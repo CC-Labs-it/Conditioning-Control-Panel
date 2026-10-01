@@ -1531,14 +1531,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         // WPF subscribed to App.Webcam's OnGazeSide / OnFaceLost / OnFaceFound. OnGazeSide
         // rather than the screen-projected OnGazeMove, because it already runs through the
         // calibrated left/right classifier with hysteresis and a 3-frame stability filter.
-        // ponytail: needs WebcamTrackingService. It owns a camera, so it does not "move to
-        // Core" - it needs a seam. CoreWebcam is now that seam, but it carries capability +
-        // consent-revoke only and NOT OnGazeSide, on purpose: this window's only input writer is
-        // that stream, so a capability flag would open Start onto a game nothing can play. Restore
-        // the gate and the stream in the same layer. Until then _currentSide is None forever,
-        // which is why Start is gated (see the class header for what that silently produced).
-        // OnFaceFound/OnFaceLost were the only writers of _faceLost; without the service the
-        // face is simply never lost.
+        // ponytail: the stream now exists - Platform/WebcamTracker raises OnGazeSide, OnFaceLost and
+        // OnFaceFound (webcam slice 4) - but this window is not subscribed yet. Subscribe here and lift
+        // the Start gate in the same layer; until then _currentSide is None forever, which is why
+        // Start is gated (see the class header), and the face is never lost.
         private void EnsureWebcamSubscribed() => _faceLost = false;
 
         private void UnsubscribeWebcam() => _faceLost = false;

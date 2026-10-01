@@ -96,4 +96,19 @@ public class GazeEngineTests
         var samples = Enumerable.Repeat((900.0, 900.0), 10).Concat(Enumerable.Range(0, 15).Select(i => (500.0 + i, 300.0 + i))).ToList();
         Assert.Equal((507.0, 307.0), GazeEngine.MedianAfterSaccadeSettle(samples, 10));   // 512 with the saccade kept
     }
+
+    /// <summary>WPF's tuned values (WebcamTrackingService.cs tuning notes). Existing calibrations were fit
+    /// against this chain, so a change here is a behaviour change on both heads, never a cleanup.</summary>
+    [Fact]
+    public void WpfGazeConstants_ArePinned()
+    {
+        Assert.Equal(15, GazeEngine.FaceLostFramesThreshold);
+        Assert.Equal(3, GazeEngine.IrisMedianFrames);          // 2 would turn the median into a max filter
+        Assert.Equal(12, GazeEngine.IrisSmoothFrames);
+        Assert.Equal(3, GazeEngine.SideStabilityFrames);
+        Assert.Equal(8, GazeEngine.MaxGateSkipFrames);
+        Assert.Equal(1.4, GazeEngine.OneEuroMinCutoff);
+        Assert.Equal(0.06, GazeEngine.ScreenOneEuroBetaDefault);  // DIP/s units, not the iris 0.007
+        Assert.Equal((0.22, 0.48, 360.0), (GazeEngine.FollowMinDefault, GazeEngine.FollowMaxDefault, GazeEngine.RampDistDefault));
+    }
 }

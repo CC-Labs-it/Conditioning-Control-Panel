@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
@@ -90,6 +91,17 @@ public sealed class WebcamGazeTests
             (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
         }
     });
+
+    [Fact]
+    public void QuickRecal_AimsAtTheCalibratedMonitorCentre_NotTheWindow()
+    {
+        var samples = System.Linq.Enumerable.Repeat((900.0, 500.0), 30).ToList();
+        var cal = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { Width = 1000, Height = 800 } };
+        // Window maximized on a different-sized monitor: the gaze frame is still the calibrated one.
+        Assert.Equal((-400.0, -100.0), WebcamQuickRecalWindow.OffsetFor(cal, new global::Avalonia.Size(2560, 1440), samples));
+        // A calibration without MonitorBounds falls back to the window, as WPF.
+        Assert.Equal((380.0, 220.0), WebcamQuickRecalWindow.OffsetFor(new WebcamCalibrationData(), new global::Avalonia.Size(2560, 1440), samples));
+    }
 
     [Fact]
     public void Revoke_DropsTheInMemoryCalibration() => AvaloniaTestDispatcher.Run(() =>

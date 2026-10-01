@@ -200,13 +200,7 @@ namespace ConditioningControlPanel
         // replaces, which got its center and spread estimates inflated by
         // the very samples it was supposed to filter.
         private static (double X, double Y) MedianAfterSaccadeSettle(List<WpfPoint> samples, int dropFirst)
-        {
-            int start = (samples.Count - dropFirst >= 15) ? dropFirst : 0;
-            var trimmed = (start == 0) ? samples : samples.GetRange(start, samples.Count - start);
-            var xs = trimmed.Select(s => s.X).OrderBy(v => v).ToList();
-            var ys = trimmed.Select(s => s.Y).OrderBy(v => v).ToList();
-            return (xs[xs.Count / 2], ys[ys.Count / 2]);
-        }
+            => GazeEngine.MedianAfterSaccadeSettle(samples.Select(s => (s.X, s.Y)).ToList(), dropFirst);   // Core, shared with Avalonia
 
         private void ShowError(string detail)
         {

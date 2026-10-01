@@ -20,8 +20,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// PORTED from ConditioningControlPanel/Windows/WebcamQuickRecalWindow.xaml.cs over
     /// Platform/WebcamTracker (OnGazeMove / Calibration / SetRuntimeOffset); the median maths is
-    /// Core GazeEngine.MedianAfterSaccadeSettle, which WPF also calls. Deviations: DialogResult
-    /// becomes Close(x) (ShowDialog&lt;bool?&gt;); the hotkey hint is hidden (below).
+    /// Core GazeEngine.MedianAfterSaccadeSettle (WPF's window calls it too). The target is the
+    /// centre of the calibrated monitor (Calibration.MonitorBounds, the DIP frame OnGazeMove emits
+    /// in), else this window's own centre as WPF; the window opens on that monitor when it is
+    /// connected (WPF App.ApplyCalibrationScreenPlacement). Deviations: DialogResult becomes
+    /// Close(x) (ShowDialog&lt;bool?&gt;); the hotkey hint is hidden (below).
     /// </summary>
     public partial class WebcamQuickRecalWindow : Window
     {
@@ -41,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public WebcamQuickRecalWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            PlaceOnCalibratedScreen(this);
 
             _dot = this.FindControl<Ellipse>("Dot")!;
             _txtStatus = this.FindControl<TextBlock>("TxtStatus")!;
@@ -134,8 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ShowError($"Didn't capture enough gaze samples ({_samples.Count}). Make sure your face is visible and try again.");
                 return;
             }
-            var (mx, my) = GazeEngine.MedianAfterSaccadeSettle(_samples, dropFirst: 10);
-            double dx = Bounds.Width / 2.0 - mx, dy = Bounds.Height / 2.0 - my;
+            var (dx, dy) = OffsetFor(Tracker.Calibration, Bounds.Size, _samples);
             Tracker.SetRuntimeOffset(new RuntimeOffsetData { Dx = dx, Dy = dy, CapturedAt = DateTime.UtcNow }, persist: true);
             Log.Information("WebcamQuickRecalWindow: offset captured dx={Dx:F1} dy={Dy:F1} from {N} samples", dx, dy, _samples.Count);
 
@@ -144,6 +147,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtStatus.Text = $"Done. Cursor nudged by ({dx:F0}, {dy:F0}) px.";
             await Task.Delay(FinishHoldMs);
             Close(true);
+        }
+
+        /// <summary>Drift of the settled gaze from the centre of the calibrated monitor (falling back to
+        /// <paramref name="window"/>'s centre when the calibration predates MonitorBounds).</summary>
+        internal static (double Dx, double Dy) OffsetFor(WebcamCalibrationData? cal, global::Avalonia.Size window, IReadOnlyList<(double X, double Y)> samples)
+        {
+            var (mx, my) = GazeEngine.MedianAfterSaccadeSettle(samples, dropFirst: 10);
+            var (w, h) = cal?.MonitorBounds is { Width: > 0, Height: > 0 } b ? ((double)b.Width, (double)b.Height) : (window.Width, window.Height);
+            return (w / 2.0 - mx, h / 2.0 - my);
+        }
+
+        /// <summary>WPF App.ApplyCalibrationScreenPlacement: start on the monitor the calibration ran on
+        /// (matched by its pixel origin), so a Maximized window maximizes there. Unknown or
+        /// disconnected monitor: leave placement alone.</summary>
+        internal static void PlaceOnCalibratedScreen(Window window)
+        {
+            try
+            {
+                if (WebcamTracker.Instance.Calibration?.MonitorBounds is not { } mb || window.Screens is not { } screens) return;
+                foreach (var sc in screens.All)
+                {
+                    if (sc.Bounds.X != mb.X || sc.Bounds.Y != mb.Y) continue;
+                    window.WindowStartupLocation = WindowStartupLocation.Manual;
+                    window.Position = sc.Bounds.Position;
+                    return;
+                }
+            }
+            catch (Exception ex) { Log.Debug("Calibrated-screen placement failed: {Error}", ex.Message); }
         }
 
         /// <summary>CalibrationSoundService.Play: master volume on the ^1.5 curve, silence when missing.</summary>

@@ -18,7 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// PORTED from ConditioningControlPanel/Windows/WebcamGazeTrackerWindow.xaml.cs over
     /// Platform/WebcamTracker. Deviations: Loaded -> OnOpened, handlers wired in the constructor,
     /// ActualWidth/Height -> Bounds, and WPF's OnTrackingStateChanged(Stopped/Error/...) close
-    /// becomes "close when the tracker is no longer running" (StateChanged).
+    /// becomes "close when the tracker is no longer running" (StateChanged). Opens on the calibrated
+    /// monitor when connected (WPF App.ApplyCalibrationScreenPlacement).
     /// </summary>
     public partial class WebcamGazeTrackerWindow : Window
     {
@@ -34,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public WebcamGazeTrackerWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            WebcamQuickRecalWindow.PlaceOnCalibratedScreen(this);
 
             _dotCanvas = this.FindControl<Canvas>("DotCanvas")!;
             _dot = this.FindControl<Ellipse>("Dot")!;

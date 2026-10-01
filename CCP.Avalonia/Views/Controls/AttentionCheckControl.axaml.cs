@@ -27,9 +27,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <para><b>Nothing on this head constructs this control, and that is not an oversight.</b>
     /// Its only caller is <c>AttentionCheckService.EnsureWindow()</c>
     /// (ConditioningControlPanel/Services/AttentionCheckService.cs:339), which is not ported and
-    /// cannot be until three things exist here: the gaze feed it drives the ring from
-    /// (<c>App.Webcam.OnGazeMove</c> / WebcamTrackingService — no webcam engine on this head at
-    /// all), a topmost, non-activating, hit-test-invisible transparent window to host it, and the
+    /// cannot be until two more things exist here (the gaze feed it drives the ring from now does:
+    /// <c>Platform/WebcamTracker.OnGazeMove</c>, webcam slice 4): a topmost, non-activating, hit-test-invisible transparent window to host it, and the
     /// <c>HwndSource</c> WM_DPICHANGED swallow hook that keeps a re-show off the render thread.
     /// Giving it any other entry point would put a ring on screen that fills from nothing and
     /// scores a check the user was never actually measured on, so it stays unreached. Wire it
