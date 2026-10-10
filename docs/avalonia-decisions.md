@@ -647,7 +647,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   loadout first (`AdoptCloudCosmetics`). This head does not adopt, so with A a fresh install would wipe the account's
   cosmetics. Like WPF's, the flag is not persisted. Logout (`SyncPush.Reset`) drops it so it cannot reach the next account.
 - Tests: `Tests/CCP.Avalonia.Tests/ProfileCosmeticsSyncTests.cs` and the golden body in `SyncPushTests.FreshLinuxInstall_*`
-  (fake wire only). Pending owner confirmation of the sync contract (`server-sync-contract` row).
+  (fake wire only). Sync contract confirmed by the owner 2026-10-10 (#1867; entry below).
 ## 2026-10-09: Program enrollment stays disabled until the run panel exists (avalonia-port/rows-program-enroll)
 - Question: the ProgramEnrollDialog is fully ported; should the shell Enroll button now call ProgramService.CanEnroll ->
   dialog -> Enroll (writes programs.json, starts the day clock and nudges) although Avalonia has no run panel or
@@ -877,3 +877,13 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 ## 2026-10-10: Vault gate card/PayPal checkout link (avalonia-port/sync6-gate-pay)
 - Mirrors WPF 750e76812 exactly (supervisor-approved, P44): same URL `https://app.cclabs.app/subscribe?plan={basic|prime}&from=panel`,
   same copy (`vaultgate_or_card`), opened only through ExternalOpener on a user click; tests use a fake launcher, never a real URL.
+## 2026-10-10: /v2/user/sync absent keys mean "no change" for every field (#1867, server-sync-contract)
+- Question: may a client leave a field out of /v2/user/sync and have the server keep its stored value, for every field? 7c
+  (Avalonia `SyncPush`, omits achievements when the profile lacked them, sends no cosmetics on a fresh install) and #1914
+  (cosmetics: empty loadout only as the explicit clear) were held on it.
+- Answer (advised: user/owner): CONFIRMED by the user 2026-10-10: the server treats absent keys as "no change" for every field.
+- Effect: `server-sync-contract` row blocked -> resolved; 7c and the #1914 `PendingCosmeticsClear` rule (entry 2026-10-09
+  above) stand as built. No code, data-format or sync-behaviour change in this entry. Tests (fake wire only, fail-proven):
+  `SyncPushTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer`,
+  `SyncPushTests.AProfileWithoutAchievements_SendsNoAchievementsKey`, `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
+  log: ~/ccp-port/evidence/server-sync-unblock/fail-proofs.log.
