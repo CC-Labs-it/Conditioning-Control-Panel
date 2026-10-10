@@ -941,3 +941,17 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Test: `OsNotificationsTests.Sandbox_never_reaches_the_session_bus` (fail-proven: guard removed -> red) and
   `RemoteControlShellTests` asserts the join raised exactly one notification via the Sink (fail-proven: call disabled -> red).
   Log (run with DBUS_SESSION_BUS_ADDRESS=disabled:): ~/ccp-port/evidence/review-no-desktop-notify-in-tests/fail-proofs.log.
+
+## 2026-10-10: Bundled app fonts; never depend on system fonts (avalonia-port/linux-runtime-deps, distro-check F1/F4)
+- Decision (supervisor, option B): `Platform/AppFonts.cs` sets `FontManagerOptions` on the app builder. Default family =
+  the bundled Inter (Fluent already draws body text in Inter), so a system with no fonts starts instead of aborting
+  ("Default font family name can't be null or empty", openSUSE Tumbleweed). "Fredoka" maps to the bundled
+  `ConditioningControlPanel/Fonts/Fredoka.ttf` (OFL, the file WPF packs as /Fonts/#Fredoka): parity over the old
+  fontconfig fallback, no XAML site rewritten. Off Windows "Consolas"/"monospace" map to the already-bundled Noto Sans
+  Mono (measured: Avalonia never resolves a generic "monospace" inside a composite family, it requires the returned
+  family name to contain the requested one, so "Consolas, Courier New, monospace" drew Inter).
+- Content emoji: emoji blocks fall back to the system "emoji" alias first (colour emoji where installed), then the
+  bundled monochrome Noto Emoji (OFL, moved from the snapshot tests to `Assets/fonts`). The snapshot lock pins the
+  bundled one (`AppFonts.Options(systemEmoji: false)`). Licenses ship as `ThirdPartyNotices/OFL-*.txt`.
+- Intentional visual change: every "Fredoka, Segoe UI" and "Consolas, Courier New" site on Linux. Before/after:
+  ~/ccp-port/evidence/linux-runtime-deps/{before,after}-{AppSettingsTabView,ChaosHubWindow}.png.

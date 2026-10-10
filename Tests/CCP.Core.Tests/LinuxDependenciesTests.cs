@@ -15,8 +15,8 @@ public sealed class LinuxDependenciesTests
     [InlineData("ID=endeavouros\nID_LIKE=arch\n", "sudo pacman -S --needed vlc libsecret")]
     [InlineData("ID=ubuntu\nID_LIKE=debian\n", "sudo apt install libvlc5 vlc-plugin-base libsecret-1-0")]
     [InlineData("ID=linuxmint\nID_LIKE=\"ubuntu debian\"\n", "sudo apt install libvlc5 vlc-plugin-base libsecret-1-0")]
-    [InlineData("ID=fedora\n", "sudo dnf install vlc-libs libsecret")]
-    [InlineData("ID=\"rocky\"\nID_LIKE=\"rhel centos fedora\"\n", "sudo dnf install vlc-libs libsecret")]
+    [InlineData("ID=fedora\n", "sudo dnf install vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio libsecret")]
+    [InlineData("ID=\"rocky\"\nID_LIKE=\"rhel centos fedora\"\n", "sudo dnf install vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio libsecret")]
     public void MessageNamesTheDistroCommandForWhatIsMissing(string osRelease, string command)
     {
         var msg = LinuxDependencies.Message(LinuxDependencies.Missing(NoVlcNoSecret), osRelease)!.Value;

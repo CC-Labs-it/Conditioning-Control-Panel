@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Services
             new Dependency("web views (WPE)", new[] { "libwpe-1.0.so.1", "libWPEBackend-fdo-1.0.so.1", "libWPEWebKit-2.0.so.1" },
                 "wpewebkit wpebackend-fdo libwpe", "libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libwpe-1.0-1", "wpewebkit wpebackend-fdo libwpe"),
             new Dependency("audio and video", new[] { "libvlc.so.5" },
-                "vlc", "libvlc5 vlc-plugin-base", "vlc-libs"),
+                "vlc", "libvlc5 vlc-plugin-base", "vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio"),
             new Dependency("sign-in token store", new[] { "libsecret-1.so.0" },
                 "libsecret", "libsecret-1-0", "libsecret"),
             new Dependency("overlays and panic key", new[] { "libX11.so.6", "libXi.so.6" },
