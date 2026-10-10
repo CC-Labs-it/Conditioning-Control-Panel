@@ -86,6 +86,7 @@ public sealed class NavRailPaintTests
         Assert.True(social.Badge.IsVisible);
         Assert.Equal("3", social.BadgeText!.Text);
         Assert.Equal(1.0, social.Badge.Opacity);
+        Assert.IsType<DropShadowEffect>(social.Badge.Effect);   // fresh: raised chip
 
         social.Button.RaiseEvent(new CancelRoutedEventArgs(ToolTip.ToolTipOpeningEvent));
         var lines = Assert.IsType<StackPanel>(ToolTip.GetTip(social.Button)).Children.OfType<TextBlock>().Select(t => t.Text).ToArray();
@@ -95,6 +96,7 @@ public sealed class NavRailPaintTests
         social.Button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // being on Social is seeing it
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(MainShellWindow.NavBadgeSeenOpacity, social.Badge.Opacity);
+        Assert.Null(social.Badge.Effect);   // seen: the shadow drops
 
         NavBadges.Set(NavSections.Social, 12);
         Dispatcher.UIThread.RunJobs();

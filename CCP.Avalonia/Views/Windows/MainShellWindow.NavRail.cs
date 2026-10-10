@@ -347,7 +347,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (text == null) return;
             badge.Background = new SolidColorBrush(row.Hue);
             row.BadgeText.Foreground = new SolidColorBrush(NavInkOn(row.Hue));
-            badge.Opacity = NavBadges.IsFresh(count, NavBadges.Seen(row.Section)) ? 1.0 : NavBadgeSeenOpacity;
+            bool fresh = NavBadges.IsFresh(count, NavBadges.Seen(row.Section));
+            badge.Opacity = fresh ? 1.0 : NavBadgeSeenOpacity;
+            // WPF MainWindow.xaml:133: a raised chip (lamp top-left, shadow down-right); a seen badge drops it.
+            badge.Effect = fresh ? new DropShadowEffect { Color = Color.FromRgb(0x06, 0x02, 0x0F), OffsetX = 1.06, OffsetY = 1.06, BlurRadius = 3, Opacity = 0.62 } : null;
         }
 
         /// <summary>WPF NavStripRules.ActiveTextOn: dark ink (#15121F) or white on the hue, whichever
