@@ -131,7 +131,10 @@ namespace ConditioningControlPanel.Avalonia
 
                 var len = new FileInfo(outPath).Length;
                 var errs = _bindingErrors.Messages.Count;
-                Console.WriteLine($"rendered -> {outPath} ({frame.PixelSize.Width}x{frame.PixelSize.Height}, {len} bytes){(errs > 0 ? $"  [{errs} binding error(s)]" : "")}");
+                var (iconTexts, unnamed) = IconCensus(window);
+                CensusTexts += iconTexts;
+                CensusUnnamed += unnamed;
+                Console.WriteLine($"rendered -> {outPath} ({frame.PixelSize.Width}x{frame.PixelSize.Height}, {len} bytes){(errs > 0 ? $"  [{errs} binding error(s)]" : "")}{(iconTexts + unnamed > 0 ? $"  [icons {iconTexts}/{unnamed}]" : "")}");
                 foreach (var m in _bindingErrors.Messages.Distinct().Take(20))
                     Console.WriteLine("    binding: " + m);
                 return len > 0 ? 0 : 1;
@@ -147,6 +150,47 @@ namespace ConditioningControlPanel.Avalonia
                 // view would otherwise stay in the headless platform's window list.
                 try { window?.Close(); } catch { /* already closed or never shown */ }
             }
+        }
+
+        internal static int CensusTexts, CensusUnnamed;
+
+        /// <summary>Fluent icons census (oracle fluent-icons.md (e).6): visible texts that still lead with an emoji/symbol
+        /// (Loc, code-set and data-driven strings the static guard cannot see; an IconGlyph that fell back to its emoji
+        /// counts too), and buttons whose only content is an icon but that carry no AutomationProperties.Name.</summary>
+        internal static (int IconTexts, int Unnamed) IconCensus(Visual root)
+        {
+            int texts = 0, unnamed = 0;
+            void Walk(Visual v, ref bool icon, ref bool text)
+            {
+                if (!v.IsVisible) return;
+                if (v is ConditioningControlPanel.Avalonia.Controls.IconGlyph g)
+                {
+                    icon = true;
+                    if (g.IsFallback) texts++;
+                    return;
+                }
+                if (v is TextBlock tb)
+                {
+                    var s = tb.Inlines is { Count: > 0 } inl
+                        ? string.Concat(inl.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text))
+                        : tb.Text;
+                    var split = ConditioningControlPanel.Avalonia.Controls.IconText.Split(s);
+                    if (split.Icons.Length > 0) { texts++; icon = true; }
+                    if (split.Rest.Length > 0) text = true;
+                }
+                if (v is Button b)
+                {
+                    bool bi = false, bt = false;
+                    foreach (var c in global::Avalonia.VisualTree.VisualExtensions.GetVisualChildren(b)) Walk(c, ref bi, ref bt);
+                    if (bi && !bt && string.IsNullOrEmpty(global::Avalonia.Automation.AutomationProperties.GetName(b))) unnamed++;
+                    icon |= bi; text |= bt;
+                    return;
+                }
+                foreach (var c in global::Avalonia.VisualTree.VisualExtensions.GetVisualChildren(v)) Walk(c, ref icon, ref text);
+            }
+            bool i0 = false, t0 = false;
+            Walk(root, ref i0, ref t0);
+            return (texts, unnamed);
         }
 
         /// <summary>--scale N: render at N x DPI (HiDPI proof of icons and text). 1 = the live frame.</summary>
@@ -186,6 +230,8 @@ namespace ConditioningControlPanel.Avalonia
                 var rc = Run(Path.Combine(dir, t.Name + ".png"), () => Construct(t));
                 if (rc != 0) failed.Add(t.Name);
             }
+            // Before the summary: the gate reads the LAST line as "N/N views rendered".
+            Console.WriteLine($"icon-census: {CensusTexts} icon-led texts, {CensusUnnamed} unnamed icon-only buttons");
             Console.WriteLine($"{views.Count - failed.Count}/{views.Count} views rendered to {dir}");
             foreach (var f in failed) Console.Error.WriteLine("  FAILED " + f);
             return failed.Count == 0 ? 0 : 1;
