@@ -48,4 +48,25 @@ public sealed class LinuxDependenciesTests
         Assert.Equal(new[] { "overlays and panic key" },
             LinuxDependencies.Missing(l => l != "libXi.so.6").Select(d => d.Need));
     }
+
+    // distro-check F2: no distro repo carries all three WPE libraries (Arch lacks libwpe/wpebackend-fdo,
+    // Ubuntu 24.04/Fedora 44 have none), so WPE never goes into an install command; it points at Flatpak.
+    [Theory]
+    [InlineData("ID=ubuntu\nID_LIKE=debian\n")]
+    [InlineData("ID=fedora\n")]
+    [InlineData("ID=arch\n")]
+    [InlineData("ID=opensuse-tumbleweed\n")]
+    public void MissingWpeNamesFlatpakNotAPackageCommand(string osRelease)
+    {
+        var onlyWpe = LinuxDependencies.Message(LinuxDependencies.Missing(l => !l.Contains("wpe", System.StringComparison.OrdinalIgnoreCase)), osRelease)!.Value;
+        Assert.Null(onlyWpe.Command);
+        Assert.Contains("Flatpak", onlyWpe.Text);
+        Assert.DoesNotContain("sudo", onlyWpe.Text);
+        Assert.DoesNotContain("libwpe", onlyWpe.Text);
+
+        var withVlc = LinuxDependencies.Message(LinuxDependencies.Missing(l => l != "libvlc.so.5" && !l.Contains("WPE")), osRelease)!.Value;
+        Assert.Contains("Flatpak", withVlc.Text);
+        Assert.DoesNotContain("wpe", withVlc.Command ?? "", System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("libWPE", withVlc.Text);
+    }
 }

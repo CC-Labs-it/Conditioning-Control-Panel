@@ -7615,5 +7615,6 @@
   "title_no_preset_selected": "Пресет не выбран",
   "title_cannot_update_default": "Нельзя обновить стандартный",
   "title_cannot_delete_default": "Нельзя удалить стандартный",
-  "title_update_preset": "Обновить пресет"
+  "title_update_preset": "Обновить пресет",
+  "linux_dep_wpe_flatpak": "Встроенным веб-страницам нужен WPE WebKit 2.0, который большинство дистрибутивов не пакетирует полностью (openSUSE Tumbleweed — да; в Arch есть только wpewebkit). Для этих страниц используй сборку Flatpak; всё остальное работает и без него."
 }

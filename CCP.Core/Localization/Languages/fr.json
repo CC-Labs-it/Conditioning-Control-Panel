@@ -7615,5 +7615,6 @@
   "title_no_preset_selected": "Aucun préréglage sélectionné",
   "title_cannot_update_default": "Impossible de mettre à jour le défaut",
   "title_cannot_delete_default": "Impossible de supprimer le défaut",
-  "title_update_preset": "Mettre à jour le préréglage"
+  "title_update_preset": "Mettre à jour le préréglage",
+  "linux_dep_wpe_flatpak": "Les pages web intégrées nécessitent WPE WebKit 2.0, que la plupart des distributions ne fournissent pas en entier (openSUSE Tumbleweed oui ; Arch n'a que wpewebkit). Utilise la version Flatpak pour ces pages ; tout le reste fonctionne sans."
 }

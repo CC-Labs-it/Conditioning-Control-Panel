@@ -941,3 +941,13 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Test: `OsNotificationsTests.Sandbox_never_reaches_the_session_bus` (fail-proven: guard removed -> red) and
   `RemoteControlShellTests` asserts the join raised exactly one notification via the Sink (fail-proven: call disabled -> red).
   Log (run with DBUS_SESSION_BUS_ADDRESS=disabled:): ~/ccp-port/evidence/review-no-desktop-notify-in-tests/fail-proofs.log.
+
+## 2026-10-10: First-run wizard fits small screens; WPE points at Flatpak (avalonia-port/wizard-hidpi-wpe)
+- Context: distro-check F5 - at 200% on 1920x1080 (960x540 DIP) the fixed 900x680 wizard put Enter off-screen, so the 18+
+  gate could not be accepted and closing exits the app. WPF has the same fixed size (`FirstRunWizard.xaml:6`, NoResize).
+  F2 - the WPE install command named packages no tested distro ships in full.
+- Choice: this head improves on WPF: `FirstRunWizard.FitToWorkingArea` caps the window to the screen working area (DIP)
+  before showing; the step bodies already scroll, the footer stays. Normal screens keep 900x680 (WPF look unchanged).
+  WPE gets no package names in any command; a localized line (`linux_dep_wpe_flatpak`, 9 languages) says to use the
+  Flatpak build and names where the packages exist (Tumbleweed in full; Arch only wpewebkit). Other deps keep their command.
+- Decided by: supervisor brief (F5, F2).

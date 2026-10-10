@@ -461,6 +461,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// and the button starts no tour; it reaches the real seam, which is the same state every
         /// other tour button on this head is in.</para>
         /// </summary>
+        /// <summary>
+        /// Shrinks the fixed 900x680 card to the screen's working area (DIPs) so the footer - Enter -
+        /// stays on screen; the step bodies already scroll, so the 18+ checkbox stays reachable.
+        /// At 200% on 1920x1080 (960x540 DIP) the fixed size put Enter off-screen and the 18+ gate
+        /// could not be accepted (distro-check F5). WPF has the same fixed size (FirstRunWizard.xaml:6,
+        /// ResizeMode=NoResize); this head improves on it, a normal-scale screen is unchanged.
+        /// </summary>
+        internal void FitToWorkingArea(Screen? screen)
+        {
+            if (screen is null || screen.Scaling <= 0) return;
+            FitTo(screen.WorkingArea.Width / screen.Scaling, screen.WorkingArea.Height / screen.Scaling);
+        }
+
+        internal void FitTo(double workWidth, double workHeight)
+        {
+            Width = Math.Min(Width, workWidth);
+            Height = Math.Min(Height, workHeight);
+        }
+
         public static async Task Run(MainShellWindow owner)
         {
             FirstRunWizard? wizard = null;
@@ -468,6 +487,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 MainShellWindow.IsStartupDialogShowing = true;
                 wizard = new FirstRunWizard { ShellOwner = owner };
+                wizard.FitToWorkingArea(wizard.Screens.ScreenFromWindow(owner) ?? wizard.Screens.Primary);
                 await wizard.ShowDialogSafe(owner);
             }
             catch (Exception ex)
