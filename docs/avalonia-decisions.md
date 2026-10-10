@@ -646,7 +646,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Chosen: B, advised by the supervisor (P44). Reason: WPF sends the empty loadout safely only because it adopts the cloud
   loadout first (`AdoptCloudCosmetics`). This head does not adopt, so with A a fresh install would wipe the account's
   cosmetics. Like WPF's, the flag is not persisted. Logout (`SyncPush.Reset`) drops it so it cannot reach the next account.
-- Tests: `Tests/CCP.Avalonia.Tests/ProfileCosmeticsSyncTests.cs` and the golden body in `SyncPushTests.FreshLinuxInstall_*`
+- Tests: `Tests/CCP.Avalonia.Tests/ProfileCosmeticsSyncTests.cs` and the golden body in `AccountSeedTests.FreshLinuxInstall_*` (SyncPushTests.cs)
   (fake wire only). Sync contract confirmed by the owner 2026-10-10 (#1867; entry below).
 ## 2026-10-09: Program enrollment stays disabled until the run panel exists (avalonia-port/rows-program-enroll)
 - Question: the ProgramEnrollDialog is fully ported; should the shell Enroll button now call ProgramService.CanEnroll ->
@@ -884,6 +884,6 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Answer (advised: user/owner): CONFIRMED by the user 2026-10-10: the server treats absent keys as "no change" for every field.
 - Effect: `server-sync-contract` row blocked -> resolved; 7c and the #1914 `PendingCosmeticsClear` rule (entry 2026-10-09
   above) stand as built. No code, data-format or sync-behaviour change in this entry. Tests (fake wire only, fail-proven):
-  `SyncPushTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer`,
-  `SyncPushTests.AProfileWithoutAchievements_SendsNoAchievementsKey`, `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
+  `AccountSeedTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer` (SyncPushTests.cs),
+  `AccountSeedTests.AProfileWithoutAchievements_SendsNoAchievementsKey` (SyncPushTests.cs), `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
   log: ~/ccp-port/evidence/server-sync-unblock/fail-proofs.log.
