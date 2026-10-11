@@ -25,6 +25,12 @@ namespace ConditioningControlPanel.Services.Video.Floating
         private double _speed = 1.0;
         private double _dx, _dy, _dw, _dh;   // the whole desktop; zero size = none given
 
+        /// <summary>The throw is measured over this much of the hand's recent path. Two samples of
+        /// a fast mouse sit a millisecond apart, and the speed and direction between just those
+        /// two is noise: a quick drag let go came out as a full-speed throw the wrong way.</summary>
+        public const double ThrowWindowMs = 80.0;
+        private readonly System.Collections.Generic.Queue<(double X, double Y, double Ms)> _path = new();
+
         /// <summary>
         /// How fast a throw travels: 1 = the flash images' own speed. Scales the velocity a throw
         /// starts with and the top speed. Live: a window in flight slows or quickens with it.
@@ -127,13 +133,38 @@ namespace ConditioningControlPanel.Services.Video.Floating
 
         /// <summary>The hand lands. Also catches a window in flight: the throw ends there.</summary>
         public void Press(double pointerX, double pointerY, double nowMs)
-            => FlashDrag.Begin(_s, pointerX, pointerY, nowMs);
+        {
+            FlashDrag.Begin(_s, pointerX, pointerY, nowMs);
+            _path.Clear();
+            _path.Enqueue((pointerX, pointerY, nowMs));
+        }
 
         /// <summary>One pointer position while held. The window follows on the next step.</summary>
         public void Move(double pointerX, double pointerY, double nowMs)
         {
             var d = _s.Drag;
-            if (d != null) FlashDrag.Sample(d, pointerX, pointerY, nowMs);
+            if (d == null) return;
+            FlashDrag.Sample(d, pointerX, pointerY, nowMs);
+            _path.Enqueue((pointerX, pointerY, nowMs));
+            while (_path.Count > 2 && nowMs - _path.Peek().Ms > ThrowWindowMs) _path.Dequeue();
+        }
+
+        /// <summary>The hand's velocity in px/ms across the last <see cref="ThrowWindowMs"/> of
+        /// its path, zero when it has been parked (the flash rule: a stale hand does not throw).</summary>
+        private (double Vx, double Vy) PathVelocity(double nowMs)
+        {
+            if (_path.Count < 2) return (0, 0);
+            (double X, double Y, double Ms) first = default, last = default;
+            bool any = false;
+            foreach (var p in _path)
+            {
+                last = p;
+                if (!any && nowMs - p.Ms <= ThrowWindowMs) { first = p; any = true; }
+            }
+            if (!any || nowMs - last.Ms > FlashDrag.StaleMs) return (0, 0);
+            var dt = last.Ms - first.Ms;
+            if (dt < 8.0) return (0, 0);   // too short a stretch to read a direction from
+            return ((last.X - first.X) / dt, (last.Y - first.Y) / dt);
         }
 
         /// <summary>
@@ -142,7 +173,30 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// </summary>
         public FlashDragOutcome Release(double nowMs, MotionLevel level)
         {
+            var drag = _s.Drag;
             var outcome = FlashDrag.Release(_s, nowMs, level);
+            if (outcome != FlashDragOutcome.Tap && drag != null)
+            {
+                // Flash reads the throw off the last two samples; a window reads it off the path.
+                var (pvx, pvy) = PathVelocity(nowMs);
+                var scale = FlashMotion.LevelScale(level);
+                if (scale > 0 && FlashDrag.ShouldFling(pvx, pvy))
+                {
+                    drag.Flinging = true;
+                    _s.Drag = drag;
+                    _s.Vx = pvx * 1000.0 * scale;
+                    _s.Vy = pvy * 1000.0 * scale;
+                    outcome = FlashDragOutcome.Fling;
+                }
+                else
+                {
+                    _s.Drag = null;
+                    _s.Vx = 0;
+                    _s.Vy = 0;
+                    outcome = FlashDragOutcome.Place;
+                }
+            }
+            _path.Clear();
             if (outcome == FlashDragOutcome.Fling)
             {
                 // The flash throw, scaled, then capped: a wild flick is still a drift at a low speed.
