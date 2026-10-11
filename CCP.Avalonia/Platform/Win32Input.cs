@@ -44,7 +44,9 @@ internal static class Win32Input
         {
             if (vk != VirtualKeys.Escape || _escDown) return;   // a held Esc is one press here too
             _escDown = true;
-            Dispatcher.UIThread.Post(EscapeDoor);
+            // WPF checks WantsGlobalEscape in the hook: post only while a non-strict clip is up (a racy
+            // pre-filter; EscapeDoor re-checks on the UI thread), never every Escape in every app.
+            if (MandatoryVideoOverlay.Instance.WantsGlobalEscape) Dispatcher.UIThread.Post(EscapeDoor);
         };
         Win32PanicKey.KeyUp += (vk, _) => { if (vk == VirtualKeys.Escape) _escDown = false; };
         return Win32PanicKey.Start(() => CoreSettings.Current.PanicKey, () =>
