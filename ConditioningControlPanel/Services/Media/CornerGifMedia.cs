@@ -228,8 +228,12 @@ namespace ConditioningControlPanel.Services
         ///
         /// <para>Note this does NOT read the session master: <c>SessionCornerGifAllowed</c> is about
         /// what a session may raise, never about the user's own overlays.</para>
+        ///
+        /// <para>ccp-bugs #1399 (owner call, 2026-10-11): a slot shows only while the engine runs,
+        /// like every other effect. An enabled slot with the engine off stays down; MainWindow
+        /// refreshes the slots when the engine starts and closes them when it stops.</para>
         /// </summary>
-        internal static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive)
-            => slotEnabled && !sessionCornerGifActive;
+        internal static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive, bool engineRunning)
+            => slotEnabled && engineRunning && !sessionCornerGifActive;
     }
 }

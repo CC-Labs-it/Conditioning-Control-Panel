@@ -2628,6 +2628,11 @@ namespace ConditioningControlPanel.Services
                 && px.Y >= exclude[1] && px.Y <= exclude[1] + exclude[3])
                 return false;
 
+            // ccp-bugs #1416: bubbles draw above flashes, so a click where a bubble covers a
+            // flash is the bubble's. This hook is installed per flash run, after the bubble
+            // hook, so it is asked first and used to claim the click from under the bubble.
+            if (BubbleService.HostBubbleAt(px.X, px.Y)) return false;
+
             var hits = _layerHits;
             for (int i = hits.Length - 1; i >= 0; i--)
             {

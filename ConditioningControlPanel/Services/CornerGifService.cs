@@ -67,6 +67,9 @@ namespace ConditioningControlPanel.Services
         // cancels first and never raises it - so this does not kill overlays on the tray path.
         private Window? _subscribedWindow;
 
+        // ccp-bugs #1399: a standalone slot shows only while the engine (or a session) runs.
+        private static bool EngineRunning => App.IsEngineRunning || App.IsSessionRunning;
+
         /// <summary>
         /// How many overlay windows are live (+ how many realizations are still queued), for the
         /// hang report. Read by <see cref="HangContext"/> on the WATCHDOG thread while the UI thread
@@ -149,7 +152,7 @@ namespace ConditioningControlPanel.Services
                 // in the same corner. SessionEngine calls RefreshOverlays again when its overlay
                 // closes, so the slot comes straight back.
                 if (o == null || !CornerGifMedia.AllowStandaloneCornerGif(
-                        o.Enabled, SessionEngine.IsSessionCornerGifActive)) continue;
+                        o.Enabled, SessionEngine.IsSessionCornerGifActive, EngineRunning)) continue;
                 if (queued >= MaxOverlays)
                 {
                     App.Logger?.Warning("CornerGifService: settings list has more than {Max} enabled corner-GIF slots - ignoring the rest", MaxOverlays);
@@ -218,7 +221,7 @@ namespace ConditioningControlPanel.Services
             // slider realise the very standalone overlay RefreshOverlays just suppressed - two
             // corner spirals at once, which is exactly ticket 1539282547484139682.
             if (setting == null || !CornerGifMedia.AllowStandaloneCornerGif(
-                    setting.Enabled, SessionEngine.IsSessionCornerGifActive))
+                    setting.Enabled, SessionEngine.IsSessionCornerGifActive, EngineRunning))
             {
                 NotifySessionAdmissionChanged();
                 return;
@@ -457,7 +460,7 @@ namespace ConditioningControlPanel.Services
                 // instant before would land behind the session's spiral - two spirals in one
                 // corner, which is ticket 1539282547484139682.
                 if (!CornerGifMedia.AllowStandaloneCornerGif(
-                        setting.Enabled, SessionEngine.IsSessionCornerGifActive))
+                        setting.Enabled, SessionEngine.IsSessionCornerGifActive, EngineRunning))
                 {
                     SyncSentinel();
                     return;

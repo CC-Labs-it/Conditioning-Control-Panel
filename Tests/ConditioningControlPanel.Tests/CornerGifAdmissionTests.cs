@@ -129,17 +129,23 @@ public class CornerGifAdmissionTests
     [Fact]
     public void StandaloneSlot_ShowsWhenNoSessionOverlayIsUp()
         => Assert.True(CornerGifMedia.AllowStandaloneCornerGif(
-            slotEnabled: true, sessionCornerGifActive: false));
+            slotEnabled: true, sessionCornerGifActive: false, engineRunning: true));
+
+    /// <summary>ccp-bugs #1399: an enabled slot stays down while the engine is not running.</summary>
+    [Fact]
+    public void StandaloneSlot_StaysDownWhileTheEngineIsOff()
+        => Assert.False(CornerGifMedia.AllowStandaloneCornerGif(
+            slotEnabled: true, sessionCornerGifActive: false, engineRunning: false));
 
     [Fact]
     public void StandaloneSlot_YieldsWhileASessionOverlayIsUp()
         => Assert.False(CornerGifMedia.AllowStandaloneCornerGif(
-            slotEnabled: true, sessionCornerGifActive: true));
+            slotEnabled: true, sessionCornerGifActive: true, engineRunning: true));
 
     [Fact]
     public void DisabledStandaloneSlot_StaysDown()
         => Assert.False(CornerGifMedia.AllowStandaloneCornerGif(
-            slotEnabled: false, sessionCornerGifActive: false));
+            slotEnabled: false, sessionCornerGifActive: false, engineRunning: true));
 
     // ---- the invariant ----
 
@@ -153,9 +159,9 @@ public class CornerGifAdmissionTests
         // Whichever one is already up, the other is refused - so the reported "two spirals" state
         // cannot be reached from either direction.
         var sessionUp = Allow(templateEnabled, userAllowed, standaloneOverlayActive: false);
-        Assert.False(sessionUp && CornerGifMedia.AllowStandaloneCornerGif(slotEnabled: true, sessionCornerGifActive: sessionUp));
+        Assert.False(sessionUp && CornerGifMedia.AllowStandaloneCornerGif(slotEnabled: true, sessionCornerGifActive: sessionUp, engineRunning: true));
 
-        var standaloneUp = CornerGifMedia.AllowStandaloneCornerGif(slotEnabled: true, sessionCornerGifActive: false);
+        var standaloneUp = CornerGifMedia.AllowStandaloneCornerGif(slotEnabled: true, sessionCornerGifActive: false, engineRunning: true);
         Assert.False(standaloneUp && Allow(templateEnabled, userAllowed, standaloneOverlayActive: standaloneUp));
     }
 
