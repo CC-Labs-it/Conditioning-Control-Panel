@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF SetLockdownBadge (Lab.cs:672/753/794): the badge shows for the whole run, seeded.
                 if (Named<global::Avalonia.Controls.Border>("LockdownBadge") is { } badge) badge.IsVisible = LockdownActive;
                 PaintLockdownBadge();
+                Platform.Win32Input.ApplyLockdown(LockdownActive, CoreSettings.Current.LockdownBlockSystemKeys);   // WPF Lab.cs:621/714
                 ApplyLockdownTheme(LockdownActive);
             });
             void Flash() => global::Avalonia.Threading.Dispatcher.UIThread.Post(PlayLockdownActivationAnimation);
