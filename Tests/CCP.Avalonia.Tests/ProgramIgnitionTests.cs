@@ -1,0 +1,209 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Threading;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Helpers;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Models.Program;
+using ConditioningControlPanel.Services.Program;
+using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
+
+namespace CCP.Avalonia.Tests;
+
+/// <summary>
+/// Programs slice 5: the ignition rig (WPF MainWindow.ProgramsFx.cs) on the run view. Read-only
+/// service; the fixture file's bytes are asserted unchanged.
+/// </summary>
+public sealed class ProgramIgnitionTests
+{
+    [Fact]
+    public void IgnitedRunLightsTheRigAndItsClocksFollowTheGates() => WithRun(lastDay: true, (shell, tab, svc, program) =>
+    {
+        T F<T>(string n) where T : Control => tab.FindControl<T>(n)!;
+        Assert.Equal(ProgramHeatTier.Ignited, tab.IgnitionTier);
+        Assert.True(tab.IgnitionLoopsRunning);
+        Assert.IsType<LinearGradientBrush>(F<Border>("TodayPanel").BorderBrush);   // T2+ turning border
+        Assert.NotNull(F<Rectangle>("ProgramsEdgeGlow").Fill);                    // T4 edge glow
+        Assert.NotNull(F<Border>("RailProgressFill").Effect);                     // T2+ rail glow
+        var particles = tab.IgnitionParticles!;                                   // through the shared canvas
+        Assert.Same(F<Grid>("TodayFxLayer"), particles.Parent);
+        var registry = (System.Collections.IDictionary)typeof(MainShellWindow).GetField("_tabFxCanvases",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(shell)!;
+        Assert.Contains(particles, (System.Collections.Generic.List<AmbientFxCanvas>)registry["programs"]!);   // RegisterTabFx("programs")
+
+        // P39 + P73: the clocks really advance - tick the render timer, time each frame; the same
+        // frames with the loops parked (Motion Reduced, below) are the baseline.
+        var edge = F<Rectangle>("ProgramsEdgeGlow");
+        var log = new StringBuilder("phase,frame,ms,edgeOpacity\n");
+        var seen = Frames("ignited", log, edge);
+        Assert.True(seen > 3, $"edge glow did not breathe ({seen} values)");
+
+        // P01: the shell hides the tab -> every clock stops and the rim parks dark.
+        tab.IsVisible = false;
+        Assert.False(tab.IgnitionLoopsRunning);
+        Assert.Equal(0, edge.Opacity);
+        tab.IsVisible = true;
+        Assert.True(tab.IgnitionLoopsRunning);
+
+        // Motion Reduced: lit, but static (WPF "T0 visuals" for loops; the edge sits at its peak).
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(tab.IgnitionLoopsRunning);
+        Assert.Equal(1, Frames("parked", log, edge));
+        if (Environment.GetEnvironmentVariable("CCP_FX_EVIDENCE") is { Length: > 0 } evidence)
+            File.WriteAllText(evidence, log.ToString());
+        Assert.Equal(ProgramHeat.EdgeGlowOpacity(ProgramHeat.Compute(program.LengthDays, program.LengthDays,
+            svc.Today?.Intensity ?? 0, svc.Today?.IsBoss == true)), edge.Opacity, 3);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(tab.IgnitionLoopsRunning);
+
+        // The shared ambient gate (Pr4aAmbientAllowed): a minimised shell parks the clocks.
+        shell.WindowState = WindowState.Minimized;
+        Assert.False(tab.IgnitionLoopsRunning);
+        shell.WindowState = WindowState.Normal;
+        Assert.True(tab.IgnitionLoopsRunning);
+
+        // P65: detaching the tab (window still active and normal) stops everything.
+        var host = (Panel)tab.Parent!;
+        host.Children.Remove(tab);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(tab.IgnitionLoopsRunning);
+        host.Children.Add(tab);
+    });
+
+    [Fact]
+    public void FirstDayStaysBelowChargedWithNoParticlesRimOrComet() => WithRun(lastDay: false, (_, tab, svc, program) =>
+    {
+        var today = svc.Today!;
+        Assert.Equal(ProgramHeat.TierOf(ProgramHeat.Compute(1, program.LengthDays, today.Intensity, today.IsBoss)), tab.IgnitionTier);
+        Assert.True(tab.IgnitionTier < ProgramHeatTier.Charged);
+        Assert.Null(tab.IgnitionParticles);
+        Assert.IsNotType<LinearGradientBrush>(tab.FindControl<Border>("TodayPanel")!.BorderBrush);
+        Assert.Null(tab.FindControl<Rectangle>("ProgramsEdgeGlow")!.Fill);
+        Assert.False(tab.FindControl<Grid>("RailCometHost")!.IsVisible);
+    });
+
+    [Fact]
+    public void DayChapterAndGraduationMomentsFireOncePerRun() => WithRun(lastDay: false, (_, tab, svc, program) =>
+    {
+        T F<T>(string n) where T : Control => tab.FindControl<T>(n)!;
+        var enrollment = svc.ActiveEnrollment!;
+
+        // Day complete: the day's real XP floats up (WPF PlayProgramDayCompleteMoment).
+        Assert.Equal("", F<TextBlock>("TxtTodayXpFloat").Text ?? "");
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.Equal(Loc.GetF("label_0_xp_3", ProgramHeat.DayXp(svc.Today!.Intensity, svc.Today.IsBoss)),
+            F<TextBlock>("TxtTodayXpFloat").Text);
+        F<TextBlock>("TxtTodayXpFloat").Text = "";
+        tab.RefreshPrograms();
+        Assert.Equal("", F<TextBlock>("TxtTodayXpFloat").Text);   // once per day
+
+        // Chapter seal: only a chapter closing after the run's baseline stamps.
+        var chapter = program.Chapters[0];
+        enrollment.CompletedChapterIds.Add(chapter.Id);
+        tab.RefreshPrograms();
+        Assert.True(F<Grid>("ProgramsSealHost").IsVisible);
+        Assert.Equal(chapter.Name, F<TextBlock>("TxtProgramsSealTitle").Text);
+
+        // Graduation: the card's accent hands over to gold (Motion Off snaps, WPF :1172).
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        enrollment.State = ProgramEnrollmentState.Graduated;
+        tab.RefreshPrograms();
+        Assert.Equal(Color.FromRgb(0xFF, 0xD7, 0x00),
+            ((ISolidColorBrush)F<Border>("ProgramsGraduatedCard").BorderBrush!).Color);
+    });
+
+    /// <summary>40 render ticks, time-bounded (P73); returns how many distinct edge opacities were seen.</summary>
+    private static int Frames(string phase, StringBuilder log, Rectangle edge)
+    {
+        var seen = new System.Collections.Generic.HashSet<double>();
+        var watch = Stopwatch.StartNew();
+        for (var i = 0; i < 40 && watch.Elapsed < TimeSpan.FromSeconds(10); i++)
+        {
+            var t0 = watch.Elapsed.TotalMilliseconds;
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            seen.Add(Math.Round(edge.Opacity, 4));
+            log.Append($"{phase},{i},{watch.Elapsed.TotalMilliseconds - t0:0.00},{edge.Opacity:0.0000}\n");
+        }
+        return seen.Count;
+    }
+
+    private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body) =>
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var program = BuiltInPrograms.All().First(p => p.Id == "first_week");
+            var day = lastDay ? program.LengthDays : 1;
+            var today = DateTime.Today;
+            var state = new ProgramState
+            {
+                Active = new ProgramEnrollment
+                {
+                    ProgramId = program.Id, StartedAt = today.AddDays(1 - day), CurrentDay = day,
+                    CurrentDayDate = today, State = ProgramEnrollmentState.Active,
+                }
+            };
+            for (var i = 1; i < day; i++) state.Active.GetOrCreateRecord(i, today.AddDays(i - day)).DayCompleted = true;
+            state.Active.GetOrCreateRecord(day, today);
+
+            var dir = Directory.CreateTempSubdirectory("ccp-programs-ignition-").FullName;
+            var path = System.IO.Path.Combine(dir, "programs.json");
+            File.WriteAllText(path, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
+            var bytes = File.ReadAllBytes(path);
+
+            var oldPrograms = AvApp.Programs;
+            var settings = CoreSettings.Current;
+            var (motion, perf) = (settings.MotionLevel, settings.PerformanceMode);
+            var (seenTab, seenIntro) = (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro);
+            settings.HasSeenProgramsTab = settings.HasSeenProgramsIntro = true;
+            settings.MotionLevel = MotionLevel.Full;
+            settings.PerformanceMode = false;
+            MainShellWindow? shell = null;
+            try
+            {
+                var svc = AvApp.Programs = new ProgramService(path, readOnly: true);
+                shell = new MainShellWindow { Width = 1400, Height = 900 };
+                shell.Show();
+                shell.ShowTab("programs");
+                Dispatcher.UIThread.RunJobs();
+                var tab = shell.Named<ProgramsTabView>("ProgramsTab")!;
+                tab.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(tab.FindControl<StackPanel>("ProgramsRunPanel")!.IsVisible);
+                body(shell, tab, svc, program);
+                Assert.Equal(bytes, File.ReadAllBytes(path));   // display only: nothing written
+            }
+            finally
+            {
+                shell?.Close();
+                Dispatcher.UIThread.RunJobs();
+                AvApp.Programs?.Dispose();
+                AvApp.Programs = oldPrograms;
+                (settings.MotionLevel, settings.PerformanceMode) = (motion, perf);
+                (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro) = (seenTab, seenIntro);
+                Directory.Delete(dir, true);
+            }
+        });
+}
