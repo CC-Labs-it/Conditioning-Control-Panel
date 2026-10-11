@@ -124,7 +124,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var s = CoreSettings.Current;
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-            foreach (var screen in Targets(host, s.FillAllMonitorsWithVideo)) _surfaces.Add(Build(screen, strict));
+            // Floating (AppSettings.MandatoryVideoFloating): ONE small window on one of the targeted screens,
+            // placed like a flash image. Same player, same rules; read per clip, so a heal replay keeps the mode.
+            _floating = s.MandatoryVideoFloating;
+            if (_floating)
+            {
+                var pool = Targets(host, fillAll: true);
+                _surfaces.Add(Build(pool[_random.Next(pool.Count)], strict));
+            }
+            else foreach (var screen in Targets(host, s.FillAllMonitorsWithVideo)) _surfaces.Add(Build(screen, strict));
 
             var vlc = LibVlcAudio.Shared;
             if (vlc == null)
@@ -347,6 +355,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var video = new Image { Stretch = Stretch.Uniform };
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
+            var floating = _floating;
             var w = new Window
             {
                 Title = "CCP Video",
@@ -354,10 +363,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Topmost = true,
                 ShowInTaskbar = false,
                 CanResize = false,
+                ShowActivated = !floating,   // floating never takes focus from the game under it
                 Background = Brushes.Black,
                 Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace } },
             };
-            Place(w, screen);
+            if (floating)
+            {
+                ((Panel)w.Content).Children.Add(new Border { BorderBrush = new SolidColorBrush(Color.Parse("#FF69B4")), BorderThickness = new Thickness(2), IsHitTestVisible = false });
+                PlaceFloating(w, screen, reuse: false);
+            }
+            else Place(w, screen);
             void OnKey(KeyEventArgs e)
             {
                 var s = CoreSettings.Current;
@@ -391,9 +406,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying && _wedge?.StallSeen != true) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
             w.Show();
-            w.WindowState = WindowState.FullScreen;
-            w.Activate();
+            if (!floating)
+            {
+                w.WindowState = WindowState.FullScreen;
+                w.Activate();
+            }
             return new Surface(w, fill, scrim, video, layer, grace, countdown);
+        }
+
+        // ---- floating mode (AppSettings.MandatoryVideoFloating) ----
+
+        private bool _floating;
+        private (PixelPoint? At, double W, double H) _floatBox = (null, 640, 360);
+        /// <summary>The clip on screen (or the last one) is the floating window, not full screen.</summary>
+        internal bool Floating => _floating;
+
+        /// <summary>A third of the screen at a random spot wholly inside its work area
+        /// (Core <see cref="MandatoryVideoScheduler.FloatingRect"/>); <paramref name="reuse"/> puts the
+        /// verdict message where the clip was. Headless (no screen): 640x360 where the platform puts it.</summary>
+        private void PlaceFloating(Window w, global::Avalonia.Platform.Screen? screen, bool reuse)
+        {
+            if (!reuse)
+            {
+                _floatBox = (null, 640, 360);
+                if (screen != null)
+                {
+                    var sc = screen.Scaling > 0 ? screen.Scaling : 1;
+                    var wa = screen.WorkingArea;
+                    var (x, y, fw, fh) = MandatoryVideoScheduler.FloatingRect((int)(wa.Width / sc), (int)(wa.Height / sc), _random);
+                    _floatBox = (new PixelPoint(wa.X + (int)(x * sc), wa.Y + (int)(y * sc)), fw, fh);
+                }
+            }
+            w.WindowStartupLocation = WindowStartupLocation.Manual;
+            if (_floatBox.At is { } at) w.Position = at;
+            w.Width = _floatBox.W;
+            w.Height = _floatBox.H;
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
@@ -672,7 +719,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var caught = false;
             foreach (var x in _surfaces)
             {
-                var t = new Target(x.Layer, text, Math.Max(40, s.AttentionSize), elapsed + s.AttentionLifespan, _random);
+                // A third of the screen gets a third of the target, so it still bounces inside the window.
+                var size = _floating ? Math.Max(16, s.AttentionSize / 3) : Math.Max(40, s.AttentionSize);
+                var t = new Target(x.Layer, text, size, elapsed + s.AttentionLifespan, _random);
                 t.Root.PointerPressed += (_, e) =>
                 {
                     e.Handled = true;
@@ -919,7 +968,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _ => m?.GetAttentionCheckFailMessage() ?? "MISSED IT!\nTRY AGAIN",
             };
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-            foreach (var screen in Targets(host, fillAll: true))
+            var floating = _floating;   // the verdict stays as small as the clip was
+            foreach (var screen in floating ? new List<global::Avalonia.Platform.Screen?> { null } : Targets(host, fillAll: true))
             {
                 var w = new Window
                 {
@@ -932,7 +982,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         Text = text,
                         Foreground = Brushes.Magenta,
-                        FontSize = 64,
+                        FontSize = floating ? 26 : 64,
                         FontWeight = FontWeight.Bold,
                         FontFamily = new FontFamily("Impact, Arial Black, Segoe UI"),
                         TextAlignment = TextAlignment.Center,
@@ -940,9 +990,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
                     },
                 };
-                Place(w, screen);
+                if (floating) PlaceFloating(w, screen, reuse: true);
+                else Place(w, screen);
                 w.Show();
-                w.WindowState = WindowState.Maximized;
+                if (!floating) w.WindowState = WindowState.Maximized;
                 _messages.Add(w);
             }
             DispatcherTimer.RunOnce(() =>

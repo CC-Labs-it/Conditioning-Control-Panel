@@ -123,6 +123,23 @@ namespace ConditioningControlPanel.Services
         public static bool ShouldFillSecondaryMonitors(int screenCount, bool fillAll) =>
             screenCount > 1 && (screenCount <= 2 || fillAll);
 
+        /// <summary>The floating video window (AppSettings.MandatoryVideoFloating) on a
+        /// <paramref name="monW"/>x<paramref name="monH"/> work area, in that area's DIPs: 16:9, a third of
+        /// the width (never under 480 wide, so the grace card fits; never larger than the area), at a random
+        /// spot inside the flash images' edge padding and always wholly on that screen.</summary>
+        public static (int X, int Y, int W, int H) FloatingRect(int monW, int monH, Random random)
+        {
+            monW = Math.Max(1, monW);
+            monH = Math.Max(1, monH);
+            var w = Math.Min(monW, Math.Max(480, monW / 3));
+            var h = w * 9 / 16;
+            if (h > monH) { h = monH; w = Math.Min(monW, h * 16 / 9); }
+            var (minX, minY, maxX, maxY) = Flash.FlashPlacement.SpawnBounds(monW, monH, w, h);
+            var x = Math.Clamp(random.Next(minX, maxX), 0, monW - w);
+            var y = Math.Clamp(random.Next(minY, maxY), 0, monH - h);
+            return (x, y, w, h);
+        }
+
         /// <summary>WPF GetEffectiveVolume (:1630): master x video, 0-100.</summary>
         public static int EffectiveVolume(int master, int video) => (int)(master / 100.0 * (video / 100.0) * 100);
 
