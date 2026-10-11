@@ -1863,3 +1863,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/server-sync-unblock: +14
 - Server sync contract confirmed by the owner (#1867): `server-sync-contract` blocked -> resolved, decision logged; 7c and the #1914 cosmetics clear stand as built (no code change).
 - Evidence: fake-wire SyncPush/cosmetics tests fail-proven with 4 mutants (evidence/server-sync-unblock/fail-proofs.log); GATE-OK.
+
+## avalonia-port/sync6-nav-polish-c: +897
+- Strip pills: Fluent glyphs, depth (sunken tray, hue drop bands, pressed-in lit pill, press spring), and motion (hover lift/grow, glyph wiggle, spark burst, 9 s sheen gated by motion and visibility).
+- Core DepthLaw + NavStripMotion (WPF forwards); Avalonia Theme/Depth.xaml; SectionStripDepthFxShellTests, fail-proven.
