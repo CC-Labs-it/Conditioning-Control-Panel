@@ -371,6 +371,21 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     [Fact]
+    public void Floating_is_off_by_default_and_always_lands_wholly_on_the_screen()
+    {
+        Assert.False(new ConditioningControlPanel.Models.AppSettings().MandatoryVideoFloating);   // full screen unless asked
+        var r = new Random(7);
+        foreach (var (mw, mh) in new[] { (1920, 1040), (2560, 1400), (1280, 680), (3440, 1400), (1080, 1880), (400, 300), (300, 900) })
+            for (var i = 0; i < 200; i++)
+            {
+                var (x, y, w, h) = MandatoryVideoScheduler.FloatingRect(mw, mh, r);
+                Assert.True(x >= 0 && y >= 0 && x + w <= mw && y + h <= mh, $"{x},{y} {w}x{h} on {mw}x{mh}");
+                Assert.True(w > 0 && h > 0 && w <= Math.Max(480, mw / 3), $"{w}x{h} on {mw}x{mh}");
+            }
+        Assert.Equal((640, 360), (MandatoryVideoScheduler.FloatingRect(1920, 1040, r).W, MandatoryVideoScheduler.FloatingRect(1920, 1040, r).H));
+    }
+
+    [Fact]
     public void Engine_starts_and_stops_it_by_the_saved_flag() => With(6, false, () =>
     {
         var s = CoreSettings.Current;

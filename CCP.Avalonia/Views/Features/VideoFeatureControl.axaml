@@ -110,6 +110,20 @@
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
 
+                            <!-- How a video appears (port only, player request 2026-10-10): full screen, or a
+                                 floating window like a flash image. In the open, not in the fold. -->
+                            <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_video_appearance}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="CmbAppearance"
+                                          Width="180" VerticalAlignment="Center"
+                                          Theme="{DynamicResource DarkComboBoxStyle}"/>
+                            </Grid>
+
                             <!-- Power-user rows, folded (WPF MoreFold, house rule: progressive disclosure). -->
                             <sessionLock:MoreFold x:Name="FoldMore">
                                 <StackPanel>

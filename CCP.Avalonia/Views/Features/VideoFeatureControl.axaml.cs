@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CmbMonitor.DropDownOpened += (_, _) => PopulateMonitors();
             CmbMonitor.SelectionChanged += CmbMonitor_Changed;
             BuildMercyItems();
+            CmbAppearance.SelectionChanged += CmbAppearance_Changed;
             ChkMercy.IsCheckedChanged += ChkMercy_Changed;
             CmbMercyAfter.SelectionChanged += CmbMercyAfter_Changed;
             SliderPerHour.ValueChanged += SliderPerHour_Changed;
@@ -112,8 +113,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CmbMercyAfter.Items.Clear();
                 for (var n = AppSettings.MercyAfterFailsMin; n <= AppSettings.MercyAfterFailsMax; n++)
                     CmbMercyAfter.Items.Add(new ComboBoxItem { Content = Loc.GetF("setting_mercy_after_n", n), Tag = n });
+                // Full screen first (the default); the names follow the language like the Mercy ones.
+                CmbAppearance.Items.Clear();
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_fullscreen"), Tag = false });
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
             }
             finally { _isLoading = was; }
+        }
+
+        /// <summary>Read at the next video's start; a video already playing stays as it is.</summary>
+        private void CmbAppearance_Changed(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbAppearance.SelectedItem is not ComboBoxItem { Tag: bool floating }) return;
+            if (CoreSettings.Current.MandatoryVideoFloating == floating) return;
+            CoreSettings.Current.MandatoryVideoFloating = floating;
+            CoreSettings.Save();
         }
 
         private void Unhook()
@@ -146,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtTargetSize.Text = s.AttentionSize.ToString();
                 ChkVideoGazeClick.IsChecked = s.VideoGazeClickEnabled;
                 PopulateMonitors();
+                CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 ChkMercy.IsChecked = s.MercySystemEnabled;
                 CmbMercyAfter.IsVisible = s.MercySystemEnabled;
                 foreach (var obj in CmbMercyAfter.Items)
@@ -181,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||
                 e.PropertyName == nameof(AppSettings.MercyAfterFails))
             {

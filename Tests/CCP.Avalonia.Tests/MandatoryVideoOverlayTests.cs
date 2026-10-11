@@ -346,6 +346,88 @@ public sealed class MandatoryVideoOverlayTests
         finally { Directory.Delete(dir, true); }
     }
 
+    /// <summary>AppSettings.MandatoryVideoFloating: the same overlay as a small topmost window that never
+    /// takes focus, with every stop rule of the full-screen one (strict vetoes a close and the in-window
+    /// panic key; the engine stop / panic closes it at once), and a target that fits inside it.</summary>
+    [Fact]
+    public async Task FloatingIsASmallWindowWithTheSameStopRules()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-mvideo-float-").FullName;
+        var clip = Path.Combine(dir, "clip.mp4");
+        try
+        {
+            try
+            {
+                using var ff = Process.Start(new ProcessStartInfo("ffmpeg",
+                    $"-v error -f lavfi -i testsrc=d=10:s=320x180:r=25 -pix_fmt yuv420p \"{clip}\"") { UseShellExecute = false })!;
+                ff.WaitForExit();
+            }
+            catch (Exception) { }
+            if (!File.Exists(clip)) Assert.Skip("ffmpeg not available to generate a test clip");
+            try { _ = new LibVlcAudio("--aout=dummy"); }
+            catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
+
+            var s = CoreSettings.Current;
+            var saved = (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.PanicKeyEnabled, s.PanicKey, s.AudioDuckingEnabled);
+            (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.PanicKeyEnabled, s.PanicKey, s.AudioDuckingEnabled) = (true, false, true, "F12", false);
+            var o = MandatoryVideoOverlay.Instance;
+            var v = new ConditioningControlPanel.Services.MandatoryVideoScheduler(o, library: () => new[] { clip });
+            var (real, listener, engineVideo) = (o.Scheduler, MandatoryVideoOverlay.PanicListenerLive, CoreEngine.Video);
+            CoreEngine.Video = v;
+            o.Scheduler = v;
+            try
+            {
+                await AvaloniaTestDispatcher.RunAsync(async () =>
+                {
+                    if (Application.Current is null)
+                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                            .UseSkia()
+                            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                            .SetupWithoutStarting();
+
+                    MandatoryVideoOverlay.PanicListenerLive = () => true;
+                    Assert.True(v.Trigger(true));
+                    for (var i = 0; i < 100 && (o.Windows.Count == 0 || (o.Sink?.FrameCount ?? 0) < 3); i++) await Task.Delay(50);
+                    var w = Assert.Single(o.Windows);
+                    Assert.True(o.Floating && w.Topmost && w.IsVisible && !w.ShowActivated && !w.ShowInTaskbar);
+                    Assert.NotEqual(WindowState.FullScreen, w.WindowState);
+                    Assert.Equal((640.0, 360.0), (w.Width, w.Height));
+                    Assert.True(o.Sink!.FrameCount >= 3, "the one shared player feeds it");
+                    Assert.NotNull(o.Wedge);                               // the watchdog guards it too
+
+                    o.Spawn(0);                                            // a target a third of the size, inside the window
+                    var t = (Border)o.Surfaces[0].Layer.Children[^1];
+                    Assert.True(t.Width <= 640 && t.Height <= 360, $"target {t.Width}x{t.Height}");
+
+                    w.Close();
+                    w.KeyPress(Key.F12, RawInputModifiers.None, PhysicalKey.F12, "");   // no Esc here: its grace stamp outlives the clip
+                    Assert.True(v.IsPlaying && w.IsVisible && !o.GracePaused, "strict floating survives close and the panic key, as full screen");
+                    v.Stop();                                              // engine stop / panic
+                    Assert.Empty(o.Windows);
+                    Assert.False(w.IsVisible || v.IsPlaying);
+
+                    // Back to full screen: the next clip is the old window again.
+                    s.MandatoryVideoFloating = false;
+                    Assert.True(v.Trigger(false));
+                    for (var i = 0; i < 100 && o.Windows.Count == 0; i++) await Task.Delay(50);
+                    Assert.Equal(WindowState.FullScreen, Assert.Single(o.Windows).WindowState);
+                    Assert.False(o.Floating);
+                    v.Stop();
+                    Assert.Empty(o.Windows);
+                });
+            }
+            finally
+            {
+                v.Stop();
+                o.Scheduler = real;
+                MandatoryVideoOverlay.PanicListenerLive = listener;
+                CoreEngine.Video = engineVideo;
+                (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.PanicKeyEnabled, s.PanicKey, s.AudioDuckingEnabled) = saved;
+            }
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private sealed class ThrowingClock : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => throw new InvalidOperationException("grace pause failure");
