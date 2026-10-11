@@ -72,6 +72,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
+        /// <summary>The quest microphone probe: without pactl the answer is unknown, so it fails open
+        /// (present) without spawning a process that cannot exist.</summary>
+        internal static bool MicrophonePresent(bool pactlInstalled, Func<string> listShortSources) =>
+            !pactlInstalled || ParseSources(listShortSources()).Count > 1;
+
         internal static IReadOnlyList<SpeechInputDevice> ParseSources(string pactlShortSources)
         {
             var list = new List<SpeechInputDevice> { new(-1, "System default") };
