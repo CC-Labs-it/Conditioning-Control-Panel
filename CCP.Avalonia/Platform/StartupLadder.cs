@@ -102,12 +102,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static void EnsurePassiveWatch()
         {
             if (_passiveTimer != null) return;
-            // Same cadence and UI-thread priority as the DispatcherTimer it replaces; a stepped clock fires
+            // WPF cadence and priority (StartupPresenter.cs:541, Normal: Background work starves); a stepped clock fires
             // it on the stepping (UI) thread, the system clock on the pool, which posts back.
             _passiveTimer = Time.CreateTimer(_ =>
             {
                 if (Dispatcher.UIThread.CheckAccess()) PumpHeld();
-                else Dispatcher.UIThread.Post(PumpHeld, DispatcherPriority.Background);
+                else Dispatcher.UIThread.Post(PumpHeld, DispatcherPriority.Normal);
             }, null, PassiveRecheck, PassiveRecheck);
         }
 
