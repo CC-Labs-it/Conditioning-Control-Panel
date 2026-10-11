@@ -250,9 +250,13 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <fx:IconLabel Grid.Column="0" Key="label_resume_takeover_on_startup" TextElement.FontSize="12.5" TextElement.FontWeight="SemiBold"
-                                                                   Margin="0,0,10,0"
-                                                                   TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                        <!-- Glyph + wrapping text (WPF :187 wraps; IconLabel is a horizontal StackPanel and would not). -->
+                                                        <Grid Grid.Column="0" ColumnDefinitions="Auto,*" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                            <fx:IconGlyph Kind="ArrowClockwise" Size="12.5" Margin="0,2,6,0" VerticalAlignment="Top"
+                                                                          Foreground="{StaticResource TextLightBrush}"/>
+                                                            <TextBlock Grid.Column="1" Text="{loc:StrBare label_resume_takeover_on_startup}" FontSize="12.5" FontWeight="SemiBold"
+                                                                       TextWrapping="Wrap" Foreground="{StaticResource TextLightBrush}"/>
+                                                        </Grid>
                                                         <CheckBox Grid.Column="1" x:Name="ChkAutonomyResumeOnStartup" Theme="{StaticResource ToggleStyle}"
                                                                   VerticalAlignment="Center"/>
                                                     </Grid>
