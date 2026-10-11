@@ -406,6 +406,10 @@ namespace ConditioningControlPanel
             App.IsEngineRunning = true;
             UpdateStartButton();
 
+            // ccp-bugs #1399: the user's own corner GIFs run with the engine, like every other
+            // effect. Each show is deferred a dispatcher pass, so this costs the start nothing.
+            try { App.CornerGif?.RefreshOverlays(); } catch (Exception ex) { App.Logger?.Debug("Corner GIF start: {E}", ex.Message); }
+
             // EMI Desk (MOMENTS 4.B). systemInitiated separates a lockdown's own restart from a
             // deliberate press, which is the only thing her lines care about here.
             _emiEngineStartedUtc = DateTime.UtcNow;
@@ -542,6 +546,9 @@ namespace ConditioningControlPanel
             _isRunning = false;
             App.IsEngineRunning = false;
             UpdateStartButton();
+
+            // ccp-bugs #1399: ...and stop with it. StopAll also cancels queued realizations.
+            try { App.CornerGif?.StopAll(); } catch (Exception ex) { App.Logger?.Debug("Corner GIF stop: {E}", ex.Message); }
 
             // EMI Desk (MOMENTS 4.B): how long the run lasted. Zero when nothing was running, and
             // the stamp is cleared so a second stop cannot invent a duration.
