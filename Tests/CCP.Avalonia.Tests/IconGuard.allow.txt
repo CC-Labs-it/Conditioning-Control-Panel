@@ -13,7 +13,6 @@ Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: 
 
 # --- content (c).2: user data examples ---
 Views/Windows/SessionCompleteWindow.axaml.cs :: SessionIcon = "🌀" :: render-sample SessionLog.SessionIcon, session data shown in a sentence (content (c).2, decision 4)
-Views/Windows/ProgramsIntroPopup.axaml.cs :: Glyph = "\U0001F4C5" :: Core InboxItem.Glyph data slot; the inbox row draws it (InboxFlyout, lane L1 icons-home-settings)
 Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a user-chosen preset icon inside prose (content (c).2)
 
 # --- content (c).4: typography ---

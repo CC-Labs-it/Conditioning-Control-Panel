@@ -44,7 +44,7 @@
                     <!-- The WPF original binds {loc:Str label_text_9} here and then overwrites
                          .Text from the code-behind. Avalonia keeps the binding alive under a local
                          value, so the boss trophy would revert to 📷 on the next language change;
-                         the icon is set from code for both step types instead. -->
+                         the camera is this XAML default and code swaps in the trophy only for Boss. -->
                     <fx:IconGlyph x:Name="TxtStepIcon" Kind="Camera" Size="24" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Str label_ready_to_complete}" Foreground="{StaticResource PinkBrush}" FontSize="20"
                                FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"/>
