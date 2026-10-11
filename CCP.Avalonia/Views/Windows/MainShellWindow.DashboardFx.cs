@@ -17,15 +17,13 @@
 
 using System;
 using System.Linq;
-using System.Threading;
 using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using Serilog;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
@@ -38,10 +36,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private const double VaultCtaBreathSeconds = 2.2;  // WPF :201
 
         private bool _dashboardFxInitialized;
-        private CancellationTokenSource? _vaultCtaBreath;
+        private TransformTween? _vaultCtaBreath;
 
         /// <summary>True while the vault CTA's breath clock runs (test seam).</summary>
-        internal bool VaultCtaBreathing => _vaultCtaBreath != null;
+        internal bool VaultCtaBreathing => _vaultCtaBreath?.IsRunning == true;
 
         /// <summary>WPF InitializeDashboardFx (:122), called once from the constructor.</summary>
         private void InitializeDashboardFx()
@@ -110,27 +108,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StopVaultCtaBreath();
                 scale.ScaleX = scale.ScaleY = 1.0;
                 if (!run) return;
-                _vaultCtaBreath = new CancellationTokenSource();
-                _ = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(VaultCtaBreathSeconds),
-                    IterationCount = IterationCount.Infinite,
-                    PlaybackDirection = PlaybackDirection.Alternate,
-                    Easing = new SineEaseInOut(),
-                    Children =
+                // Animation.RunAsync on the ScaleTransform threw InvalidCastException, so the breath was
+                // inert. One 2 x 2.2 s loop eased by (1 - cos 2 pi p) / 2 is Alternate + SineEaseInOut.
+                _vaultCtaBreath = TransformTween.Run(scale, TimeSpan.FromSeconds(2 * VaultCtaBreathSeconds),
+                    new (double, AvaloniaProperty, double)[]
                     {
-                        new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1.0), new Setter(ScaleTransform.ScaleYProperty, 1.0) } },
-                        new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(ScaleTransform.ScaleXProperty, VaultCtaBreathTo), new Setter(ScaleTransform.ScaleYProperty, VaultCtaBreathTo) } },
-                    },
-                }.RunAsync(scale, _vaultCtaBreath.Token);
+                        (0, ScaleTransform.ScaleXProperty, 1.0), (1, ScaleTransform.ScaleXProperty, VaultCtaBreathTo),
+                        (0, ScaleTransform.ScaleYProperty, 1.0), (1, ScaleTransform.ScaleYProperty, VaultCtaBreathTo),
+                    }, new AlternateSineEase(), loop: true);
             }
             catch (Exception ex) { Log.Debug("ApplyVaultCtaBreath: {E}", ex.Message); }
         }
 
         private void StopVaultCtaBreath()
         {
-            _vaultCtaBreath?.Cancel();
+            _vaultCtaBreath?.Stop();
             _vaultCtaBreath = null;
+        }
+
+        /// <summary>Alternate + SineEaseInOut folded into one forward pass: 0 -> 1 -> 0.</summary>
+        private sealed class AlternateSineEase : Easing
+        {
+            public override double Ease(double p) => (1 - Math.Cos(2 * Math.PI * p)) / 2;
         }
     }
 }

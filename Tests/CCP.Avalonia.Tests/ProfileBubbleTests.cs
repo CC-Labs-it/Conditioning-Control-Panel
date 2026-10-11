@@ -156,6 +156,8 @@ public sealed class ProfileBubbleTests
         var s = service.Current;
         s.MotionLevel = MotionLevel.Full;
         s.PerformanceMode = false;
+        var time = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.Time = time;
         var shell = new MainShellWindow();
         try
         {
@@ -171,6 +173,14 @@ public sealed class ProfileBubbleTests
             Assert.True(shell.IsActive);
             Assert.True(shell.OgBorderLoopRunning);
             Assert.NotNull(og.Background!.Transform);
+            // The spin turns (Animation.RunAsync on the RotateTransform threw and left it at 0).
+            time.Advance(TimeSpan.FromSeconds(1.5));
+            global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.StepAll();
+            Assert.Equal(180, ((RotateTransform)og.Background!.Transform!).Angle, 3);
+            time.Advance(TimeSpan.FromSeconds(2.25));                // past one turn it keeps looping
+            global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.StepAll();
+            Assert.Equal(90, ((RotateTransform)og.Background!.Transform!).Angle, 3);
+            Assert.True(shell.OgBorderLoopRunning);
 
             shell.ShowTab("settings");                          // the tab hides: the loop stops (P01)
             Dispatcher.UIThread.RunJobs();
@@ -211,6 +221,7 @@ public sealed class ProfileBubbleTests
             shell.Close();
             Dispatcher.UIThread.RunJobs();
             CoreSettings.ServiceProvider = saved;
+            global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.Time = TimeProvider.System;
         }
         return Task.CompletedTask;
     });
