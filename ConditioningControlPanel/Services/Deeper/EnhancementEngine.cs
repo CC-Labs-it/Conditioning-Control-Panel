@@ -648,7 +648,12 @@ namespace ConditioningControlPanel.Services.Deeper
                     if (!_running) break;
                     _lastFiredIndex++;
                     var entry = _timeline[_lastFiredIndex];
-                    if (entry.OwnerItem != null && !PassesRuleGate(entry.OwnerItem, t)) continue;
+                    // Gate at the entry's OWN time, not the tick's (ccp-bugs #1421). The playhead
+                    // crossed this entry between the last tick and this one; asking whether the
+                    // tick itself still sits inside the item's [Start, Start+Duration) dropped
+                    // every short subliminal the player reported late for, which a sparse
+                    // LibVLC clock did all the time and the Deeper player's 100 ms poll rarely.
+                    if (entry.OwnerItem != null && !PassesRuleGate(entry.OwnerItem, entry.Time)) continue;
                     DispatchSafely(entry.Action, t);
                     RecordTriggerFired(entry.OwnerItem?.Trigger);
                 }

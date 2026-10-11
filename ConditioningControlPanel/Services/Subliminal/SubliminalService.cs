@@ -700,7 +700,11 @@ namespace ConditioningControlPanel.Services
 
             // Guard against delayed callbacks firing after Stop() — prevents orphaned windows
             // Allow one-shot from remote control even when service not running
-            if (!_isRunning && !_oneShotActive) return;
+            // A show that carries a dispatch generation IS a point-fired one and is admitted on
+            // that alone (ccp-bugs #1421). The latch is one bool for every pending show: with a toy
+            // connected each show waits out the haptic head start, so the first to arrive cleared
+            // the latch and every other one fired inside that wait was dropped here.
+            if (!OneShotGate.AdmitsShow(_isRunning, _oneShotActive, oneShotGen)) return;
             _oneShotActive = false;
 
             // Remember whose card is on screen, so a later StopOneShotSubliminals can tell a
