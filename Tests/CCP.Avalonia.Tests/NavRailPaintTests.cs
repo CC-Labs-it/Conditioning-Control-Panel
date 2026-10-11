@@ -122,8 +122,28 @@ public sealed class NavRailPaintTests
     private static int Glows(Visual v) =>
         AdornerLayer.GetAdornerLayer(v)?.Children.OfType<NavGlowRing>().Count(r => AdornerLayer.GetAdornedElement(r) == v) ?? 0;
 
+    /// <summary>The glow's clock: 3 s of real time otherwise, and a slow runner (Windows CI, 11-17 s
+    /// for this test) let it expire between two asserts.</summary>
+    private sealed class SteppedClock : TimeProvider
+    {
+        public long Now = 1_000_000;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
+
+    private static NavGlowRing[] Rings(Visual v) =>
+        AdornerLayer.GetAdornerLayer(v)!.Children.OfType<NavGlowRing>().ToArray();
+
     [Fact]
     public void GlowNavKey_RingsTheRailRowAndPill_SettingsKeyRingsItsPill_OffDoesNothing() => Run(MotionLevel.Full, w =>
+    {
+        var clock = new SteppedClock();
+        NavGlow.Time = clock;
+        try { GlowNavKeyBody(w, clock); }
+        finally { NavGlow.Time = TimeProvider.System; }
+    });
+
+    private static void GlowNavKeyBody(MainShellWindow w, SteppedClock clock)
     {
         w.ShowTab("playsessions");
         Dispatcher.UIThread.RunJobs();
@@ -148,7 +168,15 @@ public sealed class NavRailPaintTests
         int before = Glows(play);
         w.GlowNavKey("play");
         Assert.Equal(before, Glows(play));
-    });
+
+        // The cue: sheen up, hold at 0.8 (WPF NavGlow), then gone once its 3 s have run.
+        clock.Now += TimeSpan.FromSeconds(1).Ticks;
+        foreach (var r in Rings(play)) r.Tick();
+        Assert.All(Rings(play), r => Assert.Equal(0.8, r.Opacity, 3));
+        clock.Now += TimeSpan.FromMilliseconds(NavGlow.TotalMs(MotionLevel.Full)).Ticks;
+        foreach (var r in Rings(play)) r.Tick();
+        Assert.Equal(0, Glows(play));
+    }
 
     [Fact]
     public void Title_NamesSectionAndPage_HomeDashboardNamesOnlyTheSection() => Run(MotionLevel.Off, w =>
