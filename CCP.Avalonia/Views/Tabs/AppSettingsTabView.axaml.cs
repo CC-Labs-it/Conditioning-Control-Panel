@@ -165,7 +165,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (target == null || SectionScroll == null || SectionStack == null) return false;
 
-            SectionScroll.UpdateLayout();
+            // The ROOT's layout pass: SectionScroll.UpdateLayout() measured nothing on a tab just
+            // shown (Bounds stayed 0, so the bubble lit Monitors but left the page at the top).
+            TopLevel.GetTopLevel(this)?.UpdateLayout();
             if (SectionStack.Bounds.Height <= 0) return false;
 
             var y = target.TranslatePoint(new Point(0, 0), SectionStack)?.Y;
@@ -181,7 +183,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _syncingPills = true;
             try { pill.IsChecked = true; }
             finally { _syncingPills = false; }
+            if (key == _raisedKey) return; // the spy calls this every scroll step (P07)
+            _raisedKey = key;
+            SectionChecked?.Invoke();
         }
+
+        private string? _raisedKey;
+
+        /// <summary>The checked section changed (pill click, FocusSection, scroll spy): the shell's
+        /// breadcrumb follows it (WPF MainWindow.SectionChrome :233).</summary>
+        internal event Action? SectionChecked;
 
         private void SectionPill_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {

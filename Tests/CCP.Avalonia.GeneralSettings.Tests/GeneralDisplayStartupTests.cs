@@ -44,26 +44,29 @@ public sealed class GeneralDisplayStartupTests
             Assert.Null(section.FindControl<MonitorTargetPicker>("ContentMonitorPicker"));
             var monitors = new MonitorsSettingsSection();
             var host = new Window { Content = monitors };
-            host.Show();
-            var picker = monitors.FindControl<MonitorTargetPicker>("ContentMonitorPicker")!;
-            var combo = picker.FindControl<ComboBox>("CmbContentMonitor")!;
-            var tags = combo.Items.Cast<ComboBoxItem>().Select(i => (int)i.Tag!).ToList();
-            Assert.Equal(new[] { MonitorTargetPicker.TagAllMonitors, MonitorTargetPicker.TagPrimaryOnly }, tags.Take(2));
-            Assert.Equal(Loc.Get("monitor_target_all"), ((ComboBoxItem)combo.Items[0]!).Content);
+            try
+            {
+                host.Show();
+                var picker = monitors.FindControl<MonitorTargetPicker>("ContentMonitorPicker")!;
+                var combo = picker.FindControl<ComboBox>("CmbContentMonitor")!;
+                var tags = combo.Items.Cast<ComboBoxItem>().Select(i => (int)i.Tag!).ToList();
+                Assert.Equal(new[] { MonitorTargetPicker.TagAllMonitors, MonitorTargetPicker.TagPrimaryOnly }, tags.Take(2));
+                Assert.Equal(Loc.Get("monitor_target_all"), ((ComboBoxItem)combo.Items[0]!).Content);
 
-            combo.SelectedIndex = 0;   // All monitors
-            Assert.True(s.DualMonitorEnabled);
-            Assert.Equal(-1, s.GlobalTargetMonitor);
-            combo.SelectedIndex = 1;   // Primary only
-            Assert.False(s.DualMonitorEnabled);
-            Assert.Equal(-1, s.GlobalTargetMonitor);
+                combo.SelectedIndex = 0;   // All monitors
+                Assert.True(s.DualMonitorEnabled);
+                Assert.Equal(-1, s.GlobalTargetMonitor);
+                combo.SelectedIndex = 1;   // Primary only
+                Assert.False(s.DualMonitorEnabled);
+                Assert.Equal(-1, s.GlobalTargetMonitor);
 
-            // An unplugged monitor's index matches no row: show Primary, never rewrite the choice.
-            s.GlobalTargetMonitor = 7;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, combo.SelectedIndex);
-            Assert.Equal(7, s.GlobalTargetMonitor);
-            host.Close();
+                // An unplugged monitor's index matches no row: show Primary, never rewrite the choice.
+                s.GlobalTargetMonitor = 7;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, combo.SelectedIndex);
+                Assert.Equal(7, s.GlobalTargetMonitor);
+            }
+            finally { host.Close(); }
             await Task.CompletedTask;
         });
     }

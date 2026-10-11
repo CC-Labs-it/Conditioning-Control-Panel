@@ -63,6 +63,15 @@ public sealed class NavRehomeShellTests
                 Assert.Equal("appsettings", w.CurrentTab);
                 var page = w.Named<AppSettingsTabView>("AppSettingsTab")!;
                 Assert.Equal("monitors", page.CheckedSectionKey);
+                // WPF OpenAppSettingsSection scrolls the section into view, not just the pill lit.
+                var scroll = page.FindControl<ScrollViewer>("SectionScroll")!;
+                var stack = page.FindControl<StackPanel>("SectionStack")!;
+                var monY = page.FindControl<Control>("SectionMonitors")!.TranslatePoint(default, stack)!.Value.Y;
+                Assert.True(monY > 0);
+                Assert.True(scroll.Offset.Y >= monY - 4 - 0.5, $"offset {scroll.Offset.Y} < Monitors y {monY}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("monitors", page.CheckedSectionKey);
+                Assert.EndsWith(Loc.Get("settings_section_monitors"), w.Named<SectionTabStrip>("SectionStrip")!.CrumbText);
 
                 // Monitors is the one home of the picker (WPF 5a3123f71): General no longer draws it.
                 var monitors = page.FindControl<MonitorsSettingsSection>("SectionMonitors")!;
@@ -103,9 +112,11 @@ public sealed class NavRehomeShellTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
+            var motionBefore = CoreSettings.Current.MotionLevel;
             MainShellWindow? w = null;
             try
             {
+                CoreSettings.Current.MotionLevel = MotionLevel.Full;   // NavGlow is off under Off
                 w = new MainShellWindow();
                 w.Show();
                 Dispatcher.UIThread.RunJobs();
@@ -121,6 +132,9 @@ public sealed class NavRehomeShellTests
                 var assets = w.Named<AssetsTabView>("AssetsTab")!;
                 Assert.True(assets.IsVisible);
                 Assert.Equal(CorePaths.EffectiveAssets, assets.FindControl<TextBlock>("TxtAssetsFolderPath")!.Text);
+                // The landing glows the chip and the preset picker once (WPF AssetsTabView :25-68).
+                Assert.Equal(1, Glows(assets.FindControl<Control>("ZoneFolders")!));
+                Assert.Equal(1, Glows(assets.FindControl<Control>("CmbAssetPresets")!));
 
                 // Every pill has a "?" badge, a sibling of the pill (never inside it), saying what the page does.
                 foreach (var key in strip.PillKeys)
@@ -141,10 +155,15 @@ public sealed class NavRehomeShellTests
                 var host = (Control)strip.PillFor("assets")!.Parent!;
                 Assert.Equal(strip.PillFor("assets")!.Bounds.Size, host.Bounds.Size);
             }
-            finally { w?.Close(); }
+            finally { w?.Close(); CoreSettings.Current.MotionLevel = motionBefore; }
             return Task.CompletedTask;
         });
     }
+
+    private static int Glows(Visual v) =>
+        global::Avalonia.Controls.Primitives.AdornerLayer.GetAdornerLayer(v)?.Children
+            .OfType<global::ConditioningControlPanel.Avalonia.Controls.NavGlowRing>()
+            .Count(r => global::Avalonia.Controls.Primitives.AdornerLayer.GetAdornedElement(r) == v) ?? 0;
 
     [Fact]
     public async Task RailMedallionsWearTheActiveModsDoorArt()
