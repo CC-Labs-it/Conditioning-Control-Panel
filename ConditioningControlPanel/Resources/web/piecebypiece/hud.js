@@ -48,7 +48,15 @@ export const TUNING = Object.freeze({
   askMs: 6000,         // "resign?" withdraws itself if nobody answers it
   noteMs: 2600,        // how long a passing note ("draw declined") stays
   iqPopMs: 1100,       // the "-N" that rises off the IQ readout when a move costs points
+  iqNoteMs: 9000,      // how long the line that says what IQ is stays up
 });
+
+/** What IQ is, in the words game/iq.js keeps: graded against the engine's best, small slips
+ *  free, only ever down, a take-back refunds nothing. IQ_NOTE is the short line under the
+ *  cards (first drop, or a tap on the readout); IQ_TITLE is the hover on the readout. */
+export const IQ_NOTE = 'IQ drops by how far your move was from the best one the engine could find. Small slips are free. It never comes back.';
+export const IQ_TITLE = 'Every move you make is graded against the best move the engine can find. The worse the move, the more IQ it costs. Small slips are free. It only goes down, and taking a move back does not refund it.';
+const IQ_TOLD_KEY = 'pbp.iq.told';
 
 const T = TUNING;
 const VALUE = Object.freeze({ p: 1, n: 3, b: 3, r: 5, q: 9 });
@@ -147,12 +155,24 @@ export function createHud(opts = {}) {
     wrap.className = 'iq';
     wrap.id = 'iq-' + s;
     wrap.hidden = true;
+    wrap.title = IQ_TITLE;
     wrap.appendChild(document.createElement('span')).className = 'iq-n';
     const who = head.querySelector('.who');
     head.insertBefore(wrap, who ? who.nextSibling : null);
     iqEl[s] = wrap;
   }
   const shownIq = { w: null, b: null };
+  // The line that says what IQ is, under the cards with the other passing notes. Built here too.
+  let iqNote = null, iqNoteTimer = null;
+  if (el.col && typeof document !== 'undefined') {
+    iqNote = document.createElement('p');
+    iqNote.className = 'game-notice iq-note';
+    iqNote.id = 'iq-note';
+    iqNote.setAttribute('role', 'status');
+    iqNote.hidden = true;
+    iqNote.textContent = IQ_NOTE;
+    el.col.insertBefore(iqNote, pick('game-intensity'));
+  }
 
   if (el.status) el.status.dataset.hudOwned = 'true';
   let deal = null;
@@ -305,13 +325,33 @@ export function createHud(opts = {}) {
     paintIq();
     const node = s && iqEl[s];
     const drop = before != null && shownIq[s] != null ? before - shownIq[s] : 0;
-    if (!node || !(drop > 0) || reducedMotion()) return;
+    if (!node || !(drop > 0)) return;
+    tellIqOnce();
+    if (reducedMotion()) return;
     const pop = document.createElement('span');
     pop.className = 'iq-pop';
     pop.setAttribute('aria-hidden', 'true');
-    pop.textContent = '-' + drop;
+    // the move that cost it rides with the number, so the drop reads as that move's doing
+    pop.textContent = '-' + drop + (g.san ? ' ' + g.san : '');
     node.appendChild(pop);
     later(() => pop.remove(), T.iqPopMs);
+  }
+
+  /** The line under the cards: up for a while, or put away. No movement, so every motion level gets it. */
+  function showIqNote(on) {
+    if (!iqNote) return;
+    if (iqNoteTimer) { clearTimeout(iqNoteTimer); timers.delete(iqNoteTimer); iqNoteTimer = null; }
+    iqNote.hidden = !on;
+    if (on) iqNoteTimer = later(() => { iqNoteTimer = null; iqNote.hidden = true; }, T.iqNoteMs);
+  }
+
+  /** The first drop a player ever sees explains itself, once per browser (once per page with no storage). */
+  let iqTold = false;
+  function tellIqOnce() {
+    if (iqTold) return;
+    iqTold = true;
+    try { if (window.localStorage.getItem(IQ_TOLD_KEY)) return; window.localStorage.setItem(IQ_TOLD_KEY, '1'); } catch { /* no storage: this page only */ }
+    showIqNote(true);
   }
 
   /* ---- copy --------------------------------------------------------------- */
@@ -579,6 +619,9 @@ export function createHud(opts = {}) {
   on('capture', () => paintTally());
   on('local', (p) => { newDeal(p); paintTally(); place(true); paintIq(); });
   on('iq', iqLanded);
+  // a tap on the readout asks what it is; a second one puts the line away
+  for (const s of ['w', 'b']) click(iqEl[s], () => showIqNote(!!iqNote && iqNote.hidden));
+  on('local', () => showIqNote(false));
   on('newgame', paintIq);
   on('takeback', paintIq);
   // the server corrected a guessed online seat; the grader (subscribed first, at boot) has moved over already

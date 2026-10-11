@@ -25,6 +25,7 @@ public sealed class LeashAskCard : Border
     private readonly StackPanel _body = new();
     private readonly Canvas _fx = new() { IsHitTestVisible = false, ClipToBounds = false };
     private Border? _switchHost;
+    private readonly Border _guideHost = new();
     private WrapPanel? _allowed;
     private bool _busy;
 
@@ -99,6 +100,7 @@ public sealed class LeashAskCard : Border
         _body.Children.Add(cap);
         _switchHost = new Border();
         _body.Children.Add(_switchHost);
+        _body.Children.Add(_guideHost);
         _allowed = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), Tag = "leash-ask-allowed" };
         _body.Children.Add(_allowed);
         PaintLevel();
@@ -205,6 +207,7 @@ public sealed class LeashAskCard : Border
         _switchHost.Child = LeashLook.Segmented(
             new[] { Loc.Get("leash_level_soft"), Loc.Get("leash_level_standard"), Loc.Get("leash_level_strict") },
             (int)_level, i => SetLevel((LeashIntensity)i), "leash-ask-level", 13);
+        _guideHost.Child = new LeashLevelHelp(_level, lines: false, maxTable: 220);
         _allowed.Children.Clear();
         foreach (var k in LeashUiRules.PunishOrder)
         {
