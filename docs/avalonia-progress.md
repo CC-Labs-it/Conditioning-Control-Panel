@@ -1840,3 +1840,40 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/sync6-nav-polish-b: +839
 - Section strip in its hue (tray, per-tab tints, bevelled plates, sliding glowing lit fill), page wash + ink, window edge line/band/lift and HUD band per section; SectionPaintShellTests, Keincheck strip-*.png.
 - Strip colour math in Core NavStripPaint (both heads wrap it); ledger rows 47/49/70/75/77 ported, 48/50/54/80 partial; the rest -> sync6-nav-polish-c (depth, fx, fog/embers, rail coins).
+
+## avalonia-port/ci-green: +85
+- `build` is green on GitHub Actions (run 38063614481). Changes: PKGBUILD 7.1.5; WPF tests follow the Core/Assets moves; the board budget test runs alone and fully warmed up (12 ms budget unchanged).
+- Fixed the Windows-only Avalonia test failures: a locator scope leak (8 WindowDropTests), the intake token check on runners with WebView2, and the webcam splash wall-clock flake. `build.yml` gains `workflow_dispatch`.
+
+## avalonia-port/sync6-nav-rail-c: +608
+- Rail paint: spur, art tint, label glow, 160 ms halo fade, hover nudge, NavBadges pills + rich tooltip (NavBadges moved to Core).
+- Landing glow (GlowNavTarget + NavGlow on pill, rail row, Settings pill, Play zone header) and the window-title crumb; ledger rows 2/23/46 ported, 33 partial, the rest -> sync6-nav-rail-d.
+
+## avalonia-port/roadmap-tests: +340
+- Core tests for RoadmapService steps, photo diary, notes, track unlocks and persistence; mutation score 21.9% -> 70.8%, and every remaining survivor is logging, an equivalent mutant, or crash-durability that cannot be tested in-process.
+
+## avalonia-port/linux-runtime-deps: +309
+- Bundled fonts (Inter default, Fredoka, Noto Sans Mono, Noto Emoji fallback): no crash on a font-less system, WPF display face on Linux.
+- libvlc soname resolver + Fedora VLC plugin deps; pactl probe no longer spawns when absent; install doc updated.
+- Review fixes: audio packages named when LibVLC fails to start, Noto Sans Mono license shipped.
+
+## avalonia-port/lockdown-badge-flake: +7
+- LockdownVeilTests: the setup marks every startup intro and the What moved card as seen, so an intro held by the ladder (real 1 s timer, 3 s settle) can no longer open inside the headless pre-key pump and take the badge's Enter. Fail-proven by breaking the keyboard route.
+
+## avalonia-port/server-sync-unblock: +14
+- Server sync contract confirmed by the owner (#1867): `server-sync-contract` blocked -> resolved, decision logged; 7c and the #1914 cosmetics clear stand as built (no code change).
+- Evidence: fake-wire SyncPush/cosmetics tests fail-proven with 4 mutants (evidence/server-sync-unblock/fail-proofs.log); GATE-OK.
+
+## avalonia-port/sync6-nav-polish-c: +897
+- Strip pills: Fluent glyphs, depth (sunken tray, hue drop bands, pressed-in lit pill, press spring), and motion (hover lift/grow, glyph wiggle, spark burst, 9 s sheen gated by motion and visibility).
+- Core DepthLaw + NavStripMotion (WPF forwards); Avalonia Theme/Depth.xaml; SectionStripDepthFxShellTests, fail-proven.
+
+## avalonia-port/startup-ladder-clock: +101
+- The StartupLadder held-card re-check now runs on the ladder's steppable clock where it used to run on a real DispatcherTimer. Tests default to a stand-still TestClock, so no intro card can open on its own in the middle of a test's input (root fix for P76).
+
+## avalonia-port/programs-today-card: +502
+- Dashboard Programs Today card + banner art/fog/sheen/sparkles/parallax (shell-program-banner -> wired); loops gated on visibility+motion, stopped on detach.
+
+## avalonia-port/programs-ignition-fx: +833
+- Programs run view ignition rig, built on Core ProgramHeat: heat-tiered ambient loops, particles registered with RegisterTabFx("programs"), and the day/chapter/graduation moments. Loops follow Motion, tab visibility and minimise (like WPF), and stop on detach. Brush and transform loops run on a per-frame driver, because Avalonia 12 gives them no clock.
+- 3 headless tests, 10 mutations each turned them red; headless frame-timing CSV plus a per-loop motion CSV (angle, shimmer, comet); live run (lit but still: the window was inactive). Bursts, pip pulse and session sheen still missing.
