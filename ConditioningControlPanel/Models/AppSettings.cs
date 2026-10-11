@@ -2611,6 +2611,18 @@ namespace ConditioningControlPanel.Models
             set { _videoTargetMonitor = value; OnPropertyChanged(); }
         }
 
+        private bool _mandatoryVideoFloating;
+        /// <summary>How a mandatory video appears: false (default) = full screen, as always; true = a
+        /// floating topmost window about a third of the screen, placed like a flash image, with its own
+        /// sound (player request 2026-10-10: usable while gaming). Every stop rule is the same, and a
+        /// strict video, a Lockdown and a Chaos run stay full screen
+        /// (Services/Video/MandatoryVideoPresentation.ShouldFloat).</summary>
+        public bool MandatoryVideoFloating
+        {
+            get => _mandatoryVideoFloating;
+            set { _mandatoryVideoFloating = value; OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC

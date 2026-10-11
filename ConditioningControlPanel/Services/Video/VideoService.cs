@@ -3199,6 +3199,10 @@ namespace ConditioningControlPanel.Services
             }
             catch (Exception ex) { Diag.Swallowed(ex); }
 
+            // Full screen or the floating window: one answer per clip, before either engine builds
+            // a window. A LibVLC fallback of the same clip keeps the answer it already has.
+            if (!forceLibVlc) DecidePresentation(strict);
+
             // ---- hybrid routing (docs/BROWSER_VIDEO_ENGINE_PLAN.md §4) ----
             // The ONLY change to this path. When the browser engine takes the clip it satisfies the
             // whole parity checklist itself (see VideoService.Browser.cs) and returns; otherwise
@@ -3273,7 +3277,9 @@ namespace ConditioningControlPanel.Services
                     try
                     {
                         // Global "Show content on" picker, not every screen (see GetGlobalScreens).
-                        var allScreens = VideoScreens().ToList();
+                        // No LibVLC means the MediaElement fallback, which only knows full screen.
+                        if (_libVLC == null) ClearFloating();
+                        var allScreens = PlaybackScreens().ToList();
                         VideoDiag.Log("VIDEO", $"screens enumerated ({allScreens.Count}) +{showSw.ElapsedMilliseconds}ms");
                         if (allScreens.Count == 0)
                         {
@@ -3430,12 +3436,16 @@ namespace ConditioningControlPanel.Services
             {
                 var dpiScale = BubbleCountWindow.GetDpiForScreen(screen);
                 VideoDiag.Log("VIDEO", $"win[{tag}]: dpi probed +{winSw.ElapsedMilliseconds}ms");
+                // Floating: the same window at a small rectangle, and it never takes focus from
+                // whatever is under it (panic and Esc reach a video through the global hook).
+                bool floating = IsFloating;
+                var area = BoundsFor(screen);
                 win = new Window
                 {
                     WindowStyle = WindowStyle.None,
                     ResizeMode = ResizeMode.NoResize,
                     ShowInTaskbar = false,
-                    ShowActivated = withAudio, // Only activate primary
+                    ShowActivated = withAudio && !floating, // Only activate primary
                     Topmost = true,
                     Background = Brushes.Black,
                     WindowStartupLocation = WindowStartupLocation.Manual,
@@ -3444,10 +3454,10 @@ namespace ConditioningControlPanel.Services
                     // a frame before the black background caught up — and on a secondary
                     // monitor that white frame could linger (#368). This mirrors the
                     // flash-free CreateLibVLCUrlWindow path.
-                    Left = screen.Bounds.X / dpiScale,
-                    Top = screen.Bounds.Y / dpiScale,
-                    Width = screen.Bounds.Width / dpiScale,
-                    Height = screen.Bounds.Height / dpiScale
+                    Left = area.X / dpiScale,
+                    Top = area.Y / dpiScale,
+                    Width = area.Width / dpiScale,
+                    Height = area.Height / dpiScale
                 };
 
                 // Render path for THIS screen: the blurred-background composite (WPF Image pair fed
@@ -3456,7 +3466,9 @@ namespace ConditioningControlPanel.Services
                 // the true frame size through the video-format callback (reliable on the very first
                 // play, unlike a pre-parse of the container), and the blurred fill auto-hides for a
                 // clip that already matches the screen — so a landscape video pays no blur cost.
-                bool useBlur = App.Settings?.Current?.VideoBlurredBackgroundEnabled == true;
+                // A floating window always takes the composite: it is pure WPF, so the attention
+                // targets live INSIDE the small window instead of flying over the rest of the screen.
+                bool useBlur = floating || App.Settings?.Current?.VideoBlurredBackgroundEnabled == true;
                 VideoDiag.Log("VIDEO", $"win[{tag}]: shell created (blur={useBlur}) +{winSw.ElapsedMilliseconds}ms");
 
                 // Create the video surface: either the blurred-background composite or a VideoView.
@@ -3464,7 +3476,7 @@ namespace ConditioningControlPanel.Services
                 BlurVmemSurface? blurSurface = null;
                 if (useBlur)
                 {
-                    double screenAspect = (double)screen.Bounds.Width / Math.Max(1, screen.Bounds.Height);
+                    double screenAspect = (double)area.Width / Math.Max(1, area.Height);
                     // Every BLUR: line carries the surface tag so a report says WHICH screen died
                     // instead of leaving it to be inferred from thread counts (#767).
                     blurSurface = new BlurVmemSurface(screenAspect, $"{tag} {screen.DeviceName}");
@@ -3722,6 +3734,8 @@ namespace ConditioningControlPanel.Services
                 // Don't let the video window activate - keeps targets on top
                 e.Handled = true;
                 BringTargetsToFront();
+                // A floating window moves with the mouse (no-op on a full-screen one).
+                if (e.ChangedButton == MouseButton.Left) BeginFloatingDrag(win);
             };
 
             // Window is already sized to the full screen bounds, so we don't start small
@@ -3729,11 +3743,11 @@ namespace ConditioningControlPanel.Services
             // Topmost window at full bounds covers the taskbar just like the maximized one did.
             // Pin to the monitor's true physical bounds so a secondary monitor with different DPI
             // scaling gets the full screen instead of a part-width window (see ForceFullScreenBounds).
-            ForceFullScreenBounds(win, screen);
+            ForceFullScreenBounds(win, screen, floating ? area : null);
             VideoDiag.Log("VIDEO", $"win[{tag}]: Show() begin +{winSw.ElapsedMilliseconds}ms");
             win.Show();
             VideoDiag.Log("VIDEO", $"win[{tag}]: Show() end +{winSw.ElapsedMilliseconds}ms");
-            if (withAudio) win.Activate();
+            if (withAudio && !floating) win.Activate();
             DisableChildWindowInput(win);
             VideoDiag.Log("VIDEO", $"win[{tag}]: activated +{winSw.ElapsedMilliseconds}ms");
 
@@ -5728,7 +5742,7 @@ namespace ConditioningControlPanel.Services
                 var pool = settings.AttentionPool.Where(p => p.Value).Select(p => p.Key).ToList();
                 var text = pool.Count > 0 ? pool[_random.Next(pool.Count)] : "CLICK ME";
 
-                var screens = VideoScreens();
+                var screens = PlaybackScreens();
                 // Safety check: ensure we have at least one screen
                 if (screens == null || screens.Length == 0 || screens[0] == null)
                 {
@@ -5765,7 +5779,8 @@ namespace ConditioningControlPanel.Services
                     if (screen == null) continue;
 
                     IAttentionTarget? target = null;
-                    target = CreateAttentionTarget(text, screen, settings.AttentionSize, style, () =>
+                    target = CreateAttentionTarget(text, screen,
+                        Video.MandatoryVideoPresentation.AttentionSize(settings.AttentionSize, IsFloating), style, () =>
                     {
                         // Only count as a hit once per spawn (user clicked any target from this batch)
                         if (hitRegistered) return;
@@ -6133,9 +6148,14 @@ namespace ConditioningControlPanel.Services
             _fallbackSafetyTimer = null;
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
+            // Floating: the verdict stays as small as the clip was, where the clip was (the player
+            // may have dragged it), and the replay comes back to the same spot.
+            CaptureFloatBounds();
+            var floatBox = IsFloating ? _floatBounds : null;
+            _floatReuse = floatBox != null;
             CloseAll(reason: "attention-check message");
 
-            var screens = VideoScreens();
+            var screens = PlaybackScreens();
             // Safety check: ensure we have at least one screen
             if (screens == null || screens.Length == 0 || screens[0] == null)
             {
@@ -6155,15 +6175,16 @@ namespace ConditioningControlPanel.Services
                     ShowInTaskbar = false,
                     ShowActivated = false,
                     WindowStartupLocation = WindowStartupLocation.Manual,
-                    Left = (screen.Bounds.X + 100) / msgDpi,
-                    Top = (screen.Bounds.Y + 100) / msgDpi,
-                    Width = 400,
-                    Height = 300,
+                    Left = (floatBox?.X ?? screen.Bounds.X + 100) / msgDpi,
+                    Top = (floatBox?.Y ?? screen.Bounds.Y + 100) / msgDpi,
+                    Width = floatBox != null ? floatBox.Value.Width / msgDpi : 400,
+                    Height = floatBox != null ? floatBox.Value.Height / msgDpi : 300,
                     Content = new TextBlock
                     {
                         Text = text,
                         Foreground = Brushes.Magenta,
-                        FontSize = 64,
+                        TextWrapping = floatBox != null ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                        FontSize = floatBox != null ? 26 : 64,
                         FontWeight = FontWeights.Bold,
                         FontFamily = new FontFamily("Impact, Arial Black, Segoe UI"),
                         TextAlignment = TextAlignment.Center,
@@ -6171,8 +6192,9 @@ namespace ConditioningControlPanel.Services
                         VerticalAlignment = VerticalAlignment.Center
                     }
                 };
+                if (floatBox != null) { win.ResizeMode = ResizeMode.NoResize; ForceFullScreenBounds(win, screen, floatBox); }
                 win.Show();
-                win.WindowState = WindowState.Maximized;
+                if (floatBox == null) win.WindowState = WindowState.Maximized;
                 _messageWindows.Add(win);  // Track for cleanup
             }
 
@@ -8636,7 +8658,9 @@ namespace ConditioningControlPanel.Services
         /// creation-DPI size, so the second pass re-pins it after layout settles. On uniform-DPI
         /// setups both passes set the rect the window already has (harmless no-op).
         /// </summary>
-        private void ForceFullScreenBounds(Window win, Screen screen)
+        /// <param name="floatBounds">The floating window's rectangle (physical pixels) when the clip
+        /// is not full screen; pinned the same way, for the same mixed-DPI reason.</param>
+        private void ForceFullScreenBounds(Window win, Screen screen, System.Drawing.Rectangle? floatBounds = null)
         {
             void Apply()
             {
@@ -8644,7 +8668,7 @@ namespace ConditioningControlPanel.Services
                 {
                     var hwnd = new WindowInteropHelper(win).Handle;
                     if (hwnd == IntPtr.Zero) return;
-                    var b = screen.Bounds; // physical pixels
+                    var b = floatBounds ?? screen.Bounds; // physical pixels
                     SetWindowPos(hwnd, IntPtr.Zero, b.X, b.Y, b.Width, b.Height,
                         SWP_NOZORDER | SWP_NOACTIVATE);
                 }

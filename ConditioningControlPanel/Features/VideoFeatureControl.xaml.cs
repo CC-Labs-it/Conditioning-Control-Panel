@@ -71,6 +71,12 @@ namespace ConditioningControlPanel.Features
                 TxtTargetSize.Text = s.AttentionSize.ToString();
                 ChkVideoGazeClick.IsChecked = s.VideoGazeClickEnabled;
                 PopulateMonitors();
+                // Full screen first (the default). Rebuilt on every load so the names follow the language.
+                CmbAppearance.Items.Clear();
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_fullscreen"), Tag = false });
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
+                CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
+                TxtAppearanceNote.Visibility = s.MandatoryVideoFloating ? Visibility.Visible : Visibility.Collapsed;
                 // The fold opens on its own when a row inside is off its default, so a setting
                 // someone changed is never hidden from them. It never closes itself.
                 if (s.VideoTargetMonitor != App.MonitorTargetFollowGlobal
@@ -140,6 +146,16 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
+        /// <summary>Read at the next video's start; a video already playing stays as it is.</summary>
+        private void CmbAppearance_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbAppearance.SelectedItem is not ComboBoxItem { Tag: bool floating }) return;
+            var s = App.Settings?.Current;
+            if (s == null || s.MandatoryVideoFloating == floating) return;
+            s.MandatoryVideoFloating = floating;
+            App.Settings?.Save();
+        }
+
         private static string FormatDuration(int seconds)
         {
             if (seconds <= 0) return "off";
@@ -162,6 +178,7 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoTargetMonitor))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
