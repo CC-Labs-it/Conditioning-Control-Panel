@@ -1877,3 +1877,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/programs-ignition-fx: +833
 - Programs run view ignition rig, built on Core ProgramHeat: heat-tiered ambient loops, particles registered with RegisterTabFx("programs"), and the day/chapter/graduation moments. Loops follow Motion, tab visibility and minimise (like WPF), and stop on detach. Brush and transform loops run on a per-frame driver, because Avalonia 12 gives them no clock.
 - 3 headless tests, 10 mutations each turned them red; headless frame-timing CSV plus a per-loop motion CSV (angle, shimmer, comet); live run (lit but still: the window was inactive). Bursts, pip pulse and session sheen still missing.
+
+## avalonia-port/wpf-behaviour-ci: +598
+- FlaUI drives the offline, firewall-blocked WPF reference on Windows CI (UIA tree + default/hover/pressed/opened PNGs for doors and dialogs); Avalonia `--uia-dump` writes the same schema; `uia-parity.py` diffs them per view into parity-diff.md/json (run 38179660532 green: wpf-behaviour 16 views, 0 step failures; firewall Domain/Private/Public on).
+- First diff: 5 findings in evidence/wpf-behaviour/findings.md (#1 Bug Report withdrawn: harness click was covered by the help overlay; offline does not disable logins, type-name accessible names on 35 buttons).
