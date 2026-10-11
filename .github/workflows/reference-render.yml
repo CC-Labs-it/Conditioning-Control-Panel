@@ -83,7 +83,11 @@ jobs:
       # Same view keys and JSON schema as the wpf-behaviour job; the uia-parity job diffs the two.
       - name: Dump the Avalonia automation tree
         if: ${{ !cancelled() }}
-        run: dotnet run --no-build --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --uia-dump $RUNNER_TEMP/avalonia-uia
+        # Same seed as the WPF profile below, so offline-gated controls compare like for like.
+        run: |
+          mkdir -p "$CCP_USERDATA_DIR"
+          echo '{"Welcomed":true,"HasAcceptedAgeVerification":true,"OfflineMode":true,"LauncherSkipToPanel":true,"FirstRunAssetsPromptShown":true}' > "$CCP_USERDATA_DIR/settings.json"
+          dotnet run --no-build --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --uia-dump $RUNNER_TEMP/avalonia-uia
         env:
           CCP_USERDATA_DIR: ${{ runner.temp }}/ccp-profile-uia
           XDG_CONFIG_HOME: ${{ runner.temp }}/xdg
