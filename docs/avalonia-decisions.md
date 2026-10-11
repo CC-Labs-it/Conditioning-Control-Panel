@@ -646,8 +646,8 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Chosen: B, advised by the supervisor (P44). Reason: WPF sends the empty loadout safely only because it adopts the cloud
   loadout first (`AdoptCloudCosmetics`). This head does not adopt, so with A a fresh install would wipe the account's
   cosmetics. Like WPF's, the flag is not persisted. Logout (`SyncPush.Reset`) drops it so it cannot reach the next account.
-- Tests: `Tests/CCP.Avalonia.Tests/ProfileCosmeticsSyncTests.cs` and the golden body in `SyncPushTests.FreshLinuxInstall_*`
-  (fake wire only). Pending owner confirmation of the sync contract (`server-sync-contract` row).
+- Tests: `Tests/CCP.Avalonia.Tests/ProfileCosmeticsSyncTests.cs` and the golden body in `AccountSeedTests.FreshLinuxInstall_*` (SyncPushTests.cs)
+  (fake wire only). Sync contract confirmed by the owner 2026-10-10 (#1867; entry below).
 ## 2026-10-09: Program enrollment stays disabled until the run panel exists (avalonia-port/rows-program-enroll)
 - Question: the ProgramEnrollDialog is fully ported; should the shell Enroll button now call ProgramService.CanEnroll ->
   dialog -> Enroll (writes programs.json, starts the day clock and nudges) although Avalonia has no run panel or
@@ -953,3 +953,78 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   WPE package names, and a localized line (`linux_dep_wpe_unavailable`, 9 languages) says those pages are unavailable there.
   No Flatpak is offered: none has been built (linux-package-flatpak is blocked). Other deps keep their command.
 - Decided by: supervisor brief (F5, F2).
+
+## 2026-10-10: Clean-distro check of the linux-x64 tarball (avalonia-port/distro-check)
+- `packaging/linux/distro-check/run.sh <image> <tarball> <outdir>` checks one stock image in two containers: install
+  (network on) = only the docs/avalonia-linux-install.md dep row + test tooling (Xvfb, openbox, ImageMagick, xdotool,
+  xwininfo), one package at a time so a name the distro lacks is recorded, then `docker commit`; run = `--network none
+  --init`, host uid (given a passwd line: openbox segfaults without one), no devices, throwaway HOME/XDG_CONFIG_HOME/
+  CCP_USERDATA_DIR per resolution. No fonts are added: what the deps pull in is what a minimal install has.
+- Real X (Xvfb) at 1920x1080, 1366x768 and 1920x1080 with AVALONIA_GLOBAL_SCALE_FACTOR=2 (+GDK_SCALE=2). Avalonia sets
+  only _NET_WM_NAME, so windows are found with xdotool and their geometry recorded with xwininfo. The wizard is driven like
+  a user (dismiss Free Feature card, tick the 18+ box, Enter x3) by clicks at DIP offsets x scale; Escape is not used
+  because closing the wizard ungated shuts the app down. Then Ctrl+K palette ("one dialog") and "settings" + Return.
+- result.json: window/wizard/wizard_done/exit per resolution, missing libs from ldd of every bundled .so plus the system
+  secret/vlc/webkit/wpe libs the process mapped (lttng tracepoint provider excluded) plus every `DllNotFoundException`
+  library in the log (libvlc passes ldd yet fails P/Invoke), unavailable packages, fatal log lines (Unhandled/Fatal only:
+  offline warnings appear in every run), screenshot stddev (non-blank > 0.02). run.sh exits 1 when no window appears at
+  1920x1080 and 2 on any install/harness failure.
+- `all.sh` runs the six images and writes summary.json + index.html; `all.sh --index` only assembles (CI's last job).
+- CI `.github/workflows/distro-check.yml` (build.yml untouched): tarball job, 6-way matrix, index job. Tumbleweed is
+  `expect_fail` while finding F1 (no fonts -> startup abort) stands: that tolerates only run.sh exit 1 (no window), never
+  exit 2 (install/harness failure). The first CI run hid a Tumbleweed install failure behind continue-on-error.
+- Findings (not fixed here): ~/ccp-port/evidence/distro-check/findings.md F1-F6.
+## 2026-10-10: CI green on the port stack (avalonia-port/ci-green)
+- core-linux tarball step: `packaging/aur/PKGBUILD` pkgver 7.0.5 -> 7.1.5 with the header's sed (Version.props from main sync #6);
+  pkgrel stays 1 (new pkgver), sha256sums stay SKIP (pinned at release). Local gate mirror: ~/ccp-port/bin/gate.ci-additions.sh.
+- PremiumPageTests (WPF, Windows-only): root cause is the port's PatreonService -> Core `ProviderSubscription` move; the test's
+  `WithTier` set `PatreonService.<CurrentTier>k__BackingField`, which no longer exists (`CurrentTier => _core.CurrentTier`). The
+  stand-in now sets the same backing field on an uninitialised ProviderSubscription behind `_core`. Assertions unchanged.
+- LauncherShortcutsTests.Every_launcher_game_ships_an_icon_file: root cause is the port's move of the icons to the shared
+  `/Assets/launcher-icons` (linked into the WPF head as `Resources\launcher-icons`). The test now reads them there and also pins
+  the csproj `Content ... Link` so the head still ships them. Same per-game assertion.
+- BoardTilesTests.A_frame_fits_the_budget (WPF test, frozen reference; supervisor-approved fix, 12 ms budget UNCHANGED): board code
+  is byte-identical to origin/main, so no port code change. Failed 13.1/14.9/15.7/18.0 ms in 4 of 8 port runs. Local bench of the
+  same loop: net8.0.31 1.86 ms vs net10.0.12 1.85 ms steady, 2.43 vs 2.66 ms cold. CI diagnostic run 38051508272 (4 vCPU): process
+  at 1.70-2.01 cores during the timed window (other classes running in parallel), frames 3.8-23.7 ms falling across the pass
+  (Tier-0 after only 10 warm-up frames). Fix: the class runs in a DisableParallelization collection and warms 60 frames (past
+  tier-up, the comment's "warmed up" intent). Run 38053157085 with the fix: 5.96 ms, 1.27 cores.
+  Main's green runs (e.g. 37949970298, net8, WPF suite 1m22s) do not log a passing test's time, so there is no main per-frame
+  number to compare; the comparable data is the suite wall time (port net10 1m30-1m59s) and the local net8/net10 bench above.
+- build.yml gains `workflow_dispatch:` (additive) so a branch can run the build without a PR.
+- Hidden behind the red app suite, the Windows "Test Avalonia notification suite" had 9 more reds:
+  - 8x WindowDropTests (`NotSupportedException: TryGetFileFromPathAsync` from FirstRunFolderPickerTests.PickerProxy): the
+    `BindStorageProvider` helper called the static `AvaloniaLocator.EnterScope` and then bound into the root locator it had
+    read before, so the fake factory outlived the scope for every later window in the testhost (the Linux gate shards them
+    apart). It now binds into the new scope; same fix in GeneralStartupVideoTests. Repro: the 3 classes in one host, 8 red -> 13/13.
+  - IntakePageTests.TheFallbackPanelNeverShowsTheToken: the Windows runner has WebView2, so WebHost never draws the fallback.
+    Supervisor-approved: always assert `WebHost.WithoutToken`, the TxtSource text when no engine, and on both runners that no
+    TextBlock/tooltip in the host holds `ccp_t`. Fail-proof: panel showing the raw URL -> red.
+- WebcamCalibrationTests splash-close loops (Windows CI flake, run 38060583086): the fade is an Avalonia Animation on the headless
+  render timer, which ticks on wall time (local proof: 4 ticks fail, 400 ms sleep + 4 ticks pass), so 200 bare ticks could end
+  inside the 200 ms fade. Now pumps until gone or 2 s - under the 2.8 s error hold, so a hold-instead-of-fade still fails
+  (fail-proof: panic path routed to ShowErrorAndClose -> red).
+
+## 2026-10-10: Bundled app fonts; never depend on system fonts (avalonia-port/linux-runtime-deps, distro-check F1/F4)
+- Decision (supervisor, option B): `Platform/AppFonts.cs` sets `FontManagerOptions` on the app builder. Default family =
+  the bundled Inter (Fluent already draws body text in Inter), so a system with no fonts starts instead of aborting
+  ("Default font family name can't be null or empty", openSUSE Tumbleweed). "Fredoka" maps to the bundled
+  `ConditioningControlPanel/Fonts/Fredoka.ttf` (OFL, the file WPF packs as /Fonts/#Fredoka): parity over the old
+  fontconfig fallback, no XAML site rewritten. Off Windows "Consolas"/"monospace" map to the already-bundled Noto Sans
+  Mono (measured: Avalonia never resolves a generic "monospace" inside a composite family, it requires the returned
+  family name to contain the requested one, so "Consolas, Courier New, monospace" drew Inter).
+- Content emoji: emoji blocks fall back to the system "emoji" alias first (colour emoji where installed), then the
+  bundled monochrome Noto Emoji (OFL, moved from the snapshot tests to `Assets/fonts`). The snapshot lock pins the
+  bundled one (`AppFonts.Options(systemEmoji: false)`). Licenses ship as `ThirdPartyNotices/OFL-*.txt`.
+- Intentional visual change: every "Fredoka, Segoe UI" and "Consolas, Courier New" site on Linux. Before/after:
+  ~/ccp-port/evidence/linux-runtime-deps/{before,after}-{AppSettingsTabView,ChaosHubWindow}.png.
+## 2026-10-10: /v2/user/sync absent keys mean "no change" for every field (#1867, server-sync-contract)
+- Question: may a client leave a field out of /v2/user/sync and have the server keep its stored value, for every field? 7c
+  (Avalonia `SyncPush`, omits achievements when the profile lacked them, sends no cosmetics on a fresh install) and #1914
+  (cosmetics: empty loadout only as the explicit clear) were held on it.
+- Answer (advised: user/owner): CONFIRMED by the user 2026-10-10: the server treats absent keys as "no change" for every field.
+- Effect: `server-sync-contract` row blocked -> resolved; 7c and the #1914 `PendingCosmeticsClear` rule (entry 2026-10-09
+  above) stand as built. No code, data-format or sync-behaviour change in this entry. Tests (fake wire only, fail-proven):
+  `AccountSeedTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer` (SyncPushTests.cs),
+  `AccountSeedTests.AProfileWithoutAchievements_SendsNoAchievementsKey` (SyncPushTests.cs), `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
+  log: ~/ccp-port/evidence/server-sync-unblock/fail-proofs.log.

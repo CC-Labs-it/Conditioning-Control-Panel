@@ -15,8 +15,8 @@ public sealed class LinuxDependenciesTests
     [InlineData("ID=endeavouros\nID_LIKE=arch\n", "sudo pacman -S --needed vlc libsecret")]
     [InlineData("ID=ubuntu\nID_LIKE=debian\n", "sudo apt install libvlc5 vlc-plugin-base libsecret-1-0")]
     [InlineData("ID=linuxmint\nID_LIKE=\"ubuntu debian\"\n", "sudo apt install libvlc5 vlc-plugin-base libsecret-1-0")]
-    [InlineData("ID=fedora\n", "sudo dnf install vlc-libs libsecret")]
-    [InlineData("ID=\"rocky\"\nID_LIKE=\"rhel centos fedora\"\n", "sudo dnf install vlc-libs libsecret")]
+    [InlineData("ID=fedora\n", "sudo dnf install vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio libsecret")]
+    [InlineData("ID=\"rocky\"\nID_LIKE=\"rhel centos fedora\"\n", "sudo dnf install vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio libsecret")]
     public void MessageNamesTheDistroCommandForWhatIsMissing(string osRelease, string command)
     {
         var msg = LinuxDependencies.Message(LinuxDependencies.Missing(NoVlcNoSecret), osRelease)!.Value;
@@ -77,5 +77,16 @@ public sealed class LinuxDependenciesTests
         var msg = LinuxDependencies.Message(LinuxDependencies.Missing(l => !l.Contains("wpe", System.StringComparison.OrdinalIgnoreCase)), "ID=cachyos\nID_LIKE=arch\n")!.Value;
         Assert.Equal("sudo pacman -S --needed wpewebkit wpebackend-fdo libwpe", msg.Command);
         Assert.DoesNotContain("WPE WebKit 2.0", msg.Text);
+    }
+
+    [Fact]
+    public void LibVlcThatLoadsButFailsToStartStillNamesTheAudioPackages()
+    {
+        // Fedora with vlc-libs alone: libvlc.so.5 loads, new LibVLC throws (no plugins).
+        Assert.Empty(LinuxDependencies.Missing(_ => true));
+        var missing = LinuxDependencies.Missing(_ => true, audioFailed: true);
+        Assert.Equal(new[] { "audio and video" }, missing.Select(d => d.Need));
+        Assert.Equal("sudo dnf install vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio",
+            LinuxDependencies.Message(missing, "ID=fedora\n")!.Value.Command);
     }
 }

@@ -14,10 +14,18 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
 |---|---|---|---|
 | Web views (WebHost) | webkit2gtk-4.1 | libwebkit2gtk-4.1-0 | webkit2gtk4.1 |
 | Web views, WPE path (Avalonia WebView also loads libwpe-1.0.so.1, libWPEBackend-fdo-1.0.so.1, libWPEWebKit-2.0.so.1; user hit "WPE WebKit libs not installed") | wpewebkit wpebackend-fdo libwpe (extra, verified `pacman -Si` 2026-10-10) | not packaged (Ubuntu 24.04: none; Debian 12 / Ubuntu 22.04: WebKit 1.x only, distro-check F2) | not packaged (Fedora 44, distro-check F2) |
-| Audio / video (LibVLCSharp) | vlc (libvlc) | libvlc5 + vlc-plugin-base | vlc-libs |
+| Audio / video (LibVLCSharp; the runtime package's libvlc.so.5 is enough, LibVlcNative resolves the soname) | vlc (libvlc) | libvlc5 + vlc-plugin-base | vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio (vlc-libs alone has no plugins: "Failed to perform instanciation") |
+| Ducking, microphone list, quest mic probe (`pactl`; works on PipeWire too) | libpulse | pulseaudio-utils | pulseaudio-utils (openSUSE: pulseaudio-utils) |
+| Fonts | none: Inter, Fredoka, Noto Sans Mono and Noto Emoji are bundled (a system emoji font is used first when present) | none | none |
 | Sign-in token store | libsecret | libsecret-1-0 | libsecret |
 | Overlays, panic key (X11/XInput2) | libx11 libxi | libx11-6 libxi6 | libX11 libXi |
 .NET: publish self-contained, so no runtime dependency.
+openSUSE names (used by `packaging/linux/distro-check`): libwebkit2gtk-4_1-0, libWPEWebKit-2_0-1 libWPEBackend-fdo-1_0-1
+libwpe-1_0-1, libvlc5 vlc-noX, libsecret-1-0, libX11-6 libXi6.
+Measured 2026-10-10 on stock images (`distro-check`, ~/ccp-port/evidence/distro-check/findings.md): the WPE row is NOT
+installable on Ubuntu 24.04 (no WPE at all), Ubuntu 22.04 / Debian 12 (WebKit only as libwpewebkit-1.0-3 / -1.1-0) or
+Fedora 44 (none); Arch extra ships all three (`pacman -Si` 2026-10-10; the image check reported otherwise). libvlc5 / vlc-libs ship only `libvlc.so.5`,
+which LibVLCSharp does not find (audio disabled). None of the rows pulls a font or an emoji font.
 
 ## Plan (channel order CONFIRMED by the user 2026-09-28: own Flatpak repo + AUR first; Flathub after a content-policy check)
 1. **Flatpak (primary, every distro, one click).** GNOME runtime already has WebKitGTK; bundle libVLC and the WPE libs (wpewebkit, wpebackend-fdo, libwpe) if the runtime lacks them; self-contained .NET.
@@ -25,7 +33,7 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
    (tray), portals for notifications, GlobalShortcuts and Secret (libsecret uses the Secret portal inside Flatpak).
    Updates come from the store. Host: own Flatpak repo + `.flatpakref` on the website first; Flathub only after checking
    its content policy for this app.
-2. **AUR package** (Arch/CachyOS): `depends=(webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libsecret libx11 libxi)`.
+2. **AUR package** (Arch/CachyOS): `depends=(webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libpulse libsecret libx11 libxi)`.
    Debian/Ubuntu/Fedora: no WPE packages exist, so a .deb/.rpm cannot declare them; the in-app message says those pages are
    unavailable there until a Flatpak bundling WPE ships (none has been built yet).
 3. Later, on demand: `.deb` / `.rpm` with the same dependency lists; AppImage only as a fallback (cannot pull WebKit).
