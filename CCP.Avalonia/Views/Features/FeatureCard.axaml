@@ -13,6 +13,7 @@
        Hover rim-light DoubleAnimation -> a DoubleTransition on RimLight.Opacity (below) -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.FeatureCard"
              Cursor="Hand">
 
@@ -120,7 +121,7 @@
                     CornerRadius="12"
                     IsVisible="False">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="🔒" FontSize="26" HorizontalAlignment="Center"/>
+                    <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="26" HorizontalAlignment="Center"/>
                     <TextBlock x:Name="TxtLockLabel"
                                Text="Lvl 10"
                                Margin="0,4,0,0"

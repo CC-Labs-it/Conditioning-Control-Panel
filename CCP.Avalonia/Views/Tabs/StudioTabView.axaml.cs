@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             /// <summary>Stable rack key. API for <see cref="FocusRackEntry"/>; never renamed.</summary>
             public string Key = string.Empty;
-            public string Glyph = string.Empty;
+            public IconEntry Icon;
 
             /// <summary>
             /// Filename under <c>Resources/features/</c> for this module's feature art, or null
@@ -521,36 +521,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BuildRack()
         {
             _layout.Add("st4_studio_group_effects");
-            Add("flash", "⚡", "flash.png", "Flash Images", "section_flash_images", HostFlash, PanelFlash, "Flash",
+            Add("flash", I(IconKind.Flash), "flash.png", "Flash Images", "section_flash_images", HostFlash, PanelFlash, "Flash",
                 () => CoreSettings.Current.FlashEnabled);
-            Add("video", "🎬", "mandatory_videos.png", "Mandatory Video", "section_mandatory_video", HostVideo, PanelVideo, "Video",
+            Add("video", I(IconKind.Video), "mandatory_videos.png", "Mandatory Video", "section_mandatory_video", HostVideo, PanelVideo, "Video",
                 () => CoreSettings.Current.MandatoryVideosEnabled);
-            Add("subliminal", "💭", "subliminal.png", "Subliminals", "section_subliminals_2", HostSubliminal, PanelSubliminal, "Subliminal",
+            Add("subliminal", I(IconKind.Comment), "subliminal.png", "Subliminals", "section_subliminals_2", HostSubliminal, PanelSubliminal, "Subliminal",
                 () => CoreSettings.Current.SubliminalEnabled);
-            Add("spiral", "🌀", "spiral_overlay.png", "Spiral Overlay", "label_spiral_overlay", HostSpiral, PanelSpiral, "Spiral",
+            Add("spiral", new IconEntry(IconKind.Circle, IconVariant.Regular, null, IconBrand.Spiral), "spiral_overlay.png", "Spiral Overlay", "label_spiral_overlay", HostSpiral, PanelSpiral, "Spiral",
                 () => CoreSettings.Current.SpiralEnabled);
-            Add("pinkfilter", "💗", "Pink_filter.png", "Pink Filter", "label_pink_filter", HostPinkFilter, PanelPinkFilter, "PinkFilter",
+            Add("pinkfilter", new IconEntry(IconKind.Heart, IconVariant.Filled, IconBrushes.Heart), "Pink_filter.png", "Pink Filter", "label_pink_filter", HostPinkFilter, PanelPinkFilter, "PinkFilter",
                 () => CoreSettings.Current.PinkFilterEnabled);
             // Visuals has no single master toggle - the dashboard card is deliberately neutral too.
             // A dot that cannot be wired honestly is omitted, and with it the right-click gesture.
-            Add("visuals", "👁", null, "Visuals", "section_visuals", HostVisuals, PanelVisuals, "Visuals", null);
+            Add("visuals", I(IconKind.Eye), null, "Visuals", "section_visuals", HostVisuals, PanelVisuals, "Visuals", null);
 
             _layout.Add("st4_studio_group_games");
-            Add("bubbles", "🫧", "Bubble_pop.png", "Bubble Pop", "label_bubble_pop", HostBubblePop, PanelBubblePop, "BubblePop",
+            Add("bubbles", I(IconKind.BubbleMultiple), "Bubble_pop.png", "Bubble Pop", "label_bubble_pop", HostBubblePop, PanelBubblePop, "BubblePop",
                 () => CoreSettings.Current.BubblesEnabled);
-            Add("bubblecount", "🔢", "Bubble_count.png", "Bubble Count", "label_bubble_count", HostBubbleCount, PanelBubbleCount, "BubbleCount",
+            Add("bubblecount", I(IconKind.NumberSymbol), "Bubble_count.png", "Bubble Count", "label_bubble_count", HostBubbleCount, PanelBubbleCount, "BubbleCount",
                 () => CoreSettings.Current.BubbleCountEnabled);
-            Add("lockcard", "📐", "Phrase_Lock.png", "Lock Card", "label_lock_card", HostLockCard, PanelLockCard, "LockCard",
+            Add("lockcard", I(IconKind.Keyboard), "Phrase_Lock.png", "Lock Card", "label_lock_card", HostLockCard, PanelLockCard, "LockCard",
                 () => CoreSettings.Current.LockCardEnabled);
-            Add("bouncingtext", "📺", "bouncing_text.png", "Bouncing Text", "label_bouncing_text", HostBouncingText, PanelBouncingText, "BouncingText",
+            Add("bouncingtext", I(IconKind.Tv), "bouncing_text.png", "Bouncing Text", "label_bouncing_text", HostBouncingText, PanelBouncingText, "BouncingText",
                 () => CoreSettings.Current.BouncingTextEnabled);
 
             _layout.Add("st4_studio_group_immersion");
-            Add("mindwipe", "🧠", "Mind_Wipers.png", "Mind Wipe", "label_mind_wipe", HostMindWipe, PanelMindWipe, "MindWipe",
+            Add("mindwipe", I(IconKind.BrainCircuit), "Mind_Wipers.png", "Mind Wipe", "label_mind_wipe", HostMindWipe, PanelMindWipe, "MindWipe",
                 () => CoreSettings.Current.MindWipeEnabled);
             // "BrainDrain" is a NEW feature_eq value; all three built-in mods carry a matching
             // feat_braindrain FeatureOpened rule.
-            Add("braindrain", "💧", "brain_drain.png", "Brain Drain", "section_brain_drain", HostBrainDrain, PanelBrainDrain, "BrainDrain",
+            Add("braindrain", I(IconKind.Drop), "brain_drain.png", "Brain Drain", "section_brain_drain", HostBrainDrain, PanelBrainDrain, "BrainDrain",
                 () => CoreSettings.Current.BrainDrainEnabled);
             // Haptics: no FeatureOpened key. ShowTab("haptics") still fires
             // NotifyTabNavigated("haptics"), which is what its 3 rules per mod match on. Panel is
@@ -559,7 +559,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // The dot reads a nested settings object with no INPC of its own, so it repaints on
             // every Studio show and every selection rather than live - exactly as on WPF.
             // Tier 1: the rack's one paid module, same bar as the premium rail's chip.
-            Add("haptics", "📳", "vibe.png", "Haptics", "tab_haptics", PanelHaptics, null, null,
+            Add("haptics", I(IconKind.PhoneVibrate), "vibe.png", "Haptics", "tab_haptics", PanelHaptics, null, null,
                 () => CoreSettings.Current.Haptics?.Enabled,
                 // REFUSED, and the page being hosted now does not change it. WPF flips
                 // PanelHaptics.ChkHapticsEnabled so the page's own handler AND its premium gate
@@ -577,7 +577,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Neither is a wall tile and neither drives a service directly (the scheduler tick and
             // the session ramp read the flags), so the honest quick-toggle is the panel's own
             // enable box - it writes the flag and Saves in one place.
-            Add("scheduler", "📅", null, "Scheduler", "section_scheduler", HostScheduler, PanelScheduler, "SchedulerRamp",
+            Add("scheduler", I(IconKind.Calendar), null, "Scheduler", "section_scheduler", HostScheduler, PanelScheduler, "SchedulerRamp",
                 () => CoreSettings.Current.SchedulerEnabled,
                 toggle: () =>
                 {
@@ -586,7 +586,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     else
                         SelectEntry("scheduler", announce: true, animate: true);
                 });
-            Add("ramp", "📈", null, "Intensity Ramp", "section_intensity_ramp", HostRamp, PanelRamp, "SchedulerRamp",
+            Add("ramp", I(IconKind.ArrowTrending), null, "Intensity Ramp", "section_intensity_ramp", HostRamp, PanelRamp, "SchedulerRamp",
                 () => CoreSettings.Current.IntensityRampEnabled,
                 toggle: () => FlipMasterCheckBox(PanelRamp?.Inner.FindControl<CheckBox>("ChkEnabled")));
 
@@ -594,14 +594,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshRackLabels();
             RefreshDots();
 
-            void Add(string key, string glyph, string? art, string english, string locKey, Control? host,
+            static IconEntry I(IconKind kind) => new(kind, IconVariant.Regular);
+
+            void Add(string key, IconEntry icon, string? art, string english, string locKey, Control? host,
                      UserControl? panel, string? bark, Func<bool?>? dot, bool ownHeader = true,
                      Action? toggle = null, int tier = 0)
             {
                 var entry = new StudioRackEntry
                 {
                     Key = key,
-                    Glyph = glyph,
+                    Icon = icon,
                     Art = art,
                     English = english,
                     LocKey = locKey,
@@ -767,13 +769,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // it with the module's feature plate when one resolves, which is exactly what WPF
                 // shows for a module with art and without.
                 Background = ChipHueWashBrush,
-                Child = new TextBlock
-                {
-                    Text = e.Glyph,
-                    FontSize = 14,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
+                Child = RackGlyph(e.Icon, 14),
             };
             chip[!Border.BorderBrushProperty] = new DynamicResourceExtension("GlassBorderBrush");
 
@@ -1204,7 +1200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     ? TierLiveryBrush(target.Tier)
                     : new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x46));
             }
-            if (TxtDetailIcon != null) TxtDetailIcon.Text = target.Glyph;
+            TxtDetailIcon?.Apply(target.Icon);
             if (TxtDetailTitle != null) TxtDetailTitle.Text = LabelFor(target);
         }
 
@@ -1288,6 +1284,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Local twin of <c>MainWindow.StripLeadingGlyph</c> (private over there, and a UserControl
         /// cannot reach it). Keep the two in step if either changes.
         /// </summary>
+        private static IconGlyph RackGlyph(IconEntry icon, double size)
+        {
+            var g = new IconGlyph { Size = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            g.Apply(icon);
+            return g;
+        }
+
         private static string StripLeadingGlyph(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;

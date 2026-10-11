@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
                 // Panic key: read-only mirror for the same reason. Settings ▸ Devices owns the
                 // toggle, the rebind and the keyboard hook.
-                TxtPanicKeyState.Text = $"🔑 {s.PanicKey}";
+                TxtPanicKeyState.Text = s.PanicKey.ToString();
                 TxtNoPanicState.Text = Loc.Get(s.PanicKeyEnabled ? "set2_chip_off" : "set2_chip_on");
             }
             finally { _isLoading = false; }

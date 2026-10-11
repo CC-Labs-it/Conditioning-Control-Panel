@@ -15,6 +15,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.SystemFeatureControl">
 
     <!-- This control hangs off the Settings door, not the Studio rack, so it gets NO hero
@@ -131,8 +132,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_no_panic}" Foreground="#FF6B6B"
-                                           FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="setting_no_panic" TextElement.Foreground="#FF6B6B" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="1" x:Name="TxtNoPanicState" Text=""
                                            Foreground="{StaticResource TextMutedBrush}" FontSize="11"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
@@ -190,12 +190,14 @@
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str btn_escape}"
-                                           Foreground="{StaticResource TextLightBrush}"
-                                           FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" x:Name="TxtPanicKeyState" Text="🔑 —"
-                                           Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="btn_escape" TextElement.Foreground="{StaticResource TextLightBrush}" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            TextElement.Foreground="{DynamicResource PinkBrush}">
+                                    <fx:IconGlyph Kind="Key" Size="13" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtPanicKeyState" Text="—" FontSize="13" FontWeight="Bold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
                             </Grid>
 
                         </StackPanel>
@@ -209,13 +211,15 @@
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" x:Name="BtnPickAssets" Content="📁 Pick Folder"
+                    <Button Grid.Column="0" x:Name="BtnPickAssets"
                             Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch"
-                            ToolTip.Tip="{loc:Str tooltip_set_custom_assets_folder}"/>
+                            ToolTip.Tip="{loc:Str tooltip_set_custom_assets_folder}">
+                        <fx:IconLabel Kind="Folder" Text="Pick Folder"/>
+                    </Button>
                     <Button Grid.Column="2" x:Name="BtnOpenAssets"
                             Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch"
                             ToolTip.Tip="{loc:Str tooltip_open_assets_folder_images_videos_sounds}">
-                        <TextBlock Text="{loc:Str btn_assets}"/>
+                        <fx:IconLabel Key="btn_assets"/>
                     </Button>
                 </Grid>
             </StackPanel>
@@ -226,8 +230,8 @@
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
                     VerticalAlignment="Stretch" MinHeight="200">
-                <TextBlock Text="⚙" FontSize="100" Opacity="0.18"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Settings" Variant="Filled" Size="100" Opacity="0.18"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Grid>
 

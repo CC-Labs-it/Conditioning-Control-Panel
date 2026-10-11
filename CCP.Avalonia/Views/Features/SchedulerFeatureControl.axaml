@@ -8,6 +8,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.SchedulerFeatureControl">
 
     <!-- ONE dense controls card for all nine scheduler settings. The hero for this feature
@@ -52,8 +53,8 @@
                                      Background="{DynamicResource SurfaceBgBrush}"
                                      Foreground="White" BorderBrush="{DynamicResource PinkBrush}"
                                      Padding="6,3" FontSize="13" TextAlignment="Center"/>
-                            <TextBlock Text="→" Foreground="{DynamicResource PinkBrush}"
-                                       FontSize="15" Margin="10,0" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="ArrowRight" Foreground="{DynamicResource PinkBrush}"
+                                          Size="15" Margin="10,0" VerticalAlignment="Center"/>
                             <TextBox x:Name="TxtEnd" Text="22:00" Width="74"
                                      Background="{DynamicResource SurfaceBgBrush}"
                                      Foreground="White" BorderBrush="{DynamicResource PinkBrush}"
