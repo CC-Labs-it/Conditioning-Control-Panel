@@ -2,6 +2,8 @@
 # path is relative to CCP.Avalonia; the literal is blanked on every line of that file before counting.
 # Reason prefix scopes the entry: "font:" -> NoIconFontCodepoints, "path:" -> PathIconRatchet, anything else is
 # CONTENT for IconEmojiRatchet. Only content belongs here at the finish (L12); "font:" entries are temporary.
+# Liveness is checked on comment-stripped code. A "path:" literal is listed once per line it covers (a new Path built
+# the same way fails the count). Literal `*` (path: only) exempts every file whose path starts with the entry's path.
 
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" :: font: temporary - MDL2 settings gear, the one icon-font site at L0b; L10 converts it to IconGlyph Kind=Settings
@@ -27,14 +29,30 @@ Views/Windows/QuizWindow.axaml.cs :: (Companion → AI) :: arrow inside an error
 # --- content (c).3: emoji inside head-authored sentences ---
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)
 
-# --- art, D6 "keep as art" inside files that also hold icon Paths (whole-art files are ArtFiles in the test) ---
+# --- art, D6 "keep as art": whole files that are illustration, not icons ---
+Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations
+Controls/SpiralGlyph.cs :: * :: path: D6 art - spiral glyph drawing
+Controls/ChasterRailChip.cs :: * :: path: D6 art - Chaster rail chip lock drawing
+Controls/DescentFuseRailChip.cs :: * :: path: D6 art - descent fuse rail chip drawing
+Views/Controls/SeasonRecapCard. :: * :: path: D6 art - season recap card illustration
+Helpers/BreakoutCardArt.cs :: * :: path: D6 art - breakout card art
+Views/Features/SplitFeatureCard. :: * :: path: D6 art - split feature card illustration
+Views/Windows/TutorialOverlay. :: * :: path: D6 art - tutorial overlay spotlight/arrows
+Views/Windows/EmiDesk/EmiDeskWindow. :: * :: path: D6 art - Emi desk scene
+Controls/Icons/ :: * :: path: IconGlyph's spiral extension glyph (decisions 2026-10-10)
+Controls/PremiumSpark.cs :: * :: path: D6 art - animated sparkle/particle effect, not an icon slot
+
+# --- art, D6 "keep as art" inside files that also hold icon Paths ---
 Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="FuseCandleFlame" :: path: D6 art - AvatarTube fuse candle flame
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: _curvePath = new Path :: path: D6 art - rule-editor curve
-Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: canvas.Children.Add(new Path :: path: D6 art - rule-editor keyframe curve
+Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: canvas.Children.Add(new Path :: path: D6 art - rule-editor keyframe curve (one site)
 Views/Deeper/DeeperEditorWindow.axaml :: <Path x:Name="WaveformPath" :: path: D6 art - waveform
 Views/Deeper/EnhancementPlayerWindow.axaml :: <Path x:Name="WaveformPath" :: path: D6 art - waveform
-Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness= :: path: D6 art - illustrative blink eye (lines 111-127)
-Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edges
+Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="2.6" :: path: D6 art - illustrative blink eye, open outline
+Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="2.6" :: path: D6 art - illustrative blink eye, closed arc
+Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="1.6" :: path: D6 art - illustrative blink eye, lashes
+Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, top card
+Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, second card
 Views/Tabs/DiscordTabView.axaml :: <Path HorizontalAlignment="Left" VerticalAlignment="Top" :: path: D6 art - faucet spout
 Views/Tabs/DiscordTabView.axaml :: <Path x:Name="ProfileVatChargeArc" :: path: D6 art - vat charge arc
 Views/Tabs/SpiralTabView.axaml :: <Path x:Name="SplashGlyph" :: path: D6 art - spiral splash glyph

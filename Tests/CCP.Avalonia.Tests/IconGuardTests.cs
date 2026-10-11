@@ -80,14 +80,10 @@ public sealed class IconGuardTests
     [Fact]
     public void PathIconRatchet()
     {
-        // One per line: `new Path { Data = Geometry.Parse(..) }` is one drawn shape. StreamGeometry.Parse counts too.
-        var xaml = new Regex(@"<Path[\s>/]");
-        var cs = new Regex(@"\bnew\s+Path\b|Geometry\.Parse\(");
         var perFile = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var (rel, lines) in Sources())
         {
-            if (ArtFiles.Any(a => rel.StartsWith(a, StringComparison.Ordinal))) continue;
-            var path = rel.EndsWith(".cs", StringComparison.Ordinal) ? cs : xaml;
+            var path = PathRegex(rel);
             var code = StripComments(rel, string.Join("\n", lines)).Split('\n');
             for (int i = 0; i < code.Length; i++)
                 if (path.IsMatch(Allowed(rel, code[i], "path")))
@@ -113,21 +109,30 @@ public sealed class IconGuardTests
     [Fact]
     public void AllowListEntriesAreLiveAndReasoned()
     {
-        var all = Sources().ToDictionary(s => s.Rel, s => string.Join("\n", s.Lines));
-        var bad = Allow.Where(a => a.Reason.Length < 8 || !all.TryGetValue(a.Path, out var src) || !src.Contains(a.Literal, StringComparison.Ordinal))
-            .Select(a => $"{a.Path} :: {a.Literal}").ToList();
-        Assert.True(bad.Count == 0, "stale or unreasoned IconGuard.allow.txt entries:\n" + string.Join("\n", bad));
+        // Live = matches comment-stripped code (P23). A `*` entry must exempt at least one real Path; a "path:" literal
+        // is listed once per line it covers, so a new Path built the same way breaks the count instead of hiding.
+        var code = Sources().ToDictionary(s => s.Rel, s => StripComments(s.Rel, string.Join("\n", s.Lines)).Split('\n'));
+        var bad = new List<string>();
+        foreach (var a in Allow)
+        {
+            int hits = a.Literal == "*"
+                ? code.Count(kv => kv.Key.StartsWith(a.Path, StringComparison.Ordinal) && kv.Value.Any(PathRegex(kv.Key).IsMatch))
+                : code.TryGetValue(a.Path, out var src) ? src.Count(l => l.Contains(a.Literal, StringComparison.Ordinal)) : 0;
+            int listed = Allow.Count(b => b.Path == a.Path && b.Literal == a.Literal);
+            bool wrongCount = a.Literal != "*" && Kind(a) == "path" && hits != listed;
+            if (a.Reason.Length < 8 || (a.Literal == "*" && Kind(a) != "path") || hits == 0 || wrongCount)
+                bad.Add($"{a.Path} :: {a.Literal} (covers {hits} line(s), listed {listed}x)");
+        }
+        Assert.True(bad.Count == 0, "stale, broad or unreasoned IconGuard.allow.txt entries:\n" + string.Join("\n", bad.Distinct()));
     }
 
-    // D6 "keep as art": whole files that are illustration, not icons. Mixed files use allow.txt lines (kind "path").
-    private static readonly string[] ArtFiles =
-    {
-        "Controls/HelpLoops/", "Controls/SpiralGlyph.cs", "Controls/ChasterRailChip.cs", "Controls/DescentFuseRailChip.cs",
-        "Views/Controls/SeasonRecapCard.", "Controls/VatGlassCanvas.cs", "Helpers/BreakoutCardArt.cs", "Views/Features/SplitFeatureCard.",
-        "Views/Windows/TutorialOverlay.", "Views/Windows/EmiDesk/EmiDeskWindow.",
-        "Controls/Icons/", // IconGlyph's spiral extension glyph (decisions 2026-10-10)
-        "Controls/PremiumSpark.cs", // animated sparkle/particle effect, not an icon slot
-    };
+    // One per line: `new Path { Data = Geometry.Parse(..) }` is one drawn shape. StreamGeometry.Parse counts too.
+    private static readonly Regex XamlPath = new(@"<Path[\s>/]");
+    private static readonly Regex CsPath = new(@"\bnew\s+Path\b|Geometry\.Parse\(");
+    private static Regex PathRegex(string rel) => rel.EndsWith(".cs", StringComparison.Ordinal) ? CsPath : XamlPath;
+
+    private static string Kind(AllowEntry a) =>
+        a.Reason.StartsWith("font:", StringComparison.Ordinal) ? "font" : a.Reason.StartsWith("path:", StringComparison.Ordinal) ? "path" : "emoji";
 
     private static void Ratchet(string baselineFile, SortedDictionary<string, List<string>> perFile)
     {
@@ -148,7 +153,8 @@ public sealed class IconGuardTests
 
     private sealed record AllowEntry(string Path, string Literal, string Reason);
 
-    /// <summary>IconGuard.allow.txt: `path :: exact literal :: reason`, path relative to CCP.Avalonia, '#' comments.</summary>
+    /// <summary>IconGuard.allow.txt: `path :: exact literal :: reason`, path relative to CCP.Avalonia, '#' comments.
+    /// Literal `*` ("path:" only) exempts every file whose path starts with the entry's path: whole D6 art files.</summary>
     private static readonly List<AllowEntry> Allow = File.ReadAllLines(Path.Combine(Here, "IconGuard.allow.txt"))
         .Where(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith('#'))
         .Select(l => l.Split(" :: "))
@@ -161,8 +167,9 @@ public sealed class IconGuardTests
     {
         foreach (var a in Allow)
         {
-            var k = a.Reason.StartsWith("font:", StringComparison.Ordinal) ? "font" : a.Reason.StartsWith("path:", StringComparison.Ordinal) ? "path" : "emoji";
-            if (k == kind && a.Path == rel) line = line.Replace(a.Literal, new string(' ', a.Literal.Length), StringComparison.Ordinal);
+            if (Kind(a) != kind) continue;
+            if (a.Literal == "*" && rel.StartsWith(a.Path, StringComparison.Ordinal)) return "";
+            if (a.Path == rel) line = line.Replace(a.Literal, new string(' ', a.Literal.Length), StringComparison.Ordinal);
         }
         return line;
     }
