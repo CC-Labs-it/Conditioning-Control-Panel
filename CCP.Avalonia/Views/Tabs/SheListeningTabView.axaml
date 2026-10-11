@@ -39,12 +39,20 @@
              d:DesignHeight="450" d:DesignWidth="800">
 
     <UserControl.Styles>
-        <!-- "What you can say" row heads (fluent-icons 2026-10-10): one Regular icon per row, text colour. -->
+        <!-- "What you can say" row heads (fluent-icons 2026-10-10): one icon per row, text colour;
+             Filled where the design ref says so (shield, sparkle, pause; hearts also pink). -->
         <Style Selector="fx|IconLabel.vhead">
             <Setter Property="TextElement.Foreground" Value="{StaticResource TextLightBrush}"/>
             <Setter Property="TextElement.FontSize" Value="13"/>
             <Setter Property="TextElement.FontWeight" Value="Bold"/>
             <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style Selector="fx|IconLabel.filled > fx|IconGlyph">
+            <Setter Property="Variant" Value="Filled"/>
+        </Style>
+        <Style Selector="fx|IconLabel.heart > fx|IconGlyph">
+            <Setter Property="Variant" Value="Filled"/>
+            <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
         </Style>
         <!-- No Fluent spiral: the in-house extension glyph (IconMap 🌀). -->
         <Style Selector="fx|IconLabel.spiral > fx|IconGlyph">
@@ -300,7 +308,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
                                             <StackPanel Orientation="Horizontal">
-                                                <fx:IconLabel Kind="Sparkle" Text="Reliable wake" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                <fx:IconLabel Classes="filled" Kind="Sparkle" Text="Reliable wake" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
                                                              TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="open-source, offline, no key" FontSize="9"
                                                            Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
@@ -469,7 +477,7 @@
                             <Border Background="#22FF69B4" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
                                     CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
                                 <StackPanel>
-                                    <fx:IconLabel Classes="vhead" Kind="Shield" Text="Safety word — stops every effect, instantly"/>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Shield" Text="Safety word — stops every effect, instantly"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="20"
                                                Text="“red”  ·  “stop everything”  ·  “make it stop”  ·  “all stop”"/>
                                 </StackPanel>
@@ -491,14 +499,14 @@
                                     <fx:IconLabel Classes="vhead" Kind="Tv" Text="Video" Tag="voice:video_on|video_off|video_pause"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="play "/><Run Text="“show me a video” · “play a video” · “put on a video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="stop "/><Run Text="“stop the video” · “no more videos” · “video off”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="pause "/><Run Text="“pause the video” · “resume the video” · “keep playing”"/></TextBlock>
 
-                                    <fx:IconLabel Classes="vhead" Kind="Sparkle" Text="Flash" Tag="voice:flash_once"/>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Sparkle" Text="Flash" Tag="voice:flash_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“flash me” · “one flash” · “give me a flash”"/>
 
                                     <fx:IconLabel Classes="vhead spiral" Kind="Circle" Text="Spiral" Tag="voice:spiral_on|spiral_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“show me the spiral” · “spiral on” · “bring up the spiral”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“stop the spiral” · “hide the spiral” · “spiral off”"/></TextBlock>
 
-                                    <fx:IconLabel Classes="vhead" Kind="Heart" Text="Pink filter" Tag="voice:pink_on|pink_off"/>
+                                    <fx:IconLabel Classes="vhead heart" Kind="Heart" Text="Pink filter" Tag="voice:pink_on|pink_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“make it pink” · “go pink” · “pink filter on”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“make it normal” · “stop the pink filter” · “pink filter off”"/></TextBlock>
 
                                     <fx:IconLabel Classes="vhead" Kind="Chat" Text="Subliminals" Tag="voice:subliminals_on|subliminals_off"/>
@@ -551,7 +559,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0">
-                                    <fx:IconLabel Classes="vhead" Kind="Pause" Text="Session" Tag="voice:pause"/>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Pause" Text="Session" Tag="voice:pause"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“pause” · “resume” · “keep going”"/>
 
@@ -559,7 +567,7 @@
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“louder” · “quieter” · “mute”"/>
 
-                                    <fx:IconLabel Classes="vhead" Kind="Heart" Text="Mantra" Tag="voice:mantra"/>
+                                    <fx:IconLabel Classes="vhead heart" Kind="Heart" Text="Mantra" Tag="voice:mantra"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21"
                                                Text="“give me a mantra” · “say a mantra” · “give me something to say”"/>
                                 </StackPanel>

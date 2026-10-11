@@ -111,6 +111,12 @@ public sealed class VoiceCommandsTests
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
         var toys = rows.Single(t => t.Text!.Contains("Quick toys"));   // freeze runs here only if its seam is seeded
         Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "freeze_once"), toys.IsVisible);
+        // fluent-icons design ref: hearts Filled + pink, pause Filled.
+        var heart = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Pink filter")).Children[0];
+        Assert.Equal(FluentIcons.Common.IconVariant.Filled, heart.Variant);
+        Assert.Same(shell.SheListeningPage!.FindResource(ConditioningControlPanel.Avalonia.Controls.IconBrushes.Heart), heart.Foreground);
+        var pause = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Session")).Children[0];
+        Assert.Equal(FluentIcons.Common.IconVariant.Filled, pause.Variant);
         await Task.CompletedTask;
     });
 
