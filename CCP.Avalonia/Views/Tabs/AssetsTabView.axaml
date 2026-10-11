@@ -391,7 +391,7 @@
                                                 <TextBlock Grid.Row="1" Text="{Binding Description}"
                                                            Foreground="{DynamicResource TextMutedBrush}" FontSize="9"
                                                            TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                                           MaxHeight="60" VerticalAlignment="Top"
+                                                           MaxLines="5" VerticalAlignment="Top"
                                                            ToolTip.Tip="{Binding Description}"/>
                                                 <TextBlock Grid.Row="2" Text="{Binding CountsDisplay}"
                                                            Foreground="{DynamicResource PinkBrush}" FontSize="8"
@@ -461,7 +461,7 @@
                                                Margin="0,0,0,2"/>
                                     <TextBlock Grid.Row="1" Text="{loc:Str label_are_you_a_content_creator_join_our_discord_to}"
                                                Foreground="{DynamicResource TextMutedBrush}" FontSize="10"
-                                               TextWrapping="Wrap" MaxHeight="52" VerticalAlignment="Top"/>
+                                               TextWrapping="Wrap" MaxLines="4" VerticalAlignment="Top"/>
                                     <TextBlock Grid.Row="2" Text="Get featured in the app"
                                                Foreground="#5865F2" FontSize="9" Margin="0,2,0,4" FontWeight="SemiBold"/>
 
