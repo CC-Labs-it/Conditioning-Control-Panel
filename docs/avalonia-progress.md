@@ -1856,3 +1856,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Bundled fonts (Inter default, Fredoka, Noto Sans Mono, Noto Emoji fallback): no crash on a font-less system, WPF display face on Linux.
 - libvlc soname resolver + Fedora VLC plugin deps; pactl probe no longer spawns when absent; install doc updated.
 - Review fixes: audio packages named when LibVLC fails to start, Noto Sans Mono license shipped.
+
+## avalonia-port/lockdown-badge-flake: +7
+- LockdownVeilTests: the setup marks every startup intro and the What moved card as seen, so an intro held by the ladder (real 1 s timer, 3 s settle) can no longer open inside the headless pre-key pump and take the badge's Enter. Fail-proven by breaking the keyboard route.
