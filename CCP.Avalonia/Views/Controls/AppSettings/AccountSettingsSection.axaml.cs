@@ -111,8 +111,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
                 if (CoreAccount.HasLabAccess)
                 {
-                    _txtBadge.Kind = IconKind.Beaker;   // WPF 🧪, violet like the badge border
-                    _txtBadge.Foreground = TierBadgeTier2Brush;
+                    _txtBadge.Kind = IconKind.Beaker;   // WPF 🧪: the shared tier-2 violet (Theme/Icons.axaml)
+                    _txtBadge.Bind(IconGlyph.ForegroundProperty, _txtBadge.GetResourceObservable(IconBrushes.Tier2));
                     AutomationProperties.SetName(_txtBadge, Loc.Get("label_patreon_tier_level2"));
                     _tierBadge.IsVisible = true;
                     _tierBadge.BorderBrush = TierBadgeTier2Brush;
@@ -123,8 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 }
                 else if (CoreAccount.HasPremiumAccess)
                 {
-                    _txtBadge.Kind = IconKind.LockClosed;   // WPF 🔒, gold like the badge border
-                    _txtBadge.Foreground = TierBadgeTier1Brush;
+                    _txtBadge.Kind = IconKind.LockClosed;   // WPF 🔒: the shared tier-1 gold (Theme/Icons.axaml)
+                    _txtBadge.Bind(IconGlyph.ForegroundProperty, _txtBadge.GetResourceObservable(IconBrushes.Tier1));
                     AutomationProperties.SetName(_txtBadge, Loc.Get("label_patreon_tier_level1"));
                     _tierBadge.IsVisible = true;
                     _tierBadge.BorderBrush = TierBadgeTier1Brush;

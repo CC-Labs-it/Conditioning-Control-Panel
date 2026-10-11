@@ -136,7 +136,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <fx:IconGlyph Grid.Column="0" Emoji="{Binding Glyph}" Size="16"
+                            <fx:IconGlyph Grid.Column="0" Kind="{Binding Kind}" Variant="{Binding Variant}" Emoji="{Binding Emoji}" Size="16"
                                           VerticalAlignment="Center" Margin="0,0,11,0"/>
                             <StackPanel Grid.Column="1">
                                 <!-- Caption, then the retired name it was found under ("(was Premium)"). -->

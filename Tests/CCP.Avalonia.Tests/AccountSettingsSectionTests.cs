@@ -18,6 +18,9 @@ using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Xunit;
 using IconLabel = ConditioningControlPanel.Avalonia.Controls.IconLabel;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
+using Avalonia.Media;
 
 namespace CCP.Avalonia.Tests;
 
@@ -91,6 +94,34 @@ public sealed class AccountSettingsSectionTests
         s.UnifiedId = "u-test";
         s.UserDisplayName = "Bambi";
         s.HasLinkedPatreon = true;
+    }
+
+    /// <summary>The tier badge's colour is its meaning (WPF 🧪 violet / 🔒 gold): the Fluent icon must
+    /// keep it through the shared semantic brushes (fluent-icons 2026-10-10).</summary>
+    [Fact]
+    public void TierBadgeKeepsTheTierColourAsAFluentIcon()
+    {
+        Run((shell, section, s, secrets) =>
+        {
+            var badge = section.FindControl<IconGlyph>("TxtAccountTierBadge")!;
+            Color Res(string key) => ((ISolidColorBrush)section.FindResource(key)!).Color;
+            Color Ink() => Assert.IsAssignableFrom<ISolidColorBrush>(badge.Foreground).Color;
+            CoreAccount.IsLoggedInProvider = () => true;
+
+            CoreAccount.HasLabAccessProvider = () => true;
+            section.RefreshTierBadge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Beaker, badge.Kind);
+            Assert.Equal(Res("IconTier2Brush"), Ink());
+
+            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => true;
+            section.RefreshTierBadge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.LockClosed, badge.Kind);
+            Assert.Equal(Res("IconTier1Brush"), Ink());
+            Assert.NotEqual(Res("IconTier1Brush"), Res("IconTier2Brush"));
+        });
     }
 
     [Fact]
