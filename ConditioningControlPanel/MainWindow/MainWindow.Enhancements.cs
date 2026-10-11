@@ -2124,38 +2124,10 @@ namespace ConditioningControlPanel
             {
                 EnhancementsTab.TxtPinkRushIndicator.Visibility = Visibility.Visible;
 
-                // Full-screen pink flash effect
-                try
-                {
-                    var flashWindow = new Window
-                    {
-                        WindowStyle = WindowStyle.None,
-                        AllowsTransparency = true,
-                        Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(100, 0xFF, 0x14, 0x93)),
-                        Topmost = true,
-                        ShowInTaskbar = false,
-                        ShowActivated = false,
-                        Left = SystemParameters.VirtualScreenLeft,
-                        Top = SystemParameters.VirtualScreenTop,
-                        Width = SystemParameters.VirtualScreenWidth,
-                        Height = SystemParameters.VirtualScreenHeight,
-                        IsHitTestVisible = false,
-                        Focusable = false,
-                        Opacity = 0.6
-                    };
-                    flashWindow.Show();
-
-                    var fadeOut = new DoubleAnimation(0.6, 0, TimeSpan.FromMilliseconds(500));
-                    fadeOut.Completed += (s, args) =>
-                    {
-                        try { flashWindow.Close(); } catch { }
-                    };
-                    flashWindow.BeginAnimation(Window.OpacityProperty, fadeOut);
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Debug("Pink Rush flash effect failed: {Error}", ex.Message);
-                }
+                // Full-screen pink wash, half a second. ccp-bugs #1415: never a WPF AllowsTransparency
+                // window here (a per-pixel surface the size of every monitor stalled the UI thread
+                // for over a second and dragged the whole desktop down while it faded).
+                Helpers.ScreenWash.Flash(0xFF, 0x14, 0x93, Helpers.ScreenWash.PinkRushPeak, Helpers.ScreenWash.PinkRushFadeMs);
 
                 // Show toast notification popup.
                 //
