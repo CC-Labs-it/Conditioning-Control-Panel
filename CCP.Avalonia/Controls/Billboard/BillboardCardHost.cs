@@ -384,7 +384,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             {
                 Width = 28, Height = 28, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1),
                 Background = new SolidColorBrush(Color.FromArgb(0xc0, 12, 12, 26)), BorderBrush = new SolidColorBrush(Colors.White, 0.25),
-                Child = new TextBlock { Text = "×", FontSize = 16, FontWeight = FontWeight.SemiBold, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, 0) },
+                Child = new IconGlyph { Kind = IconKind.Dismiss, Size = 14, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
             var button = new Button
             {

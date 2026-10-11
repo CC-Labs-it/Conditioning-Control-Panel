@@ -30,7 +30,10 @@ public sealed class TypeScaleReadabilityTests
     private static TextBlock ByText(Control root, string key)
     {
         var text = Loc.Get(key);
-        return root.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Text == text);
+        // A Fluent-icon heading reads {loc:StrBare key} beside its own IconGlyph (fluent-icons 2026-10-10).
+        var bare = global::ConditioningControlPanel.Avalonia.Controls.IconText.Bare(text);
+        return root.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Text == text
+            || (t.Text == bare && t.Theme != null && t.Theme == t.FindResource("SectionHeader")));
     }
 
     [Fact]

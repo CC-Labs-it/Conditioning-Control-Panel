@@ -29,6 +29,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Windows"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow"
         Title="Command Palette"
@@ -107,8 +108,8 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="🔎" FontSize="15" VerticalAlignment="Center"
-                               Margin="0,0,10,0"/>
+                    <fx:IconGlyph Grid.Column="0" Kind="Search" Size="16" VerticalAlignment="Center"
+                                  Margin="0,0,10,0"/>
                     <Grid Grid.Column="1">
                         <TextBox x:Name="TxtQuery" Classes="transparent"
                                  Background="Transparent" BorderThickness="0"
@@ -135,8 +136,8 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontSize="15"
-                                       VerticalAlignment="Center" Margin="0,0,11,0"/>
+                            <fx:IconGlyph Grid.Column="0" Emoji="{Binding Glyph}" Size="16"
+                                          VerticalAlignment="Center" Margin="0,0,11,0"/>
                             <StackPanel Grid.Column="1">
                                 <!-- Caption, then the retired name it was found under ("(was Premium)"). -->
                                 <TextBlock FontSize="13" TextTrimming="CharacterEllipsis"

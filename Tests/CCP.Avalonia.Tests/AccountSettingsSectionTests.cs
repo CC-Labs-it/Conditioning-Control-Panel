@@ -17,6 +17,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Xunit;
+using IconLabel = ConditioningControlPanel.Avalonia.Controls.IconLabel;
 
 namespace CCP.Avalonia.Tests;
 
@@ -139,7 +140,7 @@ public sealed class AccountSettingsSectionTests
 
             Assert.True(Shown(section, "AccountLinkingSection"));
             Assert.True(Shown(section, "BtnLinkPatreon"));
-            Assert.Equal(Loc.Get("btn_reconnect_patreon"), Text(section, "TxtBtnLinkPatreon"));
+            Assert.Equal("btn_reconnect_patreon", section.FindControl<IconLabel>("TxtBtnLinkPatreon")!.Key);
             Assert.True(Shown(section, "TxtPatreonReconnectHint"));
             Assert.False(Shown(section, "BtnLinkDiscord"));
         });
@@ -159,7 +160,7 @@ public sealed class AccountSettingsSectionTests
             {
                 Click(section, "BtnLinkDiscord");
                 Assert.True(section.FindControl<Button>("BtnLinkDiscord")!.IsEnabled);
-                Assert.Equal(Loc.Get("btn_link_discord"), Text(section, "TxtBtnLinkDiscord"));
+                Assert.Equal("btn_link_discord", section.FindControl<IconLabel>("TxtBtnLinkDiscord")!.Key);
             }
             finally { discord.IsVerifying = false; }
         });

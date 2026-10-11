@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -39,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         // resolved by name here so this file never depends on which of the two ran.
         private readonly Border _tierCard;
         private readonly Border _tierBadge;
-        private readonly TextBlock _txtBadge;
+        private readonly IconGlyph _txtBadge;
         private readonly TextBlock _txtName;
         private readonly TextBlock _txtTier;
 
@@ -49,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
             _tierCard = this.FindControl<Border>("AccountTierCard")!;
             _tierBadge = this.FindControl<Border>("AccountTierBadge")!;
-            _txtBadge = this.FindControl<TextBlock>("TxtAccountTierBadge")!;
+            _txtBadge = this.FindControl<IconGlyph>("TxtAccountTierBadge")!;
             _txtName = this.FindControl<TextBlock>("TxtAccountSectionName")!;
             _txtTier = this.FindControl<TextBlock>("TxtAccountSectionTier")!;
 
@@ -109,7 +111,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
                 if (CoreAccount.HasLabAccess)
                 {
-                    _txtBadge.Text = "🧪";
+                    _txtBadge.Kind = IconKind.Beaker;   // WPF 🧪, violet like the badge border
+                    _txtBadge.Foreground = TierBadgeTier2Brush;
+                    AutomationProperties.SetName(_txtBadge, Loc.Get("label_patreon_tier_level2"));
                     _tierBadge.IsVisible = true;
                     _tierBadge.BorderBrush = TierBadgeTier2Brush;
                     _tierCard.BorderBrush = TierBadgeTier2Brush;
@@ -119,7 +123,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 }
                 else if (CoreAccount.HasPremiumAccess)
                 {
-                    _txtBadge.Text = "🔒";
+                    _txtBadge.Kind = IconKind.LockClosed;   // WPF 🔒, gold like the badge border
+                    _txtBadge.Foreground = TierBadgeTier1Brush;
+                    AutomationProperties.SetName(_txtBadge, Loc.Get("label_patreon_tier_level1"));
                     _tierBadge.IsVisible = true;
                     _tierBadge.BorderBrush = TierBadgeTier1Brush;
                     _tierCard.BorderBrush = TierBadgeTier1Brush;
@@ -230,7 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             var link = Find<Button>("BtnLinkPatreon");
             link.IsVisible = row.ShowsButton;
             if (link.IsEnabled)
-                Find<TextBlock>("TxtBtnLinkPatreon").Text = Loc.Get(row.Action == PatreonLinkAction.Reconnect ? "btn_reconnect_patreon" : "btn_link_patreon");
+                Find<IconLabel>("TxtBtnLinkPatreon").Key = row.Action == PatreonLinkAction.Reconnect ? "btn_reconnect_patreon" : "btn_link_patreon";
             link.Background = row.Filled ? PatreonRedBrush : Brushes.Transparent;
             link.Foreground = row.Filled ? Brushes.White : PatreonRedBrush;
             link.BorderBrush = PatreonRedBrush;
@@ -239,7 +245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             var linkDiscord = Find<Button>("BtnLinkDiscord");
             linkDiscord.IsVisible = hasUnifiedId && !hasLinkedDiscord;
             // WPF BtnLinkDiscord_Click finally: the label comes back after a failed/cancelled link.
-            if (linkDiscord.IsEnabled) Find<TextBlock>("TxtBtnLinkDiscord").Text = Loc.Get("btn_link_discord");
+            if (linkDiscord.IsEnabled) Find<IconLabel>("TxtBtnLinkDiscord").Key = "btn_link_discord";
             // ponytail: CloudSettingsBackupSection stays hidden and BtnExportData collapsed until
             // ProfileSync's backup/restore/export calls reach this head (MainShellWindow.CloudBackup.cs).
             Find<Border>("DataPrivacySection").IsVisible = hasUnifiedId;
@@ -306,7 +312,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 return;
             }
             button.IsEnabled = false;
-            Find<TextBlock>(labelName).Text = Loc.Get("login_connecting");
+            if (Find<Control>(labelName) is IconLabel icon) icon.Key = "login_connecting";
+            else Find<TextBlock>(labelName).Text = Loc.Get("login_connecting");
             var top = TopLevel.GetTopLevel(this);
             Action<string> open = url =>
             {
