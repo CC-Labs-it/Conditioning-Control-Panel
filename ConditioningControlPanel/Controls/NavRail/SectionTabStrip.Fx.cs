@@ -21,34 +21,25 @@ namespace ConditioningControlPanel.Controls.NavRail
     /// </summary>
     internal static class NavStripFxRules
     {
-        // Polish wave 10: the shared lamp's hover lift (DepthRules.HoverLiftPx, was 1.5).
-        public const double HoverLiftPx = ConditioningControlPanel.Controls.Depth.DepthRules.HoverLiftPx;
-        public const double HoverScale = 1.035;
-        public const int HoverInMs = 120;
-        public const int HoverOutMs = 160;
-        public const double WiggleDegrees = 8;
-        public const int WiggleMs = 280;
-        public const int SheenEveryMs = 9000;
-        public const int SheenMs = 650;
-        public const double SheenWidth = 40;
-        public const double SheenOpacity = 0.22;
-        public const int BurstSparks = 18;
-        /// <summary>How far the spark layer spills past the track on every side.</summary>
-        public const double SparkBleed = 12;
+        // The numbers and gates live in Core NavStripMotion (shared with the Avalonia head).
+        public const double HoverLiftPx = NavStripMotion.HoverLiftPx;
+        public const double HoverScale = NavStripMotion.HoverScale;
+        public const int HoverInMs = NavStripMotion.HoverInMs;
+        public const int HoverOutMs = NavStripMotion.HoverOutMs;
+        public const double WiggleDegrees = NavStripMotion.WiggleDegrees;
+        public const int WiggleMs = NavStripMotion.WiggleMs;
+        public const int SheenEveryMs = NavStripMotion.SheenEveryMs;
+        public const int SheenMs = NavStripMotion.SheenMs;
+        public const double SheenWidth = NavStripMotion.SheenWidth;
+        public const double SheenOpacity = NavStripMotion.SheenOpacity;
+        public const int BurstSparks = NavStripMotion.BurstSparks;
+        public const double SparkBleed = NavStripMotion.SparkBleed;
 
-        /// <summary>The hover lift at a motion level (0 = none).</summary>
-        public static double LiftFor(MotionLevel level) => level == MotionLevel.Off ? 0 : HoverLiftPx;
-
-        /// <summary>The hover scale at a motion level (Reduced lifts only).</summary>
-        public static double ScaleFor(MotionLevel level) => level == MotionLevel.Full ? HoverScale : 1.0;
-
-        /// <summary>The glyph wiggles on Full only.</summary>
-        public static bool Wiggles(MotionLevel level) => level == MotionLevel.Full;
-
-        /// <summary>The idle sheen clock runs only on Full, on a tier that allows ambient motion,
-        /// while the strip is on screen and the main window's chrome loops are allowed.</summary>
+        public static double LiftFor(MotionLevel level) => NavStripMotion.LiftFor(level);
+        public static double ScaleFor(MotionLevel level) => NavStripMotion.ScaleFor(level);
+        public static bool Wiggles(MotionLevel level) => NavStripMotion.Wiggles(level);
         public static bool SheenRuns(MotionLevel level, bool tierAllowsAmbient, bool visible, bool chromeAllows) =>
-            level == MotionLevel.Full && tierAllowsAmbient && visible && chromeAllows;
+            NavStripMotion.SheenRuns(level, tierAllowsAmbient, visible, chromeAllows);
     }
 
     public partial class SectionTabStrip

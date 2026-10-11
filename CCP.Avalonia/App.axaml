@@ -10,6 +10,8 @@
              same merge order App.xaml uses. -->
         <ResourceInclude Source="avares://CCP.Avalonia/Theme/Colors.xaml"/>
         <ResourceInclude Source="avares://CCP.Avalonia/Theme/Brushes.xaml"/>
+        <!-- The depth pass brushes (WPF App.xaml merges Depth.xaml beside Brushes.xaml). -->
+        <ResourceInclude Source="avares://CCP.Avalonia/Theme/Depth.xaml"/>
         <!-- Keyed styles the views are written against, as ControlThemes. -->
         <ResourceInclude Source="avares://CCP.Avalonia/Theme/Styles.xaml"/>
         <!-- The Workshop cells' interior typography. Kept beside the cells rather than folded

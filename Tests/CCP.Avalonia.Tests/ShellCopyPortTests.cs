@@ -74,19 +74,13 @@ public sealed class ShellCopyPortTests
         return Task.CompletedTask;
     });
 
-    private sealed class SteppedClock : TimeProvider
-    {
-        public DateTimeOffset Now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
-        public override DateTimeOffset GetUtcNow() => Now;
-    }
-
     private sealed class FakePassiveCard : Window, IPassiveStartupSurface { }
 
-    private static void WithLadder(Action<SteppedClock> body)
+    private static void WithLadder(Action<StartupLadder.TestClock> body)
     {
         EnsureApp();
         StartupLadder.ResetForTests();
-        var clock = new SteppedClock();
+        var clock = new StartupLadder.TestClock();
         StartupLadder.Time = clock;
         try { body(clock); }
         finally { StartupLadder.ResetForTests(); }
@@ -111,6 +105,47 @@ public sealed class ShellCopyPortTests
             clock.Now += TimeSpan.FromMilliseconds(1);
             StartupLadder.PumpHeld();
             Assert.Equal(1, b);                                   // opens once the first has settled
+        });
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HeldCardOpensOnlyWhenTheLadderClockIsStepped() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // P76: the re-check runs on the ladder's clock, so real time passing never opens a held card.
+        WithLadder(clock =>
+        {
+            int b = 0;
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "a", Open = () => { } });
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "b", Open = () => b++ });
+            var watch = Assert.Single(clock.Timers);
+            Assert.Equal(StartupLadder.PassiveRecheck, watch.Period);     // WPF's 1 s cadence
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, b);                                           // unstepped: still held
+
+            clock.Advance(StartupQueueCore.PassiveSettle - StartupLadder.PassiveRecheck);
+            Assert.Equal(0, b);                                           // ticks fired, still settling
+            clock.Advance(StartupLadder.PassiveRecheck);
+            Assert.Equal(1, b);                                           // the tick past the hold opens it
+            Assert.Empty(clock.Timers);                                   // and the watch stops
+        });
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SystemClockTickPostsTheRecheckToTheUiThread() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // The runtime path: TimeProvider.System fires the watch on the pool; it must post back, not pump there.
+        WithLadder(clock =>
+        {
+            int b = 0;
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "a", Open = () => { } });
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "b", Open = () => b++ });
+            clock.Now += StartupQueueCore.PassiveSettle;
+            Task.Run(() => Assert.Single(clock.Timers).Fire()).Wait();
+            Assert.Equal(0, b);                                           // nothing opened off the UI thread
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, b);                                           // the posted re-check opened it
         });
         return Task.CompletedTask;
     });

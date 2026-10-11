@@ -70,5 +70,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public static LinearGradientBrush TrackBorderBrush(Color hue) =>
             Vertical((WithAlpha(DarkInk, TrackInsetAlpha), 0), (WithAlpha(hue, TrackBorderAlpha), 0.45),
                      (WithAlpha(hue, TrackBorderAlpha), 1));
+
+        // ---- the leading glyph (wave 3/7, WPF :203, :338-:343): a Fluent IconGlyph via IconMap.ForTab ----
+        public const double GlyphSize = 16, GlyphGap = 8;
+        public static Color RestGlyphOn(Color hue, Color tint) => C(P.RestGlyphOn(U(hue), U(tint)));
+        public static Color ActiveGlyphOn(Color hue, Color tint) => C(P.ActiveGlyphOn(U(hue), U(tint)));
+
+        // ---- depth (wave 10, WPF SectionTabStrip.Depth.cs PageDepthPaint.Shadow) ----
+        /// <summary>The pill drop band's inset from the pill's rounded ends.</summary>
+        public const double PillDropInset = 8;
+
+        /// <summary>The drop band in the hue: Core DepthLaw.ShadowColor at the contact edge, gone at the foot.</summary>
+        public static LinearGradientBrush DropBrush(Color hue)
+        {
+            var c = C(DepthLaw.ShadowColor(U(hue)));
+            return Vertical((c, 0), (Color.FromArgb(0, c.R, c.G, c.B), 1));
+        }
     }
 }
