@@ -49,13 +49,26 @@ namespace ConditioningControlPanel.Services
             var screens = VideoScreens();
             if (screens == null || screens.Length == 0) return;
             var screen = screens[_random.Next(screens.Length)];
+            _floatScreen = screen;
+            _floatBounds = FloatRectOn(screen, MandatoryVideoPresentation.PrimaryMinWidth, null);
+            VideoDiag.Log("VIDEO", $"floating window {_floatBounds} on {screen.DeviceName}");
+        }
+
+        /// <summary>A floating rectangle on this screen's work area, in PHYSICAL pixels, at the
+        /// player's size (AppSettings.MandatoryVideoFloatingSize), kept off the ones already up.</summary>
+        private System.Drawing.Rectangle FloatRectOn(Screen screen, int minWidth, System.Collections.Generic.IEnumerable<System.Drawing.Rectangle>? takenPx)
+        {
             var dpi = BubbleCountWindow.GetDpiForScreen(screen);
             if (dpi <= 0) dpi = 1;
             var wa = screen.WorkingArea;
-            var (x, y, w, h) = MandatoryVideoPresentation.FloatingRect((int)(wa.Width / dpi), (int)(wa.Height / dpi), _random);
-            _floatScreen = screen;
-            _floatBounds = new System.Drawing.Rectangle(wa.X + (int)(x * dpi), wa.Y + (int)(y * dpi), (int)(w * dpi), (int)(h * dpi));
-            VideoDiag.Log("VIDEO", $"floating window {_floatBounds} on {screen.DeviceName}");
+            var taken = new System.Collections.Generic.List<(int X, int Y, int W, int H)>();
+            if (takenPx != null)
+                foreach (var t in takenPx)
+                    taken.Add(((int)((t.X - wa.X) / dpi), (int)((t.Y - wa.Y) / dpi), (int)(t.Width / dpi), (int)(t.Height / dpi)));
+            var (x, y, w, h) = MandatoryVideoPresentation.FloatingRect((int)(wa.Width / dpi), (int)(wa.Height / dpi), _random,
+                MandatoryVideoPresentation.SizeDivisor(App.Settings?.Current?.MandatoryVideoFloatingSize),
+                minWidth, taken);
+            return new System.Drawing.Rectangle(wa.X + (int)(x * dpi), wa.Y + (int)(y * dpi), (int)(w * dpi), (int)(h * dpi));
         }
 
         private void ClearFloating()
@@ -93,7 +106,7 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
-                if (!IsFloating || win == null || _gracePaused) return;
+                if (!LegacyCaptionDrag || !IsFloating || win == null || _gracePaused) return;
                 var hwnd = new WindowInteropHelper(win).Handle;
                 if (hwnd == IntPtr.Zero) return;
                 ReleaseCapture();
@@ -101,6 +114,11 @@ namespace ConditioningControlPanel.Services
             }
             catch (Exception ex) { App.Logger?.Debug("VideoService: floating drag failed - {Error}", ex.Message); }
         }
+
+        /// <summary>The first cut's drag (a native caption move). FloatingVideoFrame owns motion
+        /// (fling and bounce) once its body lands: set this to false then, or the two fight over
+        /// the same press.</summary>
+        private static readonly bool LegacyCaptionDrag = true;
 
         private const int WM_NCLBUTTONDOWN = 0x00A1;
         private const int HTCAPTION = 2;

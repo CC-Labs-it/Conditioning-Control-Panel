@@ -1705,7 +1705,9 @@ namespace ConditioningControlPanel.Services
 
             // Browser session: one message carries master x video volume AND the external mute
             // (GetEffectiveVolume already folds the mute in, so both halves agree).
-            if (_browserActive) _browser?.SetVolume(effectiveVolume / 100.0, effectiveVolume <= 0);
+            // A primary that gave the sound to a floating companion stays silent through a volume change.
+            if (_browserActive) _browser?.SetVolume(effectiveVolume / 100.0, effectiveVolume <= 0 || _primaryFocusMuted);
+            RefreshCompanionVolumes();
 
             // Update LibVLC media players (thread-safe snapshot)
             List<LibVLCSharp.Shared.MediaPlayer> playersCopy;
@@ -1827,6 +1829,7 @@ namespace ConditioningControlPanel.Services
             _strictActive = false;
             CancelPendingRetry();
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
+            CloseFloatingCompanions("engine stop");   // before CloseAll: its JIT can throw below
             try
             {
                 CloseAll(synchronous: false, reason: "engine stop");
@@ -2702,6 +2705,7 @@ namespace ConditioningControlPanel.Services
             _strictActive = false;
             CancelPendingRetry();
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
+            CloseFloatingCompanions("force cleanup");
             CloseAll(synchronous, reason: synchronous ? "app exit" : "force cleanup (panic / stuck / session switch)");
             App.Audio?.ForceUnduck();
             _penalties = 0;
@@ -3217,7 +3221,11 @@ namespace ConditioningControlPanel.Services
             // LibVLC's FromLocation path remains the safety net rather than the front line.
             if (!forceLibVlc && Video.Browser.BrowserVideoGate.ShouldUseBrowser(path))
             {
-                if (StartBrowserVideoPlayback(path, strict)) return;
+                if (StartBrowserVideoPlayback(path, strict))
+                {
+                    OnFloatingPrimaryUp(path);   // frame + companions; a no-op full screen
+                    return;
+                }
             }
 
             App.Logger?.Information("VideoService: StartVideoPlayback called for {File}", Path.GetFileName(path));
@@ -3393,6 +3401,8 @@ namespace ConditioningControlPanel.Services
                 {
                     _playbackStarted = true;
                     StartWedgeWatchdog();
+                    // Frame + companions; a no-op full screen.
+                    DispatcherHelper.RunOnUISync(() => OnFloatingPrimaryUp(path));
                 }
 
                 VideoDiag.Log("VIDEO", $"show complete +{showSw.ElapsedMilliseconds}ms - {_windows.Count} window(s) on screen");
@@ -3735,7 +3745,11 @@ namespace ConditioningControlPanel.Services
                 e.Handled = true;
                 BringTargetsToFront();
                 // A floating window moves with the mouse (no-op on a full-screen one).
-                if (e.ChangedButton == MouseButton.Left) BeginFloatingDrag(win);
+                if (e.ChangedButton == MouseButton.Left)
+                {
+                    if (_primarySurface != null) OnFloatingTouched(_primarySurface);   // a press takes the sound
+                    BeginFloatingDrag(win);
+                }
             };
 
             // Window is already sized to the full screen bounds, so we don't start small
@@ -3910,7 +3924,15 @@ namespace ConditioningControlPanel.Services
                     // Anything heavier than a property set goes off the LibVLC event thread.
                     if (System.Threading.Interlocked.Exchange(ref audioRouted, 1) == 0)
                         Task.Run(() => RouteAndProbeAudio(mediaPlayer!, Path.GetFileName(path)));
+                    // A companion has the sound: this player's own track stays off (never Mute).
+                    if (_primaryFocusMuted) Task.Run(() => ApplyPrimaryAudioTrack(mediaPlayer!));
                 };
+                if (floating)
+                    mediaPlayer.ESSelected += (s, e) =>
+                    {
+                        // LibVLC picks the audio track on its own once the clip is parsed.
+                        if (_primaryFocusMuted && e.Type == TrackType.Audio) Task.Run(() => ApplyPrimaryAudioTrack(mediaPlayer!));
+                    };
             }
 
             // Play the media
@@ -6450,6 +6472,7 @@ namespace ConditioningControlPanel.Services
             _lastGracePauseActionUtc = nowUtc;
 
             PausePrimary();
+            SetCompanionsPaused(true);   // floating companions hold with it
 
             // The attention mini-game pauses WITH the video: motion frozen, clicks off. Its expiry
             // clock stops on its own — the deadlines are held against _startTime, which
@@ -6513,6 +6536,7 @@ namespace ConditioningControlPanel.Services
 
             ResumeGuardTimers(DateTime.UtcNow);
             PlayPrimary();
+            SetCompanionsPaused(false);
 
             App.Logger?.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, pausedFor.TotalSeconds);
             VideoDiag.Log("PANIC", $"grace pause RELEASED ({reason}) after {pausedFor.TotalSeconds:F1}s - playback resumed");
@@ -7519,6 +7543,9 @@ namespace ConditioningControlPanel.Services
             // "the panic key did nothing". Every phase is timestamped so the next report tells us
             // which phase the teardown died in instead of just going quiet.
             var closeSw = System.Diagnostics.Stopwatch.StartNew();
+            // Floating companions and frames go FIRST and on every call, a declined duplicate
+            // included: no floating window outlives a stop, whichever door the stop came through.
+            CloseFloatingLayer(reason);
             // A teardown with no windows open is the common case (every panic press, every engine
             // stop, every session end funnels here) and it produced the same four CLOSE lines as a
             // real teardown - four lines of "nothing happened" per event, in the one trace whose
@@ -7992,6 +8019,7 @@ namespace ConditioningControlPanel.Services
             _videoPlaying = false;
             _triggerInProgress = false;
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
+            CloseFloatingCompanions("cleanup");
             // "cleanup" covers both doors into this method: the natural end of a clip and the ESC
             // dismiss (SetupStrictHandlers / TryEscapeFromGlobalKey). The VideoDiag PANIC line
             // immediately before an ESC-driven call says which one it was.
