@@ -3,24 +3,32 @@
 // a Settings gear inside the 96px column; no flyout, no hold latch, no door accordion. A row opens its
 // section's last tab; the lit row follows every navigation (RefreshSectionRail, from ShowTab).
 //
-// ponytail: not yet here (sync6-nav-rail-c): the coin depth (BuildNavCoin, press travel, tilt,
-// specular), the edge spur, the hue-bevel ring gradient (a flat hue ring stands in), the art tint
-// over each tile (Tag "navtint", PaintNavTint :701), the static glow behind each label (DropShadow
-// in the mod glow colour), the 160 ms halo fade (the halo snaps here), NavBadges
-// counts, the rich row tooltip, the possession reroute seam, mod door art (ApplyDoorArt) and the
-// rail shadow (PaintDepthRail).
+// sync6-nav-rail-c added the edge spur, the art tint (navtint), the label glow, the 160 ms halo
+// fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
+// ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
+// hue-bevel ring gradient (a flat hue ring stands in) and the rail shadow (PaintDepthRail) - lane
+// sync6-nav-polish-b; the possession reroute seam and mod door art (ApplyDoorArt) - no mod door
+// art or possession misroute on this head yet. No Lobby producer feeds NavBadges here yet, so the
+// Social pill stays down until the Lobby service lands.
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
 
@@ -34,8 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             internal string Section = "";
             internal Button Button = null!;
             internal Ellipse? Glow;
-            internal Border? Tile, Ring, Shade;
-            internal TextBlock? Label;
+            internal Border? Tile, Ring, Shade, Art, Tint, Badge, Spur;
+            internal TextBlock? Label, BadgeText;
             internal Color Hue;
             internal bool Active, Painted;
         }
@@ -44,6 +52,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private const byte NavFillAlpha = 0x33, NavTileTintAlpha = 0x40;
         private const byte NavRingIdleAlpha = 0xCC, NavRingHoverAlpha = 0xF2;
         private const double NavGlowActive = 0.55;
+        // WPF NavRailRules: the art wash (lit ~5%, idle none), the spur (90% edge, 60% ring),
+        // the badge cap and its seen opacity; NavRail.cs: the 160 ms halo fade; ChromeFx: the nudge.
+        internal const byte NavArtTintActiveAlpha = 0x0D, NavSpurEdgeAlpha = 0xE6, NavSpurRingAlpha = 0x99;
+        internal const int NavGlowFadeMs = 160, NavBadgeCap = 9, NavIconHoverMs = 150;
+        internal const double NavBadgeSeenOpacity = 0.45, NavIconHoverScale = 1.06;
+
+        /// <summary>WPF NavRailRules.Ms: Full as authored, Reduced halves it, Off is instant.</summary>
+        internal static int NavMs(int fullMs) => AmbientFxCanvas.Env.Level switch
+        {
+            MotionLevel.Off => 0,
+            MotionLevel.Reduced => fullMs / 2,
+            _ => fullMs,
+        };
+
+        /// <summary>WPF NavRailRules.BadgeText: no pill at 0, "9+" past the cap.</summary>
+        internal static string? NavBadgeText(int count) =>
+            count <= 0 ? null : count > NavBadgeCap ? NavBadgeCap + "+" : count.ToString(CultureInfo.CurrentCulture);
 
         private readonly List<NavSectionRow> _navSectionRows = new();
         private bool _navRailReady;
@@ -65,6 +90,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_navRailReady) return;
                 CacheNavSectionRows();
                 RegisterSectionShortcuts();
+                // WPF :122. Per-window subscriber, so it leaves with the window (P41/P68).
+                NavBadges.Changed += OnNavBadgeChanged;
+                Closed += (_, _) => NavBadges.Changed -= OnNavBadgeChanged;
+                foreach (var row in _navSectionRows) PaintNavBadge(row, NavBadges.Get(row.Section));
                 _navRailReady = true;
                 RefreshSectionRail(CurrentTab);
             }
@@ -100,27 +129,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         {
                             case Ellipse e: row.Glow = e; break;
                             case Border b when (b.Tag as string) == "navring": row.Ring = b; break;
-                            case Border b when (b.Tag as string) == "navart": break;
+                            case Border b when (b.Tag as string) == "navart": row.Art = b; break;
                             case Border b: row.Tile ??= b; break;
                             case TextBlock t: row.Label = t; break;
                         }
                     }
                 }
                 row.Shade = Named<Border>("Shade" + name);
+                if (btn.Content is Panel face) AddNavRowParts(row, face);
                 if (row.Glow != null)
                     row.Glow.Fill = new RadialGradientBrush
                     {
                         GradientStops = { new GradientStop(WithAlpha(row.Hue, 0x99), 0), new GradientStop(WithAlpha(row.Hue, 0), 1) },
                     };
+                if (row.Glow != null) row.Glow.Transitions = NavFade();
                 if (row.Tile != null) row.Tile.Background = new SolidColorBrush(WithAlpha(row.Hue, NavTileTintAlpha));
+                // WPF :187: a quiet, static halo behind the label in the mod's glow colour.
+                if (row.Label != null)
+                    row.Label.Effect = new DropShadowEffect
+                    {
+                        Color = AmbientFxCanvas.Env.GlowColor, BlurRadius = 6, OffsetX = 0, OffsetY = 0, Opacity = 0.45,
+                    };
                 if (row.Label != null && NavSections.Find(section) is { } s)
                     row.Label.Bind(TextBlock.TextProperty, new Binding($"[{s.LabelKey}]")
                     {
                         Source = LocalizationManager.Instance, Mode = BindingMode.OneWay, Converter = NavCaps,
                     });
                 var captured = row;
-                btn.PointerEntered += (_, _) => PaintNavRing(captured, hover: true);
-                btn.PointerExited += (_, _) => PaintNavRing(captured, hover: false);
+                btn.PointerEntered += (_, _) => { PaintNavRing(captured, hover: true); NudgeNavIcon(captured, true); };
+                btn.PointerExited += (_, _) => { PaintNavRing(captured, hover: false); NudgeNavIcon(captured, false); };
+                ToolTip.AddToolTipOpeningHandler(btn, (_, _) => ToolTip.SetTip(btn, BuildNavRowToolTip(captured)));
                 PaintNavRowActive(row);
                 _navSectionRows.Add(row);
             }
@@ -189,6 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 row.Active = on;
                 PaintNavRowActive(row);
             }
+            try { NavBadges.MarkSeen(section); } catch { }   // WPF :622: being on the section is seeing its count
         }
 
         private static void PaintNavRowActive(NavSectionRow row)
@@ -201,8 +240,147 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (row.Active) row.Label.Foreground = new SolidColorBrush(row.Hue);
                 else row.Label.ClearValue(TextBlock.ForegroundProperty);
             }
-            if (row.Glow != null) row.Glow.Opacity = row.Active ? NavGlowActive : 0;
+            if (row.Glow != null)
+            {
+                // WPF :656: the halo fades over 160 ms (Reduced 80, Off snaps).
+                row.Glow.Transitions = NavFade();
+                row.Glow.Opacity = row.Active ? NavGlowActive : 0;
+            }
+            if (row.Tint != null)
+                row.Tint.Background = new SolidColorBrush(WithAlpha(row.Hue, row.Active ? NavArtTintActiveAlpha : (byte)0));
+            PaintNavSpur(row);
             PaintNavRing(row, hover: row.Button.IsPointerOver);
+        }
+
+        /// <summary>The opacity fade the halo and spur share, or none at Motion Off.</summary>
+        private static Transitions? NavFade()
+        {
+            int ms = NavMs(NavGlowFadeMs);
+            return ms <= 0 ? null : new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms) } };
+        }
+
+        /// <summary>The parts WPF authors per row (MainWindow.xaml:498-506), built once in code: the hue
+        /// wash over the art (navtint), the count pill on the tile corner (navbadge) and the edge spur
+        /// (template part NavEdgeSpur: 20x8 at top 25, under everything).</summary>
+        private static void AddNavRowParts(NavSectionRow row, Panel face)
+        {
+            var kids = face.Children;
+            row.Spur = new Border
+            {
+                Width = 20, Height = 8, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 24, 0, 0), CornerRadius = new CornerRadius(0, 4, 4, 0),
+                IsVisible = false, Opacity = 0, IsHitTestVisible = false,
+                Background = new LinearGradientBrush
+                {
+                    StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
+                    GradientStops = { new GradientStop(WithAlpha(row.Hue, NavSpurEdgeAlpha), 0), new GradientStop(WithAlpha(row.Hue, NavSpurRingAlpha), 1) },
+                },
+            };
+            kids.Insert(0, row.Spur);
+            row.Tint = new Border { Tag = "navtint", Width = 52, Height = 52, CornerRadius = new CornerRadius(13), IsHitTestVisible = false };
+            kids.Insert(row.Art is { } art ? kids.IndexOf(art) + 1 : kids.Count, row.Tint);
+            row.BadgeText = new TextBlock
+            {
+                FontSize = 9.5, FontWeight = FontWeight.ExtraBold, Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            };
+            row.Badge = new Border
+            {
+                Tag = "navbadge", IsVisible = false, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 0, 18, 0), MinWidth = 16, Height = 16, Padding = new Thickness(4, 0),
+                CornerRadius = new CornerRadius(8), BorderBrush = new SolidColorBrush(Color.FromUInt32(0xE6101020)),
+                BorderThickness = new Thickness(1.5), IsHitTestVisible = false, Child = row.BadgeText,
+            };
+            kids.Add(row.Badge);
+        }
+
+        /// <summary>WPF PaintNavSpur (:719): the lit row's hue tab from the window edge into its ring,
+        /// faded in over the halo's timing; hidden at once on every other row.</summary>
+        private static void PaintNavSpur(NavSectionRow row)
+        {
+            if (row.Spur is not { } spur) return;
+            spur.Transitions = null;
+            spur.Opacity = 0;
+            spur.IsVisible = row.Active;
+            if (!row.Active) return;
+            spur.Transitions = NavFade();
+            spur.Opacity = 1;
+        }
+
+        /// <summary>WPF ChromeFx NudgeNavIcon (:469): the medallion art grows 6% on hover over 150 ms;
+        /// the button itself keeps its hover fill. Motion Off snaps.</summary>
+        private static void NudgeNavIcon(NavSectionRow row, bool on)
+        {
+            if (row.Art is not { } icon) return;
+            int ms = AmbientFxCanvas.Env.AllowTransitions ? NavIconHoverMs : 0;
+            icon.RenderTransformOrigin = RelativePoint.Center;
+            icon.Transitions = ms <= 0 ? null : new Transitions
+            {
+                new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new global::Avalonia.Animation.Easings.QuadraticEaseOut() },
+            };
+            icon.RenderTransform = TransformOperations.Parse(on ? FormattableString.Invariant($"scale({NavIconHoverScale})") : "scale(1)");
+        }
+
+        private void OnNavBadgeChanged(string section, int count)
+        {
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(() => OnNavBadgeChanged(section, count));
+                return;
+            }
+            foreach (var row in _navSectionRows)
+            {
+                if (row.Section != section) continue;
+                // A count that rises while the player is looking at its section is seen (WPF :785).
+                if (row.Active && IsVisible && WindowState != WindowState.Minimized) NavBadges.MarkSeen(section);
+                PaintNavBadge(row, NavBadges.Get(section));
+            }
+        }
+
+        /// <summary>WPF PaintNavBadge (:797): the pill wears the section hue with contrast ink, and dims
+        /// once the player has seen the count (NavBadges.IsFresh).</summary>
+        private static void PaintNavBadge(NavSectionRow row, int count)
+        {
+            if (row.Badge is not { } badge) return;
+            var text = NavBadgeText(count);
+            row.BadgeText!.Text = text ?? "";
+            badge.IsVisible = text != null;
+            if (text == null) return;
+            badge.Background = new SolidColorBrush(row.Hue);
+            row.BadgeText.Foreground = new SolidColorBrush(NavStripRules.ActiveTextOn(row.Hue));
+            bool fresh = NavBadges.IsFresh(count, NavBadges.Seen(row.Section));
+            badge.Opacity = fresh ? 1.0 : NavBadgeSeenOpacity;
+            // WPF MainWindow.xaml:133: a raised chip (lamp top-left, shadow down-right); a seen badge drops it.
+            badge.Effect = fresh ? new DropShadowEffect { Color = Color.FromRgb(0x06, 0x02, 0x0F), OffsetX = 1.06, OffsetY = 1.06, BlurRadius = 3, Opacity = 0.62 } : null;
+        }
+
+        /// <summary>WPF BuildNavRowToolTip (:501): the section name, the open count when a badge is up
+        /// and a greyed "Ctrl+N". Built on open, so a language switch never leaves it stale.</summary>
+        private static object BuildNavRowToolTip(NavSectionRow row)
+        {
+            var panel = new StackPanel();
+            var name = row.Label?.Text ?? row.Section;
+            if (!string.IsNullOrEmpty(name))
+                name = name.Substring(0, 1) + (name.Length > 1 ? name.Substring(1).ToLowerInvariant() : "");
+            panel.Children.Add(new TextBlock { Text = name, FontWeight = FontWeight.SemiBold });
+            int count = NavBadges.Get(row.Section);
+            if (count > 0) panel.Children.Add(new TextBlock { Text = Loc.GetF("nav_badge_open", count) });
+            int n = NavShortcutNumber(row.Section);
+            if (n > 0) panel.Children.Add(new TextBlock { Text = "Ctrl+" + n, Opacity = 0.6, FontSize = 11 });
+            return panel;
+        }
+
+        /// <summary>WPF NavRailRules.ShortcutNumber: the 1-based rail position, 0 for the gear.</summary>
+        internal static int NavShortcutNumber(string section)
+        {
+            int n = 0;
+            foreach (var s in NavSections.Order)
+            {
+                if (s.Key == NavSections.Settings) continue;
+                n++;
+                if (s.Key == section) return n;
+            }
+            return 0;
         }
 
         /// <summary>WPF PaintNavRingParts (:687), flat: the hue at 0xCC idle, 0xF2 hover, solid and

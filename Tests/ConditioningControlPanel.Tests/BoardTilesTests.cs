@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Tests;
 /// and expiry rules, the once-per-version download and disk cache, the card, every effect curve
 /// ported from the approved mockup, the tile layout and the renderer's frame budget.
 /// </summary>
+[Collection(BoardFrameBudgetCollection.Name)]
 public class BoardTilesTests
 {
     private static string Loc(string key) => "[" + key + "]";
@@ -647,7 +648,8 @@ public class BoardTilesTests
         r.SetPicture(pic); // the message glow is baked once, outside the frame
         Assert.True(pic.HasInk && r.GlowPixels > 0);
         var ripples = new[] { new BoardRipple(20, 10, 0.1) };
-        for (int k = 0; k < 10; k++) { BoardScene.Compute(pic, 0, fx, 0.3 + k / 30.0, 10, ripples, 0.3 + k / 30.0, false, c, z, ro); r.Draw(c, z, true, 0.02, ro, 0.9); }
+        // Warm past tier-up (~30 calls + the background delay): with 10 frames CI measured Tier-0 code.
+        for (int k = 0; k < 60; k++) { BoardScene.Compute(pic, 0, fx, 0.3 + k / 30.0, 10, ripples, 0.3 + k / 30.0, false, c, z, ro); r.Draw(c, z, true, 0.02, ro, 0.9); }
         var sw = Stopwatch.StartNew();
         const int frames = 60;
         for (int k = 0; k < frames; k++)
@@ -703,4 +705,15 @@ public class BoardTilesTests
         Assert.True(hit);
         Assert.Equal((tx, ty), ((int)x, (int)y));
     }
+}
+
+/// <summary>
+/// Runs <see cref="BoardTilesTests"/> alone. Its frame-budget guard timed the renderer while other
+/// classes ran on the same 4-vCPU CI runner (process at ~1.7-2.0 cores during the timed window,
+/// single frames up to 23.7 ms), so the guard failed on contention, not on the renderer.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class BoardFrameBudgetCollection
+{
+    public const string Name = "BoardFrameBudget";
 }
