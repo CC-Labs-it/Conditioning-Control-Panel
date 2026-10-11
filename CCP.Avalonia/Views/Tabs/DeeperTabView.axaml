@@ -451,7 +451,7 @@
                                 Foreground="{DynamicResource DeeperAccentBrush}"
                                 BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
                                 Margin="0,0,8,0">
-                            <fx:IconLabel Kind="ArrowDownload" Text="Import"/>
+                            <fx:IconLabel Key="deeper_tab_import_btn"/>
                         </Button>
                         <Button x:Name="BtnDeeperNewEnhancement"
                                 Theme="{StaticResource DeeperPrimaryCtaButton}"

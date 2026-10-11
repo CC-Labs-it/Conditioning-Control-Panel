@@ -21,6 +21,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     public sealed class TimelineListEntry
     {
         public IconKind Icon { get; init; } = IconKind.Sparkle;
+        /// <summary>Design table: ✨ and 🟪 are Filled; 🟪 keeps its violet (style class "overlay").</summary>
+        public IconVariant IconVariant => Icon is IconKind.Sparkle or IconKind.Square ? IconVariant.Filled : IconVariant.Regular;
+        public bool IsOverlayIcon => Icon == IconKind.Square;
         public string KindLabel { get; init; } = "";
         public int KindOrder { get; init; }
         public string Label { get; init; } = "";

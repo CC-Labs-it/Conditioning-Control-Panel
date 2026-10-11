@@ -1133,7 +1133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _btnOpenInEditor.IsVisible = true;
         }
 
-        internal static (IconKind Glyph, string Text) DescribeMediaSource(Enhancement enh)
+        private static (IconKind Glyph, string Text) DescribeMediaSource(Enhancement enh)
         {
             var src = enh.MediaSource;
             if (string.IsNullOrWhiteSpace(src)) return (IconKind.Warning, Loc.Get("deeper_player_source_missing"));

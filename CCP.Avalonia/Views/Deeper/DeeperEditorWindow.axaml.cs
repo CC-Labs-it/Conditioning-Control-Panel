@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     public sealed class ValidationIssueRow
     {
         public IconKind Glyph { get; init; } = IconKind.Warning;
+        public IconVariant Variant => Glyph == IconKind.Warning ? IconVariant.Filled : IconVariant.Regular;
         public IBrush Brush { get; init; } = Brushes.Gray;
         public string Message { get; init; } = "";
     }

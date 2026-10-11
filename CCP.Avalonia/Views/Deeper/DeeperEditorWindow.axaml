@@ -130,6 +130,10 @@
         <Style Selector="MenuItem">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
         </Style>
+        <!-- Fluent icons L6: the items list's Overlay square keeps WPF's violet (🟪). -->
+        <Style Selector="fx|IconGlyph.overlay">
+            <Setter Property="Foreground" Value="#9B59FF"/>
+        </Style>
     </Window.Styles>
 
     <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -754,6 +758,7 @@
                                         <DataTemplate x:DataType="deeper:TimelineListEntry">
                                             <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                                                 <fx:IconGlyph Grid.Column="0" Kind="{Binding Icon}"
+                                                           Variant="{Binding IconVariant}" Classes.overlay="{Binding IsOverlayIcon}"
                                                            Size="12" VerticalAlignment="Center"
                                                            Margin="0,0,6,0"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding KindLabel}"
@@ -1318,7 +1323,7 @@
                                         <DataTemplate x:DataType="deeper:ValidationIssueRow">
                                             <Grid Margin="0,0,0,6" ColumnDefinitions="Auto,*">
                                                 <fx:IconGlyph Grid.Column="0"
-                                                           Kind="{Binding Glyph}"
+                                                           Kind="{Binding Glyph}" Variant="{Binding Variant}"
                                                            Foreground="{Binding Brush}"
                                                            Size="11"
                                                            VerticalAlignment="Top"

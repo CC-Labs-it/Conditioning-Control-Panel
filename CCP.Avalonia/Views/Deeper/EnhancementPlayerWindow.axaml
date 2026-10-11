@@ -212,8 +212,9 @@
                                 CornerRadius="6"
                                 Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                 Foreground="{DynamicResource DeeperAccentBrush}"
-                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1">
-                            <TextBlock Text="+"/>
+                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
+                                AutomationProperties.Name="{loc:Str deeper_zoom_in_tt}">
+                            <fx:IconGlyph Kind="Add" Size="12"/>
                         </Button>
                     </StackPanel>
                     <Border x:Name="SourcePill" CornerRadius="9" Padding="8,2"
@@ -409,6 +410,7 @@
         <DockPanel Grid.Row="4" LastChildFill="False" Margin="0,0,0,10">
             <Button x:Name="BtnPlayPause" DockPanel.Dock="Left"
                     ToolTip.Tip="{loc:Str deeper_player_tip_play_pause}"
+                    AutomationProperties.Name="{loc:Str deeper_player_tip_play_pause}"
                     Width="38" Height="32" Padding="0"
                     Background="{DynamicResource DeeperAccentBrush}"
                     Foreground="White" BorderThickness="0" FontSize="15">
@@ -416,6 +418,7 @@
             </Button>
             <Button x:Name="BtnStop" DockPanel.Dock="Left"
                     ToolTip.Tip="{loc:Str deeper_player_tip_stop}"
+                    AutomationProperties.Name="{loc:Str deeper_player_tip_stop}"
                     Width="32" Height="32" Padding="0" Margin="6,0,0,0"
                     Background="{DynamicResource DeeperAccentTransparent20Brush}"
                     Foreground="{DynamicResource DeeperAccentBrush}"
@@ -461,7 +464,11 @@
                     Foreground="{DynamicResource DeeperAccentBrush}"
                     BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"
                     IsVisible="False">
-                <TextBlock Text="{loc:Str deeper_player_btn_pip}"/>
+                <!-- "⧉ Pop out": ⧉ has no Fluent twin in IconMap, so the icon is drawn here beside the bare label. -->
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <fx:IconGlyph Kind="Open" Size="12" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Str companion_v2_popout}" VerticalAlignment="Center"/>
+                </StackPanel>
             </Button>
         </DockPanel>
 
@@ -537,6 +544,7 @@
                     </ToggleButton>
                     <Button DockPanel.Dock="Right" x:Name="BtnCollapseEventLog"
                             ToolTip.Tip="{loc:Str deeper_player_tip_collapse}"
+                            AutomationProperties.Name="{loc:Str deeper_player_tip_collapse}"
                             Width="22" Height="20" Padding="0" FontSize="11"
                             Background="Transparent"
                             Foreground="{DynamicResource TextMutedBrush}"
@@ -545,6 +553,7 @@
                     </Button>
                     <Button DockPanel.Dock="Right" x:Name="BtnClearEvents"
                             ToolTip.Tip="{loc:Str deeper_player_tip_clear}"
+                            AutomationProperties.Name="{loc:Str deeper_player_tip_clear}"
                             Width="22" Height="20" Padding="0" FontSize="10"
                             Margin="0,0,4,0"
                             Background="Transparent"
