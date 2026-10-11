@@ -44,23 +44,15 @@ public class MandatoryVideoFloatingTests
     public void The_floating_window_always_lands_wholly_on_the_screen()
     {
         var r = new Random(7);
-        foreach (var (mw, mh) in new[] { (1920, 1040), (2560, 1400), (1280, 680), (3440, 1400), (1080, 1880), (400, 300), (300, 900) })
-            for (var i = 0; i < 200; i++)
-            {
-                var (x, y, w, h) = MandatoryVideoPresentation.FloatingRect(mw, mh, r);
-                Assert.True(x >= 0 && y >= 0 && x + w <= mw && y + h <= mh, $"{mw}x{mh}: {x},{y} {w}x{h}");
-                Assert.True(w > 0 && h > 0 && w <= mw && h <= mh);
-                if (mw >= 480 && mh >= 270) Assert.True(w >= 480, $"{mw}x{mh}: {w} wide, the grace card needs 480");
-            }
-        Assert.Equal((640, 360), (MandatoryVideoPresentation.FloatingRect(1920, 1040, r).W, MandatoryVideoPresentation.FloatingRect(1920, 1040, r).H));
-    }
-
-    [Fact]
-    public void Targets_shrink_with_the_window_and_keep_their_size_full_screen()
-    {
-        Assert.Equal(120, MandatoryVideoPresentation.AttentionSize(120, floating: false));
-        Assert.Equal(40, MandatoryVideoPresentation.AttentionSize(120, floating: true));
-        Assert.Equal(16, MandatoryVideoPresentation.AttentionSize(30, floating: true));
+        foreach (var percent in new[] { 15, 33, 60 })
+            foreach (var (mw, mh) in new[] { (1920, 1040), (2560, 1400), (1280, 680), (3440, 1400), (1080, 1880), (400, 300), (300, 900) })
+                for (var i = 0; i < 100; i++)
+                {
+                    var (x, y, w, h) = MandatoryVideoPresentation.FloatingRect(mw, mh, r, percent);
+                    Assert.True(x >= 0 && y >= 0 && x + w <= mw && y + h <= mh, $"{mw}x{mh}: {x},{y} {w}x{h}");
+                    Assert.True(w > 0 && h > 0 && w <= mw && h <= mh);
+                    if (mw >= 240 && mh >= 135) Assert.True(w >= MandatoryVideoPresentation.MinWidth, $"{mw}x{mh}: {w} wide");
+                }
     }
 
     /// <summary>Source pin: both engines ask ONE decision, once per clip, and the strict handlers,

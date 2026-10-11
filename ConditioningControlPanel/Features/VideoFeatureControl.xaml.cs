@@ -78,12 +78,12 @@ namespace ConditioningControlPanel.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.Visibility = s.MandatoryVideoFloating ? Visibility.Visible : Visibility.Collapsed;
-                // Size and how many: floating only.
+                // Size, drift speed and the most at once: floating only.
                 PanelFloatingOptions.Visibility = s.MandatoryVideoFloating ? Visibility.Visible : Visibility.Collapsed;
-                CmbFloatingSize.Items.Clear();
-                foreach (var size in new[] { VideoShow.SizeSmall, VideoShow.SizeMedium, VideoShow.SizeLarge })
-                    CmbFloatingSize.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_size_" + size), Tag = size });
-                CmbFloatingSize.SelectedIndex = VideoShow.SizeDivisor(s.MandatoryVideoFloatingSize) switch { 4 => 0, 2 => 2, _ => 1 };
+                SliderFloatingSize.Value = VideoShow.ClampSizePercent(s.MandatoryVideoFloatingSizePercent);
+                TxtFloatingSize.Text = SliderFloatingSize.Value.ToString("0") + "%";
+                SliderFloatingSpeed.Value = VideoShow.ClampSpeedPercent(s.MandatoryVideoFloatingSpeedPercent);
+                TxtFloatingSpeed.Text = SliderFloatingSpeed.Value.ToString("0") + "%";
                 CmbFloatingCount.Items.Clear();
                 for (var n = 1; n <= VideoShow.MaxWindows; n++)
                     CmbFloatingCount.Items.Add(new ComboBoxItem { Content = n.ToString(), Tag = n });
@@ -167,17 +167,32 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
-        /// <summary>Read at the next video's start, like "Shows as".</summary>
-        private void CmbFloatingSize_Changed(object sender, SelectionChangedEventArgs e)
+        /// <summary>Applies to the next window that opens; the ones up keep their size.</summary>
+        private void SliderFloatingSize_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (_isLoading || CmbFloatingSize.SelectedItem is not ComboBoxItem { Tag: string size }) return;
+            if (TxtFloatingSize == null) return;
+            var v = VideoShow.ClampSizePercent((int)Math.Round(e.NewValue));
+            TxtFloatingSize.Text = v + "%";
             var s = App.Settings?.Current;
-            if (s == null || s.MandatoryVideoFloatingSize == size) return;
-            s.MandatoryVideoFloatingSize = size;
+            if (_isLoading || s == null || s.MandatoryVideoFloatingSizePercent == v) return;
+            s.MandatoryVideoFloatingSizePercent = v;
             App.Settings?.Save();
         }
 
-        /// <summary>Read at the next video's start, and by the Test button.</summary>
+        /// <summary>Live: every open floating window takes the new speed as the slider moves.</summary>
+        private void SliderFloatingSpeed_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtFloatingSpeed == null) return;
+            var v = VideoShow.ClampSpeedPercent((int)Math.Round(e.NewValue));
+            TxtFloatingSpeed.Text = v + "%";
+            var s = App.Settings?.Current;
+            if (_isLoading || s == null || s.MandatoryVideoFloatingSpeedPercent == v) return;
+            s.MandatoryVideoFloatingSpeedPercent = v;
+            App.Settings?.Save();
+            App.Video?.RefreshFloatingMotionSpeed();
+        }
+
+        /// <summary>The most on screen at once. Read at every trigger, and by the Test button.</summary>
         private void CmbFloatingCount_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_isLoading || CmbFloatingCount.SelectedItem is not ComboBoxItem { Tag: int count }) return;
@@ -210,7 +225,6 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoGazeClickEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloating) ||
-                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingSize) ||
                 e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingCount) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoTargetMonitor))
             {
@@ -421,8 +435,8 @@ namespace ConditioningControlPanel.Features
             {
                 if (App.Video?.IsPlaying == true)
                 {
-                    // Floating, with room for more than one: Test adds a window (at the limit the
-                    // oldest extra one makes room). Full screen keeps the dialog below.
+                    // Floating: Test always adds ONE window (at the limit the oldest makes room)
+                    // and never asks. Full screen keeps the dialog below.
                     if (App.Video.TryAddFloatingTestVideo()) return;
 
                     var result = MessageBox.Show(

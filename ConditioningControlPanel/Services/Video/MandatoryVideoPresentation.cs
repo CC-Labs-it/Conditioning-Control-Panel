@@ -4,7 +4,7 @@ namespace ConditioningControlPanel.Services.Video
 {
     /// <summary>
     /// How a mandatory video is put on screen (AppSettings.MandatoryVideoFloating): full screen, as
-    /// always, or one small topmost window. Pure, so the rule is pinned by tests
+    /// always, or small topmost windows. Pure, so the rule is pinned by tests
     /// (MandatoryVideoFloatingTests). The player, the timers and every stop rule are the same in both.
     /// </summary>
     internal static class MandatoryVideoPresentation
@@ -19,65 +19,81 @@ namespace ConditioningControlPanel.Services.Video
         public static bool ShouldFloat(bool floatingSetting, bool strict, bool lockdownActive, bool chaosRunning)
             => floatingSetting && !strict && !lockdownActive && !chaosRunning;
 
-        /// <summary>
-        /// The floating window on a <paramref name="areaW"/> x <paramref name="areaH"/> work area, in
-        /// that area's DIPs: 16:9, a third of the width (never under 480 wide, so the grace card and
-        /// a target fit; never larger than the area), at a random spot inside the flash images' edge
-        /// padding and always wholly on that screen. Same rule as the port's FloatingRect.
-        /// </summary>
-        public static (int X, int Y, int W, int H) FloatingRect(int areaW, int areaH, Random random)
-            => FloatingRect(areaW, areaH, random, SizeDivisor(SizeMedium), PrimaryMinWidth, null);
-
-        public const string SizeSmall = "small", SizeMedium = "medium", SizeLarge = "large";
-
-        /// <summary>The most floating windows one event may open (AppSettings.MandatoryVideoFloatingCount).</summary>
+        /// <summary>The most floating windows that may be up at once (AppSettings.MandatoryVideoFloatingCount).
+        /// One trigger opens ONE window; this is only the limit.</summary>
         public const int MaxWindows = 4;
 
-        /// <summary>The primary never goes under this (grace card + one target); a companion carries
-        /// neither, so it may be smaller.</summary>
-        public const int PrimaryMinWidth = 480, CompanionMinWidth = 320;
+        public const int MinSizePercent = 15, MaxSizePercent = 60, DefaultSizePercent = 33;
+        public const int MinSpeedPercent = 10, MaxSpeedPercent = 100, DefaultSpeedPercent = 35;
+
+        /// <summary>No window is narrower than this, whatever the percent (a small monitor).</summary>
+        public const int MinWidth = 240;
 
         public static int ClampCount(int count) => Math.Clamp(count, 1, MaxWindows);
+        public static int ClampSizePercent(int percent) => Math.Clamp(percent, MinSizePercent, MaxSizePercent);
+        public static int ClampSpeedPercent(int percent) => Math.Clamp(percent, MinSpeedPercent, MaxSpeedPercent);
 
-        public static string NormalizeSize(string? size) => size is SizeSmall or SizeLarge ? size : SizeMedium;
+        /// <summary>The retired small / medium / large choice, carried over once: 25, 33, 50.
+        /// Null = not one of the three, nothing to carry.</summary>
+        public static int? LegacySizePercent(string? size) => size switch
+        {
+            "small" => 25,
+            "medium" => 33,
+            "large" => 50,
+            _ => null,
+        };
 
-        /// <summary>The window is the work area's width over this: small a quarter, medium a third
-        /// (the first cut's size), large a half.</summary>
-        public static int SizeDivisor(string? size) => NormalizeSize(size) switch { SizeSmall => 4, SizeLarge => 2, _ => 3 };
+        public enum TriggerDecision { Open, Skip, ReplaceOldest }
 
         /// <summary>
-        /// The same rule at any size, and spread: with windows already up (<paramref name="taken"/>,
-        /// same DIPs) it tries a few spots and keeps the one that covers them least, so a new window
-        /// does not start stacked on another.
+        /// One trigger, <paramref name="up"/> windows on screen, <paramref name="limit"/> allowed:
+        /// under the limit it opens ONE; at the limit an automatic trigger is skipped quietly
+        /// (the way full screen refuses while a video plays) and a Test press replaces the oldest.
         /// </summary>
-        public static (int X, int Y, int W, int H) FloatingRect(int areaW, int areaH, Random random, int divisor, int minWidth,
-            System.Collections.Generic.IReadOnlyList<(int X, int Y, int W, int H)>? taken)
+        public static TriggerDecision DecideTrigger(int up, int limit, bool testPress)
+            => up < ClampCount(limit) ? TriggerDecision.Open
+                : testPress ? TriggerDecision.ReplaceOldest : TriggerDecision.Skip;
+
+        /// <summary>Attention checks belong to a full-screen video only. A floating one has no
+        /// targets, no mini-game, no verdict and no replay, on either engine.</summary>
+        public static bool AttentionChecksApply(bool attentionSetting, bool floating) => attentionSetting && !floating;
+
+        /// <summary>
+        /// A floating window on a <paramref name="areaW"/> x <paramref name="areaH"/> work area, in
+        /// that area's DIPs: 16:9, <paramref name="sizePercent"/> of the width (never larger than
+        /// the area), at a random spot inside the flash images' edge padding and always wholly on
+        /// that screen. Windows may overlap the ones already up (<paramref name="taken"/>, same
+        /// DIPs); the only thing avoided is landing exactly on top of one, which would hide it.
+        /// </summary>
+        public static (int X, int Y, int W, int H) FloatingRect(int areaW, int areaH, Random random, int sizePercent,
+            System.Collections.Generic.IReadOnlyList<(int X, int Y, int W, int H)>? taken = null)
         {
             areaW = Math.Max(1, areaW);
             areaH = Math.Max(1, areaH);
-            var w = Math.Min(areaW, Math.Max(minWidth, areaW / Math.Max(1, divisor)));
+            var w = Math.Min(areaW, Math.Max(MinWidth, areaW * ClampSizePercent(sizePercent) / 100));
             var h = w * 9 / 16;
             if (h > areaH) { h = areaH; w = Math.Min(areaW, h * 16 / 9); }
             var (minX, minY, maxX, maxY) = FlashService.SpawnBounds(areaW, areaH, w, h);
-            var tries = taken is { Count: > 0 } ? 16 : 1;
-            (int X, int Y, int W, int H) best = default;
-            var bestCover = long.MaxValue;
-            for (var i = 0; i < tries && bestCover > 0; i++)
-            {
-                var x = Math.Clamp(random.Next(minX, maxX), 0, areaW - w);
-                var y = Math.Clamp(random.Next(minY, maxY), 0, areaH - h);
-                long cover = 0;
-                if (taken != null)
-                    foreach (var t in taken)
-                        cover += (long)Math.Max(0, Math.Min(x + w, t.X + t.W) - Math.Max(x, t.X))
-                                 * Math.Max(0, Math.Min(y + h, t.Y + t.H) - Math.Max(y, t.Y));
-                if (cover < bestCover) { bestCover = cover; best = (x, y, w, h); }
-            }
-            return best;
+            var x = Math.Clamp(random.Next(minX, maxX), 0, areaW - w);
+            var y = Math.Clamp(random.Next(minY, maxY), 0, areaH - h);
+            if (taken != null)
+                for (var i = 0; i < 8 && OnTopOf(x, y, taken); i++)
+                {
+                    // A small step is enough: toward whichever side has the room.
+                    x = x + PileOffset <= areaW - w ? x + PileOffset : Math.Max(0, x - PileOffset);
+                    y = y + PileOffset <= areaH - h ? y + PileOffset : Math.Max(0, y - PileOffset);
+                }
+            return (x, y, w, h);
         }
 
-        /// <summary>Attention targets shrink with the window (a third, like the port) so one fits
-        /// inside it; full screen keeps the player's own size.</summary>
-        public static int AttentionSize(int size, bool floating) => floating ? Math.Max(16, size / 3) : size;
+        /// <summary>Closer than this on both axes reads as one window.</summary>
+        public const int PileOffset = 36;
+
+        private static bool OnTopOf(int x, int y, System.Collections.Generic.IReadOnlyList<(int X, int Y, int W, int H)> taken)
+        {
+            foreach (var t in taken)
+                if (Math.Abs(t.X - x) < PileOffset && Math.Abs(t.Y - y) < PileOffset) return true;
+            return false;
+        }
     }
 }
