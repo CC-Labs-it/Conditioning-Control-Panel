@@ -3010,6 +3010,18 @@ public class OverlayService : IDisposable
                     videoAnchors.Add((vh, MonitorFromWindow(vh, MONITOR_DEFAULTTONEAREST)));
                 }
             }
+            // A Bubble Count round with "Pause other effects" on (#1418) is held the same way:
+            // its fullscreen windows stand in as the video anchors, so every overlay below is
+            // pinned under the round instead of over it. Off (the default) nothing changes.
+            else if (App.BubbleCount?.HoldsEffects == true)
+            {
+                foreach (var bh in App.BubbleCount.EffectsHoldWindowHandles())
+                {
+                    if (bh == IntPtr.Zero || !IsWindow(bh)) continue;
+                    if (videoHwnd == IntPtr.Zero) videoHwnd = bh;
+                    videoAnchors.Add((bh, MonitorFromWindow(bh, MONITOR_DEFAULTTONEAREST)));
+                }
+            }
         }
         catch { }
 

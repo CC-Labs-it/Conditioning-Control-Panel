@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Features
                     }
                 }
                 ChkStrict.IsChecked = s.BubbleCountStrictLock;
+                ChkPauseEffects.IsChecked = s.BubbleCountPauseEffects;
             }
             finally { _isLoading = false; }
         }
@@ -72,7 +73,8 @@ namespace ConditioningControlPanel.Features
             if (e.PropertyName == nameof(Models.AppSettings.BubbleCountEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.BubbleCountFrequency) ||
                 e.PropertyName == nameof(Models.AppSettings.BubbleCountDifficulty) ||
-                e.PropertyName == nameof(Models.AppSettings.BubbleCountStrictLock))
+                e.PropertyName == nameof(Models.AppSettings.BubbleCountStrictLock) ||
+                e.PropertyName == nameof(Models.AppSettings.BubbleCountPauseEffects))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
             }
@@ -169,6 +171,17 @@ namespace ConditioningControlPanel.Features
             }
 
             s.BubbleCountStrictLock = on;
+            App.Settings?.Save();
+        }
+
+        /// <summary>"Pause other effects during Bubble Count" (#1418). Takes effect from the next
+        /// round; a round already on screen keeps what it started with.</summary>
+        private void ChkPauseEffects_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.BubbleCountPauseEffects = ChkPauseEffects.IsChecked ?? false;
             App.Settings?.Save();
         }
 

@@ -267,6 +267,18 @@ public class BouncingTextService : IDisposable
         CompositionTarget.Rendering += Animate;
     }
 
+    /// <summary>A Bubble Count round holding the other effects (#1418) takes the mandatory video's
+    /// pause, same rules ("show over videos" keeps the text up).</summary>
+    internal void HoldForFullscreen() => OnVideoStartedPause(null, EventArgs.Empty);
+
+    /// <summary>End of that hold: the mandatory video's resume. A video that took the screen in the
+    /// meantime keeps its own pause.</summary>
+    internal void ReleaseFullscreenHold()
+    {
+        if (App.Video?.IsPlaying == true) return;
+        OnVideoEndedResume(null, EventArgs.Empty);
+    }
+
     private string SelectRandomText()
     {
         var settings = App.Settings.Current;

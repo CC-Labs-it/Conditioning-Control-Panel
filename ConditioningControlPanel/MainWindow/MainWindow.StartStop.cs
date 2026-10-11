@@ -956,10 +956,8 @@ namespace ConditioningControlPanel
                 };
 
                 // Also update Presets tab button using direct reference
-                if (TxtPresetsStatus != null)
-                {
-                    TxtPresetsStatus.Text = Loc.Get("label_running");
-                }
+                // "Running...", or the session's name and clock while a session runs.
+                RefreshBarStatus();
             }
             else
             {

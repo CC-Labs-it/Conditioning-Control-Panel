@@ -116,6 +116,21 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkStrict_Changed" Unchecked="ChkStrict_Changed"/>
                             </Grid>
+
+                            <!-- #1418: off by default. On, a round holds flashes, spirals and the
+                                 overlays the way a mandatory video does. -->
+                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_count_pause_effects}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_count_pause_effects}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkPauseEffects"
+                                          Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                          Checked="ChkPauseEffects_Changed" Unchecked="ChkPauseEffects_Changed"/>
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </Border>
