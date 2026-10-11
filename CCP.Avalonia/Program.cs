@@ -53,6 +53,18 @@ namespace ConditioningControlPanel.Avalonia
                 return ClickThrough.Run(args[ct + 1]);
             }
 
+            // --uia-dump <dir> writes the automation tree per view for the WPF behaviour diff (UiaDump.cs).
+            var ud = Array.IndexOf(args, "--uia-dump");
+            if (ud >= 0)
+            {
+                if (ud + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("usage: --uia-dump <out-dir>");
+                    return 2;
+                }
+                return UiaDump.Run(args[ud + 1]);
+            }
+
             // --render <path> draws the real window offscreen and saves a PNG. Visual proof that
             // survives on a CI runner with no display server.
             var r = Array.IndexOf(args, "--render");
