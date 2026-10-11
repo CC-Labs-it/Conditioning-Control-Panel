@@ -1828,3 +1828,23 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/no-desktop-notify-in-tests: +73
 - OsNotifications no longer talks to D-Bus in a CCP_USERDATA_DIR sandbox (only `--notify-check` opts in); Sink/BusAttempts seams.
 - RemoteControlShellTests asserts the join notification via the Sink; sandbox no-bus test; both fail-proven.
+
+## avalonia-port/sync6-tonight-board-c: +431
+- Premium showcase on the Tonight Board: Core showcase provider (git mv), head art registry and lifecycle, muted ClipArtView. The art is released on shell close (P68).
+- Ledger row 104 is ported. Board stays silent, Live is blocked on Lobby, and drawn art needs a slice plan.
+
+## avalonia-port/distro-check: +292
+- Clean-distro Docker check of the linux-x64 tarball (6 distros, real Xvfb, offline run, screenshots + result.json) and a distro-check.yml CI matrix (run 38061705873 green).
+- Findings F1-F6 (tumbleweed no-font abort, WPE not packaged, libvlc P/Invoke, emoji tofu, HiDPI wizard, pactl) in evidence/distro-check/findings.md.
+
+## avalonia-port/sync6-nav-polish-b: +839
+- Section strip in its hue (tray, per-tab tints, bevelled plates, sliding glowing lit fill), page wash + ink, window edge line/band/lift and HUD band per section; SectionPaintShellTests, Keincheck strip-*.png.
+- Strip colour math in Core NavStripPaint (both heads wrap it); ledger rows 47/49/70/75/77 ported, 48/50/54/80 partial; the rest -> sync6-nav-polish-c (depth, fx, fog/embers, rail coins).
+
+## avalonia-port/ci-green: +85
+- `build` is green on GitHub Actions (run 38063614481). Changes: PKGBUILD 7.1.5; WPF tests follow the Core/Assets moves; the board budget test runs alone and fully warmed up (12 ms budget unchanged).
+- Fixed the Windows-only Avalonia test failures: a locator scope leak (8 WindowDropTests), the intake token check on runners with WebView2, and the webcam splash wall-clock flake. `build.yml` gains `workflow_dispatch`.
+
+## avalonia-port/sync6-nav-rail-c: +608
+- Rail paint: spur, art tint, label glow, 160 ms halo fade, hover nudge, NavBadges pills + rich tooltip (NavBadges moved to Core).
+- Landing glow (GlowNavTarget + NavGlow on pill, rail row, Settings pill, Play zone header) and the window-title crumb; ledger rows 2/23/46 ported, 33 partial, the rest -> sync6-nav-rail-d.
