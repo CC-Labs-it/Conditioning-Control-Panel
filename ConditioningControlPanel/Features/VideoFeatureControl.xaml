@@ -144,6 +144,33 @@
                                           Style="{DynamicResource DarkComboBoxStyle}"
                                           SelectionChanged="CmbAppearance_Changed"/>
                             </Grid>
+                            <!-- Floating only (progressive disclosure): size, and how many windows at once. -->
+                            <StackPanel x:Name="PanelFloatingOptions" Visibility="Collapsed">
+                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_video_appearance_size}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_size}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <ComboBox Grid.Column="1" x:Name="CmbFloatingSize"
+                                              Width="180" VerticalAlignment="Center"
+                                              Style="{DynamicResource DarkComboBoxStyle}"
+                                              SelectionChanged="CmbFloatingSize_Changed"/>
+                                </Grid>
+                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_video_appearance_count}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_count}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <ComboBox Grid.Column="1" x:Name="CmbFloatingCount"
+                                              Width="180" VerticalAlignment="Center"
+                                              Style="{DynamicResource DarkComboBoxStyle}"
+                                              SelectionChanged="CmbFloatingCount_Changed"/>
+                                </Grid>
+                            </StackPanel>
                             <TextBlock x:Name="TxtAppearanceNote" Text="{loc:Str video_appearance_strict_note}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
                                        Visibility="Collapsed"/>

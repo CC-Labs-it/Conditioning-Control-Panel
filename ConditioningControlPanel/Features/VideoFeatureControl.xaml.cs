@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using ConditioningControlPanel.Localization;
+using VideoShow = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation;
 
 namespace ConditioningControlPanel.Features
 {
@@ -77,6 +78,16 @@ namespace ConditioningControlPanel.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.Visibility = s.MandatoryVideoFloating ? Visibility.Visible : Visibility.Collapsed;
+                // Size and how many: floating only.
+                PanelFloatingOptions.Visibility = s.MandatoryVideoFloating ? Visibility.Visible : Visibility.Collapsed;
+                CmbFloatingSize.Items.Clear();
+                foreach (var size in new[] { VideoShow.SizeSmall, VideoShow.SizeMedium, VideoShow.SizeLarge })
+                    CmbFloatingSize.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_size_" + size), Tag = size });
+                CmbFloatingSize.SelectedIndex = VideoShow.SizeDivisor(s.MandatoryVideoFloatingSize) switch { 4 => 0, 2 => 2, _ => 1 };
+                CmbFloatingCount.Items.Clear();
+                for (var n = 1; n <= VideoShow.MaxWindows; n++)
+                    CmbFloatingCount.Items.Add(new ComboBoxItem { Content = n.ToString(), Tag = n });
+                CmbFloatingCount.SelectedIndex = VideoShow.ClampCount(s.MandatoryVideoFloatingCount) - 1;
                 // The fold opens on its own when a row inside is off its default, so a setting
                 // someone changed is never hidden from them. It never closes itself.
                 if (s.VideoTargetMonitor != App.MonitorTargetFollowGlobal
@@ -156,6 +167,26 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
+        /// <summary>Read at the next video's start, like "Shows as".</summary>
+        private void CmbFloatingSize_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbFloatingSize.SelectedItem is not ComboBoxItem { Tag: string size }) return;
+            var s = App.Settings?.Current;
+            if (s == null || s.MandatoryVideoFloatingSize == size) return;
+            s.MandatoryVideoFloatingSize = size;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Read at the next video's start, and by the Test button.</summary>
+        private void CmbFloatingCount_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbFloatingCount.SelectedItem is not ComboBoxItem { Tag: int count }) return;
+            var s = App.Settings?.Current;
+            if (s == null || s.MandatoryVideoFloatingCount == count) return;
+            s.MandatoryVideoFloatingCount = count;
+            App.Settings?.Save();
+        }
+
         private static string FormatDuration(int seconds)
         {
             if (seconds <= 0) return "off";
@@ -179,6 +210,8 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoGazeClickEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloating) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingSize) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingCount) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoTargetMonitor))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
@@ -388,6 +421,10 @@ namespace ConditioningControlPanel.Features
             {
                 if (App.Video?.IsPlaying == true)
                 {
+                    // Floating, with room for more than one: Test adds a window (at the limit the
+                    // oldest extra one makes room). Full screen keeps the dialog below.
+                    if (App.Video.TryAddFloatingTestVideo()) return;
+
                     var result = MessageBox.Show(
                         "A video appears to be playing.\n\nIf you don't see a video, it may be stuck. Click Yes to force reset and try again.",
                         "Video Playing",

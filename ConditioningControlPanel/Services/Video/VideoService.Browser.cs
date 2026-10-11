@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>True while a browser video session owns the screen. Read by AudioService so the
         /// duck sweep never lowers the app's OWN video audio (LibVLC audio is in-process and
         /// structurally un-duckable, so this is what keeps the two engines at parity).</summary>
-        public bool IsBrowserSessionActive => _browserActive;
+        public bool IsBrowserSessionActive => _browserActive || HasFloatingCompanions;   // a companion is WebView2 audio too
 
         /// <summary>Aspect ratio (w/h) of the clip in the live browser session, or 0 when unknown /
         /// no browser session. The page's video element is contain-fit over the full window, so this
@@ -586,7 +586,11 @@ namespace ConditioningControlPanel.Services
             // The page posts this on pointerdown, so the button is still held: a floating window
             // moves with it. Queued, never run inside the WebView2 message callback.
             if (IsFloating)
-                Application.Current?.Dispatcher?.BeginInvoke(new Action(() => BeginFloatingDrag(_primaryVideoWindow)));
+                Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                {
+                    if (_primarySurface != null) OnFloatingTouched(_primarySurface);   // a press takes the sound
+                    BeginFloatingDrag(_primaryVideoWindow);
+                }));
         }
 
         /// <summary>

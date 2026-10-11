@@ -2623,6 +2623,26 @@ namespace ConditioningControlPanel.Models
             set { _mandatoryVideoFloating = value; OnPropertyChanged(); }
         }
 
+        private string _mandatoryVideoFloatingSize = "medium";
+        /// <summary>Floating window size: "small" (a quarter of the work area's width), "medium" (a
+        /// third, the default and the first cut's size) or "large" (a half). Read at the next video
+        /// (MandatoryVideoPresentation.SizeDivisor).</summary>
+        public string MandatoryVideoFloatingSize
+        {
+            get => _mandatoryVideoFloatingSize;
+            set { _mandatoryVideoFloatingSize = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.NormalizeSize(value); OnPropertyChanged(); }
+        }
+
+        private int _mandatoryVideoFloatingCount = 1;
+        /// <summary>How many floating windows one video event opens, 1 (default) to 4. The first is
+        /// the video itself; the others are companions with their own clip and no targets. Only one
+        /// window carries the sound (Services/Video/FloatingAudioFocus).</summary>
+        public int MandatoryVideoFloatingCount
+        {
+            get => _mandatoryVideoFloatingCount;
+            set { _mandatoryVideoFloatingCount = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampCount(value); OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC
