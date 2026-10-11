@@ -62,6 +62,7 @@ public sealed class RoadmapServiceBehaviourTests : IDisposable
     [Fact]
     public void DefaultCtorKeepsTheDiaryBesideTheProfile()
     {
+        Assert.StartsWith(Path.GetTempPath(), CorePaths.UserData); // never the real profile
         using var roadmap = new RoadmapService();
         Assert.Equal(Path.Combine(CorePaths.UserData, "roadmap_diary"), roadmap.DiaryFolderPath);
     }
