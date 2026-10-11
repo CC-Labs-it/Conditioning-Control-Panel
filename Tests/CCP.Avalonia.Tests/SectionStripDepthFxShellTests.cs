@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -119,6 +120,30 @@ public sealed class SectionStripDepthFxShellTests
             {
                 (w, var strip) = Open("presets");
 
+                // The real pointer path (P04): moving onto a rest pill lifts it, pressing drops
+                // its face, releasing springs it back and chooses it.
+                var ramp0 = strip.Part("ramp")!.Pill;
+                var at = ramp0.TranslatePoint(new Point(ramp0.Bounds.Width / 2, ramp0.Bounds.Height / 2), w)!.Value;
+                w.MouseMove(at);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(-NavStripMotion.HoverLiftPx, strip.PillHover("ramp").Lift);
+                w.MouseMove(new Point(1, 1));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, strip.PillHover("ramp").Lift);
+                w.MouseMove(at);
+                Dispatcher.UIThread.RunJobs();
+                w.MouseDown(at, MouseButton.Left);
+                Assert.Equal(DepthLaw.PressTravelPx, strip.PillFaceTravel("ramp"));
+                w.MouseUp(at, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("ramp", strip.ActivePillKey);
+                Assert.Equal(DepthLaw.ActiveSinkPx, strip.PillFaceTravel("ramp"));
+                w.MouseMove(new Point(1, 1));
+                Dispatcher.UIThread.RunJobs();
+                strip.Part("presets")!.Pill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                strip.FxHoverForTests("presets", false);
+                w.UpdateLayout();
+
                 // Hover (wave 7): Full lifts and grows, Reduced lifts only, Off never moves; the
                 // lit pill rides the fill and keeps still. Hover lengthens the drop band.
                 strip.FxHoverForTests("studio", true);
@@ -136,12 +161,14 @@ public sealed class SectionStripDepthFxShellTests
                 Assert.Equal((0d, 1d), strip.PillHover("haptics"));
 
                 // Choose (wave 7): a burst in the hue at Full, none at Off.
+                int bursts = strip.BurstsFired;   // the pointer path above chose two pills at Full
+                Assert.Equal(2, bursts);
                 strip.Part("ramp")!.Pill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.Equal(0, strip.BurstsFired);
+                Assert.Equal(bursts, strip.BurstsFired);
                 CoreSettings.Current.MotionLevel = MotionLevel.Full;
                 w.UpdateLayout();
                 strip.Part("studio")!.Pill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.Equal(1, strip.BurstsFired);
+                Assert.Equal(bursts + 1, strip.BurstsFired);
 
                 // Sheen (wave 7): one sweep across the lit pill; the clock runs only on Full with
                 // an ambient tier while shown and attached (P01/P65).

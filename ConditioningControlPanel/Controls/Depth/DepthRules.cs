@@ -95,7 +95,7 @@ namespace ConditioningControlPanel.Controls.Depth
         internal const double ShadowHuePull = DepthLaw.ShadowHuePull;
 
         /// <summary>The neutral shadow used where no section hue applies (dialogs, the launcher).</summary>
-        internal static readonly Color NeutralShadowInk = Color.FromRgb(0x06, 0x02, 0x10);   // DepthLaw.NeutralShadowInk
+        internal static readonly Color NeutralShadowInk = Color.FromRgb((byte)((DepthLaw.NeutralShadowInk >> 16) & 0xFF), (byte)((DepthLaw.NeutralShadowInk >> 8) & 0xFF), (byte)(DepthLaw.NeutralShadowInk & 0xFF));
 
         /// <summary>A shadow colour for the section: deep ink pulled 28% toward the hue, at ShadowAlpha.</summary>
         internal static Color ShadowColor(Color hue) => ShadowColor(hue, ShadowAlpha);

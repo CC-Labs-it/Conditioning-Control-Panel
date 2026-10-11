@@ -141,7 +141,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!p.Pressed) anim.Children.Add(Frame(0.6, TranslateTransform.YProperty, y - DepthLaw.ReleaseOvershootPx));
             anim.Children.Add(Frame(1, TranslateTransform.YProperty, y));
             anim.Easing = new QuadraticEaseOut();
-            _ = anim.RunAsync(p.Face);
+            // WPF BeginAnimation replaces the running one: cancel the previous travel first, or a
+            // release spring still running fights the sink that a click starts right after it.
+            p.FaceRun?.Cancel();
+            p.FaceRun = new System.Threading.CancellationTokenSource();
+            _ = anim.RunAsync(p.Face, p.FaceRun.Token);
         }
 
         private void DepthPress(PillParts p, bool down)
@@ -154,7 +158,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private static KeyFrame Frame(double cue, AvaloniaProperty prop, double value) =>
             new() { Cue = new Cue(cue), Setters = { new Setter(prop, value) } };
 
-        internal double PillFaceTravel(string key) => Part(key)?.FaceShift.Y ?? double.NaN;
+        /// <summary>Test seam: where a pill's face settles (the base value, under any running travel).</summary>
+        internal double PillFaceTravel(string key) =>
+            Part(key)?.FaceShift.GetBaseValue(TranslateTransform.YProperty) is { HasValue: true } v ? v.Value : double.NaN;
         internal double PillDropLength(string key) => Part(key)?.Drop is { IsVisible: true } d ? d.Height - 2 : 0;
         internal IBrush? PillDropBrush(string key) => Part(key)?.Drop.Background;
         internal void DepthPressForTests(string key, bool down) { if (Part(key) is { } p) { p.Pressed = down; DepthSettle(p, animate: false); } }
@@ -204,7 +210,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         internal void FxHoverForTests(string key, bool on) { if (Part(key) is { } p) FxHover(p, on, animate: false); }
-        internal (double Lift, double Scale) PillHover(string key) => Part(key) is { } p ? (p.HoverLift.Y, p.HoverScale.ScaleX) : (double.NaN, double.NaN);
+        /// <summary>Test seam: where a pill's hover settles (base values, under any running transition).</summary>
+        internal (double Lift, double Scale) PillHover(string key) => Part(key) is { } p
+            ? (p.HoverLift.GetBaseValue(TranslateTransform.YProperty).GetValueOrDefault(), p.HoverScale.GetBaseValue(ScaleTransform.ScaleXProperty).GetValueOrDefault())
+            : (double.NaN, double.NaN);
 
         // ------------------------------------------------------------------ choose (wave 7)
 

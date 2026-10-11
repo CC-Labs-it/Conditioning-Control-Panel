@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             public TranslateTransform FaceShift = new(), HoverLift = new();
             public ScaleTransform HoverScale = new();
             public bool Pressed, Hovered;
+            public System.Threading.CancellationTokenSource? FaceRun;
         }
 
         private readonly TextBlock _crumbSectionText = new() { FontSize = 14, FontWeight = FontWeight.ExtraBold };
