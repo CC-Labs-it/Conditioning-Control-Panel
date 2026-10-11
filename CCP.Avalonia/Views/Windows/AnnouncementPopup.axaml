@@ -25,6 +25,8 @@
      has RecognizesAccessKey false, so an underscore in a caller's label survives. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.AnnouncementPopup"
         Title="Announcement"
         Width="440" SizeToContent="Height" MaxHeight="600"
@@ -161,8 +163,8 @@
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"
                     BorderThickness="0" Cursor="Hand"
-                    ZIndex="1">
-                <TextBlock Text="✕"/>
+                    ZIndex="1" AutomationProperties.Name="{loc:Str btn_close}">
+                <fx:IconGlyph Kind="Dismiss" Size="14"/>
             </Button>
 
             <StackPanel Grid.Column="1" Margin="20" VerticalAlignment="Center">
@@ -194,14 +196,16 @@
                 -->
                 <StackPanel x:Name="ButtonRow">
                     <!-- Action / Download button (visible when link_url or an onAction is supplied) -->
-                    <Button x:Name="BtnDownload" Content="▶ Download Mod"
+                    <Button x:Name="BtnDownload"
                             Theme="{StaticResource AnnouncementPillButton}"
                             HorizontalAlignment="Center"
                             Width="180" Height="38"
                             Cursor="Hand"
                             FontSize="14" FontWeight="Bold"
                             IsVisible="False"
-                            Margin="0,0,0,8"/>
+                            Margin="0,0,0,8">
+                        <fx:IconLabel Kind="Play" Text="Download Mod" HorizontalAlignment="Center"/>
+                    </Button>
 
                     <!-- Got it Button -->
                     <Button x:Name="BtnDismiss" Content="Got it!"

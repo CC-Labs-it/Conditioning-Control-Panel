@@ -7,6 +7,8 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 
@@ -209,11 +211,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(0, 8, 0, 0),
             };
-            footer.Children.Add(new TextBlock
+            footer.Children.Add(new IconLabel
             {
-                Text = $"👁 {entry.ViewCount}",
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0xA8)),
+                Kind = IconKind.Eye,
+                Text = entry.ViewCount.ToString(),
+                IconSize = 11,
+                Spacing = 4,
+                [TextElement.FontSizeProperty] = 11d,
+                [TextElement.ForegroundProperty] = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0xA8)),
                 Margin = new Thickness(0, 0, 14, 0),
             });
             footer.Children.Add(new TextBlock
@@ -252,10 +257,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ClipToBounds = true,
             };
 
-            container.Child = new TextBlock
+            container.Child = new IconGlyph
             {
-                Text = "▶",
-                FontSize = 22,
+                Kind = IconKind.Play,
+                Variant = IconVariant.Filled,
+                Size = 22,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x80)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,

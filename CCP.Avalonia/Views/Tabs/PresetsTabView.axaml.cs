@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -598,23 +599,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private Border PresetChip(Preset preset)
         {
-            var glyphs = (preset.FlashEnabled ? "⚡" : "") + (preset.MandatoryVideosEnabled ? "🎬" : "")
-                + (preset.SubliminalEnabled ? "💭" : "") + (preset.SpiralEnabled ? "🌀" : "")
-                + (preset.LockCardEnabled ? "🔒" : "");
             var name = CoreMods.MakeModAware(preset.Name);
             var isDefault = preset.IsDefault;
             var selected = _selectedPreset?.Id == preset.Id;
 
             var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
-            // Feature glyphs ahead of the name - the same five the detail pane uses.
-            line.Children.Add(new TextBlock
-            {
-                Text = glyphs,
-                FontSize = 10,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 6, 0),
-            });
+            // Feature glyphs ahead of the name - the same five the detail pane uses (WPF ⚡🎬💭🌀🔒).
+            var glyphs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+            foreach (var g in PresetFeatureGlyphs(preset)) glyphs.Children.Add(g);
+            line.Children.Add(glyphs);
 
             var nameText = new TextBlock { Text = name, MaxWidth = 150, Theme = TabTheme("SdPresetChipName") };
             ToolTip.SetTip(nameText, CoreMods.MakeModAware(preset.Description));
@@ -635,6 +629,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             chip.PointerPressed += (_, e) => { SelectPreset(preset); e.Handled = true; };
             return chip;
+        }
+
+        /// <summary>WPF's ⚡🎬💭🌀🔒 preset chip glyphs, one icon per enabled feature.</summary>
+        internal static IEnumerable<IconGlyph> PresetFeatureGlyphs(Preset preset)
+        {
+            if (preset.FlashEnabled) yield return new IconGlyph { Kind = IconKind.Flash, Size = 10 };
+            if (preset.MandatoryVideosEnabled) yield return new IconGlyph { Kind = IconKind.Video, Size = 10 };
+            if (preset.SubliminalEnabled) yield return new IconGlyph { Kind = IconKind.Comment, Size = 10 };
+            if (preset.SpiralEnabled) yield return new IconGlyph { Brand = IconBrand.Spiral, Size = 10 };
+            if (preset.LockCardEnabled) yield return new IconGlyph { Kind = IconKind.LockClosed, Size = 10 };
         }
 
         /// <summary>Four source chips (single-select) and four difficulty dots (independent).</summary>
@@ -692,7 +696,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Tag = difficulty,
                 IsChecked = _rackDifficulties.Contains(difficulty),
                 IsEnabled = true,
-                Content = new TextBlock { Text = "●" },
+                Content = new IconGlyph { Kind = IconKind.Circle, Variant = IconVariant.Filled, Size = 10 },
                 Foreground = Brush(solidKey),
             };
             ToolTip.SetTip(dot, tip);
@@ -839,7 +843,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _ => ("SessionDiffEasyBrush", "SessionDiffEasyWashBrush"),
             };
             var (srcKey, srcSolid, srcWash) = RackSourceKeys(session.Source);
-            var icon = string.IsNullOrWhiteSpace(session.Icon) ? "🎬" : session.Icon;
             var name = SessionName(session);
             var blurb = SessionDescription(session);
             var difficulty = session.GetDifficultyText();
@@ -857,7 +860,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Grid.SetColumn(stripe, 0);
             grid.Children.Add(stripe);
 
-            var glyph = new TextBlock { Text = icon, Theme = TabTheme("SdRackIcon"), Margin = new Thickness(7, 0, 0, 0) };
+            // A session's own icon is its data (user/catalogue choice, oracle (c).2); only the
+            // fallback for an icon-less session is ours (WPF "🎬").
+            Control glyph = string.IsNullOrWhiteSpace(session.Icon)
+                ? new IconGlyph { Kind = IconKind.Video, Size = 15, Width = 28, Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center }
+                : new TextBlock { Text = session.Icon, Theme = TabTheme("SdRackIcon"), Margin = new Thickness(7, 0, 0, 0) };
             Grid.SetColumn(glyph, 1);
             grid.Children.Add(glyph);
 
@@ -895,11 +902,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Edit, export and delete are live (WPF SessionBtn_Edit/_Export/_Delete).
             var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            var edit = RowAction("✎", Loc.Get("tooltip_edit_session"), danger: false);
+            var edit = RowAction(IconKind.Edit, Loc.Get("tooltip_edit_session"), danger: false);
             edit.IsEnabled = true;
             edit.Click += (_, e) => { e.Handled = true; EditSession(session); };
             actions.Children.Add(edit);
-            var export = RowAction("↗", Loc.Get("tooltip_export_session"), danger: false);
+            var export = RowAction(IconKind.Open, Loc.Get("tooltip_export_session"), danger: false);
             export.IsEnabled = true;
             export.Click += (_, e) => { e.Handled = true; ExportSession(session); };
             actions.Children.Add(export);
@@ -907,7 +914,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (session.Source != SessionSource.BuiltIn)
             {
                 // WPF SessionBtn_Share (MainWindow.SessionIO.cs:1827).
-                var share = RowAction("☁", Loc.Get("tooltip_share_to_catalogue"), danger: false);
+                var share = RowAction(IconKind.Cloud, Loc.Get("tooltip_share_to_catalogue"), danger: false);
                 share.IsEnabled = true;
                 share.Click += async (_, e) =>
                 {
@@ -915,7 +922,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     if (Shell is { } owner) await owner.ShareSessionToCatalogueAsync(session);
                 };
                 actions.Children.Add(share);
-                var delete = RowAction("\U0001F5D1", Loc.Get("tooltip_delete_session"), danger: true);
+                var delete = RowAction(IconKind.Delete, Loc.Get("tooltip_delete_session"), danger: true);
                 delete.IsEnabled = true;
                 delete.Click += (_, e) => { e.Handled = true; ConfirmDeleteSession(session); };
                 actions.Children.Add(delete);
@@ -974,15 +981,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _rowSweepHost = null;
         }
 
-        private Button RowAction(string glyph, string tip, bool danger)
+        private Button RowAction(IconKind kind, string tip, bool danger)
         {
             var btn = new Button
             {
                 Theme = TabTheme(danger ? "SdRowActionDanger" : "SdRowAction"),
-                Content = new TextBlock { Text = glyph },
+                Content = new IconGlyph { Kind = kind, Size = 13 },
                 IsEnabled = false,
             };
             ToolTip.SetTip(btn, tip);
+            AutomationProperties.SetName(btn, tip);   // icon-only: the tooltip is its accessible name
             return btn;
         }
 
@@ -1135,7 +1143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private bool _sessionButtonRunning;
 
-        /// <summary>WPF SessionIO.cs:971-972: a locked session greys Start and reads "🔒 Coming Soon".
+        /// <summary>WPF SessionIO.cs:971-972: a locked session greys Start and reads "🔒 Coming Soon" (padlock as an icon).
         /// While a session runs the button is Stop, so it keeps its running label and stays live.</summary>
         private void ApplyStartButton()
         {
@@ -1143,7 +1151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_selectedSession is not null) BtnStartSession.IsEnabled = !locked || _sessionButtonRunning;
             if (_sessionButtonRunning) return;
             BtnStartSession.Content = locked
-                ? new TextBlock { Text = "🔒 " + Loc.Get("label_coming_soon") }
+                ? new IconLabel { Kind = IconKind.LockClosed, Text = Loc.Get("label_coming_soon") }
                 : _startSessionLabel;
         }
 

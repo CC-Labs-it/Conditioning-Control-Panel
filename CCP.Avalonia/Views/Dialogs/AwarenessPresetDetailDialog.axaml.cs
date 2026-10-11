@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using Avalonia.Automation;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -350,7 +351,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             var btn = new Button
             {
-                Content = "＋ Add trigger",
+                Content = new IconLabel { Kind = IconKind.Add, Text = "Add trigger" },
                 Padding = new Thickness(12, 6, 12, 6),
                 Margin = new Thickness(0, 10, 0, 0),
                 Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
@@ -531,7 +532,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 var addBtn = new Button
                 {
-                    Content = "＋ Add action",
+                    Content = new IconLabel { Kind = IconKind.Add, Text = "Add action", Spacing = 4 },
                     Padding = new Thickness(10, 4, 10, 4),
                     Margin = new Thickness(6, 0, 0, 0),
                     Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
@@ -546,7 +547,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 var deleteTriggerBtn = new Button
                 {
-                    Content = "×",
+                    Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 14 },
                     Width = 26,
                     Height = 26,
                     Margin = new Thickness(6, 0, 0, 0),
@@ -558,6 +559,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     FontSize = 14,
                 };
                 ToolTip.SetTip(deleteTriggerBtn, "Delete this trigger from the preset");
+                AutomationProperties.SetName(deleteTriggerBtn, "Delete this trigger from the preset");
                 deleteTriggerBtn.Click += async (_, _) =>
                 {
                     var label = string.IsNullOrWhiteSpace(trigger.Keyword) ? "(unnamed trigger)" : $"\"{trigger.Keyword}\"";
@@ -584,15 +586,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 Grid.SetColumn(keywordText, 1);
                 headerGrid.Children.Add(keywordText);
 
-                var chipText = new TextBlock
+                var chipText = new StackPanel
                 {
-                    Text = BuildActionChips(trigger),
-                    Foreground = this.TryFindResource("TextMutedBrush", out var muted) && muted is IBrush mutedBrush
-                        ? mutedBrush
-                        : new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0xA0)),
-                    FontSize = 12,
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
+                var chipBrush = this.TryFindResource("TextMutedBrush", out var muted) && muted is IBrush mutedBrush
+                    ? mutedBrush
+                    : new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0xA0));
+                foreach (var kind in BuildActionChips(trigger))
+                    chipText.Children.Add(new IconGlyph { Kind = kind, Size = 12, Foreground = chipBrush });
                 Grid.SetColumn(chipText, 2);
                 headerGrid.Children.Add(chipText);
             }
@@ -641,7 +645,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 PlayAudioAction pa      => BuildPlayAudioRow(trigger, pa, editable, parentBorder),
                 VisualEffectAction ve   => BuildVisualEffectRow(trigger, ve, editable, parentBorder),
-                HighlightAction hi      => BuildSimpleRow("👁", "Highlight matched words on screen", trigger, hi, editable, parentBorder),
+                HighlightAction hi      => BuildSimpleRow(IconKind.Eye, "Highlight matched words on screen", trigger, hi, editable, parentBorder),
                 HapticAction h          => BuildHapticRow(trigger, h, editable, parentBorder),
                 AvatarCommentAction ac  => BuildAvatarCommentRow(trigger, ac, editable, parentBorder),
                 ExtendSessionAction es  => BuildExtendSessionRow(trigger, es, editable, parentBorder),
@@ -659,7 +663,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// an icon on the left, the supplied editor in the middle, and a remove
         /// button on the right when editable.
         /// </summary>
-        private Border ActionRowFrame(string icon, Control body, KeywordTrigger trigger, KeywordAction action, bool editable, Border parentBorder)
+        private Border ActionRowFrame(IconKind icon, Control body, KeywordTrigger trigger, KeywordAction action, bool editable, Border parentBorder)
         {
             var rowBorder = new Border
             {
@@ -676,10 +680,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // body
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // remove
 
-            var iconText = new TextBlock
+            var iconText = new IconGlyph
             {
-                Text = icon,
-                FontSize = 14,
+                Kind = icon,
+                Size = 14,
                 Margin = new Thickness(0, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -693,7 +697,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 var removeBtn = new Button
                 {
-                    Content = "×",
+                    Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 13 },
                     Width = 22,
                     Height = 22,
                     Padding = new Thickness(0),
@@ -704,6 +708,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     FontSize = 13,
                 };
                 ToolTip.SetTip(removeBtn, "Remove this action from the trigger");
+                AutomationProperties.SetName(removeBtn, "Remove this action from the trigger");
                 removeBtn.Click += (_, _) =>
                 {
                     trigger.Actions?.Remove(action);
@@ -766,7 +771,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Grid.SetColumn(browseBtn, 1);
             body.Children.Add(browseBtn);
 
-            var testBtn = MakeChipButton("▶ Test", editable);
+            var testBtn = MakeChipButton(new IconLabel { Kind = IconKind.Play, Text = "Test", Spacing = 4 }, editable);
             testBtn.Click += (_, _) => PreviewAudioClip(pa.FilePath, pa.Volume);
             Grid.SetColumn(testBtn, 2);
             body.Children.Add(testBtn);
@@ -810,7 +815,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Grid.SetColumn(volValueText, 5);
             body.Children.Add(volValueText);
 
-            return ActionRowFrame("🔊", body, trigger, pa, editable, parentBorder);
+            return ActionRowFrame(IconKind.Speaker2, body, trigger, pa, editable, parentBorder);
         }
 
         // ---- VisualEffect (dropdown of the variants) ----
@@ -920,7 +925,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Grid.SetColumn(valueText, 2);
             body.Children.Add(valueText);
 
-            return ActionRowFrame("💥", body, trigger, h, editable, parentBorder);
+            return ActionRowFrame(IconKind.PhoneVibrate, body, trigger, h, editable, parentBorder);
         }
 
         // ---- AvatarComment (example + prompt + fallback pool dropdown + AI checkbox) ----
@@ -1067,7 +1072,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             body.Children.Add(flagsRow);
 
-            return ActionRowFrame("💬", body, trigger, ac, editable, parentBorder);
+            return ActionRowFrame(IconKind.Chat, body, trigger, ac, editable, parentBorder);
         }
 
         /// <summary>
@@ -1097,16 +1102,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         // ---- ExtendSession (minutes) ----
         private Border BuildExtendSessionRow(KeywordTrigger trigger, ExtendSessionAction es, bool editable, Border parentBorder)
         {
-            return BuildMinutesRow("⏱", "Extend session by:", es.Minutes, v => es.Minutes = v, trigger, es, editable, parentBorder);
+            return BuildMinutesRow(IconKind.Timer, "Extend session by:", es.Minutes, v => es.Minutes = v, trigger, es, editable, parentBorder);
         }
 
         // ---- ChasterAddTime (minutes) ----
         private Border BuildChasterAddTimeRow(KeywordTrigger trigger, ChasterAddTimeAction ct, bool editable, Border parentBorder)
         {
-            return BuildMinutesRow("🔒", "Add lock time:", ct.Minutes, v => ct.Minutes = v, trigger, ct, editable, parentBorder);
+            return BuildMinutesRow(IconKind.Key, "Add lock time:", ct.Minutes, v => ct.Minutes = v, trigger, ct, editable, parentBorder);
         }
 
-        private Border BuildMinutesRow(string icon, string label, int current, Action<int> setter, KeywordTrigger trigger, KeywordAction action, bool editable, Border parentBorder)
+        private Border BuildMinutesRow(IconKind icon, string label, int current, Action<int> setter, KeywordTrigger trigger, KeywordAction action, bool editable, Border parentBorder)
         {
             var body = new Grid();
             body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1166,7 +1171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         }
 
         // ---- Simple (no params, just present) row ----
-        private Border BuildSimpleRow(string icon, string description, KeywordTrigger trigger, KeywordAction action, bool editable, Border parentBorder)
+        private Border BuildSimpleRow(IconKind icon, string description, KeywordTrigger trigger, KeywordAction action, bool editable, Border parentBorder)
         {
             var body = new TextBlock
             {
@@ -1192,41 +1197,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 else existing.Add(a.GetType().Name);
             }
 
-            AddMenuItem(menu, "🔊 Play Audio",              () => AddAction(trigger, new PlayAudioAction { Volume = 70 }, parentBorder),
+            AddMenuItem(menu, IconKind.Speaker2, "Play Audio",              () => AddAction(trigger, new PlayAudioAction { Volume = 70 }, parentBorder),
                 existing.Contains(nameof(PlayAudioAction)) ? "(already added)" : null);
-            AddMenuItem(menu, "👁 Highlight matched words", () => AddAction(trigger, new HighlightAction(), parentBorder),
+            AddMenuItem(menu, IconKind.Eye, "Highlight matched words", () => AddAction(trigger, new HighlightAction(), parentBorder),
                 existing.Contains(nameof(HighlightAction)) ? "(already added)" : null);
-            AddMenuItem(menu, "💥 Haptic",                  () => AddAction(trigger, new HapticAction { Intensity = 0.3 }, parentBorder),
+            AddMenuItem(menu, IconKind.PhoneVibrate, "Haptic",                  () => AddAction(trigger, new HapticAction { Intensity = 0.3 }, parentBorder),
                 existing.Contains(nameof(HapticAction)) ? "(already added)" : null);
-            AddMenuItem(menu, "💬 Avatar Comment",          () => AddAction(trigger, new AvatarCommentAction(), parentBorder),
+            AddMenuItem(menu, IconKind.Chat, "Avatar Comment",          () => AddAction(trigger, new AvatarCommentAction(), parentBorder),
                 existing.Contains(nameof(AvatarCommentAction)) ? "(already added)" : null);
 
             menu.Items.Add(new Separator());
 
-            AddMenuItem(menu, "✨ Subliminal Flash",   () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.SubliminalFlash }, parentBorder),
+            AddMenuItem(menu, IconKind.Sparkle, "Subliminal Flash",   () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.SubliminalFlash }, parentBorder),
                 existing.Contains("VisualEffect:" + KeywordVisualEffect.SubliminalFlash) ? "(already added)" : null);
-            AddMenuItem(menu, "🔤 Exact Subliminal",   () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal }, parentBorder),
+            AddMenuItem(menu, IconKind.TextFont, "Exact Subliminal",   () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal }, parentBorder),
                 existing.Contains("VisualEffect:" + KeywordVisualEffect.ExactSubliminal) ? "(already added)" : null);
-            AddMenuItem(menu, "⚡ Image Flash",         () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, parentBorder),
+            AddMenuItem(menu, IconKind.Flash, "Image Flash",         () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, parentBorder),
                 existing.Contains("VisualEffect:" + KeywordVisualEffect.ImageFlash) ? "(already added)" : null);
-            AddMenuItem(menu, "🌫 Overlay Pulse",       () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.OverlayPulse }, parentBorder),
+            AddMenuItem(menu, IconKind.WeatherFog, "Overlay Pulse",       () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.OverlayPulse }, parentBorder),
                 existing.Contains("VisualEffect:" + KeywordVisualEffect.OverlayPulse) ? "(already added)" : null);
-            AddMenuItem(menu, "🧠 Mind Wipe",           () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.MindWipe }, parentBorder),
+            AddMenuItem(menu, IconKind.BrainCircuit, "Mind Wipe",           () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.MindWipe }, parentBorder),
                 existing.Contains("VisualEffect:" + KeywordVisualEffect.MindWipe) ? "(already added)" : null);
-            AddMenuItem(menu, "🫧 Bubbles",             () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.Bubbles }, parentBorder),
+            AddMenuItem(menu, IconKind.BubbleMultiple, "Bubbles",             () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.Bubbles }, parentBorder),
                 existing.Contains("VisualEffect:" + KeywordVisualEffect.Bubbles) ? "(already added)" : null);
-            AddMenuItem(menu, "🫠 Brain Drain",         () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain }, parentBorder),
+            AddMenuItem(menu, IconKind.EmojiMeh, "Brain Drain",         () => AddAction(trigger, new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain }, parentBorder),
                 existing.Contains("VisualEffect:" + KeywordVisualEffect.BrainDrain) ? "(already added)" : null);
 
             menu.PlacementTarget = anchor;
             menu.Open(anchor);
         }
 
-        private void AddMenuItem(ContextMenu menu, string header, Action onClick, string? disabledReason = null)
+        private void AddMenuItem(ContextMenu menu, IconKind icon, string header, Action onClick, string? disabledReason = null)
         {
             // Avalonia's MenuItem.InputGesture is a KeyGesture, not free text, so the WPF
             // InputGestureText note is appended to the header instead.
-            var item = new MenuItem { Header = disabledReason == null ? header : $"{header}   {disabledReason}" };
+            var item = new MenuItem { Icon = new IconGlyph { Kind = icon, Size = 14 }, Header = disabledReason == null ? header : $"{header}   {disabledReason}" };
             if (disabledReason != null)
             {
                 item.IsEnabled = false;
@@ -1393,7 +1398,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             CoreAudio.PlayOneShot(resolved, volumePercent / 100f, "keyword-preview");
         }
 
-        private static Button MakeChipButton(string label, bool editable)
+        private static Button MakeChipButton(object label, bool editable)
         {
             return new Button
             {
@@ -1428,39 +1433,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _ => e.ToString(),
         };
 
-        private static string IconForVisualEffect(KeywordVisualEffect e) => e switch
+        /// <summary>WPF ✨ 🔤 ⚡ 🌫 🧠 🫧 🫠, as Fluent icons (oracle D1-D4).</summary>
+        internal static IconKind IconForVisualEffect(KeywordVisualEffect e) => e switch
         {
-            KeywordVisualEffect.SubliminalFlash => "✨",
-            KeywordVisualEffect.ExactSubliminal => "🔤",
-            KeywordVisualEffect.ImageFlash      => "⚡",
-            KeywordVisualEffect.OverlayPulse    => "🌫",
-            KeywordVisualEffect.MindWipe        => "🧠",
-            KeywordVisualEffect.Bubbles         => "🫧",
-            KeywordVisualEffect.BrainDrain      => "🫠",
-            _ => "✨",
+            KeywordVisualEffect.SubliminalFlash => IconKind.Sparkle,
+            KeywordVisualEffect.ExactSubliminal => IconKind.TextFont,
+            KeywordVisualEffect.ImageFlash      => IconKind.Flash,
+            KeywordVisualEffect.OverlayPulse    => IconKind.WeatherFog,
+            KeywordVisualEffect.MindWipe        => IconKind.BrainCircuit,
+            KeywordVisualEffect.Bubbles         => IconKind.BubbleMultiple,
+            KeywordVisualEffect.BrainDrain      => IconKind.EmojiMeh,
+            _ => IconKind.Sparkle,
         };
 
-        internal static string BuildActionChips(KeywordTrigger trigger)
+        /// <summary>One icon per action, in trigger order: WPF's "🔊 ✨ 👁 …" chip string.</summary>
+        internal static IReadOnlyList<IconKind> BuildActionChips(KeywordTrigger trigger)
         {
-            if (trigger.Actions == null || trigger.Actions.Count == 0) return "";
-            var sb = new StringBuilder();
+            var chips = new List<IconKind>();
+            if (trigger.Actions == null) return chips;
             foreach (var a in trigger.Actions)
             {
-                if (a == null) continue;
                 switch (a)
                 {
-                    case PlayAudioAction:     sb.Append("🔊 "); break;
-                    case VisualEffectAction v: sb.Append(IconForVisualEffect(v.Effect)).Append(' '); break;
-                    case HighlightAction:     sb.Append("👁 "); break;
-                    case HapticAction:        sb.Append("💥 "); break;
-                    case AvatarCommentAction: sb.Append("💬 "); break;
-                    case ExtendSessionAction: sb.Append("⏱ "); break;
-                    case ChasterAddTimeAction: sb.Append("🔒 "); break;
+                    case PlayAudioAction:      chips.Add(IconKind.Speaker2); break;
+                    case VisualEffectAction v: chips.Add(IconForVisualEffect(v.Effect)); break;
+                    case HighlightAction:      chips.Add(IconKind.Eye); break;
+                    case HapticAction:         chips.Add(IconKind.PhoneVibrate); break;
+                    case AvatarCommentAction:  chips.Add(IconKind.Chat); break;
+                    case ExtendSessionAction:  chips.Add(IconKind.Timer); break;
+                    case ChasterAddTimeAction: chips.Add(IconKind.Key); break;   // oracle open decision 3: Key for Chaster
                     // AddXpAction intentionally NOT shown — progression XP is not
                     // a user-facing trigger effect.
                 }
             }
-            return sb.ToString().TrimEnd();
+            return chips;
         }
 
         /// <summary>
