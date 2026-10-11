@@ -1,7 +1,6 @@
 // Ported from ConditioningControlPanel/MainWindow/MainWindow.UiUpdates.cs (SetOfflineDisabled,
 // UpdateOfflineModeUI, DisconnectNetworkServices) and MainWindow.xaml.cs SyncOfflineModeState.
-// Not ported: Discord Rich Presence (no such service on this head) and SettingsTab.BtnUnifiedLogin
-// (dead markup on this head, SettingsTabView.axaml "live code (BtnUnifiedLogin ...").
+// Not ported: Discord Rich Presence (no such service on this head).
 
 using System;
 using System.Linq;
@@ -68,6 +67,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                 // Browser card.
                 var page = BrowserPage;
+                // WPF UiUpdates.cs:2701: Home's unified login button greys too.
+                SetOfflineDisabled(page?.FindControl<Button>("BtnUnifiedLogin"), isOffline);
                 SetOfflineDisabled(page?.FindControl<RadioButton>("RbBambiCloud"), isOffline);
                 SetOfflineDisabled(page?.FindControl<RadioButton>("RbHypnoTube"), isOffline);
                 SetOfflineDisabled(page?.FindControl<Button>("BtnPopOutBrowser"), isOffline);
