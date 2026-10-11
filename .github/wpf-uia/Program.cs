@@ -43,7 +43,14 @@ try
     Dump("start", main);
     Shot(main, "start");
     var known = new HashSet<IntPtr> { main.Properties.NativeWindowHandle.ValueOrDefault };
-    foreach (var w in Others()) { Dump("startup-" + w.ClassName, w); Shot(w, "startup-" + w.ClassName); CloseWin(w); }
+    // The startup ladder shows its cards one after another: drain it before driving the doors.
+    for (var round = 0; round < 6; round++)
+    {
+        var up = Others().ToList();
+        if (up.Count == 0) break;
+        foreach (var w in up) { Dump("startup-" + WinLabel(w), w); Shot(w, "startup-" + WinLabel(w)); CloseWin(w); }
+        Thread.Sleep(2500);
+    }
 
     foreach (var door in doors) Step("door-" + door, door, expectWindow: false);
     foreach (var btn in dialogButtons) Step("dialog-" + btn, btn, expectWindow: true);
@@ -65,8 +72,13 @@ try
             Thread.Sleep(300);
             el.Click(); Thread.Sleep(1500);
             var fresh = Others().ToList();
+            // A door's own view is the main window; an intro card it queued is captured and closed first.
+            foreach (var w in fresh)
+            {
+                var k = expectWindow ? key : key + "-" + WinLabel(w);
+                Dump(k, w); Shot(w, k + "-opened"); CloseWin(w);
+            }
             if (!expectWindow || fresh.Count == 0) { Dump(key, main); Shot(main, key + "-opened"); }
-            foreach (var w in fresh) { Dump(key, w); Shot(w, key + "-opened"); CloseWin(w); }
             if (expectWindow) Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ESCAPE);   // in-window popups
             Thread.Sleep(500);
         }
@@ -77,6 +89,9 @@ try
     {
         foreach (var w in app.GetAllTopLevelWindows(automation))
             if (!known.Contains(w.Properties.NativeWindowHandle.ValueOrDefault)) yield return w;
+        // UIA parents an OWNED window (intro cards, modal dialogs) under its owner, not the desktop.
+        foreach (var c in main.FindAllChildren(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.Window)))
+            if (!known.Contains(c.Properties.NativeWindowHandle.ValueOrDefault)) yield return c.AsWindow();
     }
 
     void CloseWin(Window w)
@@ -132,3 +147,5 @@ void Dump(string key, Window w)
 }
 
 static string Safe(string s) => string.Concat(s.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '_'));
+// UIA reports every WPF window's class as "Window"; the title tells them apart.
+static string WinLabel(Window w) => string.IsNullOrWhiteSpace(w.Title) ? w.ClassName : w.Title.Trim();
