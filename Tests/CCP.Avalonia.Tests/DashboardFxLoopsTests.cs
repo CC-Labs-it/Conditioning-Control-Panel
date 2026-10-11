@@ -38,7 +38,7 @@ public sealed class DashboardFxLoopsTests
         s.PerformanceMode = false;
 
         var time = new SteppedTime();
-        global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.Time = time;
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         var shell = new MainShellWindow();
         try
         {
@@ -62,13 +62,13 @@ public sealed class DashboardFxLoopsTests
             // The stamp really breathes 1.0 -> 1.07 -> 1.0 (Animation.RunAsync on its ScaleTransform threw).
             var scale = (ScaleTransform)((TransformGroup)dash.FindControl<TextBlock>("VaultCta")!.RenderTransform!).Children[0];
             time.Advance(TimeSpan.FromSeconds(1.1));
-            global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.StepAll();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.Equal(1.035, scale.ScaleX, 3);
             time.Advance(TimeSpan.FromSeconds(1.1));
-            global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.StepAll();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.Equal(1.07, scale.ScaleY, 3);
             time.Advance(TimeSpan.FromSeconds(2.2));
-            global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.StepAll();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.Equal(1.0, scale.ScaleX, 3);
 
             // Minimised: every loop parks; restored: they re-arm (the funnel's window hook).
@@ -114,7 +114,7 @@ public sealed class DashboardFxLoopsTests
         {
             shell.Close();
             Dispatcher.UIThread.RunJobs();
-            global::ConditioningControlPanel.Avalonia.Helpers.TransformTween.Time = TimeProvider.System;
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = TimeProvider.System;
             s.MotionLevel = MotionLevel.Full;
             s.PerformanceMode = false;
             CoreSettings.ServiceProvider = old;

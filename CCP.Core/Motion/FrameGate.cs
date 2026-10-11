@@ -3,7 +3,7 @@ using System;
 namespace ConditioningControlPanel.Motion
 {
     /// <summary>
-    /// The pure half of a head's frame clock (CCP.Avalonia Controls/Fx/FrameClock.cs): given frame
+    /// IMPORTED from trunk (073afa0aa). The pure half of a head's frame clock (CCP.Avalonia Controls/Fx/FrameClock.cs): given frame
     /// times, say which frames are due so the clock holds its interval on WHOLE frames
     /// (skip-to-interval). Twin of the WPF 7.1.5 FrameClock.OnRendering body, numbers exact: 4 ms slack, a
     /// repeated frame time is ignored.

@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _profileFxInitialized;
         private const double OgBorderTurnSeconds = 3;   // WPF storyboard Duration
-        private TransformTween? _ogBorderLoop;
+        private BeatLoop? _ogBorderLoop;
         private RotateTransform? _ogBorderRotation;
 
         /// <summary>True while the OG border spins (tests read it).</summary>
@@ -103,11 +103,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _ogBorderRotation ??= new RotateTransform();
                 brush.TransformOrigin = RelativePoint.Center;
                 brush.Transform = _ogBorderRotation;
-                // Animation.RunAsync on a Transform throws InvalidCastException (trunk 62bdb4c19): the
-                // spin used to be inert behind this catch. TransformTween writes the angle itself.
-                _ogBorderLoop = TransformTween.Run(_ogBorderRotation, TimeSpan.FromSeconds(OgBorderTurnSeconds),
-                    new (double, AvaloniaProperty, double)[] { (0, RotateTransform.AngleProperty, 0.0), (1, RotateTransform.AngleProperty, 360.0) },
-                    loop: true);
+                // Animation.RunAsync on a Transform throws InvalidCastException, so the spin used to be
+                // inert behind this catch; it now rides the 30 fps beat as WPF's AmbientFrameRate does
+                // (trunk 21561758d).
+                var rotation = _ogBorderRotation;
+                _ogBorderLoop = new BeatLoop(container, t => rotation.Angle = t / OgBorderTurnSeconds * 360 % 360);
+                _ogBorderLoop.Start();
             }
             catch (Exception ex) { Log.Debug("ApplyOgBorderLoop: {E}", ex.Message); }
         }

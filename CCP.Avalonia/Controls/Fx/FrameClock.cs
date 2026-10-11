@@ -20,7 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
     }
 
     /// <summary>
-    /// PORTED from ConditioningControlPanel/Controls/FrameClock.cs (perf pass, 2026-10-07).
+    /// IMPORTED from trunk (614a56560, 073afa0aa, a59d831c2; CCP_FRAME_STATS dropped). PORTED from
+    /// ConditioningControlPanel/Controls/FrameClock.cs (perf pass, 2026-10-07).
     ///
     /// <para>A frame-locked replacement for a DispatcherTimer driving an effect. WPF ticked from
     /// CompositionTarget.Rendering; the Avalonia twin rides <see cref="TopLevel.RequestAnimationFrame"/>
