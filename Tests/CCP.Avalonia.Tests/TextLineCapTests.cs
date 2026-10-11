@@ -22,7 +22,7 @@ namespace CCP.Avalonia.Tests;
 /// MaxLines; this proves a long localized string shows exactly the WPF line count, every line whole.</summary>
 public sealed class TextLineCapTests
 {
-    private static string Long => string.Join(" ", Enumerable.Repeat(Loc.Get("label_are_you_a_content_creator_join_our_discord_to"), 3));
+    private static string Long => string.Join(" ", Enumerable.Repeat(Loc.Get("label_are_you_a_content_creator_join_our_discord_to"), 8));
 
     private static void AssertWholeLines(TextBlock tb, int lines, string what)
     {
@@ -34,6 +34,9 @@ public sealed class TextLineCapTests
         // The whole last line fits inside the box: no half line clipped off the bottom.
         Assert.True(layout.Height <= tb.Bounds.Height - tb.Padding.Top - tb.Padding.Bottom + 0.5,
             $"{what}: text {layout.Height:0.#} px tall in a {tb.Bounds.Height:0.#} px box");
+        // WPF ends a trimmed cap with an ellipsis on the last line.
+        if (tb.TextTrimming != TextTrimming.None)
+            Assert.True(layout.TextLines[^1].HasCollapsed, $"{what}: last line not ellipsized; {layout.TextLines.Count} lines, {layout.TextLines.Sum(l => l.Length)}/{tb.Text!.Length} chars, w={tb.Bounds.Width:0}, maxlines={tb.MaxLines}");
     }
 
     [Fact]
@@ -92,12 +95,16 @@ public sealed class TextLineCapTests
     public void NoTextBlockInTheAvaloniaHeadCapsItsHeightInPixels()
     {
         var head = Path.GetFullPath(Path.Combine(Here(), "..", "..", "CCP.Avalonia"));
-        var offenders = Directory.EnumerateFiles(head, "*.axaml", SearchOption.AllDirectories)
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-            .SelectMany(f => Regex.Matches(Regex.Replace(File.ReadAllText(f), "<!--.*?-->", "", RegexOptions.Singleline),
-                    @"<TextBlock\b[^>]*\bMaxHeight=")
+        bool Product(string f) => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}");
+        string[] Scan(string glob, string strip, string pattern) => Directory.EnumerateFiles(head, glob, SearchOption.AllDirectories)
+            .Where(Product)
+            .SelectMany(f => Regex.Matches(Regex.Replace(File.ReadAllText(f), strip, "", RegexOptions.Singleline), pattern)
                 .Select(m => Path.GetRelativePath(head, f)))
+            .ToArray();
+        var offenders = Scan("*.axaml", "<!--.*?-->", @"<TextBlock\b[^>]*\bMaxHeight=")
+            // Code-built TextBlocks: comments and string literals stripped first (P23).
+            .Concat(Scan("*.cs", @"//[^\n]*|/\*.*?\*/|@?""(?:[^""\\\n]|\\.)*""", @"new TextBlock\s*\{[^{}]*\bMaxHeight\s*="))
             .ToArray();
         Assert.True(offenders.Length == 0, "TextBlock with MaxHeight (use MaxLines): " + string.Join(", ", offenders));
     }
