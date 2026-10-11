@@ -139,8 +139,8 @@ public class LeashCutSafetyTests
     public void Remote_EndSessionNow_CleansUpBeforeItTalksToTheServer()
     {
         var src = ReadSource("ConditioningControlPanel", "Services", "RemoteControlService.cs");
-        var body = Between(src, "public void EndSessionNow()", "private void CleanupSession()");
-        var cleanup = body.IndexOf("CleanupSession();", StringComparison.Ordinal);
+        var body = Between(src, "public void EndSessionNow()", "private void CleanupSession(");
+        var cleanup = body.IndexOf("CleanupSession(RemoteEndCause.LeashCut);", StringComparison.Ordinal);
         var post = body.IndexOf("/v2/remote/stop", StringComparison.Ordinal);
         Assert.True(cleanup >= 0 && post > cleanup, "EndSessionNow must clean up locally before the stop call");
         Assert.DoesNotContain("await AuthPostAsync", body.Substring(0, cleanup));
