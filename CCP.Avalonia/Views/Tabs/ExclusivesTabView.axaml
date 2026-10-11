@@ -121,7 +121,7 @@
                             <!-- The hero's face. vault.png is WPF-head art, so the plate carries the
                                  vault's own glyph instead, huge and nearly transparent. -->
                             <Border CornerRadius="0,14,14,0" Width="240" HorizontalAlignment="Right">
-                                <TextBlock Text="💎" FontSize="46" Opacity="0.16"
+                                <fx:IconGlyph Kind="Diamond" Variant="Filled" Foreground="{DynamicResource IconGemBrush}" Size="46" Opacity="0.16"
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
                                            Margin="0,0,18,0"/>
                             </Border>
@@ -281,8 +281,8 @@
                                     </RadialGradientBrush>
                                 </Border.Background>
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <TextBlock x:Name="SpotVeilLock"
-                                               Text="🔒" FontSize="44" HorizontalAlignment="Center"/>
+                                    <fx:IconGlyph x:Name="SpotVeilLock"
+                                               Kind="LockClosed" Variant="Filled" Size="44" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"/>
                                     <Border CornerRadius="12" Padding="14,5" Margin="0,10,0,0">
                                         <Border.Background>
                                             <!-- Same accent pair as the shelf cards' unlock pill;
@@ -292,8 +292,8 @@
                                                 <GradientStop Color="#D9B478FF" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
-                                        <TextBlock FontSize="11" FontWeight="Bold" Foreground="White"
-                                                   Text="{loc:Str exclusives_chip_lab}"/>
+                                        <fx:IconLabel TextElement.FontSize="11" TextElement.FontWeight="Bold" TextElement.Foreground="White"
+                                                   Key="exclusives_chip_lab"/>
                                     </Border>
                                 </StackPanel>
                             </Border>
@@ -420,7 +420,7 @@
                                                 </RadialGradientBrush>
                                             </Border.Background>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <TextBlock Name="VeilLock" Text="🔒" FontSize="34" HorizontalAlignment="Center"
+                                                <fx:IconGlyph Name="VeilLock" Kind="LockClosed" Variant="Filled" Size="34" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"
                                                            Loaded="FxPart_Loaded" Unloaded="FxPart_Unloaded"/>
                                                 <Border Margin="0,8,0,0" CornerRadius="10" Padding="10,4"
                                                         HorizontalAlignment="Center">
@@ -430,8 +430,8 @@
                                                             <GradientStop Color="#D9B478FF" Offset="1"/>
                                                         </LinearGradientBrush>
                                                     </Border.Background>
-                                                    <TextBlock Text="{loc:Str exclusives_chip_lab}"
-                                                               Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                                    <fx:IconLabel Key="exclusives_chip_lab"
+                                                               TextElement.Foreground="White" TextElement.FontSize="10" TextElement.FontWeight="Bold"/>
                                                 </Border>
                                             </StackPanel>
                                         </Border>

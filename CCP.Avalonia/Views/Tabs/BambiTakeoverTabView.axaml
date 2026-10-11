@@ -177,7 +177,7 @@
                                             Background="{StaticResource TabHueWashBrush}"
                                             BorderBrush="{StaticResource TabHueBorderBrush}" BorderThickness="2" VerticalAlignment="Top">
                                         <Grid>
-                                            <TextBlock Text="🌀" FontSize="44" Opacity="0.5"
+                                            <fx:IconGlyph Brand="Spiral" Size="44" Opacity="0.5"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             <Image hover:HoverPop.IsEnabled="True" x:Name="ImgBambiTakeoverDesc" Stretch="UniformToFill"/>
                                         </Grid>
@@ -200,8 +200,8 @@
                             <!-- Locked State (legacy — kept hidden, replaced by gating overlay below) -->
                             <StackPanel x:Name="AutonomyLocked" IsVisible="False">
                                 <Grid>
-                                    <TextBlock x:Name="TxtTakeoverLocked" Text="{loc:Str label_takeover}" Foreground="{DynamicResource TextDimBrush}" FontWeight="Bold" FontSize="13"/>
-                                    <TextBlock x:Name="TxtAutonomyLockStatus" Text="{loc:Str label_patreon_only}" Foreground="{DynamicResource SecondaryBrush}" HorizontalAlignment="Right" FontSize="11"/>
+                                    <fx:IconLabel x:Name="TxtTakeoverLocked" Key="label_takeover" TextElement.Foreground="{DynamicResource TextDimBrush}" TextElement.FontWeight="Bold" TextElement.FontSize="13"/>
+                                    <fx:IconLabel x:Name="TxtAutonomyLockStatus" Key="label_patreon_only" TextElement.Foreground="{DynamicResource SecondaryBrush}" HorizontalAlignment="Right" TextElement.FontSize="11"/>
                                 </Grid>
                                 <TextBlock x:Name="TxtAutonomyLockMessage" Text="{loc:Str label_support_on_patreon_to_unlock}" Foreground="{DynamicResource PinkBrush}" FontSize="11" Margin="0,4,0,0"/>
                             </StackPanel>
@@ -250,9 +250,9 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="{loc:Str label_resume_takeover_on_startup}" FontSize="12.5" FontWeight="SemiBold"
-                                                                   TextWrapping="Wrap" Margin="0,0,10,0"
-                                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                        <fx:IconLabel Grid.Column="0" Key="label_resume_takeover_on_startup" TextElement.FontSize="12.5" TextElement.FontWeight="SemiBold"
+                                                                   Margin="0,0,10,0"
+                                                                   TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                                         <CheckBox Grid.Column="1" x:Name="ChkAutonomyResumeOnStartup" Theme="{StaticResource ToggleStyle}"
                                                                   VerticalAlignment="Center"/>
                                                     </Grid>
@@ -643,7 +643,7 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
-                                                        <TextBlock Text="🎤 Surprise me with mantras" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"/>
+                                                        <fx:IconLabel Kind="Mic" Text="Surprise me with mantras" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                                                         <TextBlock x:Name="TxtAutonomyVoiceHint" Text="{loc:Str takeover_voice_hint_off}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"/>
                                                         <!-- WPF: only up while the hint is about a missing or unloadable model; opens (and creates) the folder. -->
                                                         <Button x:Name="BtnAutonomyOpenModels" IsVisible="False"
@@ -673,8 +673,8 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="⏳ Show next-takeover countdown bar" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <fx:IconLabel Grid.Column="0" Kind="HourglassHalf" Text="Show next-takeover countdown bar" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                               TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                                     <CheckBox Grid.Column="1" x:Name="ChkShowTakeoverCountdown" Theme="{StaticResource ToggleStyle}"
                                                               VerticalAlignment="Center"/>
                                                 </Grid>
@@ -744,7 +744,7 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="🎙️" FontSize="16" VerticalAlignment="Top" Margin="0,1,10,0"/>
+                                                        <fx:IconGlyph Grid.Column="0" Kind="Mic" Size="16" VerticalAlignment="Top" Margin="0,1,10,0"/>
                                                         <TextBlock Grid.Column="1" Foreground="{DynamicResource PinkBrush}" FontSize="12"
                                                                    TextWrapping="Wrap" LineHeight="17" VerticalAlignment="Center"
                                                                    Text="{loc:Str set2_takeover_mic_moved}"/>
@@ -784,7 +784,7 @@
                                                         Background="#3A2A4A" Foreground="#90EE90" FontWeight="Bold" FontSize="12"
                                                         BorderThickness="0" Cursor="Hand" Padding="14,7"
                                                         ToolTip.Tip="Fire a spoken mantra now (requires a Vosk model in Resources/Models/vosk, a mic, and mantra content for the active mod).">
-                                                    <TextBlock Text="🎤 Test mantra"/>
+                                                    <fx:IconLabel Kind="Mic" Text="Test mantra"/>
                                                 </Button>
                                             </Grid>
                                         </Grid>
@@ -814,7 +814,7 @@
                                 Background="{StaticResource TabHueWashBrush}"
                                 MinHeight="200" MaxHeight="300" Margin="0,0,0,10">
                             <Grid>
-                                <TextBlock Text="🌀" FontSize="72" Opacity="0.5"
+                                <fx:IconGlyph Brand="Spiral" Size="72" Opacity="0.5"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 <!-- Scrim so the plate sits under the page instead of fighting it. -->
                                 <Border CornerRadius="12">
@@ -836,7 +836,7 @@
                                         Background="{StaticResource TabHueBrush}"/>
                                 <StackPanel Margin="16,12,16,14">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                        <TextBlock Text="💡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <fx:IconGlyph Kind="Lightbulb" Size="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{loc:Str guide_takeover_title}" Foreground="{StaticResource TabHueBrush}"
                                                    FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
                                     </StackPanel>
@@ -886,14 +886,14 @@
                     Background="#99000010" BorderBrush="{DynamicResource FxGlowBrush}" BorderThickness="2"
                     CornerRadius="16" IsHitTestVisible="True">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="🔒" FontSize="52" HorizontalAlignment="Center"/>
+                    <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="52" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"/>
                     <TextBlock Text="{loc:Str gate_premium_locked}" FontSize="22"
                                FontWeight="Bold" Foreground="{StaticResource TextLightBrush}" HorizontalAlignment="Center"/>
                     <TextBlock Text="{loc:Str gate_premium_subtitle}" FontSize="14"
                                Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,12"/>
                     <Button x:Name="BtnGateUnlock" Padding="20,8" Background="{DynamicResource FxGlowBrush}"
                             Foreground="White" FontWeight="Bold" Cursor="Hand" BorderThickness="0">
-                        <TextBlock Text="{loc:Str gate_unlock_with_patreon}"/>
+                        <fx:IconLabel Key="gate_unlock_with_patreon"/>
                     </Button>
                 </StackPanel>
             </Border>
