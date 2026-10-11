@@ -66,6 +66,48 @@ namespace ConditioningControlPanel.Services.Companion
                 : text;
         }
 
+        /// <summary>
+        /// What one box of the editor SHOWS when it opens.
+        ///
+        /// <para>The stored custom text only counts while the custom prompt is the one on the
+        /// wire. Picking a preset (or saving a copy in the studio) switches the custom prompt off
+        /// and leaves its six fields behind; showing those made "Fork and edit by hand" open a
+        /// prompt the companion stopped using, not the running one (#1417).</para>
+        /// </summary>
+        public static string EditorField(bool customPromptOn, string? stored, string? runningDefault)
+            => customPromptOn && !string.IsNullOrWhiteSpace(stored) ? stored! : (runningDefault ?? string.Empty);
+
+        /// <summary>
+        /// A hand-edited custom prompt as it goes on the wire: every field the user left alone
+        /// follows the running persona.
+        ///
+        /// <para>The editor stores an untouched box as blank (<see cref="PersistedField"/>), and the
+        /// prompt builder drops a blank section. So a fork that changed one box, say the screen
+        /// awareness reactions, shipped that box and lost the personality around it. Neither input
+        /// is mutated; a null <paramref name="custom"/> or <paramref name="persona"/> returns
+        /// <paramref name="custom"/> as it is.</para>
+        ///
+        /// <para>The spicy voice is only borrowed when the personality is borrowed too: under a
+        /// rewritten personality the persona's own spicy paragraph would replace the user's words
+        /// the moment that mode switches on.</para>
+        /// </summary>
+        public static CompanionPromptSettings? WireFields(CompanionPromptSettings? custom,
+            CompanionPromptSettings? persona)
+        {
+            if (custom == null || persona == null) return custom;
+
+            var wire = custom.Clone();
+            bool ownVoice = !string.IsNullOrWhiteSpace(custom.Personality);
+            wire.Personality = Pick(custom.Personality, persona.Personality);
+            wire.ExplicitReaction = Pick(custom.ExplicitReaction, persona.ExplicitReaction);
+            if (!ownVoice)
+                wire.SlutModePersonality = Pick(custom.SlutModePersonality, persona.SlutModePersonality);
+            wire.KnowledgeBase = Pick(custom.KnowledgeBase, persona.KnowledgeBase);
+            wire.ContextReactions = Pick(custom.ContextReactions, persona.ContextReactions);
+            wire.OutputRules = Pick(custom.OutputRules, persona.OutputRules);
+            return wire;
+        }
+
         private static string Pick(string? persona, string? fallback)
             => string.IsNullOrWhiteSpace(persona) ? (fallback ?? string.Empty) : persona!;
     }
