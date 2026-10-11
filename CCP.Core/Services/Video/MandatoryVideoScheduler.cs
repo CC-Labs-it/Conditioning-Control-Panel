@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Services
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
     /// ponytail: local library only - content-pack and remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
+    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/browser-media defers (DND = <see cref="ShouldDefer"/>) and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
@@ -73,6 +73,12 @@ namespace ConditioningControlPanel.Services
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
 
+        /// <summary>The clip <see cref="VideoStarted"/> announced is gone from the screen, whatever closed it
+        /// (WPF VideoService.VideoEnded: natural end, dismiss, panic, a verdict replay's gap). Raised once per
+        /// started clip, never for a clip that was cancelled inside its pre-roll.</summary>
+        public event Action? VideoEnded;
+        private bool _startedRaised;
+
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
 
@@ -100,6 +106,10 @@ namespace ConditioningControlPanel.Services
             _library = library ?? LocalLibrary;
         }
 
+        /// <summary>A SCHEDULED tick asks this first (WPF DoNotDisturbGuard.ShouldSuppressVideos at
+        /// VideoService.cs:3013); true = retry in <see cref="SkipRetrySeconds"/>. Hand triggers ignore it.</summary>
+        public Func<bool>? ShouldDefer { get; set; }
+
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
@@ -112,6 +122,23 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ShouldFillSecondaryMonitors (:2764) over the TARGETED screen count.</summary>
         public static bool ShouldFillSecondaryMonitors(int screenCount, bool fillAll) =>
             screenCount > 1 && (screenCount <= 2 || fillAll);
+
+        /// <summary>The floating video window (AppSettings.MandatoryVideoFloating) on a
+        /// <paramref name="monW"/>x<paramref name="monH"/> work area, in that area's DIPs: 16:9, a third of
+        /// the width (never under 480 wide, so the grace card fits; never larger than the area), at a random
+        /// spot inside the flash images' edge padding and always wholly on that screen.</summary>
+        public static (int X, int Y, int W, int H) FloatingRect(int monW, int monH, Random random)
+        {
+            monW = Math.Max(1, monW);
+            monH = Math.Max(1, monH);
+            var w = Math.Min(monW, Math.Max(480, monW / 3));
+            var h = w * 9 / 16;
+            if (h > monH) { h = monH; w = Math.Min(monW, h * 16 / 9); }
+            var (minX, minY, maxX, maxY) = Flash.FlashPlacement.SpawnBounds(monW, monH, w, h);
+            var x = Math.Clamp(random.Next(minX, maxX), 0, monW - w);
+            var y = Math.Clamp(random.Next(minY, maxY), 0, monH - h);
+            return (x, y, w, h);
+        }
 
         /// <summary>WPF GetEffectiveVolume (:1630): master x video, 0-100.</summary>
         public static int EffectiveVolume(int master, int video) => (int)(master / 100.0 * (video / 100.0) * 100);
@@ -283,13 +310,17 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             try
             {
-                // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                if (_playing) return;
+                // WPF VideoService.cs:3013: a do-not-disturb app in front reschedules, never drops.
+                // The head's rule (ShouldDefer, Windows foreground) or Core's DndGuard (X11 seam).
+                if (ShouldDefer?.Invoke() == true) { ScheduleNext(SkipRetrySeconds); return; }
+                if (Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);
+                    return;
                 }
-                else if (!_playing && !Trigger()) ScheduleNext();
+                if (!Trigger()) ScheduleNext();
             }
             catch (Exception ex)
             {
@@ -331,6 +362,7 @@ namespace ConditioningControlPanel.Services
                 try { _host.Show(path, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;
+                _startedRaised = true;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
                 // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
@@ -417,12 +449,26 @@ namespace ConditioningControlPanel.Services
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
             try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
+            if (_startedRaised)
+            {
+                _startedRaised = false;
+                try { VideoEnded?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
+            }
             return true;
         }
+
+        /// <summary>WPF VideoService.ReloadAssets: drop the dealt queue so the next pick re-reads the
+        /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
+        public void ReloadAssets() => _queue = new Queue<string>();
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>
         internal string? PickNext()
         {
+            // WPF GetNextVideo: active pack clips join the local pick, weighted by count. They skip the
+            // length filter (PackFileEntry carries no duration) and decrypt to a fresh temp file that
+            // PackVideos keeps on record and sweeps.
+            var packCount = PackVideos?.Count ?? 0;
             if (_queue.Count == 0)
             {
                 var enabled = _library();
@@ -432,8 +478,14 @@ namespace ConditioningControlPanel.Services
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
             }
+            if (PackVideos != null && Flash.FlashSourceRules.ShouldDrawPack(_queue.Count, packCount, _random)
+                && PackVideos.TryNext(out var entry) && PackVideos.Decrypt(entry) is { } temp)
+                return temp;
             return _queue.Count > 0 ? _queue.Dequeue() : null;
         }
+
+        /// <summary>The content-pack clips this scheduler mixes in (WPF _packVideoQueue); null = local only.</summary>
+        public PackMediaPool? PackVideos { get; set; }
 
         /// <summary>WPF VideoService.MetadataCache: a clip's cached length, null on a miss. Null keeps
         /// every clip (WPF without LibVLC).</summary>
