@@ -4714,6 +4714,7 @@
   "haptics_trim_tip": "每个玩具各自的功率倍数，最后才应用。用它来平衡一个强玩具和一个弱玩具。",
   "haptics_test_toy": "测试这个玩具",
   "haptics_test_toy_failed": "那个玩具没有响应 - 试试重新连接。",
+  "haptics_test_while_off": "这只是测试。触觉反馈已关闭，所以其他都不会振动。",
   "haptics_routing": "什么触发什么",
   "haptics_col_intensity": "强度",
   "haptics_col_pattern": "图案",

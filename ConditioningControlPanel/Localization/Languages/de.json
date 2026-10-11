@@ -3833,6 +3833,7 @@
   "haptics_trim_tip": "Leistungsfaktor pro Toy, wird zuletzt angewendet. Damit gleichst du ein starkes gegen ein schwaches Toy aus.",
   "haptics_test_toy": "Dieses Toy testen",
   "haptics_test_toy_failed": "Dieses Toy hat nicht geantwortet - versuche, es neu zu verbinden.",
+  "haptics_test_while_off": "Das war ein Test. Haptik ist ausgeschaltet, sonst vibriert also nichts.",
   "haptics_routing": "Was löst was aus",
   "haptics_col_intensity": "STÄRKE",
   "haptics_col_pattern": "MUSTER",
