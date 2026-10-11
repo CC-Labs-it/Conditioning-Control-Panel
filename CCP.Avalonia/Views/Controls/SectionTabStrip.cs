@@ -6,9 +6,11 @@
 // Pill paint (polish waves 2/3/7/9, sync6-nav-polish-b): the tray, the per-tab tints, the raised
 // plates with their bevelled rim, the active ring and glow, the sliding active fill (NavStripRules).
 //
-// ponytail: not yet here (lane sync6-nav-polish-c): the depth plates and drop bands
-// (SectionTabStrip.Depth.cs, PaintDepthPages), the hover lift / choose sparks / idle sheen
-// (SectionTabStrip.Fx.cs), the leading MDL2 glyphs (absent on Linux; WPF also drops a glyph its font lacks), the "Moved" note, the "?" help
+// sync6-nav-polish-c: the leading glyph (a Fluent IconGlyph via IconMap.ForTab, wave 3), the
+// sunken tray / pill drop bands / pressed-in fill (wave 10, SectionTabStrip.Fx.cs) and the hover
+// lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial).
+// ponytail: not yet here (lane sync6-nav-polish-d): the choose ring (NavGlow.Once, rides the
+// rail-c NavGlow port), the press squish (MotionFx.PressSquish), the "Moved" note, the "?" help
 // badges and Just Drop's ask-first, the right-click pin menu.
 
 using System;
@@ -30,7 +32,7 @@ using ConditioningControlPanel.Services.UI;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
-    public sealed class SectionTabStrip : UserControl
+    public sealed partial class SectionTabStrip : UserControl
     {
         private static readonly IBrush FocusRing = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF));
         private static readonly IBrush BadgePlate = new SolidColorBrush(NavStripRules.WithAlpha(NavStripRules.DarkInk, 0.85));
@@ -46,6 +48,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             public IBrush RestText = Brushes.Gainsboro, Outline = Brushes.Transparent, ActiveRing = Brushes.Transparent;
             public IBrush Plate = Brushes.Transparent, Hover = Brushes.Transparent;
             public Thickness RestPadding;
+            public IconGlyph? Glyph;
+            public IBrush RestGlyph = Brushes.Gainsboro, ActiveGlyph = Brushes.Black;
+            public Border Drop = null!;
+            public TranslateTransform FaceShift = new(), HoverLift = new();
+            public ScaleTransform HoverScale = new();
+            public bool Pressed, Hovered;
+            public System.Threading.CancellationTokenSource? FaceRun;
         }
 
         private readonly TextBlock _crumbSectionText = new() { FontSize = 14, FontWeight = FontWeight.ExtraBold };
@@ -119,12 +128,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
                 Child = new Panel { Children = { _activeFill, _pillRow } },
             };
+            var trayHost = BuildDepthTray(_track);
             _pillRow.LayoutUpdated += (_, _) => { if (IsVisible) PositionFill(animate: false, onlyIfMoved: true); };
             _pillRow.AddHandler(KeyDownEvent, PillRow_KeyDown, RoutingStrategies.Tunnel);
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 0, 0, 6) };
-            Grid.SetColumn(_track, 1);
+            Grid.SetColumn(trayHost, 1);
             row.Children.Add(crumb);
-            row.Children.Add(_track);
+            row.Children.Add(trayHost);
             Content = new StackPanel { Children = { row, _accentLine } };
         }
 
@@ -132,11 +142,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            UpdateSheenClock();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            _sheenClock?.Stop();   // P65: a detached strip never ticks
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -177,6 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // The tray: darker than the page wash, its top edge shaded so the pills sit IN it (WPF PaintFor :276).
                 _track.Background = new SolidColorBrush(NavStripRules.TrackFill(hue));
                 _track.BorderBrush = NavStripRules.TrackBorderBrush(hue);
+                PaintDepth(hue);
                 _crumbSectionText.Foreground = _accent;
                 _accentLine.Background = new LinearGradientBrush
                 {
@@ -251,6 +264,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     ActiveRing = NavStripRules.ActiveRingBrush(tint),
                     Plate = NavStripRules.PlateBrush(tint, NavStripRules.RestFillAlpha),
                     Hover = NavStripRules.PlateBrush(tint, NavStripRules.HoverFillAlpha),
+                    RestGlyph = new SolidColorBrush(NavStripRules.RestGlyphOn(hue, tint)),
+                    ActiveGlyph = new SolidColorBrush(NavStripRules.ActiveGlyphOn(hue, tint)),
                 };
                 var labelText = SafeLoc(tab.LabelKey, tab.Key);
                 var label = new TextBlock
@@ -258,7 +273,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     Text = labelText, FontSize = NavStripRules.PillFontSize, FontWeight = FontWeight.SemiBold,
                     VerticalAlignment = VerticalAlignment.Center, Foreground = parts.RestText,
                 };
-                var content = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { label } };
+                var content = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                // The leading glyph (wave 3, WPF :626): the tab's Fluent icon in its own tint; a
+                // tab with no icon draws none. Decorative: the pill's name is the label.
+                if (IconMap.ForTab(tab.Key) is { } icon)
+                {
+                    parts.Glyph = new IconGlyph
+                    {
+                        Kind = icon.Kind, Variant = icon.Variant, Brand = icon.Brand, Size = NavStripRules.GlyphSize,
+                        Foreground = parts.RestGlyph, VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, NavStripRules.GlyphGap, 0),
+                        RenderTransformOrigin = RelativePoint.Center, RenderTransform = new RotateTransform(),
+                    };
+                    content.Children.Add(parts.Glyph);
+                }
+                content.Children.Add(label);
                 bool locked = PillLocked(tab.Tier);
                 // Locked stays visible: the tier sign sits in the pill, the click still navigates
                 // and the page's own gate explains the lock. Static on chrome.
@@ -286,17 +315,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     MinHeight = NavStripRules.PillHeight - 2,
                     Background = parts.Plate, BorderThickness = new Thickness(NavStripRules.RestFaceThickness),
                     BorderBrush = parts.Outline, Child = content,
+                    RenderTransform = parts.FaceShift,   // wave 10: lit = sunk, pressed = down
                 };
                 var ring = new Border
                 {
                     CornerRadius = new CornerRadius(NavStripRules.PillHeight / 2), BorderThickness = new Thickness(1),
                     BorderBrush = Brushes.Transparent, Child = face,
+                    // wave 7: the ring carries the hover lift and grow (WPF RenderTransformOrigin 0.5,0.5)
+                    RenderTransformOrigin = RelativePoint.Center,
+                    RenderTransform = new TransformGroup { Children = { parts.HoverScale, parts.HoverLift } },
+                };
+                // wave 10: the drop band sits on the sheet under the face (it does not travel).
+                parts.Drop = new Border
+                {
+                    VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false,
+                    CornerRadius = new CornerRadius(4), Height = 0,
                 };
                 // A real named Button (UIA: invokable, AutomationId NavPill_<key>), so the click
                 // always reaches it (WPF 56b707252).
                 var pill = new Button
                 {
-                    Name = "NavPill_" + tab.Key, Content = ring, Padding = new Thickness(0),
+                    Name = "NavPill_" + tab.Key, Content = new Panel { Children = { parts.Drop, ring } }, Padding = new Thickness(0),
                     Background = Brushes.Transparent, BorderThickness = new Thickness(0),
                     Cursor = new Cursor(StandardCursorType.Hand), Focusable = true, Tag = tab.Key,
                     Template = PlainTemplate(),
@@ -304,11 +343,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 ToolTip.SetTip(pill, PillToolTip(section, tab, labelText, locked));
                 global::Avalonia.Automation.AutomationProperties.SetName(pill, labelText);
                 global::Avalonia.Automation.AutomationProperties.SetAutomationId(pill, "NavPill_" + tab.Key);
-                pill.PointerEntered += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Hover; };
-                pill.PointerExited += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Plate; };
+                pill.PointerEntered += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Hover; FxHover(parts, true, animate: true); };
+                pill.PointerExited += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Plate; FxHover(parts, false, animate: true); };
+                pill.AddHandler(PointerPressedEvent, (_, _) => DepthPress(parts, true), RoutingStrategies.Tunnel);
+                pill.AddHandler(PointerReleasedEvent, (_, _) => DepthPress(parts, false), RoutingStrategies.Tunnel);
+                pill.PointerCaptureLost += (_, _) => DepthPress(parts, false);
                 pill.GotFocus += (_, _) => ring.BorderBrush = FocusRing;
                 pill.LostFocus += (_, _) => ring.BorderBrush = Brushes.Transparent;
-                pill.Click += (_, e) => { e.Handled = true; Choose(tab, focus: false); };
+                pill.Click += (_, e) => { e.Handled = true; parts.Pressed = false; Choose(tab, focus: false); };
                 _pillRow.Children.Add(pill);
                 parts.Pill = pill;
                 parts.Ring = ring;
@@ -316,6 +358,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 parts.Label = label;
                 parts.RestPadding = face.Padding;
                 _pills.Add(parts);
+                DepthSettle(parts, animate: false);
                 PillCreated?.Invoke(tab, pill);
             }
         }
@@ -339,6 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // Launchers and windows open something else; the page on screen keeps its pill.
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
+            FxOnChosen(tab);
             TabRequested?.Invoke(tab);
         }
 
@@ -353,6 +397,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // plate inside the bevelled rim. The heavier lit rim takes its half pixel back from
                 // the padding, so nothing moves.
                 p.Label.Foreground = on ? _activeText : p.RestText;
+                if (p.Glyph != null) p.Glyph.Foreground = on ? p.ActiveGlyph : p.RestGlyph;
                 p.Face.BorderBrush = on ? p.ActiveRing : p.Outline;
                 double grow = on ? NavStripRules.ActiveFaceThickness - NavStripRules.RestFaceThickness : 0;
                 p.Face.BorderThickness = new Thickness(on ? NavStripRules.ActiveFaceThickness : NavStripRules.RestFaceThickness);
@@ -362,6 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // One Tab stop for the strip (ARIA tabs): the active pill, else the first. WPF :991.
                 p.Pill.IsTabStop = on || (key == null && p.Pill == _pills[0].Pill);
                 global::Avalonia.Automation.AutomationProperties.SetItemStatus(p.Pill, on ? "selected" : string.Empty);
+                DepthSettle(p, animate);
             }
             PositionFill(animate);
         }

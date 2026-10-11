@@ -14,7 +14,9 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
 |---|---|---|---|
 | Web views (WebHost) | webkit2gtk-4.1 | libwebkit2gtk-4.1-0 | webkit2gtk4.1 |
 | Web views, WPE path (Avalonia WebView also loads libwpe-1.0.so.1, libWPEBackend-fdo-1.0.so.1, libWPEWebKit-2.0.so.1; user hit "WPE WebKit libs not installed") | wpewebkit wpebackend-fdo libwpe | libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libwpe-1.0-1 (verify names) | wpewebkit wpebackend-fdo libwpe (verify) |
-| Audio / video (LibVLCSharp) | vlc (libvlc) | libvlc5 + vlc-plugin-base | vlc-libs |
+| Audio / video (LibVLCSharp; the runtime package's libvlc.so.5 is enough, LibVlcNative resolves the soname) | vlc (libvlc) | libvlc5 + vlc-plugin-base | vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio (vlc-libs alone has no plugins: "Failed to perform instanciation") |
+| Ducking, microphone list, quest mic probe (`pactl`; works on PipeWire too) | libpulse | pulseaudio-utils | pulseaudio-utils (openSUSE: pulseaudio-utils) |
+| Fonts | none: Inter, Fredoka, Noto Sans Mono and Noto Emoji are bundled (a system emoji font is used first when present) | none | none |
 | Sign-in token store | libsecret | libsecret-1-0 | libsecret |
 | Overlays, panic key (X11/XInput2) | libx11 libxi | libx11-6 libxi6 | libX11 libXi |
 .NET: publish self-contained, so no runtime dependency.
@@ -31,7 +33,7 @@ which LibVLCSharp does not find (audio disabled). None of the rows pulls a font 
    (tray), portals for notifications, GlobalShortcuts and Secret (libsecret uses the Secret portal inside Flatpak).
    Updates come from the store. Host: own Flatpak repo + `.flatpakref` on the website first; Flathub only after checking
    its content policy for this app.
-2. **AUR package** (Arch/CachyOS): `depends=(webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libsecret libx11 libxi)`.
+2. **AUR package** (Arch/CachyOS): `depends=(webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libpulse libsecret libx11 libxi)`.
 3. Later, on demand: `.deb` / `.rpm` with the same dependency lists; AppImage only as a fallback (cannot pull WebKit).
 
 ## In-app work that goes with it
