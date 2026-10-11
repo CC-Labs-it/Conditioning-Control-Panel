@@ -8,8 +8,8 @@
 //
 // ponytail: not yet here (lane sync6-nav-polish-c): the depth plates and drop bands
 // (SectionTabStrip.Depth.cs, PaintDepthPages), the hover lift / choose sparks / idle sheen
-// (SectionTabStrip.Fx.cs), the leading MDL2 glyphs (absent on Linux; WPF also drops a glyph its font lacks), the "Moved" note, the "?" help
-// badges and Just Drop's ask-first, the right-click pin menu.
+// (SectionTabStrip.Fx.cs), the leading MDL2 glyphs (absent on Linux; WPF also drops a glyph its font lacks), the "Moved" note,
+// the right-click pin menu. The "?" help badges: SectionTabStrip.Help.cs.
 
 using System;
 using System.Collections.Generic;
@@ -30,7 +30,7 @@ using ConditioningControlPanel.Services.UI;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
-    public sealed class SectionTabStrip : UserControl
+    public sealed partial class SectionTabStrip : UserControl
     {
         private static readonly IBrush FocusRing = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF));
         private static readonly IBrush BadgePlate = new SolidColorBrush(NavStripRules.WithAlpha(NavStripRules.DarkInk, 0.85));
@@ -230,6 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             _pillRow.Children.Clear();
             _pills.Clear();
+            _helpBadges.Clear();
             _activePill = null;
             _activeFill.Width = 0;
             _activeFill.IsVisible = false;
@@ -309,7 +310,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 pill.GotFocus += (_, _) => ring.BorderBrush = FocusRing;
                 pill.LostFocus += (_, _) => ring.BorderBrush = Brushes.Transparent;
                 pill.Click += (_, e) => { e.Handled = true; Choose(tab, focus: false); };
-                _pillRow.Children.Add(pill);
+                // The pill rides in a host with its "?" badge (WPF d0ec7aa8d): hovering the badge never presses the pill.
+                _pillRow.Children.Add(HostWithHelp(section, tab, pill, labelText, tint));
                 parts.Pill = pill;
                 parts.Ring = ring;
                 parts.Face = face;
@@ -320,12 +322,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             }
         }
 
-        /// <summary>WPF PillToolTip: where it leads, then the tier line for a locked page.</summary>
+        /// <summary>WPF PillToolTip: where it leads, what it does (HelpText), then the tier line for a locked page.</summary>
         internal static string PillToolTip(string section, NavTab tab, string label, bool locked)
         {
             var lines = new List<string>
             {
                 $"{SafeLoc(NavSections.Find(section)?.LabelKey, section)} {SafeLoc("nav_crumb_sep", ">")} {label}",
+                HelpText(tab),
             };
             if (locked && tab.Tier == 1) lines.Add(SafeLoc("nav_tag_premium_tip", string.Empty));
             else if (locked && tab.Tier >= 2) lines.Add(SafeLoc("nav_tag_lab_tip", string.Empty));
@@ -383,7 +386,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             var p = _activePill == null ? null : Part(_activePill);
             if (p == null) { _activeFill.IsVisible = false; _fillX = double.NaN; return; }
-            var b = p.Pill.Bounds;
+            // The pill sits in its help host (SectionTabStrip.Help.cs), so the row offset is the host's.
+            var b = (p.Pill.Parent as Control ?? p.Pill).Bounds;
             if (b.Width <= 0) return;
             if (onlyIfMoved && b.X == _fillX && b.Width == _fillW && _activeFill.IsVisible) return;
             var level = Level;

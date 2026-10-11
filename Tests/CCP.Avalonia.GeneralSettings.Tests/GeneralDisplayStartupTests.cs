@@ -40,7 +40,12 @@ public sealed class GeneralDisplayStartupTests
             countdown.IsChecked = false;
             Assert.False(s.ShowSessionCountdown);
 
-            var picker = section.FindControl<MonitorTargetPicker>("ContentMonitorPicker")!;
+            // The picker moved to Settings > Monitors (WPF 5a3123f71): General draws none.
+            Assert.Null(section.FindControl<MonitorTargetPicker>("ContentMonitorPicker"));
+            var monitors = new MonitorsSettingsSection();
+            var host = new Window { Content = monitors };
+            host.Show();
+            var picker = monitors.FindControl<MonitorTargetPicker>("ContentMonitorPicker")!;
             var combo = picker.FindControl<ComboBox>("CmbContentMonitor")!;
             var tags = combo.Items.Cast<ComboBoxItem>().Select(i => (int)i.Tag!).ToList();
             Assert.Equal(new[] { MonitorTargetPicker.TagAllMonitors, MonitorTargetPicker.TagPrimaryOnly }, tags.Take(2));
@@ -58,6 +63,7 @@ public sealed class GeneralDisplayStartupTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, combo.SelectedIndex);
             Assert.Equal(7, s.GlobalTargetMonitor);
+            host.Close();
             await Task.CompletedTask;
         });
     }
