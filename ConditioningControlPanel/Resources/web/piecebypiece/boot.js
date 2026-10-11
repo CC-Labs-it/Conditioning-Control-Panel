@@ -333,6 +333,7 @@ function main() {
   pauseCard.setAttribute('role', 'dialog');
   pauseCard.setAttribute('aria-modal', 'true');
   pauseCard.innerHTML = '<div class="pbp-pause-card"><h2>PAUSED</h2><p class="pbp-pause-note" hidden>Online game: the clock keeps running.</p>'
+    + '<p class="pbp-pause-note pbp-pause-iq">IQ: every move you make is graded against the best move the engine can find. The worse the move, the bigger the drop.</p>'
     + '<button type="button" data-pause="resume">Resume</button><button type="button" data-pause="pictures" hidden>Pictures</button>'
     + '<button type="button" data-pause="leave">Leave the board</button></div>';
   document.body.appendChild(pauseCard);
