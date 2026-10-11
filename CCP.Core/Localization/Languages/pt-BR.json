@@ -7616,5 +7616,5 @@
   "title_cannot_update_default": "Não é possível atualizar o padrão",
   "title_cannot_delete_default": "Não é possível excluir o padrão",
   "title_update_preset": "Atualizar predefinição",
-  "linux_dep_wpe_flatpak": "As páginas web integradas precisam do WPE WebKit 2.0, que a maioria das distribuições não empacota por completo (o openSUSE Tumbleweed sim; o Arch só tem wpewebkit). Use a versão Flatpak para essas páginas; todo o resto funciona sem ele."
+  "linux_dep_wpe_unavailable": "As páginas web integradas precisam do WPE WebKit 2.0, que só o Arch e o openSUSE Tumbleweed empacotam por completo; em outras distribuições essas páginas ficam indisponíveis por enquanto. Todo o resto funciona sem ele."
 }

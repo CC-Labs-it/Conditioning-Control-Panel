@@ -8125,5 +8125,5 @@
   "title_cannot_update_default": "无法更新默认预设",
   "title_cannot_delete_default": "无法删除默认预设",
   "title_update_preset": "更新预设",
-  "linux_dep_wpe_flatpak": "内置网页需要 WPE WebKit 2.0，但大多数发行版没有完整打包它（openSUSE Tumbleweed 有；Arch 只有 wpewebkit）。请使用 Flatpak 版本查看这些页面；其他功能不受影响。"
+  "linux_dep_wpe_unavailable": "内置网页需要 WPE WebKit 2.0，目前只有 Arch 和 openSUSE Tumbleweed 完整打包了它；在其他发行版上这些页面暂时不可用。其他功能均可正常使用。"
 }

@@ -8369,5 +8369,5 @@
   "title_cannot_update_default": "Cannot Update Default",
   "title_cannot_delete_default": "Cannot Delete Default",
   "title_update_preset": "Update Preset",
-  "linux_dep_wpe_flatpak": "Built-in web pages need WPE WebKit 2.0, which most distributions do not package in full (openSUSE Tumbleweed does; Arch has only wpewebkit). Use the Flatpak build for those pages; everything else works without it."
+  "linux_dep_wpe_unavailable": "Built-in web pages need WPE WebKit 2.0, which only Arch and openSUSE Tumbleweed package in full; on other distributions those pages are unavailable for now. Everything else works without it."
 }

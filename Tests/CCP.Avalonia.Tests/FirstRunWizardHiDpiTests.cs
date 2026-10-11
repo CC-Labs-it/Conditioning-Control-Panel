@@ -58,6 +58,20 @@ public sealed class FirstRunWizardHiDpiTests
         return Task.CompletedTask;
     });
 
+    // The working area comes in physical pixels: 1920x1032 at 200% is 960x516 DIPs, not 1920x1032.
+    [Fact]
+    public Task WorkingAreaPixelsAreDividedByScaling() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var wizard = new FirstRunWizard();
+        wizard.FitToWorkingArea(new PixelRect(0, 0, 1920, 1032), 2);
+        Assert.Equal(900, wizard.Width);
+        Assert.Equal(516, wizard.Height);
+        wizard.FitToWorkingArea(new PixelRect(0, 0, 1920, 1032), 0);
+        Assert.Equal(516, wizard.Height);
+        return Task.CompletedTask;
+    });
+
     private static void AssertInside(Window window, Control control)
     {
         var topLeft = control.TranslatePoint(default, window)!.Value;

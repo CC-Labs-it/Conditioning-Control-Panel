@@ -7616,5 +7616,5 @@
   "title_cannot_update_default": "デフォルトは更新できません",
   "title_cannot_delete_default": "デフォルトは削除できません",
   "title_update_preset": "プリセットを更新",
-  "linux_dep_wpe_flatpak": "内蔵のウェブページには WPE WebKit 2.0 が必要ですが、ほとんどのディストリビューションは完全にはパッケージ化していません（openSUSE Tumbleweed は対応、Arch は wpewebkit のみ）。これらのページには Flatpak 版を使ってください。それ以外はなくても動作します。"
+  "linux_dep_wpe_unavailable": "内蔵のウェブページには WPE WebKit 2.0 が必要ですが、完全にパッケージ化しているのは Arch と openSUSE Tumbleweed だけです。他のディストリビューションでは現在これらのページは利用できません。それ以外の機能はすべて動作します。"
 }
