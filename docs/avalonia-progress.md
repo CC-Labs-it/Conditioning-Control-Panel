@@ -1840,3 +1840,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/sync6-nav-polish-b: +839
 - Section strip in its hue (tray, per-tab tints, bevelled plates, sliding glowing lit fill), page wash + ink, window edge line/band/lift and HUD band per section; SectionPaintShellTests, Keincheck strip-*.png.
 - Strip colour math in Core NavStripPaint (both heads wrap it); ledger rows 47/49/70/75/77 ported, 48/50/54/80 partial; the rest -> sync6-nav-polish-c (depth, fx, fog/embers, rail coins).
+
+## avalonia-port/ci-green: +85
+- `build` is green on GitHub Actions (run 38063614481). Changes: PKGBUILD 7.1.5; WPF tests follow the Core/Assets moves; the board budget test runs alone and fully warmed up (12 ms budget unchanged).
+- Fixed the Windows-only Avalonia test failures: a locator scope leak (8 WindowDropTests), the intake token check on runners with WebView2, and the webcam splash wall-clock flake. `build.yml` gains `workflow_dispatch`.
