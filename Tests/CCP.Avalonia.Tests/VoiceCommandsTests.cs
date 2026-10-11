@@ -106,7 +106,7 @@ public sealed class VoiceCommandsTests
         shell.ShowTab("shelistening");
         Dispatcher.UIThread.RunJobs();
         var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
-            .OfType<global::Avalonia.Controls.TextBlock>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
+            .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
         Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
         var toys = rows.Single(t => t.Text!.Contains("Quick toys"));   // freeze runs here only if its seam is seeded
