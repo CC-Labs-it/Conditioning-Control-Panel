@@ -59,7 +59,7 @@ public class RemoteEasyTests
         Assert.NotNull(dir);
         var src = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Remote", "RemoteControlService.V2.cs"));
         Assert.Contains("kind = \"signal\"", src);
-        Assert.Contains("StopAllRemoteEffects(force: true)", src);
+        Assert.Contains("StopAllRemoteEffects(RemoteEndCause.Panic)", src);
         Assert.Contains("\"more\", \"easy\", \"stop\"", src);
     }
 }

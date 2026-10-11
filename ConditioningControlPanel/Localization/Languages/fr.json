@@ -3833,6 +3833,7 @@
   "haptics_trim_tip": "Multiplicateur de puissance par jouet, appliqué en dernier. Sert à équilibrer un jouet fort avec un jouet faible.",
   "haptics_test_toy": "Tester ce jouet",
   "haptics_test_toy_failed": "Ce jouet n'a pas répondu - essaie de le reconnecter.",
+  "haptics_test_while_off": "C'était un test. L'haptique est désactivée, donc rien d'autre ne vibrera.",
   "haptics_routing": "Qui déclenche quoi",
   "haptics_col_intensity": "FORCE",
   "haptics_col_pattern": "MOTIF",

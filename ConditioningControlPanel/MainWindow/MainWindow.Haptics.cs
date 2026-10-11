@@ -740,6 +740,7 @@ namespace ConditioningControlPanel
                 MessageBox.Show(Loc.Get("msg_connect_to_a_device_first"), Loc.Get("label_not_connected"),
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
+            else NoteTestWhileHapticsOff();
         }
 
         /// <summary>Per-toy test pulse, straight at that one device.</summary>
@@ -751,6 +752,20 @@ namespace ConditioningControlPanel
             var ok = await App.Haptics.TestDeviceAsync(deviceKey);
             if (!ok && HapticsTab?.TxtHapticActivity != null)
                 HapticsTab.TxtHapticActivity.Text = Loc.Get("haptics_test_toy_failed");
+            else if (ok) NoteTestWhileHapticsOff();
+        }
+
+        /// <summary>A test plays with the master toggle off; say so, or a working test reads as
+        /// "haptics work" while every flash and bubble stays silent. Queued, so it lands after the
+        /// test's own activity line.</summary>
+        private void NoteTestWhileHapticsOff()
+        {
+            if (App.Haptics?.IsMasterOff != true) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (HapticsTab?.TxtHapticActivity != null)
+                    HapticsTab.TxtHapticActivity.Text = Loc.Get("haptics_test_while_off");
+            }));
         }
 
         internal void BtnHapticsHelp_Click(object sender, RoutedEventArgs e)
@@ -1169,10 +1184,10 @@ namespace ConditioningControlPanel
             var mode = SelectedPatternMode;
             var intensity = SelectedPatternIntensity;
 
-            if (string.IsNullOrEmpty(deviceKey))
-                await App.Haptics.PlayPatternAsync(intensity, 1500, mode, priority: 5);
-            else
-                await App.Haptics.TestDeviceAsync(deviceKey, mode, intensity, 1500);
+            var ok = string.IsNullOrEmpty(deviceKey)
+                ? await App.Haptics.TestPatternAsync(intensity, 1500, mode)
+                : await App.Haptics.TestDeviceAsync(deviceKey, mode, intensity, 1500);
+            if (ok) NoteTestWhileHapticsOff();
         }
 
         #endregion

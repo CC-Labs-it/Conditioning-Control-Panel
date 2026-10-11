@@ -3833,6 +3833,7 @@
   "haptics_trim_tip": "トイごとの出力倍率で、最後に適用されます。強いトイと弱いトイのバランス取りに使います。",
   "haptics_test_toy": "このトイをテスト",
   "haptics_test_toy_failed": "そのトイは応答しませんでした - 再接続してみてください。",
+  "haptics_test_while_off": "これはテストです。ハプティクスはオフなので、ほかは何も振動しません。",
   "haptics_routing": "何が何を動かすか",
   "haptics_col_intensity": "強さ",
   "haptics_col_pattern": "パターン",

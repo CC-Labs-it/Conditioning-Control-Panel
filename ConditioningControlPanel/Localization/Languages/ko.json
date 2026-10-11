@@ -3833,6 +3833,7 @@
   "haptics_trim_tip": "토이별 출력 배수로, 가장 마지막에 적용돼요. 센 토이와 약한 토이의 균형을 맞출 때 쓰세요.",
   "haptics_test_toy": "이 토이 테스트",
   "haptics_test_toy_failed": "그 토이가 응답하지 않았어요 - 다시 연결해 보세요.",
+  "haptics_test_while_off": "테스트였어요. 햅틱이 꺼져 있어서 다른 것은 진동하지 않아요.",
   "haptics_routing": "무엇이 무엇을 움직이나",
   "haptics_col_intensity": "세기",
   "haptics_col_pattern": "패턴",

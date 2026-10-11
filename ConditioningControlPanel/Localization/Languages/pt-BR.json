@@ -3833,6 +3833,7 @@
   "haptics_trim_tip": "Multiplicador de potência por brinquedo, aplicado por último. Use para equilibrar um brinquedo forte com um fraco.",
   "haptics_test_toy": "Testar este brinquedo",
   "haptics_test_toy_failed": "Esse brinquedo não respondeu - tente reconectá-lo.",
+  "haptics_test_while_off": "Isso foi um teste. A háptica está desligada, então nada mais vai vibrar.",
   "haptics_routing": "O que aciona o quê",
   "haptics_col_intensity": "FORÇA",
   "haptics_col_pattern": "PADRÃO",
