@@ -120,9 +120,16 @@ jobs:
         run: |
           $exe = Get-ChildItem ConditioningControlPanel/bin/Release -Recurse -Filter ConditioningControlPanel.exe | Select-Object -First 1
           if (-not $exe) { throw "no ConditioningControlPanel.exe" }
+          # A rule in a disabled profile blocks nothing: turn every profile on and prove it.
+          Set-NetFirewallProfile -All -Enabled True
+          $off = @(Get-NetFirewallProfile | Where-Object { $_.Enabled -ne 'True' })
+          Get-NetFirewallProfile | Format-Table Name, Enabled, DefaultOutboundAction -AutoSize
+          if ($off.Count -gt 0) { throw "firewall profile(s) off: $($off.Name -join ', ')" }
           New-NetFirewallRule -DisplayName ccp-wpf-block -Direction Outbound -Program $exe.FullName -Action Block | Out-Null
           Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application" -Recurse -Filter msedgewebview2.exe -ErrorAction SilentlyContinue |
             ForEach-Object { New-NetFirewallRule -DisplayName ccp-webview-block -Direction Outbound -Program $_.FullName -Action Block | Out-Null }
+          $rules = @(Get-NetFirewallRule -DisplayName ccp-wpf-block | Where-Object { $_.Enabled -eq 'True' -and $_.Action -eq 'Block' })
+          if ($rules.Count -eq 0) { throw "no enabled ccp-wpf-block rule" }
           Get-NetFirewallRule -DisplayName ccp-* | Get-NetFirewallApplicationFilter | Format-Table Program -AutoSize
           $prof = "${{ runner.temp }}/ccp-profile"
           New-Item -ItemType Directory -Force $prof | Out-Null

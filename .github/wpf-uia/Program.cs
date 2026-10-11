@@ -20,6 +20,9 @@ var outDir = Directory.CreateDirectory(args[1]).FullName;
 string[] doors = { "DoorHome", "DoorStudio", "DoorCompanion", "DoorPlay", "DoorSocial", "DoorYou", "DoorLibrary", "DoorSettings" };
 string[] dialogButtons = { "BtnNavSearch", "BtnMainHelp", "BtnInbox", "BtnTitleBarBugReport", "BtnAccountChip" };
 var failures = new List<string>();
+// Expected gaps (an element this profile does not show, a window that refuses UIA Close) are written
+// down but do not fail the run; anything else that goes wrong in a step does.
+var notes = new List<string>();
 
 using var automation = new UIA3Automation();
 var app = Application.Launch(new ProcessStartInfo(exe, "--panel") { WorkingDirectory = Path.GetDirectoryName(exe)! });
@@ -61,7 +64,7 @@ try
         {
             main.SetForeground();
             var el = main.FindFirstDescendant(c => c.ByAutomationId(id));
-            if (el is null) { failures.Add($"{key}: no element {id}"); return; }
+            if (el is null) { notes.Add($"{key}: no element {id}"); return; }
             Shot(el, key + "-default");
             var centre = el.GetClickablePoint();
             Mouse.MoveTo(centre); Thread.Sleep(400); Shot(el, key + "-hover");
@@ -97,18 +100,21 @@ try
     void CloseWin(Window w)
     {
         known.Add(w.Properties.NativeWindowHandle.ValueOrDefault);   // one that refuses to close is not "new" next time
-        try { w.Close(); } catch (Exception ex) { failures.Add($"close {w.ClassName}: {ex.Message}"); }
+        try { w.Close(); }
+        catch (Exception ex) { (ex.Message.Contains("not supported") ? notes : failures).Add($"close {WinLabel(w)}: {ex.Message}"); }
         Thread.Sleep(800);
     }
 }
 finally
 {
     File.WriteAllLines(Path.Combine(outDir, "_failures.txt"), failures);
+    File.WriteAllLines(Path.Combine(outDir, "_notes.txt"), notes);
     try { app.Close(); Thread.Sleep(3000); } catch { }
     try { if (!app.HasExited) app.Kill(); } catch { }
 }
-Console.WriteLine($"wpf-uia: {Directory.GetFiles(outDir, "*.json").Length} views, {failures.Count} step failure(s)");
-return 0;
+Console.WriteLine($"wpf-uia: {Directory.GetFiles(outDir, "*.json").Length} views, {failures.Count} step failure(s), {notes.Count} note(s)");
+foreach (var f in failures) Console.Error.WriteLine("FAIL " + f);
+return failures.Count == 0 ? 0 : 1;
 
 void Shot(AutomationElement el, string name)
 {
