@@ -28,9 +28,6 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _ => SheenMs + HoldMs + FadeMs,
         };
 
-        /// <summary>The section accent (Core NavStripTable) as a colour.</summary>
-        public static Color Accent(string? section) => Color.FromUInt32(0xFF000000 | ConditioningControlPanel.Services.UI.NavStripTable.AccentRgb(section));
-
         /// <summary>Glow <paramref name="target"/> once. False (with a Debug line) when it cannot.</summary>
         public static bool Once(Control? target, Color accent, MotionLevel? levelOverride = null, string? why = null)
         {

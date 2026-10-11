@@ -26,6 +26,7 @@ using Avalonia.Media;
 using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
@@ -346,26 +347,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             badge.IsVisible = text != null;
             if (text == null) return;
             badge.Background = new SolidColorBrush(row.Hue);
-            row.BadgeText.Foreground = new SolidColorBrush(NavInkOn(row.Hue));
+            row.BadgeText.Foreground = new SolidColorBrush(NavStripRules.ActiveTextOn(row.Hue));
             bool fresh = NavBadges.IsFresh(count, NavBadges.Seen(row.Section));
             badge.Opacity = fresh ? 1.0 : NavBadgeSeenOpacity;
             // WPF MainWindow.xaml:133: a raised chip (lamp top-left, shadow down-right); a seen badge drops it.
             badge.Effect = fresh ? new DropShadowEffect { Color = Color.FromRgb(0x06, 0x02, 0x0F), OffsetX = 1.06, OffsetY = 1.06, BlurRadius = 3, Opacity = 0.62 } : null;
-        }
-
-        /// <summary>WPF NavStripRules.ActiveTextOn: dark ink (#15121F) or white on the hue, whichever
-        /// has the higher WCAG contrast.</summary>
-        internal static Color NavInkOn(Color fill)
-        {
-            static double Lum(Color c)
-            {
-                static double Lin(byte v) { double s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); }
-                return 0.2126 * Lin(c.R) + 0.7152 * Lin(c.G) + 0.0722 * Lin(c.B);
-            }
-            static double Contrast(double a, double b) => (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
-            var ink = Color.FromRgb(0x15, 0x12, 0x1F);
-            double f = Lum(fill);
-            return Contrast(Lum(ink), f) >= Contrast(1.0, f) ? ink : Colors.White;
         }
 
         /// <summary>WPF BuildNavRowToolTip (:501): the section name, the open count when a badge is up

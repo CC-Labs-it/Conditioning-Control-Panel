@@ -150,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                         y = Math.Max(0, WallScroll.Offset.Y + p.Y - ZoneTopGap);
                     WallScroll.Offset = new Vector(WallScroll.Offset.X, y);
                     Dispatcher.UIThread.Post(() => global::ConditioningControlPanel.Avalonia.Controls.NavGlow.Once(header,
-                        global::ConditioningControlPanel.Avalonia.Controls.NavGlow.Accent(Services.UI.NavSections.Play), why: "play." + zone), DispatcherPriority.Loaded);
+                        global::ConditioningControlPanel.Avalonia.Views.Controls.NavStripRules.Accent(Services.UI.NavSections.Play), why: "play." + zone), DispatcherPriority.Loaded);
                 }
                 catch (Exception ex) { Log.Debug("Play ScrollToZone({Zone}): {E}", zone, ex.Message); }
             }, DispatcherPriority.Background);
