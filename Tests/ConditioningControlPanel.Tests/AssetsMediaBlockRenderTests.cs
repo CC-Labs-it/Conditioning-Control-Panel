@@ -160,6 +160,74 @@ public class AssetsMediaBlockRenderTests
         Assert.True(((SolidColorBrush)offTrack.Background).Color.A < 0x40);
     });
 
+    /// <summary>#1410: open, the list used to be capped at a fixed 430 px while the collapsed
+    /// browser row still held its 260 px floor, so on the real page (about 650 px tall) the
+    /// last rows and the r/ add field ran under the Start bar. Now the list takes what the
+    /// page has left and scrolls inside it, at any page height.</summary>
+    [Theory]
+    [InlineData(650)]
+    [InlineData(520)]
+    [InlineData(900)]
+    public void OpenTheListStaysOnThePageAndTheAddFieldIsReachable(double pageHeight) => WpfRenderHarness.OnStaThread(() =>
+    {
+        var customs = Enumerable.Range(1, 9).Select(i => "Own" + i).ToArray();
+        var (page, _, _) = Build(new[] { "hypno", "bimbo" }, customs);
+        page.ApplyFineTuneLayout(open: true, remoteInPlay: true);
+        page.TxtRemoteSubError.Text = "r/Own1 is already in your pool.";
+        page.TxtRemoteSubError.Visibility = Visibility.Visible;
+
+        var host = Realize(page, 1469, pageHeight);
+        MaybeRender(page, $"picker-open-fit-{pageHeight:0}.png");
+
+        double Bottom(FrameworkElement el) =>
+            el.TranslatePoint(new Point(0, el.ActualHeight), page).Y;
+
+        Assert.Equal(Visibility.Collapsed, page.AssetBrowserSection.Visibility);
+        Assert.True(Bottom(page.RemoteMediaBlock) <= pageHeight + 0.5,
+            $"media block ends at {Bottom(page.RemoteMediaBlock):0} on a {pageHeight:0} px page");
+        Assert.True(Bottom(page.RemoteFineTuneScroll) <= pageHeight + 0.5);
+
+        // The list is longer than its room on the real page, so it has to scroll.
+        if (pageHeight <= 650)
+            Assert.True(page.RemoteFineTuneScroll.ScrollableHeight > 0);
+
+        page.RemoteFineTuneScroll.ScrollToBottom();
+        host.UpdateLayout();
+        foreach (var el in new FrameworkElement[] { page.TxtRemoteCustomSub, page.BtnRemoteAddSub, page.TxtRemoteSubError })
+        {
+            var top = el.TranslatePoint(new Point(0, 0), page).Y;
+            var scrollTop = page.RemoteFineTuneScroll.TranslatePoint(new Point(0, 0), page).Y;
+            Assert.True(top >= scrollTop - 0.5, $"{el.Name} starts above the list at {top:0}");
+            Assert.True(Bottom(el) <= Bottom(page.RemoteFineTuneScroll) + 0.5,
+                $"{el.Name} ends at {Bottom(el):0}, past the list's {Bottom(page.RemoteFineTuneScroll):0}");
+        }
+    });
+
+    /// <summary>#1409: Both, open Fine-tune, back to "My own assets". The Fine-tune row is gone
+    /// on local, so a left-open list must not keep the Asset Browser collapsed.</summary>
+    [Fact]
+    public void OnMyOwnAssetsAnOpenListNeverHidesTheBrowser() => WpfRenderHarness.OnStaThread(() =>
+    {
+        Assert.False(AssetsTabView.FineTuneShows(open: true, remoteInPlay: false));
+        Assert.True(AssetsTabView.FineTuneShows(open: true, remoteInPlay: true));
+        Assert.False(AssetsTabView.FineTuneShows(open: false, remoteInPlay: true));
+
+        var (page, _, _) = Build(new[] { "hypno" }, Array.Empty<string>());
+        page.ApplyFineTuneLayout(open: true, remoteInPlay: true);
+        Assert.Equal(Visibility.Collapsed, page.AssetBrowserSection.Visibility);
+
+        page.RemoteMediaDetails.Visibility = Visibility.Collapsed;     // source -> My own assets
+        page.ApplyFineTuneLayout(open: true, remoteInPlay: false);
+        Assert.Equal(Visibility.Visible, page.AssetBrowserSection.Visibility);
+        Assert.Equal(Visibility.Collapsed, page.RemoteFineTuneScroll.Visibility);
+        Assert.True(page.RowAssetBrowser.Height.IsStar);
+        Assert.Equal(260, page.RowAssetBrowser.MinHeight);
+        Assert.True(page.RowMediaSource.Height.IsAuto);
+
+        Realize(page, 1469, 650);
+        Assert.True(page.AssetBrowserSection.ActualHeight >= 260);
+    });
+
     [Fact]
     public void EveryNicheWearsATintAndTheFlavourOwnedOnesWearTheirFlavour()
     {
