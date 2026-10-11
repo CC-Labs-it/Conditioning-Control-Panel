@@ -59,7 +59,8 @@ public sealed class IconGuardTests
     {
         var en = JsonSerializer.Deserialize<Dictionary<string, string>>(
             File.ReadAllText(Path.Combine(Root, "CCP.Core", "Localization", "Languages", "en.json")))!;
-        var keys = en.Where(kv => IconClusters(LeadingCluster(kv.Value)).Any()).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
+        // nav_crumb_sep "›" is typography, not an icon (oracle (c).4): it joins words in breadcrumbs and the OS title bar.
+        var keys = en.Where(kv => kv.Key != "nav_crumb_sep" && IconClusters(LeadingCluster(kv.Value)).Any()).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
         Assert.Contains("section_system", keys); // "⚙ System": proves the key set is live, not empty by a parse slip
         // Plain references only: {loc:Str K}, Loc.Get("K"), Loc.GetF("K", LabelKeys="..K..". IconLabel Key=,
         // {loc:StrBare K} and IconLabel.ForKey are the sanctioned forms and do not match these patterns.
