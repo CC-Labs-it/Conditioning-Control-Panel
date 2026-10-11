@@ -10,7 +10,7 @@
                                            outrank both, so the WPF file's placement is mirrored
        Visibility + CmpBoolToVis(Inv)  ->  IsVisible="{Binding X}" / "{Binding !X}"
        CmpHasContentToVis/CmpEmptyToVis->  ObjectConverters.IsNotNull / IsNull
-       <Image .. CmpEmojiToImage>      ->  <TextBlock Text="🎓"/>; glyph swaps are two TextBlocks
+       <Image .. CmpEmojiToImage>      ->  fx:IconGlyph (decision 2026-10-10); glyph swaps are two IconGlyphs
                                            with opposite IsVisible bindings
        ColumnDefinition Width binding  ->  local:CompanionGrid.StarFraction (see CompanionConverters.cs)
        ToolTip="..."                   ->  ToolTip.Tip="..."
@@ -435,8 +435,8 @@
                                     <StackPanel Orientation="Horizontal">
                                         <Border Width="22" Height="22" CornerRadius="11" Margin="0,0,7,0"
                                                 Classes="moodorb" Classes.live="{Binding IsMoodLive}">
-                                            <!-- Avalonia draws colour emoji and symbol glyphs alike, so the
-                                                 WPF image-plus-text-fallback pair is two TextBlocks. -->
+                                            <!-- the WPF image-plus-text-fallback pair is two Fluent IconGlyphs
+                                                 (moon / sparkle, decision 2026-10-10). -->
                                             <Grid>
                                                 <!-- dormant: the sleeping moon, per design §3 Z1 -->
                                                 <fx:IconGlyph Kind="WeatherMoon" Size="12" HorizontalAlignment="Center" VerticalAlignment="Center"

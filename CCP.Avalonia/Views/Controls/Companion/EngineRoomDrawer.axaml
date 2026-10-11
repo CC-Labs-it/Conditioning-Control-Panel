@@ -18,8 +18,7 @@
        CmpBoolToVisInverse          ->  IsVisible="{Binding !X}"
        CmpHasContentToVis           ->  ObjectConverters.IsNotNull
        Style.Triggers / DataTrigger ->  Classes.healthy="{Binding IsHealthy}" + a class selector
-       Image + CmpEmojiToImage      ->  <TextBlock Text="⚙"/>: Avalonia renders colour emoji
-                                        natively, so the Twemoji image pipeline is not needed
+       Image + CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        PasswordBox + PasswordChanged->  TextBox with PasswordChar, bound OneWayToSource. Avalonia
                                         has no PasswordBox; see the comment at the field.
        Content="{...}" on a button  ->  a <TextBlock> child (Avalonia reads "_" in Content as an
@@ -120,22 +119,25 @@
             </Border>
 
             <!-- ========== status line (always — it is the "is she thinking?" readout) ========== -->
-            <fx:IconLabel Text="{ReflectionBinding StatusLine}" TextElement.FontSize="11" Margin="2,0,0,12"
-                       Classes.healthy="{ReflectionBinding IsHealthy}">
+            <Grid ColumnDefinitions="Auto,*" Margin="2,0,0,12" TextElement.FontSize="11"
+                  Classes.healthy="{ReflectionBinding IsHealthy}">
                 <!-- WPF used a Style with a DataTrigger on IsHealthy. Avalonia has no data
                      triggers; a bound style class is the equivalent. Both foregrounds live in
                      styles rather than on the element, because a local value would outrank the
-                     class setter. The leading ●/✓/❌ of the status string is drawn
-                     as a Fluent icon by IconLabel (fluent-icons 2026-10-10). -->
-                <fx:IconLabel.Styles>
-                    <Style Selector="fx|IconLabel">
+                     class setter. The status string's leading glyph is a Fluent icon
+                     (fluent-icons 2026-10-10); the text wraps as in WPF (EngineRoomDrawer.xaml:89). -->
+                <Grid.Styles>
+                    <Style Selector="Grid">
                         <Setter Property="TextElement.Foreground" Value="{StaticResource CmpMutedBrush}"/>
                     </Style>
-                    <Style Selector="fx|IconLabel.healthy">
+                    <Style Selector="Grid.healthy">
                         <Setter Property="TextElement.Foreground" Value="#FF8FD9A8"/>
                     </Style>
-                </fx:IconLabel.Styles>
-            </fx:IconLabel>
+                </Grid.Styles>
+                <fx:IconGlyph Emoji="{ReflectionBinding StatusGlyph}" Size="11" Margin="0,1,5,0" VerticalAlignment="Top"
+                              IsVisible="{ReflectionBinding StatusGlyph, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                <TextBlock Grid.Column="1" Text="{ReflectionBinding StatusText}" TextWrapping="Wrap"/>
+            </Grid>
 
             <!-- ========== OFF ========== -->
             <TextBlock Text="{ReflectionBinding #Root.Strings.LocOffNote}" Theme="{StaticResource CmpDrawerNoteStyle}"

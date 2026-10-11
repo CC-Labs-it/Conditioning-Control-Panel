@@ -7,7 +7,7 @@
        CmpBoolToVis / Inverse       ->  IsVisible="{Binding X}" / "{Binding !X}"
        CmpHasContentToVis           ->  StringConverters.IsNotNullOrEmpty
        CmpEmptyToVis                ->  StringConverters.IsNullOrEmpty
-       Image + CmpEmojiToImage      ->  <TextBlock Text="💬"/>: Avalonia renders colour emoji natively
+       Image + CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        DataTemplate.Triggers        ->  Classes.you / Classes.echo on the row + selectors in
                                         UserControl.Styles. The her defaults are set by the base
                                         selectors too, because a local attribute would beat the

@@ -17,8 +17,7 @@
        {loc:Str key}                   ->  a binding (LocExtension is a WPF MarkupExtension and
                                            stays in the head; the strings still come from
                                            CCP.Core's LocalizationManager, via the viewmodel)
-       <Image {CmpEmojiToImage}>       ->  <TextBlock Text="💗"/>; Avalonia draws colour emoji
-                                           natively, so the Twemoji pipeline is not needed.
+       <Image {CmpEmojiToImage}>       ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
 
      Verified rather than assumed: an Avalonia ColumnDefinition is NOT a StyledElement (its base
      chain is DefinitionBase -> AvaloniaObject, no DataContext property), so the star-width

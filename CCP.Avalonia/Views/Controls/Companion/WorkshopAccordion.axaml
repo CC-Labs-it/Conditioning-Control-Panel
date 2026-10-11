@@ -31,7 +31,7 @@
                                            Grid.ColumnDefinitions is not a styled property, so
                                            neither can be bound. Same two star columns, set from
                                            a change handler. See CompanionConverters.cs.
-       CmpEmojiToImage on an <Image>   ->  a plain <TextBlock>; Avalonia draws colour emoji natively
+       CmpEmojiToImage on an <Image>   ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        x:FieldModifier="internal"      ->  dropped; x:Name alone. The seam button exists for
                                            MainWindow partials, which this head does not have yet.
        d:DataContext / MockWorkshopAccordionVm

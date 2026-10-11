@@ -11,7 +11,7 @@
                                             setters written directly on the same Border.
        Trigger IsMouseOver              ->  :pointerover
        Visibility + CmpBoolToVis        ->  IsVisible="{Binding X}" / "{Binding !X}"
-       <Image .. CmpEmojiToImage>       ->  <TextBlock Text="📌"/> (colour emoji render natively)
+       <Image .. CmpEmojiToImage>       ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        RelativeSource AncestorType      ->  #Root (x:Name on the UserControl)
        ToolTip="..."                    ->  ToolTip.Tip="..."
        IsVisibleChanged                 ->  PropertyChanged (filtered on IsVisibleProperty in code)

@@ -16,7 +16,7 @@
        DataTrigger (page-title colour)   ->  Classes.allowed="{Binding AllowPageTitles}" + Style
        DataTrigger (locked tooltip)      ->  ToolTip.Tip="{Binding EverythingLockedTip}", null when
                                              the stop is selectable
-       <Image .. CmpEmojiToImage>        ->  <TextBlock Text="👁"/>
+       <Image .. CmpEmojiToImage>        ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        RelativeSource AncestorType       ->  $parent[local:AwarenessPrivacyView]
        ToolTip="..."                     ->  ToolTip.Tip="..."
        ToolTipService.ShowOnDisabled     ->  ToolTip.ShowOnDisabled

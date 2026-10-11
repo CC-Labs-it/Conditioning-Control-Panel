@@ -14,8 +14,7 @@
        Visibility + CmpBoolToVis       ->  IsVisible="{Binding X}"
        Visibility + CmpBoolToVisInverse->  IsVisible="{Binding !X}"     (Avalonia negates natively;
                                            both converters disappear)
-       <Image .. CmpEmojiToImage>      ->  <TextBlock Text="🪞" FontSize="16"/>  (Avalonia renders
-                                           colour emoji natively - see CLAUDE.md)
+       <Image .. CmpEmojiToImage>      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        <ContentPresenter/>             ->  <ContentPresenter Name="PART_ContentPresenter" .../>
        ToolTip="..."                   ->  ToolTip.Tip="..."
        gradient "0,1" / "0.38,0.30"    ->  "0%,100%" / "38%,30%"        (RelativePoint: bare numbers

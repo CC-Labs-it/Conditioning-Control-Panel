@@ -5,7 +5,7 @@
        Style="{StaticResource X}"   ->  Theme="{StaticResource X}"    (keyed styles are ControlThemes)
        Visibility="Collapsed"       ->  IsVisible="False"
        ToolTip="..."                ->  ToolTip.Tip="..."
-       Image + CmpEmojiToImage      ->  <TextBlock Text="🧠"/>: Avalonia renders colour emoji natively
+       Image + CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        Checked/Unchecked            ->  IsCheckedChanged (Avalonia's CheckBox raises one event)
        Content="{loc:Str}" on Button->  a <TextBlock> child (Avalonia reads "_" in Content as an
                                         access key, and every loc key here is snake_case)

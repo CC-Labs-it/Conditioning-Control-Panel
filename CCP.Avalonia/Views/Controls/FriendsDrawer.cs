@@ -661,14 +661,20 @@ public sealed partial class FriendsDrawer : Border
     };
 
     /// <summary>WPF ButtonContent/FootButton: the action's MDL2 glyph (a Fluent icon here, fluent-icons 2026-10-10)
-    /// before its label. Action buttons tint the glyph lilac; foot buttons (glyphFg null) inherit the pill's ink.</summary>
+    /// before its label. Action buttons (WPF ButtonContent: glyph 14 lilac, gap 8, text 13 Medium) pass glyphFg;
+    /// foot buttons (WPF FootButton: glyph 13, gap 6, text 12.5) pass null and inherit the pill's ink.</summary>
     internal static StackPanel GlyphContent(IconKind kind, string text, bool center = false, IBrush? glyphFg = null)
     {
+        bool action = glyphFg != null;
         var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = center ? HorizontalAlignment.Center : HorizontalAlignment.Left };
-        var g = new IconGlyph { Kind = kind, Size = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var g = new IconGlyph { Kind = kind, Size = action ? 14 : 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, action ? 8 : 6, 0) };
         if (glyphFg != null) g.Foreground = glyphFg;
         sp.Children.Add(g);
-        sp.Children.Add(new TextBlock { Text = text, FontFamily = Display, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        sp.Children.Add(new TextBlock
+        {
+            Text = text, FontFamily = Display, FontSize = action ? 13 : 12.5, FontWeight = action ? FontWeight.Medium : FontWeight.Normal,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
         return sp;
     }
 

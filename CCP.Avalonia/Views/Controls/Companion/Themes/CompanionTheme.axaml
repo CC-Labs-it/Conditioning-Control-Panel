@@ -20,7 +20,7 @@
        CmpHasContentToVis   ->  IsVisible="{Binding X, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 (or StringConverters.IsNotNullOrEmpty for strings)
        CmpEmptyToVis        ->  the IsNull / IsNullOrEmpty twins of the above
-       CmpEmojiToImage      ->  a plain <TextBlock Text="🔒"/>; Avalonia renders COLR/CPAL natively
+       CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
      CmpEnumToVis / CmpEnumToVisInverse ARE here: they return bool, bind them to IsVisible.
 
      Mapping applied throughout, all forced by real differences:
@@ -757,7 +757,7 @@
         <Setter Property="Margin" Value="0,8,0,10"/>
     </ControlTheme>
     <!-- WPF targets Image because the lock glyph went through the Twemoji pipeline. On Avalonia the
-         glyph is a TextBlock (colour emoji render natively), so the theme targets TextBlock; the
+         glyph is a Fluent fx:IconGlyph (decision 2026-10-10), so the theme targets IconGlyph; the
          26px box and the glow are unchanged. -->
     <ControlTheme x:Key="CmpLockGlyphStyle" TargetType="fx:IconGlyph">
         <Setter Property="Width" Value="26"/>
