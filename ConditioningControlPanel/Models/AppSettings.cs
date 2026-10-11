@@ -4894,6 +4894,18 @@ namespace ConditioningControlPanel.Models
             set { _bubbleCountStrictLock = value; OnPropertyChanged(); }
         }
 
+        /// <summary>
+        /// "Pause other effects during Bubble Count" (#1418). Off by default. On: while a round
+        /// runs, flashes, spirals, the pink overlay and the bouncing text hold the way they do
+        /// during a mandatory video (BubbleCountService.EnterEffectsHold) and come back after.
+        /// </summary>
+        private bool _bubbleCountPauseEffects = false;
+        public bool BubbleCountPauseEffects
+        {
+            get => _bubbleCountPauseEffects;
+            set { _bubbleCountPauseEffects = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Bouncing Text

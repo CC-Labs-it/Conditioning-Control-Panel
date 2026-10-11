@@ -1878,6 +1878,9 @@ namespace ConditioningControlPanel
                     TxtStartLabel.Text = Services.SessionClockLabel.StartButton(
                         name, remaining, showCountdown, pauseIndicator, Loc.Get("label_0_1_2_3"));
 
+                    // The line above the bar: full session name and time left, same tick.
+                    RefreshBarStatus();
+
                     // Training Programs: drive the TODAY panel's session progress strip off this
                     // same 1-second engine tick rather than a second timer. It no-ops unless the
                     // running session is the one the Programs tab launched.
@@ -1885,7 +1888,38 @@ namespace ConditioningControlPanel
                 }
             });
         }
-        
+
+        /// <summary>
+        /// The status line above START / STOP. A running SESSION shows its name and the time left
+        /// (elapsed when it has no set length); a bare engine run keeps "Running..."; idle is blank.
+        /// Driven by the session's own one-second tick and by UpdateStartButton, reads the engine's
+        /// clock and writes only this TextBlock - never settings.
+        /// </summary>
+        private void RefreshBarStatus()
+        {
+            if (TxtPresetsStatus == null) return;
+            // A session stop used to leave this collapsed for the rest of the launch.
+            TxtPresetsStatus.Visibility = Visibility.Visible;
+
+            var session = _sessionEngine?.IsRunning == true ? _sessionEngine.CurrentSession : null;
+            if (session == null)
+            {
+                TxtPresetsStatus.Text = _isRunning ? Loc.Get("label_running") : "";
+                return;
+            }
+
+            var pauseIndicator = _sessionEngine!.IsPaused ? $" [{Loc.Get("label_paused")}]" : "";
+            TxtPresetsStatus.Text = Services.SessionClockLabel.BarStatus(
+                session.GetModeAwareName(),
+                _sessionEngine.ElapsedTime,
+                _sessionEngine.RemainingTime,
+                openEnded: session.DurationMinutes <= 0,
+                showCountdown: App.Settings?.Current?.ShowSessionCountdown != false,
+                pauseIndicator,
+                Loc.Get("label_session_bar_left"),
+                Loc.Get("label_session_bar_elapsed"));
+        }
+
         private void OnSessionPhaseChanged(object? sender, SessionPhaseChangedEventArgs e)
         {
             Dispatcher.Invoke(() =>
@@ -2077,6 +2111,9 @@ namespace ConditioningControlPanel
                     BtnPauseSession.ToolTip = Loc.Get("tooltip_resume_session");
                 }
             }
+
+            // The tick may be held while paused: show (or drop) the pause mark on the bar now.
+            RefreshBarStatus();
         }
         
         // Methods called by SessionEngine to control features
