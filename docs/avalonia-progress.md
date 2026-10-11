@@ -1867,3 +1867,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/sync6-nav-polish-c: +897
 - Strip pills: Fluent glyphs, depth (sunken tray, hue drop bands, pressed-in lit pill, press spring), and motion (hover lift/grow, glyph wiggle, spark burst, 9 s sheen gated by motion and visibility).
 - Core DepthLaw + NavStripMotion (WPF forwards); Avalonia Theme/Depth.xaml; SectionStripDepthFxShellTests, fail-proven.
+
+## avalonia-port/startup-ladder-clock: +101
+- The StartupLadder held-card re-check now runs on the ladder's steppable clock where it used to run on a real DispatcherTimer. Tests default to a stand-still TestClock, so no intro card can open on its own in the middle of a test's input (root fix for P76).
