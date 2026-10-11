@@ -1280,10 +1280,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return StripLeadingGlyph(text);
         }
 
-        /// <summary>
-        /// Local twin of <c>MainWindow.StripLeadingGlyph</c> (private over there, and a UserControl
-        /// cannot reach it). Keep the two in step if either changes.
-        /// </summary>
         private static IconGlyph RackGlyph(IconEntry icon, double size)
         {
             var g = new IconGlyph { Size = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -1291,6 +1287,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return g;
         }
 
+        /// <summary>
+        /// Local twin of <c>MainWindow.StripLeadingGlyph</c> (private over there, and a UserControl
+        /// cannot reach it). Keep the two in step if either changes.
+        /// </summary>
         private static string StripLeadingGlyph(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;

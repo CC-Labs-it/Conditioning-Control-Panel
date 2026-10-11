@@ -190,7 +190,7 @@
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{loc:Str label_targets}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <CheckBox x:Name="ChkRandomize" sessionLock:SessionLock.Owned="True" Margin="8,0,0,0" VerticalAlignment="Center"
+                                    <CheckBox x:Name="ChkRandomize" sessionLock:SessionLock.Owned="True" AutomationProperties.Name="{loc:StrBare tooltip_randomize_target_count_1_to_max}" Margin="8,0,0,0" VerticalAlignment="Center"
                                               ToolTip.Tip="{loc:Str tooltip_randomize_target_count_1_to_max}">
                                         <fx:IconGlyph Kind="ArrowShuffle" Size="12"/>
                                     </CheckBox>

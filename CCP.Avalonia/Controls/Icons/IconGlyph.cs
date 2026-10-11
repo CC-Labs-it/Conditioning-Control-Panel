@@ -83,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (IconMap.TryGet(e, out var hit))
             {
                 IsFallback = false;
-                Apply(hit);
+                ApplyEntry(hit);
             }
             else
             {
@@ -96,6 +96,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Shows a mapped entry (IconMap.ForFeature and friends): kind, variant, brand, and the
         /// semantic brush the emoji carried unless the caller set a Foreground.</summary>
         public void Apply(IconEntry entry)
+        {
+            if (Emoji != null) SetCurrentValue(EmojiProperty, null);   // a reused glyph drops an old emoji fallback
+            ApplyEntry(entry);
+        }
+
+        private void ApplyEntry(IconEntry entry)
         {
             _brush?.Dispose();
             _brush = null;
