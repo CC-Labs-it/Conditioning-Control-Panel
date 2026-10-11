@@ -629,26 +629,22 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
                         using var contentStream = await downloadResponse.Content.ReadAsStreamAsync();
                         using var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
 
-                        var buffer = new byte[8192];
-                        int bytesRead;
                         var lastProgress = -1;
 
-                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
-                        {
-                            await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
-                            downloadedBytes += bytesRead;
-
-                            if (totalBytes > 0)
+                        // HttpClient.Timeout stops counting once the headers are in
+                        // (ResponseHeadersRead), so the body had no timeout at all: a connection
+                        // that went quiet left the progress window up for hours with the main
+                        // window hidden and no way out. A stalled read now fails the attempt.
+                        downloadedBytes = await CopyWithStallTimeoutAsync(contentStream, fileStream, DownloadStallTimeout,
+                            copied =>
                             {
-                                var progress = (int)(downloadedBytes * 100 / totalBytes);
-                                if (progress != lastProgress)
-                                {
-                                    lastProgress = progress;
-                                    progressCallback?.Invoke(progress);
-                                    DownloadProgressChanged?.Invoke(this, progress);
-                                }
-                            }
-                        }
+                                if (totalBytes <= 0) return;
+                                var progress = (int)(copied * 100 / totalBytes);
+                                if (progress == lastProgress) return;
+                                lastProgress = progress;
+                                progressCallback?.Invoke(progress);
+                                DownloadProgressChanged?.Invoke(this, progress);
+                            }, ct);
 
                         App.Logger?.Information("Installer downloaded successfully: {Path} ({Size:F1} MB)",
                             installerPath, downloadedBytes / (1024.0 * 1024.0));
@@ -681,6 +677,45 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             finally
             {
                 IsDownloading = false;
+            }
+        }
+
+        /// <summary>How long the installer download may receive nothing before the attempt fails.</summary>
+        internal static readonly TimeSpan DownloadStallTimeout = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// Copies <paramref name="source"/> to <paramref name="destination"/> and gives up with a
+        /// <see cref="TimeoutException"/> when a single read waits longer than
+        /// <paramref name="stallTimeout"/>. The clock restarts on every chunk, so a slow but moving
+        /// download is never cut. The caller's own cancellation still surfaces as cancellation.
+        /// Returns the bytes copied.
+        /// </summary>
+        internal static async Task<long> CopyWithStallTimeoutAsync(Stream source, Stream destination,
+            TimeSpan stallTimeout, Action<long>? onProgress, CancellationToken ct)
+        {
+            var buffer = new byte[81920];
+            long copied = 0;
+            using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            while (true)
+            {
+                stall.CancelAfter(stallTimeout);
+                int read;
+                try
+                {
+                    read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), stall.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"The download stalled: no data for {stallTimeout.TotalSeconds:F0} seconds.");
+                }
+                if (read <= 0) return copied;
+
+                // The write is local disk: it runs on the caller's token, off the stall clock.
+                stall.CancelAfter(Timeout.InfiniteTimeSpan);
+                await destination.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                copied += read;
+                onProgress?.Invoke(copied);
             }
         }
 
@@ -1574,10 +1609,11 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
         /// <summary>
         /// Determines if an exception is a transient network error that should be retried.
         /// </summary>
-        private static bool IsTransientNetworkError(Exception ex)
+        internal static bool IsTransientNetworkError(Exception ex)
         {
             // Check for common transient network errors
             if (ex is System.Net.Http.HttpRequestException ||
+                ex is TimeoutException ||
                 ex is System.IO.IOException ||
                 ex is System.Net.Sockets.SocketException ||
                 ex is TaskCanceledException)
