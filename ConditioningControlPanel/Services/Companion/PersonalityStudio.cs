@@ -58,6 +58,9 @@ internal static class PersonalityStudio
         var extra = new StackPanel();
         var background = Field(extra, L("background"), draft.PromptSettings.KnowledgeBase, 1200, 90);
         var bounds = Field(extra, L("boundaries"), draft.PromptSettings.ExplicitReaction, 800, 70);
+        // What the companion says about the window in front. The studio copied it unseen, so a
+        // copy could never change it (#1404). Same label as the full editor's section.
+        var awareness = Field(extra, Loc.Get("setting_screen_awareness_reactions"), draft.PromptSettings.ContextReactions, 1400, 110);
         advanced.Content = extra;
         form.Children.Add(advanced);
         var scroller = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -76,6 +79,7 @@ internal static class PersonalityStudio
             draft.PromptSettings.OutputRules = style.Text.Trim();
             draft.PromptSettings.KnowledgeBase = background.Text.Trim();
             draft.PromptSettings.ExplicitReaction = bounds.Text.Trim();
+            draft.PromptSettings.ContextReactions = awareness.Text.Trim();
             draft.SampleLines = PersonalitySamples.Clean(samples.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
             settings.UserPersonalityPresets.Add(draft);
             if (!service.SetActivePreset(draft.Id))
@@ -95,7 +99,7 @@ internal static class PersonalityStudio
         panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 10, 0, 5) });
         var box = new TextBox
         {
-            Text = text, MaxLength = max, Height = height, AcceptsReturn = height > 40,
+            Text = text, MaxLength = FieldCap(max, text), Height = height, AcceptsReturn = height > 40,
             TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Foreground = Brushes.Black, Background = Brushes.WhiteSmoke, Padding = new Thickness(8)
         };
@@ -103,6 +107,15 @@ internal static class PersonalityStudio
         panel.Children.Add(box);
         return box;
     }
+
+    /// <summary>
+    /// A box's length cap. Never under what it opens with: a mod persona or an old custom prompt
+    /// longer than the cap opened as a box that refused every keystroke (#1417).
+    /// </summary>
+    internal static int FieldCap(int max, string? text)
+        => Math.Max(max, (text?.Length ?? 0) + FieldHeadroom);
+
+    internal const int FieldHeadroom = 400;
 
     private static string L(string key) => Loc.Get("companion_studio_" + key);
 }
