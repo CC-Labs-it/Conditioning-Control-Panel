@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 SubscribeProgramToday();
                 AmbientFxCanvas.Env.MotionGateChanged += SyncProgramBannerFx;
                 LocalizationManager.Instance.LanguageChanged += OnProgramTodayLanguageChanged;
+                CoreMods.ModChanged += OnProgramTodayModChanged;   // WPF ProgramsTab.cs:114 -> :471
                 RefreshProgramTodayCard();
             };
             DetachedFromVisualTree += (_, _) =>
@@ -63,12 +64,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 UnsubscribeProgramToday();
                 AmbientFxCanvas.Env.MotionGateChanged -= SyncProgramBannerFx;
                 LocalizationManager.Instance.LanguageChanged -= OnProgramTodayLanguageChanged;
+                CoreMods.ModChanged -= OnProgramTodayModChanged;
                 StopProgramBannerFx();
                 _programBannerNudgeCts?.Cancel();
             };
         }
 
         private void OnProgramTodayLanguageChanged(object? sender, EventArgs e) => RefreshProgramTodayCard();
+        private void OnProgramTodayModChanged(object? sender, ConditioningControlPanel.Models.ModPackage e) => OnProgramTodayChanged(sender, EventArgs.Empty);
 
         // WPF MarshalProgramRefresh (:164-190): TodayChanged / Lapsed / Graduated repaint the card even
         // behind a hidden tab - a handful of property writes.
@@ -103,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             try
             {
-                SubscribeProgramToday();
+                if (VisualRoot is not null) SubscribeProgramToday();   // a detached view never re-subscribes
                 var svc = AvApp.Programs;
                 var enrollment = svc?.ActiveEnrollment;
                 var program = svc?.ActiveProgram;
@@ -278,6 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ProgramTodaySheen.IsVisible = false;
             ProgramTodaySparkles.IsVisible = false;
             ProgramTodayAccent.Opacity = 1;
+            _programBannerNudgeCts?.Cancel();
             Slide(ProgramTodayArt).X = 0;
         }
 
@@ -313,8 +317,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try
             {
                 if (!_programBannerArtOn || !ProgramTodayArt.IsVisible) return;
-                _programBannerNudgeCts?.Cancel();
                 var slide = Slide(ProgramTodayArt);
+                var from = slide.X;   // read before Cancel drops the held value, so leaving eases back
+                _programBannerNudgeCts?.Cancel();
                 if (!AmbientFxCanvas.Env.AllowTransitions) { slide.X = to; return; }
                 _programBannerNudgeCts = new CancellationTokenSource();
                 _ = new Animation
@@ -324,7 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     FillMode = FillMode.Forward,
                     Children =
                     {
-                        new KeyFrame { Cue = new Cue(0), Setters = { new Setter(TranslateTransform.XProperty, slide.X) } },
+                        new KeyFrame { Cue = new Cue(0), Setters = { new Setter(TranslateTransform.XProperty, from) } },
                         new KeyFrame { Cue = new Cue(1), Setters = { new Setter(TranslateTransform.XProperty, to) } },
                     },
                 }.RunAsync(slide, _programBannerNudgeCts.Token);
