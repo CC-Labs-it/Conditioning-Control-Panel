@@ -95,6 +95,9 @@ namespace ConditioningControlPanel.Services.Video.Floating
             private double _breathSeconds;
             private double _lastTickMs;
             private bool _regionCorners;
+            private double _speed = 1.0;
+            private bool _forceMove;   // the window was moved or sized behind the motion's back
+            private bool _resync;      // ...while it was at rest: read its rectangle again
             private (byte R, byte G, byte B) _painted;
 
             public event Action<IFloatingVideoSurface>? Touched;
@@ -123,7 +126,16 @@ namespace ConditioningControlPanel.Services.Video.Floating
 
             // ---- contract ----
 
-            public double MotionSpeed { get; set; } = 1.0;
+            public double MotionSpeed
+            {
+                get => _speed;
+                set
+                {
+                    _speed = double.IsNaN(value) ? 1.0
+                        : Math.Clamp(value, FloatingVideoMotion.MinSpeed, FloatingVideoMotion.MaxSpeed);
+                    if (_motion != null) _motion.Speed = _speed;   // a window in flight follows
+                }
+            }
 
             public bool AudioLit
             {
@@ -151,7 +163,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
             {
                 if (_detached || boundsPx.Width <= 0 || boundsPx.Height <= 0) return;
                 _bounds = boundsPx;
-                SyncMotion(moveIfClamped: true);
+                SyncMotion(moveIfClamped: true, startBounds: true);
             }
 
             public void Detach()
@@ -224,6 +236,14 @@ namespace ConditioningControlPanel.Services.Video.Floating
                         return IntPtr.Zero;
                     case WM_SIZE:
                         if (_regionCorners) ApplyRegion();
+                        OnResized();
+                        break;
+                    case WM_DISPLAYCHANGE:
+                    case WM_SETTINGCHANGE when wParam == (IntPtr)SPI_SETWORKAREA:
+                        // A monitor went away, a resolution or a taskbar changed: once Windows
+                        // has settled, pull the window back onto a work area.
+                        _resync = true;
+                        RunClock();
                         break;
                 }
                 return IntPtr.Zero;
@@ -255,6 +275,27 @@ namespace ConditioningControlPanel.Services.Video.Floating
                     var rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
                     if (rgn == IntPtr.Zero) return;
                     if (SetWindowRgn(_hwnd, rgn, true) == 0) DeleteObject(rgn);   // on success Windows owns it
+                }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            }
+
+            /// <summary>The window changed size by itself: it landed on a monitor with another
+            /// scale and WPF resized it to keep its size in DIPs (border and corners follow, they
+            /// are DIPs too). The motion learns the new size; the next tick puts the window back
+            /// under the hand.</summary>
+            private void OnResized()
+            {
+                if (_detached || _motion == null) return;
+                try
+                {
+                    if (_motion.Active)
+                    {
+                        if (!GetWindowRect(_hwnd, out var r)) return;
+                        _motion.Resize(r.Right - r.Left, r.Bottom - r.Top);
+                        _forceMove = true;
+                    }
+                    else _resync = true;
+                    RunClock();
                 }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
@@ -313,23 +354,48 @@ namespace ConditioningControlPanel.Services.Video.Floating
 
             /// <summary>Read the window's real rectangle into the motion (the service may have
             /// placed it since), pulled inside the bounds. False when there is nothing to move.</summary>
-            private bool SyncMotion(bool moveIfClamped)
+            private bool SyncMotion(bool moveIfClamped, bool startBounds = false)
             {
                 if (_detached || _bounds == null || _hwnd == IntPtr.Zero) return false;
                 if (!IsWindow(_hwnd) || !GetWindowRect(_hwnd, out var r)) return false;
                 int w = r.Right - r.Left, h = r.Bottom - r.Top;
                 if (w <= 0 || h <= 0) return false;
                 var b = _bounds.Value;
-                if (_motion == null) _motion = new FloatingVideoMotion(r.Left, r.Top, w, h, b.X, b.Y, b.Width, b.Height);
+                if (_motion == null)
+                {
+                    _motion = new FloatingVideoMotion(r.Left, r.Top, w, h, b.X, b.Y, b.Width, b.Height)
+                    {
+                        Speed = _speed,
+                        MonitorAt = WorkAreaAt,
+                    };
+                }
                 else
                 {
                     if (_motion.Active) _motion.Drop();
-                    _motion.SetBounds(b.X, b.Y, b.Width, b.Height);
-                    _motion.Resync(r.Left, r.Top, w, h);
+                    // StartMotion names the monitor; any later sync takes the one the window is on.
+                    if (startBounds) _motion.SetBounds(b.X, b.Y, b.Width, b.Height);
+                    _motion.Resync(r.Left, r.Top, w, h, rehome: !startBounds);
                 }
+                // Every monitor, read fresh: a held window may be carried to any of them.
+                _motion.SetDesktop(GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
+                    GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
                 if (moveIfClamped && ((int)Math.Round(_motion.X) != r.Left || (int)Math.Round(_motion.Y) != r.Top))
                     MoveTo(_motion.X, _motion.Y);
                 return true;
+            }
+
+            /// <summary>The monitor seam of <see cref="FloatingVideoMotion.MonitorAt"/>: the work
+            /// area of the monitor nearest to a point, device pixels.</summary>
+            private static (double X, double Y, double W, double H)? WorkAreaAt(double x, double y)
+            {
+                try
+                {
+                    var mon = MonitorFromPoint(new POINT { X = (int)Math.Round(x), Y = (int)Math.Round(y) }, MONITOR_DEFAULTTONEAREST);
+                    var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+                    if (mon == IntPtr.Zero || !GetMonitorInfo(mon, ref mi)) return null;
+                    return (mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right - mi.rcWork.Left, mi.rcWork.Bottom - mi.rcWork.Top);
+                }
+                catch (Exception ex) { Diag.Swallowed(ex); return null; }
             }
 
             private void MoveTo(double x, double y)
@@ -365,6 +431,16 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 _lastTickMs = now;
 
                 var level = MotionLevelNow();
+                if (_resync)
+                {
+                    _resync = false;
+                    if (_motion?.Held != true) SyncMotion(moveIfClamped: true);
+                }
+                if (_forceMove && _motion != null)
+                {
+                    _forceMove = false;
+                    MoveTo(_motion.X, _motion.Y);
+                }
                 if (_motion != null && _motion.Active)
                 {
                     // A button-up the hook never delivered must not leave the window stuck to the hand.
@@ -424,6 +500,14 @@ namespace ConditioningControlPanel.Services.Video.Floating
             private const int GWL_EXSTYLE = -20;
             private const int WS_EX_NOACTIVATE = 0x08000000;
             private const int WM_SIZE = 0x0005;
+            private const int WM_SETTINGCHANGE = 0x001A;
+            private const int WM_DISPLAYCHANGE = 0x007E;
+            private const int SPI_SETWORKAREA = 0x002F;
+            private const int SM_XVIRTUALSCREEN = 76;
+            private const int SM_YVIRTUALSCREEN = 77;
+            private const int SM_CXVIRTUALSCREEN = 78;
+            private const int SM_CYVIRTUALSCREEN = 79;
+            private const uint MONITOR_DEFAULTTONEAREST = 2;
             private const int WM_MOUSEACTIVATE = 0x0021;
             private const int WM_NCLBUTTONDOWN = 0x00A1;
             private const int HTCAPTION = 2;
@@ -442,6 +526,14 @@ namespace ConditioningControlPanel.Services.Video.Floating
             [StructLayout(LayoutKind.Sequential)]
             private struct RECT { public int Left, Top, Right, Bottom; }
 
+            [StructLayout(LayoutKind.Sequential)]
+            private struct POINT { public int X, Y; }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct MONITORINFO { public int cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
+
+            [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
+            [DllImport("user32.dll")] private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
             [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
             [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
             [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hWnd);

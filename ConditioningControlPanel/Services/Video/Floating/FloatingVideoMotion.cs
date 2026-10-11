@@ -9,12 +9,45 @@ namespace ConditioningControlPanel.Services.Video.Floating
     /// No WPF, no Win32. The rules and the numbers are the flash images' own
     /// (<see cref="FlashDrag"/>, <see cref="FlashMotion.Reflect"/>): same tap test, same throw
     /// threshold, same 25% lost per bounce, same friction, same stop speed. The one rule added
-    /// here is that a window is never left outside its bounds, not even while it is held.
-    /// Device pixels throughout.
+    /// rules added here: a window is never left outside its bounds; a throw is scaled and capped
+    /// by <see cref="Speed"/> (the hand itself stays 1:1); and a HELD window may cross to any
+    /// monitor (<see cref="SetDesktop"/>), taking the work area it is let go on as its new bounds
+    /// (<see cref="MonitorAt"/>). Device pixels throughout.
     /// </summary>
     internal sealed class FloatingVideoMotion
     {
+        /// <summary>Slowest and fastest <see cref="Speed"/>.</summary>
+        public const double MinSpeed = 0.1, MaxSpeed = 1.0;
+        /// <summary>The fastest a thrown window travels at speed 1, px/s. Scaled by <see cref="Speed"/>.</summary>
+        public const double TopSpeedPxPerSec = 3600.0;
+
         private readonly FlashMotionState _s = new() { Style = FlashMotionStyle.Still };
+        private double _speed = 1.0;
+        private double _dx, _dy, _dw, _dh;   // the whole desktop; zero size = none given
+
+        /// <summary>
+        /// How fast a throw travels: 1 = the flash images' own speed. Scales the velocity a throw
+        /// starts with and the top speed. Live: a window in flight slows or quickens with it.
+        /// </summary>
+        public double Speed
+        {
+            get => _speed;
+            set
+            {
+                var v = double.IsNaN(value) ? 1.0 : Math.Clamp(value, MinSpeed, MaxSpeed);
+                if (v == _speed) return;
+                if (Flying) { _s.Vx *= v / _speed; _s.Vy *= v / _speed; }
+                _speed = v;
+            }
+        }
+
+        /// <summary>
+        /// The monitor seam: the work area of the monitor nearest to a point (the window's
+        /// centre), or null when it cannot say. Without it the bounds never change.
+        /// </summary>
+        public Func<double, double, (double X, double Y, double W, double H)?>? MonitorAt { get; set; }
+
+        public (double X, double Y, double W, double H) Bounds => (_s.BoundsX, _s.BoundsY, _s.BoundsW, _s.BoundsH);
 
         public FloatingVideoMotion(double x, double y, double w, double h,
             double bx, double by, double bw, double bh)
@@ -43,12 +76,53 @@ namespace ConditioningControlPanel.Services.Video.Floating
             ClampInside();
         }
 
+        /// <summary>The whole desktop (every monitor). A held window is kept inside this instead of
+        /// its own monitor, so the hand can carry it across.</summary>
+        public void SetDesktop(double x, double y, double w, double h)
+        {
+            _dx = x; _dy = y; _dw = w; _dh = h;
+        }
+
+        /// <summary>
+        /// Take the work area of the monitor under the window's centre as the bounds and pull the
+        /// window inside. Called when the hand lets go, and when the monitors change (one
+        /// unplugged, a new resolution): a window is never left outside every work area.
+        /// </summary>
+        public void Rehome()
+        {
+            var area = MonitorAt?.Invoke(_s.X + _s.W / 2.0, _s.Y + _s.H / 2.0);
+            if (area is { W: > 0, H: > 0 } a) { _s.BoundsX = a.X; _s.BoundsY = a.Y; _s.BoundsW = a.W; _s.BoundsH = a.H; }
+            ClampInside();
+        }
+
+        /// <summary>
+        /// The window changed size by itself (it landed on a monitor with another scale). A held
+        /// window keeps the same spot of itself under the hand, so the pointer never slips off it.
+        /// </summary>
+        public void Resize(double w, double h)
+        {
+            if (w <= 0 || h <= 0 || (w == _s.W && h == _s.H)) return;
+            var d = _s.Drag;
+            if (d != null && d.Held && _s.W > 0 && _s.H > 0)
+            {
+                double px, py;
+                lock (d.Sync) { px = d.LastX; py = d.LastY; }
+                d.GrabDx *= w / _s.W;
+                d.GrabDy *= h / _s.H;
+                _s.X = px + d.GrabDx;
+                _s.Y = py + d.GrabDy;
+            }
+            _s.W = w; _s.H = h; _s.MediaW = w; _s.MediaH = h;
+            ClampInside();
+        }
+
         /// <summary>Adopt the window's real rectangle (something else may have placed it), pulled
         /// back inside the bounds.</summary>
-        public void Resync(double x, double y, double w, double h)
+        /// <param name="rehome">True takes the monitor the rectangle is on as the new bounds first.</param>
+        public void Resync(double x, double y, double w, double h, bool rehome = false)
         {
             _s.X = x; _s.Y = y; _s.W = w; _s.H = h; _s.MediaW = w; _s.MediaH = h;
-            ClampInside();
+            if (rehome) Rehome(); else ClampInside();
         }
 
         /// <summary>The hand lands. Also catches a window in flight: the throw ends there.</summary>
@@ -69,17 +143,27 @@ namespace ConditioningControlPanel.Services.Video.Floating
         public FlashDragOutcome Release(double nowMs, MotionLevel level)
         {
             var outcome = FlashDrag.Release(_s, nowMs, level);
-            ClampInside();
+            if (outcome == FlashDragOutcome.Fling)
+            {
+                // The flash throw, scaled, then capped: a wild flick is still a drift at a low speed.
+                _s.Vx *= _speed;
+                _s.Vy *= _speed;
+                var v = Math.Sqrt(_s.Vx * _s.Vx + _s.Vy * _s.Vy);
+                var top = TopSpeedPxPerSec * _speed * FlashMotion.LevelScale(level);
+                if (v > top && v > 0) { _s.Vx *= top / v; _s.Vy *= top / v; }
+            }
+            Rehome();   // it bounces on the monitor it was let go on
             return outcome;
         }
 
         /// <summary>Let go without a throw, whatever the hand was doing (a stop, a lost button-up).</summary>
         public void Drop()
         {
+            var held = Held;
             _s.Drag = null;
             _s.Vx = 0;
             _s.Vy = 0;
-            ClampInside();
+            if (held) Rehome(); else ClampInside();
         }
 
         /// <summary>Advance <paramref name="dt"/> seconds. True when the rectangle moved.</summary>
@@ -102,6 +186,13 @@ namespace ConditioningControlPanel.Services.Video.Floating
 
         private void ClampInside()
         {
+            if (Held && _dw > 0 && _dh > 0)
+            {
+                // In the hand: any monitor will do, only the edge of the desktop stops it.
+                _s.X = Clamp(_s.X, _s.W, _dx, _dw);
+                _s.Y = Clamp(_s.Y, _s.H, _dy, _dh);
+                return;
+            }
             if (_s.BoundsW <= 0 || _s.BoundsH <= 0) return;
             _s.X = Clamp(_s.X, _s.W, _s.BoundsX, _s.BoundsW);
             _s.Y = Clamp(_s.Y, _s.H, _s.BoundsY, _s.BoundsH);

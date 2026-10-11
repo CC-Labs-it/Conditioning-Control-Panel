@@ -152,6 +152,200 @@ public class FloatingVideoFrameTests
         Assert.False(m.Step(0.033));
     }
 
+    // ---- speed ----
+
+    private static (double Travel, double Peak, bool Rested) Flight(double speed, double vxPerMs = 1.5)
+    {
+        // Wide bounds so no wall is in the way: travel and peak are the throw's own.
+        var m = new FloatingVideoMotion(1000, 300, 400, 240, 0, 0, 100000, 1040) { Speed = speed };
+        Throw(m, vxPerMs, 0);
+        double x0 = m.X, peak = Math.Abs(m.Vx);
+        int steps = 0;
+        while (m.Active && steps++ < 4000) { m.Step(1.0 / 30.0); peak = Math.Max(peak, Math.Abs(m.Vx)); }
+        return (m.X - x0, peak, !m.Active);
+    }
+
+    [Fact]
+    public void A_slower_speed_throws_proportionally_slower_and_still_comes_to_rest()
+    {
+        var full = Flight(1.0);
+        var lazy = Flight(0.35);
+        Assert.Equal(1500.0, full.Peak, 6);                 // 1.5 px/ms, the flash throw untouched
+        Assert.Equal(full.Peak * 0.35, lazy.Peak, 6);
+        Assert.InRange(lazy.Travel / full.Travel, 0.30, 0.37);   // rest comes a touch sooner
+        Assert.True(full.Rested && lazy.Rested);
+        Assert.True(lazy.Travel > 0);
+    }
+
+    [Fact]
+    public void A_wild_flick_is_capped_at_the_top_speed_for_its_speed()
+    {
+        Assert.Equal(FloatingVideoMotion.TopSpeedPxPerSec, Flight(1.0, vxPerMs: 20).Peak, 6);
+        Assert.Equal(FloatingVideoMotion.TopSpeedPxPerSec * 0.35, Flight(0.35, vxPerMs: 20).Peak, 6);
+
+        var m = Window();
+        m.Speed = 0.35;
+        Throw(m, 20, 0, MotionLevel.Reduced);               // reduced motion halves the cap as well
+        Assert.Equal(FloatingVideoMotion.TopSpeedPxPerSec * 0.35 * 0.5, m.Vx, 6);
+    }
+
+    [Fact]
+    public void Speed_never_touches_the_drag_under_the_hand()
+    {
+        var m = Window();
+        m.Speed = 0.1;
+        m.Press(650, 350, 0);
+        m.Move(750, 420, 400);
+        m.Step(0.016);
+        Assert.Equal((700.0, 370.0), (m.X, m.Y));
+    }
+
+    [Fact]
+    public void Speed_is_clamped_and_a_window_in_flight_follows_a_change()
+    {
+        var m = Window();
+        m.Speed = 7;
+        Assert.Equal(FloatingVideoMotion.MaxSpeed, m.Speed);
+        m.Speed = -1;
+        Assert.Equal(FloatingVideoMotion.MinSpeed, m.Speed);
+        m.Speed = double.NaN;
+        Assert.Equal(1.0, m.Speed);
+
+        Throw(m, 2.0, 1.0);
+        double vx = m.Vx, vy = m.Vy;
+        m.Speed = 0.5;
+        Assert.Equal((vx * 0.5, vy * 0.5), (m.Vx, m.Vy));
+        m.Speed = 1.0;
+        Assert.Equal(vx, m.Vx, 6);
+    }
+
+    // ---- monitors ----
+
+    // Two monitors side by side: A = 1920 x 1040 at (0, 0), B = 2560 x 1400 at (1920, 0).
+    private static (double X, double Y, double W, double H)? TwoMonitors(double x, double y)
+        => x < 1920 ? (0, 0, 1920, 1040) : (1920, 0, 2560, 1400);
+
+    private static FloatingVideoMotion OnTwoMonitors(double x = 600, double y = 300)
+    {
+        var m = new FloatingVideoMotion(x, y, 400, 240, 0, 0, 1920, 1040) { MonitorAt = TwoMonitors };
+        m.SetDesktop(0, 0, 1920 + 2560, 1400);
+        return m;
+    }
+
+    [Fact]
+    public void A_held_window_crosses_to_another_monitor_and_stops_only_at_the_desktop_edge()
+    {
+        var m = OnTwoMonitors();
+        m.Press(650, 350, 0);
+        m.Move(3050, 1150, 400);
+        m.Step(0.016);
+        Assert.Equal((3000.0, 1100.0), (m.X, m.Y));        // on B, past A's right and bottom edges
+        m.Move(90000, 90000, 800);
+        m.Step(0.016);
+        Assert.Equal((1920.0 + 2560 - 400, 1400.0 - 240), (m.X, m.Y));
+    }
+
+    [Fact]
+    public void Let_go_on_another_monitor_it_bounces_inside_that_work_area()
+    {
+        var m = OnTwoMonitors();
+        m.Press(650, 350, 0);
+        m.Move(2900, 700, 400);
+        m.Move(2948, 700, 416);                             // 3 px/ms to the right, on B
+        m.Step(0.016);
+        Assert.Equal(FlashDragOutcome.Fling, m.Release(420, MotionLevel.Full));
+        Assert.Equal((1920.0, 0.0, 2560.0, 1400.0), m.Bounds);
+
+        bool cameBack = false;
+        int steps = 0;
+        while (m.Active && steps++ < 2000)
+        {
+            m.Step(1.0 / 30.0);
+            if (m.Vx < 0) cameBack = true;
+            Assert.InRange(m.X, 1920, 1920 + 2560 - 400);   // never back onto A
+            Assert.InRange(m.Y, 0, 1400 - 240);
+        }
+        Assert.True(cameBack);
+        Assert.False(m.Active);
+    }
+
+    [Fact]
+    public void A_tap_or_a_placement_also_takes_the_monitor_under_the_centre()
+    {
+        var m = OnTwoMonitors();
+        m.Press(650, 350, 0);
+        m.Move(1800, 350, 300);                             // window at x 1750..2150: centre on B
+        m.Move(1801, 350, 700);
+        m.Step(0.016);
+        Assert.Equal(FlashDragOutcome.Place, m.Release(1000, MotionLevel.Full));
+        Assert.Equal(1920.0, m.Bounds.X);
+        Assert.Equal(1920.0, m.X);                          // pulled whole onto B, not left straddling
+
+        m.Press(m.X + 10, m.Y + 10, 2000);
+        m.Move(1700, 400, 2300);                            // centre back on A
+        m.Step(0.016);
+        m.Drop();                                           // a lost button-up lands it the same way
+        Assert.Equal((0.0, 1920.0), (m.Bounds.X, m.Bounds.W));
+        Assert.Equal(1920.0 - 400, m.X);
+    }
+
+    [Fact]
+    public void A_window_left_outside_every_work_area_is_pulled_back()
+    {
+        var m = OnTwoMonitors();
+        m.Press(650, 350, 0);
+        m.Move(3050, 1150, 400);
+        m.Step(0.016);
+        m.Release(900, MotionLevel.Full);
+        Assert.Equal(1920.0, m.Bounds.X);
+
+        // B is unplugged: only A answers now.
+        m.MonitorAt = (_, _) => (0, 0, 1920, 1040);
+        m.Rehome();
+        Assert.Equal((1920.0 - 400, 1040.0 - 240), (m.X, m.Y));
+
+        // The frame's later syncs (a press, a display change) take the monitor the window is on.
+        m.MonitorAt = TwoMonitors;
+        m.Resync(2500, 1300, 400, 240, rehome: true);
+        Assert.Equal((2500.0, 1400.0 - 240), (m.X, m.Y));
+
+        // No monitor answer at all keeps the old bounds and still clamps.
+        m.MonitorAt = (_, _) => null;
+        m.Resync(-900, -900, 400, 240, rehome: true);
+        Assert.Equal((1920.0, 0.0), (m.X, m.Y));
+    }
+
+    [Fact]
+    public void A_window_that_changes_size_in_the_hand_stays_under_the_pointer()
+    {
+        var m = OnTwoMonitors();
+        m.Press(900, 420, 0);                               // grabbed at 3/4 across, 1/2 down
+        m.Move(2500, 600, 300);
+        m.Step(0.016);
+        m.Resize(600, 360);                                 // landed on a 150% monitor
+        Assert.Equal((600.0, 360.0), (m.W, m.H));
+        Assert.Equal((2500.0 - 450, 600.0 - 180), (m.X, m.Y));
+        m.Move(2600, 650, 400);
+        m.Step(0.016);
+        Assert.Equal((2600.0 - 450, 650.0 - 180), (m.X, m.Y));
+    }
+
+    /// <summary>The frame feeds the seam from Win32 and listens for the monitors changing.</summary>
+    [Fact]
+    public void The_frame_wires_speed_monitors_and_display_changes()
+    {
+        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Video", "Floating");
+        var frame = File.ReadAllText(Path.Combine(dir, "FloatingVideoFrame.cs"));
+        Assert.Contains("MonitorAt = WorkAreaAt", frame);
+        Assert.Contains("MONITOR_DEFAULTTONEAREST", frame);
+        Assert.Contains("rcWork", frame);
+        Assert.Contains("SM_CXVIRTUALSCREEN", frame);
+        Assert.Contains("case WM_DISPLAYCHANGE:", frame);
+        Assert.Contains("_motion.Resize(", frame);
+        Assert.Contains("if (_motion != null) _motion.Speed = _speed;", frame);
+        Assert.DoesNotContain("public double MotionSpeed { get; set; }", frame);
+    }
+
     // ---- the light ----
 
     [Fact]
