@@ -122,7 +122,7 @@ jobs:
           Get-NetFirewallRule -DisplayName ccp-* | Get-NetFirewallApplicationFilter | Format-Table Program -AutoSize
           $prof = "${{ runner.temp }}/ccp-profile"
           New-Item -ItemType Directory -Force $prof | Out-Null
-          '{"Welcomed":true,"HasAcceptedAgeVerification":true,"OfflineMode":true,"LauncherSkipToPanel":true}' | Set-Content -Encoding utf8 "$prof\settings.json"
+          '{"Welcomed":true,"HasAcceptedAgeVerification":true,"OfflineMode":true,"LauncherSkipToPanel":true,"FirstRunAssetsPromptShown":true}' | Set-Content -Encoding utf8 "$prof\settings.json"
           "WPF_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Drive the WPF app
         env:
