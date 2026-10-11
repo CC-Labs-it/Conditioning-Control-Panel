@@ -195,11 +195,12 @@
     <!-- WPF EmiFace.PixelFont's shipped Press Start 2P (Resources/emi/fonts), for the ring cards. -->
     <AvaloniaResource Include="..\Assets\emi\fonts\*.ttf" Link="Resources\emi\fonts\%(Filename)%(Extension)" />
     <!-- App fonts (Platform/AppFonts.cs, distro-check F1/F4): WPF's display face Fredoka (OFL) and a
-         monochrome Noto Emoji (OFL) for content emoji when the system has no emoji font. Licenses ship
+         monochrome Noto Emoji (OFL) for content emoji when the system has no emoji font; Noto Sans Mono
+         (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
-    <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
+    <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\Assets\*.png"
                       Link="Resources\%(Filename)%(Extension)" />

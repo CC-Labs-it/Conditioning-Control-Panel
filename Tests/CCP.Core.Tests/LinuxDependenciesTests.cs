@@ -48,4 +48,15 @@ public sealed class LinuxDependenciesTests
         Assert.Equal(new[] { "overlays and panic key" },
             LinuxDependencies.Missing(l => l != "libXi.so.6").Select(d => d.Need));
     }
+
+    [Fact]
+    public void LibVlcThatLoadsButFailsToStartStillNamesTheAudioPackages()
+    {
+        // Fedora with vlc-libs alone: libvlc.so.5 loads, new LibVLC throws (no plugins).
+        Assert.Empty(LinuxDependencies.Missing(_ => true));
+        var missing = LinuxDependencies.Missing(_ => true, audioFailed: true);
+        Assert.Equal(new[] { "audio and video" }, missing.Select(d => d.Need));
+        Assert.Equal("sudo dnf install vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio",
+            LinuxDependencies.Message(missing, "ID=fedora\n")!.Value.Command);
+    }
 }

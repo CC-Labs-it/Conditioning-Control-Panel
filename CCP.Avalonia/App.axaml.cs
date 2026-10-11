@@ -873,7 +873,7 @@ namespace ConditioningControlPanel.Avalonia
                 // (docs/avalonia-linux-install.md). dlopen off the UI thread; nothing when all load.
                 Dispatcher.UIThread.Post(async () =>
                 {
-                    if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(null)) is not { } missing) return;
+                    if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(null, audioFailed: Platform.LibVlcAudio.Shared is null)) is not { } missing) return;
                     Serilog.Log.Warning("Missing Linux dependencies: {Text}", missing.Text);
                     var command = missing.Command;
                     Notifications.Show(missing.Text, Helpers.NotificationType.Warning, TimeSpan.FromSeconds(20),

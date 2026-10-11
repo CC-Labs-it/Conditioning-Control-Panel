@@ -53,9 +53,12 @@ namespace ConditioningControlPanel.Services
             return Family.Unknown;
         }
 
-        /// <summary>The needs whose libraries do not load through <paramref name="canLoad"/>.</summary>
-        public static IReadOnlyList<Dependency> Missing(Func<string, bool> canLoad, IEnumerable<Dependency>? among = null) =>
-            (among ?? All).Where(d => !d.Libraries.All(alts => alts.Split('|').Any(canLoad))).ToList();
+        /// <summary>The needs whose libraries do not load through <paramref name="canLoad"/>.
+        /// <paramref name="audioFailed"/>: libvlc loaded but <c>new LibVLC</c> threw (Fedora's vlc-libs
+        /// without its plugin packages), so audio counts as missing too.</summary>
+        public static IReadOnlyList<Dependency> Missing(Func<string, bool> canLoad, IEnumerable<Dependency>? among = null, bool audioFailed = false) =>
+            (among ?? All).Where(d => (audioFailed && d.Need == "audio and video")
+                || !d.Libraries.All(alts => alts.Split('|').Any(canLoad))).ToList();
 
         /// <summary>The one install command for <paramref name="missing"/>, or null for an unknown
         /// distro (the caller then shows <see cref="Message"/>'s package list instead).</summary>
@@ -88,12 +91,12 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Real check for this machine: dlopen each library, read /etc/os-release.
         /// Null off Linux or when everything is present.</summary>
-        public static (string Text, string? Command)? Check(IEnumerable<Dependency>? among = null)
+        public static (string Text, string? Command)? Check(IEnumerable<Dependency>? among = null, bool audioFailed = false)
         {
             if (!OperatingSystem.IsLinux()) return null;
             string? osRelease = null;
             try { osRelease = File.ReadAllText("/etc/os-release"); } catch { }
-            return Message(Missing(CanLoad, among), osRelease);
+            return Message(Missing(CanLoad, among, audioFailed), osRelease);
         }
 
         // Not freed: dlclose of GTK/WebKit is not safe, and the head loads them anyway.

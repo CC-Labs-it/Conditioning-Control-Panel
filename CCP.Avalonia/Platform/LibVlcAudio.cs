@@ -13,12 +13,6 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
-    /// The Avalonia head's answer to <see cref="CoreAudio"/>: one shared LibVLC, one
-    /// MediaPlayer per one-shot, disposed when the clip ends. Ducking lowers OTHER apps'
-    /// PulseAudio/PipeWire sink-inputs through <c>pactl</c> on Linux and restores them on
-    /// Unduck, with WPF's ref count and generation rules.
-    /// </summary>
-    /// <summary>
     /// Distro-check F3: LibVLCSharp P/Invokes "libvlc"/"libvlccore", which .NET probes only as
     /// libvlc.so; Debian/Ubuntu/Fedora runtime packages ship just the soname (libvlc.so.5,
     /// libvlccore.so.9; the bare .so is in -dev). Resolve to the unversioned name, then the soname.
@@ -52,6 +46,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
     }
 
+    /// <summary>
+    /// The Avalonia head's answer to <see cref="CoreAudio"/>: one shared LibVLC, one
+    /// MediaPlayer per one-shot, disposed when the clip ends. Ducking lowers OTHER apps'
+    /// PulseAudio/PipeWire sink-inputs through <c>pactl</c> on Linux and restores them on
+    /// Unduck, with WPF's ref count and generation rules.
+    /// </summary>
     internal sealed class LibVlcAudio
     {
         private readonly LibVLC _vlc;
@@ -399,7 +399,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     list.Add(new(id, string.IsNullOrWhiteSpace(name) ? id : name));
                 }
             }
-            catch (Exception ex) { Log.Warning("EnumerateOutputDevices failed: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Information("EnumerateOutputDevices: no pactl device list ({Error})", ex.Message); }
             return list;
         }
 
