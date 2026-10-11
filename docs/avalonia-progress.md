@@ -1848,3 +1848,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/sync6-nav-rail-c: +608
 - Rail paint: spur, art tint, label glow, 160 ms halo fade, hover nudge, NavBadges pills + rich tooltip (NavBadges moved to Core).
 - Landing glow (GlowNavTarget + NavGlow on pill, rail row, Settings pill, Play zone header) and the window-title crumb; ledger rows 2/23/46 ported, 33 partial, the rest -> sync6-nav-rail-d.
+
+## avalonia-port/roadmap-tests: +340
+- Core tests for RoadmapService steps, photo diary, notes, track unlocks and persistence; mutation score 21.9% -> 70.8%, and every remaining survivor is logging, an equivalent mutant, or crash-durability that cannot be tested in-process.
