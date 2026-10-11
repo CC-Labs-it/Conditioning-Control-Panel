@@ -1859,3 +1859,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/lockdown-badge-flake: +7
 - LockdownVeilTests: the setup marks every startup intro and the What moved card as seen, so an intro held by the ladder (real 1 s timer, 3 s settle) can no longer open inside the headless pre-key pump and take the badge's Enter. Fail-proven by breaking the keyboard route.
+
+## avalonia-port/server-sync-unblock: +14
+- Server sync contract confirmed by the owner (#1867): `server-sync-contract` blocked -> resolved, decision logged; 7c and the #1914 cosmetics clear stand as built (no code change).
+- Evidence: fake-wire SyncPush/cosmetics tests fail-proven with 4 mutants (evidence/server-sync-unblock/fail-proofs.log); GATE-OK.
