@@ -49,9 +49,15 @@ public sealed class ProgramIgnitionTests
         // P39 + P73: the clocks really advance - tick the render timer, time each frame; the same
         // frames with the loops parked (Motion Reduced, below) are the baseline.
         var edge = F<Rectangle>("ProgramsEdgeGlow");
-        var log = new StringBuilder("phase,frame,ms,edgeOpacity\n");
-        var seen = Frames("ignited", log, edge);
-        Assert.True(seen > 3, $"edge glow did not breathe ({seen} values)");
+        Assert.True(F<Grid>("RailCometHost").IsVisible);                        // T4 rail comet
+        var log = new StringBuilder("phase,frame,ms,edgeOpacity,borderAngle,shimmerX,cometX\n");
+        var seen = Frames("ignited", log, tab);
+        Assert.True(seen.Edge > 3, $"edge glow did not breathe ({seen.Edge} values)");
+        // The loops that animate a brush's own transform move too (border spin, counter shimmer, comet).
+        Assert.True(seen.Angle > 3, $"border did not turn ({seen.Angle} values)");
+        Assert.True(seen.Shimmer > 3, $"counter shimmer did not move ({seen.Shimmer} values)");
+        Assert.True(seen.Comet > 3, $"comet did not travel ({seen.Comet} values)");
+
 
         // P01: the shell hides the tab -> every clock stops and the rim parks dark.
         tab.IsVisible = false;
@@ -64,7 +70,7 @@ public sealed class ProgramIgnitionTests
         CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Assert.False(tab.IgnitionLoopsRunning);
-        Assert.Equal(1, Frames("parked", log, edge));
+        Assert.Equal(1, Frames("parked", log, tab).Edge);
         if (Environment.GetEnvironmentVariable("CCP_FX_EVIDENCE") is { Length: > 0 } evidence)
             File.WriteAllText(evidence, log.ToString());
         Assert.Equal(ProgramHeat.EdgeGlowOpacity(ProgramHeat.Compute(program.LengthDays, program.LengthDays,
@@ -73,7 +79,8 @@ public sealed class ProgramIgnitionTests
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Assert.True(tab.IgnitionLoopsRunning);
 
-        // The shared ambient gate (Pr4aAmbientAllowed): a minimised shell parks the clocks.
+        // The window gate is minimise only, like WPF (ProgramsFx.cs:818); headless never deactivates a
+        // shown window, so focus loss (dust parks itself, loops keep running) is untested here.
         shell.WindowState = WindowState.Minimized;
         Assert.False(tab.IgnitionLoopsRunning);
         shell.WindowState = WindowState.Normal;
@@ -130,20 +137,34 @@ public sealed class ProgramIgnitionTests
             ((ISolidColorBrush)F<Border>("ProgramsGraduatedCard").BorderBrush!).Color);
     });
 
-    /// <summary>40 render ticks, time-bounded (P73); returns how many distinct edge opacities were seen.</summary>
-    private static int Frames(string phase, StringBuilder log, Rectangle edge)
+    /// <summary>40 render ticks, time-bounded (P73); returns how many distinct values each loop showed:
+    /// edge opacity, the border brush's rotation, the counter ink's X offset and the comet's X offset.</summary>
+    private static (int Edge, int Angle, int Shimmer, int Comet) Frames(string phase, StringBuilder log, ProgramsTabView tab)
     {
-        var seen = new System.Collections.Generic.HashSet<double>();
+        var edge = tab.FindControl<Rectangle>("ProgramsEdgeGlow")!;
+        var panel = tab.FindControl<Border>("TodayPanel")!;
+        var counter = tab.FindControl<TextBlock>("TxtRunDayCounter")!;
+        var comet = tab.FindControl<Rectangle>("RailComet")!;
+        double Of<T>(object? t, Func<T, double> read) where T : class => t is T x ? read(x) : double.NaN;
+        var seen = new[] { new System.Collections.Generic.HashSet<double>(), new(), new(), new() };
         var watch = Stopwatch.StartNew();
         for (var i = 0; i < 40 && watch.Elapsed < TimeSpan.FromSeconds(10); i++)
         {
             var t0 = watch.Elapsed.TotalMilliseconds;
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
-            seen.Add(Math.Round(edge.Opacity, 4));
-            log.Append($"{phase},{i},{watch.Elapsed.TotalMilliseconds - t0:0.00},{edge.Opacity:0.0000}\n");
+            var v = new[]
+            {
+                edge.Opacity,
+                Of<RotateTransform>((panel.BorderBrush as IBrush)?.Transform, r => r.Angle),
+                Of<TranslateTransform>((counter.Foreground as IBrush)?.Transform, r => r.X),
+                Of<TranslateTransform>(comet.RenderTransform, r => r.X),
+            };
+            for (var k = 0; k < 4; k++) seen[k].Add(Math.Round(v[k], 4));
+            log.Append(FormattableString.Invariant(
+                $"{phase},{i},{watch.Elapsed.TotalMilliseconds - t0:0.00},{v[0]:0.0000},{v[1]:0.00},{v[2]:0.00},{v[3]:0.00}\n"));
         }
-        return seen.Count;
+        return (seen[0].Count, seen[1].Count, seen[2].Count, seen[3].Count);
     }
 
     private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body) =>

@@ -7,6 +7,7 @@ using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Data;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -22,8 +23,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The ignition rig: WPF MainWindow.ProgramsFx.cs. One heat scalar (Core ProgramHeat) dresses the
     /// run view - wash, sigil breath, turning border, rail glow, counter shimmer, edge glow, boss flare,
     /// rail comet, particles - plus the day / chapter / graduation moments. Ambient loops run only while
-    /// the tab is visible and attached, Motion allows them and the shell's ambient gate
-    /// (Pr4aAmbientAllowed: active, not minimised) is open (P01); all of them hang off one
+    /// the tab is visible and attached, Motion allows them and the shell is not minimised (WPF
+    /// ProgramsFx.cs:818; focus loss only parks the particle canvas, which watches IsActive itself) (P01); all of them hang off one
     /// CancellationTokenSource, stopped on hide and on detach (P65). Display only: nothing is written.
     /// ponytail: FireBurstAt sparks (task tick, seal, graduation), the rail-node ignite, today's pip
     /// pulse, the banner spring and the live session sheen have no Avalonia twin yet.
@@ -67,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static string RunKey(ProgramEnrollment e) => $"{e.ProgramId}:{e.AttemptNumber}";   // WPF ProgramsTab.cs:236
 
         private bool AmbientOn => Env.AllowAmbientLoops && IsVisible && VisualRoot is not null
-                                  && Shell is not { Pr4aAmbientAllowed: false };
+                                  && Shell is not { WindowState: WindowState.Minimized };
 
         // ---- lifecycle: attach / detach / motion gate / window gate ----
 
@@ -102,8 +103,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnFxWindowProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
-            // IsActive, not Activated: the event can fire before the property flips.
-            if (e.Property == Window.WindowStateProperty || e.Property == WindowBase.IsActiveProperty) SyncIgnition();
+            // Minimise only, like WPF: an alt-tab must not rebuild the rig or reset the dust.
+            if (e.Property == Window.WindowStateProperty) SyncIgnition();
         }
 
         /// <summary>Re-dress (or park) after any gate changes. The signature carries the gate, so an
@@ -153,13 +154,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!Env.AllowTransitions) { brush.Color = target; return; }
             var from = brush.Color;
             _accentFadeCts = new CancellationTokenSource();
-            _ = Run(new Animation
-            {
-                Duration = TimeSpan.FromSeconds(AccentFadeSeconds),
-                Easing = new QuadraticEaseInOut(),
-                FillMode = FillMode.Forward,
-                Children = { Frame(0, SolidColorBrush.ColorProperty, from), Frame(1, SolidColorBrush.ColorProperty, target) },
-            }, brush, _accentFadeCts.Token, () => brush.Color = target);
+            Drive(AccentFadeSeconds, false, new QuadraticEaseInOut(), p => brush.Color = Mix(from, target, p),
+                _accentFadeCts.Token, () => { if (_runAccentTarget == target) brush.Color = target; });
         }
 
         private Color AccentNow => _runAccentTarget ?? _runAccent?.Color ?? Colors.HotPink;
@@ -219,15 +215,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     var swell = Pulse(breath, ScaleTransform.ScaleXProperty, 1.0, 1.0 + amp * 0.35);
                     swell.Children[0].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, 1.0));
                     swell.Children[1].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, 1.0 + amp * 0.35));
-                    _ = Run(swell, (Animatable)sigilGlow.RenderTransform, token);
+                    _ = Run(swell, sigilGlow, token);
                 }
 
                 // T2+: the border turns (WPF :508); parked at 35 degrees otherwise.
                 if (_borderRotate != null)
                 {
                     _borderRotate.Angle = 35;
+                    var rotate = _borderRotate;
                     if (_tier >= ProgramHeatTier.Charged && ambient)
-                        _ = Run(Spin(ProgramHeat.BorderLapSeconds(_heat), RotateTransform.AngleProperty, 0, 360), _borderRotate, token);
+                        Drive(ProgramHeat.BorderLapSeconds(_heat), true, new LinearEasing(), p => rotate.Angle = 360 * p, token);
                 }
 
                 // Wash: present at every tier, blooming from T3 (WPF :539).
@@ -244,11 +241,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var counter = Find<TextBlock>("TxtRunDayCounter");
                 if (_tier >= ProgramHeatTier.Hot && ambient && _counterBrush != null)
                 {
-                    counter.Foreground = _counterBrush;
+                    // Above the XAML DynamicResource (a local binding that otherwise keeps winning).
+                    counter.SetValue(TextBlock.ForegroundProperty, _counterBrush, BindingPriority.Animation);
                     var w = Math.Max(60, counter.Bounds.Width);
-                    _ = Run(Spin(breath * 2.2, TranslateTransform.XProperty, -w, w), (Animatable)_counterBrush.Transform!, token);
+                    var ink = (TranslateTransform)_counterBrush.Transform!;
+                    Drive(breath * 2.2, true, new LinearEasing(), p => ink.X = -w + 2 * w * p, token);
                 }
-                else counter.Bind(TextBlock.ForegroundProperty, counter.GetResourceObservable("TextLightBrush"));
+                else counter.SetValue(TextBlock.ForegroundProperty, AvaloniaProperty.UnsetValue, BindingPriority.Animation);
 
                 // T4 / boss: whole-panel edge glow (WPF :607).
                 var edge = Find<Rectangle>("ProgramsEdgeGlow");
@@ -336,7 +335,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             comet.Fill = _cometBrush;
             comet.Opacity = 1;
             _ = Run(Spin(ProgramHeat.CometLapSeconds(_heat), TranslateTransform.XProperty, -140, gate.Width + 40),
-                (Animatable)comet.RenderTransform!, token);
+                comet, token);
         }
 
         /// <summary>WPF ApplyProgramParticles (:761): a share of the tier's budget, through the shared canvas.</summary>
@@ -401,14 +400,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var token = (_momentCts ??= new CancellationTokenSource()).Token;
 
             wave.Fill = _waveBrush;
-            var grow = new Animation
-            {
-                Duration = TimeSpan.FromSeconds(0.95), Easing = new CubicEaseOut(), FillMode = FillMode.Forward,
-                Children = { Frame(0, ScaleTransform.ScaleXProperty, 0.02 / 1.15), Frame(1, ScaleTransform.ScaleXProperty, 1.0) },
-            };
-            grow.Children[0].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, 0.02 / 1.15));
-            grow.Children[1].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, 1.0));
-            _ = Run(grow, (Animatable)_waveBrush.Transform!, token);
+            var grow = (ScaleTransform)_waveBrush.Transform!;
+            Drive(0.95, false, new CubicEaseOut(), p => grow.ScaleX = grow.ScaleY = 0.02 / 1.15 + (1 - 0.02 / 1.15) * p, token);
             _ = Run(Keys(0.95, OpacityProperty, (0, 0.0), (0.18, 0.75), (0.95, 0.0)), wave, token, () => wave.Opacity = 0);
 
             xp.Text = Loc.GetF("label_0_xp_3", ProgramHeat.DayXp(day?.Intensity ?? 0.0, day?.IsBoss == true));
@@ -417,7 +410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 Duration = TimeSpan.FromSeconds(1.5), Easing = new CubicEaseOut(), FillMode = FillMode.Forward,
                 Children = { Frame(0, TranslateTransform.YProperty, 18.0), Frame(1, TranslateTransform.YProperty, -46.0) },
-            }, (Animatable)xp.RenderTransform!, token);
+            }, xp, token);
             _ = Run(Keys(1.5, OpacityProperty, (0, 0.0), (0.22, 1.0), (0.95, 1.0), (1.5, 0.0)), xp, token, () => xp.Opacity = 0);
         }
 
@@ -464,7 +457,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var stamp = Keys(SealSeconds, ScaleTransform.ScaleXProperty, (0, 1.35), (0.3, 1.0), (SealSeconds, 1.06));
             foreach (var (frame, value) in new[] { (0, 1.35), (1, 1.0), (2, 1.06) })
                 stamp.Children[frame].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, value));
-            _ = Run(stamp, (Animatable)Find<StackPanel>("ProgramsSealStamp").RenderTransform!, token);
+            _ = Run(stamp, Find<StackPanel>("ProgramsSealStamp"), token);
             Serilog.Log.Information("[FX] program chapter sealed: {Chapter}", chapter.Name);
         }
 
@@ -511,12 +504,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return a;
         }
 
-        /// <summary>Runs one animation; a cancelled or failed run is decoration lost, never a crash.</summary>
-        private static async Task Run(Animation animation, Animatable target, CancellationToken token, Action? done = null)
+        /// <summary>Runs one animation; a cancelled or failed run is decoration lost, never a crash. Targets
+        /// are Visuals (a Transform setter reaches the RenderTransform): a bare brush or transform has no
+        /// clock in Avalonia 12 and freezes at its first frame (measured), so those go through Drive.</summary>
+        private static async Task Run(Animation animation, Visual target, CancellationToken token, Action? done = null)
         {
             try { await animation.RunAsync(target, token); }
             catch (Exception ex) { Serilog.Log.Debug("Program FX: {E}", ex.Message); }
             done?.Invoke();
+        }
+
+        /// <summary>Per-frame driver for brushes and their transforms: eased progress 0..1 over
+        /// <paramref name="seconds"/>, laps forever or ends with <paramref name="done"/> (also on cancel).</summary>
+        private void Drive(double seconds, bool forever, IEasing easing, Action<double> apply, CancellationToken token, Action? done = null)
+        {
+            TimeSpan? start = null;
+            void Frame(TimeSpan now)
+            {
+                if (token.IsCancellationRequested) { done?.Invoke(); return; }
+                start ??= now;
+                var t = (now - start.Value).TotalSeconds / seconds;
+                var end = !forever && t >= 1;
+                apply(easing.Ease(forever ? t % 1 : Math.Min(t, 1)));
+                if (end) done?.Invoke();
+                else if (TopLevel.GetTopLevel(this) is { } top) top.RequestAnimationFrame(Frame);
+            }
+            if (TopLevel.GetTopLevel(this) is { } host) host.RequestAnimationFrame(Frame);
+            else done?.Invoke();
+        }
+
+        private static Color Mix(Color a, Color b, double t)
+        {
+            byte L(byte x, byte y) => (byte)Math.Round(x + (y - x) * t);
+            return Color.FromArgb(L(a.A, b.A), L(a.R, b.R), L(a.G, b.G), L(a.B, b.B));
         }
 
         private static LinearGradientBrush Linear(Point start, Point end, Transform? transform, params (Color c, double at)[] stops)
