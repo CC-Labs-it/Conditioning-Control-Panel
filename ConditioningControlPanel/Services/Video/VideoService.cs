@@ -1706,7 +1706,7 @@ namespace ConditioningControlPanel.Services
             // Browser session: one message carries master x video volume AND the external mute
             // (GetEffectiveVolume already folds the mute in, so both halves agree).
             if (_browserActive) _browser?.SetVolume(effectiveVolume / 100.0, effectiveVolume <= 0);
-            RefreshCompanionVolumes();
+            RefreshFloatingVolumes();
 
             // Update LibVLC media players (thread-safe snapshot)
             List<LibVLCSharp.Shared.MediaPlayer> playersCopy;
@@ -1828,7 +1828,7 @@ namespace ConditioningControlPanel.Services
             _strictActive = false;
             CancelPendingRetry();
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
-            CloseFloatingCompanions("engine stop");   // before CloseAll: its JIT can throw below
+            CloseFloatingInstances("engine stop");   // before CloseAll: its JIT can throw below
             try
             {
                 CloseAll(synchronous: false, reason: "engine stop");
@@ -2331,6 +2331,10 @@ namespace ConditioningControlPanel.Services
             // Check if another fullscreen interaction is active (bubble count, lock card)
             // If so, queue this video for later
             // Note: If CurrentInteraction is already Video, the queue dequeued us — proceed normally
+            // Floating windows are up: ONE trigger = ONE more window (or a quiet skip at the limit).
+            // Before the queue and the force-close below, which would take the open run down.
+            if (TryFloatingTrigger(strictOverride, userInitiated)) return;
+
             var alreadyActive = App.InteractionQueue?.CurrentInteraction == InteractionQueueService.InteractionType.Video;
             if (!alreadyActive && App.InteractionQueue != null && !App.InteractionQueue.CanStart)
             {
@@ -2704,7 +2708,7 @@ namespace ConditioningControlPanel.Services
             _strictActive = false;
             CancelPendingRetry();
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
-            CloseFloatingCompanions("force cleanup");
+            CloseFloatingInstances("force cleanup");
             CloseAll(synchronous, reason: synchronous ? "app exit" : "force cleanup (panic / stuck / session switch)");
             App.Audio?.ForceUnduck();
             _penalties = 0;
@@ -2992,7 +2996,10 @@ namespace ConditioningControlPanel.Services
                 _scheduler?.Stop();
                 try
                 {
-                    if (_isRunning && !_videoPlaying && !_triggerInProgress)
+                    // A floating run leaves room for the next video: the tick goes through and
+                    // TryFloatingTrigger opens one more window, or skips quietly at the limit.
+                    var duringFloatingRun = _videoPlaying && SchedulerMayTrigger;
+                    if (_isRunning && SchedulerMayTrigger && !_triggerInProgress)
                     {
                         if (App.BrowserMedia?.ShouldDeferInterruptions == true ||
                             App.InteractionQueue?.CurrentInteraction == InteractionQueueService.InteractionType.WebVideo)
@@ -3029,6 +3036,8 @@ namespace ConditioningControlPanel.Services
                         else
                         {
                             TriggerVideo();
+                            // Nothing ends here to re-arm the scheduler, so the tick does it.
+                            if (duringFloatingRun && _isRunning) ScheduleNext();
                         }
                     }
                     // Cleanup() will call ScheduleNext() when video ends
@@ -3083,6 +3092,11 @@ namespace ConditioningControlPanel.Services
                 VideoDiag.Log("VIDEO", "SKIP - a video is already playing");
                 return;
             }
+
+            // Floating, and the browser engine can take the clip: the run opens on an equal
+            // instance (VideoService.FloatingInstances.cs) and none of the single-player
+            // machinery below applies. Otherwise the ordinary path, one window.
+            if (!isVoutRetry && TryStartFloatingRun(path, strict)) return;
 
             // Fresh video ⇒ fresh vout-retry budget. The retry pass keeps the budget spent so a
             // machine where even the fresh LibVLC instance can't present skips on to ScheduleNext
@@ -3222,7 +3236,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (StartBrowserVideoPlayback(path, strict))
                 {
-                    OnFloatingPrimaryUp(path);   // frame + companions; a no-op full screen
+                    OnFloatingPrimaryUp(path);   // the floating frame; a no-op full screen
                     return;
                 }
             }
@@ -3377,7 +3391,7 @@ namespace ConditioningControlPanel.Services
                         App.Bubbles?.PauseAndClear();
                         VideoDiag.Log("VIDEO", $"bubbles paused +{showSw.ElapsedMilliseconds}ms");
 
-                        if (App.Settings.Current.AttentionChecksEnabled)
+                        if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating))
                         {
                             SetupAttention();
                             VideoDiag.Log("VIDEO", $"attention checks armed +{showSw.ElapsedMilliseconds}ms");
@@ -3400,7 +3414,7 @@ namespace ConditioningControlPanel.Services
                 {
                     _playbackStarted = true;
                     StartWedgeWatchdog();
-                    // Frame + companions; a no-op full screen.
+                    // The floating frame; a no-op full screen.
                     DispatcherHelper.RunOnUISync(() => OnFloatingPrimaryUp(path));
                 }
 
@@ -5801,7 +5815,7 @@ namespace ConditioningControlPanel.Services
 
                     IAttentionTarget? target = null;
                     target = CreateAttentionTarget(text, screen,
-                        Video.MandatoryVideoPresentation.AttentionSize(settings.AttentionSize, IsFloating), style, () =>
+                        settings.AttentionSize, style, () =>
                     {
                         // Only count as a hit once per spawn (user clicked any target from this batch)
                         if (hitRegistered) return;
@@ -6010,7 +6024,7 @@ namespace ConditioningControlPanel.Services
             var settings = App.Settings.Current;
             bool loop = false, troll = false;
 
-            if (settings.AttentionChecksEnabled && _spawned > 0)
+            if (Video.MandatoryVideoPresentation.AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && _spawned > 0)
             {
                 bool passed = _hits >= _spawned;
                 App.Logger.Information("Attention result: {Hits}/{Spawned} (of {Total} scheduled) = {Result}", _hits, _spawned, _total, passed ? "PASS" : "FAIL");
@@ -6471,7 +6485,7 @@ namespace ConditioningControlPanel.Services
             _lastGracePauseActionUtc = nowUtc;
 
             PausePrimary();
-            SetCompanionsPaused(true);   // floating companions hold with it
+            SetFloatingPaused(true);   // every floating window holds with it
 
             // The attention mini-game pauses WITH the video: motion frozen, clicks off. Its expiry
             // clock stops on its own — the deadlines are held against _startTime, which
@@ -6535,7 +6549,7 @@ namespace ConditioningControlPanel.Services
 
             ResumeGuardTimers(DateTime.UtcNow);
             PlayPrimary();
-            SetCompanionsPaused(false);
+            SetFloatingPaused(false);
 
             App.Logger?.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, pausedFor.TotalSeconds);
             VideoDiag.Log("PANIC", $"grace pause RELEASED ({reason}) after {pausedFor.TotalSeconds:F1}s - playback resumed");
@@ -6620,6 +6634,21 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex)
                 {
                     App.Logger?.Warning("VideoService: per-screen grace overlay failed - {Error}", ex.Message);
+                }
+
+                // Floating instances are not in _windows: the card goes where they opened.
+                if (_graceOverlays.Count == 0)
+                {
+                    foreach (var screen in FloatingScreens())
+                    {
+                        try
+                        {
+                            var overlay = new GracePauseOverlayWindow(screen, () => ResumeFromGrace("resume button"));
+                            overlay.SetRemainingSeconds(GraceWindowSeconds);
+                            _graceOverlays.Add(overlay);
+                        }
+                        catch (Exception ex) { Diag.Swallowed(ex); }
+                    }
                 }
 
                 if (_graceOverlays.Count == 0)
@@ -8018,7 +8047,7 @@ namespace ConditioningControlPanel.Services
             _videoPlaying = false;
             _triggerInProgress = false;
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
-            CloseFloatingCompanions("cleanup");
+            CloseFloatingInstances("cleanup");
             // "cleanup" covers both doors into this method: the natural end of a clip and the ESC
             // dismiss (SetupStrictHandlers / TryEscapeFromGlobalKey). The VideoDiag PANIC line
             // immediately before an ESC-driven call says which one it was.

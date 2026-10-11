@@ -8,11 +8,12 @@ using Screen = System.Windows.Forms.Screen;
 namespace ConditioningControlPanel.Services
 {
     /// <summary>
-    /// Floating mandatory videos (AppSettings.MandatoryVideoFloating): the SAME player in one small
-    /// topmost window instead of a window covering every targeted monitor. Only the rectangle and
-    /// the screen list change. Panic, the grace pause, the timers, the attention checks, the
-    /// pausing of other effects and the teardown are the code the full-screen video runs. The
-    /// decision itself is <see cref="MandatoryVideoPresentation.ShouldFloat"/>.
+    /// Floating mandatory videos (AppSettings.MandatoryVideoFloating), the single-window path:
+    /// the SAME player in one small topmost window instead of a window covering every targeted
+    /// monitor. It is what a floating video falls back to when the browser engine cannot take the
+    /// clip (LibVLC route); otherwise floating videos are the equal instances of
+    /// VideoService.FloatingInstances.cs. Only the rectangle and the screen list change, and there
+    /// are no attention checks. The decision itself is <see cref="MandatoryVideoPresentation.ShouldFloat"/>.
     /// </summary>
     public partial class VideoService
     {
@@ -50,13 +51,14 @@ namespace ConditioningControlPanel.Services
             if (screens == null || screens.Length == 0) return;
             var screen = screens[_random.Next(screens.Length)];
             _floatScreen = screen;
-            _floatBounds = FloatRectOn(screen, MandatoryVideoPresentation.PrimaryMinWidth, null);
+            _floatBounds = FloatRectOn(screen, null);
             VideoDiag.Log("VIDEO", $"floating window {_floatBounds} on {screen.DeviceName}");
         }
 
-        /// <summary>A floating rectangle on this screen's work area, in PHYSICAL pixels, at the
-        /// player's size (AppSettings.MandatoryVideoFloatingSize), kept off the ones already up.</summary>
-        private System.Drawing.Rectangle FloatRectOn(Screen screen, int minWidth, System.Collections.Generic.IEnumerable<System.Drawing.Rectangle>? takenPx)
+        /// <summary>A floating rectangle on this screen's work area, in PHYSICAL pixels: the
+        /// player's size (AppSettings.MandatoryVideoFloatingSizePercent of the work-area width),
+        /// a random spot, overlap allowed but never exactly on a window already up.</summary>
+        private System.Drawing.Rectangle FloatRectOn(Screen screen, System.Collections.Generic.IEnumerable<System.Drawing.Rectangle>? takenPx)
         {
             var dpi = BubbleCountWindow.GetDpiForScreen(screen);
             if (dpi <= 0) dpi = 1;
@@ -66,8 +68,7 @@ namespace ConditioningControlPanel.Services
                 foreach (var t in takenPx)
                     taken.Add(((int)((t.X - wa.X) / dpi), (int)((t.Y - wa.Y) / dpi), (int)(t.Width / dpi), (int)(t.Height / dpi)));
             var (x, y, w, h) = MandatoryVideoPresentation.FloatingRect((int)(wa.Width / dpi), (int)(wa.Height / dpi), _random,
-                MandatoryVideoPresentation.SizeDivisor(App.Settings?.Current?.MandatoryVideoFloatingSize),
-                minWidth, taken);
+                App.Settings?.Current?.MandatoryVideoFloatingSizePercent ?? MandatoryVideoPresentation.DefaultSizePercent, taken);
             return new System.Drawing.Rectangle(wa.X + (int)(x * dpi), wa.Y + (int)(y * dpi), (int)(w * dpi), (int)(h * dpi));
         }
 

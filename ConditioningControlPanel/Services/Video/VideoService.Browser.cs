@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>True while a browser video session owns the screen. Read by AudioService so the
         /// duck sweep never lowers the app's OWN video audio (LibVLC audio is in-process and
         /// structurally un-duckable, so this is what keeps the two engines at parity).</summary>
-        public bool IsBrowserSessionActive => _browserActive || HasFloatingCompanions;   // a companion is WebView2 audio too
+        public bool IsBrowserSessionActive => _browserActive || HasFloatingInstances;   // a floating instance is WebView2 audio too
 
         /// <summary>Aspect ratio (w/h) of the clip in the live browser session, or 0 when unknown /
         /// no browser session. The page's video element is contain-fit over the full window, so this
@@ -195,7 +195,7 @@ namespace ConditioningControlPanel.Services
                 StopWedgeWatchdog();
 
                 App.Bubbles?.PauseAndClear();
-                if (App.Settings.Current.AttentionChecksEnabled) SetupAttention();
+                if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating)) SetupAttention();
 
                 VideoDiag.Log("VIDEO", $"browser session on screen ({_windows.Count} window(s)) - {Path.GetFileName(path)}");
                 return true;

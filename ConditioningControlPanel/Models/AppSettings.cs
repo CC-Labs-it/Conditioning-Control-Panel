@@ -2623,20 +2623,41 @@ namespace ConditioningControlPanel.Models
             set { _mandatoryVideoFloating = value; OnPropertyChanged(); }
         }
 
-        private string _mandatoryVideoFloatingSize = "medium";
-        /// <summary>Floating window size: "small" (a quarter of the work area's width), "medium" (a
-        /// third, the default and the first cut's size) or "large" (a half). Read at the next video
-        /// (MandatoryVideoPresentation.SizeDivisor).</summary>
-        public string MandatoryVideoFloatingSize
+        private int _mandatoryVideoFloatingSizePercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.DefaultSizePercent;
+        /// <summary>Floating window WIDTH as a percent of the work-area width of the monitor it
+        /// opens on, 15 to 60, default 33. Read when the next window opens.</summary>
+        public int MandatoryVideoFloatingSizePercent
         {
-            get => _mandatoryVideoFloatingSize;
-            set { _mandatoryVideoFloatingSize = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.NormalizeSize(value); OnPropertyChanged(); }
+            get => _mandatoryVideoFloatingSizePercent;
+            set { _mandatoryVideoFloatingSizePercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampSizePercent(value); OnPropertyChanged(); }
+        }
+
+        /// <summary>RETIRED small / medium / large choice. Read once from an old settings file and
+        /// carried into <see cref="MandatoryVideoFloatingSizePercent"/> (25 / 33 / 50); it reads
+        /// back as null, so it is never the source again.</summary>
+        public string? MandatoryVideoFloatingSize
+        {
+            get => null;
+            set
+            {
+                var carried = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.LegacySizePercent(value);
+                if (carried.HasValue) MandatoryVideoFloatingSizePercent = carried.Value;
+            }
+        }
+
+        private int _mandatoryVideoFloatingSpeedPercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.DefaultSpeedPercent;
+        /// <summary>How fast a thrown floating window travels, 10 to 100 percent of flash-image
+        /// speed, default 35 (a lazy drift). Live: IFloatingVideoSurface.MotionSpeed = value / 100.</summary>
+        public int MandatoryVideoFloatingSpeedPercent
+        {
+            get => _mandatoryVideoFloatingSpeedPercent;
+            set { _mandatoryVideoFloatingSpeedPercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampSpeedPercent(value); OnPropertyChanged(); }
         }
 
         private int _mandatoryVideoFloatingCount = 1;
-        /// <summary>How many floating windows one video event opens, 1 (default) to 4. The first is
-        /// the video itself; the others are companions with their own clip and no targets. Only one
-        /// window carries the sound (Services/Video/FloatingAudioFocus).</summary>
+        /// <summary>The MOST floating windows that may be on screen at once, 1 (default) to 4.
+        /// One trigger opens one window; at the limit a trigger is skipped. Only one window
+        /// carries the sound (Services/Video/FloatingAudioFocus).</summary>
         public int MandatoryVideoFloatingCount
         {
             get => _mandatoryVideoFloatingCount;
