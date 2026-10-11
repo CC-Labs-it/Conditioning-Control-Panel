@@ -1844,3 +1844,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/ci-green: +85
 - `build` is green on GitHub Actions (run 38063614481). Changes: PKGBUILD 7.1.5; WPF tests follow the Core/Assets moves; the board budget test runs alone and fully warmed up (12 ms budget unchanged).
 - Fixed the Windows-only Avalonia test failures: a locator scope leak (8 WindowDropTests), the intake token check on runners with WebView2, and the webcam splash wall-clock flake. `build.yml` gains `workflow_dispatch`.
+
+## avalonia-port/sync6-nav-rail-c: +608
+- Rail paint: spur, art tint, label glow, 160 ms halo fade, hover nudge, NavBadges pills + rich tooltip (NavBadges moved to Core).
+- Landing glow (GlowNavTarget + NavGlow on pill, rail row, Settings pill, Play zone header) and the window-title crumb; ledger rows 2/23/46 ported, 33 partial, the rest -> sync6-nav-rail-d.
