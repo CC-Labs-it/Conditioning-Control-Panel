@@ -115,10 +115,9 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { App.Logger?.Debug("VideoService: floating drag failed - {Error}", ex.Message); }
         }
 
-        /// <summary>The first cut's drag (a native caption move). FloatingVideoFrame owns motion
-        /// (fling and bounce) once its body lands: set this to false then, or the two fight over
-        /// the same press.</summary>
-        private static readonly bool LegacyCaptionDrag = true;
+        /// <summary>The first cut's drag (a native caption move). Off: FloatingVideoFrame owns
+        /// motion (fling and bounce) and refuses a caption move on a window it is attached to.</summary>
+        private static readonly bool LegacyCaptionDrag = false;
 
         private const int WM_NCLBUTTONDOWN = 0x00A1;
         private const int HTCAPTION = 2;

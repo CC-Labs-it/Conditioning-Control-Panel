@@ -186,11 +186,12 @@ public class FloatingVideoMultiTests
         Assert.DoesNotContain(".Volume =", companions);
         // Every window goes through the frame contract, with a mute delegate.
         Assert.Contains("FloatingVideoFrame.Attach(win, SetPrimaryFocusMuted)", companions);
-        Assert.Contains("FloatingVideoFrame.Attach(win, muted => SetCompanionMuted(c, muted))", companions);
+        Assert.Contains("FloatingVideoFrame.Attach(win);", companions);
+        // The frame can only add silence: a companion is loaded with the real volume, unmuted.
+        Assert.Contains("muted = eff <= 0,", companions);
+        Assert.DoesNotContain("muted = true", companions);
         Assert.Contains("surface.StartMotion(", companions);
         Assert.Contains("surface.Detach()", companions);
-        // A volume change does not hand the sound back to a primary that gave it away.
-        Assert.Contains("effectiveVolume <= 0 || _primaryFocusMuted", Source("Services", "Video", "VideoService.cs"));
     }
 
     [Fact]

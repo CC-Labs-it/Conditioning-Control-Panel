@@ -31,7 +31,6 @@ namespace ConditioningControlPanel.Services
             public System.Drawing.Rectangle Bounds { get; init; }
             public IFloatingVideoSurface? Surface { get; set; }
             public DispatcherTimer? FirstFrameWatch { get; set; }
-            public bool Muted { get; set; } = true;
             public bool Playing { get; set; }
             public bool Closed { get; set; }
         }
@@ -42,8 +41,10 @@ namespace ConditioningControlPanel.Services
         private IFloatingVideoSurface? _primarySurface;
         private string? _floatPrimaryClip;
 
-        // The primary lost the sound to a companion. A browser primary is muted in its page; a
-        // LibVLC primary by deselecting ITS audio track (LibVLC Mute/Volume are process-wide).
+        // The engines always carry the REAL volume, unmuted: the frame can only add silence, and
+        // lifting it restores what the engine last loaded. A browser window is silenced by the
+        // frame itself; the LibVLC primary through this delegate state, by deselecting ITS audio
+        // track (LibVLC Mute/Volume are process-wide).
         private bool _primaryFocusMuted;
         private bool _primaryEverFocusMuted;
         private int _primaryAudioTrack = -1;
@@ -141,12 +142,7 @@ namespace ConditioningControlPanel.Services
             if (!muted && !_primaryEverFocusMuted) return;
             _primaryFocusMuted = muted;
             _primaryEverFocusMuted = true;
-            if (_browserActive)
-            {
-                var eff = GetEffectiveVolume();
-                _browser?.SetVolume(eff / 100.0, eff <= 0 || muted);
-                return;
-            }
+            if (_browserActive) return;   // the frame silences a browser window's page itself
             var player = _primaryMediaPlayer;
             if (player != null) Task.Run(() => ApplyPrimaryAudioTrack(player));
         }
@@ -180,19 +176,16 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { App.Logger?.Debug("VideoService: floating audio track switch failed - {Error}", ex.Message); }
         }
 
-        private void SetCompanionMuted(FloatingCompanion c, bool muted)
-        {
-            c.Muted = muted;
-            if (c.Closed) return;
-            var eff = GetEffectiveVolume();
-            try { c.Window.Post(new { type = "setVolume", volume = eff / 100.0, muted = muted || eff <= 0 }); }
-            catch (Exception ex) { Diag.Swallowed(ex); }
-        }
-
-        /// <summary>A volume change reaches every companion and keeps the focus mute.</summary>
+        /// <summary>A volume change reaches every companion: the real volume, never a focus mute
+        /// (that is the frame's, through SetMuted).</summary>
         private void RefreshCompanionVolumes()
         {
-            foreach (var c in _companions.ToList()) SetCompanionMuted(c, c.Muted);
+            var eff = GetEffectiveVolume();
+            foreach (var c in _companions.ToList())
+            {
+                try { c.Window.Post(new { type = "setVolume", volume = eff / 100.0, muted = eff <= 0 }); }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            }
         }
 
         /// <summary>The grace pause holds every window, and its release starts them again.</summary>
@@ -251,13 +244,15 @@ namespace ConditioningControlPanel.Services
                 win.InitFailed += OnCompanionInitFailed;
                 win.ProcessFailed += OnCompanionProcessFailed;
 
-                // Loaded silent; the focus pass below gives the newest window the sound.
+                // Loaded with the real volume, unmuted: the focus pass below silences every window
+                // but the newest through its frame, and a window loaded muted could never take the sound.
+                var eff = GetEffectiveVolume();
                 win.Post(new
                 {
                     type = "load",
                     url,
-                    volume = GetEffectiveVolume() / 100.0,
-                    muted = true,
+                    volume = eff / 100.0,
+                    muted = eff <= 0,
                     blurBackground = App.Settings?.Current?.VideoBlurredBackgroundEnabled == true,
                     hideCursor = false,
                     startAtMs = 0L,
@@ -268,7 +263,7 @@ namespace ConditioningControlPanel.Services
                 PreventClickRaise(win);
 
                 _companions.Add(c);
-                c.Surface = FloatingVideoFrame.Attach(win, muted => SetCompanionMuted(c, muted));
+                c.Surface = FloatingVideoFrame.Attach(win);   // a browser window: the frame silences it
                 AdoptSurface(c.Surface);
                 ApplyAudioFocus();
 
@@ -332,13 +327,8 @@ namespace ConditioningControlPanel.Services
                     PostAfterPageMessage(() => CloseCompanion(c, "page error " + ((int?)o["code"] ?? 0)));
                     break;
                 case "click":
-                    // The page posts this on pointerdown: a touch, and the first cut's drag.
-                    PostAfterPageMessage(() =>
-                    {
-                        if (c.Closed) return;
-                        if (c.Surface != null) OnFloatingTouched(c.Surface);
-                        BeginFloatingDrag(c.Window);
-                    });
+                    // The page posts this on pointerdown: a touch (the frame reports its own too).
+                    PostAfterPageMessage(() => { if (!c.Closed && c.Surface != null) OnFloatingTouched(c.Surface); });
                     break;
             }
         }

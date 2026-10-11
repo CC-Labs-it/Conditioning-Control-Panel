@@ -1705,8 +1705,7 @@ namespace ConditioningControlPanel.Services
 
             // Browser session: one message carries master x video volume AND the external mute
             // (GetEffectiveVolume already folds the mute in, so both halves agree).
-            // A primary that gave the sound to a floating companion stays silent through a volume change.
-            if (_browserActive) _browser?.SetVolume(effectiveVolume / 100.0, effectiveVolume <= 0 || _primaryFocusMuted);
+            if (_browserActive) _browser?.SetVolume(effectiveVolume / 100.0, effectiveVolume <= 0);
             RefreshCompanionVolumes();
 
             // Update LibVLC media players (thread-safe snapshot)
