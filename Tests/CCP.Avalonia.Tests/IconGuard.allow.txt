@@ -59,3 +59,5 @@ Views/Tabs/SpiralTabView.axaml :: <Path x:Name="SplashGlyph" :: path: D6 art - s
 Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralPath" :: path: D6 art - launcher spiral
 Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralSmallPath" :: path: D6 art - launcher spiral
 Views/Windows/MainShellWindow.axaml :: <Path Stretch="Fill" Stroke="#FFE5C76B" StrokeThickness="1.2" :: path: D6 art - fuse ticket frame
+Views/Controls/Companion/CompanionRoomPreviewWindow.axaml :: narrow ⇄ wide :: arrow between two words of a dev-preview button label, typography (content (c).4)
+App.axaml.cs :: Glyph = "👗" :: InboxItem.Glyph is Core row data, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon - IconMap maps 👗 to Wand once it draws via IconGlyph Emoji=

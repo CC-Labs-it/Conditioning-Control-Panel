@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Views.Controls.Companion;
 
@@ -97,7 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                     Index = i,
                     Name = ResolveStage(i, modId),
                     // Mockup glyph ladder: reached ✦, here ★, still ahead ✧ (the runtime's only glyph).
-                    Glyph = state switch { ConstellationNodeState.Filled => "✦", ConstellationNodeState.Current => "★", _ => "✧" },
+                    GlyphKind = state == ConstellationNodeState.Current ? IconKind.Star : IconKind.Sparkle,
+                    GlyphVariant = state == ConstellationNodeState.Future ? IconVariant.Regular : IconVariant.Filled,
                     Description = Loc.Get($"companion_stage_{i}_blurb"),
                     IsFilled = state == ConstellationNodeState.Filled,
                     IsCurrent = state == ConstellationNodeState.Current,
@@ -143,7 +145,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     {
         public int Index { get; init; }
         public string Name { get; init; } = string.Empty;
-        public string Glyph { get; init; } = string.Empty;
+        public IconKind GlyphKind { get; init; } = IconKind.Sparkle;
+        public IconVariant GlyphVariant { get; init; } = IconVariant.Regular;
         public string Description { get; init; } = string.Empty;
         public bool IsFilled { get; init; }
         public bool IsCurrent { get; init; }

@@ -14,6 +14,7 @@
        hero ImageBrush              ->  dropped (see the comment at the header band) -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -74,7 +75,7 @@
                 <Border Width="34" Height="34" CornerRadius="10" Margin="0,0,11,0"
                         Background="{StaticResource CmpElevBrush}"
                         BorderBrush="{StaticResource CmpHairlineBrush}" BorderThickness="1">
-                    <TextBlock Text="🧠" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="BrainCircuit" Size="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <TextBlock Text="{loc:Str lab_ai_effects_memory_title}" Theme="{StaticResource CmpSectionTitleStyle}"/>
                 <Border Theme="{StaticResource CmpTrainTagStyle}" Margin="9,0,0,0">
@@ -179,7 +180,7 @@
                           AutomationProperties.AutomationId="CompanionPermissionsLockBand">
                         <Border Theme="{StaticResource CmpVeilStyle}"/>
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <TextBlock Text="🔒" Theme="{StaticResource CmpLockGlyphStyle}" HorizontalAlignment="Center"/>
+                            <fx:IconGlyph Theme="{StaticResource CmpLockGlyphStyle}" HorizontalAlignment="Center"/>
                             <TextBlock Text="{loc:Str hm3_rail_lock_t2}" HorizontalAlignment="Center"
                                        Margin="0,6,0,0" FontSize="13" FontWeight="Bold"
                                        Foreground="{StaticResource CmpPurpleBrush}"/>

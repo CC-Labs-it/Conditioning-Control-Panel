@@ -37,6 +37,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              mc:Ignorable="d"
              d:DesignWidth="430" d:DesignHeight="620">
 
@@ -168,9 +169,12 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="{Binding Label}" Theme="{StaticResource CmpDenyChipTextStyle}"
                                    VerticalAlignment="Center"/>
-                        <Button Classes="cmpChipClose" Content="✕" Theme="{StaticResource CmpZ5ChipCloseStyle}"
+                        <Button Classes="cmpChipClose" Theme="{StaticResource CmpZ5ChipCloseStyle}"
                                 Command="{Binding RemoveCommand}"
-                                ToolTip.Tip="{loc:Str companion_awareness_deny_remove_tip}"/>
+                                ToolTip.Tip="{loc:Str companion_awareness_deny_remove_tip}"
+                                AutomationProperties.Name="{loc:Str companion_awareness_deny_remove_tip}">
+                            <fx:IconGlyph Kind="Dismiss" Size="9"/>
+                        </Button>
                     </StackPanel>
                 </Border>
             </DataTemplate>
@@ -182,9 +186,12 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="{Binding Label}" Theme="{StaticResource CmpDenyChipTextStyle}"
                                    VerticalAlignment="Center"/>
-                        <Button Classes="cmpChipClose" Content="✕" Theme="{StaticResource CmpZ5ChipCloseStyle}"
+                        <Button Classes="cmpChipClose" Theme="{StaticResource CmpZ5ChipCloseStyle}"
                                 Command="{Binding RemoveCommand}"
-                                ToolTip.Tip="{loc:Str companion_awareness_allow_remove_tip}"/>
+                                ToolTip.Tip="{loc:Str companion_awareness_allow_remove_tip}"
+                                AutomationProperties.Name="{loc:Str companion_awareness_allow_remove_tip}">
+                            <fx:IconGlyph Kind="Dismiss" Size="9"/>
+                        </Button>
                     </StackPanel>
                 </Border>
             </DataTemplate>
@@ -225,7 +232,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="👁" FontSize="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="Eye" Size="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Str companion_awareness_title}" Theme="{StaticResource CmpSectionTitleStyle}"/>
                 </StackPanel>
                 <!-- live once Train 2 landed; the bridge exhibit still wears the train tag -->
@@ -250,7 +257,7 @@
                     IsVisible="{Binding IsLegacyPipeline}">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                        <TextBlock Text="⚠️" FontSize="11" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="Warning" Variant="Filled" Size="11" Foreground="{DynamicResource IconWarnBrush}" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding LegacyHead}" Foreground="#FF6B6B" FontSize="11.5"
                                    FontWeight="Bold" VerticalAlignment="Center" Margin="5,0,0,0"
                                    TextWrapping="Wrap"/>
@@ -280,23 +287,29 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <RadioButton Grid.Column="0" GroupName="CmpAwarenessDial" Content="{loc:Str companion_awareness_dial_off}"
+                    <RadioButton Grid.Column="0" GroupName="CmpAwarenessDial"
                                  Theme="{StaticResource CmpSegmentStyle}"
                                  IsChecked="{Binding Intensity, Mode=TwoWay,
-                                             Converter={StaticResource CmpEnumEquals}, ConverterParameter=Off}"/>
-                    <RadioButton Grid.Column="1" GroupName="CmpAwarenessDial" Content="{loc:Str companion_awareness_dial_broad}"
+                                             Converter={StaticResource CmpEnumEquals}, ConverterParameter=Off}">
+                        <fx:IconLabel Key="companion_awareness_dial_off" Kind="Subtract"/>
+                    </RadioButton>
+                    <RadioButton Grid.Column="1" GroupName="CmpAwarenessDial"
                                  Theme="{StaticResource CmpSegmentStyle}"
                                  IsChecked="{Binding Intensity, Mode=TwoWay,
-                                             Converter={StaticResource CmpEnumEquals}, ConverterParameter=BroadStrokes}"/>
+                                             Converter={StaticResource CmpEnumEquals}, ConverterParameter=BroadStrokes}">
+                        <fx:IconLabel Key="companion_awareness_dial_broad" Kind="CircleHalfFill"/>
+                    </RadioButton>
                     <!-- pre-Train 2 the third stop is present but not selectable, and says why.
                          A disabled control swallows ToolTip unless told otherwise. -->
-                    <RadioButton Grid.Column="2" GroupName="CmpAwarenessDial" Content="{loc:Str companion_awareness_dial_everything}"
+                    <RadioButton Grid.Column="2" GroupName="CmpAwarenessDial"
                                  Theme="{StaticResource CmpSegmentStyle}"
                                  IsEnabled="{Binding IsEverythingAvailable}"
                                  ToolTip.Tip="{Binding EverythingLockedTip}"
                                  ToolTip.ShowOnDisabled="True"
                                  IsChecked="{Binding Intensity, Mode=TwoWay,
-                                             Converter={StaticResource CmpEnumEquals}, ConverterParameter=Everything}"/>
+                                             Converter={StaticResource CmpEnumEquals}, ConverterParameter=Everything}">
+                        <fx:IconLabel Key="companion_awareness_dial_everything" Kind="RadioButton"/>
+                    </RadioButton>
                 </Grid>
             </Border>
 

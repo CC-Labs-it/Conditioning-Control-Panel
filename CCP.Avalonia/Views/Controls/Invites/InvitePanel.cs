@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -190,7 +191,7 @@ public sealed class InvitePanel : Border
                 Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = B("#CC12121F"), BorderBrush = Edge,
                 BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, -4, -4),
-                Child = new TextBlock { Text = "🔒", FontSize = 9, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Child = new IconGlyph { Kind = IconKind.LockClosed, Size = 10, Foreground = Muted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },   // WPF MDL2 E72E
             });
         stack.Children.Add(badge);
         stack.Children.Add(new TextBlock

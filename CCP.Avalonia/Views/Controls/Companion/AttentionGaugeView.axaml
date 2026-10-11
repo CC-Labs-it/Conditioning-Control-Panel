@@ -27,6 +27,7 @@
      port unchanged; no ActualWidth arithmetic was introduced. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.AttentionGaugeView"
@@ -115,7 +116,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="💗" FontSize="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="Heart" Variant="Filled" Size="16" Foreground="{DynamicResource PinkBrush}" Margin="0,0,9,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding LocTitle}" Theme="{StaticResource CmpSectionTitleStyle}"/>
                 </StackPanel>
                 <Border Grid.Column="2" Theme="{StaticResource CmpTrainTagLiveStyle}">

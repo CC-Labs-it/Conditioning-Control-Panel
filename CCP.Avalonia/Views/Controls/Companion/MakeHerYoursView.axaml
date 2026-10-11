@@ -32,6 +32,8 @@
      because the WPF original merges per-control too. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView"
              x:DataType="local:MakeHerYoursViewModel"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -138,7 +140,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="🪞" FontSize="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="PersonEdit" Size="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding LocPersonalityTitle}" Theme="{StaticResource CmpSectionTitleStyle}"/>
                 </StackPanel>
                 <Border x:Name="PreviewTrainTag" Grid.Column="2" Theme="{StaticResource CmpTrainTagStyle}">
@@ -195,9 +197,13 @@
                         </Border>
 
                         <StackPanel Margin="0,0,58,0">
-                            <TextBlock Text="{Binding InterviewTitle}" FontFamily="Fredoka, Segoe UI"
-                                       FontWeight="SemiBold" FontSize="16" Foreground="White"
-                                       TextWrapping="Wrap" Effect="{StaticResource CmpSectionGlow}"/>
+                            <Grid ColumnDefinitions="Auto,*">
+                                <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="16" Foreground="White"
+                                              Margin="0,0,6,0" VerticalAlignment="Top"/>
+                                <TextBlock Grid.Column="1" Text="{loc:StrBare companion_personality_interview_title}" FontFamily="Fredoka, Segoe UI"
+                                           FontWeight="SemiBold" FontSize="16" Foreground="White"
+                                           TextWrapping="Wrap" Effect="{StaticResource CmpSectionGlow}"/>
+                            </Grid>
 
                             <!-- live copy -->
                             <TextBlock Text="{Binding InterviewBody}" Margin="0,5,0,0" FontSize="11.5"
@@ -270,7 +276,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="🔥" FontSize="15" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Grid.Column="0" Kind="Fire" Variant="Filled" Size="15" Foreground="{DynamicResource IconFireBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding SpiceTitle}" Theme="{StaticResource Type.Body}" Foreground="{DynamicResource TextLightBrush}" TextWrapping="NoWrap"/>
                         <TextBlock Text="{Binding SpiceSubtitle}" Theme="{StaticResource Type.Caption}" Margin="0,1,0,0"/>

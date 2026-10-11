@@ -40,6 +40,7 @@
                                            x:DataType gives the compiled bindings their types. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.WorkshopAccordion"
              x:DataType="local:IWorkshopAccordionVm"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -198,7 +199,7 @@
               IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
         <Expander.Header>
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="🔧" FontSize="14" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Wrench" Size="14" Margin="0,0,10,0" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding $parent[local:WorkshopAccordion].Strings.LocHeader}"
                            Theme="{StaticResource CmpDrawerHeaderTextStyle}"/>
             </StackPanel>
