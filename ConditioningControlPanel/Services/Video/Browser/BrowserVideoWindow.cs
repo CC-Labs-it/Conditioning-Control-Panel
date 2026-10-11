@@ -167,7 +167,47 @@ namespace ConditioningControlPanel.Services.Video.Browser
         }
 
         /// <summary>Post a message to the page; queued until the page's <c>ready</c> handshake.</summary>
-        public void Post(object msg) => _surface.Post(msg);
+        public void Post(object msg) => _surface.Post(WithFloatingMute(msg));
+
+        // ---- floating: this window's own sound ----
+
+        /// <summary>Null until a floating frame takes charge of this window's sound.</summary>
+        private bool? _floatMuted;
+        /// <summary>What the engine last asked for, so letting go of the mute restores exactly that.</summary>
+        private bool _engineMuted;
+
+        /// <summary>
+        /// Silence or restore THIS page's video (FloatingVideoFrame.SetMuted). The frame can only
+        /// add silence: unmuting hands the sound back as the engine last set it, at the engine's
+        /// volume. Every later <c>load</c> / <c>setVolume</c> the engine posts keeps the mute.
+        /// </summary>
+        public void SetFloatingMuted(bool muted)
+        {
+            _floatMuted = muted;
+            _surface.Post(new { type = "setVolume", muted = muted || _engineMuted });
+        }
+
+        /// <summary>The engine's <c>load</c> and <c>setVolume</c> carry their own <c>muted</c>;
+        /// while the frame holds this window silent, that flag goes out as true.</summary>
+        private object WithFloatingMute(object msg)
+        {
+            try
+            {
+                var o = msg as JObject ?? JObject.FromObject(msg);
+                var type = (string?)o["type"];
+                if (type != "load" && type != "setVolume") return msg;
+                if (o["muted"]?.Type == JTokenType.Boolean) _engineMuted = (bool)o["muted"]!;
+                else if (type == "setVolume") return msg;   // volume only: the page keeps its mute
+                if (_floatMuted == null) return msg;
+                o["muted"] = _floatMuted.Value || _engineMuted;
+                return o;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("BrowserVideo[{Tag}].WithFloatingMute: {E}", _tag, ex.Message);
+                return msg;
+            }
+        }
 
         /// <summary>Unhook + dispose the WebView2. Runs on Close() too, so the shared teardown funnel
         /// (VideoService.CloseAll closes every window in its list) is enough to end a session cleanly.</summary>
