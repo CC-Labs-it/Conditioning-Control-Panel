@@ -179,6 +179,23 @@ public sealed class NavRailPaintTests
     }
 
     [Fact]
+    public void GlowCurve_FollowsWpfCues_ReducedHoldsStatic()
+    {
+        // WPF NavRail/NavGlow.cs: Full = 600 ms sheen, 2 s hold at 0.8, 400 ms fade; Reduced = 0.85 for 2 s.
+        Assert.Equal(0.0, NavGlowRing.OpacityAt(MotionLevel.Full, 0), 3);
+        Assert.Equal(1.0, NavGlowRing.OpacityAt(MotionLevel.Full, 300), 3);
+        Assert.Equal(0.8, NavGlowRing.OpacityAt(MotionLevel.Full, 600), 3);
+        Assert.Equal(0.8, NavGlowRing.OpacityAt(MotionLevel.Full, 2599), 3);
+        Assert.Equal(0.4, NavGlowRing.OpacityAt(MotionLevel.Full, 2800), 3);   // half the fade
+        Assert.Equal(0.0, NavGlowRing.OpacityAt(MotionLevel.Full, 3000), 3);
+        Assert.Equal(3000, NavGlow.TotalMs(MotionLevel.Full));
+        Assert.Equal(0.85, NavGlowRing.OpacityAt(MotionLevel.Reduced, 0), 3);
+        Assert.Equal(0.85, NavGlowRing.OpacityAt(MotionLevel.Reduced, 1999), 3);
+        Assert.Equal(2000, NavGlow.TotalMs(MotionLevel.Reduced));
+        Assert.Equal(0, NavGlow.TotalMs(MotionLevel.Off));
+    }
+
+    [Fact]
     public void Title_NamesSectionAndPage_HomeDashboardNamesOnlyTheSection() => Run(MotionLevel.Off, w =>
     {
         const string Base = "Conditioning Control Panel";
