@@ -1873,3 +1873,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/programs-today-card: +502
 - Dashboard Programs Today card + banner art/fog/sheen/sparkles/parallax (shell-program-banner -> wired); loops gated on visibility+motion, stopped on detach.
+
+## avalonia-port/programs-ignition-fx: +833
+- Programs run view ignition rig, built on Core ProgramHeat: heat-tiered ambient loops, particles registered with RegisterTabFx("programs"), and the day/chapter/graduation moments. Loops follow Motion, tab visibility and minimise (like WPF), and stop on detach. Brush and transform loops run on a per-frame driver, because Avalonia 12 gives them no clock.
+- 3 headless tests, 10 mutations each turned them red; headless frame-timing CSV plus a per-loop motion CSV (angle, shimmer, comet); live run (lit but still: the window was inactive). Bursts, pip pulse and session sheen still missing.
