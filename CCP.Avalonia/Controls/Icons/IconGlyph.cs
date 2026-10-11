@@ -63,6 +63,20 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         public IconGlyph() => Rebuild();
 
+        /// <summary>Code-built icon; <paramref name="brush"/> is an <see cref="IconBrushes"/> key (live resource).</summary>
+        public static IconGlyph Of(IconKind kind, IconVariant variant = IconVariant.Regular, string? brush = null, double size = 16)
+        {
+            var g = new IconGlyph { Kind = kind, Variant = variant, Size = size, VerticalAlignment = VerticalAlignment.Center };
+            if (brush != null) g.Bind(ForegroundProperty, g.GetResourceObservable(brush));
+            return g;
+        }
+
+        private static IconGlyph WithBrand(IconGlyph g, IconBrand b) { g.Brand = b; return g; }
+
+        /// <summary>Code-built icon from an id map (IconMap.ForSkill/ForFeature); unmapped -> the emoji as content.</summary>
+        public static IconGlyph Of(IconEntry? entry, string? fallbackEmoji, double size = 16) =>
+            entry is { } e ? WithBrand(Of(e.Kind, e.Variant, e.Brush, size), e.Brand) : new IconGlyph { Emoji = fallbackEmoji, Size = size, VerticalAlignment = VerticalAlignment.Center };
+
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);

@@ -125,6 +125,18 @@ public sealed class IconGlyphRenderTests
     });
 
     [Fact]
+    public void IconLabelRerendersWhenOnlyItsArgsChange() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        // A reroll budget ticking 3 -> 2 keeps the key; the label must still re-read Loc.GetF.
+        var reroll = IconLabel.ForKey("btn_reroll_with_count", 3);    // en: "🔄 Reroll ({0})"
+        Assert.Equal(IconKind.ArrowSync, reroll.Children.OfType<IconGlyph>().Single().Kind);
+        reroll.Args = new object[] { 2 };
+        Assert.Equal(IconText.Bare(ConditioningControlPanel.Localization.Loc.GetF("btn_reroll_with_count", 2)), reroll.Label.Text);
+        Assert.Contains("2", reroll.Label.Text);
+    });
+
+    [Fact]
     public void PremiumGateFindsAnIconGlyphPadlock() => AvaloniaTestDispatcher.Run(() =>
     {
         Platform();

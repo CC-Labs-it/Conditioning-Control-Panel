@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -153,7 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var image = this.FindControl<Image>("ItemImage")!;
             image.Source = art;
             image.IsVisible = art != null;
-            this.FindControl<TextBlock>("FallbackGlyphText")!.IsVisible = art == null;
+            this.FindControl<IconGlyph>("FallbackGlyphText")!.IsVisible = art == null;
         }
 
         private void FadeOutAndClose()

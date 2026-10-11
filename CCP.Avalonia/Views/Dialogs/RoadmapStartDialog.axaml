@@ -11,6 +11,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.RoadmapStartDialog"
         Title="{loc:Str dialog_start_step}"
         Width="480" Height="340"
@@ -44,7 +45,7 @@
                          .Text from the code-behind. Avalonia keeps the binding alive under a local
                          value, so the boss trophy would revert to 📷 on the next language change;
                          the icon is set from code for both step types instead. -->
-                    <TextBlock x:Name="TxtStepIcon" FontSize="24" VerticalAlignment="Center"/>
+                    <fx:IconGlyph x:Name="TxtStepIcon" Kind="Camera" Size="24" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Str label_ready_to_complete}" Foreground="{StaticResource PinkBrush}" FontSize="20"
                                FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>

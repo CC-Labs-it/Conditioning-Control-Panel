@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -226,8 +227,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 : record.SessionCompleted ? ("programs_session_done", false, null)
                 : running ? ("programs_session_other_running", false, "programs_session_other_running_hint")
                 : ("btn_program_start_session", enrollment.State != ProgramEnrollmentState.Paused, (string?)null);
-            var glyph = Find<TextBlock>("TxtTodaySessionGlyph");
-            glyph.Text = ours ? "◉" : record.SessionCompleted ? "✓" : "○";
+            var glyph = Find<IconGlyph>("TxtTodaySessionGlyph");
+            glyph.Kind = ours ? IconKind.RadioButton : record.SessionCompleted ? IconKind.Checkmark : IconKind.Circle;
             glyph.Foreground = ours || record.SessionCompleted ? accent : muted;
             var button = Find<Button>("BtnStartTodaySession");
             button.IsEnabled = enabled && !svc.IsReadOnly;
@@ -258,7 +259,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var milestone = day != null && (day.IsBoss || !string.IsNullOrWhiteSpace(day.RewardDescription));
                 if (milestone)
                 {
-                    pip.RewardGlyph = day!.IsBoss ? "👑" : "🎁";
+                    pip.RewardIcon = day!.IsBoss ? IconKind.Crown : IconKind.Gift;
+                    pip.RewardVariant = day.IsBoss ? IconVariant.Filled : IconVariant.Regular;
+                    pip.RewardBrush = day.IsBoss ? Theme("IconGoldBrush", Brushes.Gold) : light;
                     pip.RewardVisible = true;
                     pip.RewardTip = !string.IsNullOrWhiteSpace(day.RewardDescription)
                         ? day.RewardDescription! : Loc.Get("programs_boss_badge");
@@ -282,7 +285,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     pip.Fill = accent;
                     pip.Stroke = accent;
-                    pip.Label = "✓";
+                    pip.Label = "";
+                    pip.LabelIcon = IconKind.Checkmark;
+                    pip.LabelIconVisible = true;
                     pip.LabelBrush = light;
                     pip.LabelWeight = FontWeight.Bold;
                     pip.NodeSize = 32;
@@ -292,7 +297,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 else if (record?.Missed == true)
                 {
                     pip.Stroke = danger;
-                    pip.Label = "✕";
+                    pip.Label = "";
+                    pip.LabelIcon = IconKind.Dismiss;
+                    pip.LabelIconVisible = true;
                     pip.LabelBrush = danger;
                     pip.NodeSize = 32;
                     tip = Loc.GetF("programs_pip_missed", i);
@@ -413,7 +420,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Description = task.Description,
                     HowTo = howTo ?? "",
                     HowToVisible = !string.IsNullOrWhiteSpace(howTo),
-                    StatusGlyph = complete ? "✓" : "○",
+                    StatusIcon = complete ? IconKind.Checkmark : IconKind.Circle,
                     StatusBrush = complete ? accent : muted,
                     TextBrush = complete ? muted : light,
                     RowOpacity = isBlocked ? 0.5 : 1.0,
@@ -584,7 +591,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Title = next.Title,
                     Meta = string.Join("  ·  ", parts),
                     DayBrush = next.IsBoss ? accent : muted,
-                    Glyph = next.IsBoss ? "👑" : "",
                     GlyphTip = next.IsBoss ? Loc.Get("programs_boss_badge") : "",
                     GlyphVisible = next.IsBoss,
                     RowOpacity = 1.0 - (i * 0.18)
