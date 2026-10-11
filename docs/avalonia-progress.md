@@ -1870,3 +1870,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/startup-ladder-clock: +101
 - The StartupLadder held-card re-check now runs on the ladder's steppable clock where it used to run on a real DispatcherTimer. Tests default to a stand-still TestClock, so no intro card can open on its own in the middle of a test's input (root fix for P76).
+
+## avalonia-port/programs-today-card: +502
+- Dashboard Programs Today card + banner art/fog/sheen/sparkles/parallax (shell-program-banner -> wired); loops gated on visibility+motion, stopped on detach.
