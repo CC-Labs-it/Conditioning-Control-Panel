@@ -56,6 +56,8 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
         {
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
+            // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time = new ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock();
             // A real ShowcaseProvider fetches its manifest and clips; a late Changed would put a card in
             // another test's deck (P02/P56). Every shell gets a silent one; the snapshot restores it.
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.MakeShowcase = () => SilentShowcase.Instance;

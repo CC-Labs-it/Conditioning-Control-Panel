@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Startup;
@@ -27,9 +29,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static DateTime? _firstLaunchUntilUtc;
         private static DateTime? _lastPassiveUtc;
         private static readonly List<InboxItem> _held = new();
-        private static DispatcherTimer? _passiveTimer;
+        private static ITimer? _passiveTimer;
 
-        /// <summary>The ladder's clock; tests step it (PLAYBOOK P08).</summary>
+        /// <summary>WPF's 1 s re-check of the held surfaces (Services/Startup/StartupPresenter.cs:541).</summary>
+        internal static readonly TimeSpan PassiveRecheck = TimeSpan.FromSeconds(1);
+
+        /// <summary>The ladder's clock, which also drives the held-surface re-check, so a test that steps it
+        /// decides exactly when a held card opens and one that does not never gets a card mid-input (P08, P76).</summary>
         internal static TimeProvider Time = TimeProvider.System;
         private static DateTime UtcNow => Time.GetUtcNow().UtcDateTime;
 
@@ -96,16 +102,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static void EnsurePassiveWatch()
         {
             if (_passiveTimer != null) return;
-            _passiveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _passiveTimer.Tick += (_, _) => PumpHeld();
-            _passiveTimer.Start();
+            // Same cadence and UI-thread priority as the DispatcherTimer it replaces; a stepped clock fires
+            // it on the stepping (UI) thread, the system clock on the pool, which posts back.
+            _passiveTimer = Time.CreateTimer(_ =>
+            {
+                if (Dispatcher.UIThread.CheckAccess()) PumpHeld();
+                else Dispatcher.UIThread.Post(PumpHeld, DispatcherPriority.Background);
+            }, null, PassiveRecheck, PassiveRecheck);
         }
 
         /// <summary>One tick of the watch: re-routes the held surfaces once nothing passive is up.</summary>
         internal static void PumpHeld()
         {
             if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
-            _passiveTimer?.Stop();
+            _passiveTimer?.Dispose();
             _passiveTimer = null;
             var held = _held.ToList();
             _held.Clear();
@@ -119,10 +129,48 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _lastPassiveUtc = null;
             _held.Clear();
             _passiveUp.Clear();   // a card another test left open must not hold this test's surface
-            _passiveTimer?.Stop();
+            _passiveTimer?.Dispose();
             _passiveTimer = null;
-            Time = TimeProvider.System;
+            // A held clock, not the system one: a held card opens only when a test steps it (P76).
+            Time = new TestClock();
             Inbox.Items.Clear();
+        }
+
+        /// <summary>Test clock: stands still until <see cref="Advance"/>, which fires the timers that fall due.</summary>
+        internal sealed class TestClock : TimeProvider
+        {
+            public DateTimeOffset Now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
+            public readonly List<Timer> Timers = new();
+            public override DateTimeOffset GetUtcNow() => Now;
+
+            public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            {
+                var t = new Timer(this, () => callback(state), Now + dueTime, period);
+                Timers.Add(t);
+                return t;
+            }
+
+            public void Advance(TimeSpan by)
+            {
+                var end = Now + by;
+                while (Timers.Where(t => t.Due <= end).OrderBy(t => t.Due).FirstOrDefault() is { } t)
+                {
+                    Now = t.Due;
+                    if (t.Period > TimeSpan.Zero) t.Due += t.Period; else Timers.Remove(t);
+                    t.Fire();
+                }
+                Now = end;
+            }
+
+            internal sealed class Timer(TestClock clock, Action fire, DateTimeOffset due, TimeSpan period) : ITimer
+            {
+                public readonly Action Fire = fire;
+                public DateTimeOffset Due = due;
+                public readonly TimeSpan Period = period;
+                public bool Change(TimeSpan dueTime, TimeSpan p) => false;
+                public void Dispose() => clock.Timers.Remove(this);
+                public ValueTask DisposeAsync() { Dispose(); return default; }
+            }
         }
     }
 }
