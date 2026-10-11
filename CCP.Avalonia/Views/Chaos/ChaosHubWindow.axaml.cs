@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
@@ -13,6 +14,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -86,7 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private readonly Panel _grpDifficulty, _grpLength, _grpMotion, _grpPool;
         private readonly UniformGrid _tilesAccessories, _tilesSkills, _tilesHabits;
         private readonly TextBlock _txtHint, _txtRank, _txtSparks, _txtGold, _menuRank, _menuSparks, _menuGold;
-        private readonly TextBlock _txtAccCount, _txtSkillCount, _txtHabitCount, _txtWaves, _menuMuteIcon;
+        private readonly TextBlock _txtAccCount, _txtSkillCount, _txtHabitCount, _txtWaves;
+        private readonly IconGlyph _menuMuteIcon;
         private readonly TextBlock _stSparks, _stRuns, _stTimeUnder, _stBestScore, _stBestCombo, _stDefused, _stTimeHeld;
         private readonly TextBlock _howToStep, _howToTitle, _hdrDiary;
         private readonly Button _howToBack, _howToNext, _btnMenuStory;
@@ -125,6 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _tabImprove = Part<ToggleButton>("TabImprove");
             _tabDiary = Part<ToggleButton>("TabDiary");
             _tglTesting = Part<ToggleButton>("TglTesting");
+            _tglTesting.Content = TestingLabel(false);
             _segMedium = Part<ToggleButton>("SegMedium");
             _segHard = Part<ToggleButton>("SegHard");
             _segExtreme = Part<ToggleButton>("SegExtreme");
@@ -161,7 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _txtSkillCount = Part<TextBlock>("TxtSkillCount");
             _txtHabitCount = Part<TextBlock>("TxtHabitCount");
             _txtWaves = Part<TextBlock>("TxtWaves");
-            _menuMuteIcon = Part<TextBlock>("MenuMuteIcon");
+            _menuMuteIcon = Part<IconGlyph>("MenuMuteIcon");
             _stSparks = Part<TextBlock>("StSparks");
             _stRuns = Part<TextBlock>("StRuns");
             _stTimeUnder = Part<TextBlock>("StTimeUnder");
@@ -296,11 +300,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>Settings tab: fold the dev/test knobs (bubble pool, mantra toggles, loops)
         /// in and out. Collapsed every open — the casual read stays short.</summary>
+        /// <summary>WPF "🧪 testing options ▸/▾": a Tier-2 violet beaker and a fold chevron.</summary>
+        private static StackPanel TestingLabel(bool open)
+        {
+            var label = Glyphed(13, IconKind.Beaker, "testing options", open ? IconKind.ChevronDown : IconKind.ChevronRight);
+            label.Children[0].Bind(IconGlyph.ForegroundProperty, label.Children[0].GetResourceObservable(IconBrushes.Tier2));
+            return label;
+        }
+
         private void TestingToggle_Click(object? sender, RoutedEventArgs e)
         {
             bool open = _tglTesting.IsChecked == true;
             _testingBody.IsVisible = open;
-            _tglTesting.Content = open ? "🧪 testing options ▾" : "🧪 testing options ▸";
+            _tglTesting.Content = TestingLabel(open);
         }
 
         /// <summary>A + tile wants to take the player shopping.</summary>
@@ -515,7 +527,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Width = 132 };
             if (owned)
             {
-                if (on) right.Children.Add(StateBadge("ON ✓"));
+                if (on) right.Children.Add(StateBadge("ON"));
                 var toggle = StepperButton(on ? "switch off" : "switch on", u.Id);
                 ToolTip.SetTip(toggle, on ? "switched on — shapes your next descent." : "switched off — sits out the descent.");
                 toggle.Click += HabitToggle_Click;
@@ -523,7 +535,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             else
             {
-                right.Children.Add(BuyButton($"Train  ✦{u.Cost}", u.Id, afford, Buy_Click));
+                right.Children.Add(BuyButton(Glyphed(13, "Train", IconKind.Sparkle, $"{u.Cost}"), u.Id, afford, Buy_Click));
             }
             Grid.SetColumn(right, 2);
             grid.Children.Add(right);
@@ -546,14 +558,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Margin = new Thickness(0, 0, 0, 12)
         };
 
-        private static TextBlock StateBadge(string text) => new()
+        /// <summary>WPF "ON ✓" / "EQUIPPED ✓": the tick is a Checkmark icon after the word.</summary>
+        private static StackPanel StateBadge(string text)
         {
-            Text = text,
-            Foreground = GoldBrush,
-            FontSize = 11, FontWeight = FontWeight.Bold,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 0, 4)
-        };
+            var badge = Glyphed(11, text, IconKind.Checkmark);
+            badge.HorizontalAlignment = HorizontalAlignment.Right;
+            badge.Margin = new Thickness(0, 0, 0, 4);
+            badge[TextElement.ForegroundProperty] = GoldBrush;
+            badge[TextElement.FontSizeProperty] = 11.0;
+            badge[TextElement.FontWeightProperty] = FontWeight.Bold;
+            return badge;
+        }
+
+        /// <summary>fluent-icons L8: a head-authored glyph beside a label ("Train  ✦40", "buy  🪙 12",
+        /// "🧪 testing options ▸") as one row - each IconKind part is a filled icon, each string a TextBlock.</summary>
+        internal static StackPanel Glyphed(double size, params object[] parts)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+            foreach (var part in parts)
+                row.Children.Add(part is IconKind k
+                    ? new IconGlyph { Kind = k, Variant = IconVariant.Filled, Size = size, VerticalAlignment = VerticalAlignment.Center }
+                    : new TextBlock { Text = part.ToString(), VerticalAlignment = VerticalAlignment.Center });
+            return row;
+        }
 
         /// <summary>WPF resolved real art through ChaosArt and fell back to this tinted glyph
         /// square. Only the fallback exists on this head.
@@ -699,11 +726,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             var pips = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
             for (int i = 1; i <= b.MaxLevel; i++)
-                pips.Children.Add(new TextBlock
+                pips.Children.Add(new IconGlyph   // WPF ● / ○: the count of filled pips is the level
                 {
-                    Text = i <= level ? "●" : "○",
+                    Kind = IconKind.Circle, Variant = i <= level ? IconVariant.Filled : IconVariant.Regular,
                     Foreground = new SolidColorBrush(i <= level ? BoonAccent : Color.FromArgb(0x66, 0xB8, 0xB8, 0xD0)),
-                    FontSize = 13, Margin = new Thickness(0, 0, 3, 0)
+                    Size = 12, Margin = new Thickness(0, 0, 3, 0), VerticalAlignment = VerticalAlignment.Center
                 });
             pips.Children.Add(new TextBlock
             {
@@ -722,7 +749,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 // Equip semantics instead of an ambiguous ON/OFF: the badge shows the STATE,
                 // the button is always the ACTION. Pockets cap Toys/Accessories at 2 each.
-                if (active) right.Children.Add(StateBadge(habitVoice ? "ON ✓" : "EQUIPPED ✓"));
+                if (active) right.Children.Add(StateBadge(habitVoice ? "ON" : "EQUIPPED"));
                 bool pocketFree = active || Shelf.HasFreePocket(b.Category);
                 var equip = StepperButton(
                     active ? (habitVoice ? "switch off" : "Unequip")
@@ -739,19 +766,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (rankLocked)
                 {
                     // Mystery: hide the cost too — show only the depth gate.
-                    var held = BuyButton($"🔒 {b.RankFloor}", b.Id, false, BoonUnlock_Click);
+                    var held = BuyButton(Glyphed(13, IconKind.LockClosed, $"{b.RankFloor}"), b.Id, false, BoonUnlock_Click);
                     ToolTip.SetTip(held, RankLockedTip + "\n" + RankSpecifics(b.RankFloor));
                     right.Children.Add(held);
                 }
                 else
                 {
-                    right.Children.Add(BuyButton($"Unlock  ✦{b.UnlockCost}", b.Id, Live.Sparks >= b.UnlockCost, BoonUnlock_Click));
+                    right.Children.Add(BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, Live.Sparks >= b.UnlockCost, BoonUnlock_Click));
                 }
             }
             else if (maxed)
-                right.Children.Add(new TextBlock { Text = "MAX  ✓", Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0xE0, 0x96)), FontSize = 13, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Right });
+                right.Children.Add(new ContentControl { Content = Glyphed(13, "MAX", IconKind.Checkmark), Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0xE0, 0x96)), FontSize = 13, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Right });
             else
-                right.Children.Add(BuyButton($"deepen  ✦{b.UpgradeCost}", b.Id, Live.Sparks >= b.UpgradeCost, BoonUpgrade_Click));
+                right.Children.Add(BuyButton(Glyphed(13, "deepen", IconKind.Sparkle, $"{b.UpgradeCost}"), b.Id, Live.Sparks >= b.UpgradeCost, BoonUpgrade_Click));
 
             Grid.SetColumn(right, 2);
             grid.Children.Add(right);
@@ -759,12 +786,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return ShelfCard(grid, active, unlocked, BoonAccent);
         }
 
-        private Button BuyButton(string text, string id, bool afford, EventHandler<RoutedEventArgs> onClick)
+        private Button BuyButton(Control label, string id, bool afford, EventHandler<RoutedEventArgs> onClick)
         {
             var btn = new Button
             {
-                Content = new TextBlock { Text = text },   // TextBlock, not a raw string: Avalonia
-                Tag = id,                                  // reads "_" in Content as an access key
+                Content = label,   // a control, not a raw string: Avalonia reads "_" in Content as an access key
+                Tag = id,
                 Padding = new Thickness(20, 10, 20, 10),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -896,7 +923,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     BranchColor(u.Branch),
                     on ? TileState.Equipped : owned ? TileState.Owned : TileState.Locked,
                     onClick,
-                    cornerBadge: on ? "✓" : null,
+                    cornerBadge: on ? IconKind.Checkmark : null,
                     flavor: u.Flavor));
             }
             // Charms live with the habits: leveled, always-on once worn, toggled like a habit.
@@ -917,7 +944,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     BoonAccent,
                     active ? TileState.Equipped : unlocked ? TileState.Owned : TileState.Locked,
                     onClick,
-                    cornerBadge: active ? "✓" : null,
+                    cornerBadge: active ? IconKind.Checkmark : null,
                     flavor: charmRankLocked ? null : b.Flavor));
             }
             int shown = Shelf.Habits.Count + Shelf.Charms.Count;
@@ -988,7 +1015,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 host.Children.Add(LoadoutTile(rankLocked ? "?" : b.Glyph,
                     rankLocked ? "? ? ?" : unlocked ? $"{b.Name} · L{b.Level}" : b.Name,
                     rankLocked ? RankLockedTip : b.Desc, extra, BoonAccent, state, onClick,
-                    cornerBadge: active ? "★" : null,
+                    cornerBadge: active ? IconKind.Star : null,
                     flavor: rankLocked ? null : b.Flavor));
             }
             int target = Math.Max(padTo, ((boons.Count + 3) / 4) * 4);
@@ -1000,7 +1027,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         private Control LoadoutTile(string glyph, string title, string? desc, string? extra, Color accent,
-                                    TileState state, Action? onClick, string? cornerBadge = null,
+                                    TileState state, Action? onClick, IconKind? cornerBadge = null,
                                     double size = TILE, string? caption = null, string? flavor = null)
         {
             // Rounded clip so the square art can't poke past the ring corners (Border doesn't
@@ -1033,10 +1060,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 BorderThickness = new Thickness(state == TileState.Equipped ? 4 : 3.5),
                 IsHitTestVisible = false,
             });
-            if (cornerBadge != null)
-                content.Children.Add(new TextBlock
+            if (cornerBadge is { } badgeKind)
+                content.Children.Add(new IconGlyph
                 {
-                    Text = cornerBadge, FontSize = 15, FontWeight = FontWeight.Bold,
+                    Kind = badgeKind, Variant = IconVariant.Filled, Size = 15,
                     Foreground = GoldBrush,
                     HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
                     Margin = new Thickness(0, 0, 6, 3)
@@ -1130,7 +1157,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static TextBlock GoldBalanceLine() => new()
         {
-            Text = $"you're carrying 🪙 {Live.Gold:N0}",
+            Inlines = new InlineCollection
+            {
+                new Run("you're carrying "),
+                new InlineUIContainer(new IconGlyph { Kind = IconKind.CoinMultiple, Variant = IconVariant.Filled, Size = 11 }) { BaselineAlignment = BaselineAlignment.Center },
+                new Run($" {Live.Gold:N0}"),
+            },
             Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xB4, 0x43)),
             FontSize = 11, FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 8),
@@ -1175,16 +1207,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             Control right;
             if (owned)
-                right = new TextBlock
+                right = new ContentControl
                 {
-                    Text = "sewn ✓",
+                    Content = Glyphed(11, "sewn", IconKind.Checkmark),
                     Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0xE0, 0x96)),
                     FontSize = 11, FontWeight = FontWeight.Bold,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
             else if (rankShort)
             {
-                right = new TextBlock { Text = "🔒", FontSize = 13, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center };
+                right = new IconGlyph { Kind = IconKind.LockClosed, Size = 13, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center };
+                AutomationProperties.SetName(right, DeeperTip);
                 ToolTip.SetTip(right, DeeperTip);
             }
             else
@@ -1193,7 +1226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 // Stays clickable when short — her one gift rides on a short first-pocket buy.
                 var buy = new Button
                 {
-                    Content = new TextBlock { Text = $"buy  🪙 {item.Cost:N0}" },
+                    Content = Glyphed(13, "buy", IconKind.CoinMultiple, $"{item.Cost:N0}"),
                     Tag = item.Id,
                     Padding = new Thickness(14, 6, 14, 6),
                     Background = afford ? new SolidColorBrush(goldColor) : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
@@ -1227,7 +1260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static Border HazyRow(string name, string tip)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(new TextBlock { Text = "◌", FontSize = 14, Opacity = 0.5, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new IconGlyph { Kind = IconKind.CircleHint, Size = 14, Opacity = 0.5, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
             row.Children.Add(new TextBlock { Text = name, Foreground = DimText, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
             var border = new Border
             {
@@ -1272,12 +1305,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Width = 39, Height = 39, CornerRadius = new CornerRadius(9),
                 Background = new SolidColorBrush(seen ? Color.FromArgb(60, accent.R, accent.G, accent.B) : Color.FromArgb(40, 120, 120, 140)),
                 BorderBrush = new SolidColorBrush(seen ? accent : Color.FromRgb(90, 90, 110)), BorderThickness = new Thickness(1),
-                Child = new TextBlock
-                {
-                    Text = seen ? (b.IsCurse ? "☠" : "◈") : "?",
-                    Foreground = new SolidColorBrush(seen ? accent : Color.FromRgb(0x88, 0x88, 0xA0)),
-                    FontSize = 19, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
-                },
+                Child = SlotGlyph(seen ? (b.IsCurse ? ChaosOverlayWindow.CurseIcon : IconKind.Diamond) : null,
+                    new SolidColorBrush(seen ? accent : Color.FromRgb(0x88, 0x88, 0xA0)), 19),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0)
             };
@@ -1424,7 +1453,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Background = new SolidColorBrush(Color.FromArgb(45, accent.R, accent.G, accent.B)),
                 BorderBrush = new SolidColorBrush(accent), BorderThickness = new Thickness(1),
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
-                Child = new TextBlock { Text = glyph, Foreground = new SolidColorBrush(accent), FontSize = 17, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Child = new IconGlyph { Emoji = glyph, Foreground = new SolidColorBrush(accent), Size = 18, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             });
             // MaxWidth keeps descs wrapping inside their box (a StackPanel row otherwise
             // measures at infinite width and clips); the pop-out reader passes a roomier one.
@@ -1444,6 +1473,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             };
         }
 
+        /// <summary>A seen entry's icon, or the plain "?" of one not met yet (fluent-icons L8).</summary>
+        private static Control SlotGlyph(IconKind? kind, IBrush fg, double size) => kind is { } k
+            ? new IconGlyph { Kind = k, Variant = IconVariant.Filled, Foreground = fg, Size = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            : new TextBlock { Text = "?", Foreground = fg, FontSize = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+
         private static Border CodexRow(string name, string desc, string glyph, Color accent, bool seen, double maxWidth)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
@@ -1453,12 +1487,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Background = new SolidColorBrush(seen ? Color.FromArgb(60, accent.R, accent.G, accent.B) : Color.FromArgb(40, 120, 120, 140)),
                 BorderBrush = new SolidColorBrush(seen ? accent : Color.FromRgb(90, 90, 110)), BorderThickness = new Thickness(1),
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
-                Child = new TextBlock
-                {
-                    Text = seen ? glyph : "?",
-                    Foreground = new SolidColorBrush(seen ? accent : Color.FromRgb(0x88, 0x88, 0xA0)),
-                    FontSize = 19, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
-                }
+                Child = seen
+                    ? new IconGlyph { Emoji = glyph, Foreground = new SolidColorBrush(accent), Size = 19, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                    : SlotGlyph(null, new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0xA0)), 19)
             };
             if (seen) ToolTip.SetTip(icon, name + "\n" + desc);
             row.Children.Add(icon);
@@ -1533,7 +1564,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             bool unlocked = Shelf.ExtremeUnlocked;
             _segExtreme.IsEnabled = unlocked;
-            _segExtreme.Content = unlocked ? "Inescapable" : "Inescapable 🔒";
+            _segExtreme.Content = unlocked ? "Inescapable" : Glyphed(12, "Inescapable", IconKind.LockClosed);
             if (!unlocked)
                 // The lock keeps its mystery on the face; the hover gives the exact path.
                 // ponytail: needs ChaosLessons / ChaosRanks for the real thresholds and price.
@@ -1860,7 +1891,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             // nav state
             _howToBack.IsVisible = _howToIdx > 0;
-            _howToNext.Content = _howToIdx < _howToCards.Length - 1 ? "NEXT  ›" : "DONE";
+            _howToNext.Content = _howToIdx < _howToCards.Length - 1 ? Glyphed(14, "NEXT", IconKind.ChevronRight) : "DONE";
         }
 
         private static Control BuildHowToLine(HowToLine line)
@@ -1894,7 +1925,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(34)));
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
-            var glyph = new TextBlock { Text = line.Emoji, FontSize = 17, VerticalAlignment = VerticalAlignment.Top, Foreground = BrushFromHex(line.EmojiColor) };
+            var glyph = new IconGlyph { Emoji = line.Emoji, Size = 18, VerticalAlignment = VerticalAlignment.Top, Foreground = BrushFromHex(line.EmojiColor) };
             Grid.SetColumn(glyph, 0);
             Grid.SetColumn(tb, 1);
             grid.Children.Add(glyph);
@@ -1942,7 +1973,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <c>AppSettings.ChaosMenuMusicMuted</c>, so the icon is right the moment the hub opens
         /// and the choice outlives the window, exactly as in WPF.
         /// ponytail: needs a looping/fading audio seam for the track itself.</summary>
-        private void UpdateMuteIcon(bool muted) => _menuMuteIcon.Text = muted ? "🔇" : "🔊";
+        private void UpdateMuteIcon(bool muted) => _menuMuteIcon.Kind = muted ? IconKind.SpeakerMute : IconKind.Speaker2;
 
         private void BtnMenuMute_Click(object? sender, RoutedEventArgs e)
         {
