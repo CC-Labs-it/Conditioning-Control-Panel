@@ -941,6 +941,56 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Test: `OsNotificationsTests.Sandbox_never_reaches_the_session_bus` (fail-proven: guard removed -> red) and
   `RemoteControlShellTests` asserts the join raised exactly one notification via the Sink (fail-proven: call disabled -> red).
   Log (run with DBUS_SESSION_BUS_ADDRESS=disabled:): ~/ccp-port/evidence/review-no-desktop-notify-in-tests/fail-proofs.log.
+## 2026-10-10: Clean-distro check of the linux-x64 tarball (avalonia-port/distro-check)
+- `packaging/linux/distro-check/run.sh <image> <tarball> <outdir>` checks one stock image in two containers: install
+  (network on) = only the docs/avalonia-linux-install.md dep row + test tooling (Xvfb, openbox, ImageMagick, xdotool,
+  xwininfo), one package at a time so a name the distro lacks is recorded, then `docker commit`; run = `--network none
+  --init`, host uid (given a passwd line: openbox segfaults without one), no devices, throwaway HOME/XDG_CONFIG_HOME/
+  CCP_USERDATA_DIR per resolution. No fonts are added: what the deps pull in is what a minimal install has.
+- Real X (Xvfb) at 1920x1080, 1366x768 and 1920x1080 with AVALONIA_GLOBAL_SCALE_FACTOR=2 (+GDK_SCALE=2). Avalonia sets
+  only _NET_WM_NAME, so windows are found with xdotool and their geometry recorded with xwininfo. The wizard is driven like
+  a user (dismiss Free Feature card, tick the 18+ box, Enter x3) by clicks at DIP offsets x scale; Escape is not used
+  because closing the wizard ungated shuts the app down. Then Ctrl+K palette ("one dialog") and "settings" + Return.
+- result.json: window/wizard/wizard_done/exit per resolution, missing libs from ldd of every bundled .so plus the system
+  secret/vlc/webkit/wpe libs the process mapped (lttng tracepoint provider excluded) plus every `DllNotFoundException`
+  library in the log (libvlc passes ldd yet fails P/Invoke), unavailable packages, fatal log lines (Unhandled/Fatal only:
+  offline warnings appear in every run), screenshot stddev (non-blank > 0.02). run.sh exits 1 when no window appears at
+  1920x1080 and 2 on any install/harness failure.
+- `all.sh` runs the six images and writes summary.json + index.html; `all.sh --index` only assembles (CI's last job).
+- CI `.github/workflows/distro-check.yml` (build.yml untouched): tarball job, 6-way matrix, index job. Tumbleweed is
+  `expect_fail` while finding F1 (no fonts -> startup abort) stands: that tolerates only run.sh exit 1 (no window), never
+  exit 2 (install/harness failure). The first CI run hid a Tumbleweed install failure behind continue-on-error.
+- Findings (not fixed here): ~/ccp-port/evidence/distro-check/findings.md F1-F6.
+## 2026-10-10: CI green on the port stack (avalonia-port/ci-green)
+- core-linux tarball step: `packaging/aur/PKGBUILD` pkgver 7.0.5 -> 7.1.5 with the header's sed (Version.props from main sync #6);
+  pkgrel stays 1 (new pkgver), sha256sums stay SKIP (pinned at release). Local gate mirror: ~/ccp-port/bin/gate.ci-additions.sh.
+- PremiumPageTests (WPF, Windows-only): root cause is the port's PatreonService -> Core `ProviderSubscription` move; the test's
+  `WithTier` set `PatreonService.<CurrentTier>k__BackingField`, which no longer exists (`CurrentTier => _core.CurrentTier`). The
+  stand-in now sets the same backing field on an uninitialised ProviderSubscription behind `_core`. Assertions unchanged.
+- LauncherShortcutsTests.Every_launcher_game_ships_an_icon_file: root cause is the port's move of the icons to the shared
+  `/Assets/launcher-icons` (linked into the WPF head as `Resources\launcher-icons`). The test now reads them there and also pins
+  the csproj `Content ... Link` so the head still ships them. Same per-game assertion.
+- BoardTilesTests.A_frame_fits_the_budget (WPF test, frozen reference; supervisor-approved fix, 12 ms budget UNCHANGED): board code
+  is byte-identical to origin/main, so no port code change. Failed 13.1/14.9/15.7/18.0 ms in 4 of 8 port runs. Local bench of the
+  same loop: net8.0.31 1.86 ms vs net10.0.12 1.85 ms steady, 2.43 vs 2.66 ms cold. CI diagnostic run 38051508272 (4 vCPU): process
+  at 1.70-2.01 cores during the timed window (other classes running in parallel), frames 3.8-23.7 ms falling across the pass
+  (Tier-0 after only 10 warm-up frames). Fix: the class runs in a DisableParallelization collection and warms 60 frames (past
+  tier-up, the comment's "warmed up" intent). Run 38053157085 with the fix: 5.96 ms, 1.27 cores.
+  Main's green runs (e.g. 37949970298, net8, WPF suite 1m22s) do not log a passing test's time, so there is no main per-frame
+  number to compare; the comparable data is the suite wall time (port net10 1m30-1m59s) and the local net8/net10 bench above.
+- build.yml gains `workflow_dispatch:` (additive) so a branch can run the build without a PR.
+- Hidden behind the red app suite, the Windows "Test Avalonia notification suite" had 9 more reds:
+  - 8x WindowDropTests (`NotSupportedException: TryGetFileFromPathAsync` from FirstRunFolderPickerTests.PickerProxy): the
+    `BindStorageProvider` helper called the static `AvaloniaLocator.EnterScope` and then bound into the root locator it had
+    read before, so the fake factory outlived the scope for every later window in the testhost (the Linux gate shards them
+    apart). It now binds into the new scope; same fix in GeneralStartupVideoTests. Repro: the 3 classes in one host, 8 red -> 13/13.
+  - IntakePageTests.TheFallbackPanelNeverShowsTheToken: the Windows runner has WebView2, so WebHost never draws the fallback.
+    Supervisor-approved: always assert `WebHost.WithoutToken`, the TxtSource text when no engine, and on both runners that no
+    TextBlock/tooltip in the host holds `ccp_t`. Fail-proof: panel showing the raw URL -> red.
+- WebcamCalibrationTests splash-close loops (Windows CI flake, run 38060583086): the fade is an Avalonia Animation on the headless
+  render timer, which ticks on wall time (local proof: 4 ticks fail, 400 ms sleep + 4 ticks pass), so 200 bare ticks could end
+  inside the 200 ms fade. Now pumps until gone or 2 s - under the 2.8 s error hold, so a hold-instead-of-fade still fails
+  (fail-proof: panic path routed to ShowErrorAndClose -> red).
 
 ## 2026-10-10: Bundled app fonts; never depend on system fonts (avalonia-port/linux-runtime-deps, distro-check F1/F4)
 - Decision (supervisor, option B): `Platform/AppFonts.cs` sets `FontManagerOptions` on the app builder. Default family =
