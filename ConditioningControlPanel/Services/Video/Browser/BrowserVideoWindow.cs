@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
     internal sealed class BrowserVideoWindow : Window
     {
         private readonly Screen _screen;
+        private readonly System.Drawing.Rectangle _bounds;   // the screen, or the floating rectangle
         private readonly string _tag;
         private readonly BrowserVideoSurface _surface;
 
@@ -76,9 +77,12 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// diagnostics line can say which window the surface actually missed.</summary>
         public int FirstFrameBudgetMs { get; set; }
 
-        public BrowserVideoWindow(Screen screen, bool primary)
+        /// <param name="floatBounds">Floating mandatory video: this rectangle (physical pixels)
+        /// instead of the whole screen, and the window never takes focus.</param>
+        public BrowserVideoWindow(Screen screen, bool primary, System.Drawing.Rectangle? floatBounds = null)
         {
             _screen = screen;
+            _bounds = floatBounds ?? screen.Bounds;
             IsPrimary = primary;
             _tag = primary ? "primary" : "secondary";
 
@@ -93,16 +97,16 @@ namespace ConditioningControlPanel.Services.Video.Browser
             // Chromium, so the page's {type:'key'} reports are the only route ESC/panic have back to
             // C#. The host stamps WS_EX_NOACTIVATE straight after, so the window can never RE-raise
             // itself over the attention targets / chaos layer afterwards.
-            ShowActivated = primary;
+            ShowActivated = primary && floatBounds == null;
             Topmost = true;
             Background = Brushes.Black;
             WindowStartupLocation = WindowStartupLocation.Manual;
             // Full screen bounds up front (no start-small-then-maximize white frame, #368). The DIP
             // math below is only correct on the creation monitor; PinToScreen fixes mixed DPI.
-            Left = screen.Bounds.X / dpiScale;
-            Top = screen.Bounds.Y / dpiScale;
-            Width = screen.Bounds.Width / dpiScale;
-            Height = screen.Bounds.Height / dpiScale;
+            Left = _bounds.X / dpiScale;
+            Top = _bounds.Y / dpiScale;
+            Width = _bounds.Width / dpiScale;
+            Height = _bounds.Height / dpiScale;
 
             _surface = new BrowserVideoSurface(_tag);
             _surface.Message += (_, o) => Message?.Invoke(this, o);
@@ -129,7 +133,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                 {
                     var hwnd = new WindowInteropHelper(this).Handle;
                     if (hwnd == IntPtr.Zero) return;
-                    var b = _screen.Bounds;
+                    var b = _bounds;
                     SetWindowPos(hwnd, IntPtr.Zero, b.X, b.Y, b.Width, b.Height, SWP_NOZORDER | SWP_NOACTIVATE);
                 }
                 catch (Exception ex)

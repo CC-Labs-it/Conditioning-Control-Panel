@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Services
             {
                 // Global "Show content on" picker, not every screen: one picked monitor means
                 // one browser window, on that monitor.
-                var screens = VideoScreens().ToList();
+                var screens = PlaybackScreens().ToList();   // the one floating screen, or every target
                 if (screens.Count == 0) return false;   // LibVLC path owns the no-screens end
                 var primary = screens.FirstOrDefault(s => s.Primary) ?? screens[0];
                 var secondaries = screens.Where(s => s.DeviceName != primary.DeviceName).ToList();
@@ -128,6 +128,7 @@ namespace ConditioningControlPanel.Services
                     Path = path,
                     PrimaryScreen = primary,
                     SecondaryScreens = secondaries,
+                    FloatingBounds = IsFloating ? _floatBounds : null,
                     Volume = GetEffectiveVolume() / 100.0,
                     Muted = GetEffectiveVolume() <= 0,
                     BlurBackground = App.Settings?.Current?.VideoBlurredBackgroundEnabled == true,
@@ -582,6 +583,10 @@ namespace ConditioningControlPanel.Services
             // Window-level PreviewMouseDown never fires over a WebView2 child HWND, so this message
             // is what keeps the attention targets clickable on top of the video.
             BringTargetsToFront();
+            // The page posts this on pointerdown, so the button is still held: a floating window
+            // moves with it. Queued, never run inside the WebView2 message callback.
+            if (IsFloating)
+                Application.Current?.Dispatcher?.BeginInvoke(new Action(() => BeginFloatingDrag(_primaryVideoWindow)));
         }
 
         /// <summary>
