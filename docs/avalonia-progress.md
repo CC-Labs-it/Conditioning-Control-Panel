@@ -1851,3 +1851,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/roadmap-tests: +340
 - Core tests for RoadmapService steps, photo diary, notes, track unlocks and persistence; mutation score 21.9% -> 70.8%, and every remaining survivor is logging, an equivalent mutant, or crash-durability that cannot be tested in-process.
+
+## avalonia-port/linux-runtime-deps: +309
+- Bundled fonts (Inter default, Fredoka, Noto Sans Mono, Noto Emoji fallback): no crash on a font-less system, WPF display face on Linux.
+- libvlc soname resolver + Fedora VLC plugin deps; pactl probe no longer spawns when absent; install doc updated.
+- Review fixes: audio packages named when LibVLC fails to start, Noto Sans Mono license shipped.
