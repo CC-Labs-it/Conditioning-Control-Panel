@@ -20,13 +20,32 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.5";
+        public const string AppVersion = "7.1.6";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.5 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.6 - Stay Tuned
+
+NEW IN 7.1.6
+- mandatory videos can float. Studio > Mandatory Video > ""Shows as"" > Floating window: small bordered windows you can drag across monitors and throw around. up to four at once, with sliders for size and drift speed. the lit one has the sound; touch another to move it. floating videos have no attention checks.
+- Bubble Count: a new option pauses the other effects while a round runs.
+- the bottom bar shows the session name and the time left while a session runs.
+- Leash: ""What each level allows"" at the level picker explains Soft, Standard and Strict.
+- chess: the board explains what IQ means.
+
+FIXES IN 7.1.6
+- Library: with an online source picked, the list no longer runs under the Start bar, so the ""add your own community"" field can be reached. the Asset Browser no longer vanishes after switching back to your own assets.
+- red hold-to-pop bubbles no longer let the click through to the window behind. a bubble on top of a flash image takes the click.
+- the corner GIF shows only while the engine runs.
+- applying Her Favor no longer drops the frame rate for a few seconds.
+- detached companion: the invisible areas around it no longer block clicks.
+- companion personality: ""Fork and edit by hand"" opens the current prompt, the editor no longer cuts your text short, and Screen Awareness Reactions can be edited again.
+- ending a Remote session no longer stops your own running session.
+- a Deeper file played as a mandatory video shows all of its subliminals.
+- haptics: a test only plays the test, and says so when haptics are switched off.
+- updates: a stalled download times out and retries instead of sitting on the startup window.
 
 FIXES SINCE 7.1.0
 - new Companion > AI page: the connection (cloud, local or your own model), how often your companion talks (idle chatter, bubble time, voice lines, triggers, tube look) and its memory, all in one place and never folded away. 7.1.0 and 7.1.1 left some of them with no way in.
