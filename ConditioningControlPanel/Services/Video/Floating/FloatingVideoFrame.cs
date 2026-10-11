@@ -27,7 +27,18 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// <summary>Silences or restores this window's own sound. Never touches another window.</summary>
         void SetMuted(bool muted);
 
-        /// <summary>Fling and bounce inside these bounds (device pixels, one monitor's work area).</summary>
+        /// <summary>
+        /// How fast a thrown window travels: 1 is the flash images' own speed, 0.1 a slow drift.
+        /// Scales the throw and the top speed, never the drag under the hand. Live: a window in
+        /// flight follows a change.
+        /// </summary>
+        double MotionSpeed { get; set; }
+
+        /// <summary>
+        /// Fling and bounce, starting on the monitor whose work area is given (device pixels). A
+        /// held window may cross to any monitor; once let go it bounces inside the work area of
+        /// the monitor it is on.
+        /// </summary>
         void StartMotion(Rect boundsPx);
 
         /// <summary>Stops moving and lets go of every hook. Safe to call twice, and on a closed window.</summary>
@@ -111,6 +122,8 @@ namespace ConditioningControlPanel.Services.Video.Floating
             }
 
             // ---- contract ----
+
+            public double MotionSpeed { get; set; } = 1.0;
 
             public bool AudioLit
             {
