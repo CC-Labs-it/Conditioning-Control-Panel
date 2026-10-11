@@ -3,6 +3,9 @@
 // breadcrumb and the last-tab memory - plus the pill routing (OnSectionPillChosen,
 // OpenLibraryLauncher).
 //
+// GlowNavTarget (the landing glow) and the window-title crumb (UpdateNavTitle) landed in
+// sync6-nav-rail-c.
+//
 // The section wash and ink (PaintSectionWash, PaintSectionInk: 25a4d456b, 4f22d0478) are here
 // (sync6-nav-polish-b).
 //
@@ -12,16 +15,18 @@
 // ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
 // motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthRail/Hud/Home/Quests), the window-title crumb (UpdateNavTitle), the "Moved" redirects and their note,
-// GlowNavTarget and the landing glow.
+// (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
+// issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
 using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
 
@@ -45,7 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 WireSectionStrip();
                 var section = NavSections.SectionForTab(tab);
-                PageStrip?.Show(section, tab, section == NavSections.Settings ? CurrentSettingsSectionLabel() : null);
+                var pageLabel = section == NavSections.Settings ? CurrentSettingsSectionLabel() : null;
+                PageStrip?.Show(section, tab, pageLabel);
+                UpdateNavTitle(section, tab, pageLabel);
                 PaintSectionWash(section);
 
                 // Last tab per section. Old keys are not remembered (their new home is).
@@ -174,7 +181,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Source is RadioButton { IsChecked: true } rb && rb.Name?.StartsWith("SectionPill", StringComparison.Ordinal) == true
                     && CurrentTab == "appsettings")
-                    strip.Show(NavSections.Settings, "appsettings", CurrentSettingsSectionLabel());
+                {
+                    var label = CurrentSettingsSectionLabel();
+                    strip.Show(NavSections.Settings, "appsettings", label);
+                    UpdateNavTitle(NavSections.Settings, "appsettings", label);
+                }
             }, RoutingStrategies.Bubble);
         }
 
@@ -240,6 +251,71 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Key == global::Avalonia.Input.Key.K) SettingsPaletteWindow.ChordReleased();
             }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
+
+        /// <summary>
+        /// WPF GlowNavTarget (SectionChrome.cs:315, 213aff12e): glow the place something moved to. A
+        /// Settings section key ("account", "monitors") lights that section's pill; a tab key lights its
+        /// strip pill and its rail row. Off = nothing. Called by What moved's Show me and the palette.
+        /// </summary>
+        partial void GlowNavTarget(string key)
+        {
+            try
+            {
+                var level = AmbientFxCanvas.Env.Level;
+                if (string.IsNullOrEmpty(key)) { Serilog.Log.Debug("GlowNavTarget: empty key"); return; }
+                if (level == MotionLevel.Off) { Serilog.Log.Debug("GlowNavTarget({Key}): motion off", key); return; }
+
+                if (key != "appsettings" && SettingsSectionLabelKey(key) != null)
+                {
+                    var pillName = "SectionPill" + char.ToUpperInvariant(key[0]) + key.Substring(1);
+                    if (AppSettingsPage?.FindControl<Control>(pillName) is { } settingsPill)
+                        NavGlow.Once(settingsPill, NavStripRules.Accent(NavSections.Settings), level, "settings." + key);
+                    else Serilog.Log.Debug("GlowNavTarget({Key}): no Settings pill {Name}", key, pillName);
+                    return;
+                }
+
+                var section = NavSections.SectionForTab(key);
+                var accent = NavStripRules.Accent(section);
+                bool any = false;
+                if (PageStrip?.PillFor(NavStripTable.ActivePill(key) ?? key) is { } pill)
+                    any |= NavGlow.Once(pill, accent, level, "pill." + key);
+                if (NavAnchorForTab(key) is { } row) any |= NavGlow.Once(row, accent, level, "rail." + key);
+                if (!any) Serilog.Log.Debug("GlowNavTarget({Key}): nothing to glow (no pill, no rail row)", key);
+            }
+            catch (Exception ex) { Serilog.Log.Debug("GlowNavTarget({Key}) failed: {E}", key, ex.Message); }
+        }
+
+        /// <summary>The rail row that owns a tab (WPF NavAnchorForTab).</summary>
+        internal Button? NavAnchorForTab(string? tabKey)
+        {
+            var section = NavSections.SectionForTab(tabKey == "lab" ? "play" : tabKey);
+            foreach (var row in _navSectionRows)
+                if (row.Section == section) return row.Button;
+            return null;
+        }
+
+        private static string? SettingsSectionLabelKey(string sectionKey)
+        {
+            foreach (var t in NavSections.Find(NavSections.Settings)?.Tabs ?? Array.Empty<NavTab>())
+                if (string.Equals(t.Key, sectionKey, StringComparison.OrdinalIgnoreCase)) return t.LabelKey;
+            return null;
+        }
+
+        private string? _navBaseTitle;
+
+        /// <summary>WPF UpdateNavTitle (:364): "Conditioning Control Panel - Play › Lobby", the fourth
+        /// "you are here" cue. Home's dashboard names only the section.</summary>
+        internal void UpdateNavTitle(string? section, string tab, string? pageLabel)
+        {
+            _navBaseTitle ??= Title;
+            var sectionLabel = section == null ? null : Loc.Get(NavSections.Find(section)?.LabelKey ?? string.Empty);
+            var page = pageLabel ?? (section == NavSections.Home && (string.IsNullOrEmpty(tab) || tab == "settings")
+                ? null : Loc.Get(NavStripTable.PageLabelKey(tab) ?? string.Empty));
+            Title = string.IsNullOrEmpty(sectionLabel) ? _navBaseTitle
+                : string.IsNullOrEmpty(page)
+                    ? $"{_navBaseTitle} - {sectionLabel}"
+                    : $"{_navBaseTitle} - {sectionLabel} {Loc.Get("nav_crumb_sep")} {page}";
         }
 
         /// <summary>The label of the Settings section whose pill is checked (null if none). WPF :340.</summary>

@@ -79,9 +79,11 @@ namespace ConditioningControlPanel.Avalonia
             };
             CoreQuests.PlayCompletionEffectsProvider = PlayQuestCompletionEffects;
             // Real probes, not the fail-open default (which reads present + resolved). A throw
-            // (no pactl) reaches the gate's CachedProbe and still fails open, as WPF's strict pair does.
+            // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
+            // fails open without spawning it (distro-check F6).
             CoreQuests.CameraProbe = () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any();
-            CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.ParseSources(Platform.LibVlcAudio.Pactl("list short sources")).Count > 1;
+            CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
+                Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
             var definitions = new QuestDefinitionService();
             _ = definitions.InitializeAsync(); // cache first, then the server, as WPF
@@ -871,7 +873,7 @@ namespace ConditioningControlPanel.Avalonia
                 // (docs/avalonia-linux-install.md). dlopen off the UI thread; nothing when all load.
                 Dispatcher.UIThread.Post(async () =>
                 {
-                    if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(null)) is not { } missing) return;
+                    if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(null, audioFailed: Platform.LibVlcAudio.Shared is null)) is not { } missing) return;
                     Serilog.Log.Warning("Missing Linux dependencies: {Text}", missing.Text);
                     var command = missing.Command;
                     Notifications.Show(missing.Text, Helpers.NotificationType.Warning, TimeSpan.FromSeconds(20),

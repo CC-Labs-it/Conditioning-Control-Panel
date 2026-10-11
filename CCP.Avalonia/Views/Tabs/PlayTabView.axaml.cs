@@ -134,8 +134,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         };
 
         /// <summary>WPF PlayTabView.ScrollToZone (:51), after layout: Games goes to the top so the
-        /// intro line shows too; any other zone's header lands ZoneTopGap under the strip.
-        /// ponytail: the landing glow (NavGlow.Once on the header) is sync6-nav-rail-c.</summary>
+        /// intro line shows too; any other zone's header lands ZoneTopGap under the strip, then the
+        /// header glows once where the eye goes (WPF :73, ed48b817c).</summary>
         internal void ScrollToZone(string zone)
         {
             zone = (zone ?? "").Trim().ToLowerInvariant();
@@ -149,6 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     if (zone != "games" && header.TranslatePoint(default, WallScroll) is { } p)
                         y = Math.Max(0, WallScroll.Offset.Y + p.Y - ZoneTopGap);
                     WallScroll.Offset = new Vector(WallScroll.Offset.X, y);
+                    Dispatcher.UIThread.Post(() => global::ConditioningControlPanel.Avalonia.Controls.NavGlow.Once(header,
+                        global::ConditioningControlPanel.Avalonia.Views.Controls.NavStripRules.Accent(Services.UI.NavSections.Play), why: "play." + zone), DispatcherPriority.Loaded);
                 }
                 catch (Exception ex) { Log.Debug("Play ScrollToZone({Zone}): {E}", zone, ex.Message); }
             }, DispatcherPriority.Background);
