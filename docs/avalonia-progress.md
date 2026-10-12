@@ -1997,3 +1997,12 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/leash-wire: +372
 - The Core LeashService now runs on the Avalonia friends poll: seams are seeded, it starts after friends and is dropped on exit, and the launcher leash gate reads it, but holds a tile only once a gate card can present it (LeashGateCard unit). Cut target: `RemoteRelay.EndSessionNow`.
 - The +372 is counted against the stack-tip merge 8d147364d (icons-progress), not 2a4a55570. Tests: LeashHeadTests and a RemoteRelay test, all fail-proven. GATE-OK.
+
+## avalonia-port/content-packs-service: +1000
+- Core ContentPackService network half (trunk U8): manifest, Patreon signed-URL install with Range resume, encrypt, rate limit/auth, V2 link, status, local zip; 13 fake-handler tests incl. bad signed URL rejected with user packs kept.
+- Startup seed, previews and pool wiring follow in content-packs-wire.
+
+## avalonia-port/content-packs-wire: +654
+- Content packs seeded at startup; flash, scheduled video and bubble count draw active pack media through Core PackMediaPool (WPF-weighted).
+- Pack previews (installed picks + URL cache, sandbox-safe) in Core ContentPackService; svc-content-packs stays stub (no packs UI).
+- Review fixes: startup sweep of crash-left ccp_temp_* decrypts; video/bubble weigh pack clips left this cycle like WPF.
