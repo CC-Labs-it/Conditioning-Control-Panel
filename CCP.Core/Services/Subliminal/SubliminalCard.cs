@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ConditioningControlPanel.Services;
 
@@ -16,12 +17,13 @@ public static class SubliminalCard
     /// <summary>Bold text at this size in DIP (the renderer scales it per screen).</summary>
     public const double FontDip = 120;
 
-    /// <summary>The 8 outline copies drawn in SubBorderColor under the main text, in DIP.</summary>
-    public static readonly (double X, double Y)[] OutlineOffsets =
+    /// <summary>The 8 outline copies drawn in SubBorderColor under the main text, in DIP.
+    /// Read-only: three renderers share it, so a write from one would change all of them.</summary>
+    public static readonly IReadOnlyList<(double X, double Y)> OutlineOffsets = Array.AsReadOnly(new (double X, double Y)[]
     {
         (-3, -3), (3, -3), (-3, 3), (3, 3),
         (0, -4), (0, 4), (-4, 0), (4, 0),
-    };
+    });
 
     /// <summary>
     /// Hold time: SubliminalDuration counts frames at ~17 ms each, minimum 100 ms. A caller may

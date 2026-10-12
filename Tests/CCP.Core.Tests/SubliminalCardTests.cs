@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -44,5 +46,15 @@ public sealed class SubliminalCardTests
         Assert.Equal(120, SubliminalCard.FontDip);
         Assert.Equal(new (double, double)[] { (-3, -3), (3, -3), (-3, 3), (3, 3), (0, -4), (0, 4), (-4, 0), (4, 0) },
             SubliminalCard.OutlineOffsets);
+    }
+
+    // The offsets are shared by WPF SubliminalService, SubliminalLayer and the Avalonia overlay;
+    // before the move each kept a private copy, so none could change another's.
+    [Fact]
+    public void Outline_offsets_cannot_be_written()
+    {
+        var list = Assert.IsAssignableFrom<IList<(double X, double Y)>>(SubliminalCard.OutlineOffsets);
+        Assert.Throws<NotSupportedException>(() => list[0] = (9, 9));
+        Assert.Equal((-3.0, -3.0), SubliminalCard.OutlineOffsets[0]);
     }
 }
