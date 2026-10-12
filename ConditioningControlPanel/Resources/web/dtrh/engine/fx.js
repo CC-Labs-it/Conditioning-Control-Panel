@@ -20,9 +20,9 @@ import * as THREE from 'three';
 import { FOG_COLOR, FOG_DENSITY } from './tunnel.js';
 import { S, onSettings } from './settings.js';
 import { softPulseAmount } from '../shared/softPulse.js';
-import { motionLevel } from '../shared/motion.js';
+import { motionLevel, motionScale } from '../shared/motion.js';
 import { createWorldFeel, WARM_LINE_COLOR, WARM_FOG_COLOR, WARM_HUE_PULL, WARM_FOG_PULL,
-  WARM_DENSITY, WARM_RIBBON, WARM_SPARKLE, BREATH_RIBBON } from './worldFeel.js';
+  WARM_DENSITY, WARM_RIBBON, WARM_SPARKLE, BREATH_RIBBON, threadTarget } from './worldFeel.js';
 
 // act change: the chamber palette crossfade runs this much longer than the
 // caller asks, on a gentler curve (the snap of counts stays where it was).
@@ -115,7 +115,7 @@ function makeFlowTexture() {
   return tex;
 }
 
-export function createFx({ scene, layout, tunnelMat, particleFog }) {
+export function createFx({ scene, layout, tunnelMat, particleFog, threads = true }) {
   const seed = Math.random() * 997;
 
   // each ribbon's hue offset from the first, so one picked ribbon color expands
@@ -289,6 +289,9 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     ['surge', 'uSurge'], ['slip', 'uSlip'], ['beatScroll', 'uBeatScroll'],
     ['dots', 'uDots'], ['checker', 'uChecker'], ['desat', 'uDesat'],
     ['filigree', 'uFiligree'], ['panel', 'uPanel'],
+    // thread layers: a base everywhere plus a biome's own (worldFeel.js threadTarget)
+    ['thHalo', 'uThHalo'], ['thWeave', 'uThWeave'], ['thSheen', 'uThSheen'], ['thSparkle', 'uThSparkle'],
+    ['thBeads', 'uThBeads'], ['thBraid', 'uThBraid'], ['thWisps', 'uThWisps'], ['thStatic', 'uThStatic'],
   ];
   // biome pattern params: integer counts / frequencies / spiral direction.
   // These SNAP at the chamber commit (hidden under commitWave's flash, exactly
@@ -393,6 +396,8 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     // chamber pattern knobs: glide toward this chamber's enter->peak lerp (or
     // back to 0 off-region). One code path = the transition crossfade AND the
     // in-chamber escalation, so patterns never pop.
+    const thMs = motionScale();
+    if (uni.uThTime) uni.uThTime.value += dt * thMs;   // the thread clock stands still at motion off
     for (let i = 0; i < KNOBS.length; i++) {
       const ku = uni[KNOBS[i][1]];
       if (!ku) continue;
@@ -405,6 +410,9 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
         // photosensitivity guard: the flashy knobs ride the effect-intensity dial
         if (key === 'strobe' || key === 'glitch') target *= strobeScale;
       }
+      // thread layers keep a base off-region too, and warmth brings sparkle and sheen
+      // (threads: false = a tube that keeps its classic threads; Racing Thoughts asks for that)
+      if (threads) target = threadTarget(KNOBS[i][0], target, wm, thMs);
       ku.value += (target - ku.value) * Math.min(1, dt * 0.8);
     }
     // The Surfacing floors ride AFTER the knob ease so the ending always wins:

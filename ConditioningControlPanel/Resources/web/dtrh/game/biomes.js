@@ -46,7 +46,10 @@
  * BIOME IDENTITY PASS: beyond the seven chamber knobs, styles may now use the
  * biome pattern knobs (eased like the others; all 0 = classic): scan, glitch,
  * kaleido, chase, chain, caustic, arch, mirrorY, streaks, ringFade,
- * spiralFade, surge, slip, beatScroll, dots, checker, desat, filigree, panel
+ * spiralFade, surge, slip, beatScroll, dots, checker, desat, filigree, panel,
+ * and the thread layers thHalo, thWeave, thSheen, thSparkle, thBeads, thBraid,
+ * thWisps, thStatic (halo, sparkle and a light weave are on everywhere:
+ * engine/worldFeel.js THREAD_BASE)
  * - each owned by one or two biomes so no two places share a silhouette.
  * `style.params` re-parameterizes the base geometry (dashCount / dashDuty /
  * waveF1 / waveF2 / strobeHz / spiralDir); params SNAP at the chamber commit
@@ -122,8 +125,8 @@ export const BIOMES_BY_ROOM = {
       style: {
         palette: { colLine: 0x5ee8d0, colSpiral: 0x2f8f84, colFog: 0x061012,
                    colBg: 0x081416, colRibbon: 0x53d8c4, colSparkle: 0xc8fff4 },
-        knobs: { enter: { ringDash: 0.60, strobe: 0.10, scan: 0.55, glitch: 0.20, slip: 0.45 },
-                 peak:  { ringDash: 0.85, strobe: 0.18, lineWave: 0.08, scan: 0.85, glitch: 0.45, slip: 0.65 } },
+        knobs: { enter: { ringDash: 0.60, strobe: 0.10, scan: 0.55, glitch: 0.20, slip: 0.45, thStatic: 0.50 },
+                 peak:  { ringDash: 0.85, strobe: 0.18, lineWave: 0.08, scan: 0.85, glitch: 0.45, slip: 0.65, thStatic: 0.80 } },
         params: { dashCount: 16, strobeHz: 2.3 },
         density: { rings: 110, spiralTurns: 39, arms: 3 },
         bloom: 0.9, sparkleBoost: 0.15,
@@ -182,8 +185,8 @@ export const BIOMES_BY_ROOM = {
       style: {
         palette: { colLine: 0xcfd8e8, colSpiral: 0x9fb8ff, colFog: 0x10141f,
                    colBg: 0x131826, colRibbon: 0xbde0ff, colSparkle: 0xffffff },
-        knobs: { enter: { ringDouble: 0.75, spiralDrift: 0.30, kaleido: 0.45 },
-                 peak:  { ringDouble: 1.00, spiralDrift: 0.55, kaleido: 1.00 } },
+        knobs: { enter: { ringDouble: 0.75, spiralDrift: 0.30, kaleido: 0.45, thSheen: 0.60 },
+                 peak:  { ringDouble: 1.00, spiralDrift: 0.55, kaleido: 1.00, thSheen: 0.90 } },
         density: { rings: 125, spiralTurns: 45, arms: 6 },
         bloom: 1.15, sparkleBoost: 0.25,
         field: { bolt: [190, 210, 255], boltCore: [240, 246, 255],
@@ -232,8 +235,8 @@ export const BIOMES_BY_ROOM = {
       style: {
         palette: { colLine: 0x9a7bff, colSpiral: 0x7bffb8, colFog: 0x120a1c,
                    colBg: 0x150d22, colRibbon: 0x8a6ae8, colSparkle: 0xd8ccff },
-        knobs: { enter: { spiralDrift: 0.70, lineWave: 0.10, filigree: 0.45 },
-                 peak:  { spiralDrift: 1.00, lineWave: 0.16, throb: 0.15, filigree: 0.75 } },
+        knobs: { enter: { spiralDrift: 0.70, lineWave: 0.10, filigree: 0.45, thWisps: 0.50 },
+                 peak:  { spiralDrift: 1.00, lineWave: 0.16, throb: 0.15, filigree: 0.75, thWisps: 0.85 } },
         params: { spiralDir: -1 },
         density: { rings: 120, spiralTurns: 51, arms: 4 },
         bloom: 1.0,
@@ -336,8 +339,8 @@ export const BIOMES_BY_ROOM = {
       style: {
         palette: { colLine: 0xc23b4e, colSpiral: 0x7a2230, colFog: 0x1a0709,
                    colBg: 0x200a0d, colRibbon: 0xa83a48, colSparkle: 0xffb0b8 },
-        knobs: { enter: { ringDouble: 0.50, throb: 0.20, chain: 0.55, surge: 0.20 },
-                 peak:  { ringDouble: 0.80, throb: 0.35, ringDash: 0.30, chain: 0.90, surge: 0.30 } },
+        knobs: { enter: { ringDouble: 0.50, throb: 0.20, chain: 0.55, surge: 0.20, thBraid: 0.70 },
+                 peak:  { ringDouble: 0.80, throb: 0.35, ringDash: 0.30, chain: 0.90, surge: 0.30, thBraid: 1.00 } },
         density: { rings: 125, spiralTurns: 45, arms: 4 },
         bloom: 1.0, ribbonBoost: 0.15,
         field: { bolt: [230, 90, 110], boltCore: [255, 220, 226],
@@ -361,8 +364,8 @@ export const BIOMES_BY_ROOM = {
       style: {
         palette: { colLine: 0x2f5fc8, colSpiral: 0x1b3a80, colFog: 0x050a18,
                    colBg: 0x071020, colRibbon: 0x2a55b0, colSparkle: 0x9fc8ff },
-        knobs: { enter: { breath: 0.50, lineWave: 0.15, caustic: 0.50, surge: 0.55 },
-                 peak:  { breath: 0.60, lineWave: 0.24, spiralDrift: 0.30, caustic: 0.80, surge: 0.85 } },
+        knobs: { enter: { breath: 0.50, lineWave: 0.15, caustic: 0.50, surge: 0.55, thBeads: 0.60 },
+                 peak:  { breath: 0.60, lineWave: 0.24, spiralDrift: 0.30, caustic: 0.80, surge: 0.85, thBeads: 0.90 } },
         params: { waveF1: 2, waveF2: 5 },
         density: { rings: 115, spiralTurns: 45, arms: 3 },
         bloom: 0.85,
@@ -466,8 +469,8 @@ export const BIOMES_BY_ROOM = {
       style: {
         palette: { colLine: 0xe8cfe0, colSpiral: 0xc0d8e8, colFog: 0x140f18,
                    colBg: 0x181220, colRibbon: 0xd8b8d0, colSparkle: 0xffffff },
-        knobs: { enter: { breath: 0.70, mirrorY: 0.60, caustic: 0.18, surge: 0.15 },
-                 peak:  { breath: 0.80, ringDouble: 0.40, throb: 0.20, mirrorY: 0.90, caustic: 0.30, surge: 0.20 } },
+        knobs: { enter: { breath: 0.70, mirrorY: 0.60, caustic: 0.18, surge: 0.15, thBeads: 0.40 },
+                 peak:  { breath: 0.80, ringDouble: 0.40, throb: 0.20, mirrorY: 0.90, caustic: 0.30, surge: 0.20, thBeads: 0.60 } },
         density: { rings: 110, spiralTurns: 39, arms: 3 },
         bloom: 1.2, sparkleBoost: 0.25,
         field: { bolt: [220, 200, 235], boltCore: [250, 245, 255],
