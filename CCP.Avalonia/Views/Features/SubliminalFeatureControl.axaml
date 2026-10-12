@@ -17,6 +17,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.SubliminalFeatureControl">
 
     <StackPanel>
@@ -34,8 +35,7 @@
                     </Border.OpacityMask>
                 </Border>
                 <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                    <TextBlock Text="{loc:Str section_subliminals_2}" FontSize="17" FontWeight="Bold"
-                               Foreground="{StaticResource TextLightBrush}"/>
+                    <fx:IconLabel Key="section_subliminals_2" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                     <TextBlock Text="{loc:Str tooltip_enable_disable_subliminal_messages}" FontSize="11.5"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"/>
                 </StackPanel>
@@ -133,8 +133,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_audio_whispers}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="setting_audio_whispers" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkWhispers" sessionLock:SessionLock.Owned="True"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
@@ -175,12 +174,16 @@
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" x:Name="BtnManageMessages" Content="📝 Messages"
+                    <Button Grid.Column="0" x:Name="BtnManageMessages"
                             Theme="{DynamicResource OutlineButton}"
-                            ToolTip.Tip="{loc:Str tooltip_edit_subliminal_messages}"/>
-                    <Button Grid.Column="2" x:Name="BtnAdvanced" Content="⚙ Advanced"
+                            ToolTip.Tip="{loc:Str tooltip_edit_subliminal_messages}">
+                        <fx:IconLabel Kind="Edit" Text="Messages"/>
+                    </Button>
+                    <Button Grid.Column="2" x:Name="BtnAdvanced"
                             Theme="{DynamicResource OutlineButton}"
-                            ToolTip.Tip="{loc:Str tooltip_advanced_subliminal_visual_settings}"/>
+                            ToolTip.Tip="{loc:Str tooltip_advanced_subliminal_visual_settings}">
+                        <fx:IconLabel Kind="Settings" Text="Advanced"/>
+                    </Button>
                 </Grid>
             </StackPanel>
 

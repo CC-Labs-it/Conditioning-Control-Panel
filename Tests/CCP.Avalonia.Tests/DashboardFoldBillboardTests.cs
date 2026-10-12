@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -66,7 +68,7 @@ public sealed class DashboardFoldBillboardTests
             // Launch folded (the default): header only, the Tonight Board in the freed row, still at Motion Off.
             Assert.False(body.IsVisible);
             Assert.True(billboard.IsVisible);
-            Assert.Equal("▾", C<TextBlock>("TxtFoldBrowser").Text);
+            Assert.Equal(IconKind.ChevronDown, C<IconGlyph>("TxtFoldBrowser").Kind);
             Assert.True(column.RowDefinitions[0].Height.IsAuto);
             Assert.True(column.RowDefinitions[1].Height.IsStar);
             Assert.Equal(Loc.Get("tooltip_browser_unfold"), ToolTip.GetTip(C<Button>("BtnFoldBrowser")));
@@ -126,7 +128,7 @@ public sealed class DashboardFoldBillboardTests
             global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.False(Board().HoldRunning);
             s.MotionLevel = MotionLevel.Off;
-            Assert.Equal("▴", C<TextBlock>("TxtFoldBrowser").Text);
+            Assert.Equal(IconKind.ChevronUp, C<IconGlyph>("TxtFoldBrowser").Kind);
             Assert.True(column.RowDefinitions[0].Height.IsStar);
             Assert.Equal(0, column.RowDefinitions[1].Height.Value);
 
@@ -201,7 +203,7 @@ public sealed class DashboardFoldBillboardTests
         {
             var code = File.ReadAllText(Path.Combine(RepoRoot(), rel));
             code = Regex.Replace(code, @"//[^\n]*|/\*.*?\*/|""(?:\\.|[^""\\])*""", "", RegexOptions.Singleline);
-            Assert.DoesNotMatch(@"Sfx|Audio|Sound|Chime|NAudio|Play\(", code);
+            Assert.DoesNotMatch(@"Sfx|Audio|Sound|Chime|NAudio|(?<![A-Za-z])Play\(", code);   // a Play( call; Core ArtShouldPlay( is a rule, not a sound
         }
     }
 

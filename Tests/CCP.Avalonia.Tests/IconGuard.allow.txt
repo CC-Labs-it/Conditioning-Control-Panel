@@ -13,9 +13,12 @@ Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: 
 
 # --- content (c).2: user data examples ---
 Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a user-chosen preset icon inside prose (content (c).2)
+Views/Tabs/AwarenessTabView.Presets.cs :: Icon = "✨", :: seed icon of a new user preset; the user edits it, so it is preset data (content (c).2)
 
 # --- content (c).4: typography ---
 Views/Dialogs/LoginDialog.axaml :: PasswordChar="●" :: PasswordChar mask, typography (content (c).4)
+
+Views/Windows/FeatureIntroPopup.axaml.cs :: "●" :: bullet marker of the intro card list, typography (decision 2026-10-10: bullets stay)
 Views/Controls/Companion/Themes/CompanionTheme.axaml :: <Setter Property="PasswordChar" Value="●"/> :: PasswordChar mask, typography (content (c).4)
 MainWindow.axaml :: ← Back to the app :: arrow inside a sentence, named by the oracle (content (c).4)
 Views/Chaos/ChaosSlotPickerWindow.axaml :: Descend  ↓ :: arrow inside a sentence, named by the oracle (content (c).4)
@@ -25,6 +28,9 @@ Views/Features/VideoFeatureControl.axaml :: min length &#x2192; max length :: ar
 Views/Windows/ModCreatorWindow.axaml.cs :: "COMPLY.mp3\" → companion says :: arrow inside help prose (content (c).4)
 Views/Windows/ModCreatorWindow.axaml.cs :: Video name → URL pairs :: arrow inside help prose (content (c).4)
 Views/Windows/QuizWindow.axaml.cs :: (Companion → AI) :: arrow inside an error sentence (content (c).4)
+Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Up => "\u2191" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
+Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Down => "\u2193" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
+Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 
 # --- content (c).3: emoji inside head-authored sentences ---
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)

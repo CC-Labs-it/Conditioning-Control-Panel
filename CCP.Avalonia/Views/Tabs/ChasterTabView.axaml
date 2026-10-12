@@ -57,27 +57,26 @@
                         <Border Name="Rim" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="16" Opacity="0.55"/>
                         <Grid Margin="16,12" ColumnDefinitions="Auto,*">
-                            <Path Name="Key" Width="42" Height="18" Stretch="Uniform" Opacity="0.7" Fill="{TemplateBinding BorderBrush}"
-                                  VerticalAlignment="Center" Margin="0,0,12,0"
-                                  Data="M 8,0 A 8,8 0 1 0 8,16 A 8,8 0 1 0 8,0 Z M 8,4.5 A 3.5,3.5 0 1 0 8,11.5 A 3.5,3.5 0 1 0 8,4.5 Z M 15,5.5 H 42 V 11 H 38.5 V 8.5 H 34.5 V 12.5 H 30.5 V 8.5 H 15 Z"/>
+                            <fx:IconGlyph Name="Key" Kind="Key" Variant="Filled" Size="28" Opacity="0.7" Foreground="{TemplateBinding BorderBrush}"
+                                  VerticalAlignment="Center" Margin="7,0,19,0"/>
                             <ContentPresenter Grid.Column="1" VerticalAlignment="Center" Content="{TemplateBinding Content}"
                                               ContentTemplate="{TemplateBinding ContentTemplate}"/>
                         </Grid>
                         <Border Name="Tick" Width="20" Height="20" CornerRadius="10" Opacity="0" Background="{TemplateBinding BorderBrush}"
                                 HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0">
-                            <TextBlock Text="&#x2713;" FontSize="11" FontWeight="Bold" Foreground="#FF14101E" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="Checkmark" Variant="Filled" Size="12" Foreground="#FF14101E" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Panel>
                 </ControlTemplate>
             </Setter>
             <Style Selector="^:pointerover /template/ Border#Rim"><Setter Property="Opacity" Value="1"/></Style>
-            <Style Selector="^:pointerover /template/ Path#Key"><Setter Property="Opacity" Value="1"/></Style>
+            <Style Selector="^:pointerover /template/ fx|IconGlyph#Key"><Setter Property="Opacity" Value="1"/></Style>
             <Style Selector="^:checked /template/ Border#Rim">
                 <Setter Property="Opacity" Value="1"/>
                 <Setter Property="Background" Value="Transparent"/>
             </Style>
             <Style Selector="^:checked /template/ Border#Fill"><Setter Property="Opacity" Value="0.22"/></Style>
-            <Style Selector="^:checked /template/ Path#Key"><Setter Property="Opacity" Value="1"/></Style>
+            <Style Selector="^:checked /template/ fx|IconGlyph#Key"><Setter Property="Opacity" Value="1"/></Style>
             <Style Selector="^:checked /template/ Border#Tick"><Setter Property="Opacity" Value="1"/></Style>
         </ControlTheme>
         <!-- WPF ChasterTabView.xaml:34-72 -->
@@ -128,15 +127,14 @@
                         <Button x:Name="BtnChasterSite" Theme="{StaticResource CirceLink}" VerticalAlignment="Center" Click="BtnChasterSite_Click">
                             <Border Height="26" CornerRadius="13" Padding="8,0,10,0" Background="#26FFFFFF" BorderBrush="#40FFFFFF" BorderThickness="1">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Canvas Width="10" Height="12" VerticalAlignment="Center" Margin="0,0,6,0">
-                                        <Path Data="M2,5.5 L2,3.5 A3,3 0 0 1 8,3.5 L8,5.5" Stroke="#FF8FA3" StrokeThickness="1.4"/>
-                                        <Rectangle Canvas.Top="5" Width="10" Height="7" RadiusX="1.5" RadiusY="1.5" Fill="#FF8FA3"/>
-                                    </Canvas>
+                                    <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="12" Foreground="#FF8FA3" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                     <TextBlock x:Name="TxtAccountLock" FontSize="12" MaxWidth="170" TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <fx:IconGlyph x:Name="AccountFrozen" Kind="WeatherSnowflake" Size="12" Foreground="#FF8FA3" Margin="8,0,-4,0"
+                                                  VerticalAlignment="Center" IsVisible="False"/>
                                     <TextBlock x:Name="TxtAccountLeft" FontFamily="Consolas, Courier New" FontSize="12" FontWeight="Bold"
                                                Foreground="#FF8FA3" Margin="8,0,0,0" VerticalAlignment="Center" IsVisible="False"/>
-                                    <TextBlock Text="&#x2197;" FontSize="12" Margin="7,0,0,0" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                    <fx:IconGlyph Kind="Open" Size="12" Margin="7,0,0,0" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                         </Button>
@@ -153,11 +151,8 @@
                         BorderThickness="1.5" CornerRadius="19" Height="38">
                     <Button x:Name="BtnPause" Theme="{StaticResource CirceLink}" Padding="14,0" VerticalAlignment="Stretch" Click="BtnPause_Click">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Canvas Width="10" Height="12" VerticalAlignment="Center" Margin="0,0,7,0">
-                                <Rectangle x:Name="PauseBarA" Width="3" Height="12" RadiusX="1" RadiusY="1" Fill="{DynamicResource TextLightBrush}"/>
-                                <Rectangle x:Name="PauseBarB" Canvas.Left="7" Width="3" Height="12" RadiusX="1" RadiusY="1" Fill="{DynamicResource TextLightBrush}"/>
-                                <Path x:Name="PlayArrow" Data="M0,0 L10,6 L0,12 Z" Fill="#E0B052" IsVisible="False"/>
-                            </Canvas>
+                            <fx:IconGlyph x:Name="PauseGlyph" Kind="Pause" Variant="Filled" Size="14" VerticalAlignment="Center" Margin="0,0,7,0"
+                                          Foreground="{DynamicResource TextLightBrush}"/>
                             <TextBlock x:Name="TxtPause" FontFamily="Fredoka, Segoe UI" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -267,7 +262,7 @@
                         </Border>
                         <Border Theme="{StaticResource CirceFact}">
                             <StackPanel>
-                                <TextBlock Text="&#x21BA;" FontFamily="Fredoka, Segoe UI" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource TextLightBrush}"/>
+                                <fx:IconGlyph Kind="ArrowCounterclockwise" Size="22" Margin="0,4,0,4" HorizontalAlignment="Left" Foreground="{DynamicResource TextLightBrush}"/>
                                 <TextBlock Text="{loc:Str chaster_fact_floor}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </StackPanel>
                         </Border>
@@ -301,7 +296,7 @@
                 </Border>
                 <Border Theme="{StaticResource CirceFact}">
                     <StackPanel>
-                        <TextBlock Text="&#x21BA;" FontFamily="Fredoka, Segoe UI" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource TextLightBrush}"/>
+                        <fx:IconGlyph Kind="ArrowCounterclockwise" Size="22" Margin="0,4,0,4" HorizontalAlignment="Left" Foreground="{DynamicResource TextLightBrush}"/>
                         <TextBlock Text="{loc:Str chaster_fact_floor}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                 </Border>
@@ -346,7 +341,7 @@
                                 <TextBlock Text="{loc:Str chaster_stat_run}" Theme="{StaticResource CirceEyebrow}" Margin="1,2,0,0"/>
                                 <TextBlock Text="{loc:Str chaster_stat_run_sub}" Theme="{StaticResource CirceSub}"/>
                             </StackPanel>
-                            <TextBlock x:Name="TxtRunChevron" Text="&#x25BE;" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"
+                            <fx:IconGlyph x:Name="TxtRunChevron" Kind="ChevronDown" Size="14" HorizontalAlignment="Right" VerticalAlignment="Top"
                                        Foreground="{DynamicResource TextMutedBrush}"/>
                         </Panel>
                     </Border>
@@ -409,7 +404,7 @@
                                 </Panel>
                                 <TextBlock x:Name="TxtAddedClock" Text="0:00:00" FontFamily="Consolas, Courier New" FontSize="30" FontWeight="Bold"
                                            Foreground="#FFFF6B8A" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="TxtAddedChevron" Text="&#x25BE;" FontSize="14" Margin="10,0,0,0" VerticalAlignment="Center"
+                                <fx:IconGlyph x:Name="TxtAddedChevron" Kind="ChevronDown" Size="14" Margin="10,0,0,0" VerticalAlignment="Center"
                                            Foreground="{DynamicResource TextMutedBrush}"/>
                             </StackPanel>
                         </Border>

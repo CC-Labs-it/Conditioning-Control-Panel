@@ -65,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 HorizontalAlignment = HorizontalAlignment.Right, Opacity = 0.85, Child = _stampFigure,
                 RenderTransform = new RotateTransform(-5),   // pressed by hand; static, never animated
             };
-            _verdict.Children.Add(Face(24));
+            _verdict.Children.Add(CirceSays.Face(24));   // the same padlock face
             _verdict.Children.Add(_verdictText);
 
             var body = new StackPanel();
@@ -157,24 +157,5 @@ namespace ConditioningControlPanel.Avalonia.Controls
             Stroke = PaperEdge, StrokeThickness = 1, StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double> { 3, 3 },
             Margin = new Thickness(0, 6, 0, 6),
         };
-
-        /// <summary>WPF CirceSays.Face: a lilac-to-pink disc with an ink padlock.</summary>
-        private static Control Face(double size)
-        {
-            var ink = new SolidColorBrush(Color.FromRgb(0x24, 0x1A, 0x2E));
-            var art = new Canvas { Width = 14, Height = 15 };
-            art.Children.Add(new Path { Data = Geometry.Parse("M4,7 V5 a3,3 0 0 1 6,0 V7"), Stroke = ink, StrokeThickness = 1.8 });
-            art.Children.Add(new Rectangle { Width = 10, Height = 7.5, RadiusX = 2, RadiusY = 2, Fill = ink, Margin = new Thickness(2, 6.5, 0, 0) });
-            return new Border
-            {
-                Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center,
-                Background = new LinearGradientBrush
-                {
-                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-                    GradientStops = { new GradientStop(Color.FromRgb(0xD9, 0xC4, 0xFF), 0), new GradientStop(Color.FromRgb(0xFF, 0x8F, 0xB1), 1) },
-                },
-                Child = new Viewbox { Width = size * 0.58, Height = size * 0.58, Child = art },
-            };
-        }
     }
 }

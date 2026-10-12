@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Models;
 
@@ -87,7 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_feature == null) return;
 
             // Update header
-            TxtIcon.Text = _feature.Icon;
+            if (IconMap.ForFeature(_feature.Id) is { } icon) TxtIcon.Apply(icon);
+            else TxtIcon.Emoji = _feature.Icon;   // a feature with no id mapping: IconMap by emoji
             TxtFeatureName.Text = _feature.Name;
             TxtEventType.Text = evt.EventType == TimelineEventType.Start ? "Start Event" : "Stop Event";
 
@@ -548,7 +550,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SettingsPanel.Children.Add(buttonGrid);
 
             // Import from global button
-            var importButton = PhraseButton("📥 Import from Global Settings", InputBorder, new Thickness(0, 8, 0, 0));
+            var importButton = PhraseButton("Import from Global Settings", InputBorder, new Thickness(0, 8, 0, 0));
+            importButton.Content = new IconLabel { Kind = IconKind.ArrowDownload, Text = "Import from Global Settings", HorizontalAlignment = HorizontalAlignment.Center };
             importButton.Padding = new Thickness(8, 6);
             importButton.HorizontalAlignment = HorizontalAlignment.Stretch;
             importButton.Click += (_, _) => ImportFromGlobal(phrases, listBox, countText, isSubliminal);
