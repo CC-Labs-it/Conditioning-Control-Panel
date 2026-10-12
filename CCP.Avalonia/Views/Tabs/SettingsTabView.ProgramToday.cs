@@ -294,12 +294,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var run = ++_programBannerNudge;
             var top = TopLevel.GetTopLevel(this);
             if (!AmbientFxCanvas.Env.AllowTransitions || top == null) { slide.X = to; return; }
-            TimeSpan? start = null;
-            void Frame(TimeSpan now)
+            var start = BeatLoop.Time.GetTimestamp();   // elapsed on the beat's clock: a test steps it (P08)
+            void Frame(TimeSpan _)
             {
                 if (run != _programBannerNudge) return;
-                start ??= now;
-                var p = Math.Min(1, (now - start.Value).TotalMilliseconds / 260);
+                var p = Math.Min(1, BeatLoop.Time.GetElapsedTime(start).TotalMilliseconds / 260);
                 slide.X = from + (to - from) * (1 - (1 - p) * (1 - p));
                 if (p < 1) top.RequestAnimationFrame(Frame);
             }

@@ -59,6 +59,10 @@ public sealed class ProgramIgnitionTests
         var (edgePeak, breath, lap) = (ProgramHeat.EdgeGlowOpacity(heat), ProgramHeat.BreathSeconds(heat), ProgramHeat.BorderLapSeconds(heat));
         var spin = (RotateTransform)F<Border>("TodayPanel").BorderBrush!.Transform!;
         var cometX = (TranslateTransform)F<Rectangle>("RailComet").RenderTransform!;
+        // StepAll skips the FrameClock, so prove every rig loop also rides the live window's frames.
+        var rig = BeatLoop.Running.Where(l => l.Owner == tab || global::Avalonia.VisualTree.VisualExtensions.IsVisualAncestorOf(tab, l.Owner)).ToArray();
+        Assert.True(rig.Length >= 6, $"only {rig.Length} rig loops");          // sigil x2 (if art), border, wash, shimmer, edge, comet
+        Assert.All(rig, l => Assert.True(l.OnFrameBeat, $"{l.Owner.GetType().Name}/{(l.Owner as Control)?.Name} ticking={l.IsTicking} parked={l.Parked}"));
         Assert.Equal(edgePeak * 0.55, edge.Opacity, 3);
         Assert.Equal(0, spin.Angle, 3);
         Assert.Equal(-140, cometX.X, 3);

@@ -91,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             StopIgnitionLoops();
             StopMoments();
-            _accentFadeCts?.Cancel();
+            StopAccentFade();
         }
 
         /// <summary>One-shot moments are cancelled on hide/detach (and settle at rest via their done hooks).</summary>
@@ -136,7 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var key = RunKey(enrollment);
             if (_runAccent == null || !string.Equals(_runAccentKey, key, StringComparison.Ordinal))
             {
-                _accentFadeCts?.Cancel();
+                StopAccentFade();
                 _runAccent = new SolidColorBrush(target);
                 _runAccentKey = key;
                 _runAccentTarget = target;
@@ -150,13 +150,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void FadeAccent(Color target)
         {
-            _accentFadeCts?.Cancel();
+            StopAccentFade();
             var brush = _runAccent!;
             if (!Env.AllowTransitions) { brush.Color = target; return; }
             var from = brush.Color;
             _accentFadeCts = new CancellationTokenSource();
             Drive(AccentFadeSeconds, new QuadraticEaseInOut(), p => brush.Color = Mix(from, target, p),
                 _accentFadeCts.Token, () => { if (_runAccentTarget == target) brush.Color = target; });
+        }
+
+        private void StopAccentFade()
+        {
+            _accentFadeCts?.Cancel();
+            _accentFadeCts?.Dispose();
+            _accentFadeCts = null;
         }
 
         private Color AccentNow => _runAccentTarget ?? _runAccent?.Color ?? Colors.HotPink;
