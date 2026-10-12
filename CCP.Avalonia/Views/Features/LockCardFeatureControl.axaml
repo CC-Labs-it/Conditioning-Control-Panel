@@ -18,6 +18,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl">
 
     <Grid>
@@ -38,8 +39,7 @@
                     </Border>
 
                     <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
-                        <TextBlock Text="{loc:Str label_lock_card}" FontSize="17" FontWeight="Bold"
-                                   Foreground="{StaticResource TextLightBrush}"/>
+                        <fx:IconLabel Key="label_lock_card" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                         <TextBlock Text="{loc:Str tooltip_show_lock_cards_that_require_typing_to_dismis}"
                                    FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"
                                    TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
@@ -174,7 +174,7 @@
                                 <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                                 <!-- Strict lock -->
-                                <Grid Height="34" ToolTip.Tip="{loc:Str tooltip_cannot_escape_must_complete_typing}">
+                                <Grid Height="34" ToolTip.Tip="{loc:StrBare tooltip_cannot_escape_must_complete_typing}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
@@ -192,8 +192,8 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="🎤 Solve by voice" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <fx:IconLabel Grid.Column="0" Kind="Mic" Text="Solve by voice" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                  TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                     <CheckBox Grid.Column="1" x:Name="ChkVoiceMode"
                                               Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                                 </Grid>
@@ -231,13 +231,16 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0" x:Name="BtnManagePhrases" Theme="{DynamicResource OutlineButton}">
-                            <TextBlock Text="{loc:Str btn_manage_phrases}"/>
+                            <fx:IconLabel Key="btn_manage_phrases"/>
                         </Button>
                         <Button Grid.Column="2" x:Name="BtnTest" Theme="{DynamicResource OutlineButton}">
-                            <TextBlock Text="{loc:Str btn_test_2}"/>
+                            <fx:IconLabel Key="btn_test_2"/>
                         </Button>
-                        <Button Grid.Column="4" x:Name="BtnColorSettings" Content="⚙" Width="44"
-                                Theme="{DynamicResource OutlineButton}"/>
+                        <Button Grid.Column="4" x:Name="BtnColorSettings" Width="44"
+                                AutomationProperties.Name="{loc:Str tooltip_customize_lock_card_colors}"
+                                Theme="{DynamicResource OutlineButton}">
+                            <fx:IconGlyph Kind="Settings"/>
+                        </Button>
                     </Grid>
                 </StackPanel>
 

@@ -156,6 +156,8 @@ public sealed class ProfileBubbleTests
         var s = service.Current;
         s.MotionLevel = MotionLevel.Full;
         s.PerformanceMode = false;
+        var time = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         var shell = new MainShellWindow();
         try
         {
@@ -171,10 +173,22 @@ public sealed class ProfileBubbleTests
             Assert.True(shell.IsActive);
             Assert.True(shell.OgBorderLoopRunning);
             Assert.NotNull(og.Background!.Transform);
+            // The spin turns (Animation.RunAsync on the RotateTransform threw and left it at 0).
+            time.Advance(TimeSpan.FromSeconds(1.5));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(180, ((RotateTransform)og.Background!.Transform!).Angle, 3);
+            time.Advance(TimeSpan.FromSeconds(2.25));                // past one turn it keeps looping
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(90, ((RotateTransform)og.Background!.Transform!).Angle, 3);
+            Assert.True(shell.OgBorderLoopRunning);
 
             shell.ShowTab("settings");                          // the tab hides: the loop stops (P01)
             Dispatcher.UIThread.RunJobs();
             Assert.False(shell.OgBorderLoopRunning);
+            // Freshen the shared animation clock first: a transition still running on it (the
+            // section wash/edge crossfade of an earlier navigation) would hand the stagger the
+            // whole real-time gap since its last tick as one frame.
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             shell.ShowTab("discord");
             Dispatcher.UIThread.RunJobs();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
@@ -207,6 +221,7 @@ public sealed class ProfileBubbleTests
             shell.Close();
             Dispatcher.UIThread.RunJobs();
             CoreSettings.ServiceProvider = saved;
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = TimeProvider.System;
         }
         return Task.CompletedTask;
     });

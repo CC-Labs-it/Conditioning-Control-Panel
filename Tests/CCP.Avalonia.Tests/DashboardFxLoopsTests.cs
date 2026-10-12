@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -36,6 +37,8 @@ public sealed class DashboardFxLoopsTests
         s.MotionLevel = MotionLevel.Full;
         s.PerformanceMode = false;
 
+        var time = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         var shell = new MainShellWindow();
         try
         {
@@ -55,6 +58,18 @@ public sealed class DashboardFxLoopsTests
                 Assert.Equal(on, shell.VaultCtaBreathing);
             }
             AllBreathing(true);
+
+            // The stamp really breathes 1.0 -> 1.07 -> 1.0 (Animation.RunAsync on its ScaleTransform threw).
+            var scale = (ScaleTransform)((TransformGroup)dash.FindControl<TextBlock>("VaultCta")!.RenderTransform!).Children[0];
+            time.Advance(TimeSpan.FromSeconds(1.1));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(1.035, scale.ScaleX, 3);
+            time.Advance(TimeSpan.FromSeconds(1.1));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(1.07, scale.ScaleY, 3);
+            time.Advance(TimeSpan.FromSeconds(2.2));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(1.0, scale.ScaleX, 3);
 
             // Minimised: every loop parks; restored: they re-arm (the funnel's window hook).
             shell.WindowState = WindowState.Minimized;
@@ -99,6 +114,7 @@ public sealed class DashboardFxLoopsTests
         {
             shell.Close();
             Dispatcher.UIThread.RunJobs();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = TimeProvider.System;
             s.MotionLevel = MotionLevel.Full;
             s.PerformanceMode = false;
             CoreSettings.ServiceProvider = old;

@@ -77,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Window focus + not minimised: the ambient gate every loop in this file passes
         /// through. See the header for the two halves that are missing.</summary>
-        private bool Pr4aAmbientAllowed => IsActive && WindowState != WindowState.Minimized;
+        internal bool Pr4aAmbientAllowed => IsActive && WindowState != WindowState.Minimized;
 
         /// <summary>The mod's glow colour, from the one theme key a mod switch rewrites. The
         /// fallback is the shipped FxGlowColor, so a missing key tints rather than throwing.</summary>

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   # THE ANTI-DRIFT JOB. Its entire value is that it runs on a machine where WPF cannot exist:
@@ -155,8 +156,11 @@ jobs:
         run: dotnet test Tests/CCP.Avalonia.Language.Tests/CCP.Avalonia.Language.Tests.csproj -c Release
       - name: Test Avalonia catalogue startup fallback
         run: dotnet test Tests/CCP.Avalonia.CatalogueStartup.Tests/CCP.Avalonia.CatalogueStartup.Tests.csproj -c Release
+      # Sharded like ubuntu: one testhost ran out of memory here too ("Unable to allocate pixels",
+      # OutOfMemoryException 32 min into run 38144551173, failing three unrelated tests).
       - name: Test Avalonia notification suite
-        run: dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
+        shell: bash
+        run: bash .github/scripts/avalonia-tests-sharded.sh
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release
       - name: Test Avalonia report workflow

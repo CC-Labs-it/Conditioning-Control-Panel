@@ -361,7 +361,7 @@
                                                 </TextBlock>
                                                 <TextBlock Text="{Binding Tagline}" Foreground="#9A93B8"
                                                            FontSize="11" TextWrapping="Wrap"
-                                                           TextTrimming="CharacterEllipsis" MaxHeight="30"
+                                                           TextTrimming="CharacterEllipsis" MaxLines="2"
                                                            Margin="0,2,0,0"/>
                                             </StackPanel>
                                         </Border>

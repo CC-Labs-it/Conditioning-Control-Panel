@@ -13,6 +13,40 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
+    /// Distro-check F3: LibVLCSharp P/Invokes "libvlc"/"libvlccore", which .NET probes only as
+    /// libvlc.so; Debian/Ubuntu/Fedora runtime packages ship just the soname (libvlc.so.5,
+    /// libvlccore.so.9; the bare .so is in -dev). Resolve to the unversioned name, then the soname.
+    /// </summary>
+    internal static class LibVlcNative
+    {
+        private static readonly Dictionary<string, string[]> Candidates = new()
+        {
+            ["libvlc"] = new[] { "libvlc.so", "libvlc.so.5" },
+            ["libvlccore"] = new[] { "libvlccore.so", "libvlccore.so.9" },
+        };
+        private static int _installed;
+
+        public static void Install()
+        {
+            if (Interlocked.Exchange(ref _installed, 1) == 1) return;   // one resolver per assembly
+            System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(typeof(Core).Assembly, (name, _, _) =>
+                Resolve(name, f => System.Runtime.InteropServices.NativeLibrary.TryLoad(f, out var h) ? h : IntPtr.Zero));
+        }
+
+        /// <summary>First candidate <paramref name="tryLoad"/> opens; Zero = let .NET probe as usual.</summary>
+        internal static IntPtr Resolve(string name, Func<string, IntPtr> tryLoad)
+        {
+            if (!Candidates.TryGetValue(name, out var files)) return IntPtr.Zero;
+            foreach (var f in files)
+            {
+                var h = tryLoad(f);
+                if (h != IntPtr.Zero) return h;
+            }
+            return IntPtr.Zero;
+        }
+    }
+
+    /// <summary>
     /// The Avalonia head's answer to <see cref="CoreAudio"/>: one shared LibVLC, one
     /// MediaPlayer per one-shot, disposed when the clip ends. Ducking lowers OTHER apps'
     /// PulseAudio/PipeWire sink-inputs through <c>pactl</c> on Linux and restores them on
@@ -40,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 .Select(sub => System.IO.Path.Combine(AppContext.BaseDirectory, "libvlc", sub))
                 .FirstOrDefault(d => System.IO.File.Exists(System.IO.Path.Combine(d, "libvlc.dll")));
             if (OperatingSystem.IsWindows() && bundled != null) Core.Initialize(bundled);
-            else Core.Initialize();
+            else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             _vlc = new LibVLC(options.Append("--quiet").ToArray());
             Shared ??= _vlc;
@@ -365,7 +399,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     list.Add(new(id, string.IsNullOrWhiteSpace(name) ? id : name));
                 }
             }
-            catch (Exception ex) { Log.Warning("EnumerateOutputDevices failed: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Information("EnumerateOutputDevices: no pactl device list ({Error})", ex.Message); }
             return list;
         }
 
@@ -387,8 +421,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { Log.Debug("ApplyPreferredDevice: {Error}", ex.Message); }
         }
 
+        /// <summary>pactl is on PATH (pulseaudio-utils / libpulse). Checked once.</summary>
+        internal static bool PactlInstalled => _pactlInstalled.Value;
+        private static readonly Lazy<bool> _pactlInstalled = new(() => OnPath("pactl", Environment.GetEnvironmentVariable("PATH")));
+
+        internal static bool OnPath(string exe, string? path) =>
+            (path ?? "").Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Any(d => File.Exists(System.IO.Path.Combine(d, exe)));
+
         internal static string Pactl(string args)
         {
+            if (!PactlInstalled) throw new InvalidOperationException("pactl is not installed");
             using var p = Process.Start(new ProcessStartInfo("pactl", args)
             {
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,

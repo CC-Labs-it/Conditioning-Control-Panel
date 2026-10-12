@@ -329,11 +329,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 {
                     Orientation = Orientation.Horizontal,
                 };
-                tipsHeading.Children.Add(new TextBlock
+                tipsHeading.Children.Add(new IconGlyph
                 {
-                    Text = "💡",
+                    Kind = IconKind.Lightbulb,
                     Foreground = tipsGold,
-                    FontSize = 11,
+                    Size = 11,
                     Margin = new Thickness(0, 0, 4, 4),
                 });
                 tipsHeading.Children.Add(Heading("help_heading_tips", tipsGold));
@@ -378,11 +378,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 {
                     Orientation = Orientation.Horizontal,
                 };
-                howBody.Children.Add(new TextBlock
+                howBody.Children.Add(new IconGlyph
                 {
-                    Text = "⚙",
+                    Kind = IconKind.Settings,
                     Foreground = howForeground,
-                    FontSize = 11,
+                    Size = 11,
                     Margin = new Thickness(0, 0, 4, 4),
                 });
                 howBody.Children.Add(Heading("help_heading_how_it_works", howForeground));

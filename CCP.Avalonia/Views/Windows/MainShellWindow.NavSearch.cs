@@ -15,8 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         /// <summary>Glow the strip pill / rail row / Settings pill for <paramref name="key"/> once,
         /// after a Show me or a palette landing. WPF's own seam (MainWindow.WhatMoved.cs:23):
-        /// the section strip implements it; unimplemented, the call compiles away and navigation
-        /// still lands. ponytail: body arrives with the section strip + NavGlow (lane sync6-nav-rail).</summary>
+        /// the body lives in MainShellWindow.SectionChrome.cs (NavGlow).</summary>
         partial void GlowNavTarget(string key);
 
         /// <summary>WPF GlowNavKey (SectionChrome.cs:313): the palette's door to the private partial.</summary>

@@ -5,7 +5,7 @@
 //   OpenDeviceSettings and RefreshDeviceSettingsLists are listed below as dropped, and one of them
 //   is stale. OpenDeviceSettings ALREADY SHIPS on this head - MainShellWindow.Settings.cs:82,
 //   ShowTab("appsettings") + AppSettingsPage.FocusSection("devices"), asserted by --nav-check and
-//   called from SystemFeatureControl. Do not re-add it here; a second definition is a compile
+//   called from AssetsTabView (Library > Folders). Do not re-add it here; a second definition is a compile
 //   error, and a second copy would be the wrong kind of fix if it were not.
 //   RefreshDeviceSettingsLists genuinely is missing, and needs the camera/monitor enumeration
 //   below before it means anything.
