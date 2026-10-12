@@ -230,9 +230,8 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     const d = e && e.detail;
     if (!d) return;
     if (d.kind === 'pop') { lastPop = { x: d.x, y: d.y, t: performance.now() }; return; }
-    if (d.kind === 'emotes' && d.count > 0) {
-      if (!flyReward('emote', d.x, d.y, d.count, pulseEmotes)) arriveTick('emote');
-    }
+    // Emotes do not fly to the counter (owner, 2026-10-12): they rain from the pop as they
+    // always did and the number pulses on the gain (setEmotes). Gold still flies.
   }
   window.addEventListener('dtrh:field', onFieldEvent);
   function clearFlights() {
