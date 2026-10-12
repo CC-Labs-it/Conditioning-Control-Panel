@@ -56,16 +56,20 @@ namespace ConditioningControlPanel.Services
         /// The whole WPF pack branch in one call: roll <see cref="ShouldDrawPack"/> against
         /// <paramref name="localCount"/>, take the next entry of the shuffled walk and decrypt it. Null
         /// when the roll picks local, no active pack holds this type, or the decrypt failed - the caller
-        /// then falls back to its local pick, as WPF does.
+        /// then falls back to its local pick, as WPF does. <paramref name="remaining"/>: weigh the pack
+        /// entries still to come this cycle, for callers whose <paramref name="localCount"/> is what is
+        /// left in a dealt queue (WPF VideoService.cs:8017 / BubbleCountService.cs:684 weigh queue
+        /// lengths); flash weighs whole lists (FlashService.cs:3555).
         /// </summary>
-        public string? TryDraw(int localCount)
+        public string? TryDraw(int localCount, bool remaining = false)
         {
             List<(string PackId, PackFileEntry File)> list;
             (string PackId, PackFileEntry File) entry;
             lock (_lock)
             {
                 list = Entries();
-                if (!ShouldDrawPack(localCount, list.Count, _rng) || !_bag.TryNext(list, out entry)) return null;
+                var packCount = remaining && list.Count > 0 && _bag.Remaining > 0 ? Math.Min(_bag.Remaining, list.Count) : list.Count;
+                if (!ShouldDrawPack(localCount, packCount, _rng) || !_bag.TryNext(list, out entry)) return null;
             }
             return Decrypt(entry);
         }

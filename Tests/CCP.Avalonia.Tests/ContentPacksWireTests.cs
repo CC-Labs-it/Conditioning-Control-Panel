@@ -81,6 +81,7 @@ public sealed class ContentPacksWireTests : IDisposable
         var app = Code("CCP.Avalonia", "App.axaml.cs");
         Assert.Matches(@"StartContentPacks\(new ContentPackStore\(\),", app);
         Assert.Contains("ContentPackStore.Current?.CleanupTempFiles()", app);
+        Assert.Matches(@"ContentPackStore\.SweepStaleTemps\(Path\.Combine\(CorePaths\.EffectiveAssets,\s*\),\s*sandboxed \? null : Path\.GetTempPath\(\)\)", app);
         Assert.Contains("ContentPackStore.Current?.Rescan()", Code("CCP.Avalonia", "Views", "Windows", "MainShellWindow.Settings.cs"));
         var pool = @"PackVideos\s*=\s*new ConditioningControlPanel\.Services\.PackMediaPool\(ConditioningControlPanel\.Services\.ContentPackStore\.VideoType\)";
         Assert.Matches(pool, Code("CCP.Avalonia", "Views", "Overlays", "MandatoryVideoOverlay.cs"));

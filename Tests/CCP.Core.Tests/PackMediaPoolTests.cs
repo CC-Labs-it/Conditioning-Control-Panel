@@ -100,4 +100,41 @@ public sealed class PackMediaPoolTests : IDisposable
         Assert.Null(video.PickNext());
         Assert.Null(bubble.PickNext());
     }
+
+    [Fact]
+    public void QueueCallers_WeighThePackClipsLeftThisCycle()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", Enumerable.Range(0, 10).Select(i => ($"{i}.png", "image")).ToArray());
+        // Real manifests, stubbed file decrypt: PBKDF2 per decrypt would make 4000 draws take minutes.
+        var store = new ContentPackStore(() => _root, () => _settings, () => { }, decryptFile: _ => new byte[] { 1 },
+            tempDir: () => Path.Combine(_root, ".temp"));
+        int Hits(bool remaining)
+        {
+            var hits = 0;
+            for (var n = 0; n < 200; n++)
+            {
+                var pool = new PackMediaPool(ContentPackStore.ImageType, new Random(n), () => store);
+                for (var k = 0; k < 9; k++) pool.TryDraw(0);   // one pack clip left this cycle
+                if (pool.TryDraw(99, remaining) != null) hits++;
+                pool.CleanupTemps();
+            }
+            return hits;
+        }
+        Assert.InRange(Hits(remaining: true), 0, 8);      // WPF VideoService.cs:8017: 1 of 100 -> ~1 %
+        Assert.InRange(Hits(remaining: false), 9, 40);    // flash weighs whole lists: 10 of 109 -> ~9 %
+    }
+
+    [Fact]
+    public void StartupSweep_DeletesOnlyStaleDecrypts()
+    {
+        var temp = Path.Combine(_root, ".temp");
+        Directory.CreateDirectory(temp);
+        File.WriteAllText(Path.Combine(temp, "ccp_temp_old.png"), "x");
+        File.WriteAllText(Path.Combine(temp, "keep.png"), "x");
+
+        Assert.Equal(1, ContentPackStore.SweepStaleTemps(temp, null, Path.Combine(_root, "missing")));
+
+        Assert.False(File.Exists(Path.Combine(temp, "ccp_temp_old.png")));
+        Assert.True(File.Exists(Path.Combine(temp, "keep.png")));
+    }
 }

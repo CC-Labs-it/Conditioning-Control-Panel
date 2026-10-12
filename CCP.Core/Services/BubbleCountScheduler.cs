@@ -260,7 +260,7 @@ namespace ConditioningControlPanel.Services
             if (_queue.Count == 0) _queue = new Queue<string>(_library().OrderBy(_ => _random.Next()));
             // WPF GetNextVideo (BubbleCountService.cs:684-720): pack clips join, weighted by count; a
             // failed decrypt falls through to a local clip.
-            if (PackVideos?.TryDraw(_queue.Count) is { } pack) return pack;
+            if (PackVideos?.TryDraw(_queue.Count, remaining: true) is { } pack) return pack;
             return _queue.Count > 0 ? _queue.Dequeue() : null;
         }
 

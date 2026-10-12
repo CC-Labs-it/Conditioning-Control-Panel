@@ -440,7 +440,7 @@ namespace ConditioningControlPanel.Services
             // WPF GetNextVideo (VideoService.cs:8015-8049): active pack clips join the local pick,
             // weighted by count; a failed decrypt falls back to the local queue. Pack clips skip the
             // length filter (PackFileEntry carries no duration).
-            if (PackVideos?.TryDraw(_queue.Count) is { } pack) return pack;
+            if (PackVideos?.TryDraw(_queue.Count, remaining: true) is { } pack) return pack;
             return _queue.Count > 0 ? _queue.Dequeue() : null;
         }
 

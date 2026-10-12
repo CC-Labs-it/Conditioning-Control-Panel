@@ -604,6 +604,11 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     Serilog.Log.Error(ex, "Failed to initialize ReleaseContentService - downloaded content unavailable this session");
                 }
+                // WPF App.xaml.cs:915 CleanupStaleTempFiles: decrypts a crash or kill left behind. A sandbox
+                // sweeps only its own assets, never the shared system temp another instance may be using.
+                var sandboxed = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"));
+                try { ContentPackStore.SweepStaleTemps(Path.Combine(CorePaths.EffectiveAssets, ".temp"), sandboxed ? null : Path.GetTempPath()); }
+                catch (Exception ex) { Serilog.Log.Debug("Stale pack temp sweep failed: {E}", ex.Message); }
                 try
                 {
                     StartContentPacks(new ContentPackStore(), Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
@@ -1118,7 +1123,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
-            // no decrypted pack file outlives the app.
+            // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
             try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
