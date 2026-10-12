@@ -1040,3 +1040,12 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Release builds compile it out (`#if DEBUG`; the Release `CCP.Avalonia.dll` holds no `CCP_SANDBOX_WHITELIST` string), so
   shipped builds keep the paywall. Only `~/ccp-port/bin/kc start` sets the variable; headless tests do not (and run Release),
   so they keep testing the gates. Tests: `SandboxWhitelistTests.cs`, `AccountSettingsSectionTests.SandboxWhitelistShowsOnTheTierCardOnlyInDebug`.
+## 2026-10-12: The 6-blink stop is WPF's recalibration stop, not a panic (avalonia-port/mine-safety)
+- Question: which surfaces does the rapid 6-blink stop (`MainShellWindow.BlinkStop.cs`) stop on this head?
+- Options: (A) the whole panic registry minus intake/gaze minigame/Chaos/camera, which also ends today's program session,
+  cancels the mic and AI follow-ups and stops the toys; (B) only what WPF `StopAllForRecalibration` (MainWindow.LabTab.cs:268-284) reaches.
+- Choice: B, exactly the WPF set (advised by: supervisor): `blink-trainer`, `mantra`, `takeover`, `engine` (the session is paused,
+  never ended), `pink-rush`, `lock-cards` (WPF closes them: App.xaml.cs:1778 `LockCard.Stop(dismissOpenCards: true)` and
+  StartStop.cs:~516 `LockCardWindow.ForceCloseAll()`) and `tube-speech` (KillAllAudio's `StopVoiceLineAudio`). The program
+  run, camera, mic, AI and haptics are left alone; the panic key stays the way to stop everything.
+- Test: `BlinkStopTests.SixTrackerBlinksStopEverythingButTheCamera` asserts the exact set and the kept surfaces.
