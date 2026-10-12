@@ -145,6 +145,108 @@ public sealed class FirstShowStageTests
         }
     });
 
+    /// <summary>WPF FirstShowEffects.Tick/Render: sparks on every spawn, the brain-drain beat (11-15 s), the two
+    /// floating words and the subliminal flash from 15 s, the spiral under the pink beat, the reveal burst.</summary>
+    [Fact]
+    public Task TheCarriedEffectsRunOnTheScript() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var service = new SettingsService();
+        var old = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        var fx = new FirstShowEffects(_ => { }) { Width = 1600, Height = 900, Particles = () => true };
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            await fx.LoadAsync(Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray());
+            Assert.True(fx.HasSpiral);
+            fx.Tick(S.FlashAt, .016);
+            Assert.True(fx.SparkCount > 0);                        // the spawn burst
+            Assert.Equal(0, fx.DrainAlpha);
+            fx.Tick(S.DrainAt + 1, .016);
+            Assert.True(fx.DrainAlpha > .2);
+            Assert.Equal(0, fx.WordCount);
+            fx.Tick(S.WordsAt, .016); fx.Tick(S.WordsAt + .1, .016);
+            Assert.Equal(0, fx.DrainAlpha);
+            Assert.Equal(2, fx.WordCount);
+            Assert.Equal(.7, fx.SubliminalAlpha, 2);
+            var host = new Window { Width = 1600, Height = 900, Content = fx };
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            using (var bmp = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(400, 225))) bmp.Render(fx);
+            host.Content = null; host.Close();
+            fx.Tick(S.SubliminalUntil + .5, .016);
+            Assert.Equal(0, fx.SubliminalAlpha);
+            fx.Tick(S.RevealAt, .016);
+            Assert.True(fx.SparkCount > 60);                       // six bursts and the ripple
+        }
+        finally { fx.Dispose(); service.SaveImmediate(); CoreSettings.ServiceProvider = old; }
+    });
+
+    /// <summary>WPF Guide.cs: verdict -> "Show me around" walks Core WelcomeSteps on the real shell, rings the
+    /// first unlocked feature card's help button (lit as a preview), and "sessions" closes on the Presets tab.</summary>
+    [Fact]
+    public Task TheGuideWalksTheRealShell() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var service = new SettingsService();
+        var old = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreSettings.Current.Welcomed = true;
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            CoreSettings.Current.MasterVolume = 0;
+            FirstShowService.RequireClickThrough = false;
+            shell = new MainShellWindow { OpenWelcomeShow = _ => false };
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(FirstShowService.Open(shell));
+            var stage = FirstShowService.Window!;
+            double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+            stage.Start(); t += S.Length + .1; stage.Frame();
+            Click(stage, 0);                                       // "liked"
+            Assert.Equal(Loc.Get("first_show_replyLiked"), stage.SpeechText);
+            Click(stage, 0);                                       // "show me around"
+            Assert.Equal(0, stage.GuideIndex);
+            Assert.Equal("settings", shell.CurrentTab);
+            Assert.Equal(Loc.Get("first_show_guideHelp"), stage.SpeechText);
+            Assert.Single(stage.ChoiceButtons);                    // a hover step: only "finish"
+            await Until(() => { t += .05; stage.Frame(); return stage.GuideTarget != null; });
+            Assert.Equal("BtnHelp", stage.GuideTarget!.Name);
+            var card = stage.PreviewCard!;
+            Assert.True(card.TutorialPreview);
+            t += .05; stage.Frame();
+            Assert.NotNull(stage.HighlightTarget);
+            stage.FoundHelp();
+            Assert.Equal(Loc.Get("first_show_foundHelp"), stage.SpeechText);
+            Click(stage, 0);                                       // "next"
+            Assert.False(card.TutorialPreview);
+            Assert.Equal("assets", shell.CurrentTab);
+            Assert.Equal(Loc.Get("first_show_guideMedia"), stage.SpeechText);
+            Click(stage, stage.ChoiceButtons.Count - 1);           // "finish the tour"
+            Assert.Equal(Loc.Get("first_show_whereNext"), stage.SpeechText);
+            Assert.Equal(3, stage.ChoiceButtons.Count);
+            Click(stage, 0);                                       // "sessions"
+            Assert.False(FirstShowService.IsActive);
+            Assert.Equal("presets", shell.CurrentTab);
+        }
+        finally
+        {
+            FirstShowService.Stop();
+            FirstShowService.RequireClickThrough = true;
+            EmiDeskService.Instance.Window?.ShutDown();
+            foreach (var o in shell?.OwnedWindows.ToList() ?? new()) o.Close();
+            shell?.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate(); CoreSettings.ServiceProvider = old;
+        }
+    });
+
+    private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
     private static async Task Until(Func<bool> probe)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);   // P73: bounded by time
