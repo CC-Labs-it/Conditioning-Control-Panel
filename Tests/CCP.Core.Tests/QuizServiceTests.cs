@@ -138,6 +138,7 @@ public sealed class QuizServiceTests : IDisposable
     [Fact]
     public async Task NoIdentityOrNoProxyMeansNothingIsSent()
     {
+        CoreAccount.UnifiedUserId = null;
         using (var quiz = new QuizService(_baseUrl))
             Assert.Null(await quiz.StartQuizAsync(QuizCategory.Sissy));
         CoreAccount.UnifiedUserId = "u-quiz";
