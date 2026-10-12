@@ -177,16 +177,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             strip.SectionRequested += section =>
                 ShowTab(section == NavSections.Settings ? "appsettings" : NavLastTabFor(section));
             // Settings keeps its own left pill column; the breadcrumb follows it (WPF :233).
-            AppSettingsPage?.AddHandler(ToggleButton.IsCheckedChangedEvent, (_, e) =>
+            // A plain event, not IsCheckedChangedEvent: that routed event never reached the page,
+            // so the crumb stayed "General" after the System bubble lit Monitors.
+            if (AppSettingsPage is { } page) page.SectionChecked += () =>
             {
-                if (e.Source is RadioButton { IsChecked: true } rb && rb.Name?.StartsWith("SectionPill", StringComparison.Ordinal) == true
-                    && CurrentTab == "appsettings")
-                {
-                    var label = CurrentSettingsSectionLabel();
-                    strip.Show(NavSections.Settings, "appsettings", label);
-                    UpdateNavTitle(NavSections.Settings, "appsettings", label);
-                }
-            }, RoutingStrategies.Bubble);
+                if (CurrentTab != "appsettings") return;
+                var label = CurrentSettingsSectionLabel();
+                strip.Show(NavSections.Settings, "appsettings", label);
+                UpdateNavTitle(NavSections.Settings, "appsettings", label);
+            };
         }
 
         /// <summary>Pills this head can open. A page another lane has not ported yet (Friends,

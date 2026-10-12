@@ -15,6 +15,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.FlashFeatureControl">
 
     <!-- Velvet Kit 2 density pass. The root stays a StackPanel: MainWindow.SessionFeatureLock.cs
@@ -35,8 +36,7 @@
                     </Border.OpacityMask>
                 </Border>
                 <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                    <TextBlock Text="{loc:Str section_flash_images}" FontSize="17" FontWeight="Bold"
-                               Foreground="{StaticResource TextLightBrush}"/>
+                    <fx:IconLabel Key="section_flash_images" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                     <TextBlock Text="{loc:Str tooltip_flash_enable}" FontSize="11.5"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"/>
                 </StackPanel>
@@ -47,7 +47,7 @@
                              exactly as a scheduled flash would draw it (Views/Overlays/FlashOverlay). -->
                         <Button x:Name="BtnTestFlash" Theme="{DynamicResource OutlineButton}" Margin="0,0,10,0"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="{loc:Str btn_test_2}"/>
+                            <fx:IconLabel Key="btn_test_2"/>
                         </Button>
                         <TextBlock Text="{loc:Str btn_enable}" FontSize="11.5" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -165,8 +165,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_hydra}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="setting_hydra" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkCorruption"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
@@ -176,8 +175,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_linked}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="setting_linked" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkHydraLinked"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
@@ -187,8 +185,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_glow}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="setting_glow" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkGlow"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>

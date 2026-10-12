@@ -7,7 +7,7 @@
        CmpBoolToVis / Inverse       ->  IsVisible="{Binding X}" / "{Binding !X}"
        CmpHasContentToVis           ->  StringConverters.IsNotNullOrEmpty
        CmpEmptyToVis                ->  StringConverters.IsNullOrEmpty
-       Image + CmpEmojiToImage      ->  <TextBlock Text="💬"/>: Avalonia renders colour emoji natively
+       Image + CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        DataTemplate.Triggers        ->  Classes.you / Classes.echo on the row + selectors in
                                         UserControl.Styles. The her defaults are set by the base
                                         selectors too, because a local attribute would beat the
@@ -25,6 +25,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.ChatThresholdView"
              x:DataType="local:ChatThresholdViewModel"
@@ -86,7 +87,8 @@
 
                     <!-- the AI badge floats on the bubble's top-right corner -->
                     <Border x:Name="Badge" Theme="{StaticResource CmpAiBadgeStyle}" IsVisible="{Binding IsAiGenerated}">
-                        <TextBlock Text="{loc:Str companion_chat_ai_badge}" Theme="{StaticResource CmpAiBadgeTextStyle}"/>
+                        <fx:IconLabel Key="companion_chat_ai_badge" TextElement.FontSize="8.5" TextElement.FontWeight="Bold"
+                                      TextElement.Foreground="{StaticResource CmpTextBrush}"/>
                     </Border>
                 </Grid>
             </DataTemplate>
@@ -146,7 +148,7 @@
             <!-- ========== header ========== -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="💬" FontSize="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="Chat" Size="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Str companion_chat_title}" Theme="{StaticResource CmpSectionTitleStyle}"/>
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="{Binding LastHeardCopy}"
@@ -184,7 +186,7 @@
 
                     <!-- …and the one thing in it that does -->
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="🔒" Theme="{StaticResource CmpLockGlyphStyle}" HorizontalAlignment="Center"/>
+                        <fx:IconGlyph Theme="{StaticResource CmpLockGlyphStyle}" HorizontalAlignment="Center"/>
                         <TextBlock Text="{Binding LockCopy}" Theme="{StaticResource CmpVeilCopyStyle}"/>
                         <Button Theme="{StaticResource CmpCtaPillStyle}"
                                 HorizontalAlignment="Center" Command="{Binding UnlockCommand}">
@@ -255,8 +257,9 @@
 
                 <Button Grid.Column="1" Theme="{StaticResource CmpSendButtonStyle}"
                         Command="{Binding SendCommand}" IsEnabled="{Binding CanSend}"
-                        ToolTip.Tip="{loc:Str companion_chat_send_tip}">
-                    <TextBlock Text="♥" FontSize="16" Foreground="White"/>
+                        ToolTip.Tip="{loc:Str companion_chat_send_tip}"
+                        AutomationProperties.Name="{loc:Str companion_chat_send_tip}">
+                    <fx:IconGlyph Kind="Heart" Variant="Filled" Size="16" Foreground="White"/>
                 </Button>
             </Grid>
 

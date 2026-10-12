@@ -1,5 +1,8 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Models;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -21,11 +24,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public int Current { get; init; }
         public int Target { get; init; }
         public bool IsCompleted { get; init; }
-        public string XpText { get; init; } = "";
-        public string? BonusText { get; init; }         // streak / reroll multipliers, or null
+        public string XpText { get; init; } = "";       // "120 XP"; the gift is the XpIcon glyph
+        public int StreakBonusPct { get; init; }        // 0 = none; drawn "+N%" + Fire
+        public int RerollBonusPct { get; init; }        // 0 = none; drawn "+N%" + ArrowSync
         public IImage? Art { get; init; }
         public bool CanReroll { get; init; }
-        public string RerollText { get; init; } = "";
+        public string RerollKey { get; init; } = "";    // btn_reroll_with_count (with RerollCount) / btn_reroll_none
+        public int RerollCount { get; init; }
         public string? RerollTooltip { get; init; }
     }
 
@@ -66,8 +71,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly Border _track;
         private readonly Border _fill;
         private readonly Border _completedOverlay;
-        private readonly TextBlock _txtSlot, _txtIcon, _txtName, _txtDesc;
-        private readonly TextBlock _txtXp, _txtXpBonus, _txtProgress, _txtRemaining, _txtReroll;
+        private readonly TextBlock _txtSlot, _txtName, _txtDesc;
+        private readonly TextBlock _txtXp, _txtXpBonus, _txtProgress, _txtRemaining;
+        private readonly IconGlyph _questIcon, _xpIcon;
+        private readonly IconLabel _reroll;
         private readonly Image _art;
         private readonly Button _btnReroll;
 
@@ -90,14 +97,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _fill = this.FindControl<Border>("Fill")!;
             _completedOverlay = this.FindControl<Border>("CompletedOverlay")!;
             _txtSlot = this.FindControl<TextBlock>("TxtSlot")!;
-            _txtIcon = this.FindControl<TextBlock>("TxtIcon")!;
+            _questIcon = this.FindControl<IconGlyph>("QuestIcon")!;
+            _xpIcon = this.FindControl<IconGlyph>("XpIcon")!;
             _txtName = this.FindControl<TextBlock>("TxtName")!;
             _txtDesc = this.FindControl<TextBlock>("TxtDesc")!;
             _txtXp = this.FindControl<TextBlock>("TxtXp")!;
             _txtXpBonus = this.FindControl<TextBlock>("TxtXpBonus")!;
             _txtProgress = this.FindControl<TextBlock>("TxtProgress")!;
             _txtRemaining = this.FindControl<TextBlock>("TxtRemaining")!;
-            _txtReroll = this.FindControl<TextBlock>("TxtReroll")!;
+            _reroll = this.FindControl<IconLabel>("RerollLabel")!;
             _art = this.FindControl<Image>("Art")!;
             _btnReroll = this.FindControl<Button>("BtnReroll")!;
 
@@ -111,15 +119,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             Apply(new DailyQuestCardModel
             {
                 Slot = 0,
-                Icon = "🌀",
+                Icon = QuestDefinition.DailyQuests[0].Icon,
                 Name = "Surrender",
                 Description = "Complete 5 minutes of guided breathing.",
                 Current = 3,
                 Target = 5,
-                XpText = "+120 XP",
-                BonusText = "×1.5 streak",
+                XpText = "120 XP",
+                StreakBonusPct = 9,
                 CanReroll = true,
-                RerollText = "Reroll this seat",
+                RerollKey = "btn_reroll_with_count",
+                RerollCount = 1,
                 RerollTooltip = "1 reroll left today",
             });
         }
@@ -134,21 +143,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             Opacity = 1.0;
 
             _txtSlot.Text = (m.Slot + 1).ToString();
-            _txtIcon.Text = m.Icon;
+            _questIcon.Emoji = m.Icon;
+            _questIcon.IsVisible = !string.IsNullOrEmpty(m.Icon);
             _txtName.Text = m.Name;
             _txtDesc.Text = m.Description;
             _txtDesc.IsVisible = !string.IsNullOrWhiteSpace(m.Description);
 
             _txtXp.Text = m.XpText;
-            if (string.IsNullOrWhiteSpace(m.BonusText))
-            {
-                _txtXpBonus.IsVisible = false;
-            }
-            else
-            {
-                _txtXpBonus.Text = m.BonusText;
-                _txtXpBonus.IsVisible = true;
-            }
+            _xpIcon.IsVisible = true;
+            _txtXpBonus.IsVisible = SetBonus(_txtXpBonus, m.StreakBonusPct, m.RerollBonusPct);
 
             if (m.Art != null) _art.Source = m.Art;
 
@@ -182,12 +185,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _txtRemaining.Text = left > 0 ? $"· {left} to go" : "";
             }
 
-            _txtReroll.Text = m.RerollText;
+            _reroll.Args = m.RerollKey == "btn_reroll_with_count" ? new object[] { m.RerollCount } : null;
+            _reroll.Key = m.RerollKey;
             _btnReroll.IsEnabled = m.CanReroll;
             _btnReroll.IsVisible = !m.IsCompleted;
             ToolTip.SetTip(_btnReroll, m.RerollTooltip);
 
             SetFraction(fraction);
+        }
+
+        /// <summary>WPF's "+9%🔥 +10%🔃" multipliers: the text plus Fluent Fire / ArrowSync inline.
+        /// Shared with the weekly card. False (and empty) when neither applies.</summary>
+        internal static bool SetBonus(TextBlock t, int streakPct, int rerollPct, string open = "", string close = "")
+        {
+            var inlines = new InlineCollection();
+            void Add(int pct, IconKind kind, IconVariant v, string? brush)
+            {
+                if (pct <= 0) return;
+                if (inlines.Count > 0) inlines.Add(new Run(" "));
+                inlines.Add(new Run($"{open}+{pct}%"));
+                inlines.Add(new InlineUIContainer(IconGlyph.Of(kind, v, brush, t.FontSize)) { BaselineAlignment = BaselineAlignment.Center });
+                if (close.Length > 0) inlines.Add(new Run(close));
+            }
+            Add(streakPct, IconKind.Fire, IconVariant.Filled, IconBrushes.Fire);
+            Add(rerollPct, IconKind.ArrowSync, IconVariant.Regular, null);
+            t.Inlines = inlines;
+            return inlines.Count > 0;
         }
 
         /// <summary>
@@ -201,7 +224,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             Opacity = 0.55;
 
             _txtSlot.Text = (slot + 1).ToString();
-            _txtIcon.Text = "";
+            _questIcon.IsVisible = false;
+            _xpIcon.IsVisible = false;
             _txtName.Text = title;
             _txtDesc.Text = subtitle;
             _txtDesc.IsVisible = true;

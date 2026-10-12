@@ -162,7 +162,7 @@
 
     <!-- ==================================================================
          TIER VOCABULARY - deliberately CONSTANT across mods.
-         gold 🔒 = Tier 1, violet 🧪 = Tier 2. This is a price tag, not decor,
+         gold padlock = Tier 1, violet beaker = Tier 2. This is a price tag, not decor,
          so it does NOT take its colour from the mod chain.
 
          Band contract, do not break it:
@@ -188,8 +188,9 @@
     <ControlTheme x:Key="PlayLockBandT2" TargetType="Border" BasedOn="{StaticResource PlayLockBand}">
       <Setter Property="BorderBrush" Value="{StaticResource PlayLockT2Brush}"/>
     </ControlTheme>
-    <ControlTheme x:Key="PlayLockGlyph" TargetType="TextBlock">
-      <Setter Property="FontSize" Value="20"/>
+    <ControlTheme x:Key="PlayLockGlyph" TargetType="fx:IconGlyph">
+      <Setter Property="Size" Value="22"/>
+      <Setter Property="Variant" Value="Filled"/>
       <Setter Property="HorizontalAlignment" Value="Center"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
     </ControlTheme>
@@ -272,7 +273,7 @@
                 </Grid>
                 <Border x:Name="PlayLockBreakout" Theme="{StaticResource PlayLockBandT2}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🔒" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
                   </StackPanel>
                 </Border>
@@ -369,7 +370,7 @@
                 <Border x:Name="PlayLockRemote"
                         Theme="{StaticResource PlayLockBand}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🔒" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_t1}" Theme="{StaticResource PlayLockTeaser}"/>
                   </StackPanel>
                 </Border>
@@ -434,7 +435,7 @@
                   </Border>
                   <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
                     <Border Theme="{StaticResource PlayTitleGlyphPlate}">
-                      <TextBlock Text="🎯" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      <fx:IconGlyph Kind="Target" Size="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <TextBlock Text="{loc:Str label_gaze_minigame}" Theme="{StaticResource PlayCardTitle}"/>
                     <Border Theme="{StaticResource PlayBadgePill}">
@@ -466,7 +467,7 @@
                 <Border x:Name="PlayLockGaze"
                         Theme="{StaticResource PlayLockBandT2}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🧪" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="Beaker" Foreground="{DynamicResource IconTier2Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
                   </StackPanel>
                 </Border>
@@ -496,7 +497,7 @@
                   </Border>
                   <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
                     <Border Theme="{StaticResource PlayTitleGlyphPlate}">
-                      <TextBlock Text="✨" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <TextBlock Text="{loc:Str label_focus_gaze}" Theme="{StaticResource PlayCardTitle}"/>
                     <Button x:Name="HelpBtnPlayFocusGaze" Theme="{StaticResource HelpButtonStyle}"
@@ -529,7 +530,7 @@
                 <Border x:Name="PlayLockFocusGaze"
                         Theme="{StaticResource PlayLockBandT2}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🧪" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="Beaker" Foreground="{DynamicResource IconTier2Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
                   </StackPanel>
                 </Border>
@@ -560,7 +561,7 @@
                   </Border>
                   <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
                     <Border Theme="{StaticResource PlayTitleGlyphPlate}">
-                      <TextBlock Text="👁" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      <fx:IconGlyph Kind="Eye" Size="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <TextBlock Text="{loc:Str tab_blink_trainer}" Theme="{StaticResource PlayCardTitle}"/>
                   </StackPanel>
@@ -577,7 +578,7 @@
                 <Border x:Name="PlayLockBlink"
                         Theme="{StaticResource PlayLockBand}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🔒" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_t1}" Theme="{StaticResource PlayLockTeaser}"/>
                   </StackPanel>
                 </Border>
@@ -655,7 +656,7 @@
                 <Border x:Name="PlayLockIntake"
                         Theme="{StaticResource PlayLockBand}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🔒" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_pass}" Theme="{StaticResource PlayLockTeaser}"/>
                   </StackPanel>
                 </Border>
@@ -699,7 +700,7 @@
                 <Border x:Name="PlayLockFyp"
                         Theme="{StaticResource PlayLockBand}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🔒" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_t1}" Theme="{StaticResource PlayLockTeaser}"/>
                   </StackPanel>
                 </Border>
@@ -744,7 +745,7 @@
                 <Border x:Name="PlayLockLockdown"
                         Theme="{StaticResource PlayLockBand}" Margin="-22">
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="🔒" Theme="{StaticResource PlayLockGlyph}"/>
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
                     <TextBlock Text="{loc:Str hm3_rail_lock_t1}" Theme="{StaticResource PlayLockTeaser}"/>
                   </StackPanel>
                 </Border>
@@ -786,7 +787,7 @@
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,20,20,20">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                   <Border Theme="{StaticResource PlayTitleGlyphPlate}">
-                    <TextBlock Text="🧵" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="Link" Size="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                   </Border>
                   <TextBlock Text="{loc:Str pl6_loom_title}" Theme="{StaticResource PlayCardTitle}"/>
                 </StackPanel>

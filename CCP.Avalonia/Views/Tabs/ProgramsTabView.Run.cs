@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -22,8 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// while the service IsReadOnly); the ritual picker shows only once ProgramCapabilities.RitualsAvailable.
     /// A day the program clock has moved past without a rollover (a
     /// read-only service, or the minute poll not yet run) is labelled "last saved" (<see cref="IsSnapshotStale"/>).
-    /// ponytail: ignition FX, day/task pops, node breathe and the live session clock are programs
-    /// slice 5 (~/ccp-port/briefs/programs-run-plan.md).
+    /// The ignition rig lives in ProgramsTabView.Ignition.cs (programs slice 5).
     /// </summary>
     public partial class ProgramsTabView
     {
@@ -78,11 +78,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property != IsVisibleProperty || !IsVisible || VisualRoot is null) return;
+            if (change.Property != IsVisibleProperty) return;
+            if (!IsVisible || VisualRoot is null) { SyncIgnition(); return; }
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
             if (_refreshPending || boundaryCrossed) RefreshPrograms();
+            SyncIgnition();   // WPF :1661: clocks stop behind a hidden tab and re-arm on the way back
         }
 
         /// <summary>WPF RefreshProgramsUI + RebuildProgramsTab (:490-584): pick the panel, build it, reveal it.</summary>
@@ -105,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var graduated = !browse && enrollment!.State == ProgramEnrollmentState.Graduated;
             var run = !browse && !lapsed && !graduated;
             _builtStale = null;
+            ResetRunPopsIfRunChanged(enrollment);
 
             try
             {
@@ -117,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Find<TextBlock>("TxtGraduatedSub").Text = Loc.GetF("programs_graduated_sub", program!.Title);
                     Find<TextBlock>("TxtGraduatedStats").Text = Loc.GetF("programs_graduated_stats",
                         enrollment!.AttemptNumber, enrollment.PerfectDayCount, program.LengthDays);
+                    CelebrateGraduation(program!, enrollment);
                 }
                 else BuildRunPanel(svc!, program!, enrollment!);
             }
@@ -140,6 +144,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Find<Button>("BtnProgramRestart").IsEnabled = !readOnly && restartBlocked == null;
                 ToolTip.SetTip(Find<Button>("BtnProgramRestart"), restartBlocked);
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
+                // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
+                if (!run) { StopIgnitionLoops(); _ignitionEnrollment = null; }
             }
         }
 
@@ -147,9 +153,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BuildRunPanel(ProgramService svc, ProgramDefinition program, ProgramEnrollment enrollment)
         {
+            // WPF :660-674: the ignition rig's three decisions, all before anything is dressed.
+            NoteDayCompletion(enrollment, svc.TodayRecord, IsVisible);
+            NoteChapterSeal(program, enrollment, IsVisible);
             var chapter = svc.TodayChapter;
-            var accent = MainShellWindow.AccentBrush(
-                !string.IsNullOrWhiteSpace(chapter?.AccentColor) ? chapter!.AccentColor : program.AccentColor);
+            var accent = RunAccent(program, chapter, enrollment);
+            ComputeHeat(program, enrollment, svc.Today);
             var stale = IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
             _builtStale = stale;
 
@@ -210,6 +219,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             BuildDayStrip(program, enrollment, accent, stale);
             BuildTodayPanel(svc, program, enrollment, accent, stale);
+            ApplyIgnition(enrollment);
+            if (_dayJustCompleted) PlayDayCompleteMoment(svc.Today);
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
@@ -226,8 +237,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 : record.SessionCompleted ? ("programs_session_done", false, null)
                 : running ? ("programs_session_other_running", false, "programs_session_other_running_hint")
                 : ("btn_program_start_session", enrollment.State != ProgramEnrollmentState.Paused, (string?)null);
-            var glyph = Find<TextBlock>("TxtTodaySessionGlyph");
-            glyph.Text = ours ? "◉" : record.SessionCompleted ? "✓" : "○";
+            var glyph = Find<IconGlyph>("TxtTodaySessionGlyph");
+            glyph.Kind = ours ? IconKind.RadioButton : record.SessionCompleted ? IconKind.Checkmark : IconKind.Circle;
             glyph.Foreground = ours || record.SessionCompleted ? accent : muted;
             var button = Find<Button>("BtnStartTodaySession");
             button.IsEnabled = enabled && !svc.IsReadOnly;
@@ -258,7 +269,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var milestone = day != null && (day.IsBoss || !string.IsNullOrWhiteSpace(day.RewardDescription));
                 if (milestone)
                 {
-                    pip.RewardGlyph = day!.IsBoss ? "👑" : "🎁";
+                    pip.RewardIcon = day!.IsBoss ? IconKind.Crown : IconKind.Gift;
+                    pip.RewardVariant = day.IsBoss ? IconVariant.Filled : IconVariant.Regular;
+                    pip.RewardBrush = day.IsBoss ? Theme("IconGoldBrush", Brushes.Gold) : light;
                     pip.RewardVisible = true;
                     pip.RewardTip = !string.IsNullOrWhiteSpace(day.RewardDescription)
                         ? day.RewardDescription! : Loc.Get("programs_boss_badge");
@@ -282,7 +295,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     pip.Fill = accent;
                     pip.Stroke = accent;
-                    pip.Label = "✓";
+                    pip.Label = "";
+                    pip.LabelIcon = IconKind.Checkmark;
+                    pip.LabelIconVisible = true;
                     pip.LabelBrush = light;
                     pip.LabelWeight = FontWeight.Bold;
                     pip.NodeSize = 32;
@@ -292,7 +307,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 else if (record?.Missed == true)
                 {
                     pip.Stroke = danger;
-                    pip.Label = "✕";
+                    pip.Label = "";
+                    pip.LabelIcon = IconKind.Dismiss;
+                    pip.LabelIconVisible = true;
                     pip.LabelBrush = danger;
                     pip.NodeSize = 32;
                     tip = Loc.GetF("programs_pip_missed", i);
@@ -413,7 +430,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Description = task.Description,
                     HowTo = howTo ?? "",
                     HowToVisible = !string.IsNullOrWhiteSpace(howTo),
-                    StatusGlyph = complete ? "✓" : "○",
+                    StatusIcon = complete ? IconKind.Checkmark : IconKind.Circle,
                     StatusBrush = complete ? accent : muted,
                     TextBrush = complete ? muted : light,
                     RowOpacity = isBlocked ? 0.5 : 1.0,
@@ -584,7 +601,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Title = next.Title,
                     Meta = string.Join("  ·  ", parts),
                     DayBrush = next.IsBoss ? accent : muted,
-                    Glyph = next.IsBoss ? "👑" : "",
                     GlyphTip = next.IsBoss ? Loc.Get("programs_boss_badge") : "",
                     GlyphVisible = next.IsBoss,
                     RowOpacity = 1.0 - (i * 0.18)

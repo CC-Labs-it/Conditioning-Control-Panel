@@ -57,6 +57,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -110,7 +111,7 @@
                     <!-- ================= Header ================= -->
                     <StackPanel Margin="0,0,0,14">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="📅" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="Calendar" Size="18" Foreground="{DynamicResource PinkBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{loc:Str programs_browse_header}"
                                        Foreground="{DynamicResource PinkBrush}"
                                        FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -537,8 +538,8 @@
                                             Background="{DynamicResource SurfaceBgBrush}"
                                             BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="🎁" FontSize="12" VerticalAlignment="Center"
-                                                       Margin="0,0,6,0"/>
+                                            <fx:IconGlyph Kind="Gift" Size="12" VerticalAlignment="Center"
+                                                          Margin="0,0,6,0"/>
                                             <TextBlock Text="{loc:Str programs_chapter_reward}"
                                                        Foreground="{DynamicResource TextMutedBrush}"
                                                        FontSize="10" FontWeight="Bold" VerticalAlignment="Center"
@@ -592,7 +593,7 @@
                                         <!-- T4 only: a comet running the rail. Clipped to the track
                                              by its host and hidden (not merely transparent) at every
                                              tier below Ignited. The slide clock lives in
-                                             MainWindow.ProgramsFx.cs, which is not on this head. -->
+                                             ProgramsTabView.Ignition.cs. -->
                                         <Grid x:Name="RailCometHost" ClipToBounds="True" IsVisible="False">
                                             <Rectangle x:Name="RailComet"
                                                        Width="130" HorizontalAlignment="Left"
@@ -662,15 +663,21 @@
                                                                 BorderThickness="{Binding PipBorderThickness}"
                                                                 Opacity="{Binding PipOpacity}"
                                                                 ToolTip.Tip="{Binding Tip}">
-                                                            <TextBlock Text="{Binding Label}" Foreground="{Binding LabelBrush}"
-                                                                       FontWeight="{Binding LabelWeight}"
-                                                                       FontSize="{Binding LabelSize}"
-                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            <Panel>
+                                                                <TextBlock Text="{Binding Label}" Foreground="{Binding LabelBrush}"
+                                                                           FontWeight="{Binding LabelWeight}"
+                                                                           FontSize="{Binding LabelSize}"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                <fx:IconGlyph Kind="{Binding LabelIcon}" Foreground="{Binding LabelBrush}"
+                                                                              Size="{Binding LabelSize}" IsVisible="{Binding LabelIconVisible}"
+                                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Panel>
                                                         </Border>
                                                     </Grid>
                                                     <!-- Milestone reward glyph under the node (boss crown /
                                                          reward gift). Hidden on plain days. -->
-                                                    <TextBlock Text="{Binding RewardGlyph}" FontSize="13"
+                                                    <fx:IconGlyph Kind="{Binding RewardIcon}" Variant="{Binding RewardVariant}"
+                                                               Foreground="{Binding RewardBrush}" Size="13"
                                                                IsVisible="{Binding RewardVisible}"
                                                                ToolTip.Tip="{Binding RewardTip}"
                                                                HorizontalAlignment="Center"
@@ -731,8 +738,8 @@
                                      in front of a word. -->
 
                                 <!-- T2+: the particle field. An AmbientFxCanvas is added here on
-                                     first use on WPF; empty and clockless below Charged, and empty
-                                     on this head until MainWindow.ProgramsFx.cs has a twin. -->
+                                     first use (ProgramsTabView.Ignition.cs); empty and clockless below
+                                     Charged. -->
                                 <Grid x:Name="TodayFxLayer"
                                       Grid.ColumnSpan="2" IsHitTestVisible="False"
                                       Margin="-22,-20,-22,-6"/>
@@ -860,8 +867,8 @@
                                             Background="{DynamicResource SurfaceBgBrush}"
                                             BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="🎁" FontSize="12" VerticalAlignment="Center"
-                                                       Margin="0,0,6,0"/>
+                                            <fx:IconGlyph Kind="Gift" Size="12" VerticalAlignment="Center"
+                                                          Margin="0,0,6,0"/>
                                             <TextBlock Text="{loc:Str programs_day_reward}"
                                                        Foreground="{DynamicResource TextMutedBrush}"
                                                        FontSize="10" FontWeight="Bold" VerticalAlignment="Center"
@@ -884,8 +891,8 @@
                                             <ScaleTransform ScaleX="1" ScaleY="1"/>
                                         </Border.RenderTransform>
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="✨" FontSize="14" VerticalAlignment="Center"
-                                                       Margin="0,0,8,0"/>
+                                            <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="14" Foreground="#FFD700"
+                                                          VerticalAlignment="Center" Margin="0,0,8,0"/>
                                             <TextBlock Text="{loc:Str programs_day_complete}"
                                                        Foreground="{DynamicResource PinkBrush}"
                                                        FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -925,8 +932,8 @@
                                 <Border Padding="16,14" CornerRadius="12" Margin="0,16,0,0"
                                         Background="{DynamicResource SurfaceBgBrush}">
                                     <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto,Auto">
-                                        <TextBlock x:Name="TxtTodaySessionGlyph"
-                                                   Grid.Row="0" Grid.Column="0" Text="○" FontSize="17" Margin="0,0,12,0"
+                                        <fx:IconGlyph x:Name="TxtTodaySessionGlyph"
+                                                   Grid.Row="0" Grid.Column="0" Kind="Circle" Size="17" Margin="0,0,12,0"
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource TextMutedBrush}"/>
                                         <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center">
@@ -1079,10 +1086,10 @@
                                                            Margin="0,0,12,0" VerticalAlignment="Center"
                                                            Source="{Binding Icon}"
                                                            IsVisible="{Binding IconVisible}"/>
-                                                    <TextBlock Grid.Column="0" Grid.RowSpan="2" Text="{Binding StatusGlyph}"
+                                                    <fx:IconGlyph Grid.Column="0" Grid.RowSpan="2" Kind="{Binding StatusIcon}"
                                                                IsVisible="{Binding GlyphVisible}"
                                                                Foreground="{Binding StatusBrush}"
-                                                               FontSize="24" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                                               Size="24" Margin="0,0,12,0" VerticalAlignment="Center"/>
 
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding Description}"
@@ -1120,9 +1127,9 @@
                                                         <Border.RenderTransform>
                                                             <ScaleTransform ScaleX="1" ScaleY="1"/>
                                                         </Border.RenderTransform>
-                                                        <TextBlock Text="✓" Foreground="{Binding DoneChipForeground}"
-                                                                   FontSize="12" FontWeight="Bold"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <fx:IconGlyph Kind="Checkmark" Foreground="{Binding DoneChipForeground}"
+                                                                      Size="12"
+                                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>
 
                                                     <!-- Mini progress bar for counted tasks -->
@@ -1223,8 +1230,9 @@
                                                                            FontSize="11" Margin="0,2,0,0"
                                                                            TextTrimming="CharacterEllipsis"/>
                                                             </StackPanel>
-                                                            <TextBlock Grid.Column="2" Text="{Binding Glyph}"
-                                                                       FontSize="12" Margin="8,0,0,0"
+                                                            <fx:IconGlyph Grid.Column="2" Kind="Crown" Variant="Filled"
+                                                                       Foreground="{DynamicResource IconGoldBrush}"
+                                                                       Size="12" Margin="8,0,0,0"
                                                                        VerticalAlignment="Top"
                                                                        ToolTip.Tip="{Binding GlyphTip}"
                                                                        IsVisible="{Binding GlyphVisible}"/>
@@ -1306,7 +1314,7 @@
                                 BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🏆" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <fx:IconGlyph Kind="Trophy" Variant="Filled" Size="20" Foreground="{DynamicResource IconGoldBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="{loc:Str programs_graduated_title}"
                                                Foreground="{DynamicResource PinkBrush}"
                                                FontSize="19" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -1337,8 +1345,7 @@
              scrolling content, never children of it: they must not scroll, must
              not measure, and must never take a click. On WPF everything about
              them - brush, opacity, whether they exist at all - is driven from the
-             one heat scalar in MainWindow.ProgramsFx.cs, which is not on this
-             head, so both rest exactly as they rest on WPF at tier 0.
+             one heat scalar in ProgramsTabView.Ignition.cs (WPF MainWindow.ProgramsFx.cs).
              =================================================================== -->
 
         <!-- T4 / boss day: a soft inner edge glow around the whole tab. Margin and
@@ -1358,7 +1365,8 @@
               Margin="0,0,0,8">
             <Rectangle x:Name="ProgramsSealScrim"
                        RadiusX="12" RadiusY="12" Fill="#B0000000"/>
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+            <StackPanel x:Name="ProgramsSealStamp"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
                         RenderTransformOrigin="50%,50%">
                 <StackPanel.RenderTransform>
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
@@ -1366,9 +1374,8 @@
                 <Border x:Name="ProgramsSealRing"
                         Width="104" Height="104" CornerRadius="52" BorderThickness="3"
                         HorizontalAlignment="Center">
-                    <TextBlock x:Name="TxtProgramsSealGlyph"
-                               Text="✓" FontSize="48" FontWeight="Bold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <hover:IconGlyph x:Name="ProgramsSealGlyph" Kind="Checkmark" Size="48"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <TextBlock x:Name="TxtProgramsSealTitle"
                            FontSize="30" FontWeight="Bold" Margin="0,18,0,0"

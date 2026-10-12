@@ -13,6 +13,7 @@
      ponytail: hardcoded English; give it loc keys when the WebView2 hosts actually move over -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.WebHost"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -33,10 +34,10 @@
                 CornerRadius="10"
                 Padding="24">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-                <TextBlock Text="🌐"
-                           FontSize="40"
-                           Opacity="0.75"
-                           HorizontalAlignment="Center"/>
+                <fx:IconGlyph Kind="Globe"
+                              Size="40"
+                              Opacity="0.75"
+                              HorizontalAlignment="Center"/>
                 <TextBlock Text="Web view unavailable"
                            FontSize="15"
                            FontWeight="SemiBold"
