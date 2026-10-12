@@ -1941,3 +1941,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-studio-features: +434
 - Fluent icons L2: Studio rack, feature pages, feature/intro/settings popups, PinkRush, CornerGif, LayeredAudio, MiniPlayer (play/pause by Kind); emoji ratchet 971→895, loc-prefix 234→198.
 - win-layered-audio snapshot re-baselined (icons only, by decision); snapshot tests can no longer launch a diff GUI.
+
+## avalonia-port/icons-premium-tabs: +133
+- L3 Fluent icons: 9 premium tabs + Circe faces draw fx:IconGlyph; gate padlocks keep PremiumGateFx glow (LockClosed + tier brush); Chaster Key/LockClosed per D6.
+- Ratchets lowered: emoji 971→920, prefixed-loc 234→224, path 26→19; Exclusives feature-emoji data slots and Takeover state strings left (L10/follow-up).
