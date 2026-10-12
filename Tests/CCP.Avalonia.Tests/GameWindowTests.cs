@@ -189,4 +189,108 @@ public sealed class GameWindowTests
         }
         finally { Directory.Delete(root, true); }
     }
+
+    private sealed class FakeHttp : System.Net.Http.HttpMessageHandler
+    {
+        public System.Net.Http.HttpRequestMessage? Seen;
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            Seen = request;
+            return System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent("{\"ok\":1}") });
+        }
+    }
+
+    /// <summary>WPF PieceByPieceHostService through the launcher tile: the leash gate first, then Play opens the
+    /// board; ready gets pbp:settings then pbp:identity and no shell init (:295-313); media-request answers from
+    /// the own library with gifs split out (:447); pbp:net is refused off /v2/pbp/ and otherwise carries the token
+    /// host-side (:559); a silent page gets one ping then closes (:717); panic closes the board.</summary>
+    [Fact]
+    public void PieceByPiece_LeashThenPlay_FramesNetWatchdogAndPanic() => Run((shell, launcher) =>
+    {
+        var lib = Directory.CreateTempSubdirectory("pbp-lib-").FullName;
+        var (oldAssets, oldHttp, oldBase) = (CorePaths.EffectiveAssetsProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
+        var oldSecret = CoreSecrets.RetrieveProvider;
+        var fake = new FakeHttp();
+        using var http = new System.Net.Http.HttpClient(fake);
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(lib, "images"));
+            Directory.CreateDirectory(Path.Combine(lib, "videos"));
+            File.WriteAllBytes(Path.Combine(lib, "images", "spin.gif"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "images", "still.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "videos", "clip.mp4"), new byte[] { 1 });
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            GameWindow.PbpHttpClient = () => http;                     // no network in tests
+            GameWindow.PbpServerBase = () => "http://pbp.test";
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;   // P02: never the keyring
+            launcher.Hide();
+            var card = LauncherCards.Find(GameWindow.PbpId)!;
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == GameWindow.PbpId);
+
+            int gates = 0;
+            MainShellWindow.LeashGateDueProvider = () => true;
+            MainShellWindow.PresentLeashGateProvider = _ => gates++;
+            launcher.Play(card);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, gates);
+            Assert.False(GameWindow.IsAnyOpen());
+            MainShellWindow.LeashGateDueProvider = () => false;
+
+            launcher.Play(card);
+            Dispatcher.UIThread.RunJobs();
+            var w = GameWindow.Launch(GameWindow.PbpId)!;            // the open board, focused
+            Assert.Contains("piecebypiece/index.html", w.PageUrl!.AbsolutePath);
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            w.Web.OnWebMessage("\"{\\\"type\\\":\\\"ready\\\"}\"");   // the string carrier's JSON-quoted frame
+            Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(15, (int)sent[0]["videoHoldSec"]!);
+            Assert.Equal("tok", (string?)sent[1]["net"]!["authToken"]);
+
+            w.Web.OnWebMessage("{\"type\":\"pbp:media-request\",\"kinds\":[\"gif\",\"video\"],\"count\":8}");
+            var media = sent.Last();
+            Assert.Equal("pbp:media", (string?)media["type"]);
+            Assert.Empty(media["images"]!);
+            Assert.EndsWith("/ccp.assets/images/spin.gif", (string?)media["gifs"]!.Single());
+            Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)media["videos"]!.Single());
+
+            w.Web.OnWebMessage("{\"type\":\"pbp:net\",\"id\":\"n1\",\"method\":\"GET\",\"path\":\"/v2/stakes/x\"}");
+            Assert.Equal("forbidden_path", (string?)sent.Last()["body"]);
+            Assert.Null(fake.Seen);
+            w.Web.OnWebMessage("{\"type\":\"pbp:net\",\"id\":\"n2\",\"method\":\"POST\",\"path\":\"/v2/pbp/lobby\",\"body\":{\"a\":1}}");
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (!sent.Any(o => (string?)o["id"] == "n2") && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            var result = sent.Single(o => (string?)o["id"] == "n2");
+            Assert.Equal(200, (int)result["status"]!);
+            Assert.Equal("http://pbp.test/v2/pbp/lobby", fake.Seen!.RequestUri!.ToString());
+            Assert.Equal("tok", fake.Seen.Headers.GetValues("X-Auth-Token").Single());
+
+            var now = DateTime.UtcNow;
+            Assert.Equal("ok", w.CheckPbpWatch(now));
+            Assert.Equal("ping", w.CheckPbpWatch(now.AddSeconds(25)));
+            Assert.Equal("ping", (string?)sent.Last()["type"]);
+            w.Web.OnWebMessage("{\"type\":\"pong\"}");
+            Assert.Equal("ok", w.CheckPbpWatch(DateTime.UtcNow));
+            Assert.Equal("ping", w.CheckPbpWatch(DateTime.UtcNow.AddSeconds(25)));
+            Assert.Equal("closed", w.CheckPbpWatch(DateTime.UtcNow.AddSeconds(30)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+
+            launcher.Play(card);                                       // reopened: panic closes it
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen());
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally
+        {
+            (CorePaths.EffectiveAssetsProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldAssets, oldHttp, oldBase);
+            CoreSecrets.RetrieveProvider = oldSecret;
+            Directory.Delete(lib, true);
+        }
+    });
 }
