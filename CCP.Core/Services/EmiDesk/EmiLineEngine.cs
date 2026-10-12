@@ -60,6 +60,19 @@ public sealed record AskDraw(
 /// </summary>
 public sealed class EmiLineEngine
 {
+    /// <summary>
+    /// The half of the ask gate only the app can see (WPF <c>App.EmiDesk.AskSituationOk()</c>): no
+    /// session, no video, not minimised, no offer already on the glass. The head sets it; unset
+    /// means "no service", which is "no offer", exactly as the WPF null service reads.
+    /// </summary>
+    public static Func<bool>? AskSituationProbe { get; set; }
+
+    /// <summary>
+    /// WPF <c>EmiOffers.EffectFeasible</c>: can this effect happen right now. Unset refuses every
+    /// effect, so a head with no offers surface never shows an ask whose chip would do nothing.
+    /// </summary>
+    public static Func<string?, bool>? EffectFeasibleProbe { get; set; }
+
     /// <summary>The process-wide engine. Cheap to touch: the file loads on the first draw.</summary>
     public static EmiLineEngine Instance { get; } = new();
 
@@ -941,7 +954,7 @@ public sealed class EmiLineEngine
     {
         try
         {
-            var s = App.Settings?.Current;
+            var s = ConditioningControlPanel.CoreSettings.Current;
             if (s == null) return 2;
             return Math.Max(0, Math.Min(2, s.EmiDeskSpice));
         }
@@ -964,7 +977,7 @@ public sealed class EmiLineEngine
         try
         {
             if (m.AskOdds <= 0) return false;
-            var s = App.Settings?.Current;
+            var s = ConditioningControlPanel.CoreSettings.Current;
             if (s != null && !s.EmiDeskOffers) return false;
             if (BedtimeSet) return false;
             if (_ignoredAsksThisLaunch >= AskIgnoreLimit) return false;
@@ -994,7 +1007,7 @@ public sealed class EmiLineEngine
 
             // The half only the app can see (LINES-SCHEMA 5.6): no session, no video, the avatar is
             // quiet, the app is not minimised, no offer already on the glass. No service, no offer.
-            if (App.EmiDesk?.AskSituationOk() != true) return false;
+            if (AskSituationProbe?.Invoke() != true) return false;
             return true;
         }
         catch (Exception ex)
@@ -1045,7 +1058,7 @@ public sealed class EmiLineEngine
 
             var effect = Substitute(a.Effect ?? "none", ctx);
             if (effect == null) continue;
-            if (!EmiOffers.EffectFeasible(effect)) continue;
+            if (EffectFeasibleProbe?.Invoke(effect) != true) continue;
             pool.Add(a);
         }
         if (pool.Count == 0) return null;
@@ -1173,7 +1186,7 @@ public sealed class EmiLineEngine
 
     private static string AppVersionString()
     {
-        try { return ConditioningControlPanel.Services.UpdateService.AppVersion; }
+        try { return ConditioningControlPanel.CoreReleaseContent.AppVersion; }
         catch { return "0"; }
     }
 
