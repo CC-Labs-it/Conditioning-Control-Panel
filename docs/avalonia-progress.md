@@ -2006,3 +2006,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Content packs seeded at startup; flash, scheduled video and bubble count draw active pack media through Core PackMediaPool (WPF-weighted).
 - Pack previews (installed picks + URL cache, sandbox-safe) in Core ContentPackService; svc-content-packs stays stub (no packs UI).
 - Review fixes: startup sweep of crash-left ccp_temp_* decrypts; video/bubble weigh pack clips left this cycle like WPF.
+
+## avalonia-port/lag-fixes-a: +670
+- Shell ambient loops (FeatureCard/SplitFeatureCard, Chaster chip, status pulses, fuse, Deeper, TierBadge, SpiralGlyph, roadmap, Lockdown) now run on the 30 fps BeatLoop, and a hidden or minimised loop unsubscribes its clock. Tile and tier-badge glows are sibling BoxShadows instead of Effects. Three motions that never ran before (chip swing, Deeper drift, TierBadge sway) now animate.
+- A ratchet blocks new infinite Animations (10 files left for lag-fixes-b). There are 16 recorded fail-proofs. Measured live: Play tab CPU 49 -> 32% of a core. Idle Home still composes at about 55 fps in both builds (cause outside this lane).
