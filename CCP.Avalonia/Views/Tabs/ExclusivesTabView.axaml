@@ -281,8 +281,12 @@
                                     </RadialGradientBrush>
                                 </Border.Background>
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <!-- The padlock glow (lag fix, P82): the glyph's DropShadow baked once (GlowBake) behind it, never a live Effect. -->
+                                    <Panel HorizontalAlignment="Center">
+                                    <Image Classes="lockglow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Top" IsVisible="False" IsHitTestVisible="False"/>
                                     <fx:IconGlyph x:Name="SpotVeilLock"
                                                Kind="LockClosed" Variant="Filled" Size="44" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"/>
+                                    </Panel>
                                     <Border CornerRadius="12" Padding="14,5" Margin="0,10,0,0">
                                         <Border.Background>
                                             <!-- Same accent pair as the shelf cards' unlock pill;
@@ -420,8 +424,11 @@
                                                 </RadialGradientBrush>
                                             </Border.Background>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Panel HorizontalAlignment="Center">
+                                                <Image Classes="lockglow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Top" IsVisible="False" IsHitTestVisible="False"/>
                                                 <fx:IconGlyph Name="VeilLock" Kind="LockClosed" Variant="Filled" Size="34" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"
                                                            Loaded="FxPart_Loaded" Unloaded="FxPart_Unloaded"/>
+                                                </Panel>
                                                 <Border Margin="0,8,0,0" CornerRadius="10" Padding="10,4"
                                                         HorizontalAlignment="Center">
                                                     <Border.Background>
