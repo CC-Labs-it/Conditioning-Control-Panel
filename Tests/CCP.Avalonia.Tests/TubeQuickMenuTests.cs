@@ -37,7 +37,7 @@ public sealed class TubeQuickMenuTests
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var saved = (s.AvatarEnabled, s.AvatarMuted, s.SubAudioMuted, s.TriggerModeEnabled, s.AutonomyModeEnabled,
-            s.AutonomyConsentGiven, s.AvatarTubeDetached, s.AvatarTubeScale, s.FlashEnabled, s.PanicKeyEnabled, s.PanicKey);
+            s.AutonomyConsentGiven, s.AvatarTubeDetached, s.AvatarTubeScale, s.FlashEnabled, s.PanicKeyEnabled, s.PanicKey, s.AutonomyResumeOnStartup);
         s.AvatarEnabled = true; s.AvatarTubeDetached = false; s.AvatarTubeScale = 1.0;
         s.AutonomyModeEnabled = s.AutonomyConsentGiven = false; s.AutonomyResumeOnStartup = false;
         s.PanicKeyEnabled = true; s.PanicKey = "F8";
@@ -56,11 +56,13 @@ public sealed class TubeQuickMenuTests
             LockdownService.Current?.Dispose();
             LockdownService.Current = null;
             CoreEntitlement.HasPremiumProvider = null;
+            CoreEntitlement.IsFreeTodayProvider = null;
             CoreEngine.Stop();
+            CoreEngine.StoppedHook = null;
             shell.RequestExit();
             Dispatcher.UIThread.RunJobs();
             (s.AvatarEnabled, s.AvatarMuted, s.SubAudioMuted, s.TriggerModeEnabled, s.AutonomyModeEnabled,
-                s.AutonomyConsentGiven, s.AvatarTubeDetached, s.AvatarTubeScale, s.FlashEnabled, s.PanicKeyEnabled, s.PanicKey) = saved;
+                s.AutonomyConsentGiven, s.AvatarTubeDetached, s.AvatarTubeScale, s.FlashEnabled, s.PanicKeyEnabled, s.PanicKey, s.AutonomyResumeOnStartup) = saved;
         }
         return Task.CompletedTask;
     });
@@ -102,6 +104,7 @@ public sealed class TubeQuickMenuTests
     {
         var s = CoreSettings.Current;
         CoreEntitlement.HasPremiumProvider = () => false;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;   // not the ? box's free day either
         tube.UpdateQuickMenuState();
         Assert.Equal("menu_takeover_locked_format", HeaderKey(tube, "MenuItemBambiTakeover"));
         tube.OnMenuTakeover();
