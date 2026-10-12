@@ -437,6 +437,10 @@ public class BoardTilesTests
     [Fact]
     public void A_frame_fits_the_budget()
     {
+#if DEBUG
+        // Debug code measured 12-13 ms a frame on the Linux runner; CI runs this suite in Release.
+        Assert.Skip("The frame budget is a Release measurement.");
+#endif
         // Every effect on, a ripple running, the biggest pitch: scene + raster per frame.
         var px = new int[64 * 36];
         for (int i = 0; i < px.Length; i++) px[i] = i % 3 == 0 ? Argb(255, 255, 255, 255) : Argb(255, 255, 79, 168);
