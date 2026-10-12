@@ -55,6 +55,7 @@ import { createPayloadFx } from './payloadFx.js';
 import { createScreenShake } from './screenShake.js';
 import { createChaosHud } from './chaosHud.js';
 import { createOverlays } from './overlays.js';
+import { countDetail } from './momentFeel.js';
 import { createWarren } from './warren.js';
 import { createLessonTracker } from './lessons.js';
 import { createSessionMetrics } from '../engine/sessionMetrics.js';
@@ -582,7 +583,24 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   const feelEvent = (detail) => {
     try { window.dispatchEvent(new CustomEvent('dtrh:feel', { detail })); } catch (e) { /* ignore */ }
   };
-  const FEEL_GOLD_KINDS = new Set(['golden', 'droplet', 'material', 'heart']);
+  /** Feel wave 2: the one place the run state changes, so every change is a 'phase' feel event
+   *  (countdown, running, drafting, recap, warren, requesting; 'surfacing' rides on top of running). */
+  const setState = (next) => {
+    if (next === state) return;
+    state = next;
+    surfPhaseStep = -1;
+    feelEvent({ kind: 'phase', state: next });
+  };
+  /** The Surfacing as a phase: once on entry, then once per SURF_PHASE_STEP of melt (cheap, no per-frame event). */
+  const SURF_PHASE_STEP = 0.1;
+  let surfPhaseStep = -1;
+  const surfacingPhase = (melt) => {
+    const step = Math.floor(melt / SURF_PHASE_STEP);
+    if (step === surfPhaseStep) return;
+    surfPhaseStep = step;
+    feelEvent({ kind: 'phase', state: 'surfacing', progress: +melt.toFixed(2) });
+  };
+  const FEEL_GOLD_KINDS =new Set(['golden', 'droplet', 'material', 'heart']);
   /** Wrap a field pop callback: after the game has counted it, voice the rung the streak reached. */
   const withPopFeel = (handler, xyAt) => (...args) => {
     const before = st ? st.combo : 0;
@@ -1683,6 +1701,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     if (ctx.spawner && ctx.spawner.setSurfacing) ctx.spawner.setSurfacing(0);
     if (surfDomOn) {
       surfDomOn = false;
+      // a relapse walked the Surfacing back mid-run: tell the listeners the fall is plain again
+      if (state === 'running' && surfPhaseStep >= 0) { surfPhaseStep = -1; feelEvent({ kind: 'phase', state: 'running' }); }
       ctx.hud.classList.remove('cf-surfacing');
       ctx.hud.style.removeProperty('--surf-melt');
       ctx.hud.style.removeProperty('--surf-drain');
@@ -2645,6 +2665,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
 
     // DOM: one class + two eased vars (styles.css does the rest)
     if (!surfDomOn) { surfDomOn = true; ctx.hud.classList.add('cf-surfacing'); }
+    surfacingPhase(surfMelt);
     ctx.hud.style.setProperty('--surf-melt', surfMelt.toFixed(3));
     ctx.hud.style.setProperty('--surf-drain', surfDrain.toFixed(3));
 
@@ -2956,7 +2977,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     // The draft table: hold the field, clear it with a burst, deal the cards.
     clearRoomHazards();   // grant a live drop + stop any video BEFORE the run parks
     drafting = true;
-    state = 'drafting';
+    setState('drafting');
     syncHeld();
     field.clearAll(true);
     ctx.powerupDrops?.clearLive();   // safety net: fade any drop clearRoomHazards didn't take
@@ -3004,7 +3025,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     clearRoomHazards();   // grant a live drop + stop any video BEFORE the Landing parks
     finalLandingActive = true;
     drafting = true;
-    state = 'drafting';
+    setState('drafting');
     syncHeld();
     field.clearAll(true);
     ctx.powerupDrops?.clearLive();   // safety net: fade any drop clearRoomHazards didn't take
@@ -3258,7 +3279,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       syncHeld();
       overlays.showReadyGo(() => {
         drafting = false;
-        state = 'running';
+        setState('running');
         syncHeld();
       }, { onTick: (b) => sfx(b === 'GO!' ? 'sink' : 'countdown_tick', 0.45) });
       return;
@@ -3269,7 +3290,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     // A brief "Ready? -> GO!" beat before the next loop resumes.
     overlays.showReadyGo(() => {
       drafting = false;
-      state = 'running';
+      setState('running');
       syncHeld();
       if (!scripted && st.welcomeShower) spawnWelcomeShower();
       if (!scripted) announceFinalLoopIfEntering();
@@ -3684,7 +3705,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       if (heldNow() || state !== 'running') return false;
       scriptedDraftActive = true;
       drafting = true;
-      state = 'drafting';
+      setState('drafting');
       syncHeld();
       field.clearAll(true);
       ctx.powerupDrops?.clearLive();   // scripted table parks the fall too - clear any live drop
@@ -3826,7 +3847,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   }
 
   function beginCountdown(short) {
-    state = 'countdown';
+    setState('countdown');
     st = freshState();
     setRegionCycle(!!st.endless);   // The Bottomless Fall: bonus loops wrap I->IV instead of clamping to Court
     setBiomeCycle(!!st.endless);    // ...and the biome art wraps in lockstep
@@ -3897,9 +3918,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     if (!short) sfx('fall_in', 0.28);
     overlays.showCountdown({
       short,
-      onTick: (b) => sfx(b === 'GO!' ? 'sink' : 'countdown_tick', 0.5),
+      onTick: (b) => { sfx(b === 'GO!' ? 'sink' : 'countdown_tick', 0.5); feelEvent(countDetail(b)); },
       onGo: () => {
-        state = 'running';
+        setState('running');
         // Descent is live: wake the drift whisper + special tube moods (the hub kept them idle).
         try { ctx.setRunActive && ctx.setRunActive(true); } catch (e) { /* ignore */ }
         // #647: the OPTIONAL centre spiral rides the whole fall (no-op when the toggle is off).
@@ -3960,13 +3981,13 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   function abandonRun() {
     if (state !== 'running' || !st) return false;
     const booked = booker.end(runSummary(), { abandoned: true });
-    if (booked) state = 'recap';
+    if (booked) setState('recap');
     return booked;
   }
 
   function endRun(ranFullCourse) {
     if (state !== 'running') return;
-    state = 'recap';
+    setState('recap');
     setRegionCycle(false); setBiomeCycle(false);   // The Bottomless Fall: disarm cycling so the next (normal) run clamps to Court
     // Surfaced: hush the drift whisper + calm the tube for the recap/hub idle.
     try { ctx.setRunActive && ctx.setRunActive(false); } catch (e) { /* ignore */ }
@@ -4050,7 +4071,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         // run 1 -> run 2 must leave the classroom behind).
         overlays.hideRecap();
         shortNextCountdown = true;
-        state = 'requesting';
+        setState('requesting');
         bridge.send({ type: 'request-run', setup: warren.currentSetup() });
       },
       onSurface: () => returnToWarren(),
@@ -4080,7 +4101,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     try { ctx.setRunActive && ctx.setRunActive(false); } catch (e) { /* ignore */ }
     if (ctx.spawner) ctx.spawner.setAutoSpotlight(true);
     ctx.director.setTimeFactor(0.3);
-    state = 'warren';
+    setState('warren');
     drafting = false;
     // an aborted draft room never commits: drop its state + chrome so the next
     // run's first draft doesn't inherit a stale skip flag
@@ -4315,7 +4336,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         getMediaStats: () => (hostState ? hostState.mediaStats : null),
         runSetup,
         onDescend: (setup) => {
-          state = 'requesting';
+          setState('requesting');
           bridge.send({ type: 'request-run', setup });
         },
         onExit: () => { if (requestExit) requestExit(); else bridge.send({ type: 'exit' }); },
@@ -4335,7 +4356,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       window.addEventListener('keydown', onToyKey);
       hudUi.setVisible(false);
       ctx.director.setTimeFactor(0.3);   // the tunnel idles at a crawl under the hub
-      state = 'warren';
+      setState('warren');
       warren.show('menu');
       // Seed the options panel from whatever snapshot already landed pre-attach.
       try { ctx.syncOptionUnlocks && ctx.syncOptionUnlocks((hostState && hostState.meta && hostState.meta.purchasedDials) || []); } catch (e) { /* ignore */ }
