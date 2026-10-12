@@ -32,6 +32,7 @@
      the render harness, which forces a Height onto any window that declares none. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:ctl="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiOptionsWindow"
@@ -210,14 +211,13 @@
                 <Button x:Name="BtnPanelClose" Grid.Column="1"
                         Width="22" Height="22" Padding="0"
                         Cursor="Hand" Focusable="False"
-                        ToolTip.Tip="{loc:Str emi_desk_opt_close}">
+                        ToolTip.Tip="{loc:Str emi_desk_opt_close}" AutomationProperties.Name="{loc:Str emi_desk_opt_close}">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Grid Background="Transparent">
                                 <Ellipse x:Name="Disc" Fill="#00000000" Stroke="#4A3A63" StrokeThickness="1"/>
-                                <Path Data="M 7,7 L 15,15 M 15,7 L 7,15"
-                                      Stroke="#C6BEDC" StrokeThickness="1.6"
-                                      StrokeLineCap="Round"/>
+                                <fx:IconGlyph Kind="Dismiss" Size="10" Foreground="#C6BEDC"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                         </ControlTemplate>
                     </Button.Template>

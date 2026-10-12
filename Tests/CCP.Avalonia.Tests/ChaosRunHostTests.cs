@@ -189,7 +189,7 @@ public sealed class ChaosRunHostTests
                 overlay.FinishCountdown();
                 Ticks(4);
                 var exit = ChaosRunHost.Hud!.GetVisualDescendants().OfType<Button>()
-                    .Single(b => b.Content is TextBlock { Text: "✖ wake up" });
+                    .Single(b => b.Content is ConditioningControlPanel.Avalonia.Controls.IconLabel { Text: "wake up", Kind: FluentIcons.Common.Symbol.Dismiss });
                 exit.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 Assert.False(ChaosRunHost.IsDescending);
                 Assert.True(ChaosRunHost.IsActive);   // recap up until dismissed

@@ -157,6 +157,9 @@ public sealed class LocalProvidersTests
             await vm.TestConnectionAsync();
             Assert.True(vm.IsHealthy, vm.StatusLine);
             Assert.StartsWith(Loc.Get("label_status_connected"), vm.StatusLine);
+            // The drawer draws the leading ● as an icon and wraps the rest (WPF EngineRoomDrawer.xaml:89).
+            Assert.Equal("●", vm.StatusGlyph);
+            Assert.Equal(vm.StatusLine.Substring(1).TrimStart(), vm.StatusText);
             lock (hits) Assert.Contains(hits, h => h.Path == "/api/tags");
 
             vm.Provider = Mode.Off;

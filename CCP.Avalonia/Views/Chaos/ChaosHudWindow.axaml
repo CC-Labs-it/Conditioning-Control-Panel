@@ -47,6 +47,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHudWindow"
         xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Chaos"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:chaos="clr-namespace:ConditioningControlPanel.Services.Chaos;assembly=CCP.Core"
         x:DataType="chaos:ChaosRunState"
         Title="Rabbit Hole HUD"
@@ -169,7 +170,7 @@
                 CornerRadius="0,0,18,0" PointerEntered="Hud_MouseEnter" PointerExited="Strip_MouseLeave"
                 PointerPressed="Strip_Click">
             <StackPanel VerticalAlignment="Top" Margin="0,20,0,0" HorizontalAlignment="Center">
-                <TextBlock Text="🐇" Foreground="{StaticResource Pink}" FontSize="30" HorizontalAlignment="Center"/>
+                <fx:IconGlyph Kind="AnimalRabbit" Variant="Filled" Foreground="{StaticResource Pink}" Size="32" HorizontalAlignment="Center"/>
                 <TextBlock x:Name="TxtStripClock" Text="{Binding ClockText}" Foreground="White" FontFamily="Consolas, Courier New" FontSize="17"
                            HorizontalAlignment="Center" Margin="0,12,0,0"/>
 
@@ -179,12 +180,12 @@
                     <StackPanel Orientation="Horizontal">
                         <Border x:Name="SideLeftBtn" Width="28" Height="19" CornerRadius="8" Cursor="Hand"
                                 Background="Transparent" PointerPressed="SideLeft_Click">
-                            <TextBlock x:Name="SideLeftGlyph" Text="◀" FontSize="11" FontWeight="Bold"
+                            <fx:IconGlyph x:Name="SideLeftGlyph" Kind="ChevronLeft" Variant="Filled" Size="12"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <Border x:Name="SideRightBtn" Width="28" Height="19" CornerRadius="8" Cursor="Hand" Margin="2,0,0,0"
                                 Background="Transparent" PointerPressed="SideRight_Click">
-                            <TextBlock x:Name="SideRightGlyph" Text="▶" FontSize="11" FontWeight="Bold"
+                            <fx:IconGlyph x:Name="SideRightGlyph" Kind="ChevronRight" Variant="Filled" Size="12"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
@@ -281,7 +282,8 @@
                         </Border>
                         <StackPanel VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🐇 THE HOLE" Foreground="{StaticResource Pink}" FontWeight="Bold" FontSize="22"/>
+                                <fx:IconGlyph Kind="AnimalRabbit" Variant="Filled" Foreground="{StaticResource Pink}" Size="22" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="THE HOLE" Foreground="{StaticResource Pink}" FontWeight="Bold" FontSize="22"/>
                                 <TextBlock x:Name="TxtActWave" Text="{Binding ActWaveText}" Foreground="White" FontSize="13" VerticalAlignment="Bottom" Margin="8,0,0,3"/>
                             </StackPanel>
                             <!-- Run clock + fill bar: Pocket Watch perks only (SetClockVisible) - time stays a mystery otherwise. -->
@@ -295,12 +297,12 @@
                         <StackPanel Orientation="Horizontal">
                             <Border x:Name="SideLeftBtn2" Width="28" Height="19" CornerRadius="8" Cursor="Hand"
                                     Background="Transparent" PointerPressed="SideLeft_Click">
-                                <TextBlock x:Name="SideLeftGlyph2" Text="◀" FontSize="11" FontWeight="Bold"
+                                <fx:IconGlyph x:Name="SideLeftGlyph2" Kind="ChevronLeft" Variant="Filled" Size="12"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <Border x:Name="SideRightBtn2" Width="28" Height="19" CornerRadius="8" Cursor="Hand" Margin="2,0,0,0"
                                     Background="Transparent" PointerPressed="SideRight_Click">
-                                <TextBlock x:Name="SideRightGlyph2" Text="▶" FontSize="11" FontWeight="Bold"
+                                <fx:IconGlyph x:Name="SideRightGlyph2" Kind="ChevronRight" Variant="Filled" Size="12"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </StackPanel>
@@ -417,7 +419,11 @@
                     <TextBlock x:Name="HdrFeed" Text="FEED" Theme="{StaticResource Hdr}"/>
                     <ItemsControl ItemsSource="{Binding RecentEvents}">
                         <ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String">
-                            <TextBlock Text="{Binding}" Foreground="{StaticResource TextDim}" FontSize="13" Margin="0,1" TextTrimming="CharacterEllipsis"/>
+                            <Grid ColumnDefinitions="Auto,*" Margin="0,1" TextElement.Foreground="{StaticResource TextDim}">
+                                <fx:IconGlyph Emoji="{Binding Converter={x:Static local:ChaosHudWindow.FeedGlyph}}" Size="13" Margin="0,0,5,0"
+                                              VerticalAlignment="Center" IsVisible="{Binding $self.Emoji, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Converter={x:Static local:ChaosHudWindow.FeedText}}" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                            </Grid>
                         </DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
@@ -441,13 +447,13 @@
                                     <GradientStop Color="#FF8B5CF6" Offset="1"/>
                                 </LinearGradientBrush>
                             </Button.Background>
-                            <TextBlock x:Name="TxtHero" Text="⏸ PAUSE"/>
+                            <fx:IconLabel x:Name="TxtHero" Text="PAUSE" Kind="Pause"/>
                         </Button>
                         <Button Grid.Column="1" x:Name="BtnCloseMode" Click="BtnCloseMode_Click" FontSize="15" FontWeight="Bold"
                                 Width="46" Margin="8,0,0,0" Background="#66FF5050" Foreground="White" BorderThickness="0" Cursor="Hand"
                                 CornerRadius="12" HorizontalContentAlignment="Center"
-                                ToolTip.Tip="leave the rabbit hole" IsVisible="False">
-                            <TextBlock Text="✖"/>
+                                ToolTip.Tip="leave the rabbit hole" AutomationProperties.Name="leave the rabbit hole" IsVisible="False">
+                            <fx:IconGlyph Kind="Dismiss" Size="16"/>
                         </Button>
                     </Grid>
                     <Grid x:Name="PauseChoiceRow" IsVisible="False">
@@ -458,16 +464,16 @@
                         <Button Grid.Column="0" Click="BtnResume_Click" FontSize="14" FontWeight="Bold"
                                 Padding="0,12" Margin="0,0,5,0" Background="#449CE8A0" Foreground="White" BorderThickness="0" Cursor="Hand"
                                 CornerRadius="12" HorizontalContentAlignment="Center">
-                            <TextBlock Text="▶ continue"/>
+                            <fx:IconLabel Text="continue" Kind="Play"/>
                         </Button>
                         <Button Grid.Column="1" Click="BtnExit_Click" FontSize="14" FontWeight="Bold"
                                 Padding="0,12" Margin="5,0,0,0" Background="#66FF5050" Foreground="White" BorderThickness="0" Cursor="Hand"
                                 CornerRadius="12" HorizontalContentAlignment="Center">
-                            <TextBlock Text="✖ wake up"/>
+                            <fx:IconLabel Text="wake up" Kind="Dismiss"/>
                         </Button>
                     </Grid>
-                    <TextBlock x:Name="TxtPauseHint" Text="⏸ HELD · your panic key again wakes you up"
-                               Foreground="{StaticResource TextDim}" FontSize="11" HorizontalAlignment="Center"
+                    <fx:IconLabel x:Name="TxtPauseHint" Text="HELD · your panic key again wakes you up" Kind="Pause" Spacing="4"
+                               TextElement.Foreground="{StaticResource TextDim}" TextElement.FontSize="11" HorizontalAlignment="Center"
                                Margin="0,6,0,0" IsVisible="False"/>
                 </StackPanel>
             </Grid>

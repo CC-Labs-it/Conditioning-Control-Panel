@@ -22,6 +22,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.EasterEggWindow"
         Title="..."
         Height="650" Width="550"
@@ -65,13 +66,15 @@
             </Grid.RowDefinitions>
 
             <!-- Close Button -->
-            <Button x:Name="BtnCloseTop" Grid.Row="0" Content="×"
+            <Button x:Name="BtnCloseTop" Grid.Row="0" AutomationProperties.Name="{loc:StrBare btn_close_2}"
                     HorizontalAlignment="Right" VerticalAlignment="Top"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Background="Transparent" Foreground="{DynamicResource TextMutedBrush}" FontSize="20"
                     BorderThickness="0" Cursor="Hand" Margin="0,10,15,0"
                     Padding="0"
-                    Width="30" Height="30"/>
+                    Width="30" Height="30">
+                <fx:IconGlyph Kind="Dismiss" Size="18"/>
+            </Button>
 
             <!-- Content -->
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="25,10,25,10">

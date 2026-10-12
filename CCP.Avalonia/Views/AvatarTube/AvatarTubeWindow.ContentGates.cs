@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -95,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     var item = new MenuItem
                     {
                         // A TextBlock, not a string: Avalonia reads "_" in a string header as an access key.
-                        Header = new TextBlock { Text = $"{(preset.Id == activeId ? "☑" : "☐")} {PersonalityName(preset.Name)}" },
+                        Header = new IconLabel { Text = PersonalityName(preset.Name), Kind = preset.Id == activeId ? IconKind.CheckboxChecked : IconKind.CheckboxUnchecked },
                         Tag = preset.Id,
                         Background = darkBg,
                         Foreground = preset.Id == activeId ? AccentBrush : Brushes.White,
