@@ -96,6 +96,11 @@ const TUBE_FRAG = `
   // 0 near the top of the fall, ramping to 1 the deeper you go: speeds up the
   // intermittent line-glow flicker so the rays flash slow up top, frantic deep.
   uniform float uGlowRate;
+  // feel pass (worldFeel.js via fx.js): uFeelGlow = a small multiplier on the
+  // line glow (the slow breath + warmth; 1 = classic). uFeelRing = a one-shot
+  // band of light at view distance x, amplitude y, soft radius z (y 0 = off).
+  uniform float uFeelGlow;
+  uniform vec3 uFeelRing;
   // chamber pattern knobs (fx.js eases these; ALL 0 = the classic look).
   // Each of the Four Chambers wears its own subset:
   //   uBreath      I   - slow ring width+brightness swell (an invitation, not a demand)
@@ -317,8 +322,8 @@ const TUBE_FRAG = `
     float spiralGlow = 0.45 + 2.0 * pulse(spiralCoord * 0.4 - uTime * 2.1 * gr, 3.0) + 0.9 * globalFlash;
 
     // breath (I): brightness follows the width swell, slightly lagged
-    ringGlow   *= brG;
-    spiralGlow *= brG;
+    ringGlow   *= brG * uFeelGlow;
+    spiralGlow *= brG * uFeelGlow;
     // heartbeat throb (III): hb/thr computed up top (the beat also drives the
     // communion beat-scroll); applied to the glows here.
     ringGlow   *= 1.0 + thr * 1.6;
@@ -436,6 +441,15 @@ const TUBE_FRAG = `
       col *= 1.0 - uPanel * 0.10 * interior;
     }
 
+    // feel ring: a soft band of the tube's own two colors (never white) running
+    // away from the camera. It lifts the line work and barely touches the wall,
+    // and the distance fog below fades it out with depth.
+    if (uFeelRing.y > 0.001) {
+      float fr = (vFogDepth - uFeelRing.x) / uFeelRing.z;
+      col += mix(uLineColor, uSpiralColor, 0.5) * uFeelRing.y * exp(-fr * fr)
+           * (0.10 + 0.6 * ring + 0.4 * spiral);
+    }
+
     // lightning strike: a brief whole-tube glare that favours the line work
     col += uFlash * (0.18 + ring * 1.4 + spiral * 0.9) * vec3(0.95, 0.8, 1.05);
 
@@ -495,6 +509,8 @@ export function createTunnel(layout) {
       uFlash: { value: 0 }, // lightning glare, driven by fx.js
       uRush: { value: 0 },  // speed heat, driven by scene.js (0 calm - 1 flying)
       uGlowRate: { value: 0 }, // ray-flicker rate ramp, driven by fx.js (0 shallow - 1 deep)
+      uFeelGlow: { value: 1 },                      // feel pass: breath + warmth glow (fx.js)
+      uFeelRing: { value: new THREE.Vector3(0, 0, 1) }, // feel pass: light ring dist / amp / width
       // chamber pattern knobs, eased by fx.js from the region styles (0 = classic)
       uBreath: { value: 0 },
       uRingDash: { value: 0 },

@@ -58,6 +58,8 @@ const REGION_MAX = (Q.tier === 'mobile')
 
 const AHEAD_MIN = 8;    // a recycled slot re-throws this..MAX units ahead of the POV
 const AHEAD_MAX = 78;   // within the fog sightline so it fades in, never pops
+const POSTER_OPACITY = 0.92;   // a settled poster
+const POSTER_FADE_SEC = 1.4;   // a placed poster eases up from the dark over this long
 const BEHIND = 12;      // slots this far behind the camera are recycled
 const WALL_INSET = 0.14;// how far inside RADIUS the poster sits (just off the wall)
 
@@ -346,7 +348,8 @@ export function createWallPosters({ scene, layout, media, renderer, camera }) {
     // born mid-Mirror-Moment: wear the favorite (the real map waits underneath)
     if (mirror) { slot.mirrorMap = slot.mat.map; slot.mat.map = mirror.tex; }
     slot.mat.needsUpdate = true;
-    slot.mat.opacity = 0.92;
+    slot.mat.opacity = 0;     // tickFades eases it in (the fog alone left a visible pop)
+    slot.fade = 0;
     slot.melt = null;
     slot.mesh.visible = true;
     return true;
@@ -374,6 +377,17 @@ export function createWallPosters({ scene, layout, media, renderer, camera }) {
       if (slot.melt) n++;
     }
     return n;
+  }
+
+  // ease freshly placed posters in from the dark (smoothstep on the slot's own
+  // clock). A melt or a reset elsewhere owns the opacity once fade reaches 1.
+  function tickFades(dt) {
+    for (const slot of slots) {
+      if (!slot.active || slot.melt || !(slot.fade < 1)) continue;
+      slot.fade = Math.min(1, slot.fade + dt / POSTER_FADE_SEC);
+      const k = slot.fade;
+      slot.mat.opacity = POSTER_OPACITY * k * k * (3 - 2 * k);
+    }
   }
 
   function tickMelts(dt) {
@@ -534,6 +548,7 @@ export function createWallPosters({ scene, layout, media, renderer, camera }) {
   function update(cam, camDepth, dt) {
     if (paused) return;
     tickPool(dt); // advance any animated (gif) poster textures
+    tickFades(dt); // feel pass: placed posters ease in from the dark
     tickMelts(dt); // THE BIOMES: denied holds drooping off the wall
     // ease the live count toward the region ceiling: add posters gradually (in
     // the fog ahead) and retire extras as they pass behind, so a chamber change
