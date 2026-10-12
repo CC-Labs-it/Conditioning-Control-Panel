@@ -18,6 +18,7 @@
                                         mounts it sets IsExpanded=false.) -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.KeywordTriggersPanel"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -205,8 +206,8 @@
                  Rows are built imperatively by MainWindow.CreateKeywordTriggerRow; preset
                  clones (Id prefix "preset:") are filtered out and stay owned by the preset
                  detail dialogs on the PRESETS row above. -->
-            <TextBlock Text="{loc:Str label_keyword_triggers}" Foreground="#8A8AA0" FontSize="10"
-                       FontWeight="Bold" Margin="0,2,0,6"/>
+            <fx:IconLabel Key="label_keyword_triggers" TextElement.Foreground="#8A8AA0" TextElement.FontSize="10"
+                          TextElement.FontWeight="Bold" Margin="0,2,0,6"/>
             <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="KeywordTriggerListPanel"/>
             </ScrollViewer>

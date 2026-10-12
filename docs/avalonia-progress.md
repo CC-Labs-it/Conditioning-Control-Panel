@@ -1957,3 +1957,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-deeper-media: +385
 - Fluent icons L6: Deeper tab/editor/player/new dialog, Media Log, Assets (+MediaPicker), WebHost converted to IconGlyph/IconLabel/StrBare; ratchets 971→838 emoji, 234→215 prefixed loc.
 - Deeper header-wave drift now finds the IconGlyph (fail-proven test); Keincheck before/after in evidence/icons-deeper-media/.
+
+## avalonia-port/icons-companion-social: +327
+- Fluent icons lane L7: Companion room, Profile/Discord (tick Paths too), Friends drawer (WPF MDL2 action glyphs restored), InvitePanel, ProfileCustomize; ratchets emoji 971→905, loc 234→224, path 26→23.
+- Fail-proven asserts in WorkshopCells/ProfileWardrobe/FriendsDrawer tests; Keincheck shots of Companion and Profile tabs.

@@ -11,7 +11,7 @@
                                             setters written directly on the same Border.
        Trigger IsMouseOver              ->  :pointerover
        Visibility + CmpBoolToVis        ->  IsVisible="{Binding X}" / "{Binding !X}"
-       <Image .. CmpEmojiToImage>       ->  <TextBlock Text="📌"/> (colour emoji render natively)
+       <Image .. CmpEmojiToImage>       ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        RelativeSource AncestorType      ->  #Root (x:Name on the UserControl)
        ToolTip="..."                    ->  ToolTip.Tip="..."
        IsVisibleChanged                 ->  PropertyChanged (filtered on IsVisibleProperty in code)
@@ -28,6 +28,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              mc:Ignorable="d"
              d:DesignWidth="660" d:DesignHeight="560">
 
@@ -88,7 +89,7 @@
                                            Foreground="{Binding KindKey, Converter={StaticResource CmpSurfFactKindBrush}}"
                                            TextTrimming="CharacterEllipsis" Margin="0,0,20,0"/>
                                 <!-- the gold pin, on pinned cards only -->
-                                <TextBlock Name="Pin" Text="📌" FontSize="11" HorizontalAlignment="Right"
+                                <fx:IconGlyph Name="Pin" Kind="Pin" Variant="Filled" Size="11" Foreground="{DynamicResource IconGoldBrush}" HorizontalAlignment="Right"
                                            VerticalAlignment="Top" IsVisible="{Binding IsPinned}"
                                            ToolTip.Tip="{loc:Str companion_memory_pin_tip}"/>
                             </Grid>
@@ -130,16 +131,19 @@
                                             HorizontalAlignment="Right" VerticalAlignment="Bottom">
                                     <Button Name="PinAction" Theme="{StaticResource CmpFactActionStyle}"
                                             Command="{Binding PinCommand}"
-                                            ToolTip.Tip="{loc:Str companion_memory_pin_tip}">
-                                        <TextBlock Text="📌" FontSize="11"/>
+                                            ToolTip.Tip="{loc:Str companion_memory_pin_tip}"
+                                            AutomationProperties.Name="{loc:Str companion_memory_pin_tip}">
+                                        <fx:IconGlyph Kind="Pin" Size="11"/>
                                     </Button>
                                     <Button Theme="{StaticResource CmpFactActionStyle}" Command="{Binding EditCommand}"
-                                            ToolTip.Tip="{loc:Str companion_memory_edit_tip}">
-                                        <TextBlock Text="✏" FontSize="11" Foreground="{StaticResource CmpDimBrush}"/>
+                                            ToolTip.Tip="{loc:Str companion_memory_edit_tip}"
+                                            AutomationProperties.Name="{loc:Str companion_memory_edit_tip}">
+                                        <fx:IconGlyph Kind="Edit" Size="11" Foreground="{StaticResource CmpDimBrush}"/>
                                     </Button>
                                     <Button Theme="{StaticResource CmpFactActionStyle}" Command="{Binding ForgetCommand}"
-                                            ToolTip.Tip="{loc:Str companion_memory_forget_tip}">
-                                        <TextBlock Text="🗑" FontSize="11"/>
+                                            ToolTip.Tip="{loc:Str companion_memory_forget_tip}"
+                                            AutomationProperties.Name="{loc:Str companion_memory_forget_tip}">
+                                        <fx:IconGlyph Kind="Delete" Size="11"/>
                                     </Button>
                                 </StackPanel>
                             </Grid>
@@ -223,7 +227,7 @@
             <!-- ========== header ========== -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="📖" FontSize="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="BookOpen" Size="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Str companion_memory_title}" Theme="{StaticResource CmpSectionTitleStyle}"/>
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="{loc:Str companion_memory_hint}"

@@ -7,8 +7,8 @@
        Panel.ZIndex                     ->  ZIndex
        ToolTip="..." / Border.ToolTip   ->  ToolTip.Tip="..." / <ToolTip.Tip>
        ToolTipService.*                 ->  dropped; Avalonia has no per-site show/hide durations
-       helpers:EmojiTextBlock           ->  TextBlock (Avalonia renders colour emoji natively)
-       EmojiToImageSource on an Image   ->  a plain TextBlock with the glyph, same reason
+       helpers:EmojiTextBlock / glyphs  ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
+       EmojiToImageSource on an Image   ->  fx:IconGlyph, same decision; tick-legend Paths too
        Button Content="{loc:Str …}"     ->  a TextBlock child (trap 1: "_" is an access key here
                                             and every loc key is snake_case)
        <ContentPresenter/>              ->  Content="{TemplateBinding Content}" (trap 6: a bare
@@ -106,7 +106,7 @@
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="{loc:Str profile_back_to_me_tip}"
                                 Click="BtnViewMyProfile_Click">
-                            <TextBlock Text="{loc:Str profile_back_to_me}" FontSize="11" FontWeight="SemiBold"/>
+                            <fx:IconLabel Key="profile_back_to_me" IconSize="11"/>
                         </Button>
 
                         <Button Grid.Column="3" x:Name="HelpBtnDiscordProfile"
@@ -334,24 +334,21 @@
                                                  lip it is lifetime XP). Positioned by
                                                  MainWindow.ProfileFaucet.PositionVatTickGlyphs from
                                                  the canvas's OWN tick maths. -->
-                                            <Path x:Name="ProfileVatTickDrain"
-                                                  Width="11" Height="11" IsVisible="False"
+                                            <fx:IconGlyph x:Name="ProfileVatTickDrain" Kind="WeatherMoon" Variant="Filled" Size="11"
+                                                  IsVisible="False"
                                                   HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                  Fill="#B3FFFFFF" Stretch="Uniform" Cursor="Help"
-                                                  ToolTip.Tip="{loc:Str profile_vat_tick_drain}"
-                                                  Data="M 7,0.6 A 5,5 0 1 0 7,9.4 A 4,4 0 1 1 7,0.6 Z"/>
-                                            <Path x:Name="ProfileVatTickCap"
-                                                  Width="12" Height="10" IsVisible="False"
+                                                  Foreground="#B3FFFFFF" Cursor="Help"
+                                                  ToolTip.Tip="{loc:Str profile_vat_tick_drain}"/>
+                                            <fx:IconGlyph x:Name="ProfileVatTickCap" Kind="HatGraduation" Variant="Filled" Size="12"
+                                                  IsVisible="False"
                                                   HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                  Fill="#B3FFFFFF" Stretch="Uniform" Cursor="Help"
-                                                  ToolTip.Tip="{loc:Str profile_vat_tick_cap}"
-                                                  Data="M 0,3.4 L 6,0.7 L 12,3.4 L 6,6.1 Z M 2.8,4.9 L 2.8,8.2 L 9.2,8.2 L 9.2,4.9 L 6,6.4 Z"/>
-                                            <Path x:Name="ProfileVatTickMax"
-                                                  Width="12" Height="10" IsVisible="False"
+                                                  Foreground="#B3FFFFFF" Cursor="Help"
+                                                  ToolTip.Tip="{loc:Str profile_vat_tick_cap}"/>
+                                            <fx:IconGlyph x:Name="ProfileVatTickMax" Kind="Crown" Variant="Filled" Size="12"
+                                                  IsVisible="False"
                                                   HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                  Fill="#B3FFFFFF" Stretch="Uniform" Cursor="Help"
-                                                  ToolTip.Tip="{loc:Str profile_vat_tick_max}"
-                                                  Data="M 0,8.4 L 1,1.4 L 4,5 L 6,0.7 L 8,5 L 11,1.4 L 12,8.4 Z"/>
+                                                  Foreground="#B3FFFFFF" Cursor="Help"
+                                                  ToolTip.Tip="{loc:Str profile_vat_tick_max}"/>
 
                                             <!-- THE CHIP - the screen's ONE breather and the vat's
                                                  primary explainer. Gold, so it reads as "something
@@ -410,18 +407,20 @@
                                                     Background="Transparent" BorderThickness="0"
                                                     Cursor="Hand" VerticalAlignment="Center"
                                                     ToolTip.Tip="{loc:Str tooltip_change_display_name}"
+                                                    AutomationProperties.Name="{loc:Str tooltip_change_display_name}"
                                                     Click="BtnChangeDisplayName_Click">
-                                                <TextBlock Text="{loc:Str label_text}" Foreground="#B9B0D6" FontSize="14"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <fx:IconGlyph Kind="Edit" Foreground="#B9B0D6" Size="14"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Button>
                                             <Button x:Name="BtnDeleteProfile" IsVisible="False"
                                                     Width="24" Height="24" Margin="2,2,0,0" Padding="0"
                                                     Background="Transparent" BorderThickness="0"
                                                     Cursor="Hand" VerticalAlignment="Center"
                                                     ToolTip.Tip="{loc:Str tooltip_delete_your_profile}"
+                                                    AutomationProperties.Name="{loc:Str tooltip_delete_your_profile}"
                                                     Click="BtnDeleteProfile_Click">
-                                                <TextBlock Text="{loc:Str label_text_2}" Foreground="#FF5C7A" FontSize="13"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <fx:IconGlyph Kind="Delete" Foreground="#FF5C7A" Size="13"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Button>
                                         </StackPanel>
 
@@ -451,7 +450,7 @@
                                                     </LinearGradientBrush>
                                                 </Border.BorderBrush>
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="🛠" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                    <fx:IconGlyph Kind="WrenchScrewdriver" Size="10" Foreground="#FFB3C2" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                                     <TextBlock x:Name="StaffBadgeLabel"
                                                                Text="{loc:Str label_badge_staff}" Foreground="#FFB3C2" FontSize="10"
                                                                FontWeight="ExtraBold" VerticalAlignment="Center"/>
@@ -468,7 +467,7 @@
                                                     </LinearGradientBrush>
                                                 </Border.BorderBrush>
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="⚗" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                    <fx:IconGlyph Kind="Beaker" Variant="Filled" Size="10" Foreground="#A9E4FF" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                                     <TextBlock Text="{loc:Str label_badge_whitelist}" Foreground="#A9E4FF" FontSize="10"
                                                                FontWeight="ExtraBold" VerticalAlignment="Center"/>
                                                 </StackPanel>
@@ -509,7 +508,7 @@
                                                 </ControlTemplate>
                                             </Button.Template>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="💬" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <fx:IconGlyph Kind="Chat" Size="12" Foreground="White" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                 <TextBlock x:Name="TxtProfileDiscordId" Text="{loc:Str label_message_on_discord}"
                                                            Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                             </StackPanel>
@@ -585,7 +584,7 @@
                                                     ToolTip.Tip="{loc:Str profile_btn_share_tip}"
                                                     Click="BtnProfileShare_Click">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="🔗" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <fx:IconGlyph Kind="Link" Size="11" Foreground="White" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                     <TextBlock Text="{loc:Str profile_btn_share}" Foreground="White"
                                                                FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                                                 </StackPanel>
@@ -692,7 +691,7 @@
                             Background="#B3252542" CornerRadius="12" Padding="30" Margin="0,0,0,14"
                             BorderBrush="#33B478FF" BorderThickness="1">
                         <StackPanel HorizontalAlignment="Center">
-                            <TextBlock Text="👤" FontSize="34" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                            <fx:IconGlyph Kind="Person" Size="34" HorizontalAlignment="Center" Margin="0,0,0,10"/>
                             <TextBlock Text="{loc:Str label_search_for_a_user}" Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="14" HorizontalAlignment="Center"/>
                             <TextBlock Text="{loc:Str label_or_click_my_profile}" Foreground="{DynamicResource TextMutedBrush}" FontSize="12"
@@ -826,7 +825,7 @@
                                                          the rounded plate without needing a clip. -->
                                                     <Image hover:HoverPop.IsEnabled="True" Source="{Binding Image}" Stretch="Uniform" Margin="7"/>
                                                 </Border>
-                                                <TextBlock Text="★" Foreground="#FFD700" FontSize="14"
+                                                <fx:IconGlyph Kind="Star" Variant="Filled" Foreground="{DynamicResource IconGoldBrush}" Size="14"
                                                            HorizontalAlignment="Right" VerticalAlignment="Top"
                                                            Margin="0,3,6,0"/>
                                             </Grid>
@@ -838,22 +837,22 @@
                                 <StackPanel x:Name="ProfilePinnedPlaceholders" Orientation="Horizontal">
                                     <Border Width="88" Height="88" Margin="0,0,10,10" CornerRadius="10"
                                             Background="#26FFFFFF" BorderBrush="#33FFD700" BorderThickness="1">
-                                        <TextBlock Text="☆" Foreground="#59FFD700" FontSize="26"
+                                        <fx:IconGlyph Kind="Star" Foreground="#59FFD700" Size="26"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <Border Width="88" Height="88" Margin="0,0,10,10" CornerRadius="10"
                                             Background="#26FFFFFF" BorderBrush="#33FFD700" BorderThickness="1">
-                                        <TextBlock Text="☆" Foreground="#59FFD700" FontSize="26"
+                                        <fx:IconGlyph Kind="Star" Foreground="#59FFD700" Size="26"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <Border Width="88" Height="88" Margin="0,0,10,10" CornerRadius="10"
                                             Background="#26FFFFFF" BorderBrush="#33FFD700" BorderThickness="1">
-                                        <TextBlock Text="☆" Foreground="#59FFD700" FontSize="26"
+                                        <fx:IconGlyph Kind="Star" Foreground="#59FFD700" Size="26"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <Border Width="88" Height="88" Margin="0,0,10,10" CornerRadius="10"
                                             Background="#26FFFFFF" BorderBrush="#33FFD700" BorderThickness="1">
-                                        <TextBlock Text="☆" Foreground="#59FFD700" FontSize="26"
+                                        <fx:IconGlyph Kind="Star" Foreground="#59FFD700" Size="26"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Text="{loc:Str profile_showcase_pins_empty}" Foreground="{DynamicResource TextMutedBrush}"
@@ -940,8 +939,9 @@
                                                  FontSize="12" VerticalAlignment="Center" KeyDown="TxtProfileSearch_KeyDown"/>
                                         <Button Grid.Column="1" Background="Transparent" BorderThickness="0"
                                                 Foreground="#FF69B4" FontSize="14" Cursor="Hand" Click="BtnProfileSearch_Click"
-                                                ToolTip.Tip="{loc:Str tooltip_search_profile}">
-                                            <TextBlock Text="🔍" FontSize="14"/>
+                                                ToolTip.Tip="{loc:Str tooltip_search_profile}"
+                                                AutomationProperties.Name="{loc:Str tooltip_search_profile}">
+                                            <fx:IconGlyph Kind="Search" Size="14"/>
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -1013,8 +1013,9 @@
                                     <Button Grid.Column="1" x:Name="BtnProfilePrivacyGear"
                                             Background="Transparent" BorderThickness="0" Cursor="Hand"
                                             Padding="6,2" ToolTip.Tip="{loc:Str profile_btn_privacy_tip}"
-                                            Click="BtnProfilePrivacy_Click">
-                                        <TextBlock Text="⚙️" FontSize="14"/>
+                                            Click="BtnProfilePrivacy_Click"
+                                            AutomationProperties.Name="{loc:Str profile_btn_privacy_tip}">
+                                        <fx:IconGlyph Kind="Settings" Size="14"/>
                                     </Button>
                                 </Grid>
                             </StackPanel>
