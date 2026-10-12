@@ -23,6 +23,31 @@ public class WebAssetServerTests
     static HttpClient Client(bool cookies = true) =>
         new(new HttpClientHandler { UseCookies = cookies, CookieContainer = new CookieContainer() });
 
+    /// <summary>The For You feed seeks a clip window inside each video (fyp/surfaces.js): a media element asks for a
+    /// byte range and must get only that slice (206), never the whole file.</summary>
+    [Fact]
+    public async Task ServesOneByteRange_AsWebView2DoesForSeekingMedia()
+    {
+        using var s = Make().server;
+        using var http = Client();
+        async Task<HttpResponseMessage> Get(string? range)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, s.Url("game/index.html"));
+            if (range != null) req.Headers.TryAddWithoutValidation("Range", range);
+            return await http.SendAsync(req);
+        }
+        var mid = await Get("bytes=3-6");                  // "<p>hi</p>" -> "hi</"
+        Assert.Equal(HttpStatusCode.PartialContent, mid.StatusCode);
+        Assert.Equal("hi</", await mid.Content.ReadAsStringAsync());
+        Assert.Equal("bytes 3-6/9", mid.Content.Headers.ContentRange!.ToString());
+        Assert.Equal("p>", await (await Get("bytes=-2")).Content.ReadAsStringAsync());
+        Assert.Equal("</p>", await (await Get("bytes=5-")).Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.RequestedRangeNotSatisfiable, (await Get("bytes=50-")).StatusCode);
+        var whole = await Get(null);
+        Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
+        Assert.Equal("bytes", Assert.Single(whole.Headers.AcceptRanges));
+    }
+
     [Fact]
     public async Task ServesWithToken_AndCookieCarriesLaterLoads()
     {
