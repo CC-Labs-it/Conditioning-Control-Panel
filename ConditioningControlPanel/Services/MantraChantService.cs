@@ -309,6 +309,7 @@ namespace ConditioningControlPanel.Services
                 _output.PlaybackStopped += OnPlaybackStopped;
                 _output.Play();
                 App.Audio?.NoteOutputSuccess();
+                Audio.EngineOffAudioLog.Note("mantra-chant", path);
             }
             catch (Exception ex)
             {

@@ -450,6 +450,7 @@ namespace ConditioningControlPanel.Services
             if (started)
             {
                 App.Audio?.NoteOutputSuccess();
+                Audio.EngineOffAudioLog.Note("mindwipe-loop", prepared!.Reader?.FileName);
                 App.Logger?.Debug("MindWipe: Started player {Slot}", prepared!.IsA ? "A" : "B");
                 // Retire the OTHER player once the overlap has elapsed.
                 SchedulePlayerCleanup(!prepared.IsA);
@@ -556,6 +557,7 @@ namespace ConditioningControlPanel.Services
                 if (started)
                 {
                     App.Audio?.NoteOutputSuccess();
+                    Audio.EngineOffAudioLog.Note("mindwipe-loop", prepared?.Reader?.FileName);
                     SchedulePlayerCleanup(!isA);
                     // A whole clip of lead time for the next one, so its tick only has to Play().
                     PrepareNextLoopPlayer(playImmediately: false);
@@ -879,7 +881,7 @@ namespace ConditioningControlPanel.Services
                 }
 
                 DisposePair(displacedOut, displacedReader);
-                if (started) App.Audio?.NoteOutputSuccess();
+                if (started) { App.Audio?.NoteOutputSuccess(); Audio.EngineOffAudioLog.Note("mindwipe", filePath); }
                 else DisposePair(waveOut, reader);
             });
         }

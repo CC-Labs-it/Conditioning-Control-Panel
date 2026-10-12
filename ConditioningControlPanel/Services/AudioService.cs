@@ -821,6 +821,7 @@ namespace ConditioningControlPanel.Services
                 _soundPlayer.Init(_soundFile);
                 _soundPlayer.Play();
                 NoteOutputSuccess();
+                Audio.EngineOffAudioLog.Note("sound", path);
 
                 var duration = _soundFile.TotalTime.TotalSeconds;
                 App.Logger?.Debug("Playing sound: {Path}, duration: {Duration}s", Path.GetFileName(path), duration);
