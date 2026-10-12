@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.Race;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -189,4 +190,112 @@ public sealed class GameWindowTests
         }
         finally { Directory.Delete(root, true); }
     }
+
+    // ---- Racing Thoughts (WPF Services/Chaos/CaucusHostService.cs) ----
+
+    /// <summary>Signed in, owning <paramref name="owned"/> (null = nothing); XP and Sparks go to lists.</summary>
+    private static void RunRace(string? owned, Action<LauncherWindow, List<double>, List<double>> body) => Run((_, launcher) =>
+    {
+        var (oldOwns, oldBank, oldXp, oldAssets) = (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider);
+        var lib = Directory.CreateTempSubdirectory("race-lib-").FullName;
+        var xp = new List<double>();
+        var sparks = new List<double>();
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            RacingAccess.IsGrantedProvider = id => id == owned;
+            GameWindow.RaceBankSparks = input => { sparks.Add(input.Score); return 7; };
+            CoreProgression.AddXPProvider = (amount, _) => xp.Add(amount);
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            body(launcher, xp, sparks);
+        }
+        finally
+        {
+            (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider) = (oldOwns, oldBank, oldXp, oldAssets);
+            Directory.Delete(lib, true);
+        }
+    });
+
+    /// <summary>WPF CaucusHostService.Launch :132 + LauncherCatalogue :234: no track, no race (and no tile here,
+    /// where WPF draws the mystery card); an owned track opens it from the launcher after the leash check; panic closes it.</summary>
+    [Fact]
+    public void Race_DoorAndLauncher_LeashGate_AndPanic()
+    {
+        RunRace(null, (launcher, _, _) =>
+        {
+            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
+            Assert.Null(GameWindow.Launch("race"));
+            Assert.False(GameWindow.IsAnyOpen());
+        });
+        RunRace("rt.original.03", (launcher, _, _) =>
+        {
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+            launcher.Hide();
+            int gates = 0;
+            MainShellWindow.LeashGateDueProvider = () => true;
+            MainShellWindow.PresentLeashGateProvider = _ => gates++;
+            launcher.Play(LauncherCards.Find("race")!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, gates);
+            Assert.False(GameWindow.IsAnyOpen());
+            MainShellWindow.LeashGateDueProvider = () => false;
+            launcher.Play(LauncherCards.Find("race")!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen());
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+        });
+    }
+
+    /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
+    /// one payout per run, score / 5 under 250 XP a minute, Sparks banked on score / 5.</summary>
+    [Fact]
+    public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
+    {
+        var w = GameWindow.Launch("race")!;
+        Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
+        Assert.False((bool)sent[0]["settings"]!["cloud"]!);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // no run-started: nothing
+        Assert.Empty(sent);
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        Assert.True(w.RaceRunActive);
+        w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
+        w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // a second end pays nothing
+        var pay = Assert.Single(sent);
+        Assert.Equal("payout-result", (string?)pay["type"]);
+        Assert.Equal(250, (int)pay["baseXp"]!);                 // min(5000 / 5, 250 * 1 min)
+        Assert.Equal(7, (int)pay["sparksEarned"]!);
+        Assert.Equal(new[] { 250.0 }, xp);
+        Assert.Equal(new[] { 1000.0 }, sparks);
+        Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
+    });
+
+    /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
+    /// gets one ping, a pong resets it, still silent on the next tick closes the window.</summary>
+    [Fact]
+    public void Race_HeartbeatWatchdog_PingsThenCloses() => RunRace("rt.original.00", (_, _, _) =>
+    {
+        var w = GameWindow.Launch("race")!;
+        Assert.True(w.RaceWatchRunning);                // WPF Launch arms the watch
+        var t0 = DateTime.UtcNow;
+        Assert.Equal("idle", w.CheckRaceHeartbeat(t0.AddSeconds(60)));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal("ok", w.CheckRaceHeartbeat(t0.AddSeconds(15)));
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        Assert.Equal("pinged", w.CheckRaceHeartbeat(t0.AddSeconds(15)));
+        w.HandleMessage("{\"type\":\"pong\"}");
+        Assert.Equal("ok", w.CheckRaceHeartbeat(DateTime.UtcNow.AddSeconds(5)));
+        Assert.Equal("pinged", w.CheckRaceHeartbeat(DateTime.UtcNow.AddSeconds(30)));
+        Assert.Equal("closed", w.CheckRaceHeartbeat(DateTime.UtcNow.AddSeconds(35)));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);               // DisposeAll stops it (P65)
+    });
 }
