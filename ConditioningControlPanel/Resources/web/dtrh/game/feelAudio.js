@@ -354,7 +354,7 @@ export function attachFeelEvents(feel, target = (typeof window !== 'undefined' ?
         case 'hold':
           if (d.phase === 'start') feel.holdStart(d.t);
           else if (d.phase === 'progress') { if (!feel.holdProgress(d.t) && !feel.holdActive()) feel.holdStart(d.t); }
-          else if (d.phase === 'end') feel.holdEnd(!!(d.ok || d.defused));
+          else if (d.phase === 'end') feel.holdEnd(!!(d.ok || d.defused || d.how === 'defused'));
           break;
         case 'tick': feel.tick(d.t); break;
         case 'count':
