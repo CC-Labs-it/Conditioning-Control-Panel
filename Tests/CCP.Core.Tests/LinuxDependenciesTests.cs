@@ -49,6 +49,36 @@ public sealed class LinuxDependenciesTests
             LinuxDependencies.Missing(l => l != "libXi.so.6").Select(d => d.Need));
     }
 
+    // distro-check F2: Ubuntu 24.04/Fedora 44 ship no WPE libraries, Debian 12/Ubuntu 22.04 only WebKit 1.x, so WPE
+    // never goes into their install command; the text says those pages are unavailable and offers no Flatpak (none ships).
+    [Theory]
+    [InlineData("ID=ubuntu\nID_LIKE=debian\n")]
+    [InlineData("ID=fedora\n")]
+    [InlineData("ID=opensuse-tumbleweed\n")]
+    public void MissingWpeSaysUnavailableNotAPackageCommand(string osRelease)
+    {
+        var onlyWpe = LinuxDependencies.Message(LinuxDependencies.Missing(l => !l.Contains("wpe", System.StringComparison.OrdinalIgnoreCase)), osRelease)!.Value;
+        Assert.Null(onlyWpe.Command);
+        Assert.Contains("WPE WebKit 2.0", onlyWpe.Text);
+        Assert.DoesNotContain("Flatpak", onlyWpe.Text);
+        Assert.DoesNotContain("sudo", onlyWpe.Text);
+        Assert.DoesNotContain("libwpe", onlyWpe.Text);
+
+        var withVlc = LinuxDependencies.Message(LinuxDependencies.Missing(l => l != "libvlc.so.5" && !l.Contains("WPE")), osRelease)!.Value;
+        Assert.Contains("WPE WebKit 2.0", withVlc.Text);
+        Assert.DoesNotContain("wpe", withVlc.Command ?? "", System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("libWPE", withVlc.Text);
+    }
+
+    // Arch extra ships wpewebkit, wpebackend-fdo and libwpe (pacman -Si, 2026-10-10), matching packaging/aur/PKGBUILD.
+    [Fact]
+    public void ArchInstallsWpeWithPacman()
+    {
+        var msg = LinuxDependencies.Message(LinuxDependencies.Missing(l => !l.Contains("wpe", System.StringComparison.OrdinalIgnoreCase)), "ID=cachyos\nID_LIKE=arch\n")!.Value;
+        Assert.Equal("sudo pacman -S --needed wpewebkit wpebackend-fdo libwpe", msg.Command);
+        Assert.DoesNotContain("WPE WebKit 2.0", msg.Text);
+    }
+
     [Fact]
     public void LibVlcThatLoadsButFailsToStartStillNamesTheAudioPackages()
     {

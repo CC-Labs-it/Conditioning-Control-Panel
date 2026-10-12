@@ -31,7 +31,7 @@ namespace CCP.Avalonia.Tests;
 /// Stop, the page's Start/Stop + countdown + live preview, and revoke ending it all.</summary>
 public sealed class BlinkTrainerSessionTests
 {
-    private sealed class BlackFrames : IFrameSource
+    internal sealed class BlackFrames : IFrameSource
     {
         public bool Open() => true;
         public bool Read(Mat bgr) { bgr.Create(480, 640, MatType.CV_8UC3); bgr.SetTo(Scalar.All(0)); Thread.Sleep(10); return true; }

@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,6 +19,10 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Xunit;
+using IconLabel = ConditioningControlPanel.Avalonia.Controls.IconLabel;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
+using Avalonia.Media;
 
 namespace CCP.Avalonia.Tests;
 
@@ -92,6 +98,57 @@ public sealed class AccountSettingsSectionTests
         s.HasLinkedPatreon = true;
     }
 
+    /// <summary>The tier badge's colour is its meaning (WPF 🧪 violet / 🔒 gold): the Fluent icon must
+    /// keep it through the shared semantic brushes (fluent-icons 2026-10-10).</summary>
+    [Fact]
+    public void TierBadgeKeepsTheTierColourAsAFluentIcon()
+    {
+        Run((shell, section, s, secrets) =>
+        {
+            var badge = section.FindControl<IconGlyph>("TxtAccountTierBadge")!;
+            Color Res(string key) => ((ISolidColorBrush)section.FindResource(key)!).Color;
+            Color Ink() => Assert.IsAssignableFrom<ISolidColorBrush>(badge.Foreground).Color;
+            CoreAccount.IsLoggedInProvider = () => true;
+
+            CoreAccount.HasLabAccessProvider = () => true;
+            section.RefreshTierBadge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Beaker, badge.Kind);
+            Assert.Equal(Res("IconTier2Brush"), Ink());
+
+            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => true;
+            section.RefreshTierBadge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.LockClosed, badge.Kind);
+            Assert.Equal(Res("IconTier1Brush"), Ink());
+            Assert.NotEqual(Res("IconTier1Brush"), Res("IconTier2Brush"));
+        });
+    }
+
+    /// <summary>The local sandbox whitelist (AccountSeed.SandboxWhitelistRequested) names itself on the tier card in a
+    /// DEBUG build; Release compiles it out, so the signed-out card stays.</summary>
+    [Fact]
+    public void SandboxWhitelistShowsOnTheTierCardOnlyInDebug()
+    {
+        var old = Environment.GetEnvironmentVariable("CCP_SANDBOX_WHITELIST");
+        Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", "1");   // read by Run's Seed
+        try
+        {
+            Run((shell, section, s, secrets) =>
+            {
+                Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); // before Run's cleanup re-seeds
+                section.OnSectionShown();
+#if DEBUG
+                Assert.Equal("Whitelisted (sandbox)", Text(section, "TxtAccountSectionTier"));
+#else
+                Assert.Equal(Loc.Get("label_login_to_unlock_exclusive_features"), Text(section, "TxtAccountSectionTier"));
+#endif
+            });
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); }
+    }
+
     [Fact]
     public void SignedInPatronSeesHerCardsAndTheProviderButtonSignsHerOut()
     {
@@ -139,7 +196,7 @@ public sealed class AccountSettingsSectionTests
 
             Assert.True(Shown(section, "AccountLinkingSection"));
             Assert.True(Shown(section, "BtnLinkPatreon"));
-            Assert.Equal(Loc.Get("btn_reconnect_patreon"), Text(section, "TxtBtnLinkPatreon"));
+            Assert.Equal("btn_reconnect_patreon", section.FindControl<IconLabel>("TxtBtnLinkPatreon")!.Key);
             Assert.True(Shown(section, "TxtPatreonReconnectHint"));
             Assert.False(Shown(section, "BtnLinkDiscord"));
         });
@@ -155,13 +212,15 @@ public sealed class AccountSettingsSectionTests
             section.OnSectionShown();
             var discord = AccountSeed.Discord!;
             discord.IsVerifying = true;            // SignInAsync returns at once: no token, the link fails
+            var oldProbe = LoginDialog.ProxyReachable;
+            LoginDialog.ProxyReachable = _ => Task.FromResult(true); // reachable, so the link runs inline
             try
             {
                 Click(section, "BtnLinkDiscord");
                 Assert.True(section.FindControl<Button>("BtnLinkDiscord")!.IsEnabled);
-                Assert.Equal(Loc.Get("btn_link_discord"), Text(section, "TxtBtnLinkDiscord"));
+                Assert.Equal("btn_link_discord", section.FindControl<IconLabel>("TxtBtnLinkDiscord")!.Key);
             }
-            finally { discord.IsVerifying = false; }
+            finally { discord.IsVerifying = false; LoginDialog.ProxyReachable = oldProbe; }
         });
     }
 

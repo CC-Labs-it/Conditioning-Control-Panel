@@ -20,6 +20,8 @@
      The close button carries a TextBlock rather than Content (CLAUDE.md trap 1). -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.RoadmapStepPopup"
         Title="Step Complete!"
         Width="400" Height="180"
@@ -66,8 +68,8 @@
                     <!-- Photo thumbnail (if available) -->
                     <Ellipse x:Name="PhotoEllipse" Width="96" Height="96" IsVisible="False"/>
                     <!-- Default checkmark icon -->
-                    <TextBlock x:Name="CheckmarkIcon" Text="✓" FontSize="48" FontWeight="Bold"
-                               Foreground="#00E676" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <fx:IconGlyph x:Name="CheckmarkIcon" Kind="Checkmark" Size="48"
+                                  Foreground="#00E676" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Grid>
             </Border>
 
@@ -75,7 +77,7 @@
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <!-- Star Icon + "Step Complete" -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <TextBlock Text="✨" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="16" Foreground="#FFD700" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBlock Text="STEP COMPLETE!" Foreground="#FFD700"
                                FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
@@ -98,8 +100,9 @@
                     Width="24" Height="24" Margin="0,-5,-5,0" Padding="0"
                     Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"
                     BorderThickness="0" Cursor="Hand"
-                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                <TextBlock Text="✕"/>
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    AutomationProperties.Name="{loc:Str btn_close}">
+                <fx:IconGlyph Kind="Dismiss" Size="12"/>
             </Button>
         </Grid>
     </Border>

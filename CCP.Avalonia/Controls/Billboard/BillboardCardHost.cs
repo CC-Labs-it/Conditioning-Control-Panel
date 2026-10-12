@@ -50,8 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         private readonly Panel _slides = new();
         private readonly StackPanel _meta = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left };
         private readonly TextBlock _eyebrow = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
-        private readonly TextBlock _title = new() { FontWeight = FontWeight.Bold, FontSize = 30, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap, MaxHeight = 90, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
-        private readonly TextBlock _line = new() { FontSize = 14, Margin = new Thickness(0, 4, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(0xc9, 0xc7, 0xee)), TextWrapping = TextWrapping.Wrap, MaxHeight = 42, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
+        private readonly TextBlock _title = new() { FontWeight = FontWeight.Bold, FontSize = 30, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
+        private readonly TextBlock _line = new() { FontSize = 14, Margin = new Thickness(0, 4, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(0xc9, 0xc7, 0xee)), TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
         private readonly Button _cta;
         private readonly Border _ctaFace = new() { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1) };
         private readonly TextBlock _ctaText = new() { FontWeight = FontWeight.Bold, FontSize = 14, Margin = new Thickness(18, 7, 18, 8), HorizontalAlignment = HorizontalAlignment.Center };
@@ -409,7 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             {
                 Width = 28, Height = 28, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1),
                 Background = new SolidColorBrush(Color.FromArgb(0xc0, 12, 12, 26)), BorderBrush = new SolidColorBrush(Colors.White, 0.25),
-                Child = new TextBlock { Text = "×", FontSize = 16, FontWeight = FontWeight.SemiBold, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, 0) },
+                Child = new IconGlyph { Kind = IconKind.Dismiss, Size = 14, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
             var button = new Button
             {

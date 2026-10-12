@@ -445,6 +445,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
+        /// Shrinks the fixed 900x680 card to the screen's working area (DIPs) so the footer - Enter -
+        /// stays on screen; the step bodies already scroll, so the 18+ checkbox stays reachable.
+        /// At 200% on 1920x1080 (960x540 DIP) the fixed size put Enter off-screen and the 18+ gate
+        /// could not be accepted (distro-check F5). WPF has the same fixed size (FirstRunWizard.xaml:6,
+        /// ResizeMode=NoResize); this head improves on it, a normal-scale screen is unchanged.
+        /// </summary>
+        internal void FitToWorkingArea(Screen? screen)
+        {
+            if (screen is not null) FitToWorkingArea(screen.WorkingArea, screen.Scaling);
+        }
+
+        // Working area is in physical pixels; the window size is in DIPs.
+        internal void FitToWorkingArea(PixelRect workingArea, double scaling)
+        {
+            if (scaling <= 0) return;
+            FitTo(workingArea.Width / scaling, workingArea.Height / scaling);
+        }
+
+        internal void FitTo(double workWidth, double workHeight)
+        {
+            Width = Math.Min(Width, workWidth);
+            Height = Math.Min(Height, workHeight);
+        }
+
+        /// <summary>
         /// Opens the wizard modally on <paramref name="owner"/> and performs whatever the user
         /// asked for on the way out: the short walk (the folder picker already ran from its button). Never throws - a first-run screen must
         /// never be the reason a fresh install fails to start.
@@ -468,6 +493,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 MainShellWindow.IsStartupDialogShowing = true;
                 wizard = new FirstRunWizard { ShellOwner = owner };
+                wizard.FitToWorkingArea(wizard.Screens.ScreenFromWindow(owner) ?? wizard.Screens.Primary);
                 await wizard.ShowDialogSafe(owner);
             }
             catch (Exception ex)

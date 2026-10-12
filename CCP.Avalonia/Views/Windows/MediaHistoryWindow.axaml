@@ -27,6 +27,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Windows"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.MediaHistoryWindow"
         Title="{loc:Str dialog_media_log}"
@@ -124,9 +125,12 @@
                     <Button x:Name="BtnClear" Theme="{StaticResource MlChip}"
                             Margin="0,0,8,0"
                             ToolTip.Tip="{loc:Str tooltip_clear_media_log}">
-                        <TextBlock Text="{loc:Str btn_clear_log}"/>
+                        <fx:IconLabel Key="btn_clear_log"/>
                     </Button>
-                    <Button x:Name="BtnClose" Content="✕" Theme="{StaticResource MlChip}" Padding="10,5"/>
+                    <Button x:Name="BtnClose" Theme="{StaticResource MlChip}" Padding="10,5"
+                            AutomationProperties.Name="{loc:Str btn_close}">
+                        <fx:IconGlyph Kind="Dismiss" Size="12"/>
+                    </Button>
                 </StackPanel>
             </DockPanel>
 
@@ -196,9 +200,9 @@
                                         <Border Grid.Column="0" Width="40" Height="40" CornerRadius="6"
                                                 Background="#0E0E1C" ClipToBounds="True" Margin="0,0,10,0">
                                             <Grid>
-                                                <TextBlock Text="{Binding PlaceholderGlyph, Mode=OneTime}"
-                                                           FontSize="18" HorizontalAlignment="Center"
-                                                           VerticalAlignment="Center" Opacity="0.65"/>
+                                                <fx:IconGlyph Kind="{Binding PlaceholderGlyph, Mode=OneTime}"
+                                                              Size="18" HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" Opacity="0.65"/>
                                                 <Image Source="{Binding Thumb, Mode=OneTime}" Stretch="UniformToFill"/>
                                             </Grid>
                                         </Border>
@@ -218,11 +222,14 @@
                                                        Foreground="White" FontSize="10" FontWeight="Bold"/>
                                         </Border>
 
-                                        <Button Grid.Column="3" Content="📂" Theme="{StaticResource MlChip}"
+                                        <Button Grid.Column="3" Theme="{StaticResource MlChip}"
                                                 Padding="7,4" VerticalAlignment="Center"
                                                 Tag="{Binding}"
                                                 IsVisible="{Binding FolderButtonVisible, Mode=OneTime}"
-                                                ToolTip.Tip="{loc:Str tooltip_reveal_in_explorer}"/>
+                                                ToolTip.Tip="{loc:Str tooltip_reveal_in_explorer}"
+                                                AutomationProperties.Name="{loc:Str tooltip_reveal_in_explorer}">
+                                            <fx:IconGlyph Kind="FolderOpen" Size="13"/>
+                                        </Button>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -269,12 +276,12 @@
                             <Button x:Name="BtnPreviewOpenFolder"
                                     Theme="{StaticResource MlChip}"
                                     Margin="0,0,8,6" IsEnabled="False">
-                                <TextBlock Text="{loc:Str btn_open_in_folder}"/>
+                                <fx:IconLabel Key="btn_open_in_folder"/>
                             </Button>
                             <Button x:Name="BtnPreviewOpenFile"
                                     Theme="{StaticResource MlChip}"
                                     Margin="0,0,8,6" IsEnabled="False">
-                                <TextBlock Text="{loc:Str btn_open_file}"/>
+                                <fx:IconLabel Key="btn_open_file"/>
                             </Button>
                             <Button x:Name="BtnPreviewCopyLink" Theme="{StaticResource MlChip}"
                                     Margin="0,0,8,6" IsVisible="False">
@@ -283,7 +290,7 @@
                             <Button x:Name="BtnPreviewOpenSource" Theme="{StaticResource MlChip}"
                                     Margin="0,0,0,6" IsVisible="False"
                                     ToolTip.Tip="{loc:Str tooltip_open_source}">
-                                <TextBlock Text="{loc:Str btn_open_source}"/>
+                                <fx:IconLabel Key="btn_open_source"/>
                             </Button>
                         </WrapPanel>
                     </Grid>

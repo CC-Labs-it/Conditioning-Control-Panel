@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
@@ -342,12 +343,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 }
                 catch
                 {
-                    thumbHost.Child = SpiralGlyph("🌀");
+                    thumbHost.Child = SpiralGlyph(video: false);
                 }
             }
             else
             {
-                thumbHost.Child = SpiralGlyph(string.IsNullOrEmpty(path) ? "🌀" : "🎬");
+                thumbHost.Child = SpiralGlyph(video: !string.IsNullOrEmpty(path));
             }
             stack.Children.Add(thumbHost);
 
@@ -373,10 +374,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             return card;
         }
 
-        private static TextBlock SpiralGlyph(string glyph) => new TextBlock
+        private static IconGlyph SpiralGlyph(bool video) => new IconGlyph
         {
-            Text = glyph,
-            FontSize = 32,
+            Kind = IconKind.Video,
+            Brand = video ? IconBrand.None : IconBrand.Spiral,
+            Size = 32,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),

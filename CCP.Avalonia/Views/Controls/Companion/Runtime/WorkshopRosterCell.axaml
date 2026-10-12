@@ -20,6 +20,7 @@
                                        exist on Avalonia. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime.WorkshopRosterCell"
              x:DataType="vm:WorkshopRosterCellViewModel"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -77,10 +78,13 @@
                                    FontSize="10" VerticalAlignment="Center" IsVisible="False"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                        <Button x:Name="BtnCompanion0Personality" Content="🎭" FontSize="10" Padding="4,0"
+                        <Button x:Name="BtnCompanion0Personality" Padding="4,0"
                                 Background="{DynamicResource DarkerBgBrush}" Foreground="#888" BorderThickness="0" Cursor="Hand"
                                 Tag="0"
-                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"/>
+                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"
+                                AutomationProperties.Name="{Binding LocTooltipAssignAiPersonality}">
+                            <fx:IconGlyph Kind="Emoji" Size="10"/>
+                        </Button>
                         <TextBlock x:Name="TxtCompanion0Prompt" Text="" Foreground="#666" FontSize="10"
                                    VerticalAlignment="Center" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
                     </StackPanel>
@@ -105,10 +109,13 @@
                                    FontSize="10" VerticalAlignment="Center" IsVisible="False"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                        <Button x:Name="BtnCompanion1Personality" Content="🎭" FontSize="10" Padding="4,0"
+                        <Button x:Name="BtnCompanion1Personality" Padding="4,0"
                                 Background="{DynamicResource DarkerBgBrush}" Foreground="#888" BorderThickness="0" Cursor="Hand"
                                 Tag="1"
-                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"/>
+                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"
+                                AutomationProperties.Name="{Binding LocTooltipAssignAiPersonality}">
+                            <fx:IconGlyph Kind="Emoji" Size="10"/>
+                        </Button>
                         <TextBlock x:Name="TxtCompanion1Prompt" Text="" Foreground="#666" FontSize="10"
                                    VerticalAlignment="Center" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
                     </StackPanel>
@@ -133,10 +140,13 @@
                                    FontSize="10" VerticalAlignment="Center" IsVisible="False"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                        <Button x:Name="BtnCompanion2Personality" Content="🎭" FontSize="10" Padding="4,0"
+                        <Button x:Name="BtnCompanion2Personality" Padding="4,0"
                                 Background="{DynamicResource DarkerBgBrush}" Foreground="#888" BorderThickness="0" Cursor="Hand"
                                 Tag="2"
-                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"/>
+                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"
+                                AutomationProperties.Name="{Binding LocTooltipAssignAiPersonality}">
+                            <fx:IconGlyph Kind="Emoji" Size="10"/>
+                        </Button>
                         <TextBlock x:Name="TxtCompanion2Prompt" Text="" Foreground="#666" FontSize="10"
                                    VerticalAlignment="Center" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
                     </StackPanel>
@@ -161,10 +171,13 @@
                                    FontSize="10" VerticalAlignment="Center" IsVisible="False"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                        <Button x:Name="BtnCompanion3Personality" Content="🎭" FontSize="10" Padding="4,0"
+                        <Button x:Name="BtnCompanion3Personality" Padding="4,0"
                                 Background="{DynamicResource DarkerBgBrush}" Foreground="#888" BorderThickness="0" Cursor="Hand"
                                 Tag="3"
-                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"/>
+                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"
+                                AutomationProperties.Name="{Binding LocTooltipAssignAiPersonality}">
+                            <fx:IconGlyph Kind="Emoji" Size="10"/>
+                        </Button>
                         <TextBlock x:Name="TxtCompanion3Prompt" Text="" Foreground="#666" FontSize="10"
                                    VerticalAlignment="Center" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
                     </StackPanel>
@@ -189,10 +202,13 @@
                                    FontSize="10" VerticalAlignment="Center" IsVisible="False"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                        <Button x:Name="BtnCompanion4Personality" Content="🎭" FontSize="10" Padding="4,0"
+                        <Button x:Name="BtnCompanion4Personality" Padding="4,0"
                                 Background="{DynamicResource DarkerBgBrush}" Foreground="#888" BorderThickness="0" Cursor="Hand"
                                 Tag="4"
-                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"/>
+                                ToolTip.Tip="{Binding LocTooltipAssignAiPersonality}"
+                                AutomationProperties.Name="{Binding LocTooltipAssignAiPersonality}">
+                            <fx:IconGlyph Kind="Emoji" Size="10"/>
+                        </Button>
                         <TextBlock x:Name="TxtCompanion4Prompt" Text="" Foreground="#666" FontSize="10"
                                    VerticalAlignment="Center" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
                     </StackPanel>

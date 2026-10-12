@@ -14,6 +14,7 @@
      Content as an access key and every loc key here is snake_case. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.LocalAiSetupWizard"
         Title="{loc:Str dialog_local_ai_setup_title}"
@@ -219,8 +220,8 @@
 
             <!-- Step: Done -->
             <StackPanel x:Name="PanelDone" IsVisible="False" VerticalAlignment="Center">
-                <TextBlock Foreground="{StaticResource PinkBrush}" FontSize="36"
-                           HorizontalAlignment="Center" Text="✓" FontWeight="Bold"/>
+                <fx:IconGlyph Kind="Checkmark" Foreground="{StaticResource PinkBrush}" Size="36"
+                              HorizontalAlignment="Center"/>
                 <TextBlock Theme="{StaticResource WizardBody}" HorizontalAlignment="Center"
                            Margin="0,12,0,0" FontSize="15" FontWeight="SemiBold"
                            Text="{loc:Str label_local_ai_done}"/>
@@ -261,7 +262,7 @@
                     <TextBlock x:Name="TxtSecondary" Text="{loc:Str btn_cancel}"/>
                 </Button>
                 <Button Grid.Column="2" x:Name="BtnPrimary" Theme="{StaticResource WizardPrimaryButton}">
-                    <TextBlock x:Name="TxtPrimary" Text="{loc:Str btn_continue}"/>
+                    <fx:IconLabel x:Name="TxtPrimary" Key="btn_continue"/>
                 </Button>
             </Grid>
         </Border>

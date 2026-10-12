@@ -12,6 +12,7 @@ using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -128,10 +129,14 @@ public sealed class ProfileWardrobeTests
             Assert.False(dialog.FindControl<TextBlock>("TxtWardrobeEmpty")!.IsVisible);
 
             // Equip, re-click to take off, and the charm cap - the WPF ToggleWardrobeItem rules.
+            // The worn tile's tick is a Fluent Checkmark found by its tag (it was a "✓" TextBlock).
+            int ticks() => decoHost.GetLogicalDescendants().OfType<IconGlyph>().Count(g => (g.Tag as string) == "check" && g.IsVisible);
             dialog.ToggleWardrobeItem(WardrobeCatalog.Find(Deco)!);
             Assert.Equal(Deco, dialog.Result.AvatarDeco);
+            Assert.Equal(1, ticks());
             dialog.ToggleWardrobeItem(WardrobeCatalog.Find(Deco)!);
             Assert.Null(dialog.Result.AvatarDeco);
+            Assert.Equal(0, ticks());
             var charms = WardrobeCatalog.Items.Where(i => i.IsCharm).Take(3).ToList();
             foreach (var c in charms) dialog.ToggleWardrobeItem(c);
             Assert.Equal(charms.Take(ProfileCosmetics.MaxCharms).Select(c => c.Id), dialog.Result.Charms);

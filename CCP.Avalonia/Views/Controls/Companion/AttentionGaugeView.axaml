@@ -17,8 +17,7 @@
        {loc:Str key}                   ->  a binding (LocExtension is a WPF MarkupExtension and
                                            stays in the head; the strings still come from
                                            CCP.Core's LocalizationManager, via the viewmodel)
-       <Image {CmpEmojiToImage}>       ->  <TextBlock Text="💗"/>; Avalonia draws colour emoji
-                                           natively, so the Twemoji pipeline is not needed.
+       <Image {CmpEmojiToImage}>       ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
 
      Verified rather than assumed: an Avalonia ColumnDefinition is NOT a StyledElement (its base
      chain is DefinitionBase -> AvaloniaObject, no DataContext property), so the star-width
@@ -27,6 +26,7 @@
      port unchanged; no ActualWidth arithmetic was introduced. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.AttentionGaugeView"
@@ -115,7 +115,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="💗" FontSize="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="Heart" Variant="Filled" Size="16" Foreground="{DynamicResource PinkBrush}" Margin="0,0,9,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding LocTitle}" Theme="{StaticResource CmpSectionTitleStyle}"/>
                 </StackPanel>
                 <Border Grid.Column="2" Theme="{StaticResource CmpTrainTagLiveStyle}">

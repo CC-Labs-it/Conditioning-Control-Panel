@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using Avalonia;
 using Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
@@ -66,7 +68,12 @@ public sealed class QuestsTabLiveTests
                 Assert.Equal($"0 / {pop.TargetValue}", card0.FindControl<TextBlock>("TxtProgress")!.Text);
                 // The card quotes what CompleteQuest pays (one Core formula); the payout lands below.
                 var payout = QuestService.ScaledQuestXp(pop.XPReward, settings);
-                Assert.Equal($"🎁 {payout} XP", card0.FindControl<TextBlock>("TxtXp")!.Text);
+                Assert.Equal($"{payout} XP", card0.FindControl<TextBlock>("TxtXp")!.Text);
+                var gift = card0.FindControl<IconGlyph>("XpIcon")!;   // WPF's "🎁 " prefix, as a Fluent icon
+                Assert.Equal(IconKind.Gift, gift.Kind);
+                Assert.True(gift.IsVisible);
+                var questIcon = card0.FindControl<IconGlyph>("QuestIcon")!;
+                Assert.Equal(pop.Icon, questIcon.Emoji);              // data-driven: the quest's own icon via IconMap
 
                 // A language switch after the paint (any earlier test's SetLanguage, posted from
                 // off the UI thread, used to land here) keeps what code wrote, as WPF does, and still
@@ -104,11 +111,22 @@ public sealed class QuestsTabLiveTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.NotEqual(seat1, quests.Progress.DailyQuests[1]!.DefinitionId);
                 Assert.Equal(budget - 1, quests.GetRemainingDailyRerolls());
+                // The seat button re-reads the shared pool: same key, new count (IconLabel.Args re-renders).
+                var seat2Reroll = tab.FindControl<DailyQuestCard>("DailyCard2")!.FindControl<IconLabel>("RerollLabel")!;
+                Assert.Equal(IconText.Bare(budget - 1 > 0
+                    ? ConditioningControlPanel.Localization.Loc.GetF("btn_reroll_with_count", budget - 1)
+                    : ConditioningControlPanel.Localization.Loc.Get("btn_reroll_none")), seat2Reroll.Label.Text);
 
                 var weekly = quests.Progress.WeeklyQuest!.DefinitionId;
                 tab.FindControl<Button>("BtnRerollWeekly")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.NotEqual(weekly, quests.Progress.WeeklyQuest!.DefinitionId);
+                // WPF "🔄 Reroll (n left)" / "🔄 No rerolls left": Fluent ArrowSync beside the bare text.
+                var weeklyReroll = tab.FindControl<IconLabel>("TxtWeeklyReroll")!;
+                int weeklyLeft = quests.GetRemainingWeeklyRerolls();
+                Assert.Equal(IconKind.ArrowSync, weeklyReroll.Kind);
+                Assert.Equal(weeklyLeft > 0 ? $"Reroll ({weeklyLeft} left)" : "No rerolls left", weeklyReroll.Label.Text);
+                Assert.Contains(weeklyReroll.Children, c => c is IconGlyph { Kind: IconKind.ArrowSync });
             }
             finally
             {

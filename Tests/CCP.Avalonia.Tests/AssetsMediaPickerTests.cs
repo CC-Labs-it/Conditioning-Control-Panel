@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -129,8 +130,8 @@ public sealed class AssetsMediaPickerTests
         return Task.CompletedTask;
     }));
 
-    private static TextBlock Check(Button tile) =>
-        ((Grid)tile.Content!).Children.OfType<TextBlock>().Single(t => (string?)t.Tag == "check");
+    private static IconGlyph Check(Button tile) =>
+        ((Grid)tile.Content!).Children.OfType<IconGlyph>().Single(t => (string?)t.Tag == "check");
 
     [Fact]
     public Task AddButtonProbesThenKeepsOrExplains() => AvaloniaTestDispatcher.RunAsync(() => WithView(async (view, s) =>

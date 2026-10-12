@@ -1873,3 +1873,107 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/programs-today-card: +502
 - Dashboard Programs Today card + banner art/fog/sheen/sparkles/parallax (shell-program-banner -> wired); loops gated on visibility+motion, stopped on detach.
+
+## avalonia-port/programs-ignition-fx: +833
+- Programs run view ignition rig, built on Core ProgramHeat: heat-tiered ambient loops, particles registered with RegisterTabFx("programs"), and the day/chapter/graduation moments. Loops follow Motion, tab visibility and minimise (like WPF), and stop on detach. Brush and transform loops run on a per-frame driver, because Avalonia 12 gives them no clock.
+- 3 headless tests, 10 mutations each turned them red; headless frame-timing CSV plus a per-loop motion CSV (angle, shimmer, comet); live run (lit but still: the window was inactive). Bursts, pip pulse and session sheen still missing.
+
+## avalonia-port/wpf-behaviour-ci: +598
+- FlaUI drives the offline, firewall-blocked WPF reference on Windows CI (UIA tree + default/hover/pressed/opened PNGs for doors and dialogs); Avalonia `--uia-dump` writes the same schema; `uia-parity.py` diffs them per view into parity-diff.md/json (run 38179660532 green: wpf-behaviour 16 views, 0 step failures; firewall Domain/Private/Public on).
+- First diff: 5 findings in evidence/wpf-behaviour/findings.md (#1 Bug Report withdrawn: harness click was covered by the help overlay; offline does not disable logins, type-name accessible names on 35 buttons).
+
+## avalonia-port/sync6-nav-rail-d: +732
+- Settings > Monitors (System bubble scrolls to it, crumb follows; SystemFeatureControl retired), Library Folders zone + Data logs row, ? badge beside every strip pill, mod door art on the rail.
+- Ledger rows 1/25/33 ported, 6/11/17/21/96 partial; Account & Plans, Games cards, Just Drop ask, Moved note -> sync6-nav-rail-e.
+
+## avalonia-port/wizard-hidpi-wpe: +219
+- First-run wizard capped to the screen working area (pixels divided by scaling): at 200% on 1080p, Enter stays on screen and the 18+ box is reachable by scrolling (F5; distro-check hidpi wizard_done true on ubuntu-24.04).
+- Missing-WPE message: Arch keeps WPE in pacman (extra ships the trio; PKGBUILD unchanged). Other distros get no failing command, and a 9-language line says those pages are unavailable. No unbuilt Flatpak is offered (F2).
+
+## avalonia-port/win-panic: +827
+- Windows panic key (WH_KEYBOARD_LL hook), Lockdown system-key block and unfocused Esc door, all from trunk. Core PanicKeyRules with tests. The Windows code compiles but has never run.
+- SingleInstance sandbox suffix was already on base; this adds the fail-proven test for it.
+
+## avalonia-port/windows-ci-flakes: +94
+- Windows CI flakes fixed at the root: the NavGlow glow now reads a steppable TimeProvider instead of a real animation clock, the hit test no longer races ToolTipService, and the Windows Avalonia suite runs sharded (it ran out of memory in one testhost).
+
+## avalonia-port/juice-clock: +621
+- Trunk U1 infra: FrameGate (Core), FrameClock (30 fps shared beat), BeatLoop; TransformTween/BreathClock/Easings/Keyframes/MotionGate/MotionTimings deferred to their first user.
+- Profile OG border spin and vault CTA breath were inert (Animation.RunAsync on a Transform threw); now BeatLoops on the 30 fps beat, angle/scale asserted, red run saved.
+
+## avalonia-port/text-maxlines: +130
+- WPF pixel MaxHeight line caps on 17 TextBlocks (11 files) -> MaxLines with the WPF line count; long localized copy no longer drops/clips lines.
+- TextLineCapTests: headless line-count check (fail-proven on the Assets creator card) + axaml guard against TextBlock MaxHeight.
+
+## avalonia-port/icons-guard: +355
+- IconGuardTests: font-codepoint hard 0 (1 temporary entry), emoji/loc/Path ratchets (971/234/26) failing both ways, FluentIcons isolation, allowlist liveness on comment-stripped code, with per-line counts for Path entries and reasoned whole-file art entries; every guard mutation-proven.
+- `--render-all` icon census line (1040 icon-led texts, 158 unnamed icon-only buttons); evidence in ~/ccp-port/evidence/icons/icons-guard/.
+
+## avalonia-port/sandbox-full-access: +158
+- Debug+sandbox runs with CCP_SANDBOX_WHITELIST=1 (set by kc start) get whitelist/premium/Lab; Release compiles it out.
+- Tier card shows "Whitelisted (sandbox)"; tests + Release-IL check + live evidence in evidence/sandbox-full-access.
+
+## avalonia-port/mine-safety: +592
+- P0 safety: panic silences the tube (`tube-speech`), the 6-blink stop gesture behind BlinkStopGate (moved to Core), and the camera pill now stops the camera.
+- The explicit-content acknowledgement uses ShowDialogSafe, so a hidden tube no longer throws. Gate OK, no live check.
+
+## avalonia-port/mine-launcher-account: +236
+- The launcher now checks a leash gate before play (the seam exists but nothing sets it yet). Header stat pills are ported and read the last leaderboard page. The bubble sprite is re-read from the active mod on each start.
+- P2 (account/data + devices) is skipped because it overlaps the login-fix lane; face473bd (pause-key capture) has no overlap and can be its own lane.
+
+## avalonia-port/content-packs-store: +960
+- ContentPackStore + PackManifestModels + PackFolderMover on Core (trunk d6a8343db, 1b387ad80); WPF manifest models moved to Core.
+- PackFolderMover is copy -> verify -> rename -> remove source; failure keeps the source (fail-proven tests).
+
+## avalonia-port/login-fix: +347
+- User report "login does not work". The window was a sandboxed live-check app. An unreachable sign-in server now ends the attempt at once with WPF's "Login failed" message instead of a 5-minute spinner. Closing the dialog cancels the OAuth, so a retry works again.
+- Title-bar "Sign in" chip lands on Settings · Account on the first open. Offline Mode greys the Home Login button.
+- Sandboxed runs show "[SANDBOX] " in every window title and a SANDBOX badge in the shell title bar. A Settings Link waiting on the browser ends when the Account section leaves the tree. LoginRetryTests: 9 tests; the new one is fail-proven, the rest are asserted.
+
+## avalonia-port/icons-home-settings: +292
+- Fluent icons for Home + Settings (L1): 17 product files, emoji ratchet 971→905, loc ratchet 234→214, census unnamed icon buttons 158→142.
+- Tests now check IconGlyph/IconLabel Kind (fold, drawer, panic key, link labels), each made to fail once on purpose; parity rows marked divergent by decision.
+
+## avalonia-port/icons-studio-features: +434
+- Fluent icons L2: Studio rack, feature pages, feature/intro/settings popups, PinkRush, CornerGif, LayeredAudio, MiniPlayer (play/pause by Kind); emoji ratchet 971→895, loc-prefix 234→198.
+- win-layered-audio snapshot re-baselined (icons only, by decision); snapshot tests can no longer launch a diff GUI.
+
+## avalonia-port/icons-studio-features: +434
+- Fluent icons L2: Studio rack, feature pages, feature/intro/settings popups, PinkRush, CornerGif, LayeredAudio, MiniPlayer (play/pause by Kind); emoji ratchet 971→895, loc-prefix 234→198.
+- win-layered-audio snapshot re-baselined (icons only, by decision); snapshot tests can no longer launch a diff GUI.
+
+## avalonia-port/icons-premium-tabs: +133
+- L3 Fluent icons: 9 premium tabs + Circe faces draw fx:IconGlyph; gate padlocks keep PremiumGateFx glow (LockClosed + tier brush); Chaster Key/LockClosed per D6.
+- Ratchets lowered: emoji 971→920, prefixed-loc 234→224, path 26→19; Exclusives feature-emoji data slots and Takeover state strings left (L10/follow-up).
+
+## avalonia-port/icons-voice: +143
+- Fluent icons L4: She's Listening (21 voice-command rows -> IconLabel, gate padlock), lock card voice states, webcam calibration/gaze windows; icon-emoji 971->919, icon-prefixed-loc 234->233. Review P3s: hearts Filled + PinkBrush; shield, sparkle, pause Filled per design ref.
+- Left for L10: the Start/Stop listening button (text swapped in MainShellWindow.SheListening.cs).
+
+## avalonia-port/icons-progress: +506
+- Fluent icons on the quest, achievement, skill-tree and program surfaces and their 7 popups and dialogs (L5). Icon-led loc keys go through IconLabel/StrBare; gold/success/tier brushes follow the D tables.
+- Ratchets: icon-emoji 971→880, icon-prefixed-loc 234→210; census 1040→820. IconLabel.Args now re-renders, so a reroll count that changed under the same key no longer stays stale.
+
+## avalonia-port/icons-deeper-media: +385
+- Fluent icons L6: Deeper tab/editor/player/new dialog, Media Log, Assets (+MediaPicker), WebHost converted to IconGlyph/IconLabel/StrBare; ratchets 971→838 emoji, 234→215 prefixed loc.
+- Deeper header-wave drift now finds the IconGlyph (fail-proven test); Keincheck before/after in evidence/icons-deeper-media/.
+
+## avalonia-port/icons-companion-social: +327
+- Fluent icons lane L7: Companion room, Profile/Discord (tick Paths too), Friends drawer (WPF MDL2 action glyphs restored), InvitePanel, ProfileCustomize; ratchets emoji 971→905, loc 234→224, path 26→23.
+- Fail-proven asserts in WorkshopCells/ProfileWardrobe/FriendsDrawer tests; Keincheck shots of Companion and Profile tabs.
+
+## avalonia-port/icons-chaos-play: +470
+- Fluent icons lane L8: Chaos hub/HUD/overlay/slot picker, Play tab, Gaze minigame, AvatarTube, BubbleCount and EasterEgg glyphs become IconGlyph/IconLabel with an arcade look (filled marks, tier/gold brushes, pip counts kept); icon-emoji ratchet 971 -> 846.
+- Tests: new ChaosPlayIconsTests; ChaosRunHostTests and ChaosHubStateTests assert icon Kinds; all fail-proven; Keincheck Play tab, headless Chaos hub render.
+
+## avalonia-port/icons-dialogs-windows: +497
+- Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
+- Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
+
+## avalonia-port/icons-dialogs-windows: +497
+- Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
+- Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
+
+## avalonia-port/render-budget-loc: +175
+- Skia GPU cache raised to 256 MB (trunk RenderBudget) plus Win32 presentation env switches; idle Home CPU (Linux only) 0.67 -> 0.30 cores (dotnet-counters, 2x3 samples each side).
+- Trunk loc fix 6be091d12 already in base, no json in diff (0 of 18 keys differ); FrameClock fps counter not imported (no FrameClock in this head).

@@ -80,7 +80,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "intake", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "lock-cards", "attention-test", "deeper-editor-audio", "camera",
+        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "attention-test", "deeper-editor-audio", "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
@@ -109,6 +109,8 @@ public sealed class PanicSurfacesTests
         ("engine", "pink-rush", "pink rush ends after the engine"),
         // WPF :1963-1967: session corner GIF (engine-owned) first, standalone slots LAST as the final word.
         ("engine", "corner-gif", "standalone corner slots after the session's"),
+        // WPF :1977-1981: the tube is silenced after the corner GIFs.
+        ("corner-gif", "tube-speech", "tube after corner GIFs"),
         // WPF :2030 StopAdHocEffects closes lock cards after the media stops; engine before lock cards.
         ("engine", "lock-cards", "engine before lock cards"),
         // gaze minigame ends before the camera it reads (PanicSurfaces.cs comment).
