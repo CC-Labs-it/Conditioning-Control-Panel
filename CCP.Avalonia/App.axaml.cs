@@ -52,6 +52,15 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
+        /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
+        /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
+        internal static void StartRichPresence()
+        {
+            Services.DiscordRichPresenceService.PostToUi = a => Dispatcher.UIThread.Post(a);
+            DiscordRpc = new Services.DiscordRichPresenceService();
+            ApplyRichPresence();
+        }
+
         /// <summary>
         /// WPF ChkDiscordRichPresence_Changed's tail (MainWindow.AccountShell.cs:300-316) and the startup arm
         /// (App.xaml.cs:3126-3130): the setting is already written; this arms or drops the client and tells
@@ -529,10 +538,7 @@ namespace ConditioningControlPanel.Avalonia
                 // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
-                // WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The
-                // client connects on its own thread; no Discord running is a logged failure, nothing else.
-                DiscordRpc = new Services.DiscordRichPresenceService();
-                ApplyRichPresence();
+                StartRichPresence();
                 // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
                 ProgressionBank.LevelUp += level => { if (!Settings.Current.OfflineMode) DiscordRpc?.UpdateLevel(level); };
                 // After the version seed (the proxy client's headers carry it). Fail closed; the

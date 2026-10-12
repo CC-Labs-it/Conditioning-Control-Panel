@@ -37,11 +37,13 @@ public sealed class DiscordRichPresenceTests
         var dir = Directory.CreateTempSubdirectory("ccp-rpc").FullName;
         var old = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
         var oldSandboxed = DiscordRichPresenceService.Sandboxed;
+        var oldProvider = CoreSettings.ServiceProvider;   // each test swaps in its own SettingsService
         Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", dir);
         try { await body(dir); }
         finally
         {
             DiscordRichPresenceService.Sandboxed = oldSandboxed;
+            CoreSettings.ServiceProvider = oldProvider;
             Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", old);
             try { Directory.Delete(dir, true); } catch { }
         }
@@ -106,6 +108,68 @@ public sealed class DiscordRichPresenceTests
             }
             return Task.CompletedTask;
         }));
+    }
+
+    [Fact]
+    public async Task StartupArmsOnlyWhenAskedAndLinked()
+    {
+        await WithRuntimeDir(_ => AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            DiscordRichPresenceService.Sandboxed = () => true;
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var s = CoreSettings.Current;
+            var (oldRpc, oldPost) = (AvApp.DiscordRpc, DiscordRichPresenceService.PostToUi);
+            try
+            {
+                // WPF App.xaml.cs:3127: asked but no linked Discord -> built, not armed.
+                (s.DiscordRichPresenceEnabled, s.HasLinkedDiscord, s.OfflineMode) = (true, false, false);
+                AvApp.StartRichPresence();
+                Assert.NotNull(AvApp.DiscordRpc);
+                Assert.False(AvApp.DiscordRpc!.IsEnabled);
+                AvApp.DiscordRpc.Dispose();
+
+                // Asked and linked -> armed at startup.
+                s.HasLinkedDiscord = true;
+                AvApp.StartRichPresence();
+                Assert.True(AvApp.DiscordRpc!.IsEnabled);
+                AvApp.DiscordRpc.Dispose();
+            }
+            finally
+            {
+                (AvApp.DiscordRpc, DiscordRichPresenceService.PostToUi) = (oldRpc, oldPost);
+                (s.DiscordRichPresenceEnabled, s.HasLinkedDiscord, s.OfflineMode) = (false, false, false);
+            }
+            return Task.CompletedTask;
+        }));
+    }
+
+    [Fact]
+    public void MindWipeOwnsThePresenceWhileItRuns()
+    {
+        // WPF MindWipeService.cs:179/230: Start shows the mind-wipe activity, Stop of a running service goes back
+        // to idle, Stop of a stopped one leaves whatever activity another feature set.
+        var oldRpc = AvApp.DiscordRpc;
+        var rpc = AvApp.DiscordRpc = new DiscordRichPresenceService();
+        var player = new ConditioningControlPanel.Avalonia.Platform.MindWipePlayer((_, _, _, _) => null);
+        try
+        {
+            player.Start(60, 0.5);
+            Assert.Equal("Deep conditioning", rpc.CurrentState);
+            player.Stop();
+            Assert.Equal("Browsing", rpc.CurrentState);
+            rpc.SetVideoActivity();
+            var video = rpc.CurrentState;
+            player.Stop();
+            Assert.Equal(video, rpc.CurrentState);
+        }
+        finally
+        {
+            player.Stop();
+            rpc.Dispose();
+            AvApp.DiscordRpc = oldRpc;
+        }
     }
 
     [Fact]

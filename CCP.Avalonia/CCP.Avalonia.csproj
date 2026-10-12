@@ -45,8 +45,6 @@
          name FluentIcons.*: every view draws icons through fx:IconGlyph. Built against Avalonia 12.0;
          IconGlyphRenderTests proves it draws on 12.1.2 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
-    <!-- Discord Rich Presence: the client WPF ships (pipe on Windows, discord-ipc-N unix socket on Linux). -->
-    <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.md. Linux loads the
          system libvlc (libvlc.so.5); only Windows needs the bundled natives. -->

@@ -3123,6 +3123,8 @@ namespace ConditioningControlPanel
 
             // Initialize Discord Rich Presence (only if Discord is linked — prevents
             // accidental exposure for users who chose anonymous invite-code accounts)
+            // The service lives in Core; its 15 s refresh ticks hop back to this UI thread (was a DispatcherTimer).
+            DiscordRichPresenceService.PostToUi = a => Dispatcher.BeginInvoke(a);
             DiscordRpc = new DiscordRichPresenceService();
             if (Settings.Current.DiscordRichPresenceEnabled && Settings.Current.HasLinkedDiscord)
             {
