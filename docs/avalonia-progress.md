@@ -1993,3 +1993,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/leash-core-move: +289
 - Leash services, rules and LeashHoldToCut moved to CCP.Core/Services/Leash (git mv, trunk shape). WPF keeps thin head files (LeashServiceApp, LeashCutSafetyApp, ChasterLeashTab).
 - 134 leash tests now run on Linux in CCP.Core.Tests. GATE-OK.
+
+## avalonia-port/leash-wire: +372
+- The Core LeashService now runs on the Avalonia friends poll: seams are seeded, it starts after friends and is dropped on exit, and the launcher leash gate reads it, but holds a tile only once a gate card can present it (LeashGateCard unit). Cut target: `RemoteRelay.EndSessionNow`.
+- The +372 is counted against the stack-tip merge 8d147364d (icons-progress), not 2a4a55570. Tests: LeashHeadTests and a RemoteRelay test, all fail-proven. GATE-OK.
