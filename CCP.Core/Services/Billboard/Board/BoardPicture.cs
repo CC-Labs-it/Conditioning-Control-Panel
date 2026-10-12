@@ -1,7 +1,4 @@
 using System;
-using System.IO;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace ConditioningControlPanel.Services.Billboard.Board
 {
@@ -104,29 +101,32 @@ namespace ConditioningControlPanel.Services.Billboard.Board
         }
 
         /// <summary>
-        /// Decodes PNG bytes (WPF imaging, any thread) and lays them out. Null when the bytes are not
-        /// a readable image. A strip wider or taller than the post says is cropped, never scaled.
+        /// The head's PNG decoder: bytes in, straight (non-premultiplied) 0xAARRGGBB pixels out, or
+        /// null when the bytes are not a readable image. Core has no codec, so each head sets this
+        /// once at startup (WPF: its own imaging, as 7.1.5 did here).
+        /// </summary>
+        public static volatile Func<byte[], (int[] Pixels, int Width, int Height)?>? PngDecoder;
+
+        /// <summary>The largest strip a post may send. A decoder checks it before copying pixels.</summary>
+        public static bool FitsStrip(int width, int height) =>
+            width <= BoardWire.MaxFrameWidth * BoardWire.MaxFrames && height <= 512;
+
+        /// <summary>
+        /// Decodes PNG bytes (any thread) and lays them out. Null when the bytes are not a readable
+        /// image or no decoder is set. A strip wider or taller than the post says is cropped, never scaled.
         /// </summary>
         public static BoardPicture? Decode(byte[] png, BoardPost post)
         {
             if (png == null || png.Length < 8) return null;
             // PNG signature: never hand anything else to a codec.
             if (png[0] != 0x89 || png[1] != 0x50 || png[2] != 0x4E || png[3] != 0x47) return null;
+            var decode = PngDecoder;
+            if (decode == null) return null;
             try
             {
-                using var ms = new MemoryStream(png, writable: false);
-                var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat | BitmapCreateOptions.IgnoreColorProfile,
-                    BitmapCacheOption.OnLoad);
-                if (decoder.Frames.Count == 0) return null;
-                BitmapSource src = decoder.Frames[0];
-                if (src.PixelWidth <= 0 || src.PixelHeight <= 0) return null;
-                if (src.PixelWidth > BoardWire.MaxFrameWidth * BoardWire.MaxFrames || src.PixelHeight > 512) return null;
-                if (src.Format != PixelFormats.Bgra32)
-                    src = new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
-                int w = src.PixelWidth, h = src.PixelHeight;
-                var px = new int[w * h];
-                src.CopyPixels(px, w * 4, 0);
-                return FromPixels(px, w, h, post);
+                if (decode(png) is not { } d || d.Width <= 0 || d.Height <= 0 || d.Pixels.Length < d.Width * d.Height) return null;
+                if (!FitsStrip(d.Width, d.Height)) return null;
+                return FromPixels(d.Pixels, d.Width, d.Height, post);
             }
             catch (Exception)
             {
