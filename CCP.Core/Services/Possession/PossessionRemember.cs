@@ -56,10 +56,6 @@ public static class PossessionRemember
     /// </summary>
     public static int EscapeAttempts => Volatile.Read(ref _escapeAttempts);
 
-    /// <summary>
-    /// Wire up the lockdown lifecycle and, if the last Full Doki run armed it, schedule this launch's one
-    /// charge. Called once from App.OnStartup next to the director. Safe to call twice.
-    /// </summary>
     // ---- The head's half (WPF seeds these in App before Install) ----------------------------------
     public static Func<AppSettings?> Settings { get; set; } = () => CoreSettings.Service?.Current;
     /// <summary>Start a repeating UI timer (WPF: a Background DispatcherTimer); disposing stops it.</summary>
@@ -74,6 +70,10 @@ public static class PossessionRemember
     public static Action SayRemembered { get; set; } = () => { };
     public static Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
+    /// <summary>
+    /// Wire up the lockdown lifecycle and, if the last Full Doki run armed it, schedule this launch's one
+    /// charge. Called once from App.OnStartup next to the director. Safe to call twice.
+    /// </summary>
     public static void Install(LockdownService? lockdown)
     {
         if (_installed) return;

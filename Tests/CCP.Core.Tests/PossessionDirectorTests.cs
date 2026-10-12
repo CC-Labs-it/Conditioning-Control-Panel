@@ -115,6 +115,39 @@ public class PossessionDirectorTests
         Assert.Null(director.TargetFor(stranger));
     }
 
+    // ---- The WPF head's wiring (WPF tests cannot run on Linux, so pin the mapping by source) ---------
+
+    [Theory]
+    [InlineData(@"OnUi = a => DispatcherHelper.RunOnUI(a)")]
+    [InlineData(@"Settings = () => App.Settings?.Current,")]
+    [InlineData(@"MainHost = () => App.MainWindowRef as IPossessionHost")]
+    [InlineData(@"Scenes = PossessionSceneCatalog.CreateAll")]
+    [InlineData(@"AttachReactive = events.Attach,")]
+    [InlineData(@"DetachReactive = events.Detach,")]
+    [InlineData(@"DetachAllReactive = events.DetachAll,")]
+    [InlineData(@"IsVisible = el => ((FrameworkElement)el).IsVisible")]
+    [InlineData(@"BarkRung = rung => App.Bark?.NotifyPossessionRung(rung)")]
+    [InlineData(@"BarkTimerRestarted = (reason, restart) => App.Bark?.NotifyPossessionTimerRestarted(reason, restart)")]
+    [InlineData(@"BarkEffect = (id, target) => App.Bark?.NotifyPossessionEffect(id, target)")]
+    [InlineData(@"BarkTripwire = (kind, repeat, total) => App.Bark?.NotifyPossessionTripwire(kind, repeat, total)")]
+    [InlineData(@"Shake = (intensity, ms) => App.ScreenShake?.Shake(intensity, ms)")]
+    [InlineData(@"PossessionRemember.Settings = () => App.Settings?.Current;")]
+    [InlineData(@"PossessionRemember.WindowReady = () => App.MainWindowRef is { IsLoaded: true, IsVisible: true };")]
+    [InlineData(@"PossessionRemember.HasCompanion = () => App.AvatarWindow != null;")]
+    [InlineData(@"PossessionRemember.ChargeDoor = ChargeDoor;")]
+    [InlineData(@"PossessionRemember.SayRemembered = SayRemembered;")]
+    [InlineData(@"PossessionRemember.Install(App.Lockdown);")]
+    public void WpfHead_MapsEachHookToTheCallWpfMadeBefore(string line)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization"))) dir = dir.Parent;
+        var src = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName,
+            "ConditioningControlPanel", "Services", "Possession", "PossessionWpfHead.cs"));
+        src = System.Text.RegularExpressions.Regex.Replace(src, @"/\*.*?\*/|//[^\n]*", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+        static string Squash(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ");
+        Assert.Contains(Squash(line), Squash(src));
+    }
+
     // ---- PossessionRemember -----------------------------------------------------------------------
 
     [Theory]
