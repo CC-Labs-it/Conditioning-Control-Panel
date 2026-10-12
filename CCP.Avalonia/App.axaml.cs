@@ -275,6 +275,20 @@ namespace ConditioningControlPanel.Avalonia
             Mods?.AttachReleaseContent();
         }
 
+        /// <summary>
+        /// WPF App.xaml.cs:3163 (<c>ContentPacks = new ContentPackService()</c>) and :448 (the pack-video
+        /// seam): register the installed packs under &lt;assets&gt;/.packs and the network half beside them.
+        /// The proxy follows the friends rule: a sandbox without a loopback override sends nothing.
+        /// </summary>
+        internal static void StartContentPacks(ContentPackStore store, string? userDataDir, string? overrideUrl)
+        {
+            var url = Platform.FriendsHead.BaseUrl(userDataDir, overrideUrl);
+            ConditioningControlPanel.Services.Packs.ContentPackService.DefaultBaseUrl = () => url;
+            ContentPackStore.Current = store;
+            ConditioningControlPanel.Services.Packs.ContentPackService.Current = new ConditioningControlPanel.Services.Packs.ContentPackService(store);
+            CoreProgram.ActivePackVideoCountProvider = () => ContentPackStore.Current?.GetAllActivePackVideos().Count ?? 0;
+        }
+
         private AvaloniaCoreDispatch? _desktopDispatch;
         private int _exitHandled;
         private int _warnedMissingCustomAssetsPath;
@@ -593,6 +607,17 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     Serilog.Log.Error(ex, "Failed to initialize ReleaseContentService - downloaded content unavailable this session");
                 }
+                // WPF App.xaml.cs:915 CleanupStaleTempFiles: decrypts a crash or kill left behind. A sandbox
+                // sweeps only its own assets, never the shared system temp another instance may be using.
+                var sandboxed = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"));
+                try { ContentPackStore.SweepStaleTemps(Path.Combine(CorePaths.EffectiveAssets, ".temp"), sandboxed ? null : Path.GetTempPath()); }
+                catch (Exception ex) { Serilog.Log.Debug("Stale pack temp sweep failed: {E}", ex.Message); }
+                try
+                {
+                    StartContentPacks(new ContentPackStore(), Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                        Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
+                }
+                catch (Exception ex) { Serilog.Log.Error(ex, "Failed to initialize ContentPackStore - content packs unavailable this session"); }
                 await step(0.3, "Initializing audio...");
                 // Real audio through LibVLC, seeded only if libvlc loads. If it is missing,
                 // CoreAudio stays unseeded: every clip "finishes" at once and nothing plays.
@@ -720,8 +745,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:447: ritual photos file through the roadmap. Lazy - the shell creates its
                 // RoadmapService on first use, so DisposeRoadmapIfCreated keeps its contract.
                 CoreProgram.RoadmapProvider = () => Views.Windows.MainShellWindow.Roadmap;
-                // CoreProgram's pack-video provider stays unseeded - this head has no ContentPackService,
-                // so it answers "no pack videos".
+                // CoreProgram's pack-video provider is seeded by StartContentPacks.
                 // HasPremiumProvider is seeded by AccountSeed.Seed(); NotifyProvider below, once the
                 // shell's toast host exists.
 
@@ -1102,6 +1126,9 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.Dispose(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
+            // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
+            // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
+            try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
             try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
 

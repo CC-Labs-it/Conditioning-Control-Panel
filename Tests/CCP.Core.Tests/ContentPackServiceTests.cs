@@ -41,7 +41,7 @@ public sealed class ContentPackServiceTests : IDisposable
     {
         var store = new ContentPackStore(() => _root, () => _settings, () => { }, tempDir: () => Path.Combine(_root, ".temp"));
         var svc = new ContentPackService(store, new HttpClient(_h), () => baseUrl, () => _settings, () => { },
-            () => token, () => identity, _ => Task.CompletedTask);
+            () => token, () => identity, _ => Task.CompletedTask, () => Path.Combine(_root, "previews"));
         return (svc, store);
     }
 
@@ -287,6 +287,53 @@ public sealed class ContentPackServiceTests : IDisposable
         var before = Directory.GetDirectories(store.PacksFolder).Length;
         await Assert.ThrowsAsync<InvalidDataException>(() => svc.InstallPackFromLocalZipAsync(new ContentPack { Id = "z2" }, junk));
         Assert.Equal(before, Directory.GetDirectories(store.PacksFolder).Length);
+        Assert.Empty(_h.Requests);
+    }
+
+    [Fact]
+    public void Previews_PickIsCachedPerPack_ClearKeepsThePack()
+    {
+        var files = Enumerable.Range(0, 14).Select(i => ($"i{i}.png", "image")).ToArray();
+        var (guid, _) = ContentPackStoreTests.WritePack(_root, "pv", "Previews", files);
+        var (svc, store) = New();
+
+        var first = svc.GetPackPreviewBytes("pv", 10).Select(Encoding.UTF8.GetString).ToList();
+        var second = svc.GetPackPreviewBytes("pv", 10).Select(Encoding.UTF8.GetString).ToList();
+
+        Assert.Equal(10, first.Count);
+        Assert.Equal(first.OrderBy(x => x), second.OrderBy(x => x));
+        var cache = Path.Combine(_root, ".packs", guid, ContentPackService.PreviewCacheFileName);
+        Assert.True(File.Exists(cache));
+        svc.ClearPreviewCache("pv");
+        Assert.False(File.Exists(cache));
+        Assert.Equal(14, store.GetPackFiles("pv", "image").Count);   // only the pick goes, never the pack
+        Assert.Empty(svc.GetPackPreviewBytes("missing"));
+    }
+
+    [Fact]
+    public async Task UrlPreviews_CachedOnDisk_SecondReadSendsNothing()
+    {
+        var png = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3 };
+        _h.On("GET", "https://img.test/abc123", _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(png) });
+        var (svc, _) = New();
+        var urls = new[] { "https://img.test/abc123", "http://plain.test/no.png" };
+
+        Assert.Single(await svc.GetPreviewBytesFromUrlsAsync("p1", urls));
+        Assert.Single(await svc.GetPreviewBytesFromUrlsAsync("p1", urls));
+        Assert.Single(_h.Requests);
+        Assert.True(File.Exists(Path.Combine(_root, "previews", "p1", "abc123.png")));
+    }
+
+    [Fact]
+    public async Task UrlPreviews_SandboxOrOffline_ServesCacheSendsNothing()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "previews", "p1"));
+        File.WriteAllBytes(Path.Combine(_root, "previews", "p1", "cached.png"), new byte[] { 7 });
+        var (svc, _) = New(baseUrl: null);
+
+        var got = await svc.GetPreviewBytesFromUrlsAsync("p1", new[] { "https://img.test/cached.png", "https://img.test/fresh" });
+
+        Assert.Single(got);
         Assert.Empty(_h.Requests);
     }
 
