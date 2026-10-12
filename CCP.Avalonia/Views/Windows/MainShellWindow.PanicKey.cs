@@ -46,7 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     Serilog.Log.Information("Panic trigger: XInput2 key press");
                     var s = CoreSettings.Current;
-                    if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive)
+                    if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
                         Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
                     else
                         PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
@@ -58,7 +58,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void HandlePanicKeyPress(DateTime now)
         {
             var s = CoreSettings.Current;
-            if (CapturingPanicKey || !s.PanicKeyEnabled) return;
+            // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
+            // Escape that unbinds Pause (the default panic key) is never also a panic.
+            if (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey || !s.PanicKeyEnabled) return;
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }

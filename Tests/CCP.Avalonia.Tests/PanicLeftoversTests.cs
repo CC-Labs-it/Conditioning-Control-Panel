@@ -40,6 +40,21 @@ public sealed class PanicLeftoversTests
     }
 
     [Fact]
+    public async Task WatchdogStaysOutOfAShutdown()
+    {
+        var old = PanicWatchdog.Teardown;
+        var fired = 0;
+        PanicWatchdog.Teardown = () => Interlocked.Increment(ref fired);
+        PanicWatchdog.ShutdownStartedForTest = true;   // WPF HasShutdownStarted (MainWindow.xaml.cs:1073)
+        try
+        {
+            await PanicWatchdog.Arm(new TaskCompletionSource().Task, TimeSpan.FromMilliseconds(50));
+            Assert.Equal(0, fired);
+        }
+        finally { PanicWatchdog.ShutdownStartedForTest = false; PanicWatchdog.Teardown = old; }
+    }
+
+    [Fact]
     public void EscapeInAMarkedSurfaceIsTakenOnceThenPanics()
     {
         EscapeClaim.Taken();

@@ -684,7 +684,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         /// <summary>True while the Pause key button waits for its key (WPF _isCapturingPauseKey); the
         /// pause press path (Win32Input.OnPauseKeyDown) stays quiet meanwhile, as WPF's early return.</summary>
-        internal static bool CapturingPauseKey { get; private set; }
+        internal static bool CapturingPauseKey { get; set; }
         private bool _capturingPauseKey;
 
         private void PaintPauseKey() => SetButtonLabel(BtnPauseKey, string.IsNullOrEmpty(CoreSettings.Current.PauseKey)
@@ -695,8 +695,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// WPF BtnPauseKey_Click (MainWindow.UiUpdates.cs:2429) + the capture branch of
         /// OnGlobalKeyPressed (MainWindow.xaml.cs:914): "Press any key...", the next key becomes the
         /// Pause key and Escape CLEARS it. Taken in-window like the panic capture; losing the window
-        /// cancels. Deviation, on purpose: capture never mutes the panic listener, so with panic on
-        /// Escape that press also panics. ponytail: WPF also re-evaluates the Quick Recal chord clash.
+        /// cancels. As WPF, the panic handler refuses while
+        /// capturing (MainShellWindow.HandlePanicKeyPress), so the unbinding Escape never panics. ponytail: WPF also re-evaluates the Quick Recal chord clash.
         /// </summary>
         private void BtnPauseKey_Click(object? sender, RoutedEventArgs e)
         {

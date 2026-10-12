@@ -64,6 +64,7 @@ public sealed class PauseKeyCaptureTests
             finally
             {
                 window?.Close();
+                DevicesSettingsSection.CapturingPauseKey = false;   // the 300 ms latch outlives the test (P02)
                 Win32Input.ResetPauseKeyForTest();
                 service.SealForReset();
                 CoreSettings.ServiceProvider = oldProvider;

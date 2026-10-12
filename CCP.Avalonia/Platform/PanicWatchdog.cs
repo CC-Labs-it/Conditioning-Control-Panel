@@ -23,6 +23,21 @@ internal static class PanicWatchdog
 
     private static int _fallbackRunning;
 
+    /// <summary>WPF's Dispatcher.HasShutdownStarted guard (MainWindow.xaml.cs:1073). Avalonia exposes only the
+    /// ShutdownStarted event, so the flag is latched from it: a fallback never races the app's own teardown.</summary>
+    private static volatile bool _shutdownStarted;
+    private static int _shutdownHooked;
+
+    /// <summary>Test seam for the shutdown latch.</summary>
+    internal static bool ShutdownStartedForTest { set => _shutdownStarted = value; }
+
+    private static void HookShutdown()
+    {
+        if (Interlocked.Exchange(ref _shutdownHooked, 1) == 1) return;
+        try { Dispatcher.UIThread.ShutdownStarted += (_, _) => _shutdownStarted = true; }
+        catch (Exception ex) { Log.Debug(ex, "Panic watchdog: could not watch dispatcher shutdown"); }
+    }
+
     /// <summary>Test seam: the off-thread teardown (swapped to observe it without real services).</summary>
     internal static Action Teardown { get; set; } = RunEmergencyTeardown;
 
@@ -30,6 +45,7 @@ internal static class PanicWatchdog
     /// returns at once (the hook callback must never wait).</summary>
     internal static void QueueWatched(Action handler)
     {
+        HookShutdown();
         DispatcherOperation op;
         try { op = Dispatcher.UIThread.InvokeAsync(handler); }
         catch (Exception ex)
@@ -63,6 +79,11 @@ internal static class PanicWatchdog
 
     private static void RunGuarded()
     {
+        if (_shutdownStarted)
+        {
+            try { Log.Information("PANIC FALLBACK skipped - the app is already shutting down"); } catch { }
+            return;
+        }
         if (Interlocked.Exchange(ref _fallbackRunning, 1) == 1) return;
         try
         {
