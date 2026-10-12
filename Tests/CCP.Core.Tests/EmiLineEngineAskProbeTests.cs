@@ -22,8 +22,11 @@ public class EmiLineEngineAskProbeTests
     {
         var oldS = EmiLineEngine.AskSituationProbe;
         var oldF = EmiLineEngine.EffectFeasibleProbe;
+        var oldBed = EmiState.Current.BedtimeUntil;
         try
         {
+            // Bedtime is a gate too; pin it off so a persisted value cannot decide the result.
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
             EmiLineEngine.AskSituationProbe = situation;
             EmiLineEngine.EffectFeasibleProbe = feasible;
             var engine = EmiLineEngine.FromJson(File);
@@ -34,6 +37,7 @@ public class EmiLineEngineAskProbeTests
         {
             EmiLineEngine.AskSituationProbe = oldS;
             EmiLineEngine.EffectFeasibleProbe = oldF;
+            EmiState.Current.BedtimeUntil = oldBed;
         }
     }
 

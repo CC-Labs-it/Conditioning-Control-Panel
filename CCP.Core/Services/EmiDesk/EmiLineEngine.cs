@@ -1020,12 +1020,11 @@ public sealed class EmiLineEngine
     /// <summary>
     /// THE CADENCE GATES, on their own, as arithmetic.
     ///
-    /// <para><see cref="AskGatesPass"/> cannot be reached from a headless test: it asks
-    /// <c>App.Settings</c> and <c>App.EmiDesk.AskSituationOk()</c>, neither of which exists without
-    /// a running WPF app, a session engine and a live widget. This is the half that decides whether
-    /// the SCRIPTED bypass is honoured, lifted out so the one rule that matters - the bypass skips
-    /// the gap and the summon floor, and leaks into nothing else - can be checked in a
-    /// millisecond.</para>
+    /// <para><see cref="AskGatesPass"/> reads <c>CoreSettings.Current</c>, bedtime and the head's
+    /// <see cref="AskSituationProbe"/>; tests drive it through those (EmiLineEngineAskProbeTests).
+    /// This is the half that decides whether the SCRIPTED bypass is honoured, lifted out so the one
+    /// rule that matters - the bypass skips the gap and the summon floor, and leaks into nothing
+    /// else - can be checked as plain arithmetic.</para>
     ///
     /// <para>Returns true when the two cadence gates are satisfied (or bypassed).</para>
     /// </summary>
