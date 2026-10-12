@@ -322,6 +322,9 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
+            // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
+            // reach this callback too and must keep the real titles.
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();
             // WPF App.xaml.cs:1949 shows the splash before anything else and threads SetProgress
             // through startup. One UI thread here, so startup yields a frame per step instead.
             var splash = SplashOnStartup && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
