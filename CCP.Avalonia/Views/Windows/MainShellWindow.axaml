@@ -353,6 +353,7 @@
                             Margin="0,0,12,0"
                             Cursor="Hand"
                             PointerPressed="WebcamActivePill_Click"
+                            Focusable="True" IsTabStop="True"
                             ToolTip.Tip="Webcam tracking is active. Click to stop.">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="8" Height="8" Fill="#FF4444" Margin="0,0,6,0" VerticalAlignment="Center">

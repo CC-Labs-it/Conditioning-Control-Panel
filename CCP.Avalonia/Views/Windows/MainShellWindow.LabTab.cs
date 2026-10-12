@@ -10,18 +10,16 @@
 //   RefreshDeviceSettingsLists genuinely is missing, and needs the camera/monitor enumeration
 //   below before it means anything.
 //
-// THE WEBCAM PILL IS DELIBERATELY LEFT AS A STUB. WebcamActivePill_Click is the camera's privacy
-// stop (GazeFocus.Stop, BlinkTrainer.Stop, Webcam.Stop, released together); half-porting it - a pill
-// that clears while the camera stays open - would lie about the most safety-relevant state this app
-// has. The MIC pill is wired (MainShellWindow.SheListening.cs UpdateMicPill/InitializeMicActivePill):
-// its click is DisarmVoiceMic, which on this head really closes the capture (StopVoiceInput).
+// The WEBCAM pill is PORTED (MainShellWindow.SafetyPills.cs: the click stops the Blink Trainer and
+// the tracker), and so is the 6-blink stop gesture (MainShellWindow.BlinkStop.cs). The MIC pill is
+// wired (MainShellWindow.SheListening.cs): its click is DisarmVoiceMic, which really closes the capture.
 //
 // The rest is genuinely the device: WebcamTrackingService and its debug counters, the calibration
 // and quick-recal flows, GazeSide/FocusGaze, the blink trainer's countdown,
 // the camera and monitor enumerations, and the two consent buttons (WebcamConsent itself IS in
 // Core, but "revoke" has to stop a running capture, which is App.Webcam again).
 //
-// Members dropped (79 - OpenDeviceSettings is already live elsewhere, see above):
+// Members dropped (69 - 10 since ported, see below; OpenDeviceSettings is already live elsewhere, see above):
 //   private bool _webcamDebugSubscribed
 //   private int _webcamDebugBlinkCount
 //   private int _webcamDebugMouthOpenCount
@@ -36,17 +34,11 @@
 //   private Action? _onDebugMouthOpen
 //   private Action? _onDebugTongueOut
 //   private Action<GazeSide>? _onDebugGazeSide
-//   private Action<WebcamTrackingState>? _onPillStateChanged
+//   private Action<WebcamTrackingState>? _onPillStateChanged    (PORTED: SafetyPills.cs)
 //   (WireMicActivePill / UpdateMicPill / MicActivePill_Click: PORTED, MainShellWindow.SheListening.cs)
-//   private void WireWebcamActivePill(…)
-//   private const int RapidBlinkRecalCount
-//   private const int RapidBlinkRecalWindowMs
-//   private readonly Queue<DateTime> _rapidBlinkTimes
-//   private Action? _onRapidBlinkRecal
-//   private bool _rapidBlinkRecalInProgress
-//   private void WireRapidBlinkRecalibrateShortcut(…)
-//   private async Task TriggerRapidBlinkRecalibrateAsync(…)
-//   private void StopAllForRecalibration(…)
+//   (WireWebcamActivePill / WebcamActivePill_Click: PORTED, MainShellWindow.SafetyPills.cs)
+//   (RapidBlinkRecal* / WireRapidBlinkRecalibrateShortcut / TriggerRapidBlinkRecalibrateAsync /
+//    StopAllForRecalibration: PORTED, MainShellWindow.BlinkStop.cs)
 //   private bool _syncingBlinkRecalToggles
 //   internal void ChkBlinkRecalShortcut_Changed(…)
 //   private void SyncBlinkRecalToggles(…)
@@ -57,7 +49,6 @@
 //   internal void RefreshDeviceSettingsLists(…)
 //   private string? _quickRecalTooltipBase
 //   private void RefreshQuickRecalHotkeyHint(…)
-//   private void WebcamActivePill_Click(…)
 //   internal async void BtnWebcamDebugStart_Click(…)
 //   private async Task<bool> StartWebcamOffUiThreadAsync(…)
 //   private void InstallWebcamLoadingSplash(…)          PORTED: MainShellWindow.WebcamSplash.cs
@@ -105,11 +96,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (sender is global::Avalonia.Visual v && !e.GetCurrentPoint(v).Properties.IsLeftButtonPressed) return;   // WPF: left button
             try { DisarmVoiceMic(); } catch (System.Exception ex) { Serilog.Log.Warning(ex, "MicActivePill_Click failed"); }
         }
-
-        // REFUSED (see the header): the camera's panic stop (GazeFocus/BlinkTrainer/Webcam all
-        // released together). A pill that clears while the camera stays open is worse than one
-        // that does nothing.
-        private void WebcamActivePill_Click(object? sender, global::Avalonia.Input.PointerPressedEventArgs e) { }
 
     }
 }
