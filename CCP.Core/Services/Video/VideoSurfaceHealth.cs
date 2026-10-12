@@ -280,6 +280,12 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// The video trace (video-diag.log, the file reporters attach). Its writer and UI heartbeat are
+        /// head-side, so the head hands its <c>Log(tag, line)</c> over at startup; null writes Serilog only.
+        /// </summary>
+        internal static volatile Action<string, string>? DiagSink;
+
+        /// <summary>
         /// Emit one <see cref="FormatSurfaceLine"/> to BOTH sinks: Serilog (Information, so it lands in
         /// the log the support flow collects) and the video trace (which is the file reporters attach).
         /// Never throws - a diagnostic must not be able to break playback.
@@ -290,7 +296,7 @@ namespace ConditioningControlPanel.Services
             {
                 var line = FormatSurfaceLine(engine, monitor, primary, firstFrameMs, failureReason);
                 Log.Information("VideoSurface: {Surface}", line);
-                VideoDiag.Log("SURFACE", line);
+                DiagSink?.Invoke("SURFACE", line);
             }
             catch (Exception ex)
             {

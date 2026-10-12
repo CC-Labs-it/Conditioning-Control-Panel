@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using Xunit;
 using static ConditioningControlPanel.Services.VideoSurfaceHealth;
-using OverlayService = ConditioningControlPanel.Services.OverlayService;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// The #1 open bug: mandatory video on a multi-monitor rig plays on the secondary screens while the
@@ -327,75 +326,24 @@ public class MultiMonitorVideoSurfaceTests
             FormatSurfaceLine(null, "   ", primary: false, firstFrameMs: -1, failureReason: null));
     }
 
-    // ---- multi-monitor z-order anchor (deliverable 3, #1016) ----
-
-    private static readonly IntPtr Mon1 = new IntPtr(0x1001);
-    private static readonly IntPtr Mon2 = new IntPtr(0x1002);
-    private static readonly IntPtr Video1 = new IntPtr(0xA001);
-    private static readonly IntPtr Video2 = new IntPtr(0xA002);
-    private static readonly IntPtr Overlay2 = new IntPtr(0xB002);
-
-    private static List<(IntPtr Hwnd, IntPtr Monitor)> TwoScreenVideo() =>
-        new() { (Video1, Mon1), (Video2, Mon2) };
-
     [Fact]
-    public void OverlayOnSecondMonitor_AnchorsToThatMonitorsVideoWindow()
+    public void Report_HandsTheSurfaceLineToTheHeadsVideoTrace()
     {
-        // #1016 itself: anchoring to the primary left the overlay ABOVE monitor 2's video window,
-        // which is the "pink filter covers the video on my second screen" report.
-        Assert.Equal(Video2, OverlayService.ResolveVideoAnchor(
-            TwoScreenVideo(), targetHwnd: Overlay2, targetMonitor: Mon2, fallbackHwnd: Video1));
-    }
+        // VideoDiag (video-diag.log) stays head-side; Core reaches it through DiagSink.
+        var seen = new List<(string Tag, string Line)>();
+        var prev = DiagSink;
+        try
+        {
+            DiagSink = (tag, line) => seen.Add((tag, line));
+            Report("browser", "DISPLAY2", primary: false, firstFrameMs: 12, failureReason: null);
+            Assert.Equal(("SURFACE", "engine=browser monitor=DISPLAY2 role=secondary firstFrame=12ms"), Assert.Single(seen));
 
-    [Fact]
-    public void OverlayOnPrimaryMonitor_StillAnchorsToThePrimaryVideoWindow()
-    {
-        Assert.Equal(Video1, OverlayService.ResolveVideoAnchor(
-            TwoScreenVideo(), targetHwnd: new IntPtr(0xB001), targetMonitor: Mon1, fallbackHwnd: Video1));
-    }
-
-    [Fact]
-    public void OverlayOnAMonitorWithNoVideoWindow_FallsBackToThePrimary()
-    {
-        // Nothing overlaps there, so the choice is cosmetic - but it must be a real window, not zero.
-        Assert.Equal(Video1, OverlayService.ResolveVideoAnchor(
-            TwoScreenVideo(), targetHwnd: new IntPtr(0xB003), targetMonitor: new IntPtr(0x1003),
-            fallbackHwnd: Video1));
-    }
-
-    [Fact]
-    public void NoVideoPlaying_YieldsNoAnchor()
-    {
-        Assert.Equal(IntPtr.Zero, OverlayService.ResolveVideoAnchor(
-            new List<(IntPtr, IntPtr)>(), targetHwnd: Overlay2, targetMonitor: Mon2,
-            fallbackHwnd: IntPtr.Zero));
-    }
-
-    [Fact]
-    public void AVideoWindowIsNeverAnchoredToAnotherVideoWindow()
-    {
-        // Ordering a video window below its sibling would bury one of the screens outright.
-        Assert.Equal(IntPtr.Zero, OverlayService.ResolveVideoAnchor(
-            TwoScreenVideo(), targetHwnd: Video2, targetMonitor: Mon2, fallbackHwnd: Video1));
-        Assert.Equal(IntPtr.Zero, OverlayService.ResolveVideoAnchor(
-            TwoScreenVideo(), targetHwnd: Video1, targetMonitor: Mon1, fallbackHwnd: Video1));
-    }
-
-    [Fact]
-    public void AWindowIsNeverAnchoredToItself()
-    {
-        // SetWindowPos(h, h, ...) would drop the pin entirely.
-        Assert.Equal(IntPtr.Zero, OverlayService.ResolveVideoAnchor(
-            new List<(IntPtr, IntPtr)>(), targetHwnd: Video1, targetMonitor: Mon1, fallbackHwnd: Video1));
-    }
-
-    [Fact]
-    public void UnknownMonitorHandle_FallsBackRatherThanReturningZero()
-    {
-        // MonitorFromWindow can hand back NULL during a display-topology change; the sweep must
-        // still pin the overlay below the video instead of skipping the #497 rule.
-        Assert.Equal(Video1, OverlayService.ResolveVideoAnchor(
-            TwoScreenVideo(), targetHwnd: Overlay2, targetMonitor: IntPtr.Zero, fallbackHwnd: Video1));
+            DiagSink = (_, _) => throw new InvalidOperationException("sink down");
+            Report("libvlc", "DISPLAY1", primary: true, firstFrameMs: -1, failureReason: "x");   // never throws
+            DiagSink = null;
+            Report("libvlc", "DISPLAY1", primary: true, firstFrameMs: -1, failureReason: "x");   // Serilog only
+        }
+        finally { DiagSink = prev; }
     }
 
     // ---- browser first-frame deadline arming (round 4 blocker) ----
