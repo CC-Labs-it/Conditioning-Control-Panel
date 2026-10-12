@@ -15,7 +15,7 @@ namespace ConditioningControlPanel
     /// <c>SessionEngine</c>, <c>ContextFrame</c> and <c>System.Windows.Threading</c> before Roslyn
     /// even reached the method bodies. <c>CoreModsHooks.ReloadBarkRules</c> says the same thing
     /// from the other side: the head owns rule loading. So WPF's engine stays in its head and this
-    /// is the doorbell; other heads ring Core's <c>BarkEngine</c> through it (Avalonia: Platform/BarkHead).</para>
+    /// is the doorbell; other heads ring Core's <c>BarkEngine</c> through it.</para>
     ///
     /// <para>Every member is fire-and-forget. Nothing here gates anything: a bark is a line the
     /// companion may say, chanced and cooled down inside the rules, and losing one costs a voiced

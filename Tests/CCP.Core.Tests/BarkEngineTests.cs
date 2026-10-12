@@ -104,6 +104,21 @@ public sealed class BarkEngineTests : IDisposable
         Assert.False(_s.IsBarkFired(once.Id));
     }
 
+    [Fact]   // WPF CommitFire (:1793): a safety line holds every other bark for 6 s on the engine's clock
+    public void APanicSafetyLineHoldsEveryOtherBarkForSixSeconds()
+    {
+        var panic = Rule("Panic", "breathe");
+        panic.ClassRaw = "safety";
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var e = Engine(panic, Rule("AttentionCheckFail", "eyes"));
+        e.Clock = clock;
+        Assert.True(e.Raise("Panic"));
+        clock.Advance(TimeSpan.FromSeconds(5.9));
+        Assert.False(e.Raise("AttentionCheckFail"));
+        clock.Advance(TimeSpan.FromSeconds(0.2));
+        Assert.True(e.Raise("AttentionCheckFail"));
+    }
+
     [Fact]
     public void AModOverlayMergesFieldByFieldOverTheBaseRule()
     {

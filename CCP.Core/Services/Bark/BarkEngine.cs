@@ -55,8 +55,12 @@ namespace ConditioningControlPanel.Services.Bark
         public int ModSwitchesWithin(TimeSpan window) => CountWithin(_modSwitches, window);
         public void RegisterAvatarClick() => Register(_avatarClicks, 256);
         public int AvatarClicksWithin(TimeSpan window) => CountWithin(_avatarClicks, window);
-        private static void Register(List<DateTime> list, int cap) { lock (list) { list.Add(DateTime.UtcNow); if (list.Count > cap) list.RemoveRange(0, list.Count - cap); } }
-        private static int CountWithin(List<DateTime> list, TimeSpan window) { var cutoff = DateTime.UtcNow - window; lock (list) return list.Count(t => t >= cutoff); }
+        private void Register(List<DateTime> list, int cap) { lock (list) { list.Add(Now); if (list.Count > cap) list.RemoveRange(0, list.Count - cap); } }
+        private int CountWithin(List<DateTime> list, TimeSpan window) { var cutoff = Now - window; lock (list) return list.Count(t => t >= cutoff); }
+
+        /// <summary>The gap / cooldown / hold clock; tests step it (P08).</summary>
+        public TimeProvider Clock { get; set; } = TimeProvider.System;
+        private DateTime Now => Clock.GetUtcNow().UtcDateTime;
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
@@ -113,7 +117,7 @@ namespace ConditioningControlPanel.Services.Bark
         private BarkRuleSet SafeLoad()
         { try { return _loadRules() ?? BarkRuleSet.Empty; } catch (Exception ex) { Log.Warning(ex, "BarkEngine: rule load failed"); return BarkRuleSet.Empty; } }
 
-        public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = DateTime.UtcNow; }   // WPF :806, chat suppression
+        public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = Now; }   // WPF :806, chat suppression
 
         /// <summary>WPF Raise (:1096): the first passing rule (priority order) wins; the gate decides under the
         /// lock, the mouth speaks after it. True when it spoke.</summary>
@@ -253,7 +257,7 @@ namespace ConditioningControlPanel.Services.Bark
 
             if (!isSafety && !guaranteed)
             {
-                var now = DateTime.UtcNow;
+                var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
@@ -294,7 +298,7 @@ namespace ConditioningControlPanel.Services.Bark
         /// <summary>WPF CommitFire (:1793). Caller holds the lock.</summary>
         private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)
         {
-            var now = DateTime.UtcNow;
+            var now = Now;
             _lastFiredUtc[rule.Id] = now;
             _globalLastFireUtc = now;
             RememberSpoken(pool[idx].Audio);

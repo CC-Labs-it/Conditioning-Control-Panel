@@ -77,19 +77,28 @@ namespace ConditioningControlPanel.Services.Companion
             var modifier = CalculateXPModifier(ActivePerk, false, s.StrictLockEnabled, !s.PanicKeyEnabled,
                 s.AttentionChecksEnabled, s.PinkFilterEnabled ? s.PinkFilterOpacity : 0);
             var finalAmount = baseAmount * modifier;
-            progress.CurrentXP += finalAmount;
-            progress.TotalXPEarned += finalAmount;
             Log.Debug("Companion XP: {Companion} +{Amount:F1} (base: {Base}, modifier: {Modifier:F2}x, source: {Source})",
                 id, finalAmount, baseAmount, modifier, source);
+            Credit(progress, finalAmount, level =>
+            {
+                Log.Information("Companion {Companion} leveled up to {Level}!", ActiveDef.Name, level);
+                try { LevelUp?.Invoke(id, level); } catch (Exception ex) { Log.Debug("CompanionLevelUp handler: {E}", ex.Message); }
+                _ = CoreHaptics.Service?.LevelUpPatternAsync();
+            });
+            CoreSettings.Save();
+        }
+
+        /// <summary>WPF AddCompanionXP's credit and level loop (:298-317), shared by both heads; one call per level.</summary>
+        public static void Credit(CompanionProgress progress, double amount, Action<int> onLevelUp)
+        {
+            progress.CurrentXP += amount;
+            progress.TotalXPEarned += amount;
             while (progress.CurrentXP >= progress.XPForNextLevel && !progress.IsMaxLevel)
             {
                 progress.CurrentXP -= progress.XPForNextLevel;
                 progress.Level++;
-                Log.Information("Companion {Companion} leveled up to {Level}!", ActiveDef.Name, progress.Level);
-                try { LevelUp?.Invoke(id, progress.Level); } catch (Exception ex) { Log.Debug("CompanionLevelUp handler: {E}", ex.Message); }
-                _ = CoreHaptics.Service?.LevelUpPatternAsync();
+                onLevelUp(progress.Level);
             }
-            CoreSettings.Save();
         }
 
         /// <summary>WPF OnDrainTick (:393): 3 player XP per tick, never below 0, the write throttled (#1311).</summary>
