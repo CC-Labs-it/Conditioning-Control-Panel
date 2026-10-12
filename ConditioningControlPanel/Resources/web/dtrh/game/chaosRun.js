@@ -600,7 +600,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     surfPhaseStep = step;
     feelEvent({ kind: 'phase', state: 'surfacing', progress: +melt.toFixed(2) });
   };
-  const FEEL_GOLD_KINDS =new Set(['golden', 'droplet', 'material', 'heart']);
+  const FEEL_GOLD_KINDS = new Set(['golden', 'droplet', 'material', 'heart']);
   /** Wrap a field pop callback: after the game has counted it, voice the rung the streak reached. */
   const withPopFeel = (handler, xyAt) => (...args) => {
     const before = st ? st.combo : 0;
