@@ -40,9 +40,6 @@ internal static class ChasterHead
                 Paused: s.ChasterPaused,
                 PriceOverrides: new Dictionary<string, int>(s.ChasterPriceOverrides ?? new Dictionary<string, int>(), StringComparer.Ordinal));
         };
-        // ponytail: no MinutesOn yet, although App.FeatureDayLog now runs on this head (WPF ChasterServiceApp
-        // MinutesFromDayLog = FeatureDayLog.ConditioningMinutesOn(dayKey)). Wiring it arms the idle-day
-        // charge, so it is its own lane; until then it reads as "nobody can tell".
         var target = Target(userDataDir, overrideUrl);
         inner ??= new HttpClientHandler();
         return new ChasterService(
@@ -57,6 +54,10 @@ internal static class ChasterHead
                 FriendsHead.Identity, ChasterClient.ProxyBase),
             RafflePostDays = () => CoreSettings.Current.ChasterRafflePostDays,
             LadderShowName = () => CoreSettings.Current.ChasterLadderShowName,
+            // ponytail: no MinutesOn (WPF ChasterServiceApp.MinutesFromDayLog = App.FeatureDayLog.ConditioningMinutesOn).
+            // The day log's minutes come from TotalConditioningMinutes, and this head's conditioning-time tracker
+            // (WPF SkillTreeService.AddConditioningTime) is not ported (MainShellWindow.UiUpdates.cs "STILL OUT"), so
+            // every day would read 0 and be charged idle. Wire it when the tracker lands; null = "nobody can tell".
         };
     }
 
