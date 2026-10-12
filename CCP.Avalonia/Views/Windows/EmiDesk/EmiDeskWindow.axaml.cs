@@ -930,7 +930,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // in the expression anyway: this is the one place that decides whether an idle beat may
             // interrupt her, and a gate that has to be REMEMBERED when the chain player lands is a
             // gate that will be forgotten.
-            if (_transiting || ChainLive || InputLocked) return true;
+            if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] glass-live seam threw"); }
@@ -1164,7 +1164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void OnBodyPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             if (!e.GetCurrentPoint(_bodyRoot).Properties.IsLeftButtonPressed) return;
-            if (InputLocked || _transiting) { e.Handled = true; return; }
+            if (PresentationActive || InputLocked || _transiting) { e.Handled = true; return; }   // the show owns her
             try
             {
                 RaiseActivity();
