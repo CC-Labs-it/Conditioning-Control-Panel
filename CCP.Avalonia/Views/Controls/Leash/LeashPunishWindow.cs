@@ -130,7 +130,6 @@ internal sealed class LeashPunishWindow : Window
         CloseNow();
         try { CutLeash(); } catch (Exception ex) { Serilog.Log.Warning("Leash cut from window failed: {E}", ex.Message); }
     }
-
     // ---- open / close ------------------------------------------------------------------------
     /// <summary>Open a web page (a Hypnotube video) in the cage. Replaces any open one. https only.</summary>
     public static bool OpenUrl(string url, string holder, bool locked)
@@ -185,7 +184,6 @@ internal sealed class LeashPunishWindow : Window
         + "video{width:100vw;height:100vh;object-fit:contain;background:#000}</style></head><body>"
         + "<video autoplay playsinline onerror=\"__leashPost('leash-error')\" src=\""
         + WebUtility.HtmlEncode(src) + "\"></video></body></html>";
-
     // ---- the browser -------------------------------------------------------------------------
     private void Load(Uri page)
     {
@@ -247,7 +245,6 @@ internal sealed class LeashPunishWindow : Window
             catch (Exception ex) { Serilog.Log.Debug("Leash playback-failed handler failed: {E}", ex.Message); }
         });
     }
-
     // ---- fullscreen, close, shake ------------------------------------------------------------
     internal void ToggleFullscreen()
     {

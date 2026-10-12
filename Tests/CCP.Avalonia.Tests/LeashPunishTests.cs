@@ -111,7 +111,7 @@ public sealed class LeashPunishTests
         var pun = (Newtonsoft.Json.Linq.JObject)block["me"]!["pending"]![0]!;
         (pun["kind"], pun["watch"]) = ("video", new Newtonsoft.Json.Linq.JObject { ["kind"] = "ht", ["id"] = "123" });
         svc.ApplyBlock(block);
-        var (oldWeb, motion) = (LeashPunishWindow.CreateWeb, CoreSettings.Current.MotionLevel);
+        var (oldWeb, motion, oldCut, oldKey) = (LeashPunishWindow.CreateWeb, CoreSettings.Current.MotionLevel, LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey);
         var host = new LeashTaskHost();
         var dir = Directory.CreateTempSubdirectory("leash-punish-").FullName;
         try
@@ -130,32 +130,18 @@ public sealed class LeashPunishTests
             w.OnMessage("leash-error");
             Dispatcher.UIThread.RunJobs();
             Assert.Equal((1, 1), (finished, failed));
-            // Panic and the window's Cut close a LOCKED window; an Escape that only closes the palette does not
-            // (WPF MainWindow.Leash.cs:382).
-            var (oldCut, oldKey) = (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey);
+            // Panic and Cut close a LOCKED window; a palette-closing Escape does not (WPF MainWindow.Leash.cs:382).
             int cuts = 0;
-            try
-            {
-                (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (() => cuts++, "Escape");
-                SettingsPaletteWindow.Toggle(w);
-                Assert.True(SettingsPaletteWindow.IsOpen);
-                LeashTaskHost.OnPanicPress(shell);
-                Assert.Same(w, LeashPunishWindow.Current);
-                SettingsPaletteWindow.CloseIfOpen();
-                Dispatcher.UIThread.RunJobs();
-                LeashTaskHost.OnPanicPress(shell);
-                Assert.Null(LeashPunishWindow.Current);
-                Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)));
-                Assert.True(LeashPunishWindow.Current!.Locked);
-                LeashPunishWindow.Current.CutFromWindow();
-                Assert.Null(LeashPunishWindow.Current);
-                Assert.Equal(1, cuts);
-            }
-            finally
-            {
-                SettingsPaletteWindow.CloseIfOpen();
-                (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (oldCut, oldKey);
-            }
+            (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (() => cuts++, "Escape");
+            SettingsPaletteWindow.Toggle(w);
+            LeashTaskHost.OnPanicPress(shell);
+            Assert.True(SettingsPaletteWindow.IsOpen && ReferenceEquals(w, LeashPunishWindow.Current));
+            SettingsPaletteWindow.CloseIfOpen(); Dispatcher.UIThread.RunJobs();
+            LeashTaskHost.OnPanicPress(shell);
+            Assert.Null(LeashPunishWindow.Current);
+            Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)) && LeashPunishWindow.Current!.Locked);
+            LeashPunishWindow.Current.CutFromWindow();
+            Assert.True(LeashPunishWindow.Current == null && cuts == 1);
             Assert.True(host.OpenWatch(new LeashWatch("ht", "456", null)));
             Assert.False(LeashPunishWindow.Current!.Locked);   // a task watch closes normally
             host.EndWatch();
@@ -172,7 +158,8 @@ public sealed class LeashPunishTests
         finally
         {
             host.Dispose();
-            (LeashPunishWindow.CreateWeb, CoreSettings.Current.MotionLevel) = (oldWeb, motion);
+            SettingsPaletteWindow.CloseIfOpen();
+            (LeashPunishWindow.CreateWeb, CoreSettings.Current.MotionLevel, LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (oldWeb, motion, oldCut, oldKey);
             Directory.Delete(dir, true);
         }
     });

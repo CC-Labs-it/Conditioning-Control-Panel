@@ -64,16 +64,14 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     {
         var r = Runner;
         if (r?.IsRunning != true && LeashPunishWindow.Current == null) return;
-        // WPF MainWindow.Leash.cs:382: an Escape aimed at closing the Ctrl+K palette is not a panic.
-        if (SettingsPaletteWindow.IsOpen && !LockCardWindow.IsAnyOpen()
-            && string.Equals(CoreSettings.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)) return;
+        if (SettingsPaletteWindow.IsOpen && !LockCardWindow.IsAnyOpen()   // WPF MainWindow.Leash.cs:382: an Escape
+            && string.Equals(CoreSettings.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)) return;   // closing the palette is no panic
         Serilog.Log.Information("Leash: panic press stops the running task (kept pending)");
         try { r?.Park(); } catch (Exception ex) { Serilog.Log.Debug("Leash park failed: {E}", ex.Message); }
         LeashPunishWindow.CloseNow();
         try { (shell ?? MainShellWindow.Current)?.LeashStandBack(); }
         catch (Exception ex) { Serilog.Log.Debug("Leash gate stand-back failed: {E}", ex.Message); }
     }
-
     // ---- the host -----------------------------------------------------------------------------
     private bool _windowed;
     private LeashWatch? _watching;
@@ -95,7 +93,6 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     private void OnWindowVideoEnded() { if (_watching is { } w) WatchFinished?.Invoke(w); }
     private void OnLockCardCompleted() => _lockCardsCompleted++;
     private void OnPopped() => BubblePopped?.Invoke();
-
     // ---- lock cards ----
     public int LockCardsCompleted => _lockCardsCompleted;
     public bool LockCardOpen { get { try { return LockCardWindow.IsAnyOpen(); } catch { return false; } } }
@@ -115,7 +112,6 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
         }
         catch (Exception ex) { Serilog.Log.Warning("Leash lock card failed: {E}", ex.Message); return false; }
     }
-
     // ---- sessions ----
     public bool SessionRunning => App.Sessions?.IsRunning == true;
     /// <summary>WPF StartSessionFromRemote with BuildSession: false when the player is already in a session.</summary>
@@ -165,7 +161,6 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
             },
         };
     }
-
     // ---- bubbles ----
     public bool StartBubbles()
     {
@@ -183,7 +178,6 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
         try { Views.Overlays.BubbleOverlay.Stop(); }
         catch (Exception ex) { Serilog.Log.Debug("Leash bubbles stop failed: {E}", ex.Message); }
     }
-
     // ---- video ----
     public bool OpenWatch(LeashWatch watch)
     {
