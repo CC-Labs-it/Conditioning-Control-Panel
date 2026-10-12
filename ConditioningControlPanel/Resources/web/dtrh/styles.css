@@ -746,6 +746,9 @@ img.rh-fx-spiralspin {
   opacity: 0;
   animation: rhVidIn 0.2s ease-out forwards, rhFlashPulse 1.2s ease-in-out 0.2s infinite;
 }
+/* a shattered flash card: the pieces of its last frame (engine/flashExit.js) */
+.rh-fx-shards { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
+.rh-fx-shards canvas { position: absolute; border-radius: 3px; will-change: transform, opacity; }
 @keyframes rhFlashPulse {
   0%, 100% { box-shadow: 0 0 26px rgba(var(--fx-accent-rgb), 0.5), inset 0 0 0 2px rgba(255, 255, 255, 0.18); }
   50% { box-shadow: 0 0 48px rgba(var(--fx-accent-rgb), 0.9), inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
