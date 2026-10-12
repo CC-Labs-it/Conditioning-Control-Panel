@@ -44,14 +44,17 @@ Most of `ConditioningControlPanel/Services/Haptics` had moved before this unit a
 
 ## Verification limits
 
-- `dotnet build` (Release) succeeded: CCP.Core, CCP.Avalonia, CCP.LinuxSmoke, CCP.VR and every Linux test
-  project in `.github/workflows/build.yml` (see the final message for the list).
+- `dotnet build` (Release) succeeded: CCP.Core, CCP.Avalonia, CCP.LinuxSmoke, CCP.VR, Tests/CCP.Core.Tests,
+  CCP.Core.Settings.Tests, CCP.Core.Content.Tests, CCP.Avalonia.Tests, CCP.Avalonia.Consent.Tests,
+  CCP.Avalonia.Language.Tests, CCP.Avalonia.CatalogueStartup.Tests, CCP.Avalonia.Scheduler.Tests,
+  CCP.Avalonia.Report.Tests, CCP.Avalonia.GeneralSettings.Tests, CCP.Avalonia.Snapshot.Tests.
+- Tests/ConditioningControlPanel.Tests (which builds the WPF app) compiled with
+  `-p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`: Build succeeded.
 - `bash .github/scripts/core-guards.sh`: All Core guards passed.
 - `dotnet test Tests/CCP.Core.Tests`: 1237 passed, 5 skipped, 2 failed. Both failures are environmental
   and fail identically on the base branch (checked in a separate worktree):
   `ContentPackStoreTests.Uninstall_WhenTheFolderCannotBeDeleted_...` (the container runs as root, so a
   read-only folder is still deletable) and `LoopbackOAuthTests.GoodState_OnEitherLoopback_...("[::1]")`
   (no IPv6 loopback in the container). `--filter Dtrh`: 15/15 passed.
-- Not run: the WPF app and `Tests/ConditioningControlPanel.Tests` (Windows-only testhost); they were
-  compile-checked only, as described in the final message. No Avalonia UI changed, so no Avalonia
+- Not run: the WPF app and `Tests/ConditioningControlPanel.Tests` (Windows-only testhost); compiled only. No Avalonia UI changed, so no Avalonia
   tests were run beyond building.
