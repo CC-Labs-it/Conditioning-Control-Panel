@@ -254,6 +254,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "chaster": Named<Tabs.ChasterTabView>("ChasterTab")?.OnTabShown(); break;
                     // WPF MainWindow.TabNavigation.cs:433-438: rescan the library, re-sync presets, AssetsFx entrance.
                     case "assets": Named<Tabs.AssetsTabView>("AssetsTab")?.OnTabShown(); break;
+                    // WPF :572-581: Library > Folders is a zone of the same page; scroll + glow the chip.
+                    case "folders":
+                        Named<Tabs.AssetsTabView>("AssetsTab")?.OnTabShown();
+                        Named<Tabs.AssetsTabView>("AssetsTab")?.ScrollToZone("folders");
+                        break;
                     // WPF AccountSettingsSection IsVisibleChanged: a login behind another door is never shown stale.
                     case "appsettings": AppSettingsPage?.RefreshSections(); break;
                     // WPF MainWindow.SheListening.cs RefreshSheListeningTab "called on tab show".

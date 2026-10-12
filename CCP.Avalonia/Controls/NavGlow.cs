@@ -4,13 +4,11 @@
 // Effect. Full = 600 ms sheen, 2 s hold, 400 ms fade; Reduced = a static 2 s hold; Off = nothing.
 // A one-shot cue, so the performance tier does not gate it.
 using System;
-using System.Threading;
 using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
-using Avalonia.Styling;
+using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using Serilog;
 
@@ -19,6 +17,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
     internal static class NavGlow
     {
         public const int SheenMs = 600, HoldMs = 2000, FadeMs = 400;
+
+        /// <summary>Test seam: the glow's elapsed time is read from this clock.</summary>
+        internal static TimeProvider Time = TimeProvider.System;
 
         /// <summary>Total length at a motion level (0 = no glow). WPF NavGlow.TotalMs.</summary>
         public static int TotalMs(MotionLevel level) => level switch
@@ -56,7 +57,10 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private readonly Pen _ring;
         private readonly Pen[] _halo = new Pen[4];
         private readonly IBrush _fill;
-        private readonly CancellationTokenSource _run = new();
+        private DispatcherTimer? _timer;
+        private Action? _unhook;
+        private MotionLevel _level;
+        private long _start;
         private bool _gone;
 
         internal NavGlowRing(Color accent)
@@ -68,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _fill = new SolidColorBrush(Color.FromArgb(0x26, accent.R, accent.G, accent.B));
         }
 
-        internal async void Run(Control target, MotionLevel level)
+        internal void Run(Control target, MotionLevel level)
         {
             // An adorner outlives its element's collapse at the last laid-out spot (the lilac ring
             // left over the dashboard, WPF polish 12): the glow leaves with its target.
@@ -79,38 +83,44 @@ namespace ConditioningControlPanel.Avalonia.Controls
             void Detached(object? s, VisualTreeAttachmentEventArgs e) => Remove();
             target.PropertyChanged += Gone;
             target.DetachedFromVisualTree += Detached;
-            var anim = new Animation { FillMode = FillMode.Forward };
-            if (level == MotionLevel.Full)
-            {
-                double total = NavGlow.TotalMs(level);
-                anim.Duration = TimeSpan.FromMilliseconds(total);
-                anim.Children.Add(Key(0, 0));
-                anim.Children.Add(Key(NavGlow.SheenMs / 2 / total, 1.0));
-                anim.Children.Add(Key(NavGlow.SheenMs / total, 0.8));
-                anim.Children.Add(Key((NavGlow.SheenMs + NavGlow.HoldMs) / total, 0.8));
-                anim.Children.Add(Key(1, 0));
-            }
-            else
-            {
-                anim.Duration = TimeSpan.FromMilliseconds(NavGlow.HoldMs);
-                anim.Children.Add(Key(0, 0.85));
-                anim.Children.Add(Key(1, 0.85));
-            }
-            try { await anim.RunAsync(this, _run.Token); } catch (OperationCanceledException) { }
-            target.PropertyChanged -= Gone;
-            target.DetachedFromVisualTree -= Detached;
-            Remove();
+            _unhook = () => { target.PropertyChanged -= Gone; target.DetachedFromVisualTree -= Detached; };
+            _level = level;
+            _start = NavGlow.Time.GetTimestamp();
+            Tick();
+            if (_gone) return;
+            // Elapsed time on NavGlow.Time, not Avalonia's animation clock (real time, no seam):
+            // a slow frame cannot stretch it (P40) and a test steps it (P08).
+            _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / 60), DispatcherPriority.Background, (_, _) => Tick());
+            _timer.Start();
         }
 
-        // Linear between cues (WPF eases the sheen with SineEase; Avalonia keyframes carry no per-frame easing).
-        private static KeyFrame Key(double cue, double value) =>
-            new() { Cue = new Cue(cue), Setters = { new Setter(OpacityProperty, value) } };
+        /// <summary>One frame: opacity at the elapsed time, or leave once the glow is over.</summary>
+        internal void Tick()
+        {
+            if (_gone) return;
+            double ms = NavGlow.Time.GetElapsedTime(_start).TotalMilliseconds;
+            if (ms >= NavGlow.TotalMs(_level)) { Remove(); return; }
+            Opacity = OpacityAt(_level, ms);
+        }
+
+        /// <summary>WPF's cues: Full = 0 -> 1 over half the sheen, -> 0.8 at its end, hold, fade to 0;
+        /// Reduced = a static 0.85. Linear between cues (WPF eases the sheen with SineEase).</summary>
+        internal static double OpacityAt(MotionLevel level, double ms)
+        {
+            if (level != MotionLevel.Full) return 0.85;
+            const double half = NavGlow.SheenMs / 2.0;
+            if (ms < half) return ms / half;
+            if (ms < NavGlow.SheenMs) return 1 - 0.2 * (ms - half) / half;
+            if (ms < NavGlow.SheenMs + NavGlow.HoldMs) return 0.8;
+            return Math.Max(0, 0.8 * (1 - (ms - NavGlow.SheenMs - NavGlow.HoldMs) / NavGlow.FadeMs));
+        }
 
         internal void Remove()
         {
             if (_gone) return;
             _gone = true;
-            _run.Cancel();
+            _timer?.Stop();
+            _unhook?.Invoke();
             (Parent as Panel)?.Children.Remove(this);
         }
 

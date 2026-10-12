@@ -1873,3 +1873,30 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/programs-today-card: +502
 - Dashboard Programs Today card + banner art/fog/sheen/sparkles/parallax (shell-program-banner -> wired); loops gated on visibility+motion, stopped on detach.
+
+## avalonia-port/programs-ignition-fx: +833
+- Programs run view ignition rig, built on Core ProgramHeat: heat-tiered ambient loops, particles registered with RegisterTabFx("programs"), and the day/chapter/graduation moments. Loops follow Motion, tab visibility and minimise (like WPF), and stop on detach. Brush and transform loops run on a per-frame driver, because Avalonia 12 gives them no clock.
+- 3 headless tests, 10 mutations each turned them red; headless frame-timing CSV plus a per-loop motion CSV (angle, shimmer, comet); live run (lit but still: the window was inactive). Bursts, pip pulse and session sheen still missing.
+
+## avalonia-port/wpf-behaviour-ci: +598
+- FlaUI drives the offline, firewall-blocked WPF reference on Windows CI (UIA tree + default/hover/pressed/opened PNGs for doors and dialogs); Avalonia `--uia-dump` writes the same schema; `uia-parity.py` diffs them per view into parity-diff.md/json (run 38179660532 green: wpf-behaviour 16 views, 0 step failures; firewall Domain/Private/Public on).
+- First diff: 5 findings in evidence/wpf-behaviour/findings.md (#1 Bug Report withdrawn: harness click was covered by the help overlay; offline does not disable logins, type-name accessible names on 35 buttons).
+
+## avalonia-port/sync6-nav-rail-d: +732
+- Settings > Monitors (System bubble scrolls to it, crumb follows; SystemFeatureControl retired), Library Folders zone + Data logs row, ? badge beside every strip pill, mod door art on the rail.
+- Ledger rows 1/25/33 ported, 6/11/17/21/96 partial; Account & Plans, Games cards, Just Drop ask, Moved note -> sync6-nav-rail-e.
+
+## avalonia-port/wizard-hidpi-wpe: +219
+- First-run wizard capped to the screen working area (pixels divided by scaling): at 200% on 1080p, Enter stays on screen and the 18+ box is reachable by scrolling (F5; distro-check hidpi wizard_done true on ubuntu-24.04).
+- Missing-WPE message: Arch keeps WPE in pacman (extra ships the trio; PKGBUILD unchanged). Other distros get no failing command, and a 9-language line says those pages are unavailable. No unbuilt Flatpak is offered (F2).
+
+## avalonia-port/win-panic: +827
+- Windows panic key (WH_KEYBOARD_LL hook), Lockdown system-key block and unfocused Esc door, all from trunk. Core PanicKeyRules with tests. The Windows code compiles but has never run.
+- SingleInstance sandbox suffix was already on base; this adds the fail-proven test for it.
+
+## avalonia-port/windows-ci-flakes: +94
+- Windows CI flakes fixed at the root: the NavGlow glow now reads a steppable TimeProvider instead of a real animation clock, the hit test no longer races ToolTipService, and the Windows Avalonia suite runs sharded (it ran out of memory in one testhost).
+
+## avalonia-port/juice-clock: +621
+- Trunk U1 infra: FrameGate (Core), FrameClock (30 fps shared beat), BeatLoop; TransformTween/BreathClock/Easings/Keyframes/MotionGate/MotionTimings deferred to their first user.
+- Profile OG border spin and vault CTA breath were inert (Animation.RunAsync on a Transform threw); now BeatLoops on the 30 fps beat, angle/scale asserted, red run saved.

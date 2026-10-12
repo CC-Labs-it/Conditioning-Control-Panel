@@ -941,6 +941,19 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Test: `OsNotificationsTests.Sandbox_never_reaches_the_session_bus` (fail-proven: guard removed -> red) and
   `RemoteControlShellTests` asserts the join raised exactly one notification via the Sink (fail-proven: call disabled -> red).
   Log (run with DBUS_SESSION_BUS_ADDRESS=disabled:): ~/ccp-port/evidence/review-no-desktop-notify-in-tests/fail-proofs.log.
+
+## 2026-10-10: First-run wizard fits small screens; WPE unavailable outside Arch/Tumbleweed (avalonia-port/wizard-hidpi-wpe)
+- Context: distro-check F5 - at 200% on 1920x1080 (960x540 DIP) the fixed 900x680 wizard put Enter off-screen, so the 18+
+  gate could not be accepted and closing exits the app. WPF has the same fixed size (`FirstRunWizard.xaml:6`, NoResize).
+  F2 - the WPE install command named packages no tested distro ships in full.
+- Choice: this head improves on WPF: `FirstRunWizard.FitToWorkingArea` caps the window to the screen working area (DIP)
+  before showing; the step bodies already scroll, the footer stays. Normal screens keep 900x680 (WPF look unchanged).
+  WPE stays in the Arch pacman command (extra ships wpewebkit, wpebackend-fdo and libwpe: `pacman -Si` 2026-10-10, so
+  F2's "Arch lacks libwpe/wpebackend-fdo" was wrong and packaging/aur/PKGBUILD stays as is); Debian/Fedora/unknown get no
+  WPE package names, and a localized line (`linux_dep_wpe_unavailable`, 9 languages) says those pages are unavailable there.
+  No Flatpak is offered: none has been built (linux-package-flatpak is blocked). Other deps keep their command.
+- Decided by: supervisor brief (F5, F2).
+
 ## 2026-10-10: Clean-distro check of the linux-x64 tarball (avalonia-port/distro-check)
 - `packaging/linux/distro-check/run.sh <image> <tarball> <outdir>` checks one stock image in two containers: install
   (network on) = only the docs/avalonia-linux-install.md dep row + test tooling (Xvfb, openbox, ImageMagick, xdotool,
