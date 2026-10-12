@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             WireStubs();
             InitFavoritesDrawer();
+            InitProgramTodayCard();   // the Training Programs "Today" card (SettingsTabView.ProgramToday.cs)
         }
 
         // ------------------------------------------------------------------------------
@@ -159,7 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // the wiring is a rename away once those partials reach Core.
         //
         // ponytail: needs MainWindow (DashboardFx, Browser, Login,
-        // ProgramsTab, TeaseCard, TabNavigation) and PremiumFeature - both WPF-head. TierGate is NOT
+        // TeaseCard, TabNavigation) and PremiumFeature - both WPF-head. TierGate is NOT
         // among them any more: CCP.Core/Services/TierGate.cs, over the CoreEntitlement seam.
         //
         // LinkPhoneDialog and LayeredAudioWindow are the only two handlers in the WPF file that
@@ -168,11 +169,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------------------
         private void WireStubs()
         {
-            // Training Programs "Today" card (row 0). Loaded is the card's own first-paint hook
-            // so the dashboard can show it without visiting the Programs tab first.
-            ProgramTodayCard.Loaded += ProgramTodayCard_Loaded;
-            ProgramTodayCard.Click += ProgramTodayCard_Click;
-
             // Velvet mosaic. Left-click opens the half's Studio module, right-click toggles it;
             // the three diagonal combo tiles forward per-half. A = the top-left half, B = the
             // bottom-right, as authored in XAML.
@@ -369,8 +365,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // -- quick-toggles row -----------------------------------------------------------
         private void VelvetBtnWebcam_Click(object? sender, RoutedEventArgs e) { }            // mw.VelvetBtnWebcam_Click(...)
         /// <summary>Quick-toggles row · "System". This pill is the ONLY route to
-        /// <c>MainWindow.CardSystem_Click</c> since the mosaic tile was deleted.</summary>
-        private void VelvetBtnSystem_Click(object? sender, RoutedEventArgs e) { }            // mw.CardSystem_Click(...)
+        /// <c>MainWindow.CardSystem_Click</c> since the mosaic tile was deleted; since the nav rework
+        /// it opens Settings > Monitors (WPF MainWindow.Presets.cs CardSystem_Click). ponytail: WPF's
+        /// NotifyFeatureOpened("System") bark has no BarkService on this head.</summary>
+        private void VelvetBtnSystem_Click(object? sender, RoutedEventArgs e) => Shell?.OpenAppSettingsSection("monitors");
         private void VelvetBtnAppInfo_Click(object? sender, RoutedEventArgs e) { }           // mw.VelvetBtnAppInfo_Click(...)
         private void VelvetBtnSchedulerRamp_Click(object? sender, RoutedEventArgs e) => Shell?.OpenStudioModule("scheduler");
         private void VelvetBtnCatalogue_Click(object? sender, RoutedEventArgs e) => Shell?.BtnCatalogue_Click(sender, e);
@@ -398,9 +396,5 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private MainWindow? _diagnostics;
-
-        // -- training programs "today" card ----------------------------------------------
-        private void ProgramTodayCard_Loaded(object? sender, RoutedEventArgs e) { }          // mw.ProgramTodayCard_Loaded(...)
-        private void ProgramTodayCard_Click(object? sender, RoutedEventArgs e) { }           // mw.ProgramTodayCard_Click(...)
     }
 }
