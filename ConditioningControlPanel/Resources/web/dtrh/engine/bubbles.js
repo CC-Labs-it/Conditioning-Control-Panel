@@ -268,7 +268,8 @@ export function createBubbles({ hud, canvas, media, onPop, onMiss, onEffect, onC
     // nothing and fireEffect falls back to the built-in CSS flash.
     // A moving picture first when there is one (the app's own flashes are gif clips too).
     const has = media && media.hasUserMedia && media.hasUserMedia();
-    const picked = (has && media.drawLoop && Math.random() < 0.75 && media.drawLoop())
+    const picked = (has && media.drawLoop && media.drawLoop())
+      || (has && media.drawKind && Math.random() < 0.6 && media.drawKind('video'))
       || (has && media.draw ? media.draw() : null);
     if (!picked || !picked.acquire) return;
     picked.acquire().then((a) => { if (a && a.url) buildFlashClip(gen, picked.kind, a.url); }).catch(() => {});

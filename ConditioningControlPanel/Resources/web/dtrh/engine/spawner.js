@@ -455,8 +455,8 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   // Moving pictures (hostMedia.drawLoop): silent looping clips worn by a PICTURE card.
   // Each one holds a decoder while it is on screen, so they are capped; past the cap the
   // tube falls back to stills.
-  const MAX_LIVE_LOOPS = Q.tier === 'mobile' ? 2 : 5;
-  const LOOP_SHARE = 0.7;      // of picture cards, when a moving one is to be had
+  const MAX_LIVE_LOOPS = Q.tier === 'mobile' ? 2 : 6;
+  const LOOP_SHARE = 0.9;      // of picture cards, when a moving one is to be had
   let liveLoops = 0;
   let liveVeils = 0;
   let paused = false;         // ESC pause (scene stops calling update too)

@@ -447,7 +447,7 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
     if (v === gamePaused) return;
     if (v && director.isOver()) return; // results screen owns the end state
     const held = v
-      ? (forceHold || !game || !game.canHoldPause || !!game.canHoldPause())
+      ? (forceHold || FS.hosted || !game || !game.canHoldPause || !!game.canHoldPause())   // in the app a pause is always a real one (owner, 2026-10-12)
       : pauseHeld;   // unpause undoes exactly what the pause did
     gamePaused = v;
     pauseHeld = held;
