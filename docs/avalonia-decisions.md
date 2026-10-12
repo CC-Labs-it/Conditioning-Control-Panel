@@ -1057,3 +1057,13 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   NOACTIVATE); a press pops it with its FlashExit leave. Panic/Stop (FlashOverlay.CloseAll) closes flashes mid-leave too.
   Native Wayland is unchanged: no X11 overlay, so no flashes at all (logged once).
 - Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.
+## 2026-10-12: A verbatim import is exempt from the icon ratchets as one whole file (avalonia-port/tutorials-import)
+- Question: the trunk `CCP.Avalonia/Tours/TutorialService.cs`, imported verbatim under Stack rule 4, carries ~113 emoji
+  step `Icon` strings and icon-prefixed loc keys. Editing it breaks "verbatim"; raising the shared baselines loosens every
+  other file. What clears IconGuard?
+- Answer (advised by: supervisor): neither. What the user sees is Fluent: `TutorialOverlay.IconFor` maps a step's Icon
+  through `IconMap` onto its `fx:IconGlyph`, and anything unmapped falls back to Sparkle, never the emoji text. The file
+  itself gets one `verbatim:` `*` entry in `IconGuard.allow.txt` (exact path only, emoji + prefixed-loc ratchets only);
+  the baselines stay put. Follow-up `tutorials-icons` converts the data and deletes the entry.
+- Tests: `TutorialTourTests.ATourStartsStepsClosesAndPanicEndsIt` (IconGlyph, no emoji text), `StepIconsMapThroughIconMap`,
+  `IconGuardTests.AllowListEntriesAreLiveAndReasoned`.
