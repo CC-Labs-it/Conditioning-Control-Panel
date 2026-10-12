@@ -20,13 +20,18 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.6";
+        public const string AppVersion = "7.1.7";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.6 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.7 - Stay Tuned
+
+NEW IN 7.1.7
+- lines with no recorded voice on your current mod wear a small muted-speaker mark in the phrase editor, and Audio Whispers says so when some of your lines will stay silent. nothing changed in what plays: a line with no recording was always silent.
+- Awareness keyword triggers play their sound only while the engine or a session is running. the Test button still plays.
+- bug reports now say which sound started while the engine was off, and name the companion speech bubble if the app hangs there. if you get stray sounds or a freeze, send a report right after.
 
 NEW IN 7.1.6
 - mandatory videos can float. Studio > Mandatory Video > ""Shows as"" > Floating window: small bordered windows you can drag across monitors and throw around. up to four at once, with sliders for size and drift speed. the lit one has the sound; touch another to move it. floating videos have no attention checks.
