@@ -160,7 +160,11 @@ public sealed class FirstShowStageTests
             CoreSettings.Current.MotionLevel = MotionLevel.Full;
             await fx.LoadAsync(Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray());
             Assert.True(fx.HasSpiral);
+            fx.Particles = () => false;
             fx.Tick(S.FlashAt, .016);
+            Assert.Equal(0, fx.SparkCount);                        // MotionFx.AllowParticles off: a spawn, no sparks
+            fx.Particles = () => true;
+            fx.Tick(S.FlashAt + S.FastFlashEvery, .016);
             Assert.True(fx.SparkCount > 0);                        // the spawn burst
             Assert.Equal(0, fx.DrainAlpha);
             fx.Tick(S.DrainAt + 1, .016);

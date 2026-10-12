@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// which exist on this head, so <see cref="Render"/> draws with plain calls (no Effect: P82): pictures, bubbles,
 /// pink tint, spiral, floating words, subliminal flash, the ChaosFxLayer sparks (burst, ripple, trail), gather, cues.
 /// Brain drain: WPF blurred a live desktop capture (BrainDrainCapturePump); this head has no capture, so the
-/// 11-15 s beat is a milky veil with the same .3 s edges.</summary>
+/// 11-15 s beat is a milky veil with the same .3 s edges, kept lighter than WPF's blur alpha (see DrainAlpha).</summary>
 internal sealed class FirstShowEffects : Control, IDisposable
 {
     private sealed record Media(List<Bitmap> Frames, double Delay);
@@ -40,6 +40,8 @@ internal sealed class FirstShowEffects : Control, IDisposable
     private readonly List<Actor> _actors = new();
     private readonly List<Spark> _sparks = new();
     private readonly Dictionary<(string, double), Geometry> _glyphs = new();
+    private readonly Dictionary<(Color, int), ImmutableSolidColorBrush> _brushes = new();
+    private readonly Dictionary<(Color, int), ImmutablePen> _pens = new();
     private readonly Action<string> _cue;
     private FirstShowDeck? _deck;
     private Media? _spiral;
@@ -57,7 +59,9 @@ internal sealed class FirstShowEffects : Control, IDisposable
     {
         get { double t = _time - _subAt; return t < 0 || t >= .35 ? 0 : .7 * Math.Clamp(t < .1 ? t / .1 : t < .17 ? 1 : 1 - (t - .17) / .18, 0, 1); }
     }
-    /// <summary>The brain-drain veil's opacity now (WPF BrainDrainLayer.AlphaFor(70), .3 s edges).</summary>
+    /// <summary>The brain-drain veil's opacity now, .3 s edges as WPF. Deliberately 70/255 (~.27), not WPF
+    /// BrainDrainLayer.AlphaFor(70) (~.69): that alpha laid a blurred copy of the desktop over itself, while here
+    /// the veil is a flat milky colour, which at .69 would white the screen out.</summary>
     internal double DrainAlpha
     {
         get
@@ -259,12 +263,16 @@ internal sealed class FirstShowEffects : Control, IDisposable
             if (p.Ring > 0)
             {
                 double r = p.Ring * (1 - Math.Pow(1 - t, 3));
-                dc.DrawEllipse(null, new Pen(new ImmutableSolidColorBrush(p.Color, .67 * (1 - t)), 3), new Point(p.X, p.Y), r, r);
+                int fade = (int)(32 * (1 - t));
+                if (!_pens.TryGetValue((p.Color, fade), out var pen)) _pens[(p.Color, fade)] = pen = new ImmutablePen(new ImmutableSolidColorBrush(p.Color, .67 * fade / 32), 3);
+                dc.DrawEllipse(null, pen, new Point(p.X, p.Y), r, r);
             }
             else
             {
                 double r = p.Size * (1 - t * .6);
-                dc.DrawEllipse(new ImmutableSolidColorBrush(p.Color, .9 * (1 - t)), null, new Point(p.X + p.Vx * age * (1 - t * .4), p.Y + p.Vy * age * (1 - t * .4)), r, r);
+                int fade = (int)(32 * (1 - t));
+                if (!_brushes.TryGetValue((p.Color, fade), out var fill)) _brushes[(p.Color, fade)] = fill = new ImmutableSolidColorBrush(p.Color, .9 * fade / 32);
+                dc.DrawEllipse(fill, null, new Point(p.X + p.Vx * age * (1 - t * .4), p.Y + p.Vy * age * (1 - t * .4)), r, r);
             }
         }
     }
