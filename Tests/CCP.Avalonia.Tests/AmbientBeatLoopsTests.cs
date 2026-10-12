@@ -44,6 +44,8 @@ public sealed class AmbientBeatLoopsTests
         "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml.cs",
         "Views/Tabs/BlinkTrainerTabView.axaml",
+        "Views/Tabs/ProgramsTabView.Ignition.cs",        // from the tip: programs-ignition-fx (Pulse/Spin factories, 8 sites)
+        "Views/Tabs/SettingsTabView.ProgramToday.cs",     // from the tip: programs-today-card (Loop factory, 5 sites)
         "Views/Tabs/SpiralTabView.axaml.cs",
         "Views/Windows/QuizWindow.axaml",
         "Views/Windows/SplashScreen.axaml",
@@ -236,7 +238,7 @@ public sealed class AmbientBeatLoopsTests
             Dispatcher.UIThread.RunJobs();
             if (shell.DeeperGlyphDrifting)
             {
-                var drift = (TranslateTransform)shell.Named<Control>("DeeperTab")!.FindControl<TextBlock>("DeeperWaveGlyph")!.RenderTransform!;
+                var drift = (TranslateTransform)shell.Named<Control>("DeeperTab")!.FindControl<Control>("DeeperWaveGlyph")!.RenderTransform!;
                 double y = drift.Y;
                 Step(time, 2);
                 Assert.NotEqual(y, drift.Y);
