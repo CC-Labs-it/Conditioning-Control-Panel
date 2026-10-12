@@ -1893,3 +1893,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/win-panic: +827
 - Windows panic key (WH_KEYBOARD_LL hook), Lockdown system-key block and unfocused Esc door, all from trunk. Core PanicKeyRules with tests. The Windows code compiles but has never run.
 - SingleInstance sandbox suffix was already on base; this adds the fail-proven test for it.
+
+## avalonia-port/windows-ci-flakes: +94
+- Windows CI flakes fixed at the root: the NavGlow glow now reads a steppable TimeProvider instead of a real animation clock, the hit test no longer races ToolTipService, and the Windows Avalonia suite runs sharded (it ran out of memory in one testhost).
