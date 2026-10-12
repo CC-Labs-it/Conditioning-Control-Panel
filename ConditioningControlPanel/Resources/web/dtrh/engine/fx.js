@@ -408,7 +408,7 @@ export function createFx({ scene, layout, tunnelMat, particleFog, threads = true
         const p = regionKnobs.peak[key] != null ? regionKnobs.peak[key] : e;
         target = e + (p - e) * regionProgress;
         // photosensitivity guard: the flashy knobs ride the effect-intensity dial
-        if (key === 'strobe' || key === 'glitch') target *= strobeScale;
+        if (key === 'strobe' || key === 'glitch' || key === 'thStatic') target *= strobeScale;
       }
       // thread layers keep a base off-region too, and warmth brings sparkle and sheen
       // (threads: false = a tube that keeps its classic threads; Racing Thoughts asks for that)

@@ -492,13 +492,14 @@ internal static class DtrhAssetManifest
         // Three kinds now: stills, moving pictures (loops) and long clips. The neediest one
         // under its mark gets this fetch; a tie goes loops, stills, clips.
         bool wantStills, wantLoops;
+        bool loopsDry = DateTimeOffset.UtcNow.ToUnixTimeSeconds() < Interlocked.Read(ref _loopsDryUntilUnix);
         lock (RemoteLock)
         {
             var (stills, rest) = CountKinds(_remoteCache);
             int loops = _remoteCache?.Count(e => e.IsLoop) ?? 0;
             int clips = rest - loops;
-            if (stills >= RemoteKindLowWater && loops >= RemoteKindLowWater && clips >= RemoteKindLowWater) return;
-            wantLoops = loops < RemoteKindLowWater && loops <= stills && loops <= clips;
+            if (stills >= RemoteKindLowWater && (loopsDry || loops >= RemoteKindLowWater) && clips >= RemoteKindLowWater) return;
+            wantLoops = !loopsDry && loops < RemoteKindLowWater && loops <= stills && loops <= clips;
             wantStills = !wantLoops && stills < RemoteKindLowWater && stills <= clips;
         }
         if (Interlocked.CompareExchange(ref _remoteFetchInFlight, 1, 0) != 0) return;
@@ -517,6 +518,7 @@ internal static class DtrhAssetManifest
                 if (error != null)
                 {
                     App.Logger?.Debug("DtrhAssetManifest: remote refill failed ({E})", error);
+                    if (wantLoops) MarkLoopsDry();
                     return;
                 }
                 int kept = 0;
@@ -545,6 +547,7 @@ internal static class DtrhAssetManifest
                     SaveRemoteCacheLocked();
                     after = new List<RemoteEntry>(_remoteCache);
                 }
+                if (wantLoops && kept == 0) MarkLoopsDry();
                 // Copy what just landed now, so a page that is already up gets it this session
                 // (RemoteCopiesReady re-posts the manifest) and not one launch later.
                 if (kept > 0) KickLocalCopies(after);
@@ -558,6 +561,13 @@ internal static class DtrhAssetManifest
             finally { Interlocked.Exchange(ref _remoteFetchInFlight, 0); }
         });
     }
+
+    /// <summary>When a loops fetch came back empty or failed, the loops kind sits out until
+    /// this time, so stills and clips still get their refills (a tie used to go to loops
+    /// forever while it stood at zero).</summary>
+    private static long _loopsDryUntilUnix;
+    private static void MarkLoopsDry() =>
+        Interlocked.Exchange(ref _loopsDryUntilUnix, DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1800);
 
     /// <summary>DTRH's channel set. NICHE SELECTION IS SHARED APP-WIDE on purpose (see the
     /// AppSettings remarks next to MediaSource): one taxonomy, one selection, many surfaces.

@@ -216,7 +216,10 @@ const TUBE_FRAG = `
       o += ((tint * 0.7 + 0.1) * bead + vec3(0.85) * hi * bead) * uThBeads * vis;
     }
     if (uThStatic > 0.001) {
-      float g = hash1(mod(floor(s * 150.0), 1024.0) * 13.0 + floor(d * 150.0) * 7.0 + mod(floor(t * 10.0), 256.0) * 3.0 + seed);
+      // two grains cross-faded three times a second: it drifts, it never snaps (no flicker)
+      float cell = mod(floor(s * 150.0), 1024.0) * 13.0 + floor(d * 150.0) * 7.0 + seed;
+      float tf = t * 3.0;
+      float g = mix(hash1(cell + mod(floor(tf), 256.0) * 3.0), hash1(cell + mod(floor(tf) + 1.0, 256.0) * 3.0), smoothstep(0.0, 1.0, fract(tf)));
       o += tint * exp(-d * d / 0.008) * (g - 0.35) * 0.4 * uThStatic * vis;
     }
     return o;

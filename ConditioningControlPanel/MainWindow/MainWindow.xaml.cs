@@ -1675,11 +1675,17 @@ namespace ConditioningControlPanel
             // fell into the "not running" branch below — where a second press EXITS the app.
             if (App.Chaos?.IsDescending == true) { VideoDiag.Log("PANIC", "handed off to the Rabbit Hole descent (chaos owns the key)"); return; }
 
-            // The web DtRH game (its own WebView2 window) owns Esc while it's up: the page
-            // runs a pause → exit-fullscreen → close ladder. Swallow the panic double-tap so
-            // those presses can't fall into the "not running" branch and exit the whole app.
-            // Reactivates on its own once the game window closes (IsActive flips false).
-            if (Services.Chaos.DtrhHostService.IsActive) { VideoDiag.Log("PANIC", "handed off to the DtRH web game window"); return; }
+            // The web DtRH game (its own WebView2 window). Its page only PAUSES on Escape now, so a
+            // press that reaches this rung is one the pause did not claim (a second press inside
+            // 2 s, or any press with a session running): close the game here. The page's old
+            // ladder ended in a close too, and the panic key must never do less than it did.
+            // Returning keeps the press out of the "not running" branch, which exits the app.
+            if (Services.Chaos.DtrhHostService.IsActive)
+            {
+                VideoDiag.Log("PANIC", "closing the DtRH web game window (unclaimed Escape)");
+                Services.Chaos.DtrhHostService.CloseActive();
+                return;
+            }
 
             // The Arcademy (its own WebView2 window) owns the panic key while it's up, same shape as
             // the DtRH hand-off above and for the same reason: without this rung, two Esc taps with
