@@ -66,11 +66,13 @@ public sealed class BlinkStopTests
         Assert.Empty(stopped);
         WebcamTracker.Instance.RaiseBlinkForTest();
         Dispatcher.UIThread.RunJobs();
-        var expected = PanicSurfaces.All.Select(x => x.Id).Where(id => !MainShellWindow.BlinkStopSkips.Contains(id)).ToList();
-        Assert.Equal(expected, stopped);
-        Assert.Contains("engine", stopped);
-        Assert.Contains("tube-speech", stopped);
-        Assert.DoesNotContain("camera", stopped);
+        // Exactly WPF StopAllForRecalibration's set, in registry order: the engine stop PAUSES the session
+        // (StopEngine -> Sessions.Pause), lock cards close (App.xaml.cs:1778), the tube is silenced.
+        Assert.Equal(new[] { "blink-trainer", "mantra", "takeover", "engine", "pink-rush", "tube-speech", "lock-cards" }, stopped);
+        // A recalibration stop, not a panic: today's program run is paused by the engine stop, never ended,
+        // and the camera, mic, AI and toys are left alone.
+        foreach (var kept in new[] { "program-session", "camera", "voice-capture", "ai-followups", "haptics", "remote-haptics", "intake", "chaos" })
+            Assert.DoesNotContain(kept, stopped);
         return Task.CompletedTask;
     });
 

@@ -56,6 +56,20 @@ public sealed class TubePanicTests
             Assert.False(bubble.IsVisible);
             Assert.False(tube.IsSpeaking);
 
+            // Two voiced lines close together: the second cuts the first (WPF Speech.cs:1896), so the
+            // panic leaves neither playing.
+            var live = new System.Collections.Generic.HashSet<int>();
+            var next = 0;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { var id = next++; live.Add(id); return () => live.Remove(id); };
+            tube.GigglePriority("one", phraseAudioPath: clip, barkVoice: true);
+            tube.GigglePriority("two", phraseAudioPath: clip, barkVoice: true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, next);
+            panic.Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(live);
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { started++; return () => stopped++; };
+
             // Waiting on the AI (thinking dots): panic ends the wait too.
             tube.StartThinkingAnimation();
             Assert.True(tube.IsCompanionBusy(0));

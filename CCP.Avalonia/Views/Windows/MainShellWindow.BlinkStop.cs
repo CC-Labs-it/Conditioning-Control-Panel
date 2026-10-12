@@ -2,11 +2,10 @@
 // WireRapidBlinkRecalibrateShortcut / TriggerRapidBlinkRecalibrateAsync / StopAllForRecalibration,
 // gated by CCP.Core Services/Safety/BlinkStopGate (never more permissive than the panic key).
 //
-// Deviations, on purpose: no leash service on this head (WPF LeashOnPanicPress has no target). The
-// stop pass is the panic registry minus the camera (recalibration needs it live) and minus the
-// surfaces WPF's recal stop never closed (intake, gaze minigame, Chaos descent); so it also ends
-// what panic ends on this head (today's program session, haptics, lock cards, the tube's line),
-// where WPF only paused the session and killed audio.
+// The stop pass is exactly WPF StopAllForRecalibration's set (decision 2026-10-12 in
+// docs/avalonia-decisions.md): a recalibration stop, not a panic. It pauses the session (never ends
+// it) and leaves the camera, mic, haptics and program run alone. No leash service, Focus Gaze, help
+// popover or interaction queue exists on this head, so those WPF steps have no target here.
 
 using System;
 using System.Collections.Generic;
@@ -28,8 +27,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Queue<DateTime> _rapidBlinkTimes = new();
         private bool _rapidBlinkRecalInProgress;
 
-        /// <summary>Panic surfaces the blink stop leaves running (see the header).</summary>
-        internal static readonly HashSet<string> BlinkStopSkips = new() { "intake", "gaze-minigame", "chaos", "camera" };
+        /// <summary>The panic surfaces WPF StopAllForRecalibration (LabTab.cs:268-284) reaches: BlinkTrainer.Stop;
+        /// KillAllAudio (App.xaml.cs:1745-1793: Mantra, Autonomy, LockCard.Stop(dismissOpenCards) at :1778,
+        /// the tube's voice); Autonomy.CancelActivePulses; the session PAUSE + StopEngine (StartStop.cs:443-516:
+        /// SkillTree, LockCardWindow.ForceCloseAll). Run in registry order.</summary>
+        internal static readonly HashSet<string> BlinkStopIds = new()
+            { "blink-trainer", "mantra", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
 
         /// <summary>Test seam: replaces the restart-camera + "Recalibrate?" offer after the stop pass.</summary>
         internal Func<Task>? BlinkRecalOfferForTests;
@@ -106,11 +109,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>WPF StopAllForRecalibration (:268): the panic pass minus <see cref="BlinkStopSkips"/>.
+        /// <summary>WPF StopAllForRecalibration (:268): the <see cref="BlinkStopIds"/> surfaces only.
         /// One failing stop never skips the rest.</summary>
         internal static void StopAllForRecalibration(MainShellWindow? shell)
         {
-            foreach (var surface in PanicSurfaces.All.Where(x => !BlinkStopSkips.Contains(x.Id)))
+            foreach (var surface in PanicSurfaces.All.Where(x => BlinkStopIds.Contains(x.Id)))
             {
                 try { surface.Stop(shell); }
                 catch (Exception ex) { Log.Warning(ex, "Blink stop: {Id} failed", surface.Id); }
