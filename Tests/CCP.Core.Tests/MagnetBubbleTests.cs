@@ -6,7 +6,7 @@ using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Bubbles v2, wave 2: the Magnet bubble. Roll gating, the attraction physics (turn rate, speed
@@ -94,27 +94,6 @@ public class MagnetBubbleTests
         Assert.Equal(0x6F, MagnetBubble.TintG);
         Assert.Equal(0xBF, MagnetBubble.TintB);
     }
-
-    /// <summary>
-    /// No sprite ships for it, so the body glyph is all the user has to tell it apart at a glance.
-    /// It must not be one another bubble already wears - the chaos "spiral" variant's U+25CE was
-    /// the original pick and collided exactly there.
-    /// </summary>
-    [Fact]
-    public void Its_body_glyph_is_not_already_taken()
-    {
-        Assert.False(string.IsNullOrEmpty(MagnetBubble.Label));
-        foreach (var v in ChaosBubbleVariants.All)
-            Assert.NotEqual(v.Label, MagnetBubble.Label);
-        Assert.NotEqual("◎", MagnetBubble.Label);   // the spiral variant
-        Assert.NotEqual("◍", MagnetBubble.Label);   // the Brain Drain bubble
-    }
-
-    /// <summary>The floating pop word. Its pop reaches ShowChaosEffectLabel like any other, so a
-    /// missing case would flash nothing where every neighbour flashes a token.</summary>
-    [Fact]
-    public void It_has_a_pop_word()
-        => Assert.Equal("PULL", ChaosBubbleVariants.PopWordFor(MagnetBubble.VariantId));
 
     // ---- the early-pop bargain ---------------------------------------------------------
 

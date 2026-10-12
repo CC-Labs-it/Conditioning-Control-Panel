@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// What a descent that was LEFT is worth. Both halves exist because banking every exit (so an

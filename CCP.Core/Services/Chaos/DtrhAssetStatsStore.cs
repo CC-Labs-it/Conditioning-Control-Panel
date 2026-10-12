@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Chaos;
 
@@ -48,7 +49,7 @@ internal static class DtrhAssetStatsStore
             if (File.Exists(FilePath))
                 loaded = JsonConvert.DeserializeObject<Dictionary<string, AssetStat>>(File.ReadAllText(FilePath));
         }
-        catch (Exception ex) { App.Logger?.Warning("DtrhAssetStatsStore load failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Warning("DtrhAssetStatsStore load failed: {E}", ex.Message); }
 
         // Rebuild with a case-insensitive comparer regardless of source (asset names are filenames).
         _stats = new Dictionary<string, AssetStat>(StringComparer.OrdinalIgnoreCase);
@@ -113,14 +114,14 @@ internal static class DtrhAssetStatsStore
         // (OnPageMessage runs on the dispatcher thread, and this fires every ~15s batch + at run end).
         string json;
         try { json = JsonConvert.SerializeObject(_stats, Formatting.Indented); }
-        catch (Exception ex) { App.Logger?.Warning("DtrhAssetStatsStore serialize failed: {E}", ex.Message); return; }
+        catch (Exception ex) { Log.Warning("DtrhAssetStatsStore serialize failed: {E}", ex.Message); return; }
         var path = FilePath;
         Task.Run(() =>
         {
             lock (_writeLock)
             {
                 try { File.WriteAllText(path, json); }
-                catch (Exception ex) { App.Logger?.Warning("DtrhAssetStatsStore save failed: {E}", ex.Message); }
+                catch (Exception ex) { Log.Warning("DtrhAssetStatsStore save failed: {E}", ex.Message); }
             }
         });
     }

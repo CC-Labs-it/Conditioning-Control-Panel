@@ -5,7 +5,7 @@ using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Bubbles v2, wave 2: the Brain Drain bubble. Roll gating, the overlay choice per MotionLevel,
