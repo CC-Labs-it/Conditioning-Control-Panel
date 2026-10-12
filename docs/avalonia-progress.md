@@ -1961,3 +1961,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-companion-social: +327
 - Fluent icons lane L7: Companion room, Profile/Discord (tick Paths too), Friends drawer (WPF MDL2 action glyphs restored), InvitePanel, ProfileCustomize; ratchets emoji 971→905, loc 234→224, path 26→23.
 - Fail-proven asserts in WorkshopCells/ProfileWardrobe/FriendsDrawer tests; Keincheck shots of Companion and Profile tabs.
+
+## avalonia-port/icons-chaos-play: +470
+- Fluent icons lane L8: Chaos hub/HUD/overlay/slot picker, Play tab, Gaze minigame, AvatarTube, BubbleCount and EasterEgg glyphs become IconGlyph/IconLabel with an arcade look (filled marks, tier/gold brushes, pip counts kept); icon-emoji ratchet 971 -> 846.
+- Tests: new ChaosPlayIconsTests; ChaosRunHostTests and ChaosHubStateTests assert icon Kinds; all fail-proven; Keincheck Play tab, headless Chaos hub render.

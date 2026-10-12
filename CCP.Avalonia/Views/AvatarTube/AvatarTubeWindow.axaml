@@ -235,9 +235,8 @@
                                     ToolTip.Tip="{loc:Str tooltip_close_chat_history}">
                                 <!-- A TextBlock, not a string Content: Avalonia parses "_" in Content
                                      as an access key (CLAUDE.md trap 1). -->
-                                <TextBlock Text="✕"
-                                           FontSize="14"
-                                           FontWeight="Bold"
+                                <fx:IconGlyph Kind="Dismiss"
+                                           Size="14"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"/>
                             </Button>
