@@ -2995,7 +2995,7 @@ namespace ConditioningControlPanel
                 if (_friendsService != null)
                 {
                     var friends = _friendsService;
-                    _leashService = Services.Leash.LeashService.CreateForApp(() => friends.Kick());
+                    _leashService = Services.Leash.LeashServiceApp.CreateForApp(() => friends.Kick());
                     Leash = _leashService;
                     friends.LeashReportProvider = _leashService.BuildReportJson;
                     friends.LeashActive = () => _leashService?.Active == true;
@@ -3008,6 +3008,7 @@ namespace ConditioningControlPanel
                     };
 
                     _leashTaskHost = new Services.Leash.AppLeashTaskHost();
+                    Services.Leash.LeashTaskRunner.TimerFactory ??= () => new Services.Friends.FriendsServiceApp.Timer(System.Windows.Threading.DispatcherPriority.Normal);
                     LeashRunner = new Services.Leash.LeashTaskRunner(_leashTaskHost);
                     LeashRunner.AssignmentWatched += aid => _leashService?.NoteAssignmentWatched(aid);
                     Controls.Leash.LeashLocator.Service = () => App.Leash;
