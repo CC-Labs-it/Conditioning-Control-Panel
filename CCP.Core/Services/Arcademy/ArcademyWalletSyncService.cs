@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Arcademy;
 
@@ -88,8 +89,8 @@ internal static class ArcademyWalletSyncService
     {
         try
         {
-            Http.DefaultRequestHeaders.Add("X-Client-Version", UpdateService.AppVersion);
-            Http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}");
+            Http.DefaultRequestHeaders.Add("X-Client-Version", CoreReleaseContent.AppVersion);
+            Http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{CoreReleaseContent.AppVersion}");
         }
         catch { /* a header we could not set is not worth failing a static ctor over */ }
     }
@@ -205,11 +206,11 @@ internal static class ArcademyWalletSyncService
             try { outcome = await PostMintAsync(frame, generation).ConfigureAwait(false); }
             catch (Exception ex)
             {
-                App.Logger?.Information("[ArcademyWallet] mint failed: {E}", ex.Message);
+                Log.Information("[ArcademyWallet] mint failed: {E}", ex.Message);
                 outcome = new MintOutcome(MintVerdict.Queue, null);
             }
             try { settled(outcome); }
-            catch (Exception ex) { App.Logger?.Debug("ArcademyWallet.Bank callback: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("ArcademyWallet.Bank callback: {E}", ex.Message); }
 
             // A mint that landed is proof the wire is up: anything parked from an earlier night
             // can go out now rather than waiting for the next launch.
@@ -227,11 +228,11 @@ internal static class ArcademyWalletSyncService
             try { outcome = await PostBuyAsync(sku, generation).ConfigureAwait(false); }
             catch (Exception ex)
             {
-                App.Logger?.Information("[ArcademyWallet] buy failed: {E}", ex.Message);
+                Log.Information("[ArcademyWallet] buy failed: {E}", ex.Message);
                 outcome = new BuyOutcome(false, false, "offline", null);
             }
             try { settled(outcome); }
-            catch (Exception ex) { App.Logger?.Debug("ArcademyWallet.Buy callback: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("ArcademyWallet.Buy callback: {E}", ex.Message); }
         }, "buy");
     }
 
@@ -262,10 +263,10 @@ internal static class ArcademyWalletSyncService
 
             using var response = await Http.SendAsync(request).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, body);   // contract D
+            ArcademySyncService.MergedRecovery?.Invoke((int)response.StatusCode, body);   // contract D
             if (!response.IsSuccessStatusCode)
             {
-                App.Logger?.Information("[ArcademyWallet] pull failed: {Status} {Body}",
+                Log.Information("[ArcademyWallet] pull failed: {Status} {Body}",
                     (int)response.StatusCode, Truncate(body));
                 return;
             }
@@ -296,14 +297,14 @@ internal static class ArcademyWalletSyncService
             {
                 // Nothing here and nothing there. Not an import, and deliberately not marked as one
                 // either: the day this machine does earn something is the day it should carry it up.
-                App.Logger?.Information("[ArcademyWallet] no wallet on either side yet - nothing to import");
+                Log.Information("[ArcademyWallet] no wallet on either side yet - nothing to import");
             }
 
             if (Retired(generation)) return;
             if (serverWallet != null)
             {
                 store.AdoptServerWallet(serverWallet);
-                App.Logger?.Information("[ArcademyWallet] adopted the account wallet: {T} tickets, {K} tokens (rev {Rev})",
+                Log.Information("[ArcademyWallet] adopted the account wallet: {T} tickets, {K} tokens (rev {Rev})",
                     (int?)serverWallet["t"] ?? 0, (int?)serverWallet["k"] ?? 0, (int?)serverWallet["rev"] ?? 0);
             }
 
@@ -312,7 +313,7 @@ internal static class ArcademyWalletSyncService
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademyWallet] pull failed: {E}", ex.Message);
+            Log.Information("[ArcademyWallet] pull failed: {E}", ex.Message);
         }
         finally { try { InFlight.Release(); } catch { } }
     }
@@ -330,7 +331,7 @@ internal static class ArcademyWalletSyncService
             var deviceId = store.WalletDeviceId();
             if (!IdShape.IsMatch(deviceId))
             {
-                App.Logger?.Warning("[ArcademyWallet] refusing to import with a malformed device id");
+                Log.Warning("[ArcademyWallet] refusing to import with a malformed device id");
                 return null;
             }
 
@@ -348,10 +349,10 @@ internal static class ArcademyWalletSyncService
 
             using var response = await Http.SendAsync(request).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, text);   // contract D
+            ArcademySyncService.MergedRecovery?.Invoke((int)response.StatusCode, text);   // contract D
             if (!response.IsSuccessStatusCode)
             {
-                App.Logger?.Information("[ArcademyWallet] import refused: {Status} {Body} - trying again next launch",
+                Log.Information("[ArcademyWallet] import refused: {Status} {Body} - trying again next launch",
                     (int)response.StatusCode, Truncate(text));
                 return null;
             }
@@ -363,7 +364,7 @@ internal static class ArcademyWalletSyncService
             // reading the punch-card mirror's clamps get. Worth a line, worth nothing else.
             if (reply?["clamps"] is JArray clamps && clamps.Count > 0)
             {
-                App.Logger?.Information("[ArcademyWallet] the import was clamped: {Clamps}",
+                Log.Information("[ArcademyWallet] the import was clamped: {Clamps}",
                     string.Join(", ", clamps.Select(c => (string?)c ?? "?")));
             }
 
@@ -372,14 +373,14 @@ internal static class ArcademyWalletSyncService
             // says the account had no wallet at all and this machine's became it. Worth telling
             // apart in a support thread, because "adopted whole" and "merged" answer two different
             // questions about where a balance came from.
-            App.Logger?.Information("[ArcademyWallet] this machine's wallet has been carried up ({How})",
+            Log.Information("[ArcademyWallet] this machine's wallet has been carried up ({How})",
                 (bool?)reply?["imported"] != true ? "already known"
                     : (bool?)reply?["adopted"] == true ? "adopted whole" : "merged");
             return reply?["wallet"] as JObject;
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademyWallet] import failed: {E}", ex.Message);
+            Log.Information("[ArcademyWallet] import failed: {E}", ex.Message);
             return null;
         }
     }
@@ -408,7 +409,7 @@ internal static class ArcademyWalletSyncService
 
             using var response = await Http.SendAsync(request, cts.Token).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, text);   // contract D
+            ArcademySyncService.MergedRecovery?.Invoke((int)response.StatusCode, text);   // contract D
 
             if (!response.IsSuccessStatusCode)
             {
@@ -440,7 +441,7 @@ internal static class ArcademyWalletSyncService
                             if (!_refusalLogged)
                             {
                                 _refusalLogged = true;
-                                App.Logger?.Information(
+                                Log.Information(
                                     "[ArcademyWallet] the server will not bank for this account yet: {Body}. Frames are being parked until it does.",
                                     Truncate(text));
                             }
@@ -457,7 +458,7 @@ internal static class ArcademyWalletSyncService
                         if (!_refusalLogged)
                         {
                             _refusalLogged = true;
-                            App.Logger?.Information(
+                            Log.Information(
                                 "[ArcademyWallet] the server cannot name an account for this credential: {Body}. Tickets stay on this machine.",
                                 Truncate(text));
                         }
@@ -480,13 +481,13 @@ internal static class ArcademyWalletSyncService
                     if ((string?)refusal?["reason"] == "local_day_out_of_range"
                         && (bool?)frame["queued"] != true)
                     {
-                        App.Logger?.Information(
+                        Log.Information(
                             "[ArcademyWallet] the attendance wall would not take {Day} - parking it for the queue's wider window",
                             (string?)frame["localDay"]);
                         return new MintOutcome(MintVerdict.Queue, null);
                     }
 
-                    App.Logger?.Warning("[ArcademyWallet] the server refused the frame: {Body}", Truncate(text));
+                    Log.Warning("[ArcademyWallet] the server refused the frame: {Body}", Truncate(text));
                     return new MintOutcome(MintVerdict.Refused, null);
                 }
 
@@ -502,7 +503,7 @@ internal static class ArcademyWalletSyncService
                         if (!_refusalLogged)
                         {
                             _refusalLogged = true;
-                            App.Logger?.Warning(
+                            Log.Warning(
                                 "[ArcademyWallet] the mint would not take this account's credential: {Body}. Frames are being parked until it does.",
                                 Truncate(text));
                         }
@@ -510,7 +511,7 @@ internal static class ArcademyWalletSyncService
                     return new MintOutcome(MintVerdict.Queue, null);
                 }
 
-                App.Logger?.Information("[ArcademyWallet] mint refused: {Status} {Body} - parking the frame",
+                Log.Information("[ArcademyWallet] mint refused: {Status} {Body} - parking the frame",
                     status, Truncate(text));
                 return new MintOutcome(MintVerdict.Queue, null);
             }
@@ -522,13 +523,13 @@ internal static class ArcademyWalletSyncService
                 // A 200 with no economy block is an older server that only stamped the card. The
                 // money never left this machine, so mint locally and park it for the day the route
                 // learns to pay.
-                App.Logger?.Information("[ArcademyWallet] the server stamped the card but paid nothing - parking the frame");
+                Log.Information("[ArcademyWallet] the server stamped the card but paid nothing - parking the frame");
                 return new MintOutcome(MintVerdict.Queue, null);
             }
 
             if ((bool?)economy["duplicate"] == true)
             {
-                App.Logger?.Information("[ArcademyWallet] mint {Mint} was already banked - the server paid it once",
+                Log.Information("[ArcademyWallet] mint {Mint} was already banked - the server paid it once",
                     (string?)frame["mintId"]);
             }
 
@@ -539,7 +540,7 @@ internal static class ArcademyWalletSyncService
             // and this machine's own punch card already holds the hole the server declined to add.
             if (reply?["clamps"] is JArray mintClamps && mintClamps.Count > 0)
             {
-                App.Logger?.Information("[ArcademyWallet] the mint was clamped: {Clamps}",
+                Log.Information("[ArcademyWallet] the mint was clamped: {Clamps}",
                     string.Join(", ", mintClamps.Select(c => (string?)c ?? "?")));
             }
 
@@ -551,13 +552,13 @@ internal static class ArcademyWalletSyncService
         }
         catch (OperationCanceledException)
         {
-            App.Logger?.Information("[ArcademyWallet] the mint did not answer inside {S}s - parking the frame",
+            Log.Information("[ArcademyWallet] the mint did not answer inside {S}s - parking the frame",
                 PageWait.TotalSeconds);
             return new MintOutcome(MintVerdict.Queue, null);
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademyWallet] mint failed: {E} - parking the frame", ex.Message);
+            Log.Information("[ArcademyWallet] mint failed: {E} - parking the frame", ex.Message);
             return new MintOutcome(MintVerdict.Queue, null);
         }
     }
@@ -582,10 +583,10 @@ internal static class ArcademyWalletSyncService
         if (store == null) return;
         JArray pending;
         try { pending = store.PendingMints(); }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyWallet.Replay read: {E}", ex.Message); return; }
+        catch (Exception ex) { Log.Debug("ArcademyWallet.Replay read: {E}", ex.Message); return; }
         if (pending.Count == 0) return;
 
-        App.Logger?.Information("[ArcademyWallet] {N} parked mint(s) to replay", pending.Count);
+        Log.Information("[ArcademyWallet] {N} parked mint(s) to replay", pending.Count);
         foreach (var token in pending.ToList())
         {
             if (Retired(generation)) return;
@@ -600,7 +601,7 @@ internal static class ArcademyWalletSyncService
             {
                 bool walled;
                 lock (Gate) walled = _tierWalled;
-                App.Logger?.Information(
+                Log.Information(
                     walled
                         ? "[ArcademyWallet] the account cannot bank yet - {N} frame(s) stay parked"
                         : "[ArcademyWallet] the wire is still down - {N} frame(s) stay parked",
@@ -611,7 +612,7 @@ internal static class ArcademyWalletSyncService
             store.DropMint(mintId);
             if (outcome.Verdict == MintVerdict.Banked)
             {
-                App.Logger?.Information("[ArcademyWallet] banked a parked mint for {Game} on {Day}",
+                Log.Information("[ArcademyWallet] banked a parked mint for {Game} on {Day}",
                     (string?)frame["game"], (string?)frame["localDay"]);
             }
         }
@@ -650,7 +651,7 @@ internal static class ArcademyWalletSyncService
 
             using var response = await Http.SendAsync(request, cts.Token).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, text);   // contract D
+            ArcademySyncService.MergedRecovery?.Invoke((int)response.StatusCode, text);   // contract D
             var reply = Parse(text);
 
             if (!response.IsSuccessStatusCode)
@@ -661,7 +662,7 @@ internal static class ArcademyWalletSyncService
                 // as "you cannot afford that".
                 if (response.StatusCode == HttpStatusCode.Conflict)
                 {
-                    App.Logger?.Information("[ArcademyWallet] the wallet was busy - the counter says so");
+                    Log.Information("[ArcademyWallet] the wallet was busy - the counter says so");
                     return new BuyOutcome(true, false, "busy", null);
                 }
 
@@ -671,12 +672,12 @@ internal static class ArcademyWalletSyncService
                 // identity door) and a 401 keep the offline answer, but the log tells them apart.
                 if (response.StatusCode == HttpStatusCode.Forbidden && IsTierRefusal(reply))
                 {
-                    App.Logger?.Information("[ArcademyWallet] buy refused by the tier gate: {Body}", Truncate(text));
+                    Log.Information("[ArcademyWallet] buy refused by the tier gate: {Body}", Truncate(text));
                     return new BuyOutcome(true, false, "tier", null);
                 }
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
-                    App.Logger?.Information("[ArcademyWallet] buy refused at the {Door} door: {Status} {Body}",
+                    Log.Information("[ArcademyWallet] buy refused at the {Door} door: {Status} {Body}",
                         response.StatusCode == HttpStatusCode.Unauthorized ? "token" : "identity",
                         (int)response.StatusCode, Truncate(text));
                     return new BuyOutcome(false, false, "offline", null);
@@ -685,7 +686,7 @@ internal static class ArcademyWalletSyncService
                 // Every refusal the counter has a line for arrives as a 200 with `ok:false`. A
                 // status code instead means the account, not the purchase, was the problem, and the
                 // room says the same thing it says when nobody answers.
-                App.Logger?.Information("[ArcademyWallet] buy refused: {Status} {Body}",
+                Log.Information("[ArcademyWallet] buy refused: {Status} {Body}",
                     (int)response.StatusCode, Truncate(text));
                 return new BuyOutcome(false, false, "offline", null);
             }
@@ -695,18 +696,18 @@ internal static class ArcademyWalletSyncService
             if (ok && wallet != null && !Retired(generation)) Store(generation)?.AdoptServerWallet(wallet);
 
             var reason = (string?)reply?["reason"];
-            App.Logger?.Information("[ArcademyWallet] the counter answered '{Sku}': {Verdict}",
+            Log.Information("[ArcademyWallet] the counter answered '{Sku}': {Verdict}",
                 sku, ok ? "sold" : reason ?? "refused");
             return new BuyOutcome(true, ok, reason, wallet);
         }
         catch (OperationCanceledException)
         {
-            App.Logger?.Information("[ArcademyWallet] the counter did not answer inside {S}s", PageWait.TotalSeconds);
+            Log.Information("[ArcademyWallet] the counter did not answer inside {S}s", PageWait.TotalSeconds);
             return new BuyOutcome(false, false, "offline", null);
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademyWallet] buy failed: {E}", ex.Message);
+            Log.Information("[ArcademyWallet] buy failed: {E}", ex.Message);
             return new BuyOutcome(false, false, "offline", null);
         }
     }
@@ -746,7 +747,7 @@ internal static class ArcademyWalletSyncService
     {
         int w = (int?)wave ?? 0;
         if (w == 0 || w == ArcademyEconomy.CurrentWave) return;
-        App.Logger?.Information("[ArcademyWallet] the server's shelf is wave {Server}, this build is wave {Local}",
+        Log.Information("[ArcademyWallet] the server's shelf is wave {Server}, this build is wave {Local}",
             w, ArcademyEconomy.CurrentWave);
     }
 
@@ -762,9 +763,9 @@ internal static class ArcademyWalletSyncService
         token = string.Empty;
         try
         {
-            if (App.Settings?.Current?.OfflineMode == true) return false;
-            var id = App.Settings?.Current?.UnifiedId;
-            var auth = App.Settings?.Current?.AuthToken;
+            if (CoreSettings.Current.OfflineMode == true) return false;
+            var id = CoreSettings.Current.UnifiedId;
+            var auth = CoreSettings.Current.AuthToken;
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(auth)) return false;
             unifiedId = id;
             token = auth;
@@ -772,7 +773,7 @@ internal static class ArcademyWalletSyncService
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ArcademyWallet.Identity: {E}", ex.Message);
+            Log.Debug("ArcademyWallet.Identity: {E}", ex.Message);
             return false;
         }
     }
@@ -792,7 +793,7 @@ internal static class ArcademyWalletSyncService
         lock (Gate) cb = _onWalletChanged;
         if (cb == null || Retired(generation)) return;
         try { cb(); }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyWallet.RaiseChanged: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademyWallet.RaiseChanged: {E}", ex.Message); }
     }
 
     /// <summary>Fire-and-forget onto the thread pool with a catch-all: every entry point here is
@@ -805,10 +806,10 @@ internal static class ArcademyWalletSyncService
             _ = Task.Run(async () =>
             {
                 try { await work().ConfigureAwait(false); }
-                catch (Exception ex) { App.Logger?.Information("[ArcademyWallet] {What} failed: {E}", what, ex.Message); }
+                catch (Exception ex) { Log.Information("[ArcademyWallet] {What} failed: {E}", what, ex.Message); }
             });
         }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyWallet.Run({What}): {E}", what, ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademyWallet.Run({What}): {E}", what, ex.Message); }
     }
 
     private static JObject? Parse(string body)
@@ -816,7 +817,7 @@ internal static class ArcademyWalletSyncService
         try { return string.IsNullOrWhiteSpace(body) ? null : JObject.Parse(body); }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademyWallet] unreadable reply: {E}", ex.Message);
+            Log.Information("[ArcademyWallet] unreadable reply: {E}", ex.Message);
             return null;
         }
     }
@@ -883,12 +884,12 @@ internal static class ArcademyWalletSyncService
             if (store == null) return;
             if (store.WalletImportedAt() == null)
             {
-                App.Logger?.Information(
+                Log.Information(
                     "[ArcademyWallet] this machine has not carried its wallet up yet - the local mint is the record, nothing parked");
                 return;
             }
             store.QueueMint(frame);
         }
-        catch (Exception ex) { App.Logger?.Warning("ArcademyWallet.Park: {E}", ex.Message); }
+        catch (Exception ex) { Log.Warning("ArcademyWallet.Park: {E}", ex.Message); }
     }
 }

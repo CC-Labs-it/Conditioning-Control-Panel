@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Arcademy;
 
@@ -66,12 +67,17 @@ internal static class ArcademySyncService
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
 
+    /// <summary>Contract D (409 merged) for both Arcademy mirrors (this and the wallet). The
+    /// recovery swaps the head's account, so the head seeds it with
+    /// <c>MergedAccountRecovery.TryHandle</c>. Unseeded = never handled.</summary>
+    public static volatile Func<int, string?, bool>? MergedRecovery;
+
     static ArcademySyncService()
     {
         try
         {
-            Http.DefaultRequestHeaders.Add("X-Client-Version", UpdateService.AppVersion);
-            Http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}");
+            Http.DefaultRequestHeaders.Add("X-Client-Version", CoreReleaseContent.AppVersion);
+            Http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{CoreReleaseContent.AppVersion}");
         }
         catch { /* a header we could not set is not worth failing a static ctor over */ }
     }
@@ -141,7 +147,7 @@ internal static class ArcademySyncService
         if (store == null || !owed) return;
         JObject payload;
         try { payload = store.ExportCards(); }
-        catch (Exception ex) { App.Logger?.Debug("ArcademySync.Detach export: {E}", ex.Message); return; }
+        catch (Exception ex) { Log.Debug("ArcademySync.Detach export: {E}", ex.Message); return; }
         if (payload.Count == 0) return;
 
         // Detached: no store to apply the reply into and no page to repaint, so this is a
@@ -176,7 +182,7 @@ internal static class ArcademySyncService
             }
             _debounce.Change(delay, Timeout.InfiniteTimeSpan);
         }
-        catch (Exception ex) { App.Logger?.Debug("ArcademySync.Arm: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademySync.Arm: {E}", ex.Message); }
     }
 
     private static void OnDebounceElapsed()
@@ -210,10 +216,10 @@ internal static class ArcademySyncService
 
             using var response = await Http.SendAsync(request).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, body);   // contract D
+            MergedRecovery?.Invoke((int)response.StatusCode, body);   // contract D
             if (!response.IsSuccessStatusCode)
             {
-                App.Logger?.Information("[ArcademySync] pull failed: {Status} {Body}",
+                Log.Information("[ArcademySync] pull failed: {Status} {Body}",
                     (int)response.StatusCode, Truncate(body));
                 return;
             }
@@ -226,7 +232,7 @@ internal static class ArcademySyncService
             if (store == null) return;
 
             var changed = store.ApplyServerCards(serverCards);
-            App.Logger?.Information(
+            Log.Information(
                 "[ArcademySync] pulled {N} card(s) from the mirror (rev {Rev}); {Changed} changed locally",
                 serverCards?.Count ?? 0, (int?)reply?["rev"] ?? 0, changed.Count);
             if (changed.Count > 0) RaiseChanged(generation);
@@ -235,7 +241,7 @@ internal static class ArcademySyncService
             if (ArcademyPunchCards.HasUnmirrored(store.Get(ArcademyMetaStore.PunchCardsKey) as JObject, serverCards))
             {
                 lock (Gate) { _owed = true; }
-                App.Logger?.Information("[ArcademySync] the mirror is behind this machine - pushing");
+                Log.Information("[ArcademySync] the mirror is behind this machine - pushing");
                 var payload = store.ExportCards();
                 if (payload.Count > 0)
                 {
@@ -249,7 +255,7 @@ internal static class ArcademySyncService
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademySync] pull failed: {E}", ex.Message);
+            Log.Information("[ArcademySync] pull failed: {E}", ex.Message);
         }
         finally { try { InFlight.Release(); } catch { } }
     }
@@ -262,7 +268,7 @@ internal static class ArcademySyncService
         if (store == null) return;
         JObject payload;
         try { payload = store.ExportCards(); }
-        catch (Exception ex) { App.Logger?.Debug("ArcademySync export: {E}", ex.Message); return; }
+        catch (Exception ex) { Log.Debug("ArcademySync export: {E}", ex.Message); return; }
         if (payload.Count == 0) { lock (Gate) { _owed = false; } return; }
 
         if (!await InFlight.WaitAsync(0).ConfigureAwait(false))
@@ -298,7 +304,7 @@ internal static class ArcademySyncService
 
             using var response = await Http.SendAsync(request).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, text);   // contract D
+            MergedRecovery?.Invoke((int)response.StatusCode, text);   // contract D
 
             if (!response.IsSuccessStatusCode)
             {
@@ -306,7 +312,7 @@ internal static class ArcademySyncService
                 bool soft = response.StatusCode == HttpStatusCode.Conflict
                             || (int)response.StatusCode == 429
                             || (int)response.StatusCode >= 500;
-                App.Logger?.Information("[ArcademySync] push refused: {Status} {Body}{Retry}",
+                Log.Information("[ArcademySync] push refused: {Status} {Body}{Retry}",
                     (int)response.StatusCode, Truncate(text), soft ? " - retrying later" : " - queued for next launch");
                 if (soft) lock (Gate) { if (_store != null) Arm(RetryDelay); }
                 return;
@@ -317,12 +323,12 @@ internal static class ArcademySyncService
             {
                 // A clamp is the mirror refusing an impossible row, not a failed request: a clock
                 // that ran ahead, or a hand-edited meta file. Worth a line, worth nothing else.
-                App.Logger?.Information("[ArcademySync] the mirror clamped {N} row(s): {Clamps}",
+                Log.Information("[ArcademySync] the mirror clamped {N} row(s): {Clamps}",
                     clamps.Count, string.Join(", ", clamps.Select(c => (string?)c ?? "?")));
             }
 
             lock (Gate) { _owed = false; }
-            App.Logger?.Information("[ArcademySync] pushed {N} card(s) (rev {Rev})",
+            Log.Information("[ArcademySync] pushed {N} card(s) (rev {Rev})",
                 cards.Count, (int?)reply?["rev"] ?? 0);
 
             if (!applyReply || Retired(generation)) return;
@@ -334,7 +340,7 @@ internal static class ArcademySyncService
         catch (Exception ex)
         {
             lock (Gate) { _owed = true; }
-            App.Logger?.Information("[ArcademySync] push failed: {E}", ex.Message);
+            Log.Information("[ArcademySync] push failed: {E}", ex.Message);
         }
     }
 
@@ -352,9 +358,9 @@ internal static class ArcademySyncService
         token = string.Empty;
         try
         {
-            if (App.Settings?.Current?.OfflineMode == true) return false;
-            var id = App.Settings?.Current?.UnifiedId;
-            var auth = App.Settings?.Current?.AuthToken;
+            if (CoreSettings.Current.OfflineMode == true) return false;
+            var id = CoreSettings.Current.UnifiedId;
+            var auth = CoreSettings.Current.AuthToken;
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(auth)) return false;
             unifiedId = id;
             token = auth;
@@ -362,7 +368,7 @@ internal static class ArcademySyncService
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ArcademySync.Identity: {E}", ex.Message);
+            Log.Debug("ArcademySync.Identity: {E}", ex.Message);
             return false;
         }
     }
@@ -384,7 +390,7 @@ internal static class ArcademySyncService
         lock (Gate) cb = _onCardsChanged;
         if (cb == null || Retired(generation)) return;
         try { cb(); }
-        catch (Exception ex) { App.Logger?.Debug("ArcademySync.RaiseChanged: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademySync.RaiseChanged: {E}", ex.Message); }
     }
 
     /// <summary>Fire-and-forget onto the thread pool with a catch-all: every entry point here is
@@ -397,10 +403,10 @@ internal static class ArcademySyncService
             _ = Task.Run(async () =>
             {
                 try { await work().ConfigureAwait(false); }
-                catch (Exception ex) { App.Logger?.Information("[ArcademySync] {What} failed: {E}", what, ex.Message); }
+                catch (Exception ex) { Log.Information("[ArcademySync] {What} failed: {E}", what, ex.Message); }
             });
         }
-        catch (Exception ex) { App.Logger?.Debug("ArcademySync.Run({What}): {E}", what, ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademySync.Run({What}): {E}", what, ex.Message); }
     }
 
     private static JObject? Parse(string body)
@@ -408,7 +414,7 @@ internal static class ArcademySyncService
         try { return string.IsNullOrWhiteSpace(body) ? null : JObject.Parse(body); }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademySync] unreadable reply: {E}", ex.Message);
+            Log.Information("[ArcademySync] unreadable reply: {E}", ex.Message);
             return null;
         }
     }
