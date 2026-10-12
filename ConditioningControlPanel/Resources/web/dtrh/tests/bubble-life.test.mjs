@@ -1,6 +1,7 @@
 // Which bubbles get a living picture (game/bubbleLife.js). The drawing itself needs a canvas.
 // variants.js cannot load under node (absolute page imports), so the ids are listed here.
 import test from 'node:test';
+import { moteTintFor } from '../game/bubbleLife.js';
 import assert from 'node:assert/strict';
 import { lifeKindFor, LIFE_CAP } from '../game/bubbleLife.js';
 
@@ -25,4 +26,10 @@ test('no sprite or an unknown bubble stays still', () => {
   assert.equal(lifeKindFor({ variantId: 'constructor', sprite: 'x' }), null);
   assert.equal(lifeKindFor(null), null);
   assert.ok(LIFE_CAP > 0);
+});
+
+test('the motes round a material bubble take its own colour', () => {
+  assert.equal(moteTintFor('material_chrome'), '206,214,228');
+  assert.equal(moteTintFor('material_lube'), '168,230,255');
+  assert.equal(moteTintFor('material_nope'), '255,255,255');
 });
