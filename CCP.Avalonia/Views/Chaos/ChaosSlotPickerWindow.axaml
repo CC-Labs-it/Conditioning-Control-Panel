@@ -24,6 +24,7 @@
      view and no key has been invented for one. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSlotPickerWindow"
         Title="Down the Rabbit Hole"
         SystemDecorations="None"
@@ -115,16 +116,16 @@
             <!-- Header (also the drag handle) -->
             <Grid Grid.Row="0" x:Name="HeaderBar" Background="Transparent">
                 <StackPanel HorizontalAlignment="Left">
-                    <TextBlock Text="🐇 Down the Rabbit Hole" FontSize="13" Foreground="{StaticResource Pink}"
-                               FontWeight="SemiBold" Opacity="0.85"/>
+                    <fx:IconLabel Text="Down the Rabbit Hole" Kind="AnimalRabbit" Spacing="5" TextElement.FontSize="13"
+                                  TextElement.Foreground="{StaticResource Pink}" TextElement.FontWeight="SemiBold" Opacity="0.85"/>
                     <TextBlock Text="Choose your save" FontSize="26" FontWeight="Bold" Foreground="White" Margin="0,2,0,0"/>
                     <TextBlock Text="Pick a slot to descend into. Each keeps its own progress." FontSize="13"
                                Foreground="{StaticResource TextDim}" Margin="0,3,0,0"/>
                 </StackPanel>
                 <Button x:Name="BtnClose" Width="34" Height="34" VerticalAlignment="Top"
                         HorizontalAlignment="Right" Theme="{StaticResource GhostBtn}" Padding="0"
-                        FontSize="15" ToolTip.Tip="Cancel">
-                    <TextBlock Text="✕"/>
+                        FontSize="15" ToolTip.Tip="Cancel" AutomationProperties.Name="Cancel">
+                    <fx:IconGlyph Kind="Dismiss" Size="15"/>
                 </Button>
             </Grid>
 
@@ -135,7 +136,7 @@
             <!-- Local-storage note -->
             <Border Grid.Row="2" Background="#1AFFFFFF" CornerRadius="9" Padding="14,10" Margin="0,4,0,14">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="🔒" FontSize="14" VerticalAlignment="Center" Margin="0,0,9,0"/>
+                    <fx:IconGlyph Kind="LockClosed" Size="16" VerticalAlignment="Center" Margin="0,0,9,0"/>
                     <StackPanel>
                         <TextBlock Text="All saves are stored locally on this PC" FontSize="12.5"
                                    Foreground="{StaticResource TextDim}" FontWeight="SemiBold"/>

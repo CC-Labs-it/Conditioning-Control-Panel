@@ -44,6 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderImagesMin.ValueChanged += SliderImagesMin_Changed;
             SliderMaxOnScreen.ValueChanged += SliderMaxOnScreen_Changed;
             ChkClickable.IsCheckedChanged += ChkClickable_Changed;
+            ChkStayUntilPopped.IsCheckedChanged += ChkStayUntilPopped_Changed;
+            CmbExit.SelectionChanged += CmbExit_Changed;
             ChkCorruption.IsCheckedChanged += ChkCorruption_Changed;
             ChkHydraLinked.IsCheckedChanged += ChkHydraLinked_Changed;
             ChkGlow.IsCheckedChanged += ChkGlow_Changed;
@@ -117,6 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 SliderMaxOnScreen.Value = s.HydraLimit;
                 TxtMaxOnScreen.Text = s.HydraLimit.ToString();
                 ChkClickable.IsChecked = s.FlashClickable;
+                ChkStayUntilPopped.IsChecked = s.FlashStayUntilPopped;
+                BuildExitPicker(s.FlashExitStyle);
                 ChkCorruption.IsChecked = s.CorruptionMode;
                 ChkHydraLinked.IsChecked = s.HydraLinkedTiming;
                 ChkGlow.IsChecked = s.FlashGlowEnabled;
@@ -220,6 +224,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.SimultaneousImagesMin) ||
                 e.PropertyName == nameof(AppSettings.HydraLimit) ||
                 e.PropertyName == nameof(AppSettings.FlashClickable) ||
+                e.PropertyName == nameof(AppSettings.FlashStayUntilPopped) ||
+                e.PropertyName == nameof(AppSettings.FlashExitStyle) ||
                 e.PropertyName == nameof(AppSettings.CorruptionMode) ||
                 e.PropertyName == nameof(AppSettings.HydraLinkedTiming) ||
                 e.PropertyName == nameof(AppSettings.FlashGlowEnabled) ||
@@ -349,6 +355,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (_isLoading) return;
             CoreSettings.Current.FlashClickable = ChkClickable.IsChecked ?? false;
+            CoreSettings.Save();
+        }
+
+        private void ChkStayUntilPopped_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.FlashStayUntilPopped = ChkStayUntilPopped.IsChecked ?? false;
+            CoreSettings.Save();
+        }
+
+        // WPF FlashFeatureControl.xaml.cs:498-539. Rebuilt on every load so a language switch
+        // re-reads the row text (P09). ponytail: WPF greys this picker and shows TxtExitShatterNote
+        // while an owned Shatter decides the leave (#1386); this head plays no Shatter yet.
+        private static readonly (FlashExitStyle Style, string Key)[] ExitChoices =
+        {
+            (FlashExitStyle.Mix, "option_flash_exit_mix"),
+            (FlashExitStyle.Pop, "option_flash_exit_pop"),
+            (FlashExitStyle.TvOff, "option_flash_exit_tvoff"),
+            (FlashExitStyle.Spiral, "option_flash_exit_spiral"),
+            (FlashExitStyle.Melt, "option_flash_exit_melt"),
+            (FlashExitStyle.Glitch, "option_flash_exit_glitch"),
+            (FlashExitStyle.None, "option_flash_exit_none"),
+        };
+
+        private void BuildExitPicker(FlashExitStyle style)
+        {
+            CmbExit.Items.Clear();
+            foreach (var (s, key) in ExitChoices)
+                CmbExit.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get(key) }, Tag = s });
+            CmbExit.SelectedItem = CmbExit.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is FlashExitStyle t && t == style)
+                ?? CmbExit.Items[0];
+        }
+
+        private void CmbExit_Changed(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            if (CmbExit.SelectedItem is not ComboBoxItem { Tag: FlashExitStyle style }) return;
+            if (CoreSettings.Current.FlashExitStyle == style) return;
+            CoreSettings.Current.FlashExitStyle = style;
             CoreSettings.Save();
         }
 

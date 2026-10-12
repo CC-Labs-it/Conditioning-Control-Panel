@@ -118,6 +118,11 @@ public sealed class OfflineModeShellTests
                 var next = new MainShellWindow();
                 var nextAccount = next.AppSettingsPage!.FindControl<AccountSettingsSection>("SectionAccount")!;
                 Assert.False(nextAccount.FindControl<Button>("BtnPatreonLogin")!.IsEnabled);
+                // The rest of WPF UpdateOfflineModeUI (UiUpdates.cs:2677-2730), ids from the WPF UIA dump.
+                Assert.False(nextAccount.FindControl<Button>("BtnDiscordLogin")!.IsEnabled);
+                var nextHome = next.Named<SettingsTabView>("SettingsTab")!;
+                foreach (var id in new[] { "BtnUnifiedLogin", "BtnPopOutBrowser", "RbHypnoTube", "RbBambiCloud" })
+                    Assert.False(nextHome.FindControl<Control>(id)!.IsEnabled, id);
                 next.Close();
             }
             finally

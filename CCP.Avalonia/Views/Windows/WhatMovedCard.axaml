@@ -5,6 +5,7 @@
      wired in code (template content has no name scope). -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:cp="clr-namespace:ConditioningControlPanel;assembly=CCP.Core"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.WhatMovedCard"
@@ -34,9 +35,11 @@
             <Grid>
                 <TextBlock Text="{loc:Str whatmoved_title}" FontSize="24" FontWeight="ExtraBold"
                            Foreground="{DynamicResource PinkBrush}"/>
-                <Button x:Name="BtnX" Content="✕" HorizontalAlignment="Right"
+                <Button x:Name="BtnX" HorizontalAlignment="Right" AutomationProperties.Name="{loc:Str btn_close}"
                         VerticalAlignment="Top" Background="Transparent" Foreground="#99FFFFFF"
-                        BorderThickness="0" FontSize="13" Cursor="Hand" Padding="4,0"/>
+                        BorderThickness="0" FontSize="13" Cursor="Hand" Padding="4,0">
+                    <fx:IconGlyph Kind="Dismiss" Size="13"/>
+                </Button>
             </Grid>
             <TextBlock Text="{loc:Str whatmoved_intro}" Margin="0,6,0,16" FontSize="13"
                        Foreground="#CCFFFFFF" TextWrapping="Wrap"/>

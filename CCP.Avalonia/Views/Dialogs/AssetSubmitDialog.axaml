@@ -20,6 +20,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:ctl="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.AssetSubmitDialog"
         Title="{loc:Str dialog_catalogue_submit_title}"
@@ -40,13 +41,13 @@
                     <Grid>
                         <Border x:Name="border" Width="24" Height="24" CornerRadius="4"
                                 Background="{DynamicResource PanelBgBrush}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="2" Cursor="Hand"/>
-                        <TextBlock x:Name="check" Text="✔" Foreground="{DynamicResource PinkBrush}" FontSize="16"
-                                   FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        <fx:IconGlyph x:Name="check" Kind="Checkmark" Foreground="{DynamicResource PinkBrush}" Size="16"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
                                    IsVisible="False"/>
                     </Grid>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^:checked /template/ TextBlock#check">
+            <Style Selector="^:checked /template/ fx|IconGlyph#check">
                 <Setter Property="IsVisible" Value="True"/>
             </Style>
             <Style Selector="^:checked /template/ Border#border">
@@ -118,7 +119,7 @@
 
             <!-- Title -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                <TextBlock Text="📤" FontSize="24" Width="30" Height="30"
+                <fx:IconGlyph Kind="ArrowUpload" Size="24" Width="30" Height="30"
                            VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <TextBlock Text="{loc:Str dialog_catalogue_submit_title}"
                            Foreground="{DynamicResource PinkBrush}"
@@ -193,7 +194,7 @@
 
             <!-- Spinner -->
             <StackPanel Grid.Row="7" x:Name="PnlSpinner" Orientation="Horizontal" Margin="0,16,0,12" IsVisible="False">
-                <TextBlock Text="⌛" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <fx:IconGlyph Kind="HourglassHalf" Size="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <TextBlock Text="{loc:Str dialog_catalogue_submit_spinner}" Foreground="#B0B0C0" FontSize="13" VerticalAlignment="Center"/>
             </StackPanel>
 

@@ -7,10 +7,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -124,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var btn = new Button
             {
                 // TextBlock content: Avalonia's Button would read '_' as an access key.
-                Content = new TextBlock { Text = active ? "✓ Active" : "Activate" },
+                Content = active ? new IconLabel { Kind = IconKind.Checkmark, Text = "Active", Spacing = 4 } : new TextBlock { Text = "Activate" },
                 FontSize = 10, FontWeight = FontWeight.Bold,
                 Padding = new Thickness(10, 4, 10, 4), BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Left,
@@ -148,13 +150,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var btn = new Button
             {
-                Content = new TextBlock { Text = "🗑" },
+                Content = new IconGlyph { Kind = IconKind.Delete, Size = 14 },
                 FontSize = 12, Padding = new Thickness(6, 3, 6, 3), BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent, Foreground = muted,
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.Hand),
             };
             ToolTip.SetTip(btn, "Delete this preset");
+            AutomationProperties.SetName(btn, "Delete this preset");
             btn.Click += async (_, _) =>
             {
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
@@ -176,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var pink = Res("PinkBrush", Brushes.HotPink);
             var muted = Res("TextMutedBrush", Brushes.Gray);
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            stack.Children.Add(new TextBlock { Text = "＋", FontSize = 40, FontWeight = FontWeight.Light, Foreground = pink, HorizontalAlignment = HorizontalAlignment.Center });
+            stack.Children.Add(new IconGlyph { Kind = IconKind.Add, Size = 40, Foreground = pink, HorizontalAlignment = HorizontalAlignment.Center });
             stack.Children.Add(new TextBlock { Text = "New Preset", Foreground = Brushes.White, FontSize = 13, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) });
             stack.Children.Add(new TextBlock { Text = "Pick your own words", Foreground = muted, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
 
