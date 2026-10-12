@@ -1904,3 +1904,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/text-maxlines: +130
 - WPF pixel MaxHeight line caps on 17 TextBlocks (11 files) -> MaxLines with the WPF line count; long localized copy no longer drops/clips lines.
 - TextLineCapTests: headless line-count check (fail-proven on the Assets creator card) + axaml guard against TextBlock MaxHeight.
+
+## avalonia-port/icons-guard: +355
+- IconGuardTests: font-codepoint hard 0 (1 temporary entry), emoji/loc/Path ratchets (971/234/26) failing both ways, FluentIcons isolation, allowlist liveness on comment-stripped code, with per-line counts for Path entries and reasoned whole-file art entries; every guard mutation-proven.
+- `--render-all` icon census line (1040 icon-led texts, 158 unnamed icon-only buttons); evidence in ~/ccp-port/evidence/icons/icons-guard/.
