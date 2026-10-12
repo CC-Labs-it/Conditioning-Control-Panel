@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -1127,6 +1128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var playBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 12 },
+                [AutomationProperties.NameProperty] = "Play preview",
                 Width = 28,
                 Height = 28,
                 Background = Brushes.Transparent,
@@ -1167,6 +1169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var clearBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 10 },
+                [AutomationProperties.NameProperty] = "Clear",
                 Width = 24,
                 Height = 24,
                 Background = Brushes.Transparent,
@@ -1241,6 +1244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var playBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 12 },
+                [AutomationProperties.NameProperty] = "Play preview",
                 Width = 24,
                 Height = 24,
                 Background = Brushes.Transparent,
@@ -1278,6 +1282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var removeBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 9 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Width = 20,
                 Height = 20,
                 Background = Brushes.Transparent,
@@ -1460,6 +1465,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var removeBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 10 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Width = 24,
                 Height = 24,
                 Background = Brushes.Transparent,
@@ -1634,6 +1640,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var delBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 12 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Foreground = new SolidColorBrush(Color.Parse("#FF6B6B")),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
@@ -1756,6 +1763,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var delBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 12 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Foreground = new SolidColorBrush(Color.Parse("#FF6B6B")),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
@@ -1835,6 +1843,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var clearBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 12 },
+                [AutomationProperties.NameProperty] = "Clear",
                 Foreground = new SolidColorBrush(Color.Parse("#FF6B6B")),
                 Background = new SolidColorBrush(Color.FromArgb(180, 30, 30, 50)),
                 BorderThickness = new Thickness(0),

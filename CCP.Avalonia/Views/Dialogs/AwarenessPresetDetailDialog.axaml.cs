@@ -771,7 +771,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Grid.SetColumn(browseBtn, 1);
             body.Children.Add(browseBtn);
 
-            var testBtn = MakeChipButton(new IconLabel { Kind = IconKind.Play, Text = "Test", Spacing = 4 }, editable);
+            var testBtn = MakeChipButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 11, VerticalAlignment = VerticalAlignment.Center }, new TextBlock { Text = "Test" } } }, editable);
             testBtn.Click += (_, _) => PreviewAudioClip(pa.FilePath, pa.Volume);
             Grid.SetColumn(testBtn, 2);
             body.Children.Add(testBtn);

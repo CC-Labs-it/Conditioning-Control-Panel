@@ -204,7 +204,10 @@
                             FontSize="14" FontWeight="Bold"
                             IsVisible="False"
                             Margin="0,0,0,8">
-                        <fx:IconLabel Kind="Play" Text="Download Mod" HorizontalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                            <fx:IconGlyph Kind="Play" Variant="Filled" Size="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="Download Mod" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Button>
 
                     <!-- Got it Button -->

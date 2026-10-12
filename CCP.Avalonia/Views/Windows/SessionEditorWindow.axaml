@@ -89,7 +89,7 @@
                         <Button x:Name="BtnMinimize" Width="24" Height="24" Padding="0"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="Transparent" Foreground="{DynamicResource TextMutedBrush}" FontSize="14"
-                                BorderThickness="0" Cursor="Hand" Margin="4,0,0,0">
+                                BorderThickness="0" Cursor="Hand" Margin="4,0,0,0" AutomationProperties.Name="{loc:Str titlebar_minimize_tip}">
                             <fx:IconGlyph Kind="Subtract" Size="12"/>
                         </Button>
                         <Button x:Name="BtnClose" Width="24" Height="24" Padding="0"

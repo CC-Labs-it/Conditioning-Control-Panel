@@ -700,6 +700,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Foreground = Brush(solidKey),
             };
             ToolTip.SetTip(dot, tip);
+            AutomationProperties.SetName(dot, tip);   // icon-only dot: WPF's ● had no better name either
             dot.IsCheckedChanged += RackDifficultyChip_Changed;
             return dot;
         }

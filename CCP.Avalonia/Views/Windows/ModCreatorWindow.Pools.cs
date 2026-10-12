@@ -2,6 +2,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -114,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static Button CreateRowRemoveButton() => new()
         {
             Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 10 },
+            [AutomationProperties.NameProperty] = "Remove",
             Width = 24,
             Height = 24,
             Background = Brushes.Transparent,
