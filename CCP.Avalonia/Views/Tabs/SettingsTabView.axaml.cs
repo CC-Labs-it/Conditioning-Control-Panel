@@ -225,7 +225,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnQuickLogout.Click += BtnQuickLogout_Click;
             BtnLinkPhone.Click += BtnLinkPhone_Click;
             BtnDiscord.Click += BtnDiscord_Click;
+            SyncQuickRichPresence();
             ChkQuickDiscordRichPresence.IsCheckedChanged += ChkDiscordRichPresence_Changed;
+            // The Profile privacy switch moved: repaint (WPF syncs both boxes, AccountShell.cs:300).
+            AttachedToVisualTree += (_, _) => { App.RichPresenceChanged -= SyncQuickRichPresence; App.RichPresenceChanged += SyncQuickRichPresence; };
+            DetachedFromVisualTree += (_, _) => App.RichPresenceChanged -= SyncQuickRichPresence;
 
             // Quick-toggles row.
             VelvetBtnWebcam.Click += VelvetBtnWebcam_Click;
@@ -360,7 +364,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private async void BtnLinkPhone_Click(object? sender, RoutedEventArgs e)
             => await new Dialogs.LinkPhoneDialog().ShowDialogSafe(TopLevel.GetTopLevel(this) as Window);
         private void BtnDiscord_Click(object? sender, RoutedEventArgs e) => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnDiscord_Click(sender, e);
-        private void ChkDiscordRichPresence_Changed(object? sender, RoutedEventArgs e) { }   // mw.ChkDiscordRichPresence_Changed(...)
+        private bool _syncingRichPresence;
+
+        /// <summary>Seeds the quick checkbox from settings without running its handler.</summary>
+        internal void SyncQuickRichPresence() => SyncQuickRichPresenceTo(CoreSettings.Current.DiscordRichPresenceEnabled);
+
+        /// <summary>WPF ChkDiscordRichPresence_Changed (MainWindow.AccountShell.cs:279-316): refused, with
+        /// the reason, unless a Discord is linked; otherwise the setting is written and the presence
+        /// client armed or dropped (App.ApplyRichPresence), which repaints the Profile switch.</summary>
+        internal void ChkDiscordRichPresence_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_syncingRichPresence) return;
+            try
+            {
+                var s = CoreSettings.Current;
+                bool on = ChkQuickDiscordRichPresence.IsChecked == true;
+                if (on && !s.HasLinkedDiscord)
+                {
+                    SyncQuickRichPresenceTo(false);
+                    if (TopLevel.GetTopLevel(this) is Window { IsVisible: true } owner && !SuppressDialogsForTest)
+                        _ = Dialogs.MessageDialog.ShowAsync(owner, "Discord Not Linked",   // WPF's literal title
+                            ConditioningControlPanel.Localization.Loc.Get("msg_discord_rich_presence_requires_a_linked_disco"));
+                    return;
+                }
+                if (s.DiscordRichPresenceEnabled == on) return;
+                s.DiscordRichPresenceEnabled = on;
+                CoreSettings.Save();
+                App.ApplyRichPresence();
+                Serilog.Log.Information("Discord Rich Presence {Status}", on ? "enabled" : "disabled");
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "ChkDiscordRichPresence_Changed failed"); }
+        }
+
+        private void SyncQuickRichPresenceTo(bool value)
+        {
+            _syncingRichPresence = true;
+            try { ChkQuickDiscordRichPresence.IsChecked = value; }
+            finally { _syncingRichPresence = false; }
+        }
+
+        /// <summary>Test seam: a headless run answers no dialogs.</summary>
+        internal static bool SuppressDialogsForTest;
 
         // -- quick-toggles row -----------------------------------------------------------
         private void VelvetBtnWebcam_Click(object? sender, RoutedEventArgs e) { }            // mw.VelvetBtnWebcam_Click(...)

@@ -46,6 +46,29 @@ namespace ConditioningControlPanel.Avalonia
         internal static MediaHistoryService? MediaHistory { get; set; }
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
+        /// <summary>WPF App.DiscordRpc. Null until startup built it (and in headless tests).</summary>
+        internal static Services.DiscordRichPresenceService? DiscordRpc { get; set; }
+
+        /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
+        internal static event Action? RichPresenceChanged;
+
+        /// <summary>
+        /// WPF ChkDiscordRichPresence_Changed's tail (MainWindow.AccountShell.cs:300-316) and the startup arm
+        /// (App.xaml.cs:3126-3130): the setting is already written; this arms or drops the client and tells
+        /// the other surface. Never arms without a linked Discord, nor in offline mode
+        /// (WPF DisconnectNetworkServices, MainWindow.UiUpdates.cs:2818).
+        /// </summary>
+        internal static void ApplyRichPresence()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (DiscordRpc is { } rpc) rpc.IsEnabled = s.DiscordRichPresenceEnabled && s.HasLinkedDiscord && !s.OfflineMode;
+            }
+            catch (Exception ex) { Serilog.Log.Debug("ApplyRichPresence: {E}", ex.Message); }
+            try { RichPresenceChanged?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Debug("RichPresenceChanged: {E}", ex.Message); }
+        }
 
         /// <summary>The Core quest board (WPF App.Quests), built by StartQuests before the shell.</summary>
         internal static QuestService? Quests { get; set; }
@@ -506,6 +529,12 @@ namespace ConditioningControlPanel.Avalonia
                 // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
+                // WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The
+                // client connects on its own thread; no Discord running is a logged failure, nothing else.
+                DiscordRpc = new Services.DiscordRichPresenceService();
+                ApplyRichPresence();
+                // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
+                ProgressionBank.LevelUp += level => { if (!Settings.Current.OfflineMode) DiscordRpc?.UpdateLevel(level); };
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
@@ -1084,6 +1113,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
