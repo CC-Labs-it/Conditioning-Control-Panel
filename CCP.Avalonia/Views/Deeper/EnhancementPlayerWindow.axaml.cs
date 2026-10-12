@@ -103,9 +103,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> EnhancementAudioPlayer (NAudio), EnhancementLibrary, WebcamTracking
-    ///         and the editor jump still live in the WPF head, so every handler that reached them is
-    ///         a stub. EnhancementHostService and DeeperFetcher no longer block anything: the host's
+    ///   <item><b>Services.</b> EnhancementAudioPlayer (NAudio), WebcamTracking and the editor jump
+    ///         still live in the WPF head, so every handler that reached them is a stub.
+    ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. What
     ///         does NOT come with them is the host's OTHER half — <c>Bind</c>, the rule engine and
@@ -591,7 +591,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         ///
         /// ponytail: this head leaves EnhancementResolver.LibraryMatchProvider unset, so the library
         /// tier never hits; the auto-promotion of an embedded enhancement into the library and its
-        /// 6 s toast need EnhancementLibrary, which has not moved. A media file whose enhancement
+        /// 6 s toast need an EnhancementLibrary instance (Core) this head does not construct yet. A media file whose enhancement
         /// lives only in the library lands in the "nothing found" branch and offers Create-new.
         /// </summary>
         private void TryAutoLoadEnhancement(string mediaPath)

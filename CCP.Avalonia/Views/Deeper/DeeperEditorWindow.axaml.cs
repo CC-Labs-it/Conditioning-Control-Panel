@@ -2378,7 +2378,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // absence is visible in exactly one place and noted there.
         // ---------------------------------------------------------------------------------
 
-        private const string EnhancementFileSuffix = ".ccpenh.json";
+        private const string EnhancementFileSuffix = ConditioningControlPanel.Services.Deeper.EnhancementLibrary.FileSuffix;
         private const int MaxRecentFiles = 10;
 
         private static readonly string[] AudioPatterns = { "*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg" };

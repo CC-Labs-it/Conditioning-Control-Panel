@@ -99,31 +99,31 @@ public sealed class EnhancementLibraryCoreTests
         var oldPost = CoreDispatch.PostProvider;
         var posted = 0;
         CoreDispatch.PostProvider = action => { Interlocked.Increment(ref posted); action(); };
-        var written = new List<string>();
         try
         {
-            using var library = new EnhancementLibrary();
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            using var library = new EnhancementLibrary(clock);
             var raised = 0;
-            using var fired = new ManualResetEventSlim();
-            library.LibraryChanged += (_, _) => { Interlocked.Increment(ref raised); fired.Set(); };
+            library.LibraryChanged += (_, _) => raised++;
 
-            // An atomic-save style burst: several writes well inside the 300 ms debounce.
+            // An atomic-save style burst: three watcher events 100 ms apart, inside the 300 ms debounce.
             for (var i = 0; i < 3; i++)
             {
-                var path = Path.Combine(library.LibraryFolder, $"burst-{Guid.NewGuid():N}{EnhancementLibrary.FileSuffix}");
-                File.WriteAllText(path, "{}");
-                written.Add(path);
+                library.ScheduleChangeNotification();
+                clock.Advance(TimeSpan.FromMilliseconds(100));
             }
 
-            Assert.True(fired.Wait(TimeSpan.FromSeconds(10)), "LibraryChanged never fired");
-            Thread.Sleep(800); // longer than the debounce: a second raise would have landed by now
+            clock.Advance(TimeSpan.FromMilliseconds(199));
+            Assert.Equal(0, raised); // 299 ms after the last event: still settling
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.Equal(1, raised);
+            clock.Advance(TimeSpan.FromSeconds(5));
             Assert.Equal(1, raised);
             Assert.Equal(1, posted);
         }
         finally
         {
             CoreDispatch.PostProvider = oldPost;
-            foreach (var p in written) File.Delete(p);
         }
     }
 }

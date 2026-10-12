@@ -26,11 +26,15 @@ namespace ConditioningControlPanel.Services.Deeper
         public event EventHandler? LibraryChanged;
 
         private FileSystemWatcher? _watcher;
-        private Timer? _debounceTimer;
+        private readonly TimeProvider _time;
+        private ITimer? _debounceTimer;
         private bool _disposed;
 
-        public EnhancementLibrary()
+        public EnhancementLibrary() : this(TimeProvider.System) { }
+
+        internal EnhancementLibrary(TimeProvider time)
         {
+            _time = time;
             LibraryFolder = Path.Combine(CorePaths.UserData, "enhancements");
             try { Directory.CreateDirectory(LibraryFolder); }
             catch (Exception ex) { Log.Warning(ex, "EnhancementLibrary: could not create library folder"); }
@@ -124,7 +128,7 @@ namespace ConditioningControlPanel.Services.Deeper
             catch { }
         }
 
-        private void ScheduleChangeNotification()
+        internal void ScheduleChangeNotification()
         {
             // Debounce on a threadpool timer, then raise on the UI thread through
             // CoreDispatch so subscribers can rebuild lists directly. With no UI
@@ -132,8 +136,9 @@ namespace ConditioningControlPanel.Services.Deeper
             try
             {
                 if (_disposed) return;
-                _debounceTimer ??= new Timer(_ => CoreDispatch.Post(RaiseLibraryChanged));
-                _debounceTimer.Change(DebounceMs, Timeout.Infinite);
+                _debounceTimer ??= _time.CreateTimer(_ => CoreDispatch.Post(RaiseLibraryChanged), null,
+                    Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _debounceTimer.Change(TimeSpan.FromMilliseconds(DebounceMs), Timeout.InfiniteTimeSpan);
             }
             catch { }
         }
