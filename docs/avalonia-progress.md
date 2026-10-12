@@ -1949,3 +1949,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-voice: +143
 - Fluent icons L4: She's Listening (21 voice-command rows -> IconLabel, gate padlock), lock card voice states, webcam calibration/gaze windows; icon-emoji 971->919, icon-prefixed-loc 234->233. Review P3s: hearts Filled + PinkBrush; shield, sparkle, pause Filled per design ref.
 - Left for L10: the Start/Stop listening button (text swapped in MainShellWindow.SheListening.cs).
+
+## avalonia-port/icons-progress: +506
+- Fluent icons on the quest, achievement, skill-tree and program surfaces and their 7 popups and dialogs (L5). Icon-led loc keys go through IconLabel/StrBare; gold/success/tier brushes follow the D tables.
+- Ratchets: icon-emoji 971→880, icon-prefixed-loc 234→210; census 1040→820. IconLabel.Args now re-renders, so a reroll count that changed under the same key no longer stays stale.
