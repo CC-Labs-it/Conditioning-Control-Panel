@@ -2205,7 +2205,7 @@
                                     <TextBlock Text="{Binding Text}"
                                                Foreground="White" FontSize="13"
                                                HorizontalAlignment="Center" TextAlignment="Center"
-                                               TextWrapping="Wrap" MaxHeight="36"
+                                               TextWrapping="Wrap" MaxLines="2"
                                                TextTrimming="CharacterEllipsis"
                                                MaxWidth="104" Margin="0,6,0,0"/>
                                 </StackPanel>
@@ -2257,7 +2257,7 @@
                                     <TextBlock Text="{Binding Text}"
                                                Foreground="White" FontSize="13"
                                                HorizontalAlignment="Center" TextAlignment="Center"
-                                               TextWrapping="Wrap" MaxHeight="36"
+                                               TextWrapping="Wrap" MaxLines="2"
                                                TextTrimming="CharacterEllipsis"
                                                MaxWidth="104" Margin="0,6,0,0"/>
                                 </StackPanel>
