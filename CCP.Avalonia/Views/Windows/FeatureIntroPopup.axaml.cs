@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -29,6 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Accent hex; falls back to app pink when unset or invalid.</summary>
         public string? Accent { get; init; }
         public string DismissLabel { get; init; } = "Got it";
+        /// <summary>Optional icon drawn after <see cref="DismissLabel"/> (the celebration's heart).</summary>
+        public IconKind? DismissIcon { get; init; }
 
         /// <summary>
         /// Optional CTA (v6.8.0, built for the one-account card). Both must be set or the card
@@ -263,9 +266,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Title = content.Title;
             txtTitle.Text = content.Title;
             this.FindControl<TextBlock>("TxtTagline")!.Text = content.Tagline;
-            this.FindControl<TextBlock>("RailGlyph")!.Text = content.Glyph;
+            this.FindControl<IconGlyph>("RailGlyph")!.Emoji = content.Glyph;
+            this.FindControl<IconGlyph>("TitleGlyph")!.Emoji = content.Glyph;
             txtRailTitle.Text = content.RailTitle;
-            btnDismiss.Content = content.DismissLabel;
+            btnDismiss.Content = content.DismissIcon is { } dismissIcon
+                ? new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 6,
+                    Children = { new TextBlock { Text = content.DismissLabel, VerticalAlignment = VerticalAlignment.Center },
+                                 new IconGlyph { Kind = dismissIcon, Variant = IconVariant.Filled, VerticalAlignment = VerticalAlignment.Center } },
+                }
+                : content.DismissLabel;
 
             txtFooter.Text = content.Footer ?? "";
             txtFooter.IsVisible = !string.IsNullOrWhiteSpace(content.Footer);
@@ -286,6 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 cardBorder.BorderBrush = accent;
                 txtTitle.Foreground = accent;
                 txtRailTitle.Foreground = accent;
+                this.FindControl<IconGlyph>("RailGlyph")!.Foreground = accent;   // the emoji's own colour, now the card's
                 this.FindControl<Rectangle>("RailGlow")!.Fill = GlowBrush(accent);
                 if (accent is ISolidColorBrush solid)
                 {
@@ -430,7 +442,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "awareness",
                 Glyph = "👁️",
                 RailTitle = "Awareness Engine",
-                Title = "👁️  The Awareness Engine",
+                Title = "The Awareness Engine",
                 Tagline = "She notices your words - on screen, and as you type.",
                 Accent = "#64C8FF",
                 Bullets = new[]
@@ -448,7 +460,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "shelistening",
                 Glyph = "🎙️",
                 RailTitle = "She's Listening",
-                Title = "🎙️  She's Listening",
+                Title = "She's Listening",
                 Tagline = "Voice control that never leaves your PC.",
                 Accent = "#B478FF",
                 Bullets = new[]
@@ -466,7 +478,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "blinktrainer",
                 Glyph = "😉",
                 RailTitle = "Blink Trainer",
-                Title = "😉  Blink Trainer",
+                Title = "Blink Trainer",
                 Tagline = "Every blink changes what you see.",
                 Accent = "#FF69B4",
                 Bullets = new[]
@@ -484,7 +496,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "lockdown",
                 Glyph = "🔒",
                 RailTitle = "Lockdown",
-                Title = "🔒  Lockdown",
+                Title = "Lockdown",
                 Tagline = "Lock yourself in - for as long as you dare.",
                 Accent = "#FF4D6D",
                 Bullets = new[]
@@ -507,7 +519,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "possession",
                 Glyph = "🕯️",
                 RailTitle = "Possession",
-                Title = "🔒  Possession",
+                Title = "Possession",
                 Tagline = "The room misbehaves while you're locked in.",
                 Accent = "#FF8A5C",
                 Bullets = new[]
@@ -525,7 +537,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "haptics",
                 Glyph = "📳",
                 RailTitle = "Haptics",
-                Title = "📳  Haptics",
+                Title = "Haptics",
                 Tagline = "Let her reach your toys.",
                 Accent = "#F783AC",
                 Bullets = new[]
@@ -548,7 +560,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "remotemedia",
                 Glyph = "🌐",
                 RailTitle = "Remote Media",
-                Title = "🌐  Remote Media",
+                Title = "Remote Media",
                 Tagline = "No folder of your own? She'll bring her own.",
                 Accent = "#5EC8F2",
                 Bullets = new[]
@@ -574,7 +586,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "studio-rack",
                 Glyph = "🎛️",
                 RailTitle = "The Studio",
-                Title = "🎛️  The Studio Rack",
+                Title = "The Studio Rack",
                 Tagline = "Every effect in one rack, instead of a popup for each.",
                 Accent = "#9B8CFF",
                 Bullets = new[]
@@ -592,7 +604,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "play-wall",
                 Glyph = "🎪",
                 RailTitle = "The Play Wall",
-                Title = "🎪  The Play Wall",
+                Title = "The Play Wall",
                 Tagline = "The Lab moved in here, and brought the whole toy box.",
                 Accent = "#FF9F45",
                 Bullets = new[]
@@ -610,7 +622,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "profile-hub",
                 Glyph = "🫧",
                 RailTitle = "Your Bubble",
-                Title = "🫧  The Header Bubble",
+                Title = "The Header Bubble",
                 Tagline = "That little avatar in the top-right corner is you.",
                 Accent = "#6EA8FF",
                 Bullets = new[]
@@ -628,7 +640,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "daily-free",
                 Glyph = "🎁",
                 RailTitle = "Free Today",
-                Title = "🎁  Today's Free Feature",
+                Title = "Today's Free Feature",
                 Tagline = "One premium feature, genuinely free, every single day.",
                 Accent = "#FFD700",
                 Bullets = new[]
@@ -651,7 +663,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "descent-vat",
                 Glyph = "🫙",
                 RailTitle = "The Vat",
-                Title = "🫙  The Vat",
+                Title = "The Vat",
                 Tagline = "Earn it anywhere. Pour it here.",
                 Accent = "#66E0C0",
                 Bullets = new[]
@@ -682,7 +694,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "descent-spiral",
                 Glyph = "🌀",
                 RailTitle = "The Spiral",
-                Title = "🌀  The Spiral",
+                Title = "The Spiral",
                 Tagline = "Every day you bank, you sink a little further.",
                 Accent = "#66E0C0",
                 Bullets = new[]
@@ -711,7 +723,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Key = "one-account",
                 Glyph = "🌐",
                 RailTitle = "One Account",
-                Title = "🌐  One Account",
+                Title = "One Account",
                 Tagline = "Desktop, web and mobile are windows onto the same account now.",
                 Accent = "#5EC8F2",
                 Bullets = new[]
@@ -759,7 +771,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Key = key,
             Glyph = "💖",
             RailTitle = "Thank You",
-            Title = "💖  " + tierName + " Unlocked",
+            Title = tierName + " Unlocked",
             Tagline = "Your support keeps the Lab running - and it just opened every door.",
             Accent = "#FF69B4",
             Bullets = new[]
@@ -770,7 +782,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 "Each exclusive tab introduces itself the first time you open it. Wander."
             },
             Footer = "Everything lives under the Exclusives menu. Enjoy - you earned it.",
-            DismissLabel = "Let's go 💖"
+            DismissLabel = "Let's go",
+            DismissIcon = IconKind.Heart
         };
     }
 }

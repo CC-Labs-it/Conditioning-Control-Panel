@@ -11,6 +11,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -55,7 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtProgress;
         private readonly Border _introPanel;
         private readonly Grid _validationPanel;
-        private readonly TextBlock _txtValidationCue;
+        private readonly IconGlyph _txtValidationCue;
         private readonly TextBlock _txtValidationPrompt;
         private readonly TextBlock _txtValidationDetail;
         private readonly TextBlock _txtValidationAttempt;
@@ -107,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtProgress = this.FindControl<TextBlock>("TxtProgress")!;
             _introPanel = this.FindControl<Border>("IntroPanel")!;
             _validationPanel = this.FindControl<Grid>("ValidationPanel")!;
-            _txtValidationCue = this.FindControl<TextBlock>("TxtValidationCue")!;
+            _txtValidationCue = this.FindControl<IconGlyph>("TxtValidationCue")!;
             _txtValidationPrompt = this.FindControl<TextBlock>("TxtValidationPrompt")!;
             _txtValidationDetail = this.FindControl<TextBlock>("TxtValidationDetail")!;
             _txtValidationAttempt = this.FindControl<TextBlock>("TxtValidationAttempt")!;
@@ -364,29 +365,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtTitle.Text = "Verifying calibration";
             _txtStatus.Text = "Follow the prompts to confirm the system can read your blinks and mouth.";
             _txtProgress.Text = "";
-            _txtValidationCue.Text = "";
+            _txtValidationCue.IsVisible = false;
             _txtValidationPrompt.Text = "Get ready…";
             _txtValidationDetail.Text = "A couple of quick gesture checks and you're done.";
             _txtValidationAttempt.Text = "";
             await Delay(1400);
             if (_cancelled) return;
 
-            await RunGestureCheckAsync("👁", "Blink a couple of times", 2, h => Tracker.OnBlink += h, h => Tracker.OnBlink -= h);
+            await RunGestureCheckAsync(IconKind.Eye, "Blink a couple of times", 2, h => Tracker.OnBlink += h, h => Tracker.OnBlink -= h);
             if (_cancelled) return;
-            await RunGestureCheckAsync("😮", "Open your mouth wide", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide", 1, null, null);
             if (_cancelled) return;
             _txtValidationDetail.Text = "Good — close, and once more in a moment…";
             await Delay(1000);
             if (_cancelled) return;
-            await RunGestureCheckAsync("😮", "Open your mouth wide again", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide again", 1, null, null);
         }
 
         /// <summary>WPF RunGestureCheckAsync + WaitFor*Async: up to 5 s for <paramref name="needed"/>
         /// events, then advance either way. A null subscribe (no detector) just times out.</summary>
-        private async Task RunGestureCheckAsync(string cue, string prompt, int needed, Action<Action>? add, Action<Action>? remove)
+        private async Task RunGestureCheckAsync(IconKind cue, string prompt, int needed, Action<Action>? add, Action<Action>? remove)
         {
             const int TimeoutMs = 5000;
-            _txtValidationCue.Text = cue;
+            _txtValidationCue.Kind = cue;
+            _txtValidationCue.IsVisible = true;
             _txtValidationPrompt.Text = prompt;
             _txtValidationDetail.Text = $"Detected: 0 / {needed}";
             _txtValidationAttempt.Text = "";
@@ -408,13 +410,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (got)
             {
                 WebcamQuickRecalWindow.Play("chime1.mp3", 0.45f);   // CalibrationSoundService.ValidationStepPass
-                var prevCue = _txtValidationCue.Text;
+                var prevCue = _txtValidationCue.Kind;
                 var prevColor = _txtValidationCue.Foreground;
-                _txtValidationCue.Text = "✓";
+                _txtValidationCue.Kind = IconKind.Checkmark;
                 _txtValidationCue.Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0xE0, 0x80));
                 _txtValidationDetail.Text = "Detected.";
                 await Delay(700);
-                _txtValidationCue.Text = prevCue;
+                _txtValidationCue.Kind = prevCue;
                 _txtValidationCue.Foreground = prevColor;
             }
             else

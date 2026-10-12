@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
 
@@ -22,8 +23,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static readonly IBrush CalMarker = new SolidColorBrush(Color.FromRgb(0xC8, 0x24, 0x4A));
         private static readonly IBrush CalRule = new SolidColorBrush(Color.FromArgb(0x38, 0x24, 0x1A, 0x2E));
         private static readonly FontFamily CalMono = new("Consolas, Courier New, monospace");
-        private static readonly Geometry KeyGlyph = Geometry.Parse(
-            "M 8,0 A 8,8 0 1 0 8,16 A 8,8 0 1 0 8,0 Z M 8,4.5 A 3.5,3.5 0 1 0 8,11.5 A 3.5,3.5 0 1 0 8,4.5 Z M 15,5.5 H 42 V 11 H 38.5 V 8.5 H 34.5 V 12.5 H 30.5 V 8.5 H 15 Z");
         private (DateTime Start, DateTime End, DateTime Today)? _calendarKey;
 
         /// <summary>WPF CalendarSpan: the lock's days in local time; nothing without an end or with a hidden timer.</summary>
@@ -74,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 plate.Children.Add(new Border
                 {
                     Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0x52)),
-                    Child = new Path { Data = KeyGlyph, Fill = CalInk, Stretch = Stretch.Uniform, Width = 24, Height = 10 },
+                    Child = new IconGlyph { Kind = IconKind.Key, Variant = IconVariant.Filled, Size = 22, Foreground = CalInk, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
                 });
                 tip = Loc.Get("chaster_chain_open");
             }
@@ -90,9 +89,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             else
             {
-                plate.Children.Add(new TextBlock
+                plate.Children.Add(new IconGlyph
                 {
-                    Text = "\U0001F512", FontSize = 9, Opacity = 0.5, Margin = new Thickness(0, 0, 4, 3),
+                    Kind = IconKind.LockClosed, Size = 9, Foreground = CalInk, Opacity = 0.5, Margin = new Thickness(0, 0, 4, 3),
                     HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
                 });
                 tip = Loc.GetF("chaster_cal_locked", dayNumber);

@@ -767,7 +767,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 Foreground = new SolidColorBrush(Color.FromRgb(0xF5, 0xF0, 0xE1)),
                 TextWrapping = TextWrapping.Wrap,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxHeight = 2 * CardLabelLine + 2,     // two lines: "The Arcademy" breaks at its space
+                MaxLines = 2,     // two lines: "The Arcademy" breaks at its space
                 TextAlignment = TextAlignment.Center,
             };
             grid.Children.Add(strip);

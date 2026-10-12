@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -162,12 +164,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     Cursor = new Cursor(open ? StandardCursorType.Hand : StandardCursorType.Arrow),
                     Opacity = open || chosen ? 1 : 0.4,
                     VerticalAlignment = VerticalAlignment.Top,
-                    Child = new TextBlock
+                    Child = new IconLabel
                     {
-                        Text = chosen ? "✓ " + choice.Label : choice.Label,
-                        Foreground = Brush.Parse(fg),
-                        FontSize = 13,
-                        FontWeight = FontWeight.SemiBold,
+                        Text = choice.Label,
+                        Kind = chosen ? IconKind.Checkmark : null,
+                        Spacing = 4,
+                        [TextElement.ForegroundProperty] = Brush.Parse(fg),
+                        [TextElement.FontSizeProperty] = 13.0,
+                        [TextElement.FontWeightProperty] = FontWeight.SemiBold,
                     },
                 };
                 if (card.Kind == AskKind.Watch && choice.Action == AskAction.Watch) ToolTip.SetTip(chip, card.Subject);

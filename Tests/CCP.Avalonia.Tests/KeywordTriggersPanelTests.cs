@@ -16,6 +16,8 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using Xunit;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -107,7 +109,7 @@ public sealed class KeywordTriggersPanelTests
         Assert.Equal((120, 40), (t.CooldownSeconds, t.AudioVolume));
         Assert.Contains(row.GetLogicalDescendants().OfType<TextBlock>(), b => b.Text == "120s");
 
-        Click(row.GetLogicalDescendants().OfType<Button>().Single(b => b.Content as string == "\u2716"));
+        Click(row.GetLogicalDescendants().OfType<Button>().Single(b => b.Content is IconGlyph { Kind: IconKind.Dismiss }));   // WPF ✖
         Assert.Empty(Rows(panel));
         Assert.Equal("preset:pack:1", Assert.Single(s.KeywordTriggers).Id);
     });

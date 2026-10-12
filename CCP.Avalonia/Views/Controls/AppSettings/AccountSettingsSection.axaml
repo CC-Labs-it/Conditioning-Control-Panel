@@ -53,8 +53,8 @@
                             Background="{DynamicResource DarkerBgBrush}"
                             BorderBrush="{StaticResource SectionHueAccountBorderBrush}" BorderThickness="1"
                             VerticalAlignment="Center">
-                        <TextBlock x:Name="TxtAccountTierBadge" Text="🔒"
-                                   Foreground="{DynamicResource TextLightBrush}" FontSize="14" FontWeight="Bold"/>
+                        <fx:IconGlyph x:Name="TxtAccountTierBadge" Kind="LockClosed" Variant="Filled" Size="16"
+                                      Foreground="{DynamicResource IconTier1Brush}"/>
                     </Border>
                 </Grid>
             </Grid>
@@ -213,7 +213,7 @@
                                 FontWeight="Bold" FontSize="12"
                                 Cursor="Hand" IsVisible="False"
                                 Click="BtnLinkPatreon_Click">
-                            <TextBlock x:Name="TxtBtnLinkPatreon" Text="{loc:Str btn_link_patreon}"/>
+                            <fx:IconLabel x:Name="TxtBtnLinkPatreon" Key="btn_link_patreon"/>
                         </Button>
                         <Button x:Name="BtnLinkDiscord"
                                 Background="#5865F2" Foreground="White"
@@ -221,7 +221,7 @@
                                 FontWeight="Bold" FontSize="12"
                                 Cursor="Hand" IsVisible="False"
                                 Click="BtnLinkDiscord_Click">
-                            <TextBlock x:Name="TxtBtnLinkDiscord" Text="{loc:Str btn_link_discord}"/>
+                            <fx:IconLabel x:Name="TxtBtnLinkDiscord" Key="btn_link_discord"/>
                         </Button>
                     </StackPanel>
                 </StackPanel>
@@ -250,7 +250,8 @@
                                 FontWeight="Bold" FontSize="12"
                                 Cursor="Hand"
                                 Click="BtnBackupSettingsNow_Click">
-                            <TextBlock Text="{loc:Str btn_backup_now}"/>
+                            <fx:IconLabel Key="btn_backup_now" Kind="Cloud"/>
+
                         </Button>
                         <Button x:Name="BtnRestoreSettings"
                                 Background="Transparent" Foreground="{DynamicResource SecondaryBrush}"

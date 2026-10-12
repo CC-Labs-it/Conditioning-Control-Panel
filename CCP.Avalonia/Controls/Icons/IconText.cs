@@ -46,6 +46,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>The text without its leading icon(s) or mirror.</summary>
         public static string Bare(string? s) => Split(s).Rest;
 
+        /// <summary>A loc string without its leading icon: the code twin of {loc:StrBare}, for a label whose
+        /// icon the caller draws as an IconGlyph beside it.</summary>
+        public static string BareLoc(string key, params object[] args) =>
+            Bare(args.Length > 0 ? ConditioningControlPanel.Localization.Loc.GetF(key, args) : ConditioningControlPanel.Localization.Loc.Get(key));
+
         /// <summary>An icon cluster: mapped in <see cref="IconMap"/>, carrying VS16, or starting in
         /// a pictograph/symbol block (the oracle's guard ranges; .NET has no Extended_Pictographic).</summary>
         public static bool IsIconCluster(string cluster)

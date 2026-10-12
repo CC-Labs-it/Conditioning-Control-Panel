@@ -21,6 +21,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Windows"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.SessionCompleteWindow"
         Title="{loc:Str dialog_session_complete}"
@@ -195,10 +196,9 @@
                                                            TextTrimming="CharacterEllipsis"
                                                            VerticalAlignment="Center"
                                                            Margin="6,0,8,0"/>
-                                                <TextBlock Grid.Column="3"
-                                                           Text="↗"
-                                                           Foreground="#808090" FontSize="14"
-                                                           VerticalAlignment="Center"/>
+                                                <fx:IconGlyph Grid.Column="3" Kind="Open" Size="14"
+                                                              Foreground="#808090"
+                                                              VerticalAlignment="Center"/>
                                             </Grid>
                                         </Button>
                                     </DataTemplate>
@@ -217,7 +217,11 @@
                     HorizontalAlignment="Center">
                 <!-- A TextBlock child, not Content: Avalonia parses "_" in Content as an access key
                      and every loc key here is snake_case (CLAUDE.md trap 1). -->
-                <TextBlock Text="{loc:Str btn_continue}"/>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <!-- btn_continue's 💗, Filled and white: a pink heart on the pink button vanishes. -->
+                    <fx:IconGlyph Kind="Heart" Variant="Filled" Size="16" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:StrBare btn_continue}" VerticalAlignment="Center"/>
+                </StackPanel>
             </Button>
         </Grid>
     </Border>

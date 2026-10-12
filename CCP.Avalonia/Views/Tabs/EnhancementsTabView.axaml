@@ -52,7 +52,7 @@
         <StackPanel IsVisible="False">
             <TextBlock x:Name="TxtSkillPoints" Text="0"/>
             <TextBlock x:Name="TxtXpMultiplier" Text="1.00x"/>
-            <TextBlock x:Name="TxtPinkRushIndicator" Text="{loc:Str label_rush}"/>
+            <fx:IconLabel x:Name="TxtPinkRushIndicator" Key="label_rush"/>
             <TextBlock x:Name="TxtConditioningTime" Text="{loc:Str label_0h_0m}"/>
             <WrapPanel x:Name="ActiveBonusesList"/>
             <Border x:Name="ActiveBonusesPanel"/>
@@ -109,9 +109,9 @@
                         Background="{DynamicResource PinkBrush}"/>
                 <Grid Margin="16,5,16,6" ColumnDefinitions="Auto,*">
                     <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
-                        <TextBlock Text="{loc:Str label_secret_skills}"
-                                   Foreground="{DynamicResource PinkBrush}"
-                                   FontSize="12" FontWeight="Bold"/>
+                        <fx:IconLabel Key="label_secret_skills"
+                                      TextElement.Foreground="{DynamicResource PinkBrush}"
+                                      TextElement.FontSize="12" TextElement.FontWeight="Bold"/>
                         <TextBlock Text="{loc:Str label_secret_skills_sub}"
                                    Foreground="{StaticResource TextMutedBrush}" FontSize="9" FontStyle="Italic"
                                    Margin="0,1,0,0"/>
@@ -128,7 +128,8 @@
                 BorderBrush="{StaticResource TabHueBorderBrush}" BorderThickness="2"
                 Margin="20,3,20,8" IsVisible="False">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40">
-                <TextBlock Text="&#x1F512;" FontSize="44" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+                <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="44" Foreground="{DynamicResource IconTier1Brush}"
+                              HorizontalAlignment="Center" Margin="0,0,0,15"/>
                 <TextBlock Text="{loc:Str label_login_required}" Foreground="{DynamicResource PinkBrush}" FontSize="22" FontWeight="Bold"
                            HorizontalAlignment="Center" Margin="0,0,0,10"/>
                 <TextBlock Text="{loc:Str label_log_in_with_discord_or_patreon_to_access_enha}"

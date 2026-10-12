@@ -55,5 +55,38 @@ namespace CCP.Avalonia.Tests
             Assert.True(t.Join(TimeSpan.FromSeconds(20)));
             Assert.Null(got);                                   // a bare relaunch
         }
+
+        /// <summary>A sandbox profile (CCP_USERDATA_DIR, as kc and the tests use) never wakes or blocks the
+        /// user's real instance: its mutex/pipe names carry a per-directory suffix; a shipped build has none.</summary>
+        [Fact]
+        public void ASandboxProfileIsItsOwnInstance()
+        {
+            var saved = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR");
+            try
+            {
+                Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", null);
+                Assert.Equal("", SingleInstance.SandboxSuffix());   // WPF's exact names
+                Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", "/tmp/ccp-sandbox-a-" + Guid.NewGuid().ToString("N"));
+                var a = SingleInstance.SandboxSuffix();
+                Assert.Equal(a, SingleInstance.SandboxSuffix());     // stable for one directory
+                Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", "/tmp/ccp-sandbox-b-" + Guid.NewGuid().ToString("N"));
+                var b = SingleInstance.SandboxSuffix();
+                Assert.NotEqual("", a);
+                Assert.NotEqual(a, b);
+
+                // Two profiles both own their instance: neither launch asks the other to show and exits.
+                int shown = 0;
+                using var first = SingleInstance.Claim(a, _ => { Interlocked.Increment(ref shown); return Task.CompletedTask; });
+                SingleInstance? second = null;
+                var t = new Thread(() => second = SingleInstance.Claim(b, _ => Task.CompletedTask));
+                t.Start();
+                Assert.True(t.Join(TimeSpan.FromSeconds(20)));
+                Assert.NotNull(first);
+                Assert.NotNull(second);
+                Assert.Equal(0, Volatile.Read(ref shown));
+                second!.Dispose();
+            }
+            finally { Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", saved); }
+        }
     }
 }

@@ -9,6 +9,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -69,7 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static string _sharedInput = "";
 
         private readonly TextBox _txtAnswer;
-        private readonly TextBlock _txtAttempts, _txtFeedback, _txtStrict, _txtEscHint;
+        private readonly TextBlock _txtAttempts, _txtStrict, _txtEscHint;
+        private readonly IconLabel _txtFeedback;
+        private readonly IconGlyph _feedbackMirror;
         private readonly Button _btnSubmit;
 
         /// <summary>Render/design constructor: sample data so --render-view can draw the window.</summary>
@@ -82,7 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             _txtAnswer = this.FindControl<TextBox>("TxtAnswer")!;
             _txtAttempts = this.FindControl<TextBlock>("TxtAttempts")!;
-            _txtFeedback = this.FindControl<TextBlock>("TxtFeedback")!;
+            _txtFeedback = this.FindControl<IconLabel>("TxtFeedback")!;
+            _feedbackMirror = this.FindControl<IconGlyph>("FeedbackMirror")!;
             _txtStrict = this.FindControl<TextBlock>("TxtStrict")!;
             _txtEscHint = this.FindControl<TextBlock>("TxtEscHint")!;
             _btnSubmit = this.FindControl<Button>("BtnSubmit")!;
@@ -250,7 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Correct! XP scaled by video duration.
                 var xp = Services.BubbleCountScheduler.ScaleXpByDuration(250, BubbleCountWindow.LastVideoDurationSeconds);
                 CoreProgression.AddXP(xp, "BubbleCount");
-                ShowFeedbackOnAll($"🎉 CORRECT! +{xp} XP 🎉", Color.FromRgb(50, 205, 50));
+                ShowFeedbackOnAll($"CORRECT! +{xp} XP", Color.FromRgb(50, 205, 50), IconKind.Sparkle, mirror: true);
                 DisableInputOnAll();
                 StopWatchdog(); // terminal success: no more input expected
 
@@ -292,19 +296,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     // Give hint
                     string hint = answer < _correctAnswer ? "Too low! Try higher." : "Too high! Try lower.";
-                    ShowFeedbackOnAll($"❌ {hint}", Color.FromRgb(255, 107, 107));
+                    ShowFeedbackOnAll(hint, Color.FromRgb(255, 107, 107), IconKind.DismissCircle);
                     _txtAnswer.Clear();
                     _txtAnswer.Focus();
                 }
             }
         }
 
-        private void ShowFeedbackOnAll(string message, Color color)
+        // WPF "🎉 CORRECT! … 🎉" / "❌ hint": the glyph is an icon (fluent-icons 2026-10-10), the 🎉 mirrored.
+        private void ShowFeedbackOnAll(string message, Color color, IconKind? icon = null, bool mirror = false)
         {
             foreach (var window in _allWindows)
             {
+                window._txtFeedback.Kind = icon;
                 window._txtFeedback.Text = message;
-                window._txtFeedback.Foreground = new SolidColorBrush(color);
+                if (icon is { } k) window._feedbackMirror.Kind = k;
+                window._feedbackMirror.IsVisible = mirror && icon != null;
+                window._feedbackMirror[global::Avalonia.Controls.Documents.TextElement.ForegroundProperty] = new SolidColorBrush(color);
+                window._txtFeedback[global::Avalonia.Controls.Documents.TextElement.ForegroundProperty] = new SolidColorBrush(color);
                 window._txtFeedback.IsVisible = true;
             }
         }

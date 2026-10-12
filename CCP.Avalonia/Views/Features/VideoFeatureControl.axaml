@@ -16,6 +16,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.VideoFeatureControl">
 
     <!-- Velvet Kit 2 density pass. The root stays a StackPanel: MainWindow.SessionFeatureLock.cs
@@ -36,8 +37,7 @@
                     </Border.OpacityMask>
                 </Border>
                 <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                    <TextBlock Text="{loc:Str section_mandatory_video}" FontSize="17" FontWeight="Bold"
-                               Foreground="{StaticResource TextLightBrush}"/>
+                    <fx:IconLabel Key="section_mandatory_video" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                     <TextBlock Text="{loc:Str tooltip_turn_mandatory_videos_on_or_off}" FontSize="11.5"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"/>
                 </StackPanel>
@@ -101,8 +101,8 @@
                                 <TextBlock Grid.Column="2" x:Name="TxtVideoMinDur" Text="off" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
-                                <TextBlock Grid.Column="3" Text="&#x2192;" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
+                                <fx:IconGlyph Grid.Column="3" Kind="ArrowRight" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Foreground="{StaticResource TextDimBrush}" Size="11"/>
                                 <Slider Grid.Column="4" x:Name="SliderVideoMaxDur" sessionLock:SessionLock.Owned="True" Minimum="0" Maximum="1800" Value="0"
                                         VerticalAlignment="Center" Margin="8,0,8,0"/>
                                 <TextBlock Grid.Column="5" x:Name="TxtVideoMaxDur" Text="off" HorizontalAlignment="Right"
@@ -151,8 +151,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_strict}" Foreground="#FFB347"
-                                           FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="setting_strict" TextElement.Foreground="#FFB347" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkStrict"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
@@ -173,8 +172,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_mini_game}" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="label_mini_game" TextElement.Foreground="{DynamicResource PinkBrush}" TextElement.FontSize="14" TextElement.FontWeight="Bold" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkMiniGame" sessionLock:SessionLock.Owned="True" Theme="{StaticResource ToggleStyle}"
                                           HorizontalAlignment="Right" VerticalAlignment="Center"
                                           ToolTip.Tip="{loc:Str tooltip_enable_attention_check_targets}"/>
@@ -192,9 +190,9 @@
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{loc:Str label_targets}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <CheckBox x:Name="ChkRandomize" sessionLock:SessionLock.Owned="True" Margin="8,0,0,0" VerticalAlignment="Center"
+                                    <CheckBox x:Name="ChkRandomize" sessionLock:SessionLock.Owned="True" AutomationProperties.Name="{loc:StrBare tooltip_randomize_target_count_1_to_max}" Margin="8,0,0,0" VerticalAlignment="Center"
                                               ToolTip.Tip="{loc:Str tooltip_randomize_target_count_1_to_max}">
-                                        <TextBlock Text="🎲" FontSize="12"/>
+                                        <fx:IconGlyph Kind="ArrowShuffle" Size="12"/>
                                     </CheckBox>
                                 </StackPanel>
                                 <Slider Grid.Column="1" x:Name="SliderTargets" sessionLock:SessionLock.Owned="True" Minimum="1" Maximum="10" Value="3"
@@ -260,12 +258,12 @@
                                 <Button Grid.Column="0" x:Name="BtnManageAttention"
                                         ToolTip.Tip="{loc:Str tooltip_edit_attention_check_phrases}"
                                         Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch">
-                                    <TextBlock Text="{loc:Str btn_phrases}"/>
+                                    <fx:IconLabel Key="btn_phrases"/>
                                 </Button>
                                 <Button Grid.Column="2" x:Name="BtnAttentionStyle"
                                         ToolTip.Tip="{loc:Str tooltip_customize_target_appearance_colors_border_fon}"
                                         Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch">
-                                    <TextBlock Text="{loc:Str btn_style}"/>
+                                    <fx:IconLabel Key="btn_style"/>
                                 </Button>
                             </Grid>
                         </StackPanel>
@@ -273,7 +271,7 @@
                 </Border>
 
                 <Button x:Name="BtnTestVideo" Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch">
-                    <TextBlock Text="{loc:Str btn_test_2}"/>
+                    <fx:IconLabel Key="btn_test_2"/>
                 </Button>
             </StackPanel>
 

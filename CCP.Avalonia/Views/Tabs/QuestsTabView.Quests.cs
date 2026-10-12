@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -99,20 +101,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         });
 
         /// <summary>MainWindow.QuestsTab.cs:115; the XP is QuestService.ScaledQuestXp, what CompleteQuest pays.</summary>
-        internal static (int Xp, string? Bonus) ComputeQuestXpDisplay(QuestDefinition def, AppSettings s)
+        internal static (int Xp, int StreakPct, int RerollPct) ComputeQuestXpDisplay(QuestDefinition def, AppSettings s)
         {
             var rerollMult = SkillTreeRules.GetRerollBonusMultiplier(s);
             // The streak this completion pays at (the day's first daily advances it first).
             var streak = App.Quests?.StreakPaidOn(def.Type, s) ?? s.DailyQuestStreak;
             var xp = QuestService.ScaledQuestXp(def.XPReward, s, streak);
-            string? bonus = null;
-            if (streak > 0) bonus = $"+{streak * 3}%\U0001f525";
-            if (rerollMult > 1.0)
-            {
-                var r = $"+{(int)((rerollMult - 1.0) * 100)}%\U0001f503";
-                bonus = bonus == null ? r : $"{bonus} {r}";
-            }
-            return (xp, bonus);
+            // WPF "+N%🔥 +M%🔃": the glyphs are drawn by DailyQuestCard.SetBonus.
+            return (xp, streak > 0 ? streak * 3 : 0, rerollMult > 1.0 ? (int)((rerollMult - 1.0) * 100) : 0);
         }
 
         // Server-rolled quests have no loc key, so the lookup returns the raw key (WPF :150).
@@ -121,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private static DailyQuestCardModel BuildDailyCardModel(int slot, ActiveQuest quest, QuestDefinition def, int rerollsLeft, AppSettings s)
         {
-            var (xp, bonus) = ComputeQuestXpDisplay(def, s);
+            var (xp, streakPct, rerollPct) = ComputeQuestXpDisplay(def, s);
             bool canReroll = !quest.IsCompleted && rerollsLeft > 0;
             return new DailyQuestCardModel
             {
@@ -132,13 +128,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Current = quest.CurrentProgress,
                 Target = def.TargetValue,
                 IsCompleted = quest.IsCompleted,
-                XpText = $"\U0001f381 {xp} XP",
-                BonusText = bonus,
+                XpText = $"{xp} XP",
+                StreakBonusPct = streakPct,
+                RerollBonusPct = rerollPct,
                 // ponytail: no quest art - GetModeAwareQuestImagePath resolves pack:// resources this
                 // head does not ship; the card draws its icon instead.
                 Art = null,
                 CanReroll = canReroll,
-                RerollText = canReroll ? Loc.GetF("btn_reroll_with_count", rerollsLeft) : Loc.Get("btn_reroll_none"),
+                RerollKey = canReroll ? "btn_reroll_with_count" : "btn_reroll_none",
+                RerollCount = rerollsLeft,
                 RerollTooltip = canReroll ? Loc.Get("quest_card_reroll_tip") : Loc.Get("quest_card_reroll_tip_none"),
             };
         }
@@ -172,27 +170,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _dailyCards[i].Apply(BuildDailyCardModel(i, quest, def, rerollsLeft, s));
             }
 
-            TxtDailyRerollPool.Text = allDailyDone ? ""
-                : rerollsLeft > 1 ? Loc.GetF("quest_daily_pool_many", rerollsLeft)
-                : rerollsLeft == 1 ? Loc.Get("quest_daily_pool_one")
-                : Loc.Get("quest_daily_pool_none");
+            TxtDailyRerollPool.IsVisible = !allDailyDone;
+            TxtDailyRerollPool.Args = rerollsLeft > 1 ? new object[] { rerollsLeft } : null;
+            TxtDailyRerollPool.Key = rerollsLeft > 1 ? "quest_daily_pool_many"
+                : rerollsLeft == 1 ? "quest_daily_pool_one" : "quest_daily_pool_none";
 
             var weeklyDef = quests.GetCurrentWeeklyDefinition();
             var weekly = quests.Progress.WeeklyQuest;
-            var rerollText = (TextBlock)BtnRerollWeekly.Content!;
+            var rerollText = TxtWeeklyReroll;
             if (weeklyDef != null && weekly != null)
             {
-                TxtWeeklyQuestIcon.Text = weeklyDef.Icon;
+                TxtWeeklyQuestIcon.Emoji = weeklyDef.Icon;   // collapsed, as in WPF
                 TxtWeeklyQuestName.Text = CoreMods.MakeModAware(weeklyDef.Name);
                 TxtWeeklyQuestDesc.Text = CoreMods.MakeModAware(weeklyDef.Description);
                 TxtWeeklyProgress.Text = $"{weekly.CurrentProgress} / {weeklyDef.TargetValue}";
-                var (xp, _) = ComputeQuestXpDisplay(weeklyDef, s);
-                TxtWeeklyXP.Text = $"\U0001f381 {xp} XP";
+                var (xp, _, _) = ComputeQuestXpDisplay(weeklyDef, s);
+                TxtWeeklyXP.Text = $"{xp} XP";
+                WeeklyXpIcon.IsVisible = true;
                 var rerollMult = SkillTreeRules.GetRerollBonusMultiplier(s);
-                TxtWeeklyStreakBonus.Text = $"(+{s.DailyQuestStreak * 3}%\U0001f525)";
-                TxtWeeklyStreakBonus.IsVisible = s.DailyQuestStreak > 0;
-                TxtWeeklyRerollBonus.Text = $"(+{(int)((rerollMult - 1.0) * 100)}%\U0001f503)";
-                TxtWeeklyRerollBonus.IsVisible = rerollMult > 1.0;
+                TxtWeeklyStreakBonus.IsVisible = DailyQuestCard.SetBonus(TxtWeeklyStreakBonus, s.DailyQuestStreak * 3, 0, "(", ")");
+                TxtWeeklyRerollBonus.IsVisible = DailyQuestCard.SetBonus(TxtWeeklyRerollBonus, 0, rerollMult > 1.0 ? (int)((rerollMult - 1.0) * 100) : 0, "(", ")");
                 _weeklyFraction = weeklyDef.TargetValue > 0
                     ? Math.Min(1.0, (double)weekly.CurrentProgress / weeklyDef.TargetValue) : 0;
                 ApplyWeeklyBar();
@@ -200,20 +197,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 WeeklyCompletedOverlay.IsVisible = weekly.IsCompleted;
                 int weeklyRerolls = quests.GetRemainingWeeklyRerolls();
                 BtnRerollWeekly.IsEnabled = !weekly.IsCompleted && weeklyRerolls > 0;
-                rerollText.Text = weekly.IsCompleted ? Loc.Get("btn_completed")
-                    : weeklyRerolls > 0 ? $"🔄 Reroll ({weeklyRerolls} left)" : "🔄 No rerolls left";
+                // btn_completed carries its own icon; the English reroll strings get ArrowSync (WPF "🔄 ...").
+                rerollText.Kind = weekly.IsCompleted ? null : IconKind.ArrowSync;
+                rerollText.Text = weekly.IsCompleted ? null
+                    : weeklyRerolls > 0 ? $"Reroll ({weeklyRerolls} left)" : "No rerolls left";
+                rerollText.Key = "btn_completed";
             }
             else if (weekly is { IsCompleted: true })
             {
                 // Rotated-away definition of a finished weekly (#496): a "done for the week" card.
-                TxtWeeklyQuestIcon.Text = "✅";
+                TxtWeeklyQuestIcon.Emoji = null;   // WPF wrote "✅" into the collapsed block
                 TxtWeeklyQuestName.Text = Loc.Get("quest_weekly_done_name");
                 TxtWeeklyQuestDesc.Text = Loc.Get("quest_weekly_done_desc");
                 TxtWeeklyProgress.Text = TxtWeeklyXP.Text = "";
+                WeeklyXpIcon.IsVisible = false;
                 TxtWeeklyStreakBonus.IsVisible = TxtWeeklyRerollBonus.IsVisible = false;
                 WeeklyCompletedOverlay.IsVisible = true;
                 BtnRerollWeekly.IsEnabled = false;
-                rerollText.Text = Loc.Get("btn_completed");
+                rerollText.Kind = null;
+                rerollText.Text = null;
+                rerollText.Key = "btn_completed";
             }
 
             // Desktop totals + the adopted read-only mobile ledger (WPF :318).
@@ -223,8 +226,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtStreakFixCharges.Text = s.StreakFixCharges.ToString();
             TxtQuestStats.Text = $"{dailyCompleted + (weekly?.IsCompleted == true ? 1 : 0)} completed today";
             // The bonus the next daily pays at, as the daily cards quote it.
-            TxtQuestStreakCount.Text = s.DailyQuestStreak > 0
-                ? $"\U0001f525 {s.DailyQuestStreak} day streak (+{quests.StreakPaidOn(QuestType.Daily, s) * 3}% XP)" : "";
+            TxtQuestStreakCount.Inlines = s.DailyQuestStreak > 0
+                ? new InlineCollection
+                {
+                    new InlineUIContainer(IconGlyph.Of(IconKind.Fire, IconVariant.Filled, IconBrushes.Fire, 13)) { BaselineAlignment = BaselineAlignment.Center },
+                    new Run($" {s.DailyQuestStreak} day streak (+{quests.StreakPaidOn(QuestType.Daily, s) * 3}% XP)"),
+                }
+                : new InlineCollection();
 
             PaintStreakCalendar();
         }
@@ -279,7 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 StreakCalendarCanvas.Children.Add(node);
                 if (shielded.Contains(day))
                 {
-                    var shield = new TextBlock { Text = "🛡️", FontSize = 10 };
+                    var shield = IconGlyph.Of(IconKind.Shield, IconVariant.Filled, null, 10);
                     Canvas.SetLeft(shield, x - 6);
                     Canvas.SetTop(shield, centerY - size / 2 - 12);
                     StreakCalendarCanvas.Children.Add(shield);

@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _billOpen = !_billOpen;
             if (_billOpen) Receipt.Show(ChasterHead.Service?.Bill());
             ReceiptHost.IsVisible = _billOpen;
-            TxtRunChevron.Text = _billOpen ? "\u25B4" : "\u25BE";
+            TxtRunChevron.Kind = _billOpen ? IconKind.ChevronUp : IconKind.ChevronDown;
         }
 
         private IBrush FigureBrush(int seconds) =>
