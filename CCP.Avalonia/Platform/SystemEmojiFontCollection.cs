@@ -62,8 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             using var asset = tf.OpenStream(out var index);
             if (asset is null || index != 0) return null;
             var bytes = new byte[asset.Length];
-            asset.Read(bytes, bytes.Length);   // inside the using: the asset outlives the copy
-            return new MemoryStream(bytes, writable: false);
+            // Inside the using: the asset outlives the copy. A short read fails closed (bundled Noto Emoji answers).
+            return asset.Read(bytes, bytes.Length) == bytes.Length ? new MemoryStream(bytes, writable: false) : null;
         }
     }
 }

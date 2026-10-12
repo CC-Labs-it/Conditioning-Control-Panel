@@ -1051,7 +1051,8 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Test: `BlinkStopTests.SixTrackerBlinksStopEverythingButTheCamera` asserts the exact set and the kept surfaces.
 
 ## 2026-10-12: Colour emoji never get a synthetic bold/italic (avalonia-port/render-all-segv)
-- Problem: `--render-all` died with SIGSEGV (exit 139) on ~1 in 4 CI runs. CI crash dump (run 38206867189): main thread in
+- Problem: `--render-all` died with SIGSEGV (exit 139) on CI runs 38186452139, 38187923096, 38190459151, 38203253619 and
+  38206867189 (pass 1 of 8 in a diagnostic loop; 16 more passes in 38206861559/38206872442 were clean). CI crash dump (run 38206867189): main thread in
   libc memcpy <- libSkiaSharp `sk_stream_read` <- Avalonia.Skia `SkiaTypeface.TryGetStream` <- `FontCollectionBase.
   TryCreateSyntheticGlyphTypeface("emoji", Bold)` <- `TextBlock.Measure`. TryGetStream (Avalonia 12.1.2-12.1.4 and master)
   copies from an `SKStreamAsset` it never disposes or keeps alive; in optimised code a GC on another thread finalizes it
@@ -1062,7 +1063,9 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   (`IFontManagerImpl.TryCreateGlyphTypeface(Stream, FontSimulations, ...)` is stripped from the reference assembly); no
   reflection, no runtime patching.
 - Visual delta (measured, ~/ccp-port/evidence/render-all-segv/emoji-delta/compare.png): bold text: none (0 pixels differ;
-  Skia's synthetic bold already drew Noto Color Emoji unchanged); italic text: emoji upright instead of skewed. Whether WPF/DirectWrite skews colour emoji is unverified. The emoji font now lives in memory (~11 MB)
+  Skia's synthetic bold already drew Noto Color Emoji unchanged); italic text: emoji upright instead of skewed. WPF's EmojiTextBlock draws colour emoji as inline Twemoji
+  Images (`ConditioningControlPanel/Helpers/EmojiTextBlock.cs:11-14`), which do not slant either; plain WPF TextBlocks draw
+  Segoe UI Emoji silhouettes, whose slant is not measured. The emoji font now lives in memory (~11 MB)
   instead of a file mapping.
 - Residual: Inter, Fredoka, the bundled Noto Emoji, Noto Sans Mono and system fallback fonts still go through Avalonia's
   synthesis (copies of 0.06-2 MB, from memory or a mapping); any TryGetStream call stays unsafe until Avalonia fixes it
