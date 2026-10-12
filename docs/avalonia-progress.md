@@ -1908,3 +1908,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-guard: +355
 - IconGuardTests: font-codepoint hard 0 (1 temporary entry), emoji/loc/Path ratchets (971/234/26) failing both ways, FluentIcons isolation, allowlist liveness on comment-stripped code, with per-line counts for Path entries and reasoned whole-file art entries; every guard mutation-proven.
 - `--render-all` icon census line (1040 icon-led texts, 158 unnamed icon-only buttons); evidence in ~/ccp-port/evidence/icons/icons-guard/.
+
+## avalonia-port/sandbox-full-access: +158
+- Debug+sandbox runs with CCP_SANDBOX_WHITELIST=1 (set by kc start) get whitelist/premium/Lab; Release compiles it out.
+- Tier card shows "Whitelisted (sandbox)"; tests + Release-IL check + live evidence in evidence/sandbox-full-access.
