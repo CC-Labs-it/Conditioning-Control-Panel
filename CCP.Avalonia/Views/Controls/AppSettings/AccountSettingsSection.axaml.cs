@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 if (AccountSeed.SubscribeStar is { } ss) ss.TierChanged -= tier;
                 if (chaster is { } c) { c.ProfileChanged -= chasterChanged; c.LinkChanged -= chasterChanged; c.LockChanged -= chasterChanged; }
                 chaster = null;
+                _linkCts?.Cancel(); // a Link waiting on the browser frees its callback port with the page
             };
         }
 
@@ -307,6 +308,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
             button.IsEnabled = false;
             Find<TextBlock>(labelName).Text = Loc.Get("login_connecting");
+            using var cts = _linkCts = new System.Threading.CancellationTokenSource();
+            var ct = cts.Token;
             var top = TopLevel.GetTopLevel(this);
             Action<string> open = url =>
             {
@@ -316,7 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             try
             {
                 // No network: fail now with the link-failed copy rather than wait out the 5-minute OAuth.
-                if (!await LoginDialog.ProxyReachable(default))
+                if (!await LoginDialog.ProxyReachable(ct))
                 {
                     await Tell(Owner, Loc.Get("account_link_failed_title"), Loc.GetF("account_link_failed_generic", provider));
                     return;
@@ -325,13 +328,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 if (provider == "discord")
                 {
                     if (AccountSeed.Discord is not { } d) return;
-                    await d.SignInAsync(open);
+                    await d.SignInAsync(open, ct);
                     token = d.GetAccessToken();
                 }
                 else
                 {
                     if (AccountSeed.Patreon is not { } p) return;
-                    await p.SignInAsync(open);
+                    await p.SignInAsync(open, ct);
                     token = p.GetAccessToken();
                 }
                 if (string.IsNullOrEmpty(token)) return;
@@ -359,6 +362,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Shell?.UpdateQuickLoginUI();
             }
             catch (OperationCanceledException) { }
+            // Core ends a cancelled browser wait as a timeout; here that is the page going away, not a failure.
+            catch (TimeoutException) when (ct.IsCancellationRequested) { Log.Information("{Provider} link stopped: the page closed", provider); }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to link {Provider}", provider);
@@ -366,10 +371,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
             finally
             {
+                if (_linkCts == cts) _linkCts = null;
                 button.IsEnabled = true;
                 Refresh();
             }
         }
+
+        private System.Threading.CancellationTokenSource? _linkCts;
 
         // ---- Chaster (WPF AccountSettingsSection.xaml.cs RefreshChaster) ----
 

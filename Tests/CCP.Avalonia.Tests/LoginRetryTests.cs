@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -152,6 +153,26 @@ public sealed class LoginRetryTests
         Assert.Equal(Loc.GetF("account_link_failed_generic", "discord"), told);
         Assert.False(AccountSeed.Discord!.IsVerifying);
         await Until(() => link.IsEnabled, "the button comes back");
+    });
+
+    /// <summary>A Link left waiting on the browser ends when the section leaves the tree (review P3): the latch and
+    /// callback port are freed at once, with no failure message.</summary>
+    [Fact]
+    public Task LeavingTheSectionEndsAWaitingLink() => WithShell(async (shell, s) =>
+    {
+        s.UnifiedId = "u_link";
+        LoginDialog.ProxyReachable = _ => Task.FromResult(true);
+        string? told = null;
+        AccountSettingsSection.Tell = (_, _, body) => { told = body; return Task.CompletedTask; };
+        shell.OpenAppSettingsSection("account");
+        var section = shell.AppSettingsPage!.FindControl<AccountSettingsSection>("SectionAccount")!;
+        await Until(() => section.IsAttachedToVisualTree(), "the Account section is on screen");
+        Click(section.FindControl<Button>("BtnLinkDiscord")!);
+        await Until(() => AccountSeed.Discord!.IsVerifying, "the Link flow waits on the browser");
+        ((Panel)section.Parent!).Children.Remove(section);
+        Assert.False(section.IsAttachedToVisualTree(), "detached after");
+        await Until(() => !AccountSeed.Discord!.IsVerifying, "leaving the section ended the flow");
+        Assert.Null(told);
     });
 
     /// <summary>WPF UpdateOfflineModeUI greys the Home Login button too (MainWindow.UiUpdates.cs, "Unified login button").</summary>
