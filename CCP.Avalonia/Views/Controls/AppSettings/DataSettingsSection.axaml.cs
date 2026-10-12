@@ -39,6 +39,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             SyncFromSettings();
         }
 
+        /// <summary>Settings > Data > Open logs folder (WPF MainWindow.UiUpdates.cs BtnViewLog_Click,
+        /// wired by 7e50c9381): the user-data logs folder in the file manager, else "no logs".</summary>
+        private async void BtnOpenLogsFolder_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var logPath = Path.Combine(CorePaths.UserData, "logs");
+                if (Directory.Exists(logPath)) Platform.ExternalOpener.Open(logPath);
+                else if (TopLevel.GetTopLevel(this) is Window owner)
+                    await Dialogs.MessageDialog.ShowAsync(owner, "Info", Loc.Get("msg_no_logs_found"));
+            }
+            catch (Exception ex) { Log.Warning(ex, "Open logs folder failed"); }
+        }
+
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);

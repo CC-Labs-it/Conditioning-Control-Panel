@@ -53,7 +53,7 @@
 //     eleven state flags. App.IntakePass, plus a WPF 3D card flip.
 //   ImgLogo_MouseLeftButtonDown / ShowEasterEgg / TriggerStartupVideo - a media window each.
 //   BtnManageAttention_Click, BtnAttentionStyle_Click, BtnSubliminalSettings_Click,
-//     BtnManageMessages_Click, BtnViewLog_Click, BtnPrevImage_Click, BtnNextImage_Click,
+//     BtnManageMessages_Click, BtnPrevImage_Click, BtnNextImage_Click,
 //     BtnRefreshAssets_Click - each opens an unported window or drives the unported asset tree.
 //   SetOfflineDisabled / UpdateOfflineModeUI / DisconnectNetworkServices - the toggle itself moved
 //     (DataSettingsSection.axaml.cs:67, which persists OfflineMode and asks for the offline name),
@@ -61,7 +61,7 @@
 //     things a disconnect disconnects, and none of them exists here to disconnect. The greying
 //     pass, SetOfflineDisabled, walks named controls on unported tabs.
 //   BtnPickAssetsFolder_Click / CopyDirectoryRecursive - the picker itself already ships as
-//     MainShellWindow.Settings.cs RequestPickAssetsFolder, called from SystemFeatureControl. What
+//     MainShellWindow.Settings.cs RequestPickAssetsFolder, called from AssetsTabView (Library > Folders). What
 //     is missing here is only the WPF handler shell around it and the copy-the-old-library
 //     migration, which needs the assets tree to say what it copied.
 

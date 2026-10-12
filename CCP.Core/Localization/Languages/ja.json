@@ -7615,5 +7615,6 @@
   "title_no_preset_selected": "プリセットが選択されていません",
   "title_cannot_update_default": "デフォルトは更新できません",
   "title_cannot_delete_default": "デフォルトは削除できません",
-  "title_update_preset": "プリセットを更新"
+  "title_update_preset": "プリセットを更新",
+  "linux_dep_wpe_unavailable": "内蔵のウェブページには WPE WebKit 2.0 が必要ですが、完全にパッケージ化しているのは Arch と openSUSE Tumbleweed だけです。他のディストリビューションでは現在これらのページは利用できません。それ以外の機能はすべて動作します。"
 }

@@ -12,7 +12,6 @@
 
 using System;
 using System.Linq;
-using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -20,6 +19,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -31,11 +31,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private const int ProfileStaggerMs = 40, ProfileStaggerCap = 6;   // MotionFx.StaggerMs / StaggerCap
 
         private bool _profileFxInitialized;
-        private CancellationTokenSource? _ogBorderLoop;
+        private const double OgBorderTurnSeconds = 3;   // WPF storyboard Duration
+        private BeatLoop? _ogBorderLoop;
         private RotateTransform? _ogBorderRotation;
 
-        /// <summary>True while the OG border spins (tests read it; the loop itself is an Animation).</summary>
-        internal bool OgBorderLoopRunning => _ogBorderLoop != null;
+        /// <summary>True while the OG border spins (tests read it).</summary>
+        internal bool OgBorderLoopRunning => _ogBorderLoop?.IsRunning == true;
 
         /// <summary>WPF InitializeProfileFx: search focus glow + the window-state hooks that re-gate the loop.</summary>
         private void InitializeProfileFx()
@@ -102,25 +103,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _ogBorderRotation ??= new RotateTransform();
                 brush.TransformOrigin = RelativePoint.Center;
                 brush.Transform = _ogBorderRotation;
-                _ogBorderLoop = new CancellationTokenSource();
-                _ = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(3),
-                    IterationCount = IterationCount.Infinite,
-                    Children =
-                    {
-                        new KeyFrame { Cue = new Cue(0), Setters = { new Setter(RotateTransform.AngleProperty, 0.0) } },
-                        new KeyFrame { Cue = new Cue(1), Setters = { new Setter(RotateTransform.AngleProperty, 360.0) } },
-                    },
-                }.RunAsync(_ogBorderRotation, _ogBorderLoop.Token);
+                // Animation.RunAsync on a Transform throws InvalidCastException, so the spin used to be
+                // inert behind this catch; it now rides the 30 fps beat as WPF's AmbientFrameRate does
+                // (trunk 21561758d).
+                var rotation = _ogBorderRotation;
+                _ogBorderLoop = new BeatLoop(container, t => rotation.Angle = t / OgBorderTurnSeconds * 360 % 360);
+                _ogBorderLoop.Start();
             }
             catch (Exception ex) { Log.Debug("ApplyOgBorderLoop: {E}", ex.Message); }
         }
 
         private void StopOgBorderLoop()
         {
-            _ogBorderLoop?.Cancel();
-            _ogBorderLoop?.Dispose();
+            _ogBorderLoop?.Stop();
             _ogBorderLoop = null;
         }
 
