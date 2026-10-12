@@ -12,6 +12,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -112,10 +113,37 @@ public sealed class FlashWireTests
     {
         var chimes = 0;
         FlashOverlay.LuckyChime = _ => chimes++;
-        FlashOverlay.Paid("a.png", s, 0, FlashFxRules.LuckyMultiplier);
-        Assert.Equal(1, chimes);
-        Assert.Equal(new[] { (40.0, "Flash") }, xp);
+        var quiet = s.SuppressPerkNotifications;
+        try
+        {
+            s.SuppressPerkNotifications = false;
+            FlashOverlay.Paid("a.png", s, 0, FlashFxRules.LuckyMultiplier);
+            Assert.Equal(1, chimes);
+            Assert.Equal(new[] { (40.0, "Flash") }, xp);
+
+            s.SuppressPerkNotifications = true;   // WPF PlayLuckyFlashSound returns early; the XP still pays
+            FlashOverlay.Paid("a.png", s, 0, FlashFxRules.LuckyMultiplier);
+            Assert.Equal(1, chimes);
+            Assert.Equal(2, xp.Count);
+        }
+        finally { s.SuppressPerkNotifications = quiet; }
     });
+
+    [Fact]
+    public void A_hydra_child_takes_its_parents_motion_not_the_setting()
+    {
+        var seam = PrizeOwnership.IsGranted;
+        try
+        {
+            PrizeOwnership.IsGranted = _ => true;
+            var (rect, screen) = (new PixelRect(100, 100, 400, 300), new PixelRect(0, 0, 1920, 1080));
+            var s = new AppSettings { FlashMotionStyle = FlashMotionStyle.DriftBounce, FlashDriftSpeed = 1, MotionLevel = MotionLevel.Full };
+            Assert.Null(FlashOverlay.BuildMotion(rect, screen, s, new Random(3), inherit: FlashMotionStyle.Still));
+            s.FlashMotionStyle = FlashMotionStyle.Still;
+            Assert.Equal(FlashMotionStyle.DriftBounce, FlashOverlay.BuildMotion(rect, screen, s, new Random(3), inherit: FlashMotionStyle.DriftBounce)!.Style);
+        }
+        finally { PrizeOwnership.IsGranted = seam; }
+    }
 
     [Fact]
     public Task Sparkle_boost_wraps_the_flash_in_a_pink_glow_card_and_grows_the_window_round_it() => OnUi((s, _, _, _) =>

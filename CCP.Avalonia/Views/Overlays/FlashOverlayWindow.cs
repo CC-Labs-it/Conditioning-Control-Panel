@@ -197,6 +197,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal TimeSpan Lifetime { get; set; }
         internal long SpawnedAt { get; set; }
         internal Screen? SpawnScreen { get; set; }
+        /// <summary>The motion a hydra parent passes down (WPF inheritMotion), and the one this flash resolved.</summary>
+        internal FlashMotionStyle? InheritMotion { get; set; }
+        internal FlashMotionStyle MotionStyle { get; set; }
 
         /// <summary>--render-all only: the flash card art as a sample picture.</summary>
         internal FlashOverlayWindow()

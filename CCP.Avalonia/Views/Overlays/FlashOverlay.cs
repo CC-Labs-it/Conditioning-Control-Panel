@@ -108,7 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
         private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
-            int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done)
+            int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
+            FlashMotionStyle? inheritMotion = null)
         {
             var refused = false;
             for (var i = 0; i < flashes.Count; i++)
@@ -120,7 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try
                     {
                         if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
-                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration);
+                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
                     finally { if (last) done?.Invoke(); }
@@ -131,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>One flash on screen plus what WPF SpawnFlashWindow pays for it: the lucky roll
         /// before the show (FlashService.cs:1851) and its glow (1881-1967).</summary>
         internal static bool Show(Bitmap bmp, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
-            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration)
+            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null)
         {
             var s = CoreSettings.Current;
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
@@ -140,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var w = new FlashOverlayWindow(bmp)
             {
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
-                SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen,
+                SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
             Paid(path, s, hydraGeneration, multiplier);
@@ -155,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
-            if (multiplier > 1) LuckyChime(s);
+            if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
             CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
             {
@@ -235,7 +236,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Active.Add(entry);
             w.Show();
             w.Run(alpha, fade, lifetime);
-            if (BuildMotion(rect, screen, CoreSettings.Current, Rng) is { } motion) StartDrift(w, motion);
+            var motion = BuildMotion(rect, screen, CoreSettings.Current, Rng, w.InheritMotion);
+            w.MotionStyle = motion?.Style ?? FlashMotionStyle.Still;
+            if (motion != null) StartDrift(w, motion);
             return true;
         }
 
@@ -253,10 +256,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// monitor, like WPF's world px. Ownership is <see cref="PrizeOwnership"/>; this head has no
         /// pendulum yet, so a Pendulum pick (synced profile) plays Still and Mix rolls Still or Drift.
         /// </summary>
-        internal static FlashMotionState? BuildMotion(PixelRect rect, PixelRect screen, AppSettings s, Random rng)
+        internal static FlashMotionState? BuildMotion(PixelRect rect, PixelRect screen, AppSettings s, Random rng, FlashMotionStyle? inherit = null)
         {
-            if (s.FlashMotionStyle == FlashMotionStyle.Still) return null;
-            var style = FlashMotion.Resolve(s.FlashMotionStyle, PrizeOwnership.IsGranted(PrizeOwnership.FlashDriftBounce),
+            // WPF ResolveMotionStyle: a hydra child takes its parent's motion kind (inheritMotion).
+            var picked = inherit ?? s.FlashMotionStyle;
+            if (picked == FlashMotionStyle.Still) return null;
+            var style = FlashMotion.Resolve(picked, PrizeOwnership.IsGranted(PrizeOwnership.FlashDriftBounce),
                 ownsPendulum: false, s.MotionLevel, rng);
             if (style != FlashMotionStyle.DriftBounce) return null;
             var m = FlashMotion.Create(style, rect.X, rect.Y, rect.Width, rect.Height,
@@ -408,7 +413,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
                 Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
-                    parent.Ambient, hydraGeneration, done: null);
+                    parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
             }
             catch (Exception ex) { Log.Error(ex, "Flash: hydra spawn failed"); }
         }
