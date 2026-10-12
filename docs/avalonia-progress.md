@@ -1900,3 +1900,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/juice-clock: +621
 - Trunk U1 infra: FrameGate (Core), FrameClock (30 fps shared beat), BeatLoop; TransformTween/BreathClock/Easings/Keyframes/MotionGate/MotionTimings deferred to their first user.
 - Profile OG border spin and vault CTA breath were inert (Animation.RunAsync on a Transform threw); now BeatLoops on the 30 fps beat, angle/scale asserted, red run saved.
+
+## avalonia-port/text-maxlines: +130
+- WPF pixel MaxHeight line caps on 17 TextBlocks (11 files) -> MaxLines with the WPF line count; long localized copy no longer drops/clips lines.
+- TextLineCapTests: headless line-count check (fail-proven on the Assets creator card) + axaml guard against TextBlock MaxHeight.
