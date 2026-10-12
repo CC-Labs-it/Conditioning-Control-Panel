@@ -29,6 +29,31 @@ public sealed class CoreFlashScheduleTests
     // WPF FlashService :682: with "suppress flashes" on, a do-not-disturb app in front skips the
     // scheduled spawn; another app in front lets it through.
     [Fact]
+    public void The_scheduler_tick_fires_the_ambient_provider_not_the_point_fired_one()
+    {
+        var s = CoreSettings.Current;
+        var enabled = s.FlashEnabled;
+        var (show, ambient) = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider);
+        var tick = typeof(CoreFlash).GetMethod("OnTick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        int point = 0, scheduled = 0;
+        try
+        {
+            s.FlashEnabled = true;
+            CoreFlash.ShowProvider = () => point++;
+            CoreFlash.AmbientShowProvider = () => scheduled++;
+            CoreFlash.Start();
+            tick.Invoke(null, new object?[] { null });
+            Assert.Equal((0, 1), (point, scheduled));
+        }
+        finally
+        {
+            CoreFlash.Stop();
+            s.FlashEnabled = enabled;
+            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider) = (show, ambient);
+        }
+    }
+
+    [Fact]
     public void Dnd_app_in_front_skips_the_scheduled_flash()
     {
         var s = CoreSettings.Current;
