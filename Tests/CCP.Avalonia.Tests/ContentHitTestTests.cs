@@ -32,6 +32,10 @@ public sealed class ContentHitTestTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var w = new MainShellWindow();
+            // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
+            // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
+            // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
+            ToolTip.SetServiceEnabled(w, false);
             w.Show();
             Dispatcher.UIThread.RunJobs();
             var misses = new List<string>();
