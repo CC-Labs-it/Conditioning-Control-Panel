@@ -166,7 +166,7 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
         private readonly object _cacheGate = new();
         private readonly Dictionary<string, string> _prefixCache = new(StringComparer.Ordinal);
 
-        /// <param name="modId">Active mod id. Defaults to <c>App.Mods.ActiveModId</c>.</param>
+        /// <param name="modId">Active mod id. Defaults to the attached mod service's active id (<c>CoreMods.ActiveModIdProvider</c>), or "" before mods attach.</param>
         /// <param name="deck">Angle deck source. Defaults to the loaded <see cref="AwarenessAngleCards.Deck"/>.</param>
         /// <param name="presetPersonality">
         /// Raw personality text for a mod the deck has no authored digest for, distilled into a
@@ -421,7 +421,7 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
 
         private static string DefaultModId()
         {
-            try { return CoreMods.ActiveModId ?? ""; }
+            try { return CoreMods.ActiveModIdProvider?.Invoke() ?? ""; }
             catch { return ""; }
         }
 
