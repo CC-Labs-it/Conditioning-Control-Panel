@@ -1920,3 +1920,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/mine-launcher-account: +236
 - The launcher now checks a leash gate before play (the seam exists but nothing sets it yet). Header stat pills are ported and read the last leaderboard page. The bubble sprite is re-read from the active mod on each start.
 - P2 (account/data + devices) is skipped because it overlaps the login-fix lane; face473bd (pause-key capture) has no overlap and can be its own lane.
+
+## avalonia-port/content-packs-store: +960
+- ContentPackStore + PackManifestModels + PackFolderMover on Core (trunk d6a8343db, 1b387ad80); WPF manifest models moved to Core.
+- PackFolderMover is copy -> verify -> rename -> remove source; failure keeps the source (fail-proven tests).
