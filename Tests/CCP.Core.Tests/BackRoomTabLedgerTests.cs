@@ -107,9 +107,11 @@ public class BackRoomTabLedgerTests
             UtcNow = () => T0,
         });
 
-        bridge.Handle(JObject.Parse("{\"type\":\"station-request\",\"reqId\":\"" + BackRoomBridgeTests.Req + "\",\"station\":\"slot\",\"op\":\"tape\",\"idem\":\"idem-0123456789abcdef\",\"body\":{\"count\":2}}"));
-        relay.Next.SetResult(new BackRoomStationResult(true, 200, null, TapeBody("t1", 0, "melt", "none")));
-        for (var i = 0; i < 200; i++) { lock (posted) if (posted.Count > 0) break; await Task.Delay(5); }
+        // Inline continuations, no captured context, SetResult off the test thread: awaiting it waits for the tape.
+        relay.Next = new TaskCompletionSource<BackRoomStationResult>();
+        await Task.Run(() => bridge.Handle(JObject.Parse("{\"type\":\"station-request\",\"reqId\":\"" + BackRoomBridgeTests.Req + "\",\"station\":\"slot\",\"op\":\"tape\",\"idem\":\"idem-0123456789abcdef\",\"body\":{\"count\":2}}")));
+        await Task.Run(() => relay.Next.SetResult(new BackRoomStationResult(true, 200, null, TapeBody("t1", 0, "melt", "none"))));
+        lock (posted) Assert.Single(posted);
 
         // A page claiming a jackpot on a blank row still gets the blank: the line is never read off the frame.
         bridge.Handle(JObject.Parse("{\"type\":\"landed\",\"station\":\"slot\",\"tapeId\":\"t1\",\"i\":1,\"line\":\"emi3\"}"));

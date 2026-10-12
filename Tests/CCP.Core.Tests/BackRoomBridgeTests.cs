@@ -38,8 +38,8 @@ public partial class BackRoomBridgeTests
         rig.Send(StationRequest());   // same reqId: never a second relay, never a second reply
         rig.Relay.Next.SetResult(new BackRoomStationResult(true, 200, null, JObject.Parse("{\"ok\":true,\"sp\":9}")));
 
+        // The single relay answered and Reply is its last step, so nothing more can arrive after this.
         await rig.SettleAsync("station-result", 1);
-        await Task.Delay(30);
         var r = Assert.Single(rig.Of("station-result"));
         Assert.Single(rig.Relay.Calls);
         Assert.Equal(Req, (string?)r["reqId"]);
@@ -100,10 +100,12 @@ public partial class BackRoomBridgeTests
     public async Task HungRelay_GetsATimeoutFromTheGuard_AndTheLateAnswerIsDropped()
     {
         var rig = new Rig();
-        rig.Send(StationRequest());
+        // Inline continuations, no captured context, SetResult off the test thread: awaiting it waits for the late answer.
+        rig.Relay.Next = new TaskCompletionSource<BackRoomStationResult>();
+        await Task.Run(() => rig.Send(StationRequest()));
         rig.Clock.Fire(BackRoomBridge.ReplyGuard);
-        rig.Relay.Next.SetResult(new BackRoomStationResult(true, 200, null, null));
-        await Task.Delay(40);
+        await Task.Run(() => rig.Relay.Next.SetResult(new BackRoomStationResult(true, 200, null, null)));
+        Assert.True(rig.Clock.Timers.Single().Cancelled, "the late answer ran (it cancels the guard)");
         var r = Assert.Single(rig.Of("station-result"));
         Assert.Equal("timeout", (string?)r["reason"]);
         Assert.True(BackRoomBridge.ReplyGuard < TimeSpan.FromSeconds(6), "the page gives up at 6 s");
