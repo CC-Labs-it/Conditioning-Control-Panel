@@ -1881,3 +1881,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/wpf-behaviour-ci: +598
 - FlaUI drives the offline, firewall-blocked WPF reference on Windows CI (UIA tree + default/hover/pressed/opened PNGs for doors and dialogs); Avalonia `--uia-dump` writes the same schema; `uia-parity.py` diffs them per view into parity-diff.md/json (run 38179660532 green: wpf-behaviour 16 views, 0 step failures; firewall Domain/Private/Public on).
 - First diff: 5 findings in evidence/wpf-behaviour/findings.md (#1 Bug Report withdrawn: harness click was covered by the help overlay; offline does not disable logins, type-name accessible names on 35 buttons).
+
+## avalonia-port/sync6-nav-rail-d: +732
+- Settings > Monitors (System bubble scrolls to it, crumb follows; SystemFeatureControl retired), Library Folders zone + Data logs row, ? badge beside every strip pill, mod door art on the rail.
+- Ledger rows 1/25/33 ported, 6/11/17/21/96 partial; Account & Plans, Games cards, Just Drop ask, Moved note -> sync6-nav-rail-e.
