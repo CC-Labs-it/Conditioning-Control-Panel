@@ -92,7 +92,8 @@ public sealed class BillboardShowcaseTests
     });
 
     /// <summary>WPF ClipArtView with no clip: the card still wears the clip art, on its plain dark
-    /// ground, and makes no player even where motion is allowed.</summary>
+    /// ground, and makes no player even where motion is allowed. A regression guard: it already passes
+    /// on the base; fail-proven by changing the ground colour in ClipArtView.</summary>
     [Fact]
     public Task ShowcaseCardWithoutAClipStandsOnItsPlainGround() => AvaloniaTestDispatcher.RunAsync(() =>
     {
