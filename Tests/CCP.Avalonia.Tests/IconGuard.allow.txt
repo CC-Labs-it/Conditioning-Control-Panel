@@ -12,10 +12,12 @@ Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 As
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
 # --- content (c).2: user data examples ---
+Views/Windows/SessionCompleteWindow.axaml.cs :: SessionIcon = "🌀" :: render-sample SessionLog.SessionIcon, session data shown in a sentence (content (c).2, decision 4)
 Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a user-chosen preset icon inside prose (content (c).2)
 Views/Tabs/AwarenessTabView.Presets.cs :: Icon = "✨", :: seed icon of a new user preset; the user edits it, so it is preset data (content (c).2)
 
 # --- content (c).4: typography ---
+Views/Windows/ProgramsIntroPopup.axaml :: Text="●" :: list bullets beside prose rows, typography (content (c).4)
 Views/Dialogs/LoginDialog.axaml :: PasswordChar="●" :: PasswordChar mask, typography (content (c).4)
 
 Views/Windows/FeatureIntroPopup.axaml.cs :: "●" :: bullet marker of the intro card list, typography (decision 2026-10-10: bullets stay)
