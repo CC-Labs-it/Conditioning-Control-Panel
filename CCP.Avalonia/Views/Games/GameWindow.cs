@@ -90,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         private WebAssetServer? _server;
-        private GameMediaManifest.Manifest? _library;
+        private Lazy<GameMediaManifest.Manifest>? _library;   // single-flight: concurrent sit-downs share one walk
 
         internal void Load(WebAssetServer server)
         {
@@ -128,10 +128,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     int count = GameMediaManifest.MediaCount(o["count"]?.Type == JTokenType.Integer ? (int?)o["count"] : null);
                     // The library is walked once per window, like WPF's FlashService snapshot, not on every sit-down.
                     var server = _server;
+                    var library = _library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server));
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         object deal;
-                        try { deal = GameMediaManifest.Deal(_library ??= server == null ? new() : GameMediaManifest.BuildLocal(server), reqId, Random.Shared.Next(), count); }
+                        try { deal = GameMediaManifest.Deal(library.Value, reqId, Random.Shared.Next(), count); }
                         catch (Exception ex) { Log.Debug("[Game] media deal failed: {E}", ex.Message); deal = GameMediaManifest.Deal(new(), reqId, 0, count); }
                         Dispatcher.UIThread.Post(() => Post(deal));
                     });

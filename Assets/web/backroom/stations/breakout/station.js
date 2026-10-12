@@ -859,7 +859,7 @@ export async function mount(ctx) {
     on(document, 'visibilitychange', () => { if (document.hidden) pageFx?.cancelAll(); if (document.hidden && moved) setPaused(true); });
     if (ui.back) on(ui.back, 'click', back);
     on(window,'keydown',e=>{
-      if(e.key!=='F2' || globalThis.chrome?.webview)return;
+      if(e.key!=='F2' || desktopHosted())return;
       e.preventDefault();e.stopImmediatePropagation();
       const show=ui.dev.hidden;
       ui.gear.hidden=!show;setDevOpen(show);if(show)syncDev();

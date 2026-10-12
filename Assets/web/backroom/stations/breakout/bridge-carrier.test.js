@@ -39,4 +39,7 @@ test('the string carrier counts as a desktop host for the in-window effects and 
   const station = readFileSync(new URL('./station.js', import.meta.url), 'utf8');
   assert.match(station, /const hosted = desktopHosted\(\);/);
   assert.match(station, /if\(action==='exit'&&desktopHosted\(\)\)back\(\);/);
+  // Review 3: the F2 dev panel was gated on chrome.webview alone, so WebKitGTK opened dev controls in the shipped demo.
+  assert.match(station, /if\(e\.key!=='F2' \|\| desktopHosted\(\)\)return;/);
+  assert.doesNotMatch(station, /e\.key!=='F2' \|\| globalThis\.chrome\?\.webview/);
 });
