@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             bool open = MetadataDrawerToggle.IsChecked == true;
             MetadataDrawerContent.IsVisible = open;
             if (MetadataDrawerChevron != null)
-                MetadataDrawerChevron.Text = open ? "▼" : "▶";
+                MetadataDrawerChevron.Kind = open ? IconKind.ChevronDown : IconKind.ChevronRight;
         }
 
         // Called from UpdateTitle() so the drawer chip shows the current project name even while

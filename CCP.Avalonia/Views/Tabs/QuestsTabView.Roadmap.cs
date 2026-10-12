@@ -47,6 +47,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -196,36 +197,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     catch (Exception ex) { Log.Debug("Roadmap thumbnail failed: {Error}", ex.Message); }
                 }
 
-                circle.Children.Add(new TextBlock
-                {
-                    Text = "✓",
-                    FontSize = 20,
-                    FontWeight = FontWeight.Bold,
-                    Foreground = new SolidColorBrush(Colors.LimeGreen),
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Bottom,
-                    Margin = new Thickness(0, 0, 5, 5),
-                });
+                var tick = IconGlyph.Of(IconKind.Checkmark, IconVariant.Regular, null, 20);
+                tick.Foreground = new SolidColorBrush(Colors.LimeGreen);
+                tick.HorizontalAlignment = HorizontalAlignment.Right;
+                tick.VerticalAlignment = VerticalAlignment.Bottom;
+                tick.Margin = new Thickness(0, 0, 5, 5);
+                circle.Children.Add(tick);
             }
             else if (isLocked)
             {
-                circle.Children.Add(new TextBlock
-                {
-                    Text = "🔒",
-                    FontSize = 28,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                });
+                var padlock = IconGlyph.Of(IconKind.LockClosed, IconVariant.Filled, IconBrushes.Tier1, 28);
+                padlock.HorizontalAlignment = HorizontalAlignment.Center;
+                circle.Children.Add(padlock);
             }
             else
             {
-                circle.Children.Add(new TextBlock
-                {
-                    Text = "📷",
-                    FontSize = 28,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                });
+                var camera = IconGlyph.Of(IconKind.Camera, IconVariant.Regular, null, 28);
+                camera.HorizontalAlignment = HorizontalAlignment.Center;
+                circle.Children.Add(camera);
 
                 _pulse?.Stop();
                 _pulseTarget = bgEllipse;

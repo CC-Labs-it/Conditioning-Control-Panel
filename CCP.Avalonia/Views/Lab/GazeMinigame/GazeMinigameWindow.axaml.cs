@@ -17,6 +17,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using ConditioningControlPanel.Lab.GazeMinigame;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -374,12 +375,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 }
                 catch
                 {
-                    thumbHost.Child = GlyphBlock("🖼");
+                    thumbHost.Child = GlyphBlock(IconKind.Image);
                 }
             }
             else
             {
-                thumbHost.Child = GlyphBlock("🎬");
+                thumbHost.Child = GlyphBlock(IconKind.Video);
             }
             stack.Children.Add(thumbHost);
 
@@ -409,10 +410,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             return card;
         }
 
-        private static TextBlock GlyphBlock(string glyph) => new()
+        private static IconGlyph GlyphBlock(IconKind glyph) => new()
         {
-            Text = glyph,
-            FontSize = 30,
+            Kind = glyph,
+            Size = 30,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x66)),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1001,8 +1002,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 // Avalonia WebView playing a file:// page's <video>), which DeeperEditorWindow
                 // proves for ONE pane; two side-by-side WebHosts are untested. A glyph holds the
                 // pane meanwhile; video rounds are not built (VideoRoundsPlayable).
-                var leftView = GlyphBlock("🎬");
-                var rightView = GlyphBlock("🎬");
+                var leftView = GlyphBlock(IconKind.Video);
+                var rightView = GlyphBlock(IconKind.Video);
                 _leftPane.Children.Add(leftView);
                 _rightPane.Children.Add(rightView);
                 AnimateAssetIn(leftView);

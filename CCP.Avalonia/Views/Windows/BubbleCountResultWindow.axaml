@@ -21,7 +21,7 @@
        WS_EX_TOOLWINDOW (code-behind) -> ShowInTaskbar="False", already on this window.
        TextWrapping/TextAlignment     -> ADDED to the title, instruction and feedback blocks. The
                                          head renders in Inter, which is wider than the original's
-                                         Comic Sans, and "🫧 How Many Bubbles? 🫧" at 40px overran
+                                         Comic Sans, and the "How Many Bubbles?" title at 40px overran
                                          the card's MaxWidth="600" - the trailing emoji was cut off
                                          in the first render. Wrapping keeps every glyph on screen
                                          without changing the card geometry. -->
@@ -29,6 +29,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.BubbleCountResultWindow"
         Title="{loc:Str dialog_how_many_bubbles}"
         SystemDecorations="None"
@@ -136,15 +137,14 @@
                            Margin="0,20,0,0"/>
 
                 <!-- Feedback -->
-                <TextBlock x:Name="TxtFeedback"
-                           Text=""
-                           FontSize="20"
-                           FontWeight="Bold"
-                           HorizontalAlignment="Center"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           Margin="0,15,0,0"
-                           IsVisible="False"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,15,0,0" Spacing="6">
+                    <fx:IconLabel x:Name="TxtFeedback"
+                               TextElement.FontSize="20"
+                               TextElement.FontWeight="Bold"
+                               IsVisible="False"/>
+                    <!-- the trailing 🎉 of WPF's "🎉 CORRECT! … 🎉"; outside the IconLabel so a rebuild keeps it -->
+                    <fx:IconGlyph x:Name="FeedbackMirror" Size="20" VerticalAlignment="Center" IsVisible="False"/>
+                </StackPanel>
 
                 <!-- Submit Button -->
                 <Button x:Name="BtnSubmit"

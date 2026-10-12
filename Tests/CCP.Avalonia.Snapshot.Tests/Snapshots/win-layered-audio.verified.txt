@@ -9,19 +9,21 @@
     Margin: 18,
     Children: [
       {
-        Type: TextBlock,
-        FontSize: 20.0,
-        FontWeight: DemiBold,
-        Foreground: {
-          Type: SolidColorBrush,
-          Color: {
-            A: 255,
-            R: 255,
-            G: 105,
-            B: 180
+        Type: IconLabel,
+        Spacing: 6.0,
+        Orientation: Horizontal,
+        Children: [
+          {
+            Type: IconGlyph,
+            VerticalAlignment: Center
+          },
+          {
+            Type: TextBlock,
+            Text: Audio Layers,
+            VerticalAlignment: Center,
+            IsVisible: true
           }
-        },
-        Text: 🎧 Audio Layers
+        ]
       },
       {
         Type: TextBlock,
@@ -154,7 +156,23 @@
       },
       {
         Type: Button,
-        Content: ➕  Add audio file…,
+        Content: {
+          Type: IconLabel,
+          Spacing: 6.0,
+          Orientation: Horizontal,
+          Children: [
+            {
+              Type: IconGlyph,
+              VerticalAlignment: Center
+            },
+            {
+              Type: TextBlock,
+              Text: Add audio file…,
+              VerticalAlignment: Center,
+              IsVisible: true
+            }
+          ]
+        },
         Padding: 12,8,12,8,
         Margin: 0,0,0,10,
         HorizontalAlignment: Left,

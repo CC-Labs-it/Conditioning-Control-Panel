@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -95,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     var item = new MenuItem
                     {
                         // A TextBlock, not a string: Avalonia reads "_" in a string header as an access key.
-                        Header = new TextBlock { Text = $"{(preset.Id == activeId ? "☑" : "☐")} {PersonalityName(preset.Name)}" },
+                        Header = new IconLabel { Text = PersonalityName(preset.Name), Kind = preset.Id == activeId ? IconKind.CheckboxChecked : IconKind.CheckboxUnchecked },
                         Tag = preset.Id,
                         Background = darkBg,
                         Foreground = preset.Id == activeId ? AccentBrush : Brushes.White,
@@ -124,8 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var promptSettings = settings.CompanionPrompt;
                 if (!ExplicitContentGate.IsAlreadyAcknowledged(promptSettings))
                 {
-                    // Cancel, Esc and the close box all yield false: nothing switches.
-                    if (!await new ExplicitContentAcknowledgementDialog().ShowDialog<bool>(this)) return;
+                    // Cancel and the close box yield false (WPF ChatInput.cs:1298-1299): nothing switches.
+                    if (!await new ExplicitContentAcknowledgementDialog().ShowDialogSafe<bool>(this)) return;   // P49: a hidden tube never throws
                     if (promptSettings != null)
                     {
                         ExplicitContentGate.MarkAcknowledged(promptSettings);

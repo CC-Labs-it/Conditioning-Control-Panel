@@ -18,6 +18,7 @@
      key and every loc key here is snake_case (trap 1). -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.HelpVideoWindow"
         Title="Help"
@@ -35,7 +36,7 @@
         <Style Selector="Button.close:pointerover /template/ Border#border">
             <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
         </Style>
-        <Style Selector="Button.close:pointerover /template/ TextBlock#glyph">
+        <Style Selector="Button.close:pointerover /template/ fx|IconGlyph#glyph">
             <Setter Property="Foreground" Value="White"/>
         </Style>
     </Window.Styles>
@@ -95,17 +96,17 @@
                             Background="Transparent"
                             BorderThickness="0"
                             Foreground="{DynamicResource TextMutedBrush}"
-                            ToolTip.Tip="{loc:Str tooltip_close_escape}">
+                            ToolTip.Tip="{loc:Str tooltip_close_escape}" AutomationProperties.Name="{loc:Str tooltip_close_escape}">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="border"
                                         Background="{TemplateBinding Background}"
                                         CornerRadius="0">
-                                    <TextBlock x:Name="glyph"
-                                               Text="✕"
+                                    <fx:IconGlyph x:Name="glyph"
+                                               Kind="Dismiss"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
-                                               FontSize="14"
+                                               Size="14"
                                                Foreground="{TemplateBinding Foreground}"/>
                                 </Border>
                             </ControlTemplate>

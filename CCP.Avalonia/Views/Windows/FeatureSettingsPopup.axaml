@@ -16,6 +16,7 @@
      would be an invented one. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Windows.FeatureSettingsPopup"
              Width="320" Background="Transparent">
 
@@ -26,9 +27,9 @@
 
             <!-- Header -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
-                <TextBlock x:Name="TxtIcon" Text="⚡" FontSize="20"
-                           Width="26" Height="26" TextAlignment="Center"
-                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <fx:IconGlyph x:Name="TxtIcon" Kind="Flash" Size="20"
+                              Width="26" Height="26"
+                              VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <StackPanel>
                     <TextBlock x:Name="TxtFeatureName" Text="Feature Name"
                                Foreground="{DynamicResource PinkBrush}" FontSize="16" FontWeight="SemiBold"/>

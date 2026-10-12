@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -28,8 +29,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             AvaloniaXamlLoader.Load(this);
 
             // Set icon based on step type
-            this.FindControl<TextBlock>("TxtStepIcon")!.Text =
-                stepDef.StepType == RoadmapStepType.Boss ? "🏆" : Loc.Get("label_text_9");
+            // WPF: Boss "🏆" else label_text_9 "📷".
+            if (stepDef.StepType == RoadmapStepType.Boss)
+            {
+                var icon = this.FindControl<IconGlyph>("TxtStepIcon")!;
+                icon.Kind = IconKind.Trophy;
+                icon.Variant = IconVariant.Filled;
+                icon.Bind(IconGlyph.ForegroundProperty, icon.GetResourceObservable(IconBrushes.Gold));
+            }
 
             this.FindControl<TextBlock>("TxtStepTitle")!.Text = stepDef.StepType == RoadmapStepType.Boss
                 ? $"BOSS: {stepDef.Title}"

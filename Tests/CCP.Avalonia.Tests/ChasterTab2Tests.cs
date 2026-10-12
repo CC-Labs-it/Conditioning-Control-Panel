@@ -245,9 +245,11 @@ public sealed class ChasterTab2Tests
             Click(w, tab.FindControl<Button>("BtnPause")!);
             Assert.True(v.ChasterPaused && chaster.IsPaused);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("chaster_paused"), txt.Text);
-            Assert.True(tab.FindControl<global::Avalonia.Controls.Shapes.Path>("PlayArrow")!.IsVisible);
+            var glyph = tab.FindControl<IconGlyph>("PauseGlyph")!;
+            Assert.Equal(FluentIcons.Common.Symbol.Play, glyph.Kind);    // WPF PlayArrow while paused
             Click(w, tab.FindControl<Button>("BtnPause")!);
             Assert.False(v.ChasterPaused);
+            Assert.Equal(FluentIcons.Common.Symbol.Pause, glyph.Kind);
             await Task.CompletedTask;
         }
         finally { w.Close(); }
