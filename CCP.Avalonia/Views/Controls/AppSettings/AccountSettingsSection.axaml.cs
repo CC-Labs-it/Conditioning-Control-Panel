@@ -315,6 +315,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             };
             try
             {
+                // No network: fail now with the link-failed copy rather than wait out the 5-minute OAuth.
+                if (!await LoginDialog.ProxyReachable(default))
+                {
+                    await Tell(Owner, Loc.Get("account_link_failed_title"), Loc.GetF("account_link_failed_generic", provider));
+                    return;
+                }
                 string? token;
                 if (provider == "discord")
                 {
