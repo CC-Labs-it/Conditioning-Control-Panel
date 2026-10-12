@@ -20,7 +20,7 @@
        CmpHasContentToVis   ->  IsVisible="{Binding X, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 (or StringConverters.IsNotNullOrEmpty for strings)
        CmpEmptyToVis        ->  the IsNull / IsNullOrEmpty twins of the above
-       CmpEmojiToImage      ->  a plain <TextBlock Text="🔒"/>; Avalonia renders COLR/CPAL natively
+       CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
      CmpEnumToVis / CmpEnumToVisInverse ARE here: they return bool, bind them to IsVisible.
 
      Mapping applied throughout, all forced by real differences:
@@ -46,7 +46,8 @@
                                      key yet (hoist to App.axaml when a second consumer appears) -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion">
+                    xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
+                    xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls">
 
     <!-- ============================ 0. converters ============================ -->
     <cmp:FractionToStarConverter x:Key="CmpFractionToStar"/>
@@ -756,13 +757,15 @@
         <Setter Property="Margin" Value="0,8,0,10"/>
     </ControlTheme>
     <!-- WPF targets Image because the lock glyph went through the Twemoji pipeline. On Avalonia the
-         glyph is a TextBlock (colour emoji render natively), so the theme targets TextBlock; the
+         glyph is a Fluent fx:IconGlyph (decision 2026-10-10), so the theme targets IconGlyph; the
          26px box and the glow are unchanged. -->
-    <ControlTheme x:Key="CmpLockGlyphStyle" TargetType="TextBlock">
+    <ControlTheme x:Key="CmpLockGlyphStyle" TargetType="fx:IconGlyph">
         <Setter Property="Width" Value="26"/>
         <Setter Property="Height" Value="26"/>
-        <Setter Property="FontSize" Value="22"/>
-        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="Size" Value="22"/>
+        <Setter Property="Kind" Value="LockClosed"/>
+        <Setter Property="Variant" Value="Filled"/>
+        <Setter Property="Foreground" Value="{DynamicResource IconTier1Brush}"/>
         <Setter Property="Effect" Value="{StaticResource CmpLockGlow}"/>
     </ControlTheme>
 
@@ -885,8 +888,8 @@
                 <Border x:Name="Chip" CornerRadius="9" Padding="{TemplateBinding Padding}"
                         Background="#26FF69B4" BorderBrush="#59FF69B4" BorderThickness="1">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#x25B6;" FontSize="9" VerticalAlignment="Center"
-                                   Margin="0,0,5,0" Foreground="{TemplateBinding Foreground}"/>
+                        <fx:IconGlyph Kind="Play" Variant="Filled" Size="9" VerticalAlignment="Center"
+                                      Margin="0,0,5,0" Foreground="{TemplateBinding Foreground}"/>
                         <TextBlock Text="{TemplateBinding Content}" TextTrimming="CharacterEllipsis"
                                    MaxWidth="240" VerticalAlignment="Center"
                                    Foreground="{TemplateBinding Foreground}"/>
@@ -1229,16 +1232,16 @@
                                           VerticalAlignment="Center"/>
                         <!-- ▼ / ▲ swap rather than a rotate: a named transform
                              inside a property value is not a trigger target. -->
-                        <TextBlock x:Name="Arrow" Grid.Column="1" Text="&#x25BC;" FontSize="11"
-                                   VerticalAlignment="Center" Foreground="#FFA9A3C4"/>
+                        <fx:IconGlyph x:Name="Arrow" Grid.Column="1" Kind="ChevronDown" Size="11"
+                                      VerticalAlignment="Center" Foreground="#FFA9A3C4"/>
                     </Grid>
                 </Border>
             </ControlTemplate>
         </Setter>
-        <Style Selector="^:checked /template/ TextBlock#Arrow">
-            <Setter Property="Text" Value="&#x25B2;"/>
+        <Style Selector="^:checked /template/ fx|IconGlyph#Arrow">
+            <Setter Property="Kind" Value="ChevronUp"/>
         </Style>
-        <Style Selector="^:pointerover /template/ TextBlock#Arrow">
+        <Style Selector="^:pointerover /template/ fx|IconGlyph#Arrow">
             <Setter Property="Foreground" Value="White"/>
         </Style>
     </ControlTheme>

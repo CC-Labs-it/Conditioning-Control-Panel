@@ -14,6 +14,7 @@ using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Deeper;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -87,7 +88,7 @@ public sealed class DeeperRowsTests
 
             Click(editor.BtnPlayPause);
             Assert.True(fake.Playing);
-            Assert.Equal("⏸", editor.BtnPlayPause.Content);
+            Assert.Equal(IconKind.Pause, editor.PlayPauseGlyph.Kind);
 
             // One stepped playhead tick: the clock and an exact length come from the transport.
             fake.PositionSeconds = 30;
@@ -101,12 +102,12 @@ public sealed class DeeperRowsTests
             // Panic (registered surface) stops it.
             PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
             Assert.False(fake.Playing);
-            Assert.Equal("▶", editor.BtnPlayPause.Content);
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
 
             Click(editor.BtnPlayPause);
             fake.End();
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal("▶", editor.BtnPlayPause.Content);
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
             Assert.Equal("0:00", editor.TxtCurrentTime.Text);
         }
         finally

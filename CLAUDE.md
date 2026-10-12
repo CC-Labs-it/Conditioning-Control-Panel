@@ -150,6 +150,10 @@ Things that will bite, all found by rendering or running rather than by reading:
      own accessible name, an `IconGlyph` is decorative (`Raw`) until named.
    - Code that finds a control by its emoji text (`PremiumGateFx` padlock, `Content == "▶"`) breaks
      silently when that emoji is converted; grep for it before converting a file.
+   - `Tests/CCP.Avalonia.Tests/IconGuardTests` enforces this: no icon-font codepoints, `FluentIcons.*` only in
+     `Controls/Icons`, and ratchets (`Baselines/*.count`) on icon-emoji literals, icon-prefixed loc keys and icon
+     `Path`s that fail up AND down — a lane that converts files lowers the baseline in the same PR. Content (chat,
+     user data, typography) goes in `IconGuard.allow.txt` with a reason. `--render-all` prints `icon-census:`.
 
 4. **A property-only `ControlTheme` on a templated control draws nothing.** A WPF keyed `<Style>`
    overrides setters and keeps the control's default template. An Avalonia `ControlTheme` replaces

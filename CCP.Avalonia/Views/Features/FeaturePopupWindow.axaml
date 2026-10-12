@@ -12,6 +12,7 @@
        MouseLeftButtonDown / Click / PreviewKeyDown -> wired in the constructor -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Features.FeaturePopupWindow"
         Title="Feature"
         Width="520" Height="640"
@@ -33,10 +34,10 @@
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
                             CornerRadius="0">
-                        <TextBlock Text="✕"
+                        <fx:IconGlyph Kind="Dismiss"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
-                                   FontSize="14"
+                                   Size="14"
                                    Foreground="{TemplateBinding Foreground}"/>
                     </Border>
                 </ControlTemplate>
@@ -79,8 +80,8 @@
                             <Image x:Name="ImgIcon" Width="20" Height="20"
                                    Stretch="Uniform"
                                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
-                            <TextBlock x:Name="TxtGlyph"
-                                       FontSize="16"
+                            <fx:IconGlyph x:Name="TxtGlyph"
+                                       Size="16"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource PinkBrush}"
@@ -103,6 +104,7 @@
                             Theme="{StaticResource CloseButton}"
                             Cursor="Hand"
                             Width="38" Height="38"
+                            AutomationProperties.Name="Close (Esc)"
                             ToolTip.Tip="Close (Esc)"/>
                 </Grid>
             </Border>

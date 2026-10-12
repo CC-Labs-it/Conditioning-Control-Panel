@@ -1,4 +1,5 @@
 ﻿using System;
+using ConditioningControlPanel.Avalonia.Controls;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
@@ -766,7 +767,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 Foreground = new SolidColorBrush(Color.FromRgb(0xF5, 0xF0, 0xE1)),
                 TextWrapping = TextWrapping.Wrap,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxHeight = 2 * CardLabelLine + 2,     // two lines: "The Arcademy" breaks at its space
+                MaxLines = 2,     // two lines: "The Arcademy" breaks at its space
                 TextAlignment = TextAlignment.Center,
             };
             grid.Children.Add(strip);
@@ -775,7 +776,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // The pin badge came off here on the owner's third live run ("the Pin button is not
             // usable right now, I propose we remove it from there"); pinning is in her options menu
             // now. What stays is how a pinned card LOOKS - the thicker solid-pink frame above.
-            if (slot.Locked) grid.Children.Add(Badge("\U0001F512", HorizontalAlignment.Left, 0.65));
+            if (slot.Locked) grid.Children.Add(Badge(IconKind.LockClosed, HorizontalAlignment.Left, 0.65));   // WPF 🔒
 
             // ---- input ------------------------------------------------------------
             // Left button only, on release, exactly as MouseLeftButtonUp. The right button is
@@ -793,7 +794,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             return card;
         }
 
-        private static Control Badge(string glyph, HorizontalAlignment side, double opacity)
+        private static Control Badge(IconKind kind, HorizontalAlignment side, double opacity)
         {
             return new Border
             {
@@ -805,14 +806,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 Background = new SolidColorBrush(Color.FromArgb(0xB3, 0x0E, 0x0E, 0x1C)),
                 Opacity = opacity,
                 IsHitTestVisible = false,
-                Child = new TextBlock
+                Child = new IconGlyph
                 {
-                    Text = glyph,
-                    // NOT the pixel font: this is an emoji glyph and Press Start 2P has none. WPF had
-                    // to name "Segoe UI Emoji" to land somewhere chosen; Avalonia renders colour
-                    // emoji from the system fallback natively (CLAUDE.md, porting note 3), so the
-                    // family name goes and the default face draws the padlock.
-                    FontSize = BadgeFont,
+                    Kind = kind,
+                    Variant = IconVariant.Filled,
+                    // NOT the pixel font: Press Start 2P has no padlock. WPF named "Segoe UI Emoji";
+                    // the head draws icons through IconGlyph (fluent-icons 2026-10-10).
+                    Size = BadgeFont,
                     Foreground = new SolidColorBrush(Color.FromRgb(0xF5, 0xF0, 0xE1)),
                 },
             };

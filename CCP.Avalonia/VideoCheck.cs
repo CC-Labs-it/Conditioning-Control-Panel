@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 
@@ -69,11 +70,11 @@ namespace ConditioningControlPanel.Avalonia
 
             w.TogglePlayPause();
             await Task.Delay(600);
-            var glyph = w.FindControl<Button>("BtnPlayPause")!.Content as string;
+            var glyph = w.FindControl<IconGlyph>("IcoPlayPause")!.Kind;
             var p1 = Hash(w.VideoFrame!);
             await Task.Delay(500);
             var p2 = Hash(w.VideoFrame!);
-            Expect(!w.Player!.IsPlaying && glyph == "▶", $"pause stops the player (IsPlaying={w.Player.IsPlaying}, glyph {glyph})");
+            Expect(!w.Player!.IsPlaying && glyph == IconKind.Play, $"pause stops the player (IsPlaying={w.Player.IsPlaying}, glyph {glyph})");
             Expect(p1 == p2, $"frames frozen while paused ({p1:x} / {p2:x})");
 
             var threadsOpen = Threads();

@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -12,6 +13,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 // ContentLocator: Core's two-root probe (install dir, then the downloaded content pack). The
 // chaos cue resolver ends on exactly this call in the head.
@@ -128,7 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private readonly StackPanel _boonCardHost;
         private readonly Button _btnSkipBoon;
         private readonly Button _btnReroll;
-        private readonly TextBlock _btnRerollText;
+        private readonly IconLabel _btnRerollText;
         private readonly TextBlock _draftCountdown;
         private readonly Border _resultsPanel;
         private readonly Image _resultsHero;
@@ -145,7 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private readonly TextBlock _storyTitle;
         private readonly TextBlock _storyText;
         private readonly Border _storyBox;
-        private readonly TextBlock _storyAdvance;
+        private readonly IconGlyph _storyAdvance;
 
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosOverlayWindow: no '{name}' in the XAML");
@@ -170,7 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _boonCardHost = Part<StackPanel>("BoonCardHost");
             _btnSkipBoon = Part<Button>("BtnSkipBoon");
             _btnReroll = Part<Button>("BtnReroll");
-            _btnRerollText = Part<TextBlock>("BtnRerollText");
+            _btnRerollText = Part<IconLabel>("BtnRerollText");
             _draftCountdown = Part<TextBlock>("DraftCountdown");
             _resultsPanel = Part<Border>("ResultsPanel");
             _resultsHero = Part<Image>("ResultsHero");
@@ -187,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _storyTitle = Part<TextBlock>("StoryTitle");
             _storyText = Part<TextBlock>("StoryText");
             _storyBox = Part<Border>("StoryBox");
-            _storyAdvance = Part<TextBlock>("StoryAdvance");
+            _storyAdvance = Part<IconGlyph>("StoryAdvance");
 
             _btnSkipBoon.Click += BtnSkipBoon_Click;
             _btnReroll.Click += BtnReroll_Click;
@@ -349,7 +351,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _draftWave = waveJustCleared;
             _rerollFunc = onReroll;
             _btnReroll.IsVisible = rerollsLeft > 0 && onReroll != null;
-            _btnRerollText.Text = rerollsLeft > 1 ? $"🎲 tempt fate again ({rerollsLeft} left)" : "🎲 tempt fate again";
+            _btnRerollText.Text = rerollsLeft > 1 ? $"tempt fate again ({rerollsLeft} left)" : "tempt fate again";
             _autoResumeTimer?.Stop();
             _autoResumeTimer = null;
             _confirmTimer?.Stop();
@@ -548,10 +550,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     : new SolidColorBrush(Color.FromArgb(48, 0, 0, 0)),
             };
             if (artFill == null)
-                art.Child = new TextBlock
+                art.Child = new IconGlyph
                 {
-                    Text = boon.IsCurse ? "☠" : "◈",
-                    FontSize = 70,
+                    Kind = boon.IsCurse ? CurseIcon : IconKind.Diamond,
+                    Variant = IconVariant.Filled,
+                    Size = 70,
                     Foreground = new SolidColorBrush(Color.FromArgb(90, accent.R, accent.G, accent.B)),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -559,15 +562,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosTips.Attach(art, boon.Name, boon.Desc, accent: accent, flavor: boon.Flavor);
             panel.Children.Add(art);
 
-            panel.Children.Add(new TextBlock
+            panel.Children.Add(IconPrefix(new TextBlock
             {
-                Text = (boon.IsCurse ? "☠ " : "◈ ") + boon.Name.ToUpperInvariant(),
+                Text = boon.Name.ToUpperInvariant(),
                 Foreground = accentBrush,
                 FontWeight = FontWeight.Bold,
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8),
-            });
+            }, boon.IsCurse ? CurseIcon : IconKind.Diamond));
             panel.Children.Add(new TextBlock
             {
                 Text = boon.Desc,
@@ -587,17 +590,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 2, 0, 8),
                 });
-            panel.Children.Add(new TextBlock
+            panel.Children.Add(IconPrefix(new TextBlock
             {
-                Text = $"{RarityDots(boon.Rarity)} {boon.Rarity}",
+                Text = boon.Rarity.ToString(),
                 Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 208)),
                 FontSize = 11,
                 Margin = new Thickness(0, 0, 0, 10),
-            });
+            }, IconKind.Diamond, RarityDots(boon.Rarity)));
             var pickScale = new ScaleTransform(1, 1);
             // The caption is a TextBlock child rather than Content: Avalonia parses "_" in a
             // button's Content as an access key, and SelectBoon rewrites this one to "✓ CHOSEN".
-            var pickText = new TextBlock { Text = boon.IsCurse ? "GIVE IN" : "ACCEPT", HorizontalAlignment = HorizontalAlignment.Center };
+            var pickText = new IconLabel { Text = boon.IsCurse ? "GIVE IN" : "ACCEPT", HorizontalAlignment = HorizontalAlignment.Center };
             var pick = new Button
             {
                 Content = pickText,
@@ -638,13 +641,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return dc;
         }
 
-        private static string RarityDots(ChaosRarity r) => r switch
+        /// <summary>Rarity pips: the COUNT is the meaning (WPF ◆ / ◆◆ / ◆◆◆).</summary>
+        internal static int RarityDots(ChaosRarity r) => r switch
         {
-            ChaosRarity.Common => "◆",
-            ChaosRarity.Uncommon => "◆◆",
-            ChaosRarity.Rare => "◆◆◆",
-            _ => "◆"
+            ChaosRarity.Uncommon => 2,
+            ChaosRarity.Rare => 3,
+            _ => 1
         };
+
+        /// <summary>Fluent has no skull (oracle D4 ☠): a curse reads as the filled warning sign.</summary>
+        internal const IconKind CurseIcon = IconKind.Warning;
+
+        /// <summary>A head-authored glyph prefix ("☠ NAME", "◆◆ Rare", "★ NEW BEST") as inline icons,
+        /// so the line still wraps (fluent-icons 2026-10-10).</summary>
+        internal static TextBlock IconPrefix(TextBlock tb, IconKind kind, int count = 1)
+        {
+            var text = tb.Text;
+            tb.Text = null;
+            tb.Inlines ??= new InlineCollection();
+            for (int i = 0; i < count; i++)
+                tb.Inlines.Add(new InlineUIContainer(new IconGlyph
+                {
+                    Kind = kind, Variant = IconVariant.Filled, Size = tb.FontSize,
+                    Margin = new Thickness(0, 0, i == count - 1 ? 5 : 1, 0),
+                }) { BaselineAlignment = BaselineAlignment.Center });
+            tb.Inlines.Add(new Run(text));
+            return tb;
+        }
 
         /// <summary>A card was picked: dissolve the others, highlight + bounce this one, then auto-commit after a beat.</summary>
         private void SelectBoon(DraftCard chosen)
@@ -703,7 +726,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // Slight bounce on the chosen button.
             StartTween(chosen.Key + ":bounce", 360,
                 t => chosen.PickScale.ScaleX = chosen.PickScale.ScaleY = 1.15 + (1.0 - 1.15) * t, new BackEaseOut());
-            if (chosen.Pick.Content is TextBlock chosenText) chosenText.Text = "✓ CHOSEN";
+            if (chosen.Pick.Content is IconLabel chosenText) { chosenText.Kind = IconKind.Checkmark; chosenText.Text = "CHOSEN"; }
 
             // No Continue button: hold the glowing pick for a short beat, then commit on its own.
             _btnSkipBoon.IsVisible = false;
@@ -783,7 +806,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var scoreLine = AddResultLine("score 0", 24, Brushes.White, FontWeight.Bold);
             AnimateScoreTally(scoreLine, score);
             var verdict = isPb
-                ? AddResultLine($"★ NEW BEST  (+{pbDelta:N0} over {previousBest:N0})", 14, gold, FontWeight.Bold)
+                ? IconPrefix(AddResultLine($"NEW BEST  (+{pbDelta:N0} over {previousBest:N0})", 14, gold, FontWeight.Bold), IconKind.Star)
                 : AddResultLine($"best {previousBest:N0}   ({pbDelta:N0} vs best)", 12, dim, FontWeight.Normal);
             // Held dark, then faded in at 820ms - on the beat of the score tally landing, which is
             // what puts a PB's reveal on the 900ms fanfare above.

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -16,6 +17,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
@@ -43,12 +45,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         public string TimestampDisplay => Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 
-        public string IconGlyph => Category switch
+        public IconKind IconGlyph => Category switch
         {
-            EventLogCategory.Action => "⚡",
-            EventLogCategory.Engine => "⚙",
-            EventLogCategory.Error => "⚠",
-            _ => "•",
+            EventLogCategory.Action => IconKind.Flash,
+            EventLogCategory.Engine => IconKind.Settings,
+            EventLogCategory.Error => IconKind.Warning,
+            _ => IconKind.Circle,
         };
 
         public IBrush IconBrush => Category switch
@@ -166,10 +168,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // -- controls ------------------------------------------------------------------------
         private readonly Border _statusPill, _mediaTypeIconBg, _sourcePill, _audioPane, _videoPane,
                                 _nowRegionPanel;
-        private readonly TextBlock _statusPillText, _mediaTypeIcon, _txtEnhName, _txtEnhPath,
+        private readonly IconGlyph _mediaTypeIcon, _txtPlayPauseGlyph, _txtCollapseGlyph;
+        private readonly TextBlock _statusPillText, _txtEnhName, _txtEnhPath,
                                    _txtEnhMetadata, _txtEnhSource, _txtAudioPath, _txtVideoStatus,
                                    _txtNowRegion, _txtMiniTimelineReadout, _txtCurrent, _txtTotal,
-                                   _txtStatus, _txtPlayPauseGlyph, _txtEyeTracking, _txtCollapseGlyph,
+                                   _txtStatus,
                                    _txtFilterCountAll, _txtFilterCountActions, _txtFilterCountEngine,
                                    _txtFilterCountErrors;
         private readonly Button _btnOpenInEditor, _btnChange, _btnCreateNewEnhancement,
@@ -225,7 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _statusPill = this.FindControl<Border>("StatusPill")!;
             _statusPillText = this.FindControl<TextBlock>("StatusPillText")!;
             _mediaTypeIconBg = this.FindControl<Border>("MediaTypeIconBg")!;
-            _mediaTypeIcon = this.FindControl<TextBlock>("MediaTypeIcon")!;
+            _mediaTypeIcon = this.FindControl<IconGlyph>("MediaTypeIcon")!;
             _sourcePill = this.FindControl<Border>("SourcePill")!;
             _audioPane = this.FindControl<Border>("AudioPane")!;
             _videoPane = this.FindControl<Border>("VideoPane")!;
@@ -241,9 +244,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtCurrent = this.FindControl<TextBlock>("TxtCurrent")!;
             _txtTotal = this.FindControl<TextBlock>("TxtTotal")!;
             _txtStatus = this.FindControl<TextBlock>("TxtStatus")!;
-            _txtPlayPauseGlyph = this.FindControl<TextBlock>("TxtPlayPauseGlyph")!;
-            _txtEyeTracking = this.FindControl<TextBlock>("TxtEyeTracking")!;
-            _txtCollapseGlyph = this.FindControl<TextBlock>("TxtCollapseGlyph")!;
+            _txtPlayPauseGlyph = this.FindControl<IconGlyph>("TxtPlayPauseGlyph")!;
+            _txtCollapseGlyph = this.FindControl<IconGlyph>("TxtCollapseGlyph")!;
             _txtFilterCountAll = this.FindControl<TextBlock>("TxtFilterCountAll")!;
             _txtFilterCountActions = this.FindControl<TextBlock>("TxtFilterCountActions")!;
             _txtFilterCountEngine = this.FindControl<TextBlock>("TxtFilterCountEngine")!;
@@ -280,7 +282,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtAudioPath.Text = Loc.Get("deeper_player_no_media");
             _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
             _txtStatus.Text = Loc.Get("deeper_player_status_idle");
-            _txtEyeTracking.Text = Loc.Get("deeper_player_btn_eye_tracking_start");
 
             _changePopup.PlacementTarget = _btnChange;
 
@@ -801,7 +802,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"))) != "ok")
                 return;
             _isPlaying = want;
-            _txtPlayPauseGlyph.Text = _isPlaying ? "⏸" : "▶";
+            _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
             _txtStatus.Text = Loc.Get(_isPlaying ? "deeper_player_status_playing" : "deeper_player_status_stopped");
             UpdateStatusPill();
         }
@@ -812,7 +813,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
             _isPlaying = false;
             _currentSec = 0;
-            _txtPlayPauseGlyph.Text = "▶";
+            _txtPlayPauseGlyph.Kind = IconKind.Play;
             _txtCurrent.Text = "0:00";
             UpdatePlayhead(0);
             _txtStatus.Text = Loc.Get("deeper_player_status_stopped");
@@ -947,7 +948,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (playing != _isPlaying)
                 {
                     _isPlaying = playing;
-                    _txtPlayPauseGlyph.Text = playing ? "⏸" : "▶";
+                    _txtPlayPauseGlyph.Kind = playing ? IconKind.Pause : IconKind.Play;
                 }
             }
             catch (Exception ex)
@@ -1086,9 +1087,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (enh == null)
             {
                 _txtEnhName.Text = Loc.Get("deeper_player_no_enh");
-                _txtEnhMetadata.Text = "";
+                _txtEnhMetadata.Inlines = new InlineCollection();
                 _txtEnhPath.IsVisible = false;
-                _mediaTypeIcon.Text = "🎵";
+                _mediaTypeIcon.Kind = IconKind.MusicNote2;
                 _mediaTypeIconBg.Background = Res("DeeperHubAudioBadgeBgBrush");
                 _sourcePill.IsVisible = false;
                 _btnOpenInEditor.IsVisible = false;
@@ -1098,7 +1099,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtEnhName.Text = string.IsNullOrEmpty(enh.Metadata?.Name) ? "(untitled)" : enh.Metadata!.Name;
 
             var isVideo = string.Equals(enh.MediaType, MediaTypes.Video, StringComparison.OrdinalIgnoreCase);
-            _mediaTypeIcon.Text = isVideo ? "🎬" : "🎵";
+            _mediaTypeIcon.Kind = isVideo ? IconKind.Video : IconKind.MusicNote2;
             _mediaTypeIconBg.Background = Res(isVideo ? "DeeperHubVideoBadgeBgBrush" : "DeeperHubAudioBadgeBgBrush");
 
             // Inline meta line: creator · sourceGlyph source · counts.
@@ -1110,11 +1111,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (enh.HapticTracks != null)
                 foreach (var t in enh.HapticTracks) haptics += t?.Events?.Count ?? 0;
 
-            var parts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(creator)) parts.Add(creator!);
-            if (!string.IsNullOrWhiteSpace(srcText)) parts.Add($"{srcGlyph} {srcText}");
-            parts.Add(Loc.GetF("deeper_player_meta_counts_fmt", regions, rules, haptics));
-            _txtEnhMetadata.Text = string.Join("  ·  ", parts);
+            // creator · [source icon] source · counts; the icon rides inline (Fluent icons L6).
+            var meta = new InlineCollection();
+            if (!string.IsNullOrWhiteSpace(creator)) meta.Add(new Run(creator + "  ·  "));
+            if (!string.IsNullOrWhiteSpace(srcText))
+            {
+                meta.Add(new InlineUIContainer(new IconGlyph { Kind = srcGlyph, Size = _txtEnhMetadata.FontSize })
+                    { BaselineAlignment = BaselineAlignment.Center });
+                meta.Add(new Run(" " + srcText + "  ·  "));
+            }
+            meta.Add(new Run(Loc.GetF("deeper_player_meta_counts_fmt", regions, rules, haptics)));
+            _txtEnhMetadata.Inlines = meta;
 
             // TxtEnhPath stays hidden — the popover surfaces the raw path; the name's tooltip
             // carries it as a discoverable detail.
@@ -1126,17 +1133,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _btnOpenInEditor.IsVisible = true;
         }
 
-        private static (string Glyph, string Text) DescribeMediaSource(Enhancement enh)
+        private static (IconKind Glyph, string Text) DescribeMediaSource(Enhancement enh)
         {
             var src = enh.MediaSource;
-            if (string.IsNullOrWhiteSpace(src)) return ("⚠", Loc.Get("deeper_player_source_missing"));
+            if (string.IsNullOrWhiteSpace(src)) return (IconKind.Warning, Loc.Get("deeper_player_source_missing"));
             if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
                 || src.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                try { return ("🌐", new Uri(src).Host); } catch { return ("🌐", src); }
+                try { return (IconKind.Globe, new Uri(src).Host); } catch { return (IconKind.Globe, src); }
             }
-            if (File.Exists(src)) return ("✓", System.IO.Path.GetFileName(src));
-            return ("⚠", System.IO.Path.GetFileName(src));
+            if (File.Exists(src)) return (IconKind.Checkmark, System.IO.Path.GetFileName(src));
+            return (IconKind.Warning, System.IO.Path.GetFileName(src));
         }
 
         private void ShowMediaPaneFor(string? mediaType)
@@ -1296,13 +1303,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _eventLogExpandedHeight = _eventScroll.MaxHeight > 0 ? _eventScroll.MaxHeight : 140;
                 _eventScroll.MaxHeight = 0;
                 _eventScroll.IsVisible = false;
-                _txtCollapseGlyph.Text = "▴";
+                _txtCollapseGlyph.Kind = IconKind.ChevronUp;
             }
             else
             {
                 _eventScroll.MaxHeight = _eventLogExpandedHeight;
                 _eventScroll.IsVisible = true;
-                _txtCollapseGlyph.Text = "▾";
+                _txtCollapseGlyph.Kind = IconKind.ChevronDown;
             }
         }
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -79,7 +80,9 @@ public sealed class ProgramsRunViewTests
             Assert.Equal($"1 / {program.LengthDays}", F<TextBlock>("TxtRunStatDone").Text);
             var pips = F<ItemsControl>("ProgramDayStrip").ItemsSource!.Cast<ProgramDayPip>().ToList();
             Assert.Equal(program.LengthDays, pips.Count);
-            Assert.Equal("✓", pips[0].Label);
+            Assert.True(pips[0].LabelIconVisible);               // a done day draws a Fluent check, not its number
+            Assert.Equal(IconKind.Checkmark, pips[0].LabelIcon);
+            Assert.Equal("", pips[0].Label);
             Assert.StartsWith(Loc.GetF("programs_pip_last_saved", 2), pips[1].Tip);
 
             Assert.Equal(program.GetDay(2)!.Title, F<TextBlock>("TxtTodayTitle").Text);

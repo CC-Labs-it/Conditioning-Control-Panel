@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
@@ -40,6 +41,7 @@ public sealed class EnhancementsTabTests
     }
 
     private static string?[] Texts(Control c) => c.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
+    private static IconKind[] Kinds(Control c) => c.GetLogicalDescendants().OfType<IconGlyph>().Select(g => g.Kind).ToArray();
 
     [Fact]
     public Task TreeDrawsWpfStatesHeaderAndSecretRailAndBreathesOnlyOnScreen() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -70,14 +72,17 @@ public sealed class EnhancementsTabTests
 
             var nodes = tab.FindControl<Canvas>("SkillTreeCanvas")!.Children.OfType<Control>()
                 .Where(c => c.Tag is string).ToDictionary(c => (string)c.Tag!);
-            // Owned: breathing green glow, FOREVER badge. Purchasable: pink glow, "💎 cost". Locked: blurred art, padlock.
+            // Owned: breathing green glow, FOREVER badge. Purchasable: pink glow, Diamond + cost. Locked: blurred art, padlock.
             Assert.Equal(Colors.LimeGreen, Assert.IsType<DropShadowEffect>(nodes["pink_hours"].Effect).Color);
             var buyable = SkillDefinition.All.Single(x => x.Id == "sparkle_boost_2");
             Assert.Equal(Colors.HotPink, Assert.IsType<DropShadowEffect>(nodes["sparkle_boost_2"].Effect).Color);
-            Assert.Contains($"💎 {buyable.Cost}", Texts(nodes["sparkle_boost_2"]));
+            Assert.Contains($"{buyable.Cost}", Texts(nodes["sparkle_boost_2"]));
+            Assert.Contains(IconKind.Diamond, Kinds(nodes["sparkle_boost_2"]));
             var locked = SkillDefinition.All.Single(x => x.Id == "lucky_bimbo");
             Assert.Null(nodes["lucky_bimbo"].Effect);
-            Assert.Contains($"🔒 {locked.Cost}", Texts(nodes["lucky_bimbo"]));
+            Assert.Contains($"{locked.Cost}", Texts(nodes["lucky_bimbo"]));
+            Assert.Contains(IconKind.LockClosed, Kinds(nodes["lucky_bimbo"]));
+            Assert.DoesNotContain(IconKind.Diamond, Kinds(nodes["lucky_bimbo"]));
             Assert.Contains(nodes["lucky_bimbo"].GetVisualDescendants(), v => v.Effect is BlurEffect);
             Assert.Contains(nodes["lucky_bimbo"].GetVisualDescendants(), v => v is Image);   // skills/ art is packaged
 

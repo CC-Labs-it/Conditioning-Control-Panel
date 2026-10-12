@@ -8,7 +8,6 @@ using Avalonia;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -63,13 +62,6 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Her padlock face: a lilac-to-pink disc with an ink padlock.</summary>
         public static Control Face(double size)
         {
-            var ink = new SolidColorBrush(InkColour);
-            var art = new Canvas { Width = 14, Height = 15 };
-            art.Children.Add(new Path { Data = Geometry.Parse("M4,7 V5 a3,3 0 0 1 6,0 V7"), Stroke = ink, StrokeThickness = 1.8 });
-            var body = new Rectangle { Width = 10, Height = 7.5, RadiusX = 2, RadiusY = 2, Fill = ink };
-            Canvas.SetLeft(body, 2);
-            Canvas.SetTop(body, 6.5);
-            art.Children.Add(body);
             return new Border
             {
                 Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), VerticalAlignment = VerticalAlignment.Center,
@@ -78,7 +70,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
                     GradientStops = { new GradientStop(Color.FromRgb(0xD9, 0xC4, 0xFF), 0), new GradientStop(Color.FromRgb(0xFF, 0x8F, 0xB1), 1) },
                 },
-                Child = new Viewbox { Width = size * 0.58, Height = size * 0.58, Child = art },
+                Child = new IconGlyph
+                {
+                    Kind = IconKind.LockClosed, Variant = IconVariant.Filled, Size = size * 0.58, Foreground = new SolidColorBrush(InkColour),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                },
             };
         }
 

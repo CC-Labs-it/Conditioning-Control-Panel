@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -11,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -112,14 +115,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // in the list the feature is audibly indistinguishable from broken.
                 if (_chkMasterEnable.IsChecked == true)
                 {
-                    _slotsPanel.Children.Add(new TextBlock
+                    var note = new DockPanel { Margin = new Thickness(2, 8, 0, 0) };
+                    var warn = new IconGlyph { Kind = IconKind.Warning, Variant = IconVariant.Filled, Size = 12, Margin = new Thickness(0, 2, 6, 0), VerticalAlignment = VerticalAlignment.Top };
+                    DockPanel.SetDock(warn, Dock.Left);
+                    note.Children.Add(warn);
+                    note.Children.Add(new TextBlock
                     {
-                        Text = "⚠ The master switch is on, but with no layers there is nothing to play - it stays silent until you add a file.",
-                        Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xA8, 0x4C)),
+                        Text = "The master switch is on, but with no layers there is nothing to play - it stays silent until you add a file.",
                         FontSize = 12,
                         TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(2, 8, 0, 0),
                     });
+                    note.SetValue(TextElement.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xE8, 0xA8, 0x4C)));
+                    _slotsPanel.Children.Add(note);
                 }
                 return;
             }
@@ -173,7 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var remove = new Button
             {
-                Content = "✕",
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 12 },
                 Width = 26,
                 Height = 26,
                 Padding = new Thickness(0),
@@ -187,6 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 VerticalAlignment = VerticalAlignment.Center,
             };
             ToolTip.SetTip(remove, "Remove this track");
+            AutomationProperties.SetName(remove, "Remove this track");
             Grid.SetColumn(remove, 2);
             header.Children.Add(remove);
             root.Children.Add(header);

@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -71,7 +72,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public bool IsLoggedIn { get => _isLoggedIn; private set => Set(ref _isLoggedIn, value); }
         public string LoginPrompt => Loc.Get("companion_engine_login_prompt");
         public string LoginButtonLabel => Loc.Get("companion_engine_login_button");
-        public string StatusLine { get => _statusLine; private set => Set(ref _statusLine, value); }
+        public string StatusLine
+        {
+            get => _statusLine;
+            private set { if (Set(ref _statusLine, value)) { Raise(nameof(StatusGlyph)); Raise(nameof(StatusText)); } }
+        }
+        /// <summary>The status line's leading ●/✓/❌, drawn as an icon by the drawer; the rest wraps (WPF EngineRoomDrawer.xaml:89).</summary>
+        public string StatusGlyph => IconText.Split(_statusLine).Icons is { Length: > 0 } icons ? icons[0] : "";
+        public string StatusText => IconText.Bare(_statusLine);
         public bool IsHealthy { get => _isHealthy; private set => Set(ref _isHealthy, value); }
 
         public string OllamaModel
@@ -214,5 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
             return true;
         }
+
+        private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

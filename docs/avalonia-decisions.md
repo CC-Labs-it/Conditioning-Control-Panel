@@ -1028,6 +1028,27 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `AccountSeedTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer` (SyncPushTests.cs),
   `AccountSeedTests.AProfileWithoutAchievements_SendsNoAchievementsKey` (SyncPushTests.cs), `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
   log: ~/ccp-port/evidence/server-sync-unblock/fail-proofs.log.
+
+## 2026-10-12: Sandboxed Debug runs get full access (avalonia-port/sandbox-full-access)
+
+- Advised by: the user (owner, server-whitelisted). Sandboxed test instances (kc live checks) have no network
+  (SandboxNet) and no real account (memory-only SecretStore), so the server whitelist cannot reach them.
+- Decision: a LOCAL override in `CCP.Avalonia/Platform/AccountSeed.cs` (`SandboxWhitelistRequested`). When ALL of a DEBUG
+  build, `SandboxNet.Active` (CCP_USERDATA_DIR honoured) and `CCP_SANDBOX_WHITELIST=1`: whitelisted, premium and Lab are
+  true (whitelist folds into tier 2, CoreEntitlement docs), so every TierGate opens. It does not sign in, sync or invent an
+  identity. Settings > Account's tier card says "Whitelisted (sandbox)" (literal, Debug-only, not localized).
+- Release builds compile it out (`#if DEBUG`; the Release `CCP.Avalonia.dll` holds no `CCP_SANDBOX_WHITELIST` string), so
+  shipped builds keep the paywall. Only `~/ccp-port/bin/kc start` sets the variable; headless tests do not (and run Release),
+  so they keep testing the gates. Tests: `SandboxWhitelistTests.cs`, `AccountSettingsSectionTests.SandboxWhitelistShowsOnTheTierCardOnlyInDebug`.
+## 2026-10-12: The 6-blink stop is WPF's recalibration stop, not a panic (avalonia-port/mine-safety)
+- Question: which surfaces does the rapid 6-blink stop (`MainShellWindow.BlinkStop.cs`) stop on this head?
+- Options: (A) the whole panic registry minus intake/gaze minigame/Chaos/camera, which also ends today's program session,
+  cancels the mic and AI follow-ups and stops the toys; (B) only what WPF `StopAllForRecalibration` (MainWindow.LabTab.cs:268-284) reaches.
+- Choice: B, exactly the WPF set (advised by: supervisor): `blink-trainer`, `mantra`, `takeover`, `engine` (the session is paused,
+  never ended), `pink-rush`, `lock-cards` (WPF closes them: App.xaml.cs:1778 `LockCard.Stop(dismissOpenCards: true)` and
+  StartStop.cs:~516 `LockCardWindow.ForceCloseAll()`) and `tube-speech` (KillAllAudio's `StopVoiceLineAudio`). The program
+  run, camera, mic, AI and haptics are left alone; the panic key stays the way to stop everything.
+- Test: `BlinkStopTests.SixTrackerBlinksStopEverythingButTheCamera` asserts the exact set and the kept surfaces.
 ## 2026-10-12: FlashClickable is honoured by the Avalonia flash overlay (flash-core)
 - Question: the Avalonia flash windows were always click-through, ignoring the user's Click setting; stay-until-popped
   and the leave picker had nothing to act on. May the overlay make flash windows take clicks when Click is on?

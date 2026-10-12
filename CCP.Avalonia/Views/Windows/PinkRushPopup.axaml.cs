@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Mod overrides for the title and subtitle. Both TextBlocks carry a plain literal in
             // the markup (no {loc:Str} binding), so assigning Text is safe. CoreMods answers with
             // the vanilla default when no mod layer is up, which is what App.Mods == null gave WPF.
-            this.FindControl<TextBlock>("TxtPinkRushTitle")!.Text = "\u26A1 " + CoreMods.PinkRushName;
+            this.FindControl<TextBlock>("TxtPinkRushTitle")!.Text = CoreMods.PinkRushName;
             this.FindControl<TextBlock>("TxtPinkRushSubtitle")!.Text = CoreMods.PinkRushDescription;
 
             // ponytail: needs Helpers.PassiveToastWindow (Win32 WS_EX_NOACTIVATE), which kept this

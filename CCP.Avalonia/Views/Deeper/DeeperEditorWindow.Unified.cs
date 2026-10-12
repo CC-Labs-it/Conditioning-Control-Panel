@@ -883,7 +883,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (TxtMetaCreator == null || BtnCreatorLockToggle == null) return;
             BtnCreatorLockToggle.IsChecked = _creatorLocked;
-            BtnCreatorLockToggle.Content = _creatorLocked ? "🔒" : "🔓";
+            CreatorLockGlyph.Kind = _creatorLocked ? IconKind.LockClosed : IconKind.LockOpen;
             TxtMetaCreator.IsReadOnly = _creatorLocked;
             TxtMetaCreator.Foreground = _creatorLocked ? Res("TextDimBrush") : Res("TextLightBrush");
         }

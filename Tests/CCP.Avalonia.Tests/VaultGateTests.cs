@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -37,7 +38,7 @@ public sealed class VaultGateTests
             Dispatcher.UIThread.RunJobs();
             var remote = shell.Named<RemoteControlTabView>("RemoteControlTab")!;
             var unlock = remote.GetLogicalDescendants().OfType<Button>()
-                .Single(b => b.Content is TextBlock t && t.Text == Loc.Get("gate_unlock_with_patreon"));
+                .Single(b => b.Content is IconLabel { Key: "gate_unlock_with_patreon" });
             unlock.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
 
@@ -127,7 +128,7 @@ public sealed class VaultGateTests
             Click(host, Loc.Get("tiergate_reconnect_action"));
             Assert.Equal(1, reconnects);
             var unlock = shell.Named<RemoteControlTabView>("RemoteControlTab")!.GetLogicalDescendants().OfType<Button>()
-                .Single(b => b.Content is TextBlock t && t.Text == Loc.Get("gate_unlock_with_patreon"));
+                .Single(b => b.Content is IconLabel { Key: "gate_unlock_with_patreon" });
             unlock.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, reconnects);
             Assert.Null(VaultGateDialog.Open);
@@ -152,7 +153,7 @@ public sealed class VaultGateTests
         {
             shell.Show();
             var unlock = shell.Named<RemoteControlTabView>("RemoteControlTab")!.GetLogicalDescendants().OfType<Button>()
-                .Single(b => b.Content is TextBlock t && t.Text == Loc.Get("gate_unlock_with_patreon"));
+                .Single(b => b.Content is IconLabel { Key: "gate_unlock_with_patreon" });
             shell.ShowTab("achievements");
             var ld = LockdownService.Current = new LockdownService();
             ld.Activate(TimeSpan.FromMinutes(30));

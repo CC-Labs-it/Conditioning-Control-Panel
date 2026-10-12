@@ -5,11 +5,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -41,6 +44,10 @@ public sealed class SessionSurfacesTests
         Assert.Equal("+77", Text(window, "TxtXP"));
         Assert.Equal("02:05", Text(window, "TxtDuration"));
         Assert.Equal(Loc.GetF("label_media_count_videos_images", 1, 1), Text(window, "TxtMediaCount"));
+        // btn_continue "💗 Continue": a Fluent heart beside the bare label (fluent-icons 2026-10-10).
+        var cont = window.FindControl<Button>("BtnClose")!;
+        Assert.Contains(cont.GetLogicalDescendants(), c => c is IconGlyph { Kind: IconKind.Heart });
+        Assert.Contains(cont.GetLogicalDescendants(), c => c is TextBlock t && t.Text == IconText.Bare(Loc.Get("btn_continue")));
         window.Close();
     });
 
