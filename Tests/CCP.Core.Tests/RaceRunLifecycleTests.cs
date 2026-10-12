@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.Race;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 public class RaceRunLifecycleTests
 {

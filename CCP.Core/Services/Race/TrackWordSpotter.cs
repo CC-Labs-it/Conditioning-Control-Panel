@@ -44,7 +44,7 @@ public static class TrackWordSpotter
             if (!_noModelLogged)
             {
                 _noModelLogged = true;
-                App.Logger?.Information("TrackWordSpotter: no Vosk model under {Root}, the word pass is skipped", Speech.SpeechService.ModelRoot);
+                Serilog.Log.Information("TrackWordSpotter: no Vosk model under {Root}, the word pass is skipped", string.Join(", ", Speech.SpeechEngine.DefaultModelRoots));
             }
             return events;
         }
@@ -83,9 +83,9 @@ public static class TrackWordSpotter
             ReadWords(rec.FinalResult(), heard);
 
             events = Group(heard, lexicon);
-            App.Logger?.Information("TrackWordSpotter: {Count} phrases over {Dur:F1}s of audio", events.Count, pcm.DurationSec);
+            Serilog.Log.Information("TrackWordSpotter: {Count} phrases over {Dur:F1}s of audio", events.Count, pcm.DurationSec);
         }
-        catch (Exception ex) { App.Logger?.Information(ex, "TrackWordSpotter: the word pass failed, charting energy only"); }
+        catch (Exception ex) { Serilog.Log.Information(ex, "TrackWordSpotter: the word pass failed, charting energy only"); }
         finally { try { model?.Dispose(); } catch { } }
         return events;
     }
@@ -108,7 +108,7 @@ public static class TrackWordSpotter
                 return new VoskRecognizer(model, TrackPcm.SampleRate, grammar.ToString(Newtonsoft.Json.Formatting.None));
             }
             catch (Exception ex)
-            { App.Logger?.Information(ex, "TrackWordSpotter: the model refused a grammar of {Count} phrases, narrowing", attempt.Count); }
+            { Serilog.Log.Information(ex, "TrackWordSpotter: the model refused a grammar of {Count} phrases, narrowing", attempt.Count); }
         }
         return new VoskRecognizer(model, TrackPcm.SampleRate);
     }
@@ -187,7 +187,7 @@ public static class TrackWordSpotter
     /// </summary>
     private static string? ResolveModelDir()
     {
-        try { return Speech.SpeechService.ResolveModelDir(); }
+        try { return System.Linq.Enumerable.FirstOrDefault(System.Linq.Enumerable.Select(Speech.SpeechEngine.DefaultModelRoots, Speech.SpeechEngine.ResolveModelDir), d => d != null); }
         catch { return null; }
     }
 }
@@ -252,7 +252,7 @@ public static class TrackChartWords
             chart.Analysis.Lexicon = lexicon?.ToList() ?? new List<string>();
             chart.Analysis.Partial = false;
         }
-        catch (Exception ex) { App.Logger?.Information(ex, "TrackChartWords: fold failed, the chart keeps its energy pass"); }
+        catch (Exception ex) { Serilog.Log.Information(ex, "TrackChartWords: fold failed, the chart keeps its energy pass"); }
     }
 
     /// <summary>

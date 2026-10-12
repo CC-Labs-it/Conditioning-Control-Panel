@@ -5,7 +5,7 @@ using ConditioningControlPanel.Services.Race;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 public class RacingAccessTests
 {
@@ -64,10 +64,10 @@ public class RacingAccessTests
     public void PurchaseDoorIsArmed()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "ConditioningControlPanel.csproj")))
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "CCP.Core", "CCP.Core.csproj")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        var source = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Race", "RacingAccess.cs"));
+        var source = File.ReadAllText(Path.Combine(dir!.FullName, "CCP.Core", "Services", "Race", "RacingAccess.cs"));
         Assert.Contains("private const bool PurchaseDoorArmed = true;", source, StringComparison.Ordinal);
     }
 

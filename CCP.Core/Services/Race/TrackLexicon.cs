@@ -72,7 +72,7 @@ public static class TrackLexicon
     private static Resolved Current()
     {
         string modId;
-        try { modId = App.Mods?.ActiveModId ?? ""; }
+        try { modId = CoreMods.ActiveModId ?? ""; }
         catch { modId = ""; }   // charting can run before the mod system is up; neutral is the safe answer
 
         var cached = _cache;
@@ -115,7 +115,7 @@ public static class TrackLexicon
             // The active mod's trigger corpus. ModService folds a manifest's list into
             // AppSettings.CustomTriggers per mod, so both are read: the settings copy is what the
             // user actually hears, the manifest copy covers a mod loaded but not yet applied.
-            var mods = App.Mods;
+            var mods = CoreMods.Service;
             if (mods != null)
             {
                 raw.AddRange(mods.GetDefaultCustomTriggers());
@@ -125,7 +125,7 @@ public static class TrackLexicon
                 if (t?.CumAndCollapse != null) raw.Add(t.CumAndCollapse);
             }
 
-            var settings = App.Settings?.Current;
+            var settings = CoreSettings.Current;
             if (settings != null)
             {
                 if (settings.CustomTriggers != null) raw.AddRange(settings.CustomTriggers);
@@ -141,7 +141,7 @@ public static class TrackLexicon
                 }
             }
         }
-        catch (Exception ex) { App.Logger?.Information(ex, "TrackLexicon: trigger sources unavailable, using structure words only"); }
+        catch (Exception ex) { Serilog.Log.Information(ex, "TrackLexicon: trigger sources unavailable, using structure words only"); }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var phrases = new List<string>(Math.Min(raw.Count, MaxPhrases));

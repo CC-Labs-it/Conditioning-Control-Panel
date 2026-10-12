@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services.Race;
 /// <summary>Charts keyed by source hash under %LOCALAPPDATA%/ConditioningControlPanel/race/charts.</summary>
 public static class TrackChartCache
 {
-    public static string Root => Path.Combine(App.UserDataPath, "race", "charts");
+    public static string Root => Path.Combine(CorePaths.UserData, "race", "charts");
 
     /// <summary>The file a chart with this source hash lives at.</summary>
     public static string PathFor(string hash) => Path.Combine(Root, hash + ".json");
@@ -30,7 +30,7 @@ public static class TrackChartCache
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("race-chart: cached chart {Hash} unreadable ({Message})", hash, ex.Message);
+            Serilog.Log.Information("race-chart: cached chart {Hash} unreadable ({Message})", hash, ex.Message);
             return null;
         }
     }
@@ -54,12 +54,12 @@ public static class TrackChartCache
 
         if (AuthoredCharts.IsAuthored(chart))
         {
-            App.Logger?.Information("race-chart: not caching {Hash}, it is an authored chart", hash);
+            Serilog.Log.Information("race-chart: not caching {Hash}, it is an authored chart", hash);
             return;
         }
         if (AuthoredCharts.ExistsFor(hash, chart.Source.CloudId))
         {
-            App.Logger?.Information("race-chart: not caching {Hash}, an authored chart already answers for it", hash);
+            Serilog.Log.Information("race-chart: not caching {Hash}, an authored chart already answers for it", hash);
             return;
         }
 

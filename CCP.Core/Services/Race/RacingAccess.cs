@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Race;
@@ -20,7 +19,7 @@ public static class RacingAccess
     /// in its place and was disarmed here at the merge. Later on 2026-09-18 the owner reversed
     /// that: Racing Thoughts is a Back Room unlock. A player who owns no racing track does not
     /// get the race, and the launcher shows a mystery card in its place until the first track is
-    /// bought at the counter (PrizeGrants.RacingTrack(n), see LauncherCatalogue).</para>
+    /// bought at the counter (RacingTrack(n), see LauncherCatalogue).</para>
     ///
     /// <para>Armed in ONE place rather than six. Six call sites ask this class whether the race
     /// may open: CaucusHostService.Launch and its grant watcher and both cloud hooks, and
@@ -41,10 +40,21 @@ public static class RacingAccess
     /// </summary>
     private const bool PurchaseDoorArmed = true;
 
-    /// <summary>Every original track, which is what an open door hands the page.</summary>
-    private static int[] AllTracks => Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).ToArray();
+    /// <summary>WPF PrizeGrants.RacingTrackMax: the original tracks are rt.original.00..10.</summary>
+    public const int RacingTrackMax = 10;
 
-    public static bool CanLaunch => !PurchaseDoorArmed || AllowsLaunch(PrizeGrants.IsGranted);
+    /// <summary>WPF PrizeGrants.RacingTrack(n).</summary>
+    public static string RacingTrack(int n) => "rt.original." + n.ToString("00", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>WPF PrizeGrants.IsGranted. The ownership store lives in the head (Platform/PrizeOwnership), which seeds this; unseeded owns nothing, so the door stays shut.</summary>
+    public static volatile Func<string, bool>? IsGrantedProvider;
+
+    private static bool Owns(string id) { try { return IsGrantedProvider?.Invoke(id) ?? false; } catch { return false; } }
+
+    /// <summary>Every original track, which is what an open door hands the page.</summary>
+    private static int[] AllTracks => Enumerable.Range(0, RacingTrackMax + 1).ToArray();
+
+    public static bool CanLaunch => !PurchaseDoorArmed || AllowsLaunch(Owns);
 
     /// <summary>The tracks the page may pick from. An open door hands over the whole catalogue: the
     /// page treats an EMPTY list as "you own nothing" and hides every built-in level (CONTRACT
@@ -52,12 +62,12 @@ public static class RacingAccess
     /// gate the game's content even though its door is unlocked, which is the same refusal one
     /// screen later.</summary>
     public static int[] OwnedTracks => PurchaseDoorArmed
-        ? Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1)
-            .Where(n => PrizeGrants.IsGranted(PrizeGrants.RacingTrack(n))).ToArray()
+        ? Enumerable.Range(0, RacingTrackMax + 1)
+            .Where(n => Owns(RacingTrack(n))).ToArray()
         : AllTracks;
 
     internal static bool AllowsLaunch(Func<string, bool> owns)
-        => Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).Any(n => owns(PrizeGrants.RacingTrack(n)));
+        => Enumerable.Range(0, RacingTrackMax + 1).Any(n => owns(RacingTrack(n)));
 
     internal static Dictionary<string, int> ParseCatalog(JToken json)
     {
@@ -67,7 +77,7 @@ public static class RacingAccess
             var id = (string?)row["id"];
             if (row["trackNum"]?.Type != JTokenType.Integer || string.IsNullOrWhiteSpace(id)) continue;
             var n = (int)row["trackNum"]!;
-            if (n is >= 0 and <= PrizeGrants.RacingTrackMax) result[id] = n;
+            if (n is >= 0 and <= RacingTrackMax) result[id] = n;
         }
         return result;
     }
@@ -76,7 +86,7 @@ public static class RacingAccess
     {
         if (!AllowsLaunch(owns) || catalog == null) return false;
         var id = AuthoredCharts.CloudIdFrom(url);
-        return !catalog.TryGetValue(id, out var n) || owns(PrizeGrants.RacingTrack(n));
+        return !catalog.TryGetValue(id, out var n) || owns(RacingTrack(n));
     }
 
     private static readonly Lazy<IReadOnlyDictionary<string, int>?> Catalog = new(() =>
@@ -85,7 +95,7 @@ public static class RacingAccess
         {
             var path = Path.Combine(AppContext.BaseDirectory, "Resources", "web", "dtrh", "race", "levels.json");
             var rows = ParseCatalog(JToken.Parse(File.ReadAllText(path)));
-            return rows.Count == PrizeGrants.RacingTrackMax + 1 ? rows : null;
+            return rows.Count == RacingTrackMax + 1 ? rows : null;
         }
         catch (Exception ex) { Diag.Swallowed(ex, "race catalogue unavailable; cloud gate closed"); return null; }
     });
@@ -93,7 +103,7 @@ public static class RacingAccess
     /// <summary>A BambiCloud source the player asked to race to. Open door, any source: the authored
     /// charts are the game's own content, so refusing one is refusing the game.</summary>
     public static bool CanOpenCloud(string? url) =>
-        !PurchaseDoorArmed || AllowsCloud(url, Catalog.Value, PrizeGrants.IsGranted);
+        !PurchaseDoorArmed || AllowsCloud(url, Catalog.Value, Owns);
 }
 
 /// <summary>A denied browser source is rechecked on Play, never autoplayed by a purchase.</summary>

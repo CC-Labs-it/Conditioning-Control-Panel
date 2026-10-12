@@ -38,7 +38,7 @@ public static class AuthoredCharts
     public const string DoorGenerated = "generated";
 
     /// <summary>Where a player drops a chart of their own. Any *.json in here with `hand: true`.</summary>
-    public static string UserRoot => Path.Combine(App.UserDataPath, "race", "authored");
+    public static string UserRoot => Path.Combine(CorePaths.UserData, "race", "authored");
 
     /// <summary>The race page's folder as it lands next to the exe (DtrhHostService maps this same
     /// Resources/web tree to ccp.game), so the shipped index is read off disk, not over the bridge.</summary>
@@ -169,16 +169,16 @@ public static class AuthoredCharts
                 if (h.Length > 0) map[h] = file;
                 if (id.Length > 0) map[id] = file;
                 if (h.Length == 0 && id.Length == 0)
-                    App.Logger?.Information("race-chart: authored chart {File} has no source.hash and no source.cloudId, so nothing can match it", Path.GetFileName(file));
+                    Serilog.Log.Information("race-chart: authored chart {File} has no source.hash and no source.cloudId, so nothing can match it", Path.GetFileName(file));
             }
             _userIndex = map;
             _userStamp = stamp;
             _userScanned = true;
-            if (map.Count > 0) App.Logger?.Information("race-chart: {Keys} authored key(s) in {Root}", map.Count, root);
+            if (map.Count > 0) Serilog.Log.Information("race-chart: {Keys} authored key(s) in {Root}", map.Count, root);
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("race-chart: authored folder unreadable ({Message})", ex.Message);
+            Serilog.Log.Information("race-chart: authored folder unreadable ({Message})", ex.Message);
             _userIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _userScanned = true;
         }
@@ -230,11 +230,11 @@ public static class AuthoredCharts
                     .ToList();
                 _shippedStamp = stamp;
                 _shippedRead = true;
-                if (_shipped.Count > 0) App.Logger?.Information("race-chart: {N} authored track(s) in the shipped index", _shipped.Count);
+                if (_shipped.Count > 0) Serilog.Log.Information("race-chart: {N} authored track(s) in the shipped index", _shipped.Count);
             }
             catch (Exception ex)
             {
-                App.Logger?.Information("race-chart: shipped chart index unreadable ({Message})", ex.Message);
+                Serilog.Log.Information("race-chart: shipped chart index unreadable ({Message})", ex.Message);
                 _shipped = new List<IndexRow>();
                 _shippedRead = true;
             }
@@ -256,14 +256,14 @@ public static class AuthoredCharts
             string full = Path.GetFullPath(Path.Combine(root, row.Chart.Replace('/', Path.DirectorySeparatorChar)));
             if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             {
-                App.Logger?.Information("race-chart: index row {Chart} points outside the race folder, ignored", row.Chart);
+                Serilog.Log.Information("race-chart: index row {Chart} points outside the race folder, ignored", row.Chart);
                 return null;
             }
             var chart = Load(full);
             if (chart == null) return null;
             if (!IsAuthored(chart))
             {
-                App.Logger?.Information("race-chart: index row {Chart} is not marked hand: true, ignored", row.Chart);
+                Serilog.Log.Information("race-chart: index row {Chart} is not marked hand: true, ignored", row.Chart);
                 return null;
             }
             // The chart's own name wins; the row's title is the fallback, per the README.
@@ -273,7 +273,7 @@ public static class AuthoredCharts
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("race-chart: index row {Chart} unreadable ({Message})", row.Chart, ex.Message);
+            Serilog.Log.Information("race-chart: index row {Chart} unreadable ({Message})", row.Chart, ex.Message);
             return null;
         }
     }
@@ -288,13 +288,13 @@ public static class AuthoredCharts
             var chart = JsonConvert.DeserializeObject<TrackChart>(File.ReadAllText(path));
             if (chart == null) return null;
             if (chart.Version != TrackChart.CurrentVersion)
-                App.Logger?.Information("race-chart: authored chart {File} is version {V}, this build writes {Cur}",
+                Serilog.Log.Information("race-chart: authored chart {File} is version {V}, this build writes {Cur}",
                     Path.GetFileName(path), chart.Version, TrackChart.CurrentVersion);
             return chart;
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("race-chart: authored chart {File} unreadable ({Message})", Path.GetFileName(path), ex.Message);
+            Serilog.Log.Information("race-chart: authored chart {File} unreadable ({Message})", Path.GetFileName(path), ex.Message);
             return null;
         }
     }
