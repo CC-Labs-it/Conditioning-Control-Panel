@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 
 namespace ConditioningControlPanel.Avalonia.Helpers
@@ -27,37 +28,69 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private readonly Visual _owner;
         private readonly Action<double> _step;
         private long _started;
+        private bool _running;
+        private Action? _unwatch;
 
         public BeatLoop(Visual owner, Action<double> step)
         {
             _owner = owner;
             _step = step;
             _clock = new FrameClock(owner) { Interval = TimeSpan.FromSeconds(1.0 / 30) };
-            _clock.Tick += (_, _) => { if (!Parked) Step(); };
+            _clock.Tick += (_, _) => { if (Parked) _clock.Stop(); else Step(); };
         }
 
-        /// <summary>A beat writes nothing while its owner is hidden or its window minimised, so the
-        /// window has nothing to compose (WPF renders nothing for a minimised window either). Time
-        /// keeps running, so the loop resumes in phase.</summary>
+        /// <summary>While its owner is hidden or its window minimised a loop parks: the clock stops,
+        /// so the window neither requests frames nor has anything to compose (WPF renders nothing
+        /// for a minimised window either). An IsVisible / WindowState change on the owner or any
+        /// ancestor parks or wakes it; time keeps running, so it resumes in phase.</summary>
         internal bool Parked =>
             !_owner.IsEffectivelyVisible
             || global::Avalonia.Controls.TopLevel.GetTopLevel(_owner) is global::Avalonia.Controls.Window { WindowState: global::Avalonia.Controls.WindowState.Minimized };
 
-        public bool IsRunning => _clock.IsEnabled;
+        /// <summary>True while the beat's clock is actually subscribed (not parked).</summary>
+        internal bool IsTicking => _clock.IsEnabled;
+
+        /// <summary>Started and not stopped; a parked loop is still running.</summary>
+        public bool IsRunning => _running;
 
         public void Start()
         {
-            if (IsRunning) return;
+            if (_running) return;
+            _running = true;
             _started = Time.GetTimestamp();
             _step(0);
-            _clock.Start();
             Live.Add(this);
+            // Watch the owner and its ancestors (the window included) for IsVisible / WindowState,
+            // so a hide or a minimise parks the clock at once and a show wakes it.
+            var chain = _owner.GetSelfAndVisualAncestors().ToArray();
+            void On(object? s, AvaloniaPropertyChangedEventArgs e)
+            {
+                if (e.Property == Visual.IsVisibleProperty || e.Property == global::Avalonia.Controls.Window.WindowStateProperty) Sync();
+            }
+            foreach (var a in chain) a.PropertyChanged += On;
+            _unwatch = () => { foreach (var a in chain) a.PropertyChanged -= On; };
+            Sync();
         }
 
         public void Stop()
         {
+            _running = false;
             _clock.Stop();
+            Unwatch();
             Live.Remove(this);
+        }
+
+        private void Sync()
+        {
+            if (!_running) return;
+            if (Parked) _clock.Stop();
+            else _clock.Start();
+        }
+
+        private void Unwatch()
+        {
+            _unwatch?.Invoke();
+            _unwatch = null;
         }
 
         private void Step() => _step(Time.GetElapsedTime(_started).TotalSeconds);

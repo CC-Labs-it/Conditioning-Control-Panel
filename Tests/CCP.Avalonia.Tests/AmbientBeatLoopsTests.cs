@@ -149,20 +149,32 @@ public sealed class AmbientBeatLoopsTests
             var glyphScale = F<ScaleTransform>(glyph, "_breath").ScaleX;
             var badgeScale = F<ScaleTransform>(badge, "_tierScale").ScaleX;
             var badgeAngle = F<RotateTransform>(badge, "_tierRotate").Angle;
+            var badgeGlow = badge.TierGlow.Opacity;
+            Assert.Null(badge.TierSign.Effect);                // the glow is a sibling BoxShadow (P82), not an Effect
+            Assert.True(badge.TierGlow.IsVisible);
+            Assert.NotEqual(default, badge.TierGlow.BoxShadow);
             Step(time, 0.7);
             Assert.NotEqual(glyphScale, F<ScaleTransform>(glyph, "_breath").ScaleX);
             Assert.NotEqual(badgeScale, F<ScaleTransform>(badge, "_tierScale").ScaleX);
             Assert.NotEqual(badgeAngle, F<RotateTransform>(badge, "_tierRotate").Angle);
+            Assert.NotEqual(badgeGlow, badge.TierGlow.Opacity);
 
-            // Minimised: every beat parks (writes nothing), like WPF rendering nothing for a minimised window.
+            // Minimised or hidden: the beat parks - its clock unsubscribes, so the window requests no
+            // frames (WPF renders nothing for a minimised window); shown again, it wakes.
+            var idle = F<BeatLoop>(chip, "_idle");
+            Assert.True(idle.IsTicking);
             w.WindowState = WindowState.Minimized;
             Dispatcher.UIThread.RunJobs();
-            Assert.True(F<BeatLoop>(chip, "_idle").Parked);
+            Assert.True(idle.Parked);
+            Assert.False(idle.IsTicking);
+            Assert.True(idle.IsRunning);
             w.WindowState = WindowState.Normal;
             Dispatcher.UIThread.RunJobs();
-            Assert.False(F<BeatLoop>(chip, "_idle").Parked);
+            Assert.True(idle.IsTicking);
             chip.IsVisible = false;
-            Assert.True(F<BeatLoop>(chip, "_idle").Parked);
+            Assert.False(idle.IsTicking);
+            chip.IsVisible = true;
+            Assert.True(idle.IsTicking);
         }
         finally
         {
@@ -204,6 +216,10 @@ public sealed class AmbientBeatLoopsTests
             Assert.Equal(1.0, spark.Opacity);
 
             // Lockdown plate (WPF MainWindow.Animations.cs:99-112): #FF1493 -> #FF69B4, blur 12 -> 22, linear 1.5 s.
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;      // WPF :88 AllowAmbientLoops gate
+            shell.StartLockdownPulse();
+            Assert.False(shell.LockdownPulsing);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
             shell.StartLockdownPulse();
             Assert.True(shell.LockdownPulsing);
             var plate = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageBorder")!;
@@ -272,6 +288,11 @@ public sealed class AmbientBeatLoopsTests
             Assert.Equal(0.75, view.RoadmapPulseOpacity!.Value, 3);
             Step(time, 0.8);
             Assert.Equal(0.75, view.RoadmapPulseOpacity!.Value, 3);   // on the way back down
+            // A hidden Quests tab parks the pulse's clock (P01/P07).
+            var pulse = F<BeatLoop>(view, "_pulse");
+            Assert.True(pulse.IsTicking);
+            view.IsVisible = false;
+            Assert.False(pulse.IsTicking);
         }
         finally
         {

@@ -42,6 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StartLockdownPulse()
         {
             if (_lockdownPulseClock != null) return;                 // already running
+            // WPF :88: no pulse when ambient loops are off (Motion Reduced/Off, performance tier).
+            if (!global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops) return;
             try
             {
                 var plate = Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageBorder");

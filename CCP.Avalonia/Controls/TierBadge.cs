@@ -110,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>The sign plates. Each hosts the real PNG when it loads and the vector
         /// stand-in when it does not (see the class remarks); the Border stays either way,
         /// because it is what carries the transforms, the glow and the layout box.</summary>
-        private readonly Border _tierSign;
+        private readonly Border _tierSign, _tierGlow;
         private readonly Border _stampSign;
         private readonly Image _tierImage;
         private readonly Image _stampImage;
@@ -172,6 +172,22 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 TextAlignment = TextAlignment.Center,
             };
 
+            // The neon glow (lag fix, P82): a sibling BoxShadow layer under the sign that shares its
+            // transforms, never a DropShadowEffect on the sign - an Effect under the looping swell/sway
+            // re-renders and re-blurs the sign on every beat, eight times over on the Play tab.
+            var signTransform = new TransformGroup { Children = { _tierScale, _tierRotate } };
+            _tierGlow = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                RenderTransformOrigin = RelativePoint.Center,
+                RenderTransform = signTransform,
+                IsHitTestVisible = false,
+                IsVisible = false,
+            };
+            Children.Add(_tierGlow);
+
             _tierSign = new Border
             {
                 CornerRadius = new CornerRadius(6),
@@ -179,7 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 RenderTransformOrigin = RelativePoint.Center,
-                RenderTransform = new TransformGroup { Children = { _tierScale, _tierRotate } },
+                RenderTransform = signTransform,
                 Child = _tierWords,
             };
             Children.Add(_tierSign);
@@ -290,6 +306,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         internal new bool IsAnimating => _motionRunning;
 
         internal Border TierSign => _tierSign;
+        internal Border TierGlow => _tierGlow;
         internal Border StampSign => _stampSign;
         internal double TierTilt => Tier >= 2 ? TiltT2 : TiltT1;
 
@@ -380,21 +397,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 // The tier badge behind a stamp is dimmed and DEAD - a neon sign that has been
                 // papered over does not keep humming. Its glow comes off with its brightness.
                 _tierSign.Opacity = restamped ? DimmedTierOpacity : 1.0;
-                if (restamped || !GlowAllowed)
-                {
-                    _tierSign.Effect = null;
-                }
-                else if (_tierSign.Effect is not DropShadowEffect)
-                {
-                    _tierSign.Effect = new DropShadowEffect
-                    {
-                        Color = tier >= 2 ? GlowT2 : GlowT1,
-                        BlurRadius = GlowBlurRadius,
-                        OffsetX = 0,
-                        OffsetY = 0,
-                        Opacity = 1.0,
-                    };
-                }
+                _tierGlow.IsVisible = !restamped && GlowAllowed;
+                _tierGlow.Opacity = 1.0;
+                _tierGlow.BoxShadow = new BoxShadows(new BoxShadow { Blur = GlowBlurRadius, Color = tier >= 2 ? GlowT2 : GlowT1 });
 
                 bool glints = tier >= 2 && !restamped;
                 _glintA.IsVisible = glints;
@@ -570,7 +575,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 double period = Tier >= 2 ? BreathT2 : BreathT1;
                 double tilt = TierTilt;
                 bool hum = !FreeToday, glints = Tier >= 2;   // a papered-over sign hums no more; the stamp is the star
-                var glow = _tierSign.Effect as DropShadowEffect;
+                var glow = _tierGlow.IsVisible ? _tierGlow : null;
                 // WPF StartMotion (TierBadge.cs:416-535), every track at AmbientFrameRate 30, on the
                 // window's 30 fps beat instead of five infinite Animations (P82); the swell and the sway
                 // used to be inert (RunAsync of a transform property on the sign).
@@ -621,7 +626,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 _tierRotate.Angle = TierTilt;
                 _tierSign.Opacity = FreeToday ? DimmedTierOpacity : 1.0;
 
-                if (_tierSign.Effect is DropShadowEffect glow) glow.Opacity = 1.0;
+                _tierGlow.Opacity = 1.0;
 
                 foreach (var glint in new[] { _glintA, _glintB }) glint.Opacity = 0;
             }
@@ -664,8 +669,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
             // WPF gets the height from Stretch=Uniform on the bitmap; a Border has to be told, so
             // each sign is boxed at its art's own aspect - and at the measured constant when the
             // art is missing and the vector plate is standing in.
-            _tierSign.Width = width;
-            _tierSign.Height = width / Aspect(TierArt(Tier), Tier >= 2 ? AspectT2 : AspectT1);
+            _tierGlow.Width = _tierSign.Width = width;
+            _tierGlow.Height = _tierSign.Height = width / Aspect(TierArt(Tier), Tier >= 2 ? AspectT2 : AspectT1);
             _tierWords.FontSize = Math.Max(7, Math.Round(width * 0.125));
 
             // The stamp is deliberately a touch bigger than what it covers, and lands down-left of
