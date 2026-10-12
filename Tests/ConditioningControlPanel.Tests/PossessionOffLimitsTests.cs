@@ -20,28 +20,11 @@ namespace ConditioningControlPanel.Tests;
 [Collection(CompanionWpfRenderCollection.Name)]
 public class PossessionOffLimitsTests
 {
-    // ---- the name half (pure) --------------------------------------------------------------------
-
-    [Theory]
-    [InlineData("LockdownCardBorder")]
-    [InlineData("BtnEmergencyExit")]
-    [InlineData("TxtSecretExitPhrase")]
-    [InlineData("lockdowngate")]            // case does not matter
-    [InlineData("PanelEMERGENCY")]
-    public void ReservedNames_are_off_limits(string name)
-        => Assert.True(PossessionOffLimits.IsReservedName(name));
-
-    [Theory]
-    [InlineData("BtnStart")]
-    [InlineData("CardFlashSettings")]
-    [InlineData("")]
-    [InlineData(null)]
-    public void Ordinary_names_are_not(string? name)
-        => Assert.False(PossessionOffLimits.IsReservedName(name));
+    // The name half (pure) moved with the rule to Tests/CCP.Core.Tests/PossessionPureRulesTests.cs.
 
     [Fact]
     public void A_null_element_is_off_limits()
-        => Assert.True(PossessionOffLimits.IsOffLimits(null));
+        => Assert.True(PossessionOffLimitsTree.IsOffLimits(null));
 
     // ---- the tree half ---------------------------------------------------------------------------
 
@@ -67,7 +50,7 @@ public class PossessionOffLimitsTests
             inner.Children.Add(new Button { Content = "Save" });
             card.Child = inner;
 
-            Assert.False(PossessionOffLimits.IsOffLimits(Realize(card)));
+            Assert.False(PossessionOffLimitsTree.IsOffLimits(Realize(card)));
         });
     }
 
@@ -85,7 +68,7 @@ public class PossessionOffLimitsTests
             card.Child = inner;
 
             Assert.False(Possession.GetExclude(card));   // the tag really does not reach upward
-            Assert.True(PossessionOffLimits.IsOffLimits(Realize(card)));
+            Assert.True(PossessionOffLimitsTree.IsOffLimits(Realize(card)));
         });
     }
 
@@ -96,7 +79,7 @@ public class PossessionOffLimitsTests
         {
             var card = new Border { Width = 200, Height = 120 };
             Possession.SetExclude(card, true);
-            Assert.True(PossessionOffLimits.IsOffLimits(Realize(card)));
+            Assert.True(PossessionOffLimitsTree.IsOffLimits(Realize(card)));
         });
     }
 
@@ -106,7 +89,7 @@ public class PossessionOffLimitsTests
         WpfRenderHarness.OnStaThread(() =>
         {
             var card = new Border { Name = "LockdownCardBorder", Width = 200, Height = 120 };
-            Assert.True(PossessionOffLimits.IsOffLimits(Realize(card)));
+            Assert.True(PossessionOffLimitsTree.IsOffLimits(Realize(card)));
         });
     }
 
@@ -120,7 +103,7 @@ public class PossessionOffLimitsTests
             var outer = new Border { Name = "LockdownActivePanel", Width = 200, Height = 120, Child = inner };
 
             Realize(outer);
-            Assert.True(PossessionOffLimits.IsOffLimits(inner));
+            Assert.True(PossessionOffLimitsTree.IsOffLimits(inner));
         });
     }
 }
