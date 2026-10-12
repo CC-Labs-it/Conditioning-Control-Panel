@@ -1,0 +1,133 @@
+using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Flash;
+using Serilog;
+
+namespace ConditioningControlPanel.Services
+{
+    /// <summary>
+    /// One surface's content-pack half of a media pool (WPF FlashService <c>_packImageList</c> + PackBag +
+    /// <c>_tempPackFiles</c> :173-191; VideoService <c>_packVideoQueue</c> + <c>_tempPackFiles</c> :44/:56;
+    /// BubbleCountService <c>_packVideos</c> :33): the active pack entries of one type, dealt from a
+    /// <see cref="ShuffleBag{T}"/> keyed on <see cref="ContentPackStore.SourceKey"/> (never a temp path).
+    ///
+    /// <para>The entry list is re-read from <c>ContentPackStore.Current</c> on every draw (an in-memory
+    /// walk of the loaded manifests), so an activation, an uninstall or a per-file opt-out shows on the
+    /// next pick, the way the flash overlay re-lists its folder per burst. Decrypts stay on record and
+    /// are deleted past <see cref="TempCap"/> and at <see cref="CleanupTemps"/>. Thread-safe.</para>
+    /// </summary>
+    public sealed class PackMediaPool
+    {
+        /// <summary>WPF FlashService.cs:3504: <c>if (_tempPackFiles.Count &gt; 50) CleanupTempPackFiles()</c>.</summary>
+        public const int TempCap = 50;
+
+        private readonly string _type;
+        private readonly Func<ContentPackStore?> _store;
+        private readonly Random _rng;
+        private readonly object _lock = new();
+        private readonly ShuffleBag<(string PackId, PackFileEntry File)> _bag;
+        private readonly List<string> _temps = new();
+
+        /// <param name="type"><see cref="ContentPackStore.ImageType"/> or <see cref="ContentPackStore.VideoType"/>.</param>
+        public PackMediaPool(string type, Random? rng = null, Func<ContentPackStore?>? store = null)
+        {
+            _type = type;
+            _rng = rng ?? new Random();
+            _store = store ?? (() => ContentPackStore.Current);
+            _bag = new ShuffleBag<(string PackId, PackFileEntry File)>(e => ContentPackStore.SourceKey(e.PackId, e.File), _rng);
+        }
+
+        /// <summary>Decrypts on record (tests, diagnostics).</summary>
+        public int TempCount { get { lock (_lock) return _temps.Count; } }
+
+        /// <summary>
+        /// WPF GetNextImages (FlashService.cs:3555-3563), GetNextVideo (VideoService.cs:8017-8026) and
+        /// BubbleCountService.cs:684-693: with local and pack entries both present a pack entry wins in
+        /// proportion to its share; with packs only, always; with no packs, never.
+        /// </summary>
+        public static bool ShouldDrawPack(int localCount, int packCount, Random rng)
+        {
+            if (packCount <= 0) return false;
+            if (localCount <= 0) return true;
+            return rng.Next(localCount + packCount) >= localCount;
+        }
+
+        /// <summary>
+        /// The whole WPF pack branch in one call: roll <see cref="ShouldDrawPack"/> against
+        /// <paramref name="localCount"/>, take the next entry of the shuffled walk and decrypt it. Null
+        /// when the roll picks local, no active pack holds this type, or the decrypt failed - the caller
+        /// then falls back to its local pick, as WPF does.
+        /// </summary>
+        public string? TryDraw(int localCount)
+        {
+            List<(string PackId, PackFileEntry File)> list;
+            (string PackId, PackFileEntry File) entry;
+            lock (_lock)
+            {
+                list = Entries();
+                if (!ShouldDrawPack(localCount, list.Count, _rng) || !_bag.TryNext(list, out entry)) return null;
+            }
+            return Decrypt(entry);
+        }
+
+        /// <summary>
+        /// WPF GetPackFileTempPath + <c>_tempPackFiles.Add</c>: decrypt to a FRESH temp file and keep it on
+        /// record. Past <see cref="TempCap"/> the oldest half is deleted first (WPF deletes them all; the
+        /// newest stay so a clip still playing keeps its file).
+        /// </summary>
+        private string? Decrypt((string PackId, PackFileEntry File) entry)
+        {
+            var store = _store();
+            if (store == null || entry.File == null) return null;
+            List<string>? stale = null;
+            lock (_lock)
+            {
+                if (_temps.Count > TempCap)
+                {
+                    var drop = _temps.Count / 2;
+                    stale = _temps.GetRange(0, drop);
+                    _temps.RemoveRange(0, drop);
+                }
+            }
+            if (stale != null) foreach (var p in stale) store.DeleteTempFile(p);
+            var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
+            if (string.IsNullOrEmpty(temp))
+            {
+                // WPF VideoService.cs:8044 logs at Information (#1135): a pool that LOOKS full handed back nothing.
+                Log.Information("ContentPacks: '{Name}' from pack {PackId} could not be decrypted", entry.File.OriginalName, entry.PackId);
+                return null;
+            }
+            lock (_lock) _temps.Add(temp);
+            return temp;
+        }
+
+        /// <summary>WPF CleanupTempPackFiles: delete every decrypt this pool has on record.</summary>
+        public void CleanupTemps()
+        {
+            List<string> all;
+            lock (_lock) { all = new List<string>(_temps); _temps.Clear(); }
+            var store = _store();
+            foreach (var p in all)
+            {
+                if (store != null) store.DeleteTempFile(p);
+                else try { System.IO.File.Delete(p); } catch { }
+            }
+        }
+
+        // Caller holds _lock.
+        private List<(string PackId, PackFileEntry File)> Entries()
+        {
+            try
+            {
+                var store = _store();
+                if (store == null) return new List<(string, PackFileEntry)>();
+                return _type == ContentPackStore.VideoType ? store.GetAllActivePackVideos() : store.GetAllActivePackImages();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("ContentPacks: pool read failed: {E}", ex.Message);
+                return new List<(string, PackFileEntry)>();
+            }
+        }
+    }
+}

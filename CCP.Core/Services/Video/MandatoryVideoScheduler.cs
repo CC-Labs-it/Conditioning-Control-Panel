@@ -40,7 +40,8 @@ namespace ConditioningControlPanel.Services
     /// doors (<c>Cleanup</c> :7934 re-arms, <c>ForceCleanup</c> :2670 does not), watch credit
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
-    /// ponytail: local library only - content-pack and remote clips, the duration filter
+    /// Content-pack clips come through <see cref="PackVideos"/>.
+    /// ponytail: remote clips, the duration filter
     /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
@@ -436,8 +437,15 @@ namespace ConditioningControlPanel.Services
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
             }
+            // WPF GetNextVideo (VideoService.cs:8015-8049): active pack clips join the local pick,
+            // weighted by count; a failed decrypt falls back to the local queue. Pack clips skip the
+            // length filter (PackFileEntry carries no duration).
+            if (PackVideos?.TryDraw(_queue.Count) is { } pack) return pack;
             return _queue.Count > 0 ? _queue.Dequeue() : null;
         }
+
+        /// <summary>The content-pack clips mixed in (WPF _packVideoQueue); null = local only.</summary>
+        public PackMediaPool? PackVideos { get; set; }
 
         /// <summary>WPF VideoService.MetadataCache: a clip's cached length, null on a miss. Null keeps
         /// every clip (WPF without LibVLC).</summary>
