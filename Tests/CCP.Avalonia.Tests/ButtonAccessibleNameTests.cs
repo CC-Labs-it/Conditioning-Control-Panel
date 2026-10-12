@@ -29,6 +29,34 @@ public sealed class ButtonAccessibleNameTests
         "blinktrainer", "remotecontrol", "discord", "quests", "achievements", "leaderboard", "assets", "appsettings",
     };
 
+    /// <summary>The helper follows the content: a panel filled after Content was set is named by its
+    /// text (not its tooltip), an icon-only one by its tooltip, and a string content wins back.</summary>
+    [Fact]
+    public Task NameFollowsContentChanges() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var panel = new StackPanel();
+        var b = new Button { Content = panel };
+        ToolTip.SetTip(b, "Tip");
+        string Name() => ControlAutomationPeer.CreatePeerForElement(b).GetName();
+        Assert.Equal("Tip", Name());   // icon-only so far
+        panel.Children.Add(new TextBlock { Text = "Label" });
+        var w = new Window { Content = b };
+        w.Show();
+        Dispatcher.UIThread.RunJobs();   // Loaded re-reads the filled panel
+        try
+        {
+            Assert.Equal("Label", Name());
+            b.Content = "Go";
+            Assert.Equal("Go", Name());
+        }
+        finally { w.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task NoShellButtonIsNamedByItsContentType() => AvaloniaTestDispatcher.RunAsync(() =>
     {

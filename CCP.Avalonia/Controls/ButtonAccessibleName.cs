@@ -35,12 +35,19 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         private static void Apply(Button b)
         {
-            if (b.Content is not Control content) return;   // a string names itself
-            var label = content as TextBlock ?? content.GetLogicalDescendants().OfType<TextBlock>().FirstOrDefault();
+            // A string (or nothing) names itself: undo whatever an earlier control content set.
+            var content = b.Content as Control;
+            var label = content as TextBlock ?? content?.GetLogicalDescendants().OfType<TextBlock>().FirstOrDefault();
             b.SetValue(AutomationProperties.LabeledByProperty, label, BindingPriority.Style);
-            if (label is null && !TipBindings.TryGetValue(b, out _))
+            var iconOnly = content != null && label is null;
+            if (iconOnly && !TipBindings.TryGetValue(b, out _))
                 TipBindings.Add(b, b.Bind(AutomationProperties.NameProperty,
                     b.GetObservable(ToolTip.TipProperty, t => t as string), BindingPriority.Style));
+            else if (!iconOnly && TipBindings.TryGetValue(b, out var tip))
+            {
+                tip.Dispose();   // a label arrived (panel filled after Content was set): it names the button
+                TipBindings.Remove(b);
+            }
         }
     }
 }
