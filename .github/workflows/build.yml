@@ -106,14 +106,11 @@ jobs:
       # One PNG per ported view. A view that throws on construction fails the job; one that nulls
       # its own template or binds a missing property does NOT - Avalonia keeps bindings silent -
       # so the run prints every binding error per view and the PNGs are the proof. Read them.
-      # DIAG (render-all-segv): loop to catch the intermittent exit 139 with a dump. Temporary.
+      # A native crash (exit 139) leaves a createdump core + crash report (native and managed frames) here;
+      # that is how the render-all SIGSEGV was traced to Avalonia's synthetic-typeface copy (SystemEmojiFontCollection).
       - run: |
           mkdir -p $RUNNER_TEMP/dumps
-          dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release
-          for i in 1 2 3 4 5 6 7 8; do
-            echo "=== pass $i"
-            dotnet run --no-build --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --render-all $RUNNER_TEMP/render
-          done
+          dotnet run --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --render-all $RUNNER_TEMP/render
         env:
           DOTNET_DbgEnableMiniDump: 1
           DOTNET_DbgMiniDumpType: 2
