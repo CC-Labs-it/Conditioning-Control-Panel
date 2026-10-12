@@ -248,6 +248,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     {
         public int DayIndex { get; set; }
         public string Label { get; set; } = "";
+
+        /// <summary>Done / missed days draw an icon instead of the number (WPF "✓" / "✕").</summary>
+        public IconKind LabelIcon { get; set; } = IconKind.Checkmark;
+        public bool LabelIconVisible { get; set; }
         public string Tip { get; set; } = "";
 
         public IBrush Fill { get; set; } = Brushes.Transparent;
@@ -283,7 +287,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public IBrush IgniteBrush { get; set; } = Brushes.Transparent;
 
         /// <summary>Milestone treatment: boss crown / reward gift under the node.</summary>
-        public string RewardGlyph { get; set; } = "";
+        public IconKind RewardIcon { get; set; } = IconKind.Gift;
+        public IconVariant RewardVariant { get; set; } = IconVariant.Regular;
+        public IBrush RewardBrush { get; set; } = Brushes.White;
         public bool RewardVisible { get; set; }
         public string RewardTip { get; set; } = "";
     }
@@ -301,7 +307,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public string HowTo { get; set; } = "";
         public bool HowToVisible { get; set; }
 
-        public string StatusGlyph { get; set; } = "";
+        /// <summary>WPF "✓" / "○".</summary>
+        public IconKind StatusIcon { get; set; } = IconKind.Circle;
         public IBrush StatusBrush { get; set; } = Brushes.Gray;
 
         /// <summary>
@@ -411,7 +418,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Accent on a boss day, muted otherwise.</summary>
         public IBrush DayBrush { get; set; } = Brushes.Gray;
 
-        public string Glyph { get; set; } = "";
+        /// <summary>Boss crown (Crown icon in the template); WPF bound the "👑" string.</summary>
         public string GlyphTip { get; set; } = "";
         public bool GlyphVisible { get; set; }
 

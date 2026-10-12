@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -161,7 +162,8 @@ public sealed class CoreStandInTests
 
         var texts = nodes[0].GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
         Assert.Contains(expected[0].LocalizedName, texts);
-        Assert.Contains(texts, t => t!.EndsWith(" " + expected[0].Cost));
+        Assert.Contains(expected[0].Cost.ToString(), texts);               // the cost badge; its 💎/🔒 is an IconGlyph
+        Assert.Contains(nodes[0].GetLogicalDescendants(), c => c is IconGlyph);
 
         Assert.Equal(ConditioningControlPanel.Models.SkillDefinition.All.Count(s => s.IsSecret),
             tab.FindControl<Panel>("SecretSkills")!.Children.Count);
@@ -178,8 +180,10 @@ public sealed class CoreStandInTests
             var nodes = new EnhancementsTabView().FindControl<Canvas>("SkillTreeCanvas")!.Children.OfType<Control>()
                 .Where(b => b.Tag is string).ToDictionary(b => (string)b.Tag!);
             string?[] Texts(string id) => nodes[id].GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
-            Assert.Contains(Texts("sparkle_boost_1"), t => t!.EndsWith(Loc.Get("label_skill_permanent")));
-            Assert.DoesNotContain(Texts("sparkle_boost_2"), t => t!.EndsWith(Loc.Get("label_skill_permanent")));
+            // label_skill_permanent "★ FOREVER": the star is a Fluent icon, the text is the bare label.
+            var forever = IconText.Bare(Loc.Get("label_skill_permanent"));
+            Assert.Contains(Texts("sparkle_boost_1"), t => t!.EndsWith(forever));
+            Assert.DoesNotContain(Texts("sparkle_boost_2"), t => t!.EndsWith(forever));
         }
         finally { settings.UnlockedSkills = old; }
     });

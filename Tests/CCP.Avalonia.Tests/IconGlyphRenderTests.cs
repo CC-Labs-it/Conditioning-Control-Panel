@@ -125,6 +125,32 @@ public sealed class IconGlyphRenderTests
     });
 
     [Fact]
+    public void IconLabelRerendersWhenOnlyItsArgsChange() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        // A reroll budget ticking 3 -> 2 keeps the key; the label must still re-read Loc.GetF.
+        var reroll = IconLabel.ForKey("btn_reroll_with_count", 3);    // en: "🔄 Reroll ({0})"
+        Assert.Equal(IconKind.ArrowSync, reroll.Children.OfType<IconGlyph>().Single().Kind);
+        reroll.Args = new object[] { 2 };
+        Assert.Equal(IconText.Bare(ConditioningControlPanel.Localization.Loc.GetF("btn_reroll_with_count", 2)), reroll.Label.Text);
+        Assert.Contains("2", reroll.Label.Text);
+    });
+
+    [Fact]
+    public void QuestBonusLineDrawsFireThenArrowSync() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        // WPF DailyQuestCard: "+{streak}% 🔥 +{reroll}% 🔄"; each part only when its pct > 0.
+        var t = new TextBlock();
+        Assert.True(ConditioningControlPanel.Avalonia.Views.Controls.DailyQuestCard.SetBonus(t, 10, 5));
+        var glyphs = t.Inlines!.OfType<InlineUIContainer>().Select(c => (IconGlyph)c.Child!).ToList();
+        Assert.Equal(new[] { IconKind.Fire, IconKind.ArrowSync }, glyphs.Select(g => g.Kind));
+        Assert.Equal(IconVariant.Filled, glyphs[0].Variant);
+        Assert.Equal("+10%", t.Inlines!.OfType<Run>().First().Text);
+        Assert.False(ConditioningControlPanel.Avalonia.Views.Controls.DailyQuestCard.SetBonus(t, 0, 0));
+    });
+
+    [Fact]
     public void PremiumGateFindsAnIconGlyphPadlock() => AvaloniaTestDispatcher.Run(() =>
     {
         Platform();

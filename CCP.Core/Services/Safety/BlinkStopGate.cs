@@ -4,7 +4,8 @@ namespace ConditioningControlPanel.Services.Safety
     /// When the rapid 6-blink "stop everything and recalibrate" gesture may fire.
     ///
     /// <para>The gesture is a second, hands-free stop button: it kills audio, stops the engine and
-    /// pauses the session, the same surface a panic press reaches. It used to ask nothing but its
+    /// pauses the session (a recalibration stop, not a panic: it never ends a session and leaves the
+    /// camera, mic and toys alone; WPF MainWindow.LabTab.cs StopAllForRecalibration). It used to ask nothing but its
     /// own toggle, so it was an escape the user had switched off everywhere else. Tester ticket
     /// 2026-09-27 (Mich): a Blink Trainer session under Lockdown, a few fast blinks, everything
     /// stopped, and Lockdown then refused to resume the paused session. Owner, 2026-09-28: it also
@@ -27,7 +28,7 @@ namespace ConditioningControlPanel.Services.Safety
             BlinkTrainer,
             /// <summary>Lockdown is running: a halt leaves a paused session Lockdown will not resume.</summary>
             Lockdown,
-            /// <summary>The panic key is off ("no escape"); the blink stop is a panic press by another name.</summary>
+            /// <summary>The panic key is off ("no escape"); a hands-free stop must not be the way out the user switched off.</summary>
             NoEscape,
             /// <summary>Strict Lock is on: the user promised not to skip, and the halt skipped for them.</summary>
             StrictLock

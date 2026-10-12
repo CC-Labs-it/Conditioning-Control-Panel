@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -258,8 +259,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var row = new Grid { Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
 
             // 1. the goods (or the shape of them). Earned items glow - the band is the payoff.
-            var icon = RewardIcon(reward, unlocked) ?? new TextBlock { Text = Glyph(t.A.Category), FontSize = 22, Foreground = Brushes.White,
-                Opacity = 0.3, Width = RewardIconPx, TextAlignment = TextAlignment.Center };
+            Control? icon = RewardIcon(reward, unlocked);
+            if (icon == null)
+            {
+                var g = IconGlyph.Of(Glyph(t.A.Category), IconVariant.Filled, null, 22);
+                g.Foreground = Brushes.White;
+                g.Opacity = 0.3;
+                g.Width = RewardIconPx;
+                icon = g;
+            }
             icon.VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(icon);
 
@@ -275,8 +283,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             row.Children.Add(text);
 
             // 3. the state
-            var state = new TextBlock { Text = unlocked ? "✓" : "🔒", FontSize = unlocked ? 16 : 13,
-                FontWeight = unlocked ? FontWeight.Bold : FontWeight.Normal, Foreground = unlocked ? Tick : Muted, VerticalAlignment = VerticalAlignment.Center };
+            var state = IconGlyph.Of(unlocked ? IconKind.Checkmark : IconKind.LockClosed, IconVariant.Regular, null, unlocked ? 16 : 13);
+            state.Foreground = unlocked ? Tick : Muted;
             Grid.SetColumn(state, 2);
             row.Children.Add(state);
             t.Band.Child = row;
@@ -299,15 +307,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             } };
         }
 
-        private static string Glyph(AchievementCategory c) => c switch
+        // WPF ▲ ● ■ ▼ ★ ♥ ◆, as filled Fluent shapes.
+        internal static IconKind Glyph(AchievementCategory c) => c switch
         {
-            AchievementCategory.Progression => "▲",
-            AchievementCategory.Minigames => "●",
-            AchievementCategory.Hardcore => "■",
-            AchievementCategory.Deeper => "▼",
-            AchievementCategory.Creator => "★",
-            AchievementCategory.Community => "♥", // the invite ladder (main ecb8ace7e)
-            _ => "◆",
+            AchievementCategory.Progression => IconKind.Triangle,
+            AchievementCategory.Minigames => IconKind.Circle,
+            AchievementCategory.Hardcore => IconKind.Square,
+            AchievementCategory.Deeper => IconKind.TriangleDown,
+            AchievementCategory.Creator => IconKind.Star,
+            AchievementCategory.Community => IconKind.Heart, // the invite ladder (main ecb8ace7e)
+            _ => IconKind.Diamond,
         };
 
         /// <summary>WPF BuildAchievementFilters: radio-style chips, built once so the choice survives a rebuild.</summary>

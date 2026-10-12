@@ -18,6 +18,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.SpiralFeatureControl">
 
     <!-- Velvet Kit 2 density pass. The root IS the StackPanel (the old Grid wrapper is gone):
@@ -40,8 +41,7 @@
                     </Border.OpacityMask>
                 </Border>
                 <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                    <TextBlock Text="{loc:Str label_spiral_overlay}" FontSize="17" FontWeight="Bold"
-                               Foreground="{StaticResource TextLightBrush}"/>
+                    <fx:IconLabel Key="label_spiral_overlay" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                     <TextBlock Text="{loc:Str tooltip_show_hypnotic_spiral_overlay}" FontSize="11.5"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"/>
                 </StackPanel>
@@ -135,24 +135,29 @@
                 <!-- Actions (kept above the library so they're reachable without scrolling) -->
                 <!-- THE LOOM: weave your own spiral (also craftable inside DtRH) -->
                 <Button x:Name="BtnOpenLoom"
-                        Content="🌀 THE LOOM — weave your own spiral"
                         Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch"
                         Padding="12,10"
-                        Margin="0,0,0,10"/>
+                        Margin="0,0,0,10">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <fx:IconGlyph Brand="Spiral" VerticalAlignment="Center"/>
+                        <TextBlock Text="THE LOOM — weave your own spiral" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
 
                 <!-- Standalone corner-GIF overlays (independent of sessions) -->
                 <Button x:Name="BtnCornerGifs"
-                        Content="🖼 CORNER GIFs — pin a GIF to a screen corner"
                         Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch"
                         Padding="12,10"
-                        Margin="0,0,0,10"/>
+                        Margin="0,0,0,10">
+                    <fx:IconLabel Kind="Image" Text="CORNER GIFs — pin a GIF to a screen corner"/>
+                </Button>
 
                 <!-- Select GIF (browse anywhere) -->
                 <Button x:Name="BtnSelectGif"
                         Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch"
                         Padding="12,10"
                         Margin="0,0,0,10">
-                    <TextBlock Text="{loc:Str btn_select_gif}"/>
+                    <fx:IconLabel Key="btn_select_gif"/>
                 </Button>
 
                 <!-- Spiral library: its own card - it is a picker, not a dial. -->
@@ -184,10 +189,11 @@
                                         FontSize="11"/>
                                 <Button Grid.Column="2"
                                         x:Name="BtnRefreshSpirals"
-                                        Content="⟳ Refresh"
                                         Theme="{DynamicResource OutlineButton}"
                                         Padding="10,5"
-                                        FontSize="11"/>
+                                        FontSize="11">
+                                    <fx:IconLabel Kind="ArrowClockwise" Text="Refresh" Spacing="4"/>
+                                </Button>
                             </Grid>
 
                             <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -207,13 +213,14 @@
                     </Grid>
                 </Border>
 
-                <TextBlock Text="{loc:Str label_if_you_have_display_problems_try_setting_your}"
-                           Foreground="#FFA500"
-                           FontSize="11"
-                           FontStyle="Italic"
-                           TextWrapping="Wrap"
-                           Opacity="0.8"
-                           Margin="0,2,0,0"/>
+                <DockPanel Opacity="0.8" Margin="0,2,0,0" TextElement.Foreground="#FFA500">
+                    <fx:IconGlyph DockPanel.Dock="Left" Kind="Warning" Variant="Filled" Size="11"
+                                  VerticalAlignment="Top" Margin="0,2,5,0"/>
+                    <TextBlock Text="{loc:StrBare label_if_you_have_display_problems_try_setting_your}"
+                               FontSize="11"
+                               FontStyle="Italic"
+                               TextWrapping="Wrap"/>
+                </DockPanel>
             </StackPanel>
 
             <!-- SIDE ART. On WPF the art is the Border's BACKGROUND (an ImageBrush); the wash stands

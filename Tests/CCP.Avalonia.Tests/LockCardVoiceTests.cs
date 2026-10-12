@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Speech;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -34,7 +35,7 @@ public sealed class LockCardVoiceTests
     [Fact]
     public Task AWrongPhraseKeepsTheCardOpen() => Run(Wav(), "hello my darling", async (card, _) =>
     {
-        await Until(() => card.VoiceState.StartsWith("✗"), 30);
+        await Until(() => card.VoiceStateKind == IconKind.Dismiss && card.VoiceState.StartsWith("Again"), 30);
         Snap(card, "voice-again");
         Assert.False(card.IsCompleted);
         Assert.True(LockCardWindow.IsAnyOpen());
