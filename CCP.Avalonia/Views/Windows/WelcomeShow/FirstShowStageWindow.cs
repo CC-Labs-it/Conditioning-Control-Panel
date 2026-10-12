@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -65,6 +66,7 @@ internal sealed class FirstShowStageWindow : Window
     private readonly string _panic;
     private readonly PixelRect _screenPx;
     private readonly double _scale;
+    private readonly bool _redirected;
     private FirstShowEffects? _effects;
     private CancellationTokenSource? _load;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving;
@@ -75,6 +77,7 @@ internal sealed class FirstShowStageWindow : Window
     internal Func<double> Clock;
     /// <summary>Test seams: the feed page for (preset, attempt), and the bundled pictures.</summary>
     internal Func<string, int, CancellationToken, Task<IReadOnlyList<FypAssetManifest.Entry>>> FetchFeed = DefaultFetch;
+    internal Func<string, CancellationToken, Task<string?>> Download = DownloadAsync;
     internal Func<IReadOnlyList<string>> BundledPictures = () => Enumerable.Range(0, 4)
         .Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", "gif" + i + ".webp")))
         .Where(File.Exists).ToArray();
@@ -82,6 +85,7 @@ internal sealed class FirstShowStageWindow : Window
     internal string SpeechText => _speech.Text ?? string.Concat(_speech.Inlines?.OfType<Run>().Select(r => r.Text) ?? Array.Empty<string>());
     internal IReadOnlyList<Button> ChoiceButtons => _choices.Children.OfType<Button>().ToArray();
     internal bool Playing => _playing;
+    internal FirstShowAudio Audio => _audio;
     internal double LogoOpacity => _logo.Opacity;
     /// <summary>--render-all: the stage at the reveal (logo up), nothing else on it.</summary>
     internal FirstShowStageWindow() : this(null) => _logo.Opacity = 1;
@@ -98,6 +102,9 @@ internal sealed class FirstShowStageWindow : Window
         var primary = Screens?.Primary ?? Screens?.All.FirstOrDefault();
         _screenPx = primary?.Bounds ?? new PixelRect(0, 0, 1920, 1080);
         _scale = primary?.Scaling > 0 ? primary.Scaling : 1;
+        // X11Overlay.cs:216: override-redirect goes on before Show() and before any geometry of ours.
+        try { _redirected = X11Overlay.SetOverrideRedirect(this, _screenPx, passive: true); }
+        catch (Exception ex) { Log.Debug(ex, "First show stage: override-redirect failed"); }
         Position = _screenPx.Position; Width = _screenPx.Width / _scale; Height = _screenPx.Height / _scale;
         Content = _stage;
         _logo.BorderBrush = new LinearGradientBrush
@@ -111,7 +118,9 @@ internal sealed class FirstShowStageWindow : Window
         _stage.Children.Add(_logo);
         _loadingPanel.Children.Add(_loadingBar); _loadingPanel.Children.Add(_loadingStatus);
         _bubbleContent.Children.Add(_speech); _bubbleContent.Children.Add(_loadingPanel); _bubbleContent.Children.Add(_choices);
-        _bubble.Child = _bubbleContent; _speechWindow.Content = _bubble;
+        // WPF :327-338: a line taller than the screen scrolls; normal lines show no scroll chrome (Auto).
+        _bubble.Child = new ScrollViewer { Content = _bubbleContent, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        _speechWindow.Content = _bubble;
         _x = Width - 205; _y = Height - 150;
         _clock = new FrameClock(_stage) { Interval = TimeSpan.FromMilliseconds(16) };
         _clock.Tick += (_, _) => Frame();
@@ -125,10 +134,10 @@ internal sealed class FirstShowStageWindow : Window
     /// <summary>Make the stage input-transparent and passive, then show it. False when the platform refuses.</summary>
     internal bool Launch()
     {
+        bool ok = _redirected;   // both calls before the map, as every other overlay (BubbleOverlay.cs:81)
+        try { ok &= X11Overlay.SetClickThrough(this, true); }
+        catch (Exception ex) { ok = false; Log.Debug(ex, "First show stage: click-through failed"); }
         Show();
-        bool ok = false;
-        try { ok = X11Overlay.SetClickThrough(this, true); X11Overlay.SetOverrideRedirect(this, _screenPx, passive: true); }
-        catch (Exception ex) { Log.Debug(ex, "First show stage: overlay calls failed"); }
         // WPF ran its own keyboard hook so Esc stops the show even with the panic key off (:52, :92).
         if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown += OnGlobalKey;
         return ok;
@@ -181,13 +190,38 @@ internal sealed class FirstShowStageWindow : Window
         var kind = attempt == 0 ? FeedMediaKind.Image : FeedMediaKind.GifStill;
         return (await source.FetchPageAsync(channel, kind, token))?.Entries ?? new List<FypAssetManifest.Entry>();
     }
-    private static async Task<string?> Download(string url, CancellationToken token)
+    /// <summary>WPF RemoteMediaCache.MaxSingleEntryBytes: one demo picture is never bigger than this.</summary>
+    internal const long MaxPictureBytes = 24L * 1024 * 1024;
+    /// <summary>The show's own temp dir, swept on every open, so a crash mid-show leaves nothing behind for long.</summary>
+    internal static readonly string TempDir = Path.Combine(Path.GetTempPath(), "ccp-first-show");
+    internal static void SweepTemp() { try { if (Directory.Exists(TempDir)) foreach (var f in Directory.GetFiles(TempDir)) Release(f); } catch (IOException) { } }
+    private static async Task<string?> DownloadAsync(string url, CancellationToken token)
     {
-        var path = Path.Combine(Path.GetTempPath(), "ccp-first-show-" + Guid.NewGuid().ToString("N"));
         using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
-        if (!response.IsSuccessStatusCode) return null;
-        await using (var file = File.Create(path)) await response.Content.CopyToAsync(file, token);
-        return path;
+        var head = response.Content.Headers;
+        if (!response.IsSuccessStatusCode || head.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true
+            || head.ContentLength > MaxPictureBytes) return null;
+        return await SaveCapped(await response.Content.ReadAsStreamAsync(token), token);
+    }
+    /// <summary>Copies at most <see cref="MaxPictureBytes"/> into <see cref="TempDir"/>; null (and no file) past the cap.</summary>
+    internal static async Task<string?> SaveCapped(Stream body, CancellationToken token)
+    {
+        Directory.CreateDirectory(TempDir);
+        var path = Path.Combine(TempDir, Guid.NewGuid().ToString("N"));
+        bool keep = false;
+        try
+        {
+            await using var file = File.Create(path);
+            var buffer = new byte[81920]; long total = 0; int n;
+            while ((n = await body.ReadAsync(buffer, token)) > 0)
+            {
+                if ((total += n) > MaxPictureBytes) return null;
+                await file.WriteAsync(buffer.AsMemory(0, n), token);
+            }
+            keep = true;
+            return path;
+        }
+        finally { await body.DisposeAsync(); if (!keep) Release(path); }
     }
     private static void Release(string path) { try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
     // WPF Load :145-191.

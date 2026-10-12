@@ -25,6 +25,7 @@ internal static class FirstShowService
         EmiDeskWindow? desk = null;
         try
         {
+            FirstShowStageWindow.SweepTemp();
             window = new FirstShowStageWindow(owner);
             if (!window.Launch() && RequireClickThrough)
             {

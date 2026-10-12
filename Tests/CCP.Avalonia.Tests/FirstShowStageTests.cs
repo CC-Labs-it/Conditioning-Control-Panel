@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -15,6 +17,8 @@ using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Services.Fyp;
 using Xunit;
 using S = ConditioningControlPanel.Services.FirstShow.FirstShowScript;
 
@@ -34,6 +38,9 @@ public sealed class FirstShowStageTests
         t = S.GreetAfter + .1; stage.Frame();
         Assert.Equal(Loc.Get("first_show_greeting"), stage.SpeechText);
         Assert.Equal(2, stage.ChoiceButtons.Count);
+        var home = (EmiState.Current.WinLeftPx, EmiState.Current.WinTopPx);
+        emi.SavePlacement();   // WPF EmiDeskWindow.xaml.cs:787: the show's spot is never saved as her home
+        Assert.Equal(home, (EmiState.Current.WinLeftPx, EmiState.Current.WinTopPx));
 
         stage.Start();
         t += S.Beats[3]; stage.Frame();
@@ -49,6 +56,40 @@ public sealed class FirstShowStageTests
         Assert.False(FirstShowService.IsActive);
         Assert.False(stage.IsVisible);
         Assert.False(emi.PresentationActive);
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF Load :145 / Bundled :206 -> Confirm :222 -> Start: pictures load through the seams, the
+    /// warning names the stop key, "ready" starts the show, and the flash beat plays its cue.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PicturesThenWarningThenTheShow(bool bundled) => Run(async stage =>
+    {
+        var pics = Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
+        stage.BundledPictures = () => pics;
+        stage.FetchFeed = (_, _, _) => Task.FromResult<IReadOnlyList<FypAssetManifest.Entry>>(pics.Select(p => new FypAssetManifest.Entry { Url = p }).ToList());
+        stage.Download = (url, ct) => FirstShowStageWindow.SaveCapped(File.OpenRead(url), ct);
+        var played = new List<string>();
+        stage.Audio.Play = (path, _, _) => { played.Add(Path.GetFileName(path)); return () => { }; };
+        CoreSettings.Current.MasterVolume = 50;
+        double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+        await (bundled ? stage.Bundled() : stage.Load("censored"));
+        Assert.Equal(Loc.Get("first_show_warning") + S.PanicLabel(CoreSettings.Current.PanicKey) + " " + Loc.Get("first_show_panicHint"), stage.SpeechText);
+        stage.ChoiceButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // "ready"
+        Assert.True(stage.Playing);
+        t += S.FlashAt + .01; stage.Frame();
+        Assert.True(played.Count(p => p == "chip_pop.mp3") >= 2, string.Join(",", played));   // the beat's cue + a picture flash
+    });
+
+    [Fact]
+    public Task APictureOverTheCapIsDroppedAndLeavesNoFile() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var before = Directory.Exists(FirstShowStageWindow.TempDir) ? Directory.GetFiles(FirstShowStageWindow.TempDir).Length : 0;
+        Assert.Null(await FirstShowStageWindow.SaveCapped(new MemoryStream(new byte[FirstShowStageWindow.MaxPictureBytes + 1]), default));
+        Assert.Equal(before, Directory.GetFiles(FirstShowStageWindow.TempDir).Length);
+        var ok = await FirstShowStageWindow.SaveCapped(new MemoryStream(new byte[16]), default);
+        Assert.True(File.Exists(ok)); File.Delete(ok!);
     });
 
     [Theory]
@@ -61,6 +102,7 @@ public sealed class FirstShowStageTests
         Assert.False(FirstShowService.IsActive);
         Assert.False(stage.IsVisible);
         Assert.False(EmiDeskService.Instance.Window!.PresentationActive);
+        return Task.CompletedTask;
     });
 
     /// <summary>WPF MainWindow.xaml.cs:546-553: the show follows the first-run wizard once the age gate is
@@ -117,7 +159,7 @@ public sealed class FirstShowStageTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
-    private static Task Run(Action<FirstShowStageWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task Run(Func<FirstShowStageWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var service = new SettingsService();
@@ -130,8 +172,7 @@ public sealed class FirstShowStageTests
             FirstShowService.RequireClickThrough = false;
             Assert.True(FirstShowService.Open());
             Assert.True(FirstShowService.IsActive);
-            body(FirstShowService.Window!);
-            return Task.CompletedTask;
+            await body(FirstShowService.Window!);
         }
         finally
         {

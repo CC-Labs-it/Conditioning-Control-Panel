@@ -777,9 +777,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Persist where she is and how big, in physical pixels plus the monitor's name.</summary>
-        // WPF :785. No PresentationActive guard: this head has no presentation mode to exempt.
+        // WPF :785-787: never while the welcome show drives her (EndPresentation puts her home back).
         public void SavePlacement()
         {
+            if (PresentationActive) return;
             try
             {
                 var body = BodyScreenRect;
