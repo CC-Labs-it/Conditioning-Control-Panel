@@ -2034,3 +2034,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/render-all-segv: +188
 - Root-caused the intermittent `--render-all` exit 139 on CI. Avalonia's `SkiaTypeface.TryGetStream` reads an SKStreamAsset it doesn't keep alive, so a GC during the copy finalizes it and the read hits freed memory (use-after-free). It was hit through synthetic bold of the 10.8 MB system emoji font.
 - The system emoji font now loads through `SystemEmojiFontCollection`, which refuses synthetic bold/italic. CI keeps a crash dump and report as an artifact when render-all fails.
+
+## avalonia-port/possession-core-a: +253
+- Pure Possession rules (deck, off-limits name rule, toast/rewrite pools, enums, bark triggers) moved from WPF to CCP.Core via git mv; WPF keeps the FrameworkElement contracts and the tree walk.
+- Deck tests moved to CCP.Core.Tests; new CoreMods mod-routing test (fail-proven).
