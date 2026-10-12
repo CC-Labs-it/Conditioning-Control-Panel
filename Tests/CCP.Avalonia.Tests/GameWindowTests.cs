@@ -20,8 +20,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>The shared game host (WPF LauncherHost.LaunchGame -> BreakoutHostService.LaunchDemo ->
 /// ChaosWebViewHost): the launcher's Play opens it after the leash check, the page protocol answers
-/// ready with init + manifest, exit-done closes it, and the panic registry closes it.</summary>
-[Collection("GameMediaManifest")]
+/// ready with init and media-request with a deal, exit-done closes it, and the panic registry closes it.</summary>
 public sealed class GameWindowTests
 {
     private static void Run(Action<MainShellWindow, LauncherWindow> body)
@@ -44,7 +43,6 @@ public sealed class GameWindowTests
             var (oldServer, oldIn, oldAudio) = (GameWindow.Server, CoreAccount.IsLoggedInProvider, CoreAudio.PlayOneShotProvider);
             var (oldDue, oldGate) = (MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider);
             GameWindow.Server = () => server;
-            GameMediaManifest.RefillOverride = () => { };   // no network, ever
             CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
             CoreAccount.IsLoggedInProvider = () => false;    // the demo needs no account
             var shell = new MainShellWindow();
@@ -63,7 +61,6 @@ public sealed class GameWindowTests
                 shell.Close();
                 (GameWindow.Server, CoreAccount.IsLoggedInProvider, CoreAudio.PlayOneShotProvider) = (oldServer, oldIn, oldAudio);
                 (MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider) = (oldDue, oldGate);
-                GameMediaManifest.RefillOverride = null;
                 CoreSettings.ServiceProvider = null;
                 server.Dispose();
                 Directory.Delete(root, true);
@@ -101,23 +98,45 @@ public sealed class GameWindowTests
         Assert.False(GameWindow.IsAnyOpen());
     });
 
+    /// <summary>Through the web view's own carrier (WebHost.OnWebMessage, from the loaded page only): ready gets
+    /// init with the 3-level demo access (WPF BackRoomHostService.BuildInit :566), a station's media-request gets
+    /// the library's gifs (WPF BackRoomBridge.cs:208), exit-done closes.</summary>
     [Fact]
-    public void Ready_AnswersInitThenManifest_AndExitDoneCloses() => Run((_, _) =>
+    public void PageFrames_ThroughTheWebView_InitMediaAndExit() => Run((_, _) =>
     {
-        var w = GameWindow.Launch("breakoutdemo")!;
-        Assert.Same(w, GameWindow.Launch("breakoutdemo"));   // focused, never relaunched
-        Assert.Contains("backroom/stations/breakout/play.html", w.PageUrl!.AbsolutePath);
-        Assert.Contains("desktop=1", w.PageUrl.Query);
-        var sent = new List<JObject>();
-        w.Posted += json => sent.Add(JObject.Parse(json));
-        w.HandleMessage("\"{\\\"type\\\":\\\"ready\\\"}\"");   // a JSON-quoted string carrier
-        Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
-        Assert.True((bool)sent[0]["breakoutStandalone"]!);
-        Assert.True((bool)sent[0]["breakout"]!["demo"]!);
-        Assert.Equal(3, (int)sent[0]["breakout"]!["storyLimit"]!);
-        w.HandleMessage("{\"type\":\"exit-done\"}");
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(GameWindow.IsAnyOpen());
+        var lib = Directory.CreateTempSubdirectory("game-lib-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(lib, "images"));
+            File.WriteAllBytes(Path.Combine(lib, "images", "spin.gif"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "images", "still.png"), new byte[] { 1 });   // not an animation
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            var w = GameWindow.Launch("breakoutdemo")!;
+            Assert.Same(w, GameWindow.Launch("breakoutdemo"));   // focused, never relaunched
+            Assert.Contains("backroom/stations/breakout/play.html", w.PageUrl!.AbsolutePath);
+            Assert.Contains("desktop=1&demo=1", w.PageUrl.Query);   // 3 levels even before init (access.js)
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");          // before the page loaded: dropped
+            Assert.Empty(sent);
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            w.Web.OnWebMessage("\"{\\\"type\\\":\\\"ready\\\"}\"");   // invokeCSharpAction's JSON-quoted string
+            Assert.Equal(new[] { "init" }, sent.Select(o => (string?)o["type"]));
+            Assert.True((bool)sent[0]["breakoutStandalone"]!);
+            Assert.Equal(3, (int)sent[0]["breakout"]!["storyLimit"]!);
+            w.Web.OnWebMessage("{\"type\":\"media-request\",\"reqId\":\"r1\",\"station\":\"breakout\",\"count\":8}");
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (sent.Count < 2 && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            var media = sent[1];
+            Assert.Equal("media", (string?)media["type"]);
+            Assert.Equal("r1", (string?)media["reqId"]);
+            Assert.EndsWith("/ccp.assets/images/spin.gif", (string?)media["gifs"]!.Single()["url"]);
+            w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { CorePaths.EffectiveAssetsProvider = oldAssets; Directory.Delete(lib, true); }
     });
 
     /// <summary>WPF DtrhAssetManifest.Build's local half: images/ and videos/, deselected files out,

@@ -8,14 +8,13 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Games
 {
     /// <summary>
-    /// The media manifest the game pages read on ready (WPF Services/Chaos/DtrhAssetManifest.Build, the
-    /// local half): the active library's images/ and videos/, deselected files left out, oversize or
-    /// undecodable media counted as skipped, sampled down to 5000 entries keeping the image:video ratio.
-    /// URLs are the asset server's ccp.assets path (WPF https://ccp.assets/&lt;rel&gt;).
-    /// The remote (online) entries WPF appends after the sample are GameMediaManifest.Remote.cs: only
-    /// with MediaSource off "local" AND remote media consent.
+    /// The user's library as the game pages see it (WPF Services/Chaos/DtrhAssetManifest.Build, the local half):
+    /// the active library's images/ and videos/, deselected files left out, oversize or undecodable media
+    /// counted as skipped, sampled down to 5000 entries keeping the image:video ratio. URLs are the asset
+    /// server's ccp.assets path (WPF https://ccp.assets/&lt;rel&gt;). <see cref="Deal"/> answers a Back Room
+    /// station's <c>media-request</c> from it (WPF BackRoomBridge.OnMediaRequestAsync, local source only).
     /// </summary>
-    internal static partial class GameMediaManifest
+    internal static class GameMediaManifest
     {
         private static readonly string[] ImageExts = { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
         private static readonly string[] VideoExts = { ".mp4", ".webm", ".m4v" };
@@ -32,15 +31,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             public List<Entry> Videos { get; } = new();
             public int Skipped { get; set; }
             public bool Truncated { get; set; }
-
-            public object Frame() => new
-            {
-                type = "manifest",
-                images = Images.Select(e => new { name = e.Name, url = e.Url }),
-                videos = Videos.Select(e => new { name = e.Name, url = e.Url }),
-                skipped = Skipped,
-                truncated = Truncated,
-            };
         }
 
         internal static Manifest Build(string? root, Func<string, string> url, IEnumerable<string>? disabledPaths)
@@ -95,55 +85,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return m;
         }
 
-        /// <summary>The same walk as <see cref="Build"/>, as files (WPF DtrhAssetManifest.EnumerateActive):
-        /// full path, assets-relative path, bytes, picture or video. Local disk only; the transfer cache's
-        /// planner is the consumer, so "the active pool" never means two things on this head.</summary>
-        internal static IEnumerable<(string Full, string Rel, long Bytes, bool IsImage)> EnumerateActive(string? root, IEnumerable<string>? disabledPaths)
+        /// <summary>The user's library through the shared asset server.</summary>
+        internal static Manifest BuildLocal(ConditioningControlPanel.Avalonia.Platform.WebAssetServer server)
         {
-            if (string.IsNullOrEmpty(root)) yield break;
-            var disabled = new HashSet<string>((disabledPaths ?? Array.Empty<string>()).Select(p => p.Replace('\\', '/')),
-                StringComparer.OrdinalIgnoreCase);
-            int accepted = 0;
-            foreach (var isImage in new[] { true, false })
-            {
-                var dir = Path.Combine(root, isImage ? "images" : "videos");
-                if (!Directory.Exists(dir)) continue;
-                var exts = isImage ? ImageExts : VideoExts;
-                long cap = isImage ? MaxImageBytes : MaxVideoBytes;
-                foreach (var f in Walk(dir, 0))
-                {
-                    if (accepted >= MaxEntries * 2) break;
-                    if (!exts.Contains(Path.GetExtension(f).ToLowerInvariant())) continue;
-                    string rel;
-                    try { rel = Path.GetRelativePath(root, f).Replace('\\', '/'); }
-                    catch { continue; }
-                    if (disabled.Contains(rel)) continue;
-                    long len;
-                    try { len = new FileInfo(f).Length; } catch { continue; }
-                    if (len <= 0 || len > cap) continue;
-                    accepted++;
-                    yield return (f, rel, len, isImage);
-                }
-            }
-        }
-
-        /// <summary>WPF DtrhAssetManifest.Build: the live library through the shared asset server, then
-        /// the remote tail ON TOP of it, after the downsample (a bounded handful: sampling it against a
-        /// 5000-file library would lose it).</summary>
-        internal static Manifest BuildLive()
-        {
-            var m = BuildLocal();
-            int remote = AppendRemote(m, CoreSettings.Current);
-            if (remote > 0) Log.Information("[Game] manifest: +{N} remote", remote);
-            return m;
-        }
-
-        /// <summary>The local half only (WPF EnumerateActive's pool): for a consumer that needs files
-        /// behind every entry, never a CDN url.</summary>
-        internal static Manifest BuildLocal()
-        {
-            var server = ConditioningControlPanel.Avalonia.Platform.WebAssetServer.Shared;
             return Build(CorePaths.EffectiveAssets, server.AssetUrl, CoreSettings.Current.DisabledAssetPaths);
+        }
+
+        /// <summary>WPF BackRoomBridge.MediaCount: 1..13, anything else reads as 4.</summary>
+        internal static int MediaCount(int? n) => n is >= 1 and <= 13 ? n.Value : 4;
+
+        /// <summary>WPF BackRoomMedia's local deal: the library's .gif/.webp, sorted so the listing order cannot
+        /// move it, shuffled with the seed, <paramref name="count"/> of them. None = an empty deal, and the page
+        /// falls back to its bundled loops (play.html hostDeal -> localDeal), as WPF's bundled source does.</summary>
+        internal static object Deal(Manifest library, string? reqId, int seed, int count)
+        {
+            var pool = library.Images
+                .Where(e => e.Url.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) || e.Url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => e.Url, StringComparer.Ordinal).ToList();
+            var rng = new Random(seed);
+            for (int i = pool.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); (pool[i], pool[j]) = (pool[j], pool[i]); }
+            var gifs = pool.Take(count).Select((e, i) => new { key = "g" + i, url = e.Url, w = 0, h = 0, src = "local" }).ToList();
+            return new
+            {
+                type = "media", reqId, seed, source = gifs.Count > 0 ? "local" : "bundled",
+                gifs, words = Array.Empty<object>(),
+            };
         }
 
         private static IEnumerable<string> Walk(string dir, int depth)

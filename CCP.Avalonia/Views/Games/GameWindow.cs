@@ -22,8 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// WPF Services/Safety/GameSurfaces.cs:53-55).
     ///
     /// <para>The bridge is the shell protocol those pages share (WPF ChaosWebViewHost.cs:1719): the page says
-    /// <c>ready</c>, the host answers <c>init</c> (language + identity) and the media <c>manifest</c>
-    /// (<see cref="GameMediaManifest"/>), and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
+    /// <c>ready</c>, the host answers <c>init</c> (language + identity + Breakout access), a station's
+    /// <c>media-request</c> gets a library deal (<see cref="GameMediaManifest.Deal"/>), and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
     /// Ported from trunk's Views/Games/GameWindow.cs with only the Breakout demo registered; every other
     /// game lands with its own frames.</para>
     /// </summary>
@@ -36,8 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF 7.1.5's game hosts, StartUrl for StartUrl.</summary>
         internal static readonly IReadOnlyDictionary<string, Game> Games = new Dictionary<string, Game>(StringComparer.OrdinalIgnoreCase)
         {
-            // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account.
-            ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1"),
+            // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
+            // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
+            ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -87,8 +88,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Closed += (_, _) => { lock (Open) Open.Remove(this); };
         }
 
+        private WebAssetServer? _server;
+
         internal void Load(WebAssetServer server)
         {
+            _server = server;
             PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
             Web.Navigate(PageUrl);
         }
@@ -113,8 +117,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 case "ready":
                     IsReady = true;
-                    Post(InitMessage());
-                    Post(GameMediaManifest.BuildLive().Frame());
+                    Post(InitMessage());   // WPF BackRoomHostService.BuildInit (:566); no manifest frame for Breakout
+                    break;
+                case "media-request":
+                    // WPF BackRoomBridge.cs:208 -> OnMediaRequestAsync: the station's pictures for this sit-down.
+                    // The walk touches every library file, so it runs off the UI thread (WPF OffUi); the reply is posted back.
+                    var reqId = (string?)o["reqId"];
+                    int count = GameMediaManifest.MediaCount(o["count"]?.Type == JTokenType.Integer ? (int?)o["count"] : null);
+                    var server = _server;
+                    _ = System.Threading.Tasks.Task.Run(() =>
+                    {
+                        object deal;
+                        try { deal = GameMediaManifest.Deal(server == null ? new() : GameMediaManifest.BuildLocal(server), reqId, Random.Shared.Next(), count); }
+                        catch (Exception ex) { Log.Debug("[Game] media deal failed: {E}", ex.Message); deal = GameMediaManifest.Deal(new(), reqId, 0, count); }
+                        Dispatcher.UIThread.Post(() => Post(deal));
+                    });
                     break;
                 case "log":
                     Log.Debug("[Game] {Id} page: {Msg}", Spec.Id, (string?)o["msg"]);
