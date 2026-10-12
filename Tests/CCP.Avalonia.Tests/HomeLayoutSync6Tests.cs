@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -60,14 +62,14 @@ public sealed class HomeLayoutSync6Tests
                 // Closed by default; the handle sits in the last column and the old column 0 is gone.
                 Assert.Equal(0, body.Width);
                 Assert.Equal(3, Grid.GetColumn(dash.FindControl<Grid>("FavoritesDrawer")!));
-                Assert.Equal("‹", dash.FindControl<TextBlock>("FavoritesDrawerChevron")!.Text);
+                Assert.Equal(IconKind.ChevronLeft, dash.FindControl<IconGlyph>("FavoritesDrawerChevron")!.Kind);
 
                 // The handle opens it and persists; a second click closes it again.
                 handle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(SettingsTabView.FavoritesDrawerWidth, body.Width);
                 Assert.True(s.FavoritesDrawerOpen);
-                Assert.Equal("›", dash.FindControl<TextBlock>("FavoritesDrawerChevron")!.Text);
+                Assert.Equal(IconKind.ChevronRight, dash.FindControl<IconGlyph>("FavoritesDrawerChevron")!.Kind);
                 handle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(0, body.Width);

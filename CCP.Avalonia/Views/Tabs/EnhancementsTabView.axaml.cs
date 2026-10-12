@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -386,7 +387,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var main = new StackPanel();
 
             var title = new StackPanel { Margin = new Thickness(0, 0, 0, 15) };
-            title.Children.Add(Text("✨ " + (mods?.GetEnhancementTreeTitle() ?? Loc.Get("label_enhancement_tree_title")), Accent, 22, bold: true));
+            title.Children.Add(IconRow(Glyph(IconKind.Sparkle, IconVariant.Filled, null, 22, IconBrushes.Gold),
+                Text(mods?.GetEnhancementTreeTitle() ?? Loc.Get("label_enhancement_tree_title"), Accent, 22, bold: true)));
             title.Children.Add(Text(mods?.GetEnhancementTreeSubtitle() ?? Loc.Get("label_enhancement_tree_subtitle"), Rgb(176, 176, 176), 11, italic: true, top: 4));
             title.Children.Add(Text(mods?.GetEnhancementTreeWarning() ?? Loc.Get("label_enhancement_tree_warning"), Rgb(136, 170, 204), 10, italic: true, top: 2));
             if (SkillTreeRules.HasSkill(settings, "certified_data_bimbo"))
@@ -399,7 +401,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Padding = new Thickness(8, 3, 8, 3),
                     Margin = new Thickness(0, 6, 0, 0),
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    Child = Text("🎓 " + Loc.Get("skill_certified_data_bimbo_name"), Rgb(255, 200, 80), 10, bold: true),
+                    Child = IconRow(Glyph(IconKind.HatGraduation, IconVariant.Regular, Rgb(255, 200, 80), 10),
+                        Text(Loc.Get("skill_certified_data_bimbo_name"), Rgb(255, 200, 80), 10, bold: true)),
                 });
             main.Children.Add(title);
 
@@ -416,7 +419,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Sparkle points.
             var points = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            points.Children.Add(new TextBlock { Text = "💎", FontSize = 24, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            var gem = Glyph(IconKind.Diamond, IconVariant.Filled, null, 24, IconBrushes.Gem);
+            gem.Margin = new Thickness(0, 0, 10, 0);
+            points.Children.Add(gem);
             var info = new StackPanel();
             info.Children.Add(Text(mods?.GetPointsLabel() ?? Loc.Get("label_sparkle_points"), Rgb(176, 176, 176), 10));
             info.Children.Add(Text(settings.SkillPoints.ToString("N0"), Accent, 24, bold: true));
@@ -426,13 +431,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Prestige: lifetime points spent, rank 1 + spent / 100.
             var spent = App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0;
             var prestige = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            prestige.Children.Add(new TextBlock { Text = "✦", Foreground = Rgb(255, 200, 80), FontSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            var star = Glyph(IconKind.Sparkle, IconVariant.Filled, Rgb(255, 200, 80), 18);
+            star.Margin = new Thickness(0, 0, 10, 0);
+            prestige.Children.Add(star);
             var pInfo = new StackPanel();
             pInfo.Children.Add(Text(Loc.Get("label_prestige"), Rgb(176, 176, 176), 10));
             var pValue = new StackPanel { Orientation = Orientation.Horizontal };
             pValue.Children.Add(Text(spent.ToString("N0"), Rgb(255, 200, 80), 16, bold: true));
-            pValue.Children.Add(Text("  ✦ " + Loc.GetF("label_prestige_rank", 1 + (int)(spent / 100)), Rgb(210, 180, 120), 10));
-            foreach (var c in pValue.Children) ((TextBlock)c).VerticalAlignment = VerticalAlignment.Center;
+            var rankStar = Glyph(IconKind.Sparkle, IconVariant.Filled, Rgb(210, 180, 120), 10);
+            rankStar.Margin = new Thickness(8, 0, 4, 0);
+            pValue.Children.Add(rankStar);
+            pValue.Children.Add(Text(Loc.GetF("label_prestige_rank", 1 + (int)(spent / 100)), Rgb(210, 180, 120), 10));
+            foreach (var c in pValue.Children) c.VerticalAlignment = VerticalAlignment.Center;
             pInfo.Children.Add(pValue);
             prestige.Children.Add(pInfo);
             var prestigeBox = Box(Rgb(52, 44, 28), new Thickness(15, 6, 15, 6), prestige);
@@ -447,10 +457,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             xp.Children.Add(Text(Loc.Get("label_xp_mult"), Rgb(176, 176, 176), 12));
             xp.Children.Add(Text($"{SkillTreeRules.GetTotalXpMultiplier(settings, DateTime.Now.Hour, 0.0):F2}x", Rgb(0, 255, 136), 14, bold: true));
             if (settings.PinkRushActive)
-                xp.Children.Add(Text(" " + Loc.Get("label_xp_rush"), new SolidColorBrush(Color.Parse(mods?.GetAccentDarkColorHex() ?? "#FF1493")), 12, bold: true));
-            foreach (var c in xp.Children) ((TextBlock)c).VerticalAlignment = VerticalAlignment.Center;
+            {
+                var rush = IconLabel.ForKey("label_xp_rush");
+                rush.Margin = new Thickness(4, 0, 0, 0);
+                rush.SetValue(TextElement.ForegroundProperty, new SolidColorBrush(Color.Parse(mods?.GetAccentDarkColorHex() ?? "#FF1493")));
+                rush.SetValue(TextElement.FontSizeProperty, 12.0);
+                rush.SetValue(TextElement.FontWeightProperty, FontWeight.Bold);
+                xp.Children.Add(rush);
+            }
+            foreach (var c in xp.Children) c.VerticalAlignment = VerticalAlignment.Center;
             var time = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            time.Children.Add(new TextBlock { Text = "⏱️ ", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+            var timer = Glyph(IconKind.Timer, IconVariant.Regular, Rgb(176, 176, 176), 12);
+            timer.Margin = new Thickness(0, 0, 4, 0);
+            time.Children.Add(timer);
             time.Children.Add(Text(SkillTreeRules.FormatConditioningTime(settings), Rgb(176, 176, 176), 12));
             var stats = new StackPanel();
             stats.Children.Add(xp);
@@ -485,12 +504,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The Ditzy Data toggle and its collapsed 3-column stats grid.</summary>
         private static void AddDitzyStats(StackPanel main, string? statsTitle)
         {
-            var arrow = Text(" ▼", Rgb(176, 176, 176), 10);
-            var label = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            label.Children.Add(new TextBlock { Text = "📊 ", FontSize = 12 });
-            label.Children.Add(Text(statsTitle ?? Loc.Get("label_ditzy_data_stats"), AccentLight, 11, bold: true));
-            label.Children.Add(arrow);
-            foreach (var c in label.Children) ((TextBlock)c).VerticalAlignment = VerticalAlignment.Center;
+            var arrow = Glyph(IconKind.ChevronDown, IconVariant.Regular, Rgb(176, 176, 176), 10);
+            arrow.Margin = new Thickness(4, 0, 0, 0);
+            var label = IconRow(Glyph(IconKind.DataBarVertical, IconVariant.Regular, null, 12),
+                Text(statsTitle ?? Loc.Get("label_ditzy_data_stats"), AccentLight, 11, bold: true), arrow);
+            label.HorizontalAlignment = HorizontalAlignment.Center;
             // A focusable Border, not a Button: WPF's is a Border with MouseLeftButtonDown, and a
             // stock Button would draw Fluent chrome. Enter/Space reach it from the keyboard (P17).
             var toggle = new Border
@@ -508,7 +526,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
 
             var stack = new StackPanel();
-            stack.Children.Add(Text("📊 " + (statsTitle ?? "Ditzy Data Stats"), Rgb(176, 176, 176), 11, bold: true, bottom: 8));
+            var statsHead = IconRow(Glyph(IconKind.DataBarVertical, IconVariant.Regular, Rgb(176, 176, 176), 11),
+                Text(statsTitle ?? "Ditzy Data Stats", Rgb(176, 176, 176), 11, bold: true));
+            statsHead.Margin = new Thickness(0, 0, 0, 8);
+            stack.Children.Add(statsHead);
             if (App.Achievements?.Progress is { } a)
             {
                 var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*") };
@@ -563,7 +584,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             void Toggle()
             {
                 details.IsVisible = !details.IsVisible;
-                arrow.Text = details.IsVisible ? " ▲" : " ▼";
+                arrow.Kind = details.IsVisible ? IconKind.ChevronUp : IconKind.ChevronDown;
             }
             toggle.PointerPressed += (_, e) => { if (e.GetCurrentPoint(toggle).Properties.IsLeftButtonPressed) Toggle(); };
             toggle.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Toggle(); e.Handled = true; } };
@@ -613,15 +634,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 Background = owned ? Rgb(255, 200, 80) : canPurchase ? Accent : Rgb(40, 35, 50),
                 CornerRadius = new CornerRadius(0, 0, 8, 8),
-                Child = new TextBlock
-                {
-                    Text = owned ? $"💎{skill.Cost} {Loc.Get("label_skill_permanent")}" : canPurchase ? $"💎 {skill.Cost}" : $"🔒 {skill.Cost}",
-                    Foreground = owned ? Rgb(20, 20, 30) : canPurchase ? Brushes.White : Rgb(120, 120, 130),
-                    FontSize = 10,
-                    FontWeight = FontWeight.Bold,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
+                // WPF "💎N ★ FOREVER" / "💎 N" / "🔒 N": icons take the badge ink (gem violet or gold
+                // on the gold/pink badge would vanish).
+                Child = CostBadge(skill.Cost, owned ? IconKind.Diamond : canPurchase ? IconKind.Diamond : IconKind.LockClosed,
+                    owned ? Rgb(20, 20, 30) : canPurchase ? Brushes.White : Rgb(120, 120, 130), owned),
             };
             Grid.SetRow(cost, 3);
             grid.Children.Add(cost);
@@ -664,7 +680,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!string.IsNullOrEmpty(skill.PrerequisiteId) && !SkillTreeRules.HasSkill(settings, skill.PrerequisiteId))
             {
                 var pre = SkillDefinition.All.FirstOrDefault(s => s.Id == skill.PrerequisiteId);
-                tip.Children.Add(new TextBlock { Text = Loc.GetF("label_skill_requires", pre?.LocalizedName ?? skill.PrerequisiteId), Foreground = Rgb(255, 100, 100), Margin = new Thickness(0, 6, 0, 0) });
+                var requires = IconLabel.ForKey("label_skill_requires", pre?.LocalizedName ?? skill.PrerequisiteId);
+                requires.SetValue(TextElement.ForegroundProperty, Rgb(255, 100, 100));
+                requires.Margin = new Thickness(0, 6, 0, 0);
+                tip.Children.Add(requires);
             }
             ToolTip.SetTip(wrapper, Tip(tip, Rgb(30, 30, 50), Accent));
             return wrapper;
@@ -741,7 +760,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static Control HiddenSecretCard(string requirement)
         {
             var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-            body.Children.Add(new TextBlock { Text = "🔒", FontSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            var padlock = Glyph(IconKind.LockClosed, IconVariant.Filled, Rgb(153, 50, 204), 18);
+            padlock.Margin = new Thickness(0, 0, 8, 0);
+            body.Children.Add(padlock);
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(text, 1);
             text.Children.Add(Text(Loc.Get("label_secret_skill_hidden"), Rgb(153, 50, 204), 11, bold: true));
@@ -761,20 +782,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
             if (!_art.TryGetValue(skill.Id, out var bitmap)) _art[skill.Id] = bitmap = ModArt.TryLoad($"skills/{skill.Id}.png", 312);
-            // 44x30 is the 3:2 the skills/ art is drawn at. The emoji pair is the fallback
-            // (Avalonia draws the pair natively, so it is not lost the way WPF's Twemoji lookup was).
-            body.Children.Add(bitmap != null
-                ? new Image { Source = bitmap, Width = 44, Height = 30, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }
-                : new TextBlock { Text = skill.Icon, FontSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            // 44x30 is the 3:2 the skills/ art is drawn at. Without art, the skill's icon by id (IconMap.ForSkill).
+            Control icon = bitmap != null
+                ? new Image { Source = bitmap, Width = 44, Height = 30, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center }
+                : IconGlyph.Of(IconMap.ForSkill(skill.Id), skill.Icon, 18);
+            icon.Margin = new Thickness(0, 0, 8, 0);
+            body.Children.Add(icon);
 
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(stack, 1);
             var name = Text(CoreMods.MakeModAware(skill.LocalizedName), owned ? Rgb(180, 130, 255) : Rgb(153, 50, 204), 11, bold: true);
             name.TextWrapping = TextWrapping.Wrap;
             stack.Children.Add(name);
-            stack.Children.Add(owned
-                ? Text($"💎{skill.Cost} {Loc.Get("label_skill_owned")}", Rgb(180, 130, 255), 9, top: 2)
-                : Text($"💎 {skill.Cost}", settings.SkillPoints >= skill.Cost ? Rgb(255, 215, 0) : Rgb(120, 120, 120), 10, top: 2));
+            // WPF "💎N ✓ OWNED" / "💎 N".
+            var price = owned
+                ? IconRow(Glyph(IconKind.Diamond, IconVariant.Filled, Rgb(180, 130, 255), 9), Text($"{skill.Cost}", Rgb(180, 130, 255), 9),
+                      Glyph(IconKind.Checkmark, IconVariant.Regular, Rgb(180, 130, 255), 9), Text(IconText.BareLoc("label_skill_owned"), Rgb(180, 130, 255), 9))
+                : IconRow(Glyph(IconKind.Diamond, IconVariant.Filled, settings.SkillPoints >= skill.Cost ? Rgb(255, 215, 0) : Rgb(120, 120, 120), 10),
+                      Text($"{skill.Cost}", settings.SkillPoints >= skill.Cost ? Rgb(255, 215, 0) : Rgb(120, 120, 120), 10));
+            price.Margin = new Thickness(0, 2, 0, 0);
+            stack.Children.Add(price);
             body.Children.Add(stack);
 
             var card = SecretBorder(owned ? Rgb(40, 30, 50) : canPurchase ? Rgb(50, 30, 60) : Rgb(35, 25, 45),
@@ -804,6 +831,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Opacity = opacity,
             Child = body,
         };
+
+        /// <summary>Icons and texts on one centred line (WPF wrote the emoji into the string).</summary>
+        private static StackPanel IconRow(params Control[] parts)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            foreach (var c in parts) { c.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(c); }
+            return row;
+        }
+
+        /// <summary>An icon in a fixed ink, or (brushKey) a live IconBrushes resource.</summary>
+        private static IconGlyph Glyph(IconKind kind, IconVariant variant, IBrush? ink, double size, string? brushKey = null)
+        {
+            var g = IconGlyph.Of(kind, variant, brushKey, size);
+            if (ink != null) g.Foreground = ink;
+            return g;
+        }
+
+        private static StackPanel CostBadge(int cost, IconKind kind, IBrush ink, bool forever)
+        {
+            var parts = new List<Control> { Glyph(kind, IconVariant.Filled, ink, 10), Text($"{cost}", ink, 10, bold: true) };
+            if (forever)
+            {
+                parts.Add(Glyph(IconKind.Star, IconVariant.Filled, ink, 10));
+                parts.Add(Text(IconText.BareLoc("label_skill_permanent"), ink, 10, bold: true));
+            }
+            var badge = IconRow(parts.ToArray());
+            badge.HorizontalAlignment = HorizontalAlignment.Center;
+            badge.VerticalAlignment = VerticalAlignment.Center;
+            return badge;
+        }
 
         private static TextBlock Text(string text, IBrush colour, double size,
                                       bool bold = false, bool italic = false, double top = 0, double bottom = 0) => new()

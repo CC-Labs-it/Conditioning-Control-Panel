@@ -1,0 +1,98 @@
+# IconGuardTests allow-list (oracle fluent-icons.md (c)/(e)): `path :: exact literal :: reason`
+# path is relative to CCP.Avalonia; the literal is blanked on every line of that file before counting.
+# Reason prefix scopes the entry: "font:" -> NoIconFontCodepoints, "path:" -> PathIconRatchet, anything else is
+# CONTENT for IconEmojiRatchet. Only content belongs here at the finish (L12); "font:" entries are temporary.
+# Liveness is checked on comment-stripped code. A "path:" literal is listed once per line it covers (a new Path built
+# the same way fails the count). Literal `*` (path: only) exempts every file whose path starts with the entry's path.
+
+# --- temporary (removed by L10 icons-shell-chrome) ---
+Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" :: font: temporary - MDL2 settings gear, the one icon-font site at L0b; L10 converts it to IconGlyph Kind=Settings
+
+# --- content (c).1: companion/chat text ---
+Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
+
+# --- content (c).2: user data examples ---
+Views/Windows/SessionCompleteWindow.axaml.cs :: SessionIcon = "🌀" :: render-sample SessionLog.SessionIcon, session data shown in a sentence (content (c).2, decision 4)
+Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a user-chosen preset icon inside prose (content (c).2)
+Views/Tabs/AwarenessTabView.Presets.cs :: Icon = "✨", :: seed icon of a new user preset; the user edits it, so it is preset data (content (c).2)
+
+# --- content (c).4: typography ---
+Views/Windows/ProgramsIntroPopup.axaml :: Text="●" :: list bullets beside prose rows, typography (content (c).4)
+Views/Dialogs/LoginDialog.axaml :: PasswordChar="●" :: PasswordChar mask, typography (content (c).4)
+
+Views/Windows/FeatureIntroPopup.axaml.cs :: "●" :: bullet marker of the intro card list, typography (decision 2026-10-10: bullets stay)
+Views/Controls/Companion/Themes/CompanionTheme.axaml :: <Setter Property="PasswordChar" Value="●"/> :: PasswordChar mask, typography (content (c).4)
+MainWindow.axaml :: ← Back to the app :: arrow inside a sentence, named by the oracle (content (c).4)
+Views/Chaos/ChaosSlotPickerWindow.axaml :: Descend  ↓ :: arrow inside a sentence, named by the oracle (content (c).4)
+Views/Deeper/DeeperEditorWindow.ItemsList.cs :: {trigger} → {action} :: arrow between two user rule parts, typography (content (c).4)
+Views/Controls/Companion/MemoryDiaryView.axaml.cs :: used 4× · last :: multiplication sign in a sample sentence (content (c).4)
+Views/Features/VideoFeatureControl.axaml :: min length &#x2192; max length :: arrow inside a tooltip sentence (content (c).4)
+Views/Windows/ModCreatorWindow.axaml.cs :: "COMPLY.mp3\" → companion says :: arrow inside help prose (content (c).4)
+Views/Windows/ModCreatorWindow.axaml.cs :: Video name → URL pairs :: arrow inside help prose (content (c).4)
+Views/Windows/QuizWindow.axaml.cs :: (Companion → AI) :: arrow inside an error sentence (content (c).4)
+Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Up => "\u2191" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
+Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Down => "\u2193" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
+Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
+
+# --- content (c).3: emoji inside head-authored sentences ---
+Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)
+
+# --- art, D6 "keep as art": whole files that are illustration, not icons ---
+Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations
+Controls/SpiralGlyph.cs :: * :: path: D6 art - spiral glyph drawing
+Controls/ChasterRailChip.cs :: * :: path: D6 art - Chaster rail chip lock drawing
+Controls/DescentFuseRailChip.cs :: * :: path: D6 art - descent fuse rail chip drawing
+Views/Controls/SeasonRecapCard. :: * :: path: D6 art - season recap card illustration
+Helpers/BreakoutCardArt.cs :: * :: path: D6 art - breakout card art
+Views/Features/SplitFeatureCard. :: * :: path: D6 art - split feature card illustration
+Views/Windows/TutorialOverlay. :: * :: path: D6 art - tutorial overlay spotlight/arrows
+Views/Windows/EmiDesk/EmiDeskWindow. :: * :: path: D6 art - Emi desk scene
+Controls/Icons/ :: * :: path: IconGlyph's spiral extension glyph (decisions 2026-10-10)
+Controls/PremiumSpark.cs :: * :: path: D6 art - animated sparkle/particle effect, not an icon slot
+
+# --- art, D6 "keep as art" inside files that also hold icon Paths ---
+Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="FuseCandleFlame" :: path: D6 art - AvatarTube fuse candle flame
+Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: _curvePath = new Path :: path: D6 art - rule-editor curve
+Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: canvas.Children.Add(new Path :: path: D6 art - rule-editor keyframe curve (one site)
+Views/Deeper/DeeperEditorWindow.axaml :: <Path x:Name="WaveformPath" :: path: D6 art - waveform
+Views/Deeper/EnhancementPlayerWindow.axaml :: <Path x:Name="WaveformPath" :: path: D6 art - waveform
+Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="2.6" :: path: D6 art - illustrative blink eye, open outline
+Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="2.6" :: path: D6 art - illustrative blink eye, closed arc
+Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="1.6" :: path: D6 art - illustrative blink eye, lashes
+Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, top card
+Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, second card
+Views/Tabs/DiscordTabView.axaml :: <Path HorizontalAlignment="Left" VerticalAlignment="Top" :: path: D6 art - faucet spout
+Views/Tabs/DiscordTabView.axaml :: <Path x:Name="ProfileVatChargeArc" :: path: D6 art - vat charge arc
+Views/Tabs/SpiralTabView.axaml :: <Path x:Name="SplashGlyph" :: path: D6 art - spiral splash glyph
+Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralPath" :: path: D6 art - launcher spiral
+Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralSmallPath" :: path: D6 art - launcher spiral
+Views/Windows/MainShellWindow.axaml :: <Path Stretch="Fill" Stroke="#FFE5C76B" StrokeThickness="1.2" :: path: D6 art - fuse ticket frame
+
+Views/Dialogs/TubeFitDialog.axaml.cs :: "🧍", "🙋", "💃", "🧎" :: pose pictograms drawn in place of a pose image that failed to load (oracle (c) ambiguous 3: default keep, content)
+
+Views/Dialogs/TubeFitDialog.axaml.cs :: $"×{_scale:0.00}" :: scale readout "×1.00", multiplication sign as typography (content (c).4)
+
+Views/Dialogs/MicConsentDialog.axaml :: View on GitHub → :: arrow inside a link sentence, typography (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml :: Content="← Back" :: "← Back" wizard button, arrow as typography like "← Back to the app" (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml :: I want to know more → :: arrow ending a sentence-style button label, typography (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml.cs :: I want to know more → :: same label set from code per step, typography (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml.cs :: Continue → :: arrow ending a sentence-style button label, typography (content (c).4)
+
+Views/Dialogs/WebcamConsentDialog.axaml :: View on GitHub → :: arrow inside a link sentence, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml :: Content="← Back" :: "← Back" wizard button, arrow as typography like "← Back to the app" (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml :: I want to know more → :: arrow ending a sentence-style button label, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml.cs :: I want to know more → :: same label set from code per step, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml.cs :: Continue → :: arrow ending a sentence-style button label, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml :: (5×5 grid) :: multiplication sign in prose, typography (content (c).4)
+
+Views/Dialogs/AwarenessPresetDetailDialog.axaml.cs :: Icon = "🎯", :: render sample preset icon, a user-chosen preset icon is data (content (c).2)
+
+Views/Tabs/PresetsTabView.axaml.cs :: | ×{preset.SimultaneousImages} | :: "×3" simultaneous-images count in a detail sentence, typography (content (c).4)
+Views/Tabs/PresetsTabView.axaml.cs :: ───────────────── :: text rule between description and summary inside one text block, typography (content (c).4)
+Views/Tabs/PresetsTabView.axaml.cs :: ? "🎬" : session.Icon :: session title keeps the session's own icon text (data); the 🎬 is its text fallback in the same slot (content (c).2)
+
+Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Up => "\u2191", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
+Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Down => "\u2193", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
+Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Flat => "\u2192", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
+Views/Controls/Companion/CompanionRoomPreviewWindow.axaml :: narrow ⇄ wide :: arrow between two words of a dev-preview button label, typography (content (c).4)
+App.axaml.cs :: Glyph = "👗" :: InboxItem.Glyph is Core row data, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon - IconMap maps 👗 to Wand once it draws via IconGlyph Emoji=

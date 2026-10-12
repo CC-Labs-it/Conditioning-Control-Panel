@@ -14,6 +14,7 @@
      trap in CLAUDE.md. The slot cards are still built in code-behind, as in WPF. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.CornerGifWindow"
         Title="Corner GIFs"
         Width="460" Height="640"
@@ -30,11 +31,11 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Text="🖼 Corner GIFs"
-                   Foreground="{DynamicResource PinkBrush}"
-                   FontSize="20"
-                   FontWeight="SemiBold"/>
+        <fx:IconLabel Grid.Row="0"
+                      Kind="Image" Text="Corner GIFs"
+                      TextElement.Foreground="{DynamicResource PinkBrush}"
+                      TextElement.FontSize="20"
+                      TextElement.FontWeight="SemiBold"/>
 
         <TextBlock Grid.Row="1"
                    Text="Pin a looping GIF to a screen corner. Turn on one or both slots and point each at a different corner (great for covering minimaps, HUD corners, or just decoration). Overlays are click-through; a session that brings its own corner GIF borrows the slot and hands it back after."

@@ -7615,5 +7615,6 @@
   "title_no_preset_selected": "Kein Preset ausgewählt",
   "title_cannot_update_default": "Standard kann nicht aktualisiert werden",
   "title_cannot_delete_default": "Standard kann nicht gelöscht werden",
-  "title_update_preset": "Preset aktualisieren"
+  "title_update_preset": "Preset aktualisieren",
+  "linux_dep_wpe_unavailable": "Integrierte Webseiten benötigen WPE WebKit 2.0, das nur Arch und openSUSE Tumbleweed vollständig paketieren; auf anderen Distributionen sind diese Seiten vorerst nicht verfügbar. Alles andere funktioniert ohne."
 }

@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // FindControl, not the generated field: DeeperTabView loads with
                 // AvaloniaXamlLoader.Load, so DeeperWaveGlyph is null on it despite compiling.
                 var glyph = Named<Tabs.DeeperTabView>("DeeperTab")
-                    ?.FindControl<TextBlock>("DeeperWaveGlyph");
+                    ?.FindControl<Control>("DeeperWaveGlyph");
                 if (glyph == null) return;
 
                 if (glyph.RenderTransform is TranslateTransform existing) _deeperGlyphDrift = existing;

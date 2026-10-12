@@ -16,6 +16,40 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
+    /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>
+    [Fact]
+    public async Task Each_start_reads_the_active_mods_bubble_sprite()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var dir = System.IO.Directory.CreateTempSubdirectory("ccp-bubble-");
+            var png = System.IO.Path.Combine(dir.FullName, "pill.png");
+            using (var bmp = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(7, 3), new Vector(96, 96)))
+                bmp.Save(png);
+            var (previous, oldImage) = (CoreModArt.OverridePathProvider, BubbleOverlay.Image);
+            try
+            {
+                CoreModArt.OverridePathProvider = _ => null;              // the default mod's sprite
+                BubbleOverlay.LoadBubbleImage();
+                Assert.NotEqual(7, BubbleOverlay.Image!.PixelSize.Width);
+                CoreModArt.OverridePathProvider = p => p == "bubble.png" ? png : null;   // switched mod
+                BubbleOverlay.LoadBubbleImage();
+                Assert.Equal(7, BubbleOverlay.Image!.PixelSize.Width);
+            }
+            finally
+            {
+                CoreModArt.OverridePathProvider = previous;
+                BubbleOverlay.Image = oldImage;
+                dir.Delete(true);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Press_on_a_bubble_pops_it_and_pays_the_bucket()
     {

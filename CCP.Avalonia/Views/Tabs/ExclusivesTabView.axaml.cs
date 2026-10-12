@@ -287,13 +287,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // WPF ApplyVeilLockBreath (MainWindow.Exclusives.cs:1241) breathes a DropShadowEffect on the glyph. Here
                 // that same shadow is baked once into a bitmap behind the glyph (glyph-shaped, GlowBake) and the
                 // breath moves only the bitmap's Opacity: a live Effect re-blurs every frame (P82 rule 3).
-                if (LockGlow(part) is not { } g || part is not TextBlock glyph) return;
+                if (LockGlow(part) is not { } g || part is not IconGlyph glyph) return;
                 g.IsVisible = _motion != null && glow && part.IsEffectivelyVisible;
                 if (!g.IsVisible) return;
                 double blur = Math.Min(20, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)), pad = 2 * blur;
-                var key = $"{glyph.Text}|{glyph.FontSize}|{AmbientFxCanvas.Env.GlowColor}|{blur}";
+                var key = $"{glyph.Kind}|{glyph.Variant}|{glyph.Size}|{AmbientFxCanvas.Env.GlowColor}|{blur}";
                 if (!LockGlowBakes.TryGetValue(key, out var baked))
-                    LockGlowBakes[key] = baked = GlowBake.Text(glyph, Brushes.White,
+                    LockGlowBakes[key] = baked = GlowBake.Icon(glyph, Brushes.White,
                         new DropShadowEffect { Color = AmbientFxCanvas.Env.GlowColor, BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 1 }, pad);
                 g.Source = baked;
                 g.Margin = new Thickness(-pad);

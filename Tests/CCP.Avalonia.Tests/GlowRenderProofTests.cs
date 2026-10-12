@@ -162,7 +162,7 @@ public sealed class GlowRenderProofTests
             w.ShowTab("exclusives");
             Dispatcher.UIThread.RunJobs();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
-            var lockGlyph = view.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
+            var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
             var glow = ExclusivesTabView.LockGlow(lockGlyph)!;
             Assert.True(glow.IsVisible, "the padlock glow is not shown - the proof proves nothing");
             Assert.Null(lockGlyph.Effect);                                    // no live Effect on the glyph
@@ -172,7 +172,7 @@ public sealed class GlowRenderProofTests
 
             // Glyph-shaped: the bake's ink reaches past the bare glyph's ink on every side (the shadow's spread).
             double pad = -glow.Margin.Left;
-            var plain = Ink(ConditioningControlPanel.Avalonia.Helpers.GlowBake.Text(lockGlyph, Brushes.White, null, pad)!);
+            var plain = Ink(ConditioningControlPanel.Avalonia.Helpers.GlowBake.Icon(lockGlyph, Brushes.White, null, pad)!);
             var halo = Ink(baked);
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");

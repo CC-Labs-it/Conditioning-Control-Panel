@@ -14,6 +14,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.AchievementsTabView"
              x:DataType="vm:AchievementsTabViewModel"
              xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs">
@@ -78,7 +79,10 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <Grid Margin="0,0,0,10">
-          <TextBlock Theme="{StaticResource SectionHeader}" Text="{loc:Str section_achievements}" Margin="0"/>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <fx:IconGlyph Kind="Trophy" Variant="Filled" Size="18" Foreground="{DynamicResource IconGoldBrush}" VerticalAlignment="Center"/>
+            <TextBlock Theme="{StaticResource SectionHeader}" Text="{loc:StrBare section_achievements}" Margin="0" VerticalAlignment="Center"/>
+          </StackPanel>
           <Button x:Name="HelpBtnAchievements" Theme="{StaticResource HelpButtonStyle}"
                   HorizontalAlignment="Right" Tag="Achievements"/>
         </Grid>
@@ -120,7 +124,8 @@
           <Border x:Name="PatronAchievementsOverlay" Background="#CC1A1A2E" CornerRadius="12"
                   ZIndex="100" IsVisible="{Binding PatronLocked}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20">
-              <TextBlock Text="🔒" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+              <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="40" Foreground="{DynamicResource IconTier1Brush}"
+                            HorizontalAlignment="Center" Margin="0,0,0,15"/>
               <TextBlock Text="{loc:Str section_patron_achievements}"
                          Foreground="{DynamicResource PinkBrush}"
                          FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10">

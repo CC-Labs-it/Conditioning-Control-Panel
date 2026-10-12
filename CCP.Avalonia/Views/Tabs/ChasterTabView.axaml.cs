@@ -175,9 +175,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void PaintPause(bool paused)
         {
             TxtPause.Text = Loc.Get(paused ? "chaster_paused" : "chaster_pause");
-            PauseBarA.IsVisible = PauseBarB.IsVisible = !paused;
-            PlayArrow.IsVisible = paused;
-            TxtPause.Foreground = paused ? new SolidColorBrush(PauseGold) : Brush("TextLightBrush");
+            PauseGlyph.Kind = paused ? IconKind.Play : IconKind.Pause;
+            TxtPause.Foreground = PauseGlyph.Foreground = paused ? new SolidColorBrush(PauseGold) : Brush("TextLightBrush");
             PausePill.BorderBrush = paused ? new SolidColorBrush(PauseGold) : Brush("GlassBorderBrush");
             ToolTip.SetTip(PausePill, Loc.Get(paused ? "chaster_paused_tip" : "chaster_pause_tip"));
         }
@@ -363,7 +362,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtAccountLock.Text = snapshot == null ? Loc.Get("chaster_account_nolock")
                 : string.IsNullOrWhiteSpace(snapshot.Title) ? Loc.Get("chaster_lock_untitled") : snapshot.Title!;
             var left = chaster?.IsLinked == true ? snapshot?.Remaining(DateTime.UtcNow) : null;
-            TxtAccountLeft.Text = left is { } l ? (snapshot!.IsFrozen ? "❄ " : "") + ChasterWebLinks.Short(l) : "";
+            TxtAccountLeft.Text = left is { } l ? ChasterWebLinks.Short(l) : "";
+            AccountFrozen.IsVisible = left is not null && snapshot!.IsFrozen;
             TxtAccountLeft.IsVisible = left is not null;
             ToolTip.SetTip(BtnChasterSite, Loc.Get(snapshot == null ? "chaster_site_make_tip" : "chaster_site_open_tip"));
         }

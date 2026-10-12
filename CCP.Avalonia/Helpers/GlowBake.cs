@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using ConditioningControlPanel.Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Helpers
 {
@@ -33,6 +34,19 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 Foreground = foreground,
                 Effect = effect,
             };
+            return Bake(copy, pad);
+        }
+
+        /// <summary>The same bake for an icon glyph (the padlocks became <see cref="IconGlyph"/>s in the icon chain).</summary>
+        public static Bitmap? Icon(IconGlyph source, IBrush foreground, IEffect? effect, double pad) =>
+            Bake(new IconGlyph
+            {
+                Kind = source.Kind, Variant = source.Variant, Brand = source.Brand, Size = source.Size,
+                Foreground = foreground, Effect = effect,
+            }, pad);
+
+        private static Bitmap Bake(Control copy, double pad)
+        {
             var host = new Border { Padding = new Thickness(pad), Child = copy };
             host.Measure(Size.Infinity);
             host.Arrange(new Rect(host.DesiredSize));

@@ -124,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Home, R, null, "🏠"); M(IconKind.ShoppingBag, R, null, "🛍"); M(IconKind.CompassNorthwest, R, null, "🧭");
             M(IconKind.Square, F, null, "🟪");
             M(IconKind.Circle, F, null, "🟢", "●");
-            M(IconKind.Circle, R, null, "○"); M(IconKind.RadioButton, R, null, "◉");
+            M(IconKind.Circle, R, null, "○"); M(IconKind.CircleHint, R, null, "◌"); M(IconKind.RadioButton, R, null, "◉");
             M(IconKind.Diamond, F, null, "◆", "◈");
             M(IconKind.Diamond, R, null, "◇"); M(IconKind.Color, R, null, "🎨", "🌈"); M(IconKind.New, R, null, "🆕");
             M(IconKind.Flag, R, null, "🏁"); M(IconKind.Building, R, null, "🏫"); M(IconKind.Grid, R, null, "🧱");

@@ -941,6 +941,19 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Test: `OsNotificationsTests.Sandbox_never_reaches_the_session_bus` (fail-proven: guard removed -> red) and
   `RemoteControlShellTests` asserts the join raised exactly one notification via the Sink (fail-proven: call disabled -> red).
   Log (run with DBUS_SESSION_BUS_ADDRESS=disabled:): ~/ccp-port/evidence/review-no-desktop-notify-in-tests/fail-proofs.log.
+
+## 2026-10-10: First-run wizard fits small screens; WPE unavailable outside Arch/Tumbleweed (avalonia-port/wizard-hidpi-wpe)
+- Context: distro-check F5 - at 200% on 1920x1080 (960x540 DIP) the fixed 900x680 wizard put Enter off-screen, so the 18+
+  gate could not be accepted and closing exits the app. WPF has the same fixed size (`FirstRunWizard.xaml:6`, NoResize).
+  F2 - the WPE install command named packages no tested distro ships in full.
+- Choice: this head improves on WPF: `FirstRunWizard.FitToWorkingArea` caps the window to the screen working area (DIP)
+  before showing; the step bodies already scroll, the footer stays. Normal screens keep 900x680 (WPF look unchanged).
+  WPE stays in the Arch pacman command (extra ships wpewebkit, wpebackend-fdo and libwpe: `pacman -Si` 2026-10-10, so
+  F2's "Arch lacks libwpe/wpebackend-fdo" was wrong and packaging/aur/PKGBUILD stays as is); Debian/Fedora/unknown get no
+  WPE package names, and a localized line (`linux_dep_wpe_unavailable`, 9 languages) says those pages are unavailable there.
+  No Flatpak is offered: none has been built (linux-package-flatpak is blocked). Other deps keep their command.
+- Decided by: supervisor brief (F5, F2).
+
 ## 2026-10-10: Clean-distro check of the linux-x64 tarball (avalonia-port/distro-check)
 - `packaging/linux/distro-check/run.sh <image> <tarball> <outdir>` checks one stock image in two containers: install
   (network on) = only the docs/avalonia-linux-install.md dep row + test tooling (Xvfb, openbox, ImageMagick, xdotool,
@@ -1015,3 +1028,32 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `AccountSeedTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer` (SyncPushTests.cs),
   `AccountSeedTests.AProfileWithoutAchievements_SendsNoAchievementsKey` (SyncPushTests.cs), `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
   log: ~/ccp-port/evidence/server-sync-unblock/fail-proofs.log.
+
+## 2026-10-12: Sandboxed Debug runs get full access (avalonia-port/sandbox-full-access)
+
+- Advised by: the user (owner, server-whitelisted). Sandboxed test instances (kc live checks) have no network
+  (SandboxNet) and no real account (memory-only SecretStore), so the server whitelist cannot reach them.
+- Decision: a LOCAL override in `CCP.Avalonia/Platform/AccountSeed.cs` (`SandboxWhitelistRequested`). When ALL of a DEBUG
+  build, `SandboxNet.Active` (CCP_USERDATA_DIR honoured) and `CCP_SANDBOX_WHITELIST=1`: whitelisted, premium and Lab are
+  true (whitelist folds into tier 2, CoreEntitlement docs), so every TierGate opens. It does not sign in, sync or invent an
+  identity. Settings > Account's tier card says "Whitelisted (sandbox)" (literal, Debug-only, not localized).
+- Release builds compile it out (`#if DEBUG`; the Release `CCP.Avalonia.dll` holds no `CCP_SANDBOX_WHITELIST` string), so
+  shipped builds keep the paywall. Only `~/ccp-port/bin/kc start` sets the variable; headless tests do not (and run Release),
+  so they keep testing the gates. Tests: `SandboxWhitelistTests.cs`, `AccountSettingsSectionTests.SandboxWhitelistShowsOnTheTierCardOnlyInDebug`.
+## 2026-10-12: The 6-blink stop is WPF's recalibration stop, not a panic (avalonia-port/mine-safety)
+- Question: which surfaces does the rapid 6-blink stop (`MainShellWindow.BlinkStop.cs`) stop on this head?
+- Options: (A) the whole panic registry minus intake/gaze minigame/Chaos/camera, which also ends today's program session,
+  cancels the mic and AI follow-ups and stops the toys; (B) only what WPF `StopAllForRecalibration` (MainWindow.LabTab.cs:268-284) reaches.
+- Choice: B, exactly the WPF set (advised by: supervisor): `blink-trainer`, `mantra`, `takeover`, `engine` (the session is paused,
+  never ended), `pink-rush`, `lock-cards` (WPF closes them: App.xaml.cs:1778 `LockCard.Stop(dismissOpenCards: true)` and
+  StartStop.cs:~516 `LockCardWindow.ForceCloseAll()`) and `tube-speech` (KillAllAudio's `StopVoiceLineAudio`). The program
+  run, camera, mic, AI and haptics are left alone; the panic key stays the way to stop everything.
+- Test: `BlinkStopTests.SixTrackerBlinksStopEverythingButTheCamera` asserts the exact set and the kept surfaces.
+## 2026-10-12: FlashClickable is honoured by the Avalonia flash overlay (flash-core)
+- Question: the Avalonia flash windows were always click-through, ignoring the user's Click setting; stay-until-popped
+  and the leave picker had nothing to act on. May the overlay make flash windows take clicks when Click is on?
+- Answer (advised by: supervisor): yes, WPF parity (FlashService.cs:1765 IsClickable). Click off keeps exactly the old
+  click-through recipe; Click on keeps the window's input and never takes focus (X11 override-redirect, Win32 passive
+  NOACTIVATE); a press pops it with its FlashExit leave. Panic/Stop (FlashOverlay.CloseAll) closes flashes mid-leave too.
+  Native Wayland is unchanged: no X11 overlay, so no flashes at all (logged once).
+- Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.

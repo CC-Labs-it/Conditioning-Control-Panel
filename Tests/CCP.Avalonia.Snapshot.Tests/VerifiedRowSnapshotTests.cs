@@ -56,6 +56,8 @@ public sealed class VerifiedRowSnapshotTests
 
         VerifyAvalonia.Initialize();
         VerifierSettings.UseSsimForPng(SsimThreshold);
+        // A mismatch must never open a diff tool (meld) on the user's desktop (P74): read .received.png instead.
+        DiffEngine.DiffRunner.Disabled = true;
     }
 
     private static bool _setUp;

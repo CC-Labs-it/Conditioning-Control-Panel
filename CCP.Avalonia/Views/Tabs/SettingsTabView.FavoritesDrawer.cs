@@ -79,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SetFavoritesDrawer(bool open, bool animate)
         {
             _drawerOpen = open;
-            FavoritesDrawerChevron.Text = open ? "›" : "‹";
+            FavoritesDrawerChevron.Kind = open ? IconKind.ChevronRight : IconKind.ChevronLeft;
             double to = open ? FavoritesDrawerWidth : 0;
             bool slide = animate && AmbientFxCanvas.Env.AllowTransitions;
             FavoritesDrawerBody.Transitions = slide
