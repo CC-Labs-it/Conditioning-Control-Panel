@@ -1916,3 +1916,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/mine-safety: +592
 - P0 safety: panic silences the tube (`tube-speech`), the 6-blink stop gesture behind BlinkStopGate (moved to Core), and the camera pill now stops the camera.
 - The explicit-content acknowledgement uses ShowDialogSafe, so a hidden tube no longer throws. Gate OK, no live check.
+
+## avalonia-port/mine-launcher-account: +236
+- The launcher now checks a leash gate before play (the seam exists but nothing sets it yet). Header stat pills are ported and read the last leaderboard page. The bubble sprite is re-read from the active mod on each start.
+- P2 (account/data + devices) is skipped because it overlaps the login-fix lane; face473bd (pause-key capture) has no overlap and can be its own lane.
