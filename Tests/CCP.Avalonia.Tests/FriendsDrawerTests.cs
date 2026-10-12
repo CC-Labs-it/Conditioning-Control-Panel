@@ -19,6 +19,8 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 using Xunit;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -74,6 +76,10 @@ public sealed class FriendsDrawerTests
         await svc.RefreshAsync();
         d.Toggle("u_on");
         foreach (var act in new[] { "invite", "poke", "watch" }) Assert.NotNull(Tagged<Button>(d, "friends-action:" + act));
+        // WPF ActionButton's MDL2 glyphs (E8A7 / E7C9 / E714 / E712), restored as Fluent icons.
+        IconKind glyph(string tag) => Tagged<Button>(d, tag)!.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind;
+        Assert.Equal(new[] { IconKind.Open, IconKind.HandPoint, IconKind.Video, IconKind.MoreHorizontal },
+            new[] { "invite", "poke", "watch", "more" }.Select(a => glyph("friends-action:" + a)));
         Assert.Null(d.OpenPicker);
 
         Click(d, "friends-action:poke");

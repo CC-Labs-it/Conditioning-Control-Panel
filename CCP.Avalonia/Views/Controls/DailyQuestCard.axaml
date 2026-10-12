@@ -29,6 +29,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.DailyQuestCard"
              MaxWidth="257" MaxHeight="320">
 
@@ -63,13 +64,13 @@
                     <!-- Stamped. Sits UNDER the caption: a finished quest should still say which
                          quest it was. -->
                     <Border x:Name="CompletedOverlay" Background="#992D4A2D" IsVisible="False">
-                        <TextBlock Text="&#x2713;" Foreground="#00E676" FontSize="72" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Margin="0,0,0,38">
-                            <TextBlock.Effect>
+                        <fx:IconGlyph Kind="Checkmark" Size="72" Foreground="#00E676"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Margin="0,0,0,38">
+                            <fx:IconGlyph.Effect>
                                 <DropShadowEffect Color="Black" BlurRadius="8" OffsetX="0" OffsetY="2"/>
-                            </TextBlock.Effect>
-                        </TextBlock>
+                            </fx:IconGlyph.Effect>
+                        </fx:IconGlyph>
                     </Border>
 
                     <!-- Seat number: with three cards up, "which one is this" has to be answerable
@@ -86,6 +87,8 @@
                             Padding="7,2" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top"
                             IsHitTestVisible="False">
                         <StackPanel Orientation="Horizontal">
+                            <fx:IconGlyph x:Name="XpIcon" Kind="Gift" Size="11" Foreground="{DynamicResource PinkBrush}"
+                                          VerticalAlignment="Center" Margin="0,0,4,0"/>
                             <TextBlock x:Name="TxtXp" Text="" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtXpBonus" Text="" Foreground="#FFB347"
@@ -97,8 +100,8 @@
                     <!-- CAPTION. Name and ask, on the picture, over the scrim. -->
                     <StackPanel VerticalAlignment="Bottom" Margin="11,0,11,9" IsHitTestVisible="False">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                            <TextBlock x:Name="TxtIcon" Text="" FontSize="15"
-                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <fx:IconGlyph x:Name="QuestIcon" Size="15"
+                                          VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock x:Name="TxtName" Text="" Foreground="White" FontSize="14" FontWeight="Bold"
                                        TextWrapping="Wrap" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -133,7 +136,7 @@
                 <Button x:Name="BtnReroll" Grid.Row="1" Theme="{StaticResource OutlineButton}"
                         FontSize="11" Padding="8,4" Margin="0,8,0,0"
                         ToolTip.ShowOnDisabled="True">
-                    <TextBlock x:Name="TxtReroll" Text=""/>
+                    <fx:IconLabel x:Name="RerollLabel"/>
                 </Button>
             </Grid>
         </Grid>

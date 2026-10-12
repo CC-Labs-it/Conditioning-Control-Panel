@@ -23,6 +23,7 @@
                                           template is left to Fluent, only the colours are set. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
@@ -74,8 +75,8 @@
                                         </Transitions>
                                     </Grid.Transitions>
                                     <Border x:Name="Node">
-                                        <TextBlock x:Name="Glyph" Text="{Binding Glyph}" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph x:Name="Glyph" Kind="{Binding GlyphKind}" Variant="{Binding GlyphVariant}" Size="13"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                 </Grid>
                                 <TextBlock x:Name="Label" Text="{Binding Name}"/>
@@ -106,7 +107,7 @@
         <Style Selector="Button /template/ Border#Node">
             <Setter Property="Theme" Value="{StaticResource CmpConstellationNodeStyle}"/>
         </Style>
-        <Style Selector="Button /template/ TextBlock#Glyph">
+        <Style Selector="Button /template/ fx|IconGlyph#Glyph">
             <Setter Property="Foreground" Value="#40FFFFFF"/>
         </Style>
         <Style Selector="Button /template/ TextBlock#Label">
@@ -116,7 +117,7 @@
         <Style Selector="Button.filled /template/ Border#Node">
             <Setter Property="Theme" Value="{StaticResource CmpConstellationNodeFilledStyle}"/>
         </Style>
-        <Style Selector="Button.filled /template/ TextBlock#Glyph">
+        <Style Selector="Button.filled /template/ fx|IconGlyph#Glyph">
             <Setter Property="Foreground" Value="White"/>
         </Style>
         <Style Selector="Button.filled /template/ TextBlock#Label">
@@ -126,7 +127,7 @@
         <Style Selector="Button.current /template/ Border#Node">
             <Setter Property="Theme" Value="{StaticResource CmpConstellationNodeCurrentStyle}"/>
         </Style>
-        <Style Selector="Button.current /template/ TextBlock#Glyph">
+        <Style Selector="Button.current /template/ fx|IconGlyph#Glyph">
             <Setter Property="Foreground" Value="White"/>
         </Style>
         <Style Selector="Button.current /template/ TextBlock#Label">

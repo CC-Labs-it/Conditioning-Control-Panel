@@ -26,6 +26,7 @@
      The four button styles were local to the WPF window, so they stay local here. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame.GazeMinigameWindow"
         Title="Gaze Minigame"
         Width="1100" Height="720"
@@ -166,8 +167,8 @@
 
                 <!-- Header -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,14">
-                    <TextBlock Text="👁" FontSize="36" Width="46" Height="46" Margin="0,0,12,0"
-                               TextAlignment="Center" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="Eye" Size="40" Width="46" Height="46" Margin="0,0,12,0"
+                                  Foreground="#FF69B4" VerticalAlignment="Center"/>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="Gaze Training" Foreground="White" FontSize="26" FontWeight="Bold"/>
                         <TextBlock Text="Drag a set into Focus and one or more into Ignore, then hold your eyes on the focus content to win."
@@ -230,7 +231,7 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Text="👁 FOCUS ON" Foreground="#FF69B4" FontWeight="Bold" FontSize="13"/>
+                                <fx:IconLabel Text="FOCUS ON" Kind="Eye" Spacing="5" TextElement.Foreground="#FF69B4" TextElement.FontWeight="Bold" TextElement.FontSize="13"/>
                                 <TextBlock Text="   the one set to stare at" Foreground="#9A7488" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -254,7 +255,7 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Text="🚫 IGNORE" Foreground="#FF8080" FontWeight="Bold" FontSize="13"/>
+                                <fx:IconLabel Text="IGNORE" Kind="Prohibited" Spacing="5" TextElement.Foreground="#FF8080" TextElement.FontWeight="Bold" TextElement.FontSize="13"/>
                                 <TextBlock Text="   distractions to look away from" Foreground="#9A7070" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -437,9 +438,14 @@
                     <TextBlock Grid.Column="0" x:Name="TxtSelectionSummary" VerticalAlignment="Center"
                                Foreground="#888888" FontSize="12" TextWrapping="Wrap" Margin="0,0,16,0"
                                Text="Pick a Focus set and at least one Ignore set."/>
-                    <Button Grid.Column="1" x:Name="BtnStartGame" Content="Start ▶"
+                    <Button Grid.Column="1" x:Name="BtnStartGame"
                             Theme="{StaticResource PrimaryBtn}" Padding="40,12" FontSize="16"
-                            IsEnabled="False"/>
+                            IsEnabled="False">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Start" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="Play" Variant="Filled" Size="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </Grid>
             </Grid>
         </Grid>

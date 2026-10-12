@@ -24,6 +24,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.MiniPlayerWindow"
         Height="350" Width="450"
         MinHeight="200" MinWidth="300"
@@ -72,11 +73,14 @@
                            Foreground="{DynamicResource PinkBrush}" FontSize="12" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="12,0,0,0"
                            TextTrimming="CharacterEllipsis"/>
-                <Button x:Name="BtnClose" Grid.Column="1" Content="✕" Width="32" Height="32"
+                <Button x:Name="BtnClose" Grid.Column="1" Width="32" Height="32"
                         Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"
                         BorderThickness="0" FontSize="14" Cursor="Hand"
-                        ToolTip.Tip="{loc:Str tooltip_close_escape}"/>
+                        AutomationProperties.Name="{loc:Str tooltip_close_escape}"
+                        ToolTip.Tip="{loc:Str tooltip_close_escape}">
+                    <fx:IconGlyph Kind="Dismiss" Size="14"/>
+                </Button>
             </Grid>
 
             <!-- Content Area -->
@@ -107,12 +111,15 @@
 
                 <!-- Play/Pause Button -->
                 <Button x:Name="BtnPlayPause" Grid.Column="0"
-                        Content="▶" Width="36" Height="28"
+                        Width="36" Height="28"
                         Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         Background="#353555" Foreground="{DynamicResource PinkBrush}"
                         BorderThickness="0" FontSize="12" Cursor="Hand"
                         Margin="8,0,0,0"
-                        ToolTip.Tip="{loc:Str tooltip_play_pause_space}"/>
+                        AutomationProperties.Name="{loc:Str tooltip_play_pause_space}"
+                        ToolTip.Tip="{loc:Str tooltip_play_pause_space}">
+                    <fx:IconGlyph x:Name="IcoPlayPause" Kind="Play" Variant="Filled" Size="12"/>
+                </Button>
 
                 <!-- Seek Slider -->
                 <Slider x:Name="SeekSlider" Grid.Column="1"

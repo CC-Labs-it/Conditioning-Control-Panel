@@ -20,7 +20,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// </summary>
     public sealed class TimelineListEntry
     {
-        public string Icon { get; init; } = "";
+        public IconKind Icon { get; init; } = IconKind.Sparkle;
+        /// <summary>Design table: ✨ and 🟪 are Filled; 🟪 keeps its violet (style class "overlay").</summary>
+        public IconVariant IconVariant => Icon is IconKind.Sparkle or IconKind.Square ? IconVariant.Filled : IconVariant.Regular;
+        public bool IsOverlayIcon => Icon == IconKind.Square;
         public string KindLabel { get; init; } = "";
         public int KindOrder { get; init; }
         public string Label { get; init; } = "";
@@ -76,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (rule == null) continue;
                 entries.Add(new TimelineListEntry
                 {
-                    Icon = "🎯",
+                    Icon = IconKind.Target,
                     KindLabel = "Rule",
                     KindOrder = 0,
                     Label = DescribeRule(rule),
@@ -91,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (region == null) continue;
                 entries.Add(new TimelineListEntry
                 {
-                    Icon = "▦",
+                    Icon = IconKind.Grid,
                     KindLabel = "Region",
                     KindOrder = 1,
                     Label = string.IsNullOrWhiteSpace(region.Label) ? (region.Id ?? "(region)") : region.Label!,
@@ -109,7 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     if (ev == null) continue;
                     entries.Add(new TimelineListEntry
                     {
-                        Icon = "📳",
+                        Icon = IconKind.PhoneVibrate,
                         KindLabel = "Haptic",
                         KindOrder = 2,
                         Label = string.IsNullOrWhiteSpace(ev.PatternName) ? "Haptic" : ev.PatternName!,
@@ -267,13 +270,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static string Truncate(string s, int max)
             => s.Length <= max ? s : s.Substring(0, max - 1) + "…";
 
-        private static string EffectIcon(string? type) => type switch
+        private static IconKind EffectIcon(string? type) => type switch
         {
-            EffectTypes.Flash      => "⚡",
-            EffectTypes.Bubble     => "🫧",
-            EffectTypes.Subliminal => "💭",
-            EffectTypes.Overlay    => "🟪",
-            _                      => "✨"
+            EffectTypes.Flash      => IconKind.Flash,
+            EffectTypes.Bubble     => IconKind.BubbleMultiple,
+            EffectTypes.Subliminal => IconKind.Comment,
+            EffectTypes.Overlay    => IconKind.Square,
+            _                      => IconKind.Sparkle
         };
 
         private static string NiceEffectName(string? type) => type switch

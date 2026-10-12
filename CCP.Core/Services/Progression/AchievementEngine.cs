@@ -161,6 +161,15 @@ internal sealed class AchievementEngine
         return minutes;
     }
 
+    /// <summary>WPF AchievementService.TrackFlashImage: one more image shown, retinal_burn at 5000.
+    /// The caller credits quests (WPF App.Quests.TrackFlashImage).</summary>
+    public void TrackFlashImage()
+    {
+        Progress.TotalFlashImages++;
+        _isDirty = true;
+        if (Progress.TotalFlashImages >= AchievementRules.RetinalBurnFlashImages) TryUnlock("retinal_burn");
+    }
+
     /// <summary>WPF AchievementService.TrackMindWipeDuration: clean_slate at 60 s of continuous loop.</summary>
     public void TrackMindWipeDuration(double seconds)
     {

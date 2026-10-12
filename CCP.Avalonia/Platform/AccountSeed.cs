@@ -14,6 +14,23 @@ internal static class AccountSeed
     internal static ProviderSubscription? SubscribeStar { get; private set; }
     internal static DiscordAccount? Discord { get; private set; }
 
+    /// <summary>True when the last <see cref="Seed"/> granted the local sandbox whitelist (see
+    /// <see cref="SandboxWhitelistRequested"/>). Always false in a Release build.</summary>
+    internal static bool SandboxWhitelisted { get; private set; }
+
+    /// <summary>Decision 2026-10-12 (docs/avalonia-decisions.md): a sandboxed DEBUG run (CCP_USERDATA_DIR honoured,
+    /// so SandboxNet is active and there is no network or real account) with CCP_SANDBOX_WHITELIST=1 is treated as a
+    /// whitelisted account: premium + Lab, as the server whitelist would grant. Only `kc start` sets the variable;
+    /// headless tests do not, so they keep testing the gates. Release builds compile this out: shipped builds keep the paywall.</summary>
+    internal static bool SandboxWhitelistRequested()
+    {
+#if DEBUG
+        return SandboxNet.Active && Environment.GetEnvironmentVariable("CCP_SANDBOX_WHITELIST") == "1";
+#else
+        return false;
+#endif
+    }
+
     /// <param name="make">Tests only: builds the provider for a prefix.</param>
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
@@ -40,9 +57,11 @@ internal static class AccountSeed
             if (s.OfflineMode && !string.IsNullOrWhiteSpace(s.OfflineUsername)) return s.OfflineUsername;
             return s.UserDisplayName ?? patreon.DisplayName ?? discord.CustomDisplayName ?? discord.DisplayName ?? substar.DisplayName;
         };
-        CoreAccount.IsWhitelistedProvider = () => patreon.IsWhitelisted;
-        CoreAccount.HasPremiumAccessProvider = () => ProviderSubscription.HasPremiumAccess(patreon, substar, CoreSettings.Current);
-        CoreAccount.HasLabAccessProvider = () => ProviderSubscription.HasLabAccess(patreon, substar, CoreSettings.Current);
+        SandboxWhitelisted = SandboxWhitelistRequested();
+        var sandbox = SandboxWhitelisted;
+        CoreAccount.IsWhitelistedProvider = () => sandbox || patreon.IsWhitelisted;
+        CoreAccount.HasPremiumAccessProvider = () => sandbox || ProviderSubscription.HasPremiumAccess(patreon, substar, CoreSettings.Current);
+        CoreAccount.HasLabAccessProvider = () => sandbox || ProviderSubscription.HasLabAccess(patreon, substar, CoreSettings.Current);
         // WPF App.xaml.cs:487-488: TierGate's seam reads the same gates (Patreon.HasPremiumAccess there).
         CoreEntitlement.HasPremiumProvider = () => CoreAccount.HasPremiumAccess;
         CoreEntitlement.HasLabProvider = () => CoreAccount.HasLabAccess;

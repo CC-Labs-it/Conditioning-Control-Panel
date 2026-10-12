@@ -112,8 +112,8 @@
 
         <!-- Header -->
         <Grid Grid.Row="0" Margin="0,0,0,18" ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Grid.Column="0" Text="🛰️" FontSize="30" Width="44"
-                       TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,16,0"/>
+            <fx:IconGlyph Grid.Column="0" Kind="Globe" Size="30"
+                       VerticalAlignment="Center" Margin="7,0,23,0"/>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <TextBlock Theme="{StaticResource Type.PageTitle}" Text="{loc:Str tab_available_subjects}"/>
                 <TextBlock Text="{loc:Str desc_available_subjects}"

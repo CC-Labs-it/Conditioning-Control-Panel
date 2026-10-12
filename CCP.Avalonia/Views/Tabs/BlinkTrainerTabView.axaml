@@ -28,6 +28,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.BlinkTrainerTabView">
 
   <!-- Mint (#5CE0A5) is this tab's hue. LOCAL resources with LITERAL colors only - same rule as
@@ -532,9 +533,9 @@
                             Background="#1A4ADE80"
                             BorderBrush="#4ADE80" BorderThickness="1">
                       <StackPanel>
-                        <TextBlock x:Name="BlinkTrainerConsentStatus"
-                                   Text="{loc:Str blink_trainer_consent_granted}"
-                                   Foreground="{StaticResource TextLightBrush}" FontSize="12" FontWeight="Medium"/>
+                        <fx:IconLabel x:Name="BlinkTrainerConsentStatus"
+                                   Key="blink_trainer_consent_granted"
+                                   TextElement.Foreground="{StaticResource TextLightBrush}" TextElement.FontSize="12" TextElement.FontWeight="Medium"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                           <Button x:Name="BtnBlinkTrainerManageConsent"
                                   Padding="10,4"
@@ -612,7 +613,7 @@
                 </Border.BorderBrush>
 
                 <StackPanel HorizontalAlignment="Center">
-                  <TextBlock Text="🔒" FontSize="34"
+                  <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="34" Foreground="{DynamicResource IconTier1Brush}"
                              HorizontalAlignment="Center"
                              Margin="0,0,0,12"/>
                   <TextBlock Text="{loc:Str blink_trainer_gate_headline}"

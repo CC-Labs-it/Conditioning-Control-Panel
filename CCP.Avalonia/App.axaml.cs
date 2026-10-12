@@ -298,6 +298,7 @@ namespace ConditioningControlPanel.Avalonia
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
+            Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
             // App.OnStartup; every head must, because LocalizationManager holds no language until
@@ -322,6 +323,9 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
+            // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
+            // reach this callback too and must keep the real titles.
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();
             // WPF App.xaml.cs:1949 shows the splash before anything else and threads SetProgress
             // through startup. One UI thread here, so startup yields a frame per step instead.
             var splash = SplashOnStartup && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
@@ -435,13 +439,8 @@ namespace ConditioningControlPanel.Avalonia
                 await step(0.4, "Initializing flash service...");
                 // The ambient flash surface. CoreFlash owns the rhythm; a burst needs any attached
                 // visual to reach Screens, and the main window is the one that always is.
-                CoreFlash.IsBusyProvider = () => Views.Overlays.FlashOverlay.IsBusy;
-                CoreFlash.ShowProvider = () =>
-                {
-                    if (desktop.MainWindow is not { } host) return;
-                    Views.Overlays.FlashOverlay.TriggerOnce(host);
-                    NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash);
-                };
+                Views.Overlays.FlashOverlay.SeedCore(() => desktop.MainWindow,
+                    () => NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash));
 
                 // Subliminal and bouncing-text surfaces. Core owns the schedule / the motion;
                 // these draw on click-through overlays (Views/Overlays), hosted like the flash.

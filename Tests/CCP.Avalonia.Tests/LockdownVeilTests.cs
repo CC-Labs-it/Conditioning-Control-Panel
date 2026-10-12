@@ -54,6 +54,8 @@ public sealed class LockdownVeilTests
             s.StrictLockEnabled = false;
             s.LockdownForceStrictLock = s.LockdownDisablePanicKey = true;
             s.MotionLevel = MotionLevel.Full;
+            s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);   // P76: no intro card stealing the badge's Enter
+            s.WhatMovedCardShown = 1;
             var ld = LockdownService.Current = new LockdownService();
             var shell = new MainShellWindow();
             try

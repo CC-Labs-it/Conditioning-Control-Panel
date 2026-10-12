@@ -488,7 +488,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public string DisplayName { get; }
         public string TimeText { get; }
         public string TypeBadge { get; }
-        public string PlaceholderGlyph { get; }
+        public IconKind PlaceholderGlyph { get; }
         public IBrush BadgeBrush { get; }
         public bool FileExists => SafeExists(Entry.FilePath);
         /// <summary>Hidden for online entries: there is no folder of theirs to reveal.</summary>
@@ -504,19 +504,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (entry.Type == MediaType.Video)
             {
                 TypeBadge = Loc.Get("badge_video");
-                PlaceholderGlyph = "🎬";
+                PlaceholderGlyph = IconKind.Video;
                 BadgeBrush = new SolidColorBrush(Color.FromRgb(0x4A, 0x6C, 0xD0));
             }
             else if (entry.Type == MediaType.Audio)
             {
                 TypeBadge = Loc.Get("badge_audio");
-                PlaceholderGlyph = "🎵";
+                PlaceholderGlyph = IconKind.MusicNote2;
                 BadgeBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x9A, 0x86));
             }
             else
             {
                 TypeBadge = Loc.Get("badge_image");
-                PlaceholderGlyph = "🖼";
+                PlaceholderGlyph = IconKind.Image;
                 BadgeBrush = new SolidColorBrush(Color.FromRgb(0xB0, 0x50, 0x9C));
             }
         }
