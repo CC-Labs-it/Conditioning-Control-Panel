@@ -1929,3 +1929,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - User report "login does not work". The window was a sandboxed live-check app. An unreachable sign-in server now ends the attempt at once with WPF's "Login failed" message instead of a 5-minute spinner. Closing the dialog cancels the OAuth, so a retry works again.
 - Title-bar "Sign in" chip lands on Settings · Account on the first open. Offline Mode greys the Home Login button.
 - Sandboxed runs show "[SANDBOX] " in every window title and a SANDBOX badge in the shell title bar. A Settings Link waiting on the browser ends when the Account section leaves the tree. LoginRetryTests: 9 tests; the new one is fail-proven, the rest are asserted.
+
+## avalonia-port/icons-home-settings: +292
+- Fluent icons for Home + Settings (L1): 17 product files, emoji ratchet 971→905, loc ratchet 234→214, census unnamed icon buttons 158→142.
+- Tests now check IconGlyph/IconLabel Kind (fold, drawer, panic key, link labels), each made to fail once on purpose; parity rows marked divergent by decision.

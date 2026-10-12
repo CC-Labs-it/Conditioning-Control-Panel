@@ -7,6 +7,8 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using Avalonia.Controls;
+using IconLabel = ConditioningControlPanel.Avalonia.Controls.IconLabel;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using System.Linq;
@@ -108,7 +110,9 @@ public sealed class PanicKeyTests
                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .Invoke(window, null);
             Assert.False(MainShellWindow.CapturingPanicKey);
-            Assert.Equal("🔑 F8", ((TextBlock)button.Content!).Text);
+            var label = (IconLabel)button.Content!;
+            Assert.Equal(IconKind.Key, label.Kind);
+            Assert.Equal("F8", label.Label.Text);
 
             // ...and the panic key still works.
             var shell = new MainShellWindow();
