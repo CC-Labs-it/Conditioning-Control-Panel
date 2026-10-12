@@ -15,6 +15,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.VisualsFeatureControl">
 
     <!-- Velvet Kit 2 density pass. The root stays a StackPanel: MainWindow.SessionFeatureLock.cs
@@ -27,8 +28,7 @@
                 BorderBrush="{StaticResource SectionHueStudioBorderBrush}" BorderThickness="2" Margin="0,0,0,10">
             <Grid>
                 <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                    <TextBlock Text="{loc:Str section_visuals}" FontSize="17" FontWeight="Bold"
-                               Foreground="{StaticResource TextLightBrush}"/>
+                    <fx:IconLabel Key="section_visuals" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -117,8 +117,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_link_to_audio_trigger}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <fx:IconLabel Grid.Column="0" Key="label_link_to_audio_trigger" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkAudio"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
@@ -132,8 +131,8 @@
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
                     VerticalAlignment="Stretch" MinHeight="200">
-                <TextBlock Text="👁" FontSize="120" Opacity="0.18"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Eye" Size="120" Opacity="0.18"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Grid>
 

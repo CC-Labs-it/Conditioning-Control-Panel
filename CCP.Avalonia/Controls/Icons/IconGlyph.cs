@@ -97,12 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (IconMap.TryGet(e, out var hit))
             {
                 IsFallback = false;
-                SetCurrentValue(BrandProperty, hit.Brand);
-                SetCurrentValue(VariantProperty, hit.Variant);
-                SetCurrentValue(KindProperty, hit.Kind);
-                // The emoji carried the colour; keep it unless the caller set one.
-                if (hit.Brush != null && !IsSet(ForegroundProperty))
-                    _brush = Bind(ForegroundProperty, this.GetResourceObservable(hit.Brush), BindingPriority.Style);
+                ApplyEntry(hit);
             }
             else
             {
@@ -110,6 +105,25 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (LoggedMisses.TryAdd(e, 0)) Log.Debug("IconGlyph: no icon mapped for {Emoji}; drawing the emoji", e);
             }
             Rebuild();
+        }
+
+        /// <summary>Shows a mapped entry (IconMap.ForFeature and friends): kind, variant, brand, and the
+        /// semantic brush the emoji carried unless the caller set a Foreground.</summary>
+        public void Apply(IconEntry entry)
+        {
+            if (Emoji != null) SetCurrentValue(EmojiProperty, null);   // a reused glyph drops an old emoji fallback
+            ApplyEntry(entry);
+        }
+
+        private void ApplyEntry(IconEntry entry)
+        {
+            _brush?.Dispose();
+            _brush = null;
+            SetCurrentValue(BrandProperty, entry.Brand);
+            SetCurrentValue(VariantProperty, entry.Variant);
+            SetCurrentValue(KindProperty, entry.Kind);
+            if (entry.Brush != null && !IsSet(ForegroundProperty))
+                _brush = Bind(ForegroundProperty, this.GetResourceObservable(entry.Brush), BindingPriority.Style);
         }
 
         private void Rebuild()

@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             CoreMods.ModChanged += OnModChanged;   // the active mod's programs lead (WPF #966)
             Platform.ProgramEngineBridge.SessionChanged += OnProgramSessionChanged;   // P41
+            HookIgnition();
             RefreshPrograms();
         }
 
@@ -47,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged -= OnModChanged;
             Platform.ProgramEngineBridge.SessionChanged -= OnProgramSessionChanged;
             UnsubscribePrograms();
+            UnhookIgnition();
             base.OnDetachedFromVisualTree(e);
         }
 

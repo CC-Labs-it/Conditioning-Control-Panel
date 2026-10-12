@@ -7615,5 +7615,6 @@
   "title_no_preset_selected": "선택된 프리셋 없음",
   "title_cannot_update_default": "기본값은 업데이트할 수 없음",
   "title_cannot_delete_default": "기본값은 삭제할 수 없음",
-  "title_update_preset": "프리셋 업데이트"
+  "title_update_preset": "프리셋 업데이트",
+  "linux_dep_wpe_unavailable": "내장 웹 페이지에는 WPE WebKit 2.0이 필요하지만, 이를 완전히 패키징한 배포판은 Arch와 openSUSE Tumbleweed뿐입니다. 다른 배포판에서는 현재 이 페이지를 사용할 수 없습니다. 그 외 기능은 모두 작동합니다."
 }

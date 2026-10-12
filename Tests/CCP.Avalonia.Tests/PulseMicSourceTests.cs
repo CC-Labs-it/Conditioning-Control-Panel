@@ -20,4 +20,21 @@ public sealed class PulseMicSourceTests
             devices.Select(d => d.Name));
         Assert.Equal(new[] { -1, 0, 1 }, devices.Select(d => d.Index));
     }
+
+    /// <summary>Distro-check F6: no pactl -> fail open without spawning it; with pactl the list decides.</summary>
+    [Fact]
+    public void Microphone_probe_without_pactl_fails_open_without_spawning()
+    {
+        Assert.True(PulseMicSource.MicrophonePresent(false, () => throw new System.InvalidOperationException("spawned pactl")));
+        Assert.False(PulseMicSource.MicrophonePresent(true, () => "55\tx.monitor\tPipeWire\ts32le\tIDLE\n"));
+
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-path-").FullName;
+        try
+        {
+            Assert.False(LibVlcAudio.OnPath("pactl", dir));
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "pactl"), "");
+            Assert.True(LibVlcAudio.OnPath("pactl", "/nonexistent" + System.IO.Path.PathSeparator + dir));
+        }
+        finally { System.IO.Directory.Delete(dir, true); }
+    }
 }

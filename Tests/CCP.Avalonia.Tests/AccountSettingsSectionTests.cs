@@ -17,6 +17,10 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Xunit;
+using IconLabel = ConditioningControlPanel.Avalonia.Controls.IconLabel;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
+using Avalonia.Media;
 
 namespace CCP.Avalonia.Tests;
 
@@ -92,6 +96,34 @@ public sealed class AccountSettingsSectionTests
         s.HasLinkedPatreon = true;
     }
 
+    /// <summary>The tier badge's colour is its meaning (WPF 🧪 violet / 🔒 gold): the Fluent icon must
+    /// keep it through the shared semantic brushes (fluent-icons 2026-10-10).</summary>
+    [Fact]
+    public void TierBadgeKeepsTheTierColourAsAFluentIcon()
+    {
+        Run((shell, section, s, secrets) =>
+        {
+            var badge = section.FindControl<IconGlyph>("TxtAccountTierBadge")!;
+            Color Res(string key) => ((ISolidColorBrush)section.FindResource(key)!).Color;
+            Color Ink() => Assert.IsAssignableFrom<ISolidColorBrush>(badge.Foreground).Color;
+            CoreAccount.IsLoggedInProvider = () => true;
+
+            CoreAccount.HasLabAccessProvider = () => true;
+            section.RefreshTierBadge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Beaker, badge.Kind);
+            Assert.Equal(Res("IconTier2Brush"), Ink());
+
+            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => true;
+            section.RefreshTierBadge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.LockClosed, badge.Kind);
+            Assert.Equal(Res("IconTier1Brush"), Ink());
+            Assert.NotEqual(Res("IconTier1Brush"), Res("IconTier2Brush"));
+        });
+    }
+
     [Fact]
     public void SignedInPatronSeesHerCardsAndTheProviderButtonSignsHerOut()
     {
@@ -139,7 +171,7 @@ public sealed class AccountSettingsSectionTests
 
             Assert.True(Shown(section, "AccountLinkingSection"));
             Assert.True(Shown(section, "BtnLinkPatreon"));
-            Assert.Equal(Loc.Get("btn_reconnect_patreon"), Text(section, "TxtBtnLinkPatreon"));
+            Assert.Equal("btn_reconnect_patreon", section.FindControl<IconLabel>("TxtBtnLinkPatreon")!.Key);
             Assert.True(Shown(section, "TxtPatreonReconnectHint"));
             Assert.False(Shown(section, "BtnLinkDiscord"));
         });
@@ -159,7 +191,7 @@ public sealed class AccountSettingsSectionTests
             {
                 Click(section, "BtnLinkDiscord");
                 Assert.True(section.FindControl<Button>("BtnLinkDiscord")!.IsEnabled);
-                Assert.Equal(Loc.Get("btn_link_discord"), Text(section, "TxtBtnLinkDiscord"));
+                Assert.Equal("btn_link_discord", section.FindControl<IconLabel>("TxtBtnLinkDiscord")!.Key);
             }
             finally { discord.IsVerifying = false; }
         });

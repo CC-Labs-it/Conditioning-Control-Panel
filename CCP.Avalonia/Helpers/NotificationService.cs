@@ -116,7 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             var dismissBtn = new Button
             {
                 Name = "ToastDismiss",
-                Content = new TextBlock { Text = "×", FontSize = 16, Foreground = new SolidColorBrush(Color.Parse("#B0B0C0")) },
+                Content = new ConditioningControlPanel.Avalonia.Controls.IconGlyph { Kind = IconKind.Dismiss, Size = 14, Foreground = new SolidColorBrush(Color.Parse("#B0B0C0")) },
                 Width = 24,
                 Height = 24,
                 Padding = new Thickness(0),
@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 Cursor = new Cursor(StandardCursorType.Hand),
                 VerticalAlignment = VerticalAlignment.Top,
             };
+            global::Avalonia.Automation.AutomationProperties.SetName(dismissBtn, ConditioningControlPanel.Localization.Loc.Get("btn_close"));   // icon-only: name it
             dismissBtn.Click += (_, _) => FadeOutAndRemove(border);
             buttons.Children.Add(dismissBtn);
 

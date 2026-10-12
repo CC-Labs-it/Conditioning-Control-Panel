@@ -171,9 +171,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             t.Name = new TextBlock { FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White,
                 TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis,
-                LineHeight = 17, MaxHeight = 34, Margin = new Thickness(10, 6, 10, 0), VerticalAlignment = VerticalAlignment.Top };
+                LineHeight = 17, MaxLines = 2, Margin = new Thickness(10, 6, 10, 0), VerticalAlignment = VerticalAlignment.Top };
             t.Info = new TextBlock { FontSize = 11, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                TextTrimming = TextTrimming.CharacterEllipsis, LineHeight = 14, MaxHeight = 42, Margin = new Thickness(12, 4, 12, 4) };
+                TextTrimming = TextTrimming.CharacterEllipsis, LineHeight = 14, MaxLines = 3, Margin = new Thickness(12, 4, 12, 4) };
             t.InfoStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { t.Info } };
 
             // Bottom band: filled per state by BuildRewardBand.
@@ -224,11 +224,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // WPF ApplyAchievementMeter: locked + countable shows the bar and caps the requirement at two lines.
             if (t.Meter != null) { t.InfoStack.Children.Remove(t.Meter); t.Meter = null; }
-            t.Info.MaxHeight = 42;
+            t.Info.MaxLines = 3;
             var meter = unlocked ? null : AchievementMeters.Compute(a, _engine.Progress, CoreSettings.Current.PlayerLevel);
             if (meter is { } m)
             {
-                t.Info.MaxHeight = 28;
+                t.Info.MaxLines = 2;
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 var cols = new Grid { ColumnDefinitions = new ColumnDefinitions($"{m.Fraction.ToString(inv)}*,{(1 - m.Fraction).ToString(inv)}*") };
                 cols.Children.Add(new Border { Background = MeterFill, CornerRadius = new CornerRadius(2) });
