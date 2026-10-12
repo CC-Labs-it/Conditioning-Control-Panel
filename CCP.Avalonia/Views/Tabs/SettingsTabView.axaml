@@ -222,16 +222,16 @@
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="Transparent" Padding="4,0">
-            <TextBlock x:Name="arrow" Text="&#x25BE;" FontSize="13"
-                       Foreground="{DynamicResource TextMutedBrush}"/>
+            <fx:IconGlyph x:Name="arrow" Kind="ChevronDown" Size="12" VerticalAlignment="Center"
+                          Foreground="{DynamicResource TextMutedBrush}"/>
           </Border>
         </ControlTemplate>
       </Setter>
-      <Style Selector="^:checked /template/ TextBlock#arrow">
-        <Setter Property="Text" Value="&#x25B4;"/>
+      <Style Selector="^:checked /template/ fx|IconGlyph#arrow">
+        <Setter Property="Kind" Value="ChevronUp"/>
         <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
       </Style>
-      <Style Selector="^:pointerover /template/ TextBlock#arrow">
+      <Style Selector="^:pointerover /template/ fx|IconGlyph#arrow">
         <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
       </Style>
     </ControlTheme>
@@ -307,8 +307,8 @@
     <!-- ============================================================ -->
     <!-- TRAINING PROGRAMS - "TODAY" CARD (row 0, full width).         -->
     <!-- Collapsed entirely unless a program is running; painted from  -->
-    <!-- MainWindow.ProgramsTab.cs (RefreshProgramTodayCard). Clicking -->
-    <!-- it opens the Programs tab.                                    -->
+    <!-- SettingsTabView.ProgramToday.cs (RefreshProgramTodayCard).  -->
+    <!-- Clicking it opens the Programs tab.                            -->
     <!-- ============================================================ -->
     <Button x:Name="ProgramTodayCard"
             Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4"
@@ -319,7 +319,7 @@
       <Grid>
         <!-- ============================================================ -->
         <!-- BANNER DECORATION (art + FX). Painted and animated entirely   -->
-        <!-- from MainWindow.ProgramBanner.cs; Collapsed until             -->
+        <!-- from SettingsTabView.ProgramToday.cs; Collapsed until        -->
         <!-- ApplyProgramBannerArt() runs, so with no wiring and no PNGs   -->
         <!-- the card renders exactly as it did before this layer existed. -->
         <!-- Every child is empty here on purpose: the brushes are built   -->
@@ -367,8 +367,8 @@
                        Foreground="{DynamicResource TextLightBrush}"
                        FontSize="13" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
-          <TextBlock Grid.Column="2" Text="›" VerticalAlignment="Center" Margin="12,0,2,0"
-                     Foreground="{DynamicResource TextMutedBrush}" FontSize="18"/>
+          <fx:IconGlyph Grid.Column="2" Kind="ChevronRight" Size="16" VerticalAlignment="Center" Margin="12,0,2,0"
+                        Foreground="{DynamicResource TextMutedBrush}"/>
         </Grid>
       </Grid>
     </Button>
@@ -399,18 +399,19 @@
               AutomationProperties.HelpText="{loc:Str tooltip_rail_favorites_drawer}"
               ToolTip.Tip="{loc:Str tooltip_rail_favorites_drawer}">
         <Grid RowDefinitions="Auto,*,Auto">
-          <TextBlock x:Name="FavoritesDrawerStar" Grid.Row="0" Text="&#x2605;" FontSize="13" Margin="0,9,0,0"
-                     HorizontalAlignment="Center" RenderTransformOrigin="50%,50%"
-                     Foreground="{Binding $parent[Button].Foreground}">
-            <TextBlock.RenderTransform><ScaleTransform/></TextBlock.RenderTransform>
-          </TextBlock>
+          <fx:IconGlyph x:Name="FavoritesDrawerStar" Grid.Row="0" Kind="Star" Variant="Filled" Size="14" Margin="0,9,0,0"
+                        HorizontalAlignment="Center" RenderTransformOrigin="50%,50%"
+                        Foreground="{Binding $parent[Button].Foreground}">
+            <fx:IconGlyph.RenderTransform><ScaleTransform/></fx:IconGlyph.RenderTransform>
+          </fx:IconGlyph>
           <LayoutTransformControl Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
             <LayoutTransformControl.LayoutTransform><RotateTransform Angle="-90"/></LayoutTransformControl.LayoutTransform>
             <TextBlock Text="{loc:Str rail_favorites_drawer}" FontSize="12" FontWeight="SemiBold"
                        TextTrimming="CharacterEllipsis" Foreground="{Binding $parent[Button].Foreground}"/>
           </LayoutTransformControl>
-          <TextBlock x:Name="FavoritesDrawerChevron" Grid.Row="2" Text="&#x2039;" FontSize="16" FontWeight="Bold"
-                     Margin="0,0,0,7" HorizontalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}"/>
+          <fx:IconGlyph x:Name="FavoritesDrawerChevron" Grid.Row="2" Kind="ChevronLeft" Size="14"
+                        Margin="0,0,0,7" HorizontalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}"/>
+
         </Grid>
       </Button>
       <!-- THE BODY: 92 open = the old column 0, so the chip sum is unchanged (92 - 5 - 2 - 8 - 8
@@ -709,7 +710,7 @@
               <StackPanel x:Name="IntakePassVectorBody"
                           VerticalAlignment="Center" HorizontalAlignment="Center"
                           Margin="10,20,10,28">
-                <TextBlock Text="✨" FontSize="17" HorizontalAlignment="Center"/>
+                <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="18" HorizontalAlignment="Center"/>
 
                 <Border Height="1" Margin="16,7"
                         Background="{DynamicResource GlassBorderBrush}"/>
@@ -936,7 +937,8 @@
                             BlurRadius="16" OffsetX="0" OffsetY="0" Opacity="0.6"/>
         </Border.Effect>
         <StackPanel Orientation="Horizontal">
-          <TextBlock Text="🔒" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
+          <fx:IconGlyph Kind="LockClosed" Size="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+
           <!-- Text is written by ApplyProgramLockRibbon. The literal here is a design-time
                placeholder only - it is never shown, because the ribbon is collapsed until that
                method fills it in. -->
@@ -1003,7 +1005,10 @@
               <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-              <TextBlock Theme="{StaticResource SectionHeader}" Text="{loc:Str section_browser}" Margin="0"/>
+              <fx:IconGlyph Kind="Globe" Size="13" Margin="0,0,6,0" VerticalAlignment="Center"
+                            Foreground="{DynamicResource SectionInkBrush}"/>
+              <TextBlock Theme="{StaticResource SectionHeader}" Text="{loc:StrBare section_browser}" Margin="0"
+                         VerticalAlignment="Center"/>
               <Button x:Name="HelpBtnBrowser" Theme="{StaticResource HelpButtonStyle}" Tag="Browser"/>
             </StackPanel>
             <!-- Site Toggle - inline -->
@@ -1028,8 +1033,9 @@
                     Theme="{StaticResource BrowserPillButton}"
                     HorizontalAlignment="Left" VerticalAlignment="Center"
                     ToolTip.Tip="{loc:Str tooltip_reload_browser}"
+                    AutomationProperties.Name="{loc:Str tooltip_reload_browser}"
                     FontSize="11" Padding="6,3" Margin="8,0,0,0">
-              <TextBlock Text="🔄"/>
+              <fx:IconGlyph Kind="ArrowSync" Size="13"/>
             </Button>
             <!-- The fold arrow (WPF 210e0e262: "an unmissable dropdown arrow"): a wide pill in the
                  header's empty star column, clear of the reload button. Hue, label, tooltip and
@@ -1044,10 +1050,10 @@
                     AutomationProperties.Name="{loc:Str btn_browser_fold_show}">
               <Button.Tag><SolidColorBrush Color="#66B79CFF"/></Button.Tag>
               <StackPanel Orientation="Horizontal">
-                <!-- Core's chevrons are Segoe MDL2 code points; no such font on Linux, so this
-                     head draws the plain arrows (DashboardFold.cs sets them). -->
-                <TextBlock x:Name="TxtFoldBrowser" Text="&#x25B4;" FontSize="16"
-                           Foreground="White" VerticalAlignment="Center" Margin="0,1,8,0"/>
+                <!-- Core's chevrons are Segoe MDL2 code points: Fluent chevrons here
+                     (SettingsTabView.FoldArrow.cs sets them). -->
+                <fx:IconGlyph x:Name="TxtFoldBrowser" Kind="ChevronUp" Size="14"
+                              Foreground="White" VerticalAlignment="Center" Margin="0,1,8,0"/>
                 <TextBlock x:Name="TxtFoldBrowserLabel" Text="{loc:Str btn_browser_fold_show}"
                            FontSize="12" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
               </StackPanel>
@@ -1064,10 +1070,9 @@
                     CornerRadius="3" Padding="6,1" Margin="0,0,8,0"
                     HorizontalAlignment="Right" VerticalAlignment="Center"
                     ToolTip.Tip="{Binding $self.Tag}">
-              <TextBlock x:Name="TxtDeeperBrowserBadge"
-                         Text="🌊 Deeper"
-                         Foreground="{DynamicResource DeeperAccentBrush}"
-                         FontSize="9" FontWeight="SemiBold"/>
+              <fx:IconLabel x:Name="TxtDeeperBrowserBadge" Kind="Water" Text="Deeper" Spacing="3"
+                            TextElement.Foreground="{DynamicResource DeeperAccentBrush}"
+                            TextElement.FontSize="9" TextElement.FontWeight="SemiBold"/>
             </Border>
             <!-- Webcam Tracking toggle - inline, between the status badge and the pop-out.
                  Off: "📷 Webcam"  On: "📷 Webcam On" (label updated in code-behind from
@@ -1077,15 +1082,16 @@
                     Theme="{StaticResource BrowserPillButton}"
                     ToolTip.Tip="{loc:Str tooltip_browser_webcam_tracking_off}"
                     FontSize="9" Padding="6,3" Margin="0,0,6,0" VerticalAlignment="Center">
-              <TextBlock x:Name="TxtWebcamTracking" Text="{loc:Str btn_browser_webcam_tracking_off}"/>
+              <fx:IconLabel x:Name="TxtWebcamTracking" Key="btn_browser_webcam_tracking_off" Spacing="4"/>
             </Button>
             <!-- Mute browser audio toggle (BambiCloud / HypnoTube video) -->
             <Button Grid.Column="5" x:Name="BtnMuteBrowser"
                     Theme="{StaticResource BrowserMuteButton}"
                     ToolTip.Tip="Mute / unmute browser audio (BambiCloud / HypnoTube)"
+                    AutomationProperties.Name="Mute / unmute browser audio (BambiCloud / HypnoTube)"
                     Padding="5,2" Margin="4,0,0,0"
                     VerticalAlignment="Center">
-              <TextBlock x:Name="TxtBrowserMute" Text="🔊" FontSize="13"/>
+              <fx:IconGlyph x:Name="TxtBrowserMute" Kind="Speaker2" Size="14"/>
             </Button>
             <!-- Pop Out button -->
             <Button Grid.Column="6" x:Name="BtnPopOutBrowser"
@@ -1155,10 +1161,10 @@
                       <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Column="0" Text="{loc:Str section_audio}"
-                               Foreground="{DynamicResource PinkBrush}"
-                               FontSize="12" FontWeight="Bold"
-                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <fx:IconLabel Grid.Column="0" Key="section_audio"
+                                  TextElement.Foreground="{DynamicResource PinkBrush}"
+                                  TextElement.FontSize="12" TextElement.FontWeight="Bold"
+                                  VerticalAlignment="Center" Margin="0,0,10,0"/>
 
                     <Slider Grid.Column="1" x:Name="HomeSliderMaster"
                             Minimum="0" Maximum="100" VerticalAlignment="Center"
@@ -1242,8 +1248,9 @@
                       <Button Grid.Column="2" x:Name="HomeBtnAudioOutputRefresh"
                               FontSize="11" Margin="6,0,0,0" Padding="8,2" Cursor="Hand"
                               Theme="{StaticResource SecondaryButton}"
-                              ToolTip.Tip="{loc:Str set2_tooltip_audio_output_refresh}">
-                        <TextBlock Text="↻"/>
+                              ToolTip.Tip="{loc:Str set2_tooltip_audio_output_refresh}"
+                              AutomationProperties.Name="{loc:Str set2_tooltip_audio_output_refresh}">
+                        <fx:IconGlyph Kind="ArrowClockwise" Size="12"/>
                       </Button>
                     </Grid>
 
@@ -1264,7 +1271,7 @@
                               FontSize="11" Cursor="Hand"
                               Theme="{StaticResource SecondaryButton}"
                               ToolTip.Tip="{loc:Str tooltip_audio_layers}">
-                        <TextBlock Text="{loc:Str btn_audio_layers}"/>
+                        <fx:IconLabel Key="btn_audio_layers"/>
                       </Button>
                     </StackPanel>
                   </StackPanel>
@@ -1283,7 +1290,8 @@
                 <controls:WebHost x:Name="BrowserWebHost"/>
                 <TextBlock x:Name="BrowserLoadingText"
                            IsVisible="False"
-                           Text="{loc:Str label_click_to_load_browser}"
+                           Text="{loc:StrBare label_click_to_load_browser}"
+
                            Foreground="{DynamicResource TextMutedBrush}" FontSize="12"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            Cursor="Hand"/>
@@ -1334,7 +1342,7 @@
                     FontSize="12"
                     Padding="14,7" HorizontalAlignment="Left" VerticalAlignment="Center"
                     ToolTip.Tip="{loc:Str tooltip_login_with_discord_or_patreon}">
-              <TextBlock Text="{loc:Str btn_login_2}"/>
+              <fx:IconLabel Key="btn_login_2"/>
             </Button>
 
             <!-- Logged in: the name alone; "Logged in as" is its tooltip. -->
@@ -1357,12 +1365,12 @@
             <Button x:Name="BtnLinkPhone"
                     IsVisible="{Binding #LoggedInStatusPanel.IsVisible}"
                     ToolTip.Tip="Sign in to the CCP mobile app by scanning a QR code"
-                    fx:HoverBubbleBar.Glyph="📱"
+                    fx:HoverBubbleBar.Icon="Phone"
                     fx:HoverBubbleBar.LabelKeys="btn_home_link_phone"/>
             <Button x:Name="BtnQuickLogout"
                     IsVisible="{Binding #LoggedInStatusPanel.IsVisible}"
                     ToolTip.Tip="{loc:Str btn_logout}"
-                    fx:HoverBubbleBar.Glyph="⏻"
+                    fx:HoverBubbleBar.Icon="SignOut"
                     fx:HoverBubbleBar.Fill="#FF69B4"
                     fx:HoverBubbleBar.LabelKeys="btn_logout"/>
             <Border x:Name="AccountStripDivider" Width="1" Height="18" Margin="12,0,4,0"
@@ -1375,7 +1383,7 @@
                     ToolTip.Tip="{loc:Str tooltip_join_the_discord_community}" Cursor="Hand"
                     VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <TextBlock Text="💬" FontSize="11" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Chat" Size="12" VerticalAlignment="Center" Foreground="White"/>
                 <TextBlock Text="{loc:Str label_join_discord}" Foreground="White" FontSize="11" FontWeight="Bold"
                            VerticalAlignment="Center" Margin="6,0,0,0"/>
               </StackPanel>
@@ -1384,7 +1392,7 @@
             <!-- Rich Presence as a status bubble: lit when on. Still the CheckBox the
                  account mirror writes (IsChecked), just dressed by the bar. -->
             <CheckBox x:Name="ChkQuickDiscordRichPresence"
-                      fx:HoverBubbleBar.Glyph="🎮"
+                      fx:HoverBubbleBar.Icon="Games"
                       fx:HoverBubbleBar.LabelKeys="btn_home_discord_status">
               <ToolTip.Tip>
                 <Border Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1" Padding="10">
@@ -1404,20 +1412,20 @@
             <!-- The five quick bubbles (WPF 41288a884). VelvetBtnSystem is the ONLY route to
                  MainWindow.CardSystem_Click: never retire it without moving the handler. -->
             <Button x:Name="VelvetBtnWebcam"
-                    fx:HoverBubbleBar.Glyph="📷"
+                    fx:HoverBubbleBar.Icon="Camera"
                     fx:HoverBubbleBar.LabelKeys="btn_home_webcam_mic"/>
             <Button x:Name="VelvetBtnSystem"
-                    fx:HoverBubbleBar.Glyph="⚙"
+                    fx:HoverBubbleBar.Icon="Settings"
                     fx:HoverBubbleBar.LabelKeys="section_system"/>
             <Button x:Name="VelvetBtnSchedulerRamp"
-                    fx:HoverBubbleBar.Glyph="📅"
+                    fx:HoverBubbleBar.Icon="Calendar"
                     fx:HoverBubbleBar.LabelKeys="section_scheduler+section_intensity_ramp"/>
             <Button x:Name="VelvetBtnCatalogue"
                     ToolTip.Tip="Opens app.cclabs.app/catalogue in your browser"
-                    fx:HoverBubbleBar.Glyph="📚"
+                    fx:HoverBubbleBar.Icon="Library"
                     fx:HoverBubbleBar.LabelKeys="btn_home_catalogue"/>
             <Button x:Name="VelvetBtnAppInfo"
-                    fx:HoverBubbleBar.Glyph="ℹ"
+                    fx:HoverBubbleBar.Icon="Info"
                     fx:HoverBubbleBar.LabelKeys="label_app_info"/>
           </fx:HoverBubbleBar>
 
@@ -1432,8 +1440,10 @@
                   Background="Transparent" BorderThickness="0" Cursor="Hand"
                   Foreground="{DynamicResource TextMutedBrush}"
                   Click="BtnOpenDiagnostics_Click"
-                  ToolTip.Tip="Open the Linux head's diagnostics window">
-            <TextBlock Text="🛠"/>
+                  ToolTip.Tip="Open the Linux head's diagnostics window"
+                  AutomationProperties.Name="Open the Linux head's diagnostics window">
+            <fx:IconGlyph Kind="WrenchScrewdriver" Size="12"/>
+
           </Button>
         </Grid>
       </Border>

@@ -7615,5 +7615,6 @@
   "title_no_preset_selected": "Aucun préréglage sélectionné",
   "title_cannot_update_default": "Impossible de mettre à jour le défaut",
   "title_cannot_delete_default": "Impossible de supprimer le défaut",
-  "title_update_preset": "Mettre à jour le préréglage"
+  "title_update_preset": "Mettre à jour le préréglage",
+  "linux_dep_wpe_unavailable": "Les pages web intégrées nécessitent WPE WebKit 2.0, que seuls Arch et openSUSE Tumbleweed empaquettent entièrement ; sur les autres distributions, ces pages sont indisponibles pour l'instant. Tout le reste fonctionne sans."
 }

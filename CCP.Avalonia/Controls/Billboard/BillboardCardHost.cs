@@ -8,6 +8,7 @@
 
 using System;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -49,8 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         private readonly Panel _slides = new();
         private readonly StackPanel _meta = new() { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left };
         private readonly TextBlock _eyebrow = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
-        private readonly TextBlock _title = new() { FontWeight = FontWeight.Bold, FontSize = 30, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap, MaxHeight = 90, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
-        private readonly TextBlock _line = new() { FontSize = 14, Margin = new Thickness(0, 4, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(0xc9, 0xc7, 0xee)), TextWrapping = TextWrapping.Wrap, MaxHeight = 42, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
+        private readonly TextBlock _title = new() { FontWeight = FontWeight.Bold, FontSize = 30, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
+        private readonly TextBlock _line = new() { FontSize = 14, Margin = new Thickness(0, 4, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(0xc9, 0xc7, 0xee)), TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
         private readonly Button _cta;
         private readonly Border _ctaFace = new() { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1) };
         private readonly TextBlock _ctaText = new() { FontWeight = FontWeight.Bold, FontSize = 14, Margin = new Thickness(18, 7, 18, 8), HorizontalAlignment = HorizontalAlignment.Center };
@@ -136,6 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         {
             _visibilityWatch?.Dispose();
             _visibilityWatch = null;
+            (_current?.Tag as IBillboardArtView)?.Hold();
             PauseHold();
             base.OnDetachedFromVisualTree(e);
         }
@@ -159,6 +161,12 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 
         public void MarkDirty() => _deck.MarkDirty();
 
+        /// <summary>The shell closed: every art view frees its player and bitmaps (P68).</summary>
+        public void ReleaseArt()
+        {
+            foreach (var slide in _slides.Children) (slide.Tag as IBillboardArtView)?.Release();
+        }
+
         /// <summary>The motion level or a visibility gate changed: re-read every gate now.</summary>
         public void RefreshMotion() => UpdateRunning();
 
@@ -180,8 +188,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 _slides.Children.Add(slide);
                 if (old != null)
                 {
+                    (old.Tag as IBillboardArtView)?.Hold();
                     if (animate) Push(old, slide);
-                    else _slides.Children.Remove(old);
+                    else Retire(old);
                 }
             }
             PaintWords(card);
@@ -194,7 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 
         private void ClearStage()
         {
-            _slides.Children.Clear();
+            foreach (var slide in _slides.Children.ToArray()) Retire(slide);
             _current = null;
             _card = null;
             _meta.IsVisible = _badge.IsVisible = _snooze.IsVisible = false;
@@ -203,8 +212,24 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             PauseHold();
         }
 
+        /// <summary>WPF Retire: the slide's art lets go of its player, then the slide leaves.</summary>
+        private void Retire(Control slide)
+        {
+            try { (slide.Tag as IBillboardArtView)?.Release(); } catch (Exception ex) { Log.Debug("Billboard art release failed: {E}", ex.Message); }
+            _slides.Children.Remove(slide);
+        }
+
+        /// <summary>WPF UpdateRunning: another tab or a fold holds the art; hover never does.</summary>
         private void UpdateRunning()
         {
+            var art = _current?.Tag as IBillboardArtView;
+            bool onScreen = IsEffectivelyVisible && TopLevel.GetTopLevel(this) is { IsVisible: true };
+            try
+            {
+                if (DashboardBillboard.ArtShouldPlay(onScreen, _folding)) art?.Run();
+                else art?.Hold();
+            }
+            catch (Exception ex) { Log.Debug("Billboard art run/hold failed: {E}", ex.Message); }
             if (HoldMayRun) ResumeHold();
             else PauseHold();
         }
@@ -229,7 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 await inbound;
             }
             catch (Exception ex) { Log.Debug("Billboard push failed: {E}", ex.Message); }
-            _slides.Children.Remove(old);
+            Retire(old);
         }
 
         private static string Px(double v, string unit = "px") => v.ToString("0.###", CultureInfo.InvariantCulture) + unit;
@@ -384,7 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             {
                 Width = 28, Height = 28, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1),
                 Background = new SolidColorBrush(Color.FromArgb(0xc0, 12, 12, 26)), BorderBrush = new SolidColorBrush(Colors.White, 0.25),
-                Child = new TextBlock { Text = "×", FontSize = 16, FontWeight = FontWeight.SemiBold, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, 0) },
+                Child = new IconGlyph { Kind = IconKind.Dismiss, Size = 14, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
             var button = new Button
             {
@@ -417,11 +442,20 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             return pill;
         }
 
-        /// <summary>WPF Slide: the art (a poster here; drawn views are slice b) or a plain ground, and the shade.</summary>
+        /// <summary>WPF Slide: the registered art view, a poster, or a plain ground, and the shade.
+        /// The slide's Tag carries the art's lifecycle.</summary>
         private static Control BuildSlide(DeckCard card)
         {
             var root = new Grid { Background = new SolidColorBrush(Color.FromRgb(0x0c, 0x0d, 0x1a)) };
-            if (card.Spec.ArtKey == BuiltInArtKeys.Poster && card.Spec.ArtData is string poster)
+            Control? art = null;
+            try { art = BillboardArt.Create(card.Spec.ArtKey ?? string.Empty, card.Spec.ArtData); }
+            catch (Exception ex) { Log.Debug("Billboard art {Key} did not build: {E}", card.Spec.ArtKey, ex.Message); }
+            if (art != null)
+            {
+                root.Children.Add(art);
+                root.Tag = art as IBillboardArtView;
+            }
+            else if (card.Spec.ArtKey == BuiltInArtKeys.Poster && card.Spec.ArtData is string poster)
             {
                 try { root.Children.Add(new Image { Stretch = Stretch.UniformToFill, Source = new Bitmap(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + poster))) }); }
                 catch (Exception ex) { Log.Debug("Billboard poster {Poster} did not load: {E}", poster, ex.Message); }

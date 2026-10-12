@@ -53,6 +53,18 @@ namespace ConditioningControlPanel.Avalonia
                 return ClickThrough.Run(args[ct + 1]);
             }
 
+            // --uia-dump <dir> writes the automation tree per view for the WPF behaviour diff (UiaDump.cs).
+            var ud = Array.IndexOf(args, "--uia-dump");
+            if (ud >= 0)
+            {
+                if (ud + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("usage: --uia-dump <out-dir>");
+                    return 2;
+                }
+                return UiaDump.Run(args[ud + 1]);
+            }
+
             // --render <path> draws the real window offscreen and saves a PNG. Visual proof that
             // survives on a CI runner with no display server.
             var r = Array.IndexOf(args, "--render");
@@ -128,6 +140,10 @@ namespace ConditioningControlPanel.Avalonia
             var pc = Array.IndexOf(args, "--panic-check");
             if (pc >= 0)
                 return PanicCheck.Run(pc + 1 < args.Length ? args[pc + 1] : "Pause");
+            // --win-panic-check [Key]: the Windows twin; injects F24 into the WH_KEYBOARD_LL hook (sandbox only).
+            var wpc = Array.IndexOf(args, "--win-panic-check");
+            if (wpc >= 0)
+                return Win32PanicCheck.Run(wpc + 1 < args.Length && !args[wpc + 1].StartsWith("--") ? args[wpc + 1] : "F24");
 
             // --audio-probe plays a clip through the REAL LibVLC output and ducks/unducks other
             // apps via CoreAudio, printing pactl's view of each step. Run with another stream
@@ -223,6 +239,7 @@ namespace ConditioningControlPanel.Avalonia
             var builder = AppBuilder.Configure<App>()
                 .UsePlatformDetect()      // Win32 on Windows, X11 on Linux (12.1.2 has no Wayland backend)
                 .WithInterFont()
+                .With(Platform.AppFonts.Options())   // never-empty default, Fredoka, emoji fallback
                 .LogToTrace();
             // Pinned, not detected: every desktop overlay is an X11 override-redirect window
             // (Platform/X11Overlay.cs), and under a future native Wayland backend those calls would

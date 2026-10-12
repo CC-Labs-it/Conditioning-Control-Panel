@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -63,7 +64,7 @@ public sealed class VerifiedRowSnapshotTests
 
     /// <summary>
     /// RenderProof.EnsureSetUp (the --render-all path: app builder, Inter, Skia, real drawing) plus one
-    /// pin: glyphs Inter lacks (emoji) fall back to the bundled Noto Emoji before the system's fontconfig,
+    /// pin: emoji fall back to the head's bundled Noto Emoji (AppFonts, systemEmoji off) before fontconfig,
     /// which picked Noto Sans Symbols 2 for the headphones on Arch and another face on ubuntu-latest,
     /// shifting the whole layout (CI run 38052778670).
     /// </summary>
@@ -73,10 +74,7 @@ public sealed class VerifiedRowSnapshotTests
         Program.BuildAvaloniaApp()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-            .With(new FontManagerOptions
-            {
-                FontFallbacks = [new FontFallback { FontFamily = new FontFamily("avares://CCP.Avalonia.Snapshot.Tests/Fonts#Noto Emoji") }],
-            })
+            .With(AppFonts.Options(systemEmoji: false))
             .SetupWithoutStarting();
         // A missing resource would silently fall through to fontconfig again: fail loudly instead.
         if (!FontManager.Current.TryMatchCharacter(0x1F3A7, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
@@ -84,6 +82,25 @@ public sealed class VerifiedRowSnapshotTests
             throw new InvalidOperationException("snapshot fallback font is not the bundled Noto Emoji");
         _setUp = true;
     }
+
+    /// <summary>Distro-check F1/F4: the default family is the bundled Inter (a system without fonts
+    /// aborted), "Fredoka, Segoe UI" draws the bundled Fredoka, and emoji have a bundled fallback.</summary>
+    [Fact]
+    public Task AppFontsNeverDependOnSystemFonts() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        SetUpOnce();
+        var fm = FontManager.Current;
+        Assert.Equal("Inter", fm.DefaultFontFamily.Name);
+        Assert.True(fm.TryGetGlyphTypeface(new Typeface("Fredoka, Segoe UI"), out var face));
+        Assert.StartsWith("Fredoka", face!.FamilyName);
+        Assert.True(fm.TryGetGlyphTypeface(new Typeface("Consolas, Courier New"), out var mono));
+        Assert.Equal("Noto Sans Mono", mono!.FamilyName);
+        Assert.True(fm.TryMatchCharacter(0x1F600, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal, null, null, out var emoji));
+        Assert.Equal("Noto Emoji", emoji.FontFamily.Name);
+        // The app (not the render lock) asks the system's colour emoji font first.
+        Assert.Equal("emoji", AppFonts.Options().FontFallbacks![0].FontFamily.Name);
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [MemberData(nameof(RowIds))]

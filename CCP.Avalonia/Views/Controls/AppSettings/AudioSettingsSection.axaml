@@ -20,6 +20,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AudioSettingsSection"
              mc:Ignorable="d" d:DesignWidth="620">
 
@@ -47,9 +48,13 @@
 
                 <!-- Header -->
                 <Grid Margin="0,0,0,8">
-                    <TextBlock Theme="{StaticResource SectionHeader}"
-                               Foreground="{StaticResource SectionHueAudioBrush}"
-                               Text="{loc:Str section_audio}" Margin="0"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <fx:IconGlyph Kind="DataBarVertical" Size="13" VerticalAlignment="Center"
+                                      Foreground="{StaticResource SectionHueAudioBrush}"/>
+                        <TextBlock Theme="{StaticResource SectionHeader}"
+                                   Foreground="{StaticResource SectionHueAudioBrush}"
+                                   Text="{loc:StrBare section_audio}" Margin="0" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button x:Name="HelpBtnAudio"
                             Theme="{StaticResource HelpButtonStyle}" Tag="Audio"
                             HorizontalAlignment="Right" VerticalAlignment="Center"/>
@@ -136,12 +141,16 @@
                               Theme="{StaticResource DarkComboBoxStyle}"
                               Margin="6,0" VerticalAlignment="Center" HorizontalAlignment="Stretch"
                               ToolTip.Tip="{loc:Str tooltip_audio_output_device}"/>
-                    <Button Grid.Column="2" x:Name="BtnAudioOutputRefresh" Content="↻"
+                    <Button Grid.Column="2" x:Name="BtnAudioOutputRefresh"
                             ToolTip.Tip="{loc:Str set2_tooltip_audio_output_refresh}"
+                            AutomationProperties.Name="{loc:Str set2_tooltip_audio_output_refresh}"
                             Padding="10,3" Background="#33FF69B4" Foreground="White" FontSize="12"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1" Cursor="Hand"
-                            VerticalAlignment="Center"/>
+                            VerticalAlignment="Center">
+                        <fx:IconGlyph Kind="ArrowClockwise" Size="13"/>
+                    </Button>
                 </Grid>
+
 
                 <!-- Actions: diagnostics + the layered-audio mixer (#659) -->
                 <StackPanel Orientation="Horizontal">
@@ -157,7 +166,7 @@
                             ToolTip.Tip="{loc:Str tooltip_audio_layers}"
                             Background="#33FF69B4" Foreground="White" FontSize="11" Padding="12,5"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1" Cursor="Hand">
-                        <TextBlock Text="{loc:Str btn_audio_layers}"/>
+                        <fx:IconLabel Key="btn_audio_layers"/>
                     </Button>
                 </StackPanel>
 
@@ -172,9 +181,10 @@
                         Background="{DynamicResource PanelBgBrush}" CornerRadius="8"
                         Padding="12,10" Margin="0,12,0,0">
                     <StackPanel>
-                        <TextBlock Text="{loc:Str hm3_audio_sync_tuning}"
-                                   Foreground="{DynamicResource PinkBrush}"
-                                   FontSize="12" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <fx:IconLabel Key="hm3_audio_sync_tuning"
+                                      TextElement.Foreground="{DynamicResource PinkBrush}"
+                                      TextElement.FontSize="12" TextElement.FontWeight="Bold" Margin="0,0,0,6"/>
+
 
                         <!-- Delay -->
                         <Grid MinHeight="34" Margin="0,0,0,6" ColumnDefinitions="150,*,46"

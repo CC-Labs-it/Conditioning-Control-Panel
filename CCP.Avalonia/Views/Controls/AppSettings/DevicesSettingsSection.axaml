@@ -28,6 +28,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.DevicesSettingsSection"
              d:DesignWidth="700"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -80,7 +81,7 @@
                         <Border Width="34" Height="34" CornerRadius="10" Margin="0,0,11,0"
                                 Background="{DynamicResource AccentTintedBgBrush}"
                                 BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1">
-                            <TextBlock Text="👁" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="Eye" Size="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Theme="{StaticResource SectionHeader}"
@@ -116,12 +117,15 @@
                                               Theme="{StaticResource DarkComboBoxStyle}"
                                               VerticalAlignment="Center"
                                               ToolTip.Tip="Pick the capture device to use for blink / gaze tracking. If your physical webcam doesn't show its in-use light, you may have a virtual camera selected (OBS, Snap, etc.) — switch here, then hit Start."/>
-                                    <Button x:Name="BtnWebcamDeviceRefresh" Content="↻"
+                                    <Button x:Name="BtnWebcamDeviceRefresh"
                                             ToolTip.Tip="Re-scan connected video-capture devices."
+                                            AutomationProperties.Name="Re-scan connected video-capture devices."
                                             Padding="9,3" Margin="6,0,0,0" VerticalAlignment="Center"
                                             Background="Transparent" Foreground="{DynamicResource PinkBrush}"
                                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                                            FontSize="12" FontWeight="Bold" Cursor="Hand" CornerRadius="8"/>
+                                            FontSize="12" FontWeight="Bold" Cursor="Hand" CornerRadius="8">
+                                        <fx:IconGlyph Kind="ArrowClockwise" Size="13"/>
+                                    </Button>
                                 </StackPanel>
 
                                 <!-- monitor -->
@@ -290,7 +294,7 @@
                         <Border Width="34" Height="34" CornerRadius="10" Margin="0,0,11,0"
                                 Background="{DynamicResource AccentTintedBgBrush}"
                                 BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1">
-                            <TextBlock Text="🎤" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="Mic" Size="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Theme="{StaticResource SectionHeader}"
@@ -321,11 +325,14 @@
                                  means no speech head is attached, and this item stays. -->
                             <ComboBoxItem Content="System default"/>
                         </ComboBox>
-                        <Button Grid.Column="2" x:Name="BtnMicRefresh" Content="↻"
+                        <Button Grid.Column="2" x:Name="BtnMicRefresh"
                                 Padding="10,3" Background="#33FF69B4" Foreground="White" FontSize="12"
                                 BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1" Cursor="Hand"
                                 VerticalAlignment="Center"
-                                ToolTip.Tip="Re-scan microphones."/>
+                                ToolTip.Tip="Re-scan microphones."
+                                AutomationProperties.Name="Re-scan microphones.">
+                            <fx:IconGlyph Kind="ArrowClockwise" Size="13"/>
+                        </Button>
                     </Grid>
 
                     <!-- Wake word -->
@@ -458,7 +465,7 @@
                         <Border Width="34" Height="34" CornerRadius="10" Margin="0,0,11,0"
                                 Background="{DynamicResource AccentTintedBgBrush}"
                                 BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1">
-                            <TextBlock Text="⌨️" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="Keyboard" Size="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Theme="{StaticResource SectionHeader}" VerticalAlignment="Center"
                                    Foreground="{StaticResource SectionHueDevicesBrush}"
@@ -471,14 +478,14 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str btn_escape}"
+                        <TextBlock Grid.Column="0" Text="{loc:StrBare btn_escape}"
                                    Theme="{StaticResource SettingLabel}" FontSize="12"
                                    Margin="0,0,12,0" TextTrimming="CharacterEllipsis"/>
                         <Button Grid.Column="1" x:Name="BtnPanicKey"
                                 Theme="{StaticResource OutlineButton}"
                                 Padding="12,6" VerticalAlignment="Center"
                                 ToolTip.Tip="{loc:Str tooltip_click_to_change_panic_key}">
-                            <TextBlock Text="{loc:Str btn_escape}"/>
+                            <fx:IconLabel Key="btn_escape"/>
                         </Button>
                     </Grid>
                     <!-- Avalonia-only: policy C, docs/avalonia-decisions.md (panic key row). -->
@@ -529,10 +536,11 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
-                            <TextBlock Text="{loc:Str setting_no_panic}"
-                                       Foreground="{DynamicResource DangerBrush}"
-                                       FontSize="12" FontWeight="SemiBold"/>
-                            <TextBlock Text="{loc:Str tooltip_danger_completely_disables_panic_key_you_won}"
+                            <fx:IconLabel Key="setting_no_panic"
+                                          TextElement.Foreground="{DynamicResource DangerBrush}"
+                                          TextElement.FontSize="12" TextElement.FontWeight="SemiBold"/>
+                            <TextBlock Text="{loc:StrBare tooltip_danger_completely_disables_panic_key_you_won}"
+
                                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                        TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
