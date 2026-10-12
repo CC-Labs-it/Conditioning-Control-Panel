@@ -38,6 +38,10 @@ const CHIME_SFX = ['chime1.mp3', 'chime2.mp3', 'chime3.mp3'];
 const DEFUSE_HOLD_MS = 1000;     // hold this long over a live one to snap it
 const CLICK_THRESHOLD_MS = 180;  // a faster press+release reads as a CLICK
 const CHANNEL_MIN_SCALE = 0.55;  // visual shrink floor while channeling
+// ---- hold channel feel (wave 2) ----
+const HOLD_PROGRESS_MS = 100;    // dtrh:feel hold progress events: about 10 a second
+const HOLD_RING_CAP = 4;         // most exhale / sigh rings alive at once
+const HOLD_RING_MS = 620;        // an exhale / sigh ring lives this long (feel-field.css reads --hold-ring-ms)
 const VIBE_BRUSH_PX = 14;        // extra brush reach around a bubble's radius for the vibe sweep
 
 // ---- motion tuning (self-calibrated for the browser field) ----
@@ -412,12 +416,42 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
   function beginChannel(b) {
     b.channel = { elapsed: 0 };
     b.chan.style.display = '';
+    b.wrap.style.setProperty('--hold', '0');
     b.wrap.classList.add('is-channeling');
+    holdFeel('start', 0);
+    holdSentAt = performance.now();
+  }
+
+  // ---- hold feel: the seam the audio lane hears, and the ring that breathes out ----
+  let holdSentAt = 0;
+  let holdRings = 0;
+  function holdFeel(phase, t, how) {
+    const detail = { kind: 'hold', phase, t };
+    if (how) detail.how = how;   // end only: defused | release | lost
+    try { window.dispatchEvent(new CustomEvent('dtrh:feel', { detail })); } catch (err) { /* ignore */ }
+  }
+  /** A hold is over. Defused = a soft inward sigh; let go = the ring exhales outward. */
+  function holdEnd(b, how) {
+    const t = b.channel ? Math.min(1, b.channel.elapsed / DEFUSE_HOLD_MS) : 0;
+    holdFeel('end', t, how);
+    if (holdRings >= HOLD_RING_CAP) return;
+    const el = document.createElement('div');
+    el.className = how === 'defused' ? 'cf-hold-ring cf-hold-ring--in' : 'cf-hold-ring cf-hold-ring--out';
+    el.style.left = `${b.x}px`;
+    el.style.top = `${b.y}px`;
+    el.style.setProperty('--s', `${Math.round(b.size)}px`);
+    el.style.setProperty('--hold-ring-ms', `${HOLD_RING_MS}ms`);
+    // a short hold breathes out a faint ring, a long one a fuller one
+    el.style.setProperty('--hold-a', (0.25 + 0.45 * t).toFixed(2));
+    fxLayer.appendChild(el);
+    holdRings++;
+    window.setTimeout(() => { el.remove(); holdRings--; }, HOLD_RING_MS + 40);
   }
 
   function endChannel(b, complete) {
     if (!b.channel || b.state !== 'live') return;
     const ms = b.channel.elapsed;
+    holdEnd(b, 'release');
     b.channel = null;
     b.chan.style.display = 'none';
     b.wrap.classList.remove('is-channeling');
@@ -619,7 +653,7 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
     const fuseSecLeft = Math.max(0, b.fuseLeft) / 1000;
     const bx = b.x, by = b.y;
     // A hold that completes springs out of its squeeze instead of squashing again.
-    if (b.channel) { b.channel = null; endChannelVisual(b); b.wrap.classList.add('is-pop-jelly'); }
+    if (b.channel) { holdEnd(b, 'defused'); b.channel = null; endChannelVisual(b); b.wrap.classList.add('is-pop-jelly'); }
     popVisual(b, 0.2);
     floatText('SNAP', bx, by - b.size * 0.2, 'cf-pop--snap');
     noteBoundDefused(b);
@@ -635,7 +669,7 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
     if (b.state !== 'live') return;
     b.state = 'popped';
     live.delete(b);
-    if (b.channel) { b.channel = null; endChannelVisual(b); }
+    if (b.channel) { holdEnd(b, 'lost'); b.channel = null; endChannelVisual(b); }
     unlink(b);
     noteBoundTriggered(b);
     b.wrap.classList.add('is-detonate');
@@ -1123,6 +1157,9 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
         channelSeconds += dt;
         const p = Math.min(1, b.channel.elapsed / DEFUSE_HOLD_MS);
         b.chan.style.setProperty('--cdeg', `${p * 360}`);
+        b.wrap.style.setProperty('--hold', p.toFixed(3));
+        const nowMs = performance.now();
+        if (p < 1 && nowMs - holdSentAt >= HOLD_PROGRESS_MS) { holdSentAt = nowMs; holdFeel('progress', p); }
         b.body.style.transform = `scale(${1 - (1 - CHANNEL_MIN_SCALE) * p})`;
         if (p >= 1) { defuse(b, true); }
         continue;   // the grip holds it still: no motion, no fuse, no rot
