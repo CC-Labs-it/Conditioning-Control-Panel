@@ -52,6 +52,10 @@ import { getVoice, setVoiceDefault, onVoice, getLevel } from '../engine/audioLev
 import { createChaosField } from './chaosField.js';
 import { createFieldFx } from './fieldFx.js';
 import { createPayloadFx } from './payloadFx.js';
+import { setLoomBook } from '../engine/loomSpirals.js';
+import { createLoomBook } from '../race/loomBook.js';
+import { createLoomSpiralFx } from '../race/loomSpiralFx.js';
+import { motionOff } from '../shared/motion.js';
 import { createScreenShake } from './screenShake.js';
 import { createChaosHud } from './chaosHud.js';
 import { createOverlays } from './overlays.js';
@@ -403,6 +407,33 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     const b = biomeAt(waveIndex);
     return (b && b.style) || regionForWave(waveIndex).style || null;
   };
+  // ---- the Loom weaves this game's spirals (owner: every game's spirals come from the Loom) ----
+  // The chamber's own six colours become the weave's threads and ground, so a spiral pop and
+  // the pinned centre spiral belong to the room they appear in.
+  const loomHex = (n) => '#' + (((n >>> 0) & 0xffffff).toString(16)).padStart(6, '0');
+  const loomDark = (n, k) => loomHex(
+    (Math.round(((n >> 16) & 255) * (1 - k)) << 16) | (Math.round(((n >> 8) & 255) * (1 - k)) << 8) | Math.round((n & 255) * (1 - k)));
+  const LOOM_HOUSE = { threads: ['#ff69b4', '#e56cc0', '#b78cff'], ground: loomDark(0x12061a, 0.35), outer: loomDark(0x12061a, 0.8) };
+  function loomPalette() {
+    let p = null;
+    try { const s = st ? styleForWaveNow(st.waveIndex) : null; p = s && s.palette; } catch (e) { p = null; }
+    if (!p || p.colLine == null) return LOOM_HOUSE;
+    const threads = [];
+    for (const n of [p.colLine, p.colSpiral, p.colRibbon]) {
+      if (n == null) continue;
+      const h = loomHex(n);
+      if (!threads.includes(h)) threads.push(h);
+    }
+    if (threads.length < 2) threads.push(LOOM_HOUSE.threads[0]);
+    const fog = p.colFog != null ? p.colFog : 0x12061a;
+    return { threads, ground: loomDark(fog, 0.35), outer: loomDark(fog, 0.8) };
+  }
+  const loomRoom = () => {
+    try { const b = activeBiome(); return (b && b.id) || (st ? 'chamber' + regionForWave(st.waveIndex).id : 'warren'); }
+    catch (e) { return 'warren'; }
+  };
+  let loomBook = null, spiralFx = null;
+
   const profileForWaveNow = (waveIndex) => {
     const b = biomeAt(waveIndex);
     return (b && b.profile) || profileForWave(waveIndex);
@@ -4131,7 +4162,10 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       detachFeelAudio = attachFeelEvents(feel);
       preloadRecipeArt();   // warm the ingredient photos so a deep-run recipe plaster draws them, not glyphs
       ffx = createFieldFx(ctx.hud);
-      payloadFx = createPayloadFx({ hud: ctx.hud, fx: ctx.fx, media: ctx.media, flashBurst: ctx.flashBurst });
+      loomBook = createLoomBook({ seed: (Math.random() * 0xffffffff) >>> 0, room: loomRoom, palette: loomPalette });
+      setLoomBook(loomBook.draw);
+      spiralFx = createLoomSpiralFx({ reducedMotion: motionOff(), log: (m) => bridge.log(m) });
+      payloadFx = createPayloadFx({ hud: ctx.hud, fx: ctx.fx, media: ctx.media, flashBurst: ctx.flashBurst, spiralFx });
       // The screen-shake consumer rocks the 3D canvas only (never the hud - see
       // screenShake.js). Seeded from the live cfg when a run-config already landed.
       shakeFx = createScreenShake({ el: ctx.canvas });
@@ -4603,6 +4637,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       field?.dispose();
       ffx?.dispose();
       payloadFx?.dispose();
+      setLoomBook(null);                       // leave no weaver and no GL context behind
+      try { spiralFx?.dispose(); } catch (e) { /* best effort */ }
+      loomBook = null; spiralFx = null;
       shakeFx?.dispose();   // drops any jolt in flight and clears the canvas transform
       vn?.dispose();   // closes the VN AudioContext + removes its overlay/listeners (else it leaks per attach and hits Chromium's context ceiling)
       try { if (window.__sfPayloadFx === payloadFx) delete window.__sfPayloadFx; } catch { /* seam cleanup */ }
