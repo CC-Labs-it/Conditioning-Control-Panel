@@ -1015,3 +1015,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `AccountSeedTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer` (SyncPushTests.cs),
   `AccountSeedTests.AProfileWithoutAchievements_SendsNoAchievementsKey` (SyncPushTests.cs), `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
   log: ~/ccp-port/evidence/server-sync-unblock/fail-proofs.log.
+
+## 2026-10-12: Sandboxed Debug runs get full access (avalonia-port/sandbox-full-access)
+
+- Advised by: the user (owner, server-whitelisted). Sandboxed test instances (kc live checks) have no network
+  (SandboxNet) and no real account (memory-only SecretStore), so the server whitelist cannot reach them.
+- Decision: a LOCAL override in `CCP.Avalonia/Platform/AccountSeed.cs` (`SandboxWhitelistRequested`). When ALL of a DEBUG
+  build, `SandboxNet.Active` (CCP_USERDATA_DIR honoured) and `CCP_SANDBOX_WHITELIST=1`: whitelisted, premium and Lab are
+  true (whitelist folds into tier 2, CoreEntitlement docs), so every TierGate opens. It does not sign in, sync or invent an
+  identity. Settings > Account's tier card says "Whitelisted (sandbox)" (literal, Debug-only, not localized).
+- Release builds compile it out (`#if DEBUG`; the Release `CCP.Avalonia.dll` holds no `CCP_SANDBOX_WHITELIST` string), so
+  shipped builds keep the paywall. Only `~/ccp-port/bin/kc start` sets the variable; headless tests do not (and run Release),
+  so they keep testing the gates. Tests: `SandboxWhitelistTests.cs`, `AccountSettingsSectionTests.SandboxWhitelistShowsOnTheTierCardOnlyInDebug`.
