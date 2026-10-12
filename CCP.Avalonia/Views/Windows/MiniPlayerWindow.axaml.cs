@@ -46,7 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// site is <c>MainWindow.OpenAssetPreview</c> (MainWindow.Assets.cs:1233), reached from a
     /// thumbnail click in the Library tab. Nothing on this head raises that click: the asset tree
     /// and the thumbnail grid are held back in MainShellWindow.Assets.cs because
-    /// <c>App.ContentPacks</c> (Services/Content/ContentPackService.cs) is not ported, and
+    /// the packs tree over <c>ContentPackStore.Current</c> is not built yet, and
     /// OpenAssetPreview's first branch is a pack-file extraction through that same service. When
     /// the tree lands, the wiring is <c>LoadFile(path)</c> then <c>Show(owner)</c>. Until then
     /// <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) opens it on the real desktop.</para>

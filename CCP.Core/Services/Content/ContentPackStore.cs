@@ -394,6 +394,27 @@ namespace ConditioningControlPanel.Services
             foreach (var path in _tempIdentity.Keys.ToList()) DeleteTempFile(path);
         }
 
+        /// <summary>
+        /// WPF App.CleanupStaleTempFiles (App.xaml.cs:915, crash recovery): delete leftover
+        /// <c>ccp_temp_*</c> decrypts in each given folder (WPF: <c>&lt;assets&gt;/.temp</c> and system temp).
+        /// Only that prefix, never pack content. Returns the count deleted; never throws.
+        /// </summary>
+        public static int SweepStaleTemps(params string?[] dirs)
+        {
+            var deleted = 0;
+            foreach (var dir in dirs)
+            {
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
+                try
+                {
+                    foreach (var file in Directory.GetFiles(dir, "ccp_temp_*"))
+                        try { File.Delete(file); deleted++; } catch { }
+                }
+                catch (Exception ex) { Log.Debug("ContentPacks: stale temp sweep of {Dir} failed: {E}", dir, ex.Message); }
+            }
+            return deleted;
+        }
+
         private string MediaTempDir()
         {
             if (_tempDir != null) { var d = _tempDir(); Directory.CreateDirectory(d); return d; }

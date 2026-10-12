@@ -390,6 +390,33 @@ public sealed class RemoteRelayTests
         finally { (CoreDispatch.InvokeProvider, CoreDispatch.PostProvider) = saved; }
     }
 
+    // WPF RemoteControlService.EndSessionNow (leash cut): the session ends HERE at once, the relay is told after.
+    [Fact]
+    public async Task End_session_now_ends_locally_before_the_relay_is_told()
+    {
+        var f = new FakeRelay();
+        RemoteRelay? relay = null;
+        var stopSent = new TaskCompletionSource<(bool ActiveThen, int StopsThen, JObject Body)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var start = f.Answer;
+        f.Answer = path =>
+        {
+            if (path == "/v2/remote/stop") stopSent.TrySetResult((relay!.IsActive, _stops.Count, f.Seen[^1].Body));
+            return start(path);
+        };
+        using var r = relay = Relay(f);
+        await r.StartAsync("full");
+
+        r.EndSessionNow();
+
+        Assert.False(r.IsActive);
+        var sent = await stopSent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(sent.ActiveThen);           // ended here before the request went out
+        Assert.Equal(1, sent.StopsThen);
+        Assert.Equal("uid-1", (string?)sent.Body["unified_id"]);
+        r.EndSessionNow();                       // safe with no session
+        Assert.Single(_stops);
+    }
+
     // main d39969827: 1 s polls while a connected controller is busy; a 429 still backs off from 5 s.
     [Fact]
     public async Task Hot_cadence_while_the_controller_is_busy()
