@@ -23,7 +23,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     ///
     /// <para>The bridge is the shell protocol those pages share (WPF ChaosWebViewHost.cs:1719): the page says
     /// <c>ready</c>, the host answers <c>init</c> (language + identity + Breakout access), a station's
-    /// <c>media-request</c> gets a library deal (<see cref="GameMediaManifest.Deal"/>), and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
+    /// <c>media-request</c> gets a library deal (<see cref="GameMediaManifest.Deal"/>), <c>fx</c> gets its
+    /// <c>fx-ack</c>, and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
     /// Ported from trunk's Views/Games/GameWindow.cs with only the Breakout demo registered; every other
     /// game lands with its own frames.</para>
     /// </summary>
@@ -89,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         private WebAssetServer? _server;
+        private GameMediaManifest.Manifest? _library;
 
         internal void Load(WebAssetServer server)
         {
@@ -124,13 +126,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     // The walk touches every library file, so it runs off the UI thread (WPF OffUi); the reply is posted back.
                     var reqId = (string?)o["reqId"];
                     int count = GameMediaManifest.MediaCount(o["count"]?.Type == JTokenType.Integer ? (int?)o["count"] : null);
+                    // The library is walked once per window, like WPF's FlashService snapshot, not on every sit-down.
                     var server = _server;
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         object deal;
-                        try { deal = GameMediaManifest.Deal(server == null ? new() : GameMediaManifest.BuildLocal(server), reqId, Random.Shared.Next(), count); }
+                        try { deal = GameMediaManifest.Deal(_library ??= server == null ? new() : GameMediaManifest.BuildLocal(server), reqId, Random.Shared.Next(), count); }
                         catch (Exception ex) { Log.Debug("[Game] media deal failed: {E}", ex.Message); deal = GameMediaManifest.Deal(new(), reqId, 0, count); }
                         Dispatcher.UIThread.Post(() => Post(deal));
+                    });
+                    break;
+                case "fx":
+                    // WPF BackRoomBridge.OnFx (:479) answers every fx with one fx-ack, or the page waits out its 4 s
+                    // timeout. The five big-beat ids are drawn in the page (page-fx.js); this head has no desktop
+                    // primitives for the rest yet, so they ack skipped "unknown" (BackRoomFxSkipReason.Unknown).
+                    Post(new
+                    {
+                        type = "fx-ack", token = (string?)o["token"], fired = Array.Empty<string>(),
+                        skipped = new[] { new { prim = (string?)o["fxId"] ?? "", why = "unknown" } },
                     });
                     break;
                 case "log":

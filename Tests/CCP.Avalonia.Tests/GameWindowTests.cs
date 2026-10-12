@@ -132,6 +132,19 @@ public sealed class GameWindowTests
             Assert.Equal("media", (string?)media["type"]);
             Assert.Equal("r1", (string?)media["reqId"]);
             Assert.EndsWith("/ccp.assets/images/spin.gif", (string?)media["gifs"]!.Single()["url"]);
+            // Walked once per window (WPF's FlashService snapshot): a file added mid-game is not re-scanned.
+            File.WriteAllBytes(Path.Combine(lib, "images", "late.gif"), new byte[] { 1 });
+            w.Web.OnWebMessage("{\"type\":\"media-request\",\"reqId\":\"r2\",\"station\":\"breakout\",\"count\":8}");
+            until = DateTime.UtcNow.AddSeconds(10);
+            while (sent.Count < 3 && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            Assert.EndsWith("/ccp.assets/images/spin.gif", (string?)sent[2]["gifs"]!.Single()["url"]);
+            // WPF BackRoomBridge.OnFx: every fx gets its fx-ack at once, or the page waits out 4 s per effect.
+            w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"t7\",\"fxId\":\"fx.gif_storm\",\"station\":\"breakout\",\"symbols\":[]}");
+            var ack = sent.Last();
+            Assert.Equal("fx-ack", (string?)ack["type"]);
+            Assert.Equal("t7", (string?)ack["token"]);
+            Assert.Empty(ack["fired"]!);
+            Assert.Equal("unknown", (string?)ack["skipped"]!.Single()["why"]);
             w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
@@ -167,6 +180,12 @@ public sealed class GameWindowTests
             Assert.Equal(2, m.Skipped);   // the empty png and the bmp
             Assert.False(m.Truncated);
             Assert.Empty(GameMediaManifest.Build(null, rel => rel, null).Images);
+            // A media deal reads pictures only: BuildLocal never walks videos/.
+            var oldAssets = CorePaths.EffectiveAssetsProvider;
+            CorePaths.EffectiveAssetsProvider = () => root;
+            using var server = new WebAssetServer(root);
+            try { Assert.Empty(GameMediaManifest.BuildLocal(server).Videos); }
+            finally { CorePaths.EffectiveAssetsProvider = oldAssets; }
         }
         finally { Directory.Delete(root, true); }
     }

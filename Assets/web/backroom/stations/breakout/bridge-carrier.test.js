@@ -21,3 +21,22 @@ test('the string carrier hosts the page: ready goes out, init comes back, held f
   b.send({ type: 'exit-done' });
   assert.deepEqual(sent.map(m => m.type), ['ready', 'station-open', 'exit-done']);
 });
+
+// Review 2 (games-host): station.js read "hosted" from chrome.webview alone, so on WebKitGTK the five
+// big-beat effects went to the host (each waiting out its 4 s fx timeout) and the pause menu's Exit did nothing.
+test('the string carrier counts as a desktop host for the in-window effects and the pause Exit', async () => {
+  const { desktopHosted, routeFx } = await import('./page-fx.js');
+  const carrier = { invokeCSharpAction() {} };
+  assert.equal(desktopHosted(carrier), true);
+  assert.equal(desktopHosted({ chrome: { webview: {} } }), true);   // WPF WebView2, unchanged
+  assert.equal(desktopHosted({}), false);                            // the web / dev.html
+  const toHost = [], toPage = [];
+  const fx = routeFx({ hosted: desktopHosted(carrier), fx: id => toHost.push(id), page: { fire: id => toPage.push(id) } });
+  fx('fx.wash'); fx('fx.gif_storm');
+  assert.deepEqual(toPage, ['fx.wash']);
+  assert.deepEqual(toHost, ['fx.gif_storm']);
+  const { readFileSync } = await import('node:fs');
+  const station = readFileSync(new URL('./station.js', import.meta.url), 'utf8');
+  assert.match(station, /const hosted = desktopHosted\(\);/);
+  assert.match(station, /if\(action==='exit'&&desktopHosted\(\)\)back\(\);/);
+});

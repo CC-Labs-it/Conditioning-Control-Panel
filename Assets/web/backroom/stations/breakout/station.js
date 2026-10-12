@@ -30,7 +30,7 @@ import { routeFinaleAudio } from './finale-audio.js';
 import { WORD_KEYS } from './word-fx.js';
 import { createVoice } from '../../shared/hypno/voice.js';
 import { createHostFx } from './host-fx.js';
-import { createPageFx, routeFx } from './page-fx.js';
+import { createPageFx, routeFx, desktopHosted } from './page-fx.js';
 import { createPerfPanel } from './perf.js';
 import { createRenderBudget } from './render-budget.js';
 import { createHaptics } from './haptics.js';
@@ -680,7 +680,7 @@ export async function mount(ctx) {
     const gates = ctx.gates || {};
     // The desktop draws the five big-beat effects inside the game window, like the web (owner, 2026-09-27);
     // the site shim already does that in-page, so the web keeps ctx.fx as it is.
-    const hosted = !!globalThis.chrome?.webview;
+    const hosted = desktopHosted();
     pageFx = hosted ? createPageFx({ parent: el, media: () => media, reduced }) : null;
     const fx = routeFx({ hosted, fx: typeof ctx.fx === 'function' ? ctx.fx : null, page: pageFx });
     subs = createSubliminals({ words: () => media.words, enabled: gates.subliminal !== false, fx, w: W, h: H });
@@ -743,7 +743,7 @@ export async function mount(ctx) {
       if(action==='new-run'){startFresh=true;previewRun=null;syncModeMenu();pressStart();}
       if(action==='save-menu')returnToMenu();
       if(action==='resume'){setPaused(false);canvas.focus();if(e.pointerType!=='touch'&&!endingUnderway())mouseLock?.request({pointerType:'mouse'});}   // the Resume click is the gesture that re-takes the mouse; the ending keeps it free
-      if(action==='exit'&&globalThis.chrome?.webview)back();
+      if(action==='exit'&&desktopHosted())back();
       if(action==='options'){
         optionsFrom=button;if(!menuOpen)setPaused(true);
         pace.value=String(game.snapshot().speedScale);

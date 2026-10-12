@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             public bool Truncated { get; set; }
         }
 
-        internal static Manifest Build(string? root, Func<string, string> url, IEnumerable<string>? disabledPaths)
+        internal static Manifest Build(string? root, Func<string, string> url, IEnumerable<string>? disabledPaths, bool videos = true)
         {
             var m = new Manifest();
             if (string.IsNullOrEmpty(root)) return m;
@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var disabled = new HashSet<string>((disabledPaths ?? Array.Empty<string>()).Select(p => p.Replace('\\', '/')),
                     StringComparer.OrdinalIgnoreCase);
                 int accepted = 0;
-                foreach (var isImage in new[] { true, false })
+                foreach (var isImage in videos ? new[] { true, false } : new[] { true })
                 {
                     var dir = Path.Combine(root, isImage ? "images" : "videos");
                     if (!Directory.Exists(dir)) continue;
@@ -85,10 +85,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return m;
         }
 
-        /// <summary>The user's library through the shared asset server.</summary>
+        /// <summary>The user's pictures through the shared asset server: images/ only, the half a media deal
+        /// reads (WPF BackRoomMedia deals from FlashService's image snapshot, never the videos).</summary>
         internal static Manifest BuildLocal(ConditioningControlPanel.Avalonia.Platform.WebAssetServer server)
         {
-            return Build(CorePaths.EffectiveAssets, server.AssetUrl, CoreSettings.Current.DisabledAssetPaths);
+            return Build(CorePaths.EffectiveAssets, server.AssetUrl, CoreSettings.Current.DisabledAssetPaths, videos: false);
         }
 
         /// <summary>WPF BackRoomBridge.MediaCount: 1..13, anything else reads as 4.</summary>
