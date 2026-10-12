@@ -1,5 +1,5 @@
 // PARTIALLY PORTED from ConditioningControlPanel/MainWindow/MainWindow.UiUpdates.cs (2904 lines).
-// Sorted member by member against the fifteen Core seams. One member is real; the blanket claim
+// Sorted member by member against the fifteen Core seams. One member is real (plus the stat pills); the blanket claim
 // was wrong for it and is right for most of the rest, with three exceptions worth naming.
 //
 // WHAT IS REAL: BtnAccountChip_Click. WPF's body is ShowTab("appsettings") +
@@ -32,8 +32,9 @@
 //
 // STILL OUT, by blocker:
 //   (UpdateLevelDisplay's header half is live in MainShellWindow.HeroFx.cs.)
-//   App.Progression / the XP bar - UpdateXPBarLoginState, UpdateStatPills,
-//     RefreshXPBarBonuses, GetBonusChipTooltip, StartStatPillUpdateTimer, XPBarTrack_ToolTipOpening,
+//   (UpdateStatPills + StartStatPillUpdateTimer are live below, reading the leaderboard tab's last page.)
+//   App.Progression / the XP bar - UpdateXPBarLoginState,
+//     RefreshXPBarBonuses, GetBonusChipTooltip, XPBarTrack_ToolTipOpening,
 //     RefreshAccountChip and the three AccountChip* brushes. CoreProgression is a seam, but the
 //     chip and the pills read App.Account / App.Patreon tier state on top of it, and a chip that
 //     paints the logged-out tier unconditionally is the same failure recorded for
@@ -64,6 +65,9 @@
 //     is missing here is only the WPF handler shell around it and the copy-the-old-library
 //     migration, which needs the assets tree to say what it copied.
 
+using Avalonia.Controls;
+using ConditioningControlPanel.Localization;
+
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
@@ -76,5 +80,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void BtnAccountChip_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
             => OpenAppSettingsSection("account");
+
+        // ---- header stat pills (WPF MainWindow.UiUpdates.cs:530-641 UpdateStatPills, :717 timer) ----
+        private global::Avalonia.Threading.DispatcherTimer? _statPillTimer;
+        private static int _lbOnline, _lbRank, _lbTotal, _lbEntries;
+
+        /// <summary>The last leaderboard page the pills read (WPF App.Leaderboard OnlineUsers/YourRank/
+        /// YourTotal/Entries, LeaderboardService.cs:106-108). LeaderboardTabView calls it when a page lands
+        /// and repaints its host, as WPF's post-refresh UpdateStatPills does (MainWindow.xaml.cs:3721).</summary>
+        internal static void NoteLeaderboardPage(int onlineUsers, int? yourRank, int? yourTotal, int entries)
+            => (_lbOnline, _lbRank, _lbTotal, _lbEntries) = (onlineUsers, yourRank ?? 0, yourTotal ?? 0, entries);
+
+        /// <summary>WPF StartStatPillUpdateTimer (MainWindow.xaml.cs:3726): paint now, then every 30 s.</summary>
+        private void InitializeStatPills()
+        {
+            UpdateStatPills();
+            _statPillTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(30) };
+            _statPillTimer.Tick += (_, _) => UpdateStatPills();
+            _statPillTimer.Start();
+            Closed += (_, _) => _statPillTimer?.Stop();
+        }
+
+        /// <summary>WPF UpdateStatPills: each pill shows only with the skill that buys it. The conditioning
+        /// figure is the stored total (no live session tracker on this head); the mic pill and the XP bonus
+        /// chips WPF also refreshes here are not on this head.</summary>
+        internal void UpdateStatPills()
+        {
+            var s = CoreSettings.Current;
+            bool Has(string skill) => ConditioningControlPanel.Models.SkillTreeRules.HasSkill(s, skill);
+            if (Named<Border>("PillConditioningTime") is { } time && (time.IsVisible = Has("pink_hours"))
+                && Named<TextBlock>("TxtPillConditioningTime") is { } tt)
+            {
+                double secs = s.TotalConditioningMinutes * 60;
+                tt.Text = $"{(int)(secs / 3600)}h {(int)(secs % 3600 / 60)}m {(int)(secs % 60)}s";
+            }
+            if (Named<Border>("PillOnlineUsers") is { } online && (online.IsVisible = Has("hive_mind"))
+                && Named<TextBlock>("TxtPillOnlineUsers") is { } ot)
+                ot.Text = _lbOnline.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (Named<Border>("PillRankPercentile") is { } rank && (rank.IsVisible = Has("popular_girl"))
+                && Named<TextBlock>("TxtPillRankPercentile") is { } rt)
+            {
+                // WPF LeaderboardService.GetPlayerPercentile, server-rank branch (:158-166).
+                int pct = _lbRank > 0 && _lbTotal > 0 ? System.Math.Clamp((int)System.Math.Ceiling((double)_lbRank / _lbTotal * 100), 1, 99) : 0;
+                rt.Text = pct > 0 ? $"Top {pct}%" : Loc.Get(_lbEntries > 0 ? "label_unranked" : "label_loading_2");
+            }
+            if (Named<Border>("StreakFirePill") is { } fire && (fire.IsVisible = Has("good_girl_streak")))
+            {
+                if (Named<TextBlock>("TxtStreakFireCount") is { } count)
+                    count.Text = (global::ConditioningControlPanel.Avalonia.App.Achievements?.Progress?.ConsecutiveDays ?? 0).ToString();
+                if (Named<Control>("TxtStreakShieldIcon") is { } shield) shield.IsVisible = s.StreakShieldsRemaining > 0;
+            }
+        }
     }
 }
