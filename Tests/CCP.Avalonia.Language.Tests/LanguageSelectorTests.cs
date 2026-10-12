@@ -216,6 +216,8 @@ public sealed class LanguageSelectorTests
 
             // Italian is offered like the other languages, and a key it.json lacks falls back to English.
             Select(Pill(shell), "it");
+            Assert.Equal("it", CoreSettings.Current.Language);
+            WaitForPersistedSetting(settingsPath, "Language", "it");
             Assert.Equal("it", LocalizationManager.Instance.CurrentLanguage);
             Assert.Equal("it", SelectedCode(General(shell)));
             Assert.NotEqual(LocalizationManager.Instance.GetEnglish("msg_restart_to_apply"), Loc.Get("msg_restart_to_apply"));
