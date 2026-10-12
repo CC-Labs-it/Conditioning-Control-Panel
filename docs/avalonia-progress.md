@@ -2026,3 +2026,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/lang-italian: +8864 (39 non-data)
 - Italian selectable in both heads: verbatim trunk it.json + one AvailableLanguages entry; missing keys fall back to English.
 - Language test: every file parses strictly and is offered; WPF count asserts 9→10.
+
+## avalonia-port/lang-italian: +8864 (39 non-data)
+- Italian selectable in both heads: verbatim trunk it.json + one AvailableLanguages entry; missing keys fall back to English.
+- Language test: every file parses strictly and is offered; WPF count asserts 9→10.
