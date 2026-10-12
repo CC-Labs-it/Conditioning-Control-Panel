@@ -1973,3 +1973,27 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-dialogs-windows: +497
 - Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
 - Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
+
+## avalonia-port/render-budget-loc: +175
+- Skia GPU cache raised to 256 MB (trunk RenderBudget) plus Win32 presentation env switches; idle Home CPU (Linux only) 0.67 -> 0.30 cores (dotnet-counters, 2x3 samples each side).
+- Trunk loc fix 6be091d12 already in base, no json in diff (0 of 18 keys differ); FrameClock fps counter not imported (no FrameClock in this head).
+
+## avalonia-port/wpf-findings-a11y: +157
+- Buttons whose content is a panel or TextBlock are named by their text, and the name follows content changes; this fixes 55 type-name accessible names. Offline mode greys Home's unified login as WPF does.
+- WPF UIA findings 2 and 4 reproduced on the real startup path with the CI seed: the shell matches WPF, and the `--uia-dump` harness never seeds settings or services.
+
+## avalonia-port/flash-core: +547
+- Core flash rules from trunk U9 (FlashExit/StayRule/Corners/Shatter moved to Core, tests on Linux).
+- Avalonia flashes honour Click: a press pops with haptic and the chosen leave; Stay until popped (10 min, cap 40) only for scheduler flashes, not remote/voice ones.
+
+## avalonia-port/flash-wire: +677
+- Flash: lucky roll + chime, glow card, XP/achievement/quest per flash, hydra on pop, TvOff/Glitch/Pop exit layers (FlashFxRules imported with its caller).
+- Flash XP still not banked (no idle tracker); Shatter, lucky pulse/toast, FlashCorners, voice pool, remote source left.
+
+## avalonia-port/leash-core-move: +289
+- Leash services, rules and LeashHoldToCut moved to CCP.Core/Services/Leash (git mv, trunk shape). WPF keeps thin head files (LeashServiceApp, LeashCutSafetyApp, ChasterLeashTab).
+- 134 leash tests now run on Linux in CCP.Core.Tests. GATE-OK.
+
+## avalonia-port/leash-wire: +372
+- The Core LeashService now runs on the Avalonia friends poll: seams are seeded, it starts after friends and is dropped on exit, and the launcher leash gate reads it, but holds a tile only once a gate card can present it (LeashGateCard unit). Cut target: `RemoteRelay.EndSessionNow`.
+- The +372 is counted against the stack-tip merge 8d147364d (icons-progress), not 2a4a55570. Tests: LeashHeadTests and a RemoteRelay test, all fail-proven. GATE-OK.
