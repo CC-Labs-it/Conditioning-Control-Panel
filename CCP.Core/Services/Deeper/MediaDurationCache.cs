@@ -4,9 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using LibVLCSharp.Shared;
-using NAudio.Wave;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
@@ -17,16 +16,19 @@ namespace ConditioningControlPanel.Services.Deeper
     /// on save), this cache (a small JSON map next to the waveform cache, keyed
     /// by path + size + last-write so a re-encoded file re-probes), and finally
     /// a background probe of a local file. Remote sources are never probed.
+    /// The probe itself decodes media, so it stays in the head (WPF MediaDurationProbe).
     /// </summary>
     public static class MediaDurationCache
     {
         private const int MaxEntries = 4000;
-        private const int VlcParseTimeoutMs = 5000;
 
         private static readonly object Gate = new();
         private static Dictionary<string, double>? _store;
 
-        public static string StorePath => Path.Combine(AudioWaveformCache.CacheFolder, "media-durations.json");
+        /// <summary>The Deeper cache folder, shared with the head's waveform peaks cache.</summary>
+        public static string CacheFolder => Path.Combine(CorePaths.UserData, "deeper-cache");
+
+        public static string StorePath => Path.Combine(CacheFolder, "media-durations.json");
 
         /// <summary>
         /// The mini timeline readout format: m:ss under an hour, h:mm:ss from
@@ -100,54 +102,6 @@ namespace ConditioningControlPanel.Services.Deeper
             catch (Exception ex) { Diag.Swallowed(ex); }
         }
 
-        /// <summary>
-        /// Reads the duration of a local file on a worker thread. MediaFoundation
-        /// first (header read, no decode, same reader the waveform cache uses),
-        /// then a LibVLC parse-only pass for containers MediaFoundation cannot
-        /// open. Null when neither source knows.
-        /// </summary>
-        public static async Task<double?> ProbeAsync(string mediaPath)
-        {
-            if (!IsProbeable(mediaPath)) return null;
-            var viaMf = await Task.Run(() => ProbeMediaFoundation(mediaPath)).ConfigureAwait(false);
-            if (viaMf is > 0) return viaMf;
-            return await ProbeLibVlcAsync(mediaPath).ConfigureAwait(false);
-        }
-
-        private static double? ProbeMediaFoundation(string path)
-        {
-            try
-            {
-                using var reader = new MediaFoundationReader(path);
-                var seconds = reader.TotalTime.TotalSeconds;
-                return seconds > 0 ? seconds : null;
-            }
-            catch (Exception ex)
-            {
-                Diag.Swallowed(ex);
-                return null;
-            }
-        }
-
-        private static async Task<double?> ProbeLibVlcAsync(string path)
-        {
-            try
-            {
-                var vlc = VideoService.SharedLibVLC;
-                if (vlc == null) return null;
-                using var media = new Media(vlc, path, FromType.FromPath);
-                var status = await media.Parse(MediaParseOptions.ParseLocal, VlcParseTimeoutMs).ConfigureAwait(false);
-                if (status != MediaParsedStatus.Done) return null;
-                var ms = media.Duration;
-                return ms > 0 ? ms / 1000.0 : null;
-            }
-            catch (Exception ex)
-            {
-                Diag.Swallowed(ex);
-                return null;
-            }
-        }
-
         // -- store ----------------------------------------------------------
 
         internal static string KeyFor(string mediaPath)
@@ -170,7 +124,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("MediaDurationCache: store read failed: {Error}", ex.Message);
+                Log.Debug("MediaDurationCache: store read failed: {Error}", ex.Message);
             }
             return _store;
         }
@@ -195,12 +149,12 @@ namespace ConditioningControlPanel.Services.Deeper
                     if (_store == null) return;
                     json = JsonConvert.SerializeObject(_store);
                 }
-                Directory.CreateDirectory(AudioWaveformCache.CacheFolder);
+                Directory.CreateDirectory(CacheFolder);
                 File.WriteAllText(StorePath, json);
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("MediaDurationCache: store write failed: {Error}", ex.Message);
+                Log.Debug("MediaDurationCache: store write failed: {Error}", ex.Message);
             }
         }
     }

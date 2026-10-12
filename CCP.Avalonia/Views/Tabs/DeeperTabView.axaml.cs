@@ -153,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BtnDeeperCatalogue_Click(object? sender, RoutedEventArgs e)
             => _ = Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), MainShellWindow.DeeperCatalogueUrl);
-        // ponytail: import needs EnhancementLibrary.FindDuplicateOf/PromoteToLibrary, still WPF-only.
+        // ponytail: import needs EnhancementLibrary.FindDuplicateOf/PromoteToLibrary (Core); no head instance yet.
         private void BtnDeeperImport_Click(object? sender, RoutedEventArgs e) { }
         private void BtnDeeperNewEnhancement_Click(object? sender, RoutedEventArgs e)
             => Owner?.BtnDeeperNewEnhancement_Click(sender, e);

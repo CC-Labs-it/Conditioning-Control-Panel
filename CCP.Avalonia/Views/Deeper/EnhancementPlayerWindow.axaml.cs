@@ -1716,14 +1716,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 ? b
                 : Brushes.Gray;
 
-        private static string FormatTime(double seconds)
-        {
-            if (seconds < 0 || double.IsNaN(seconds)) seconds = 0;
-            var ts = TimeSpan.FromSeconds(seconds);
-            return ts.TotalHours >= 1
-                ? $"{(int)ts.TotalHours}:{ts.Minutes:00}:{ts.Seconds:00}"
-                : $"{ts.Minutes}:{ts.Seconds:00}";
-        }
+        // WPF EnhancementPlayerWindow.FormatTime is the same one-liner over the Core rule.
+        private static string FormatTime(double seconds) => MediaDurationCache.Format(seconds);
 
         // ====================================================================================
         // Render sample. Placeholder data, never reachable from a production caller.
