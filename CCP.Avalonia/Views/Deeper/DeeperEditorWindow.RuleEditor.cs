@@ -4,7 +4,9 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Styling;
 using Avalonia.Controls.Shapes;
@@ -836,11 +838,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             for (int r = 0; r < 3; r++)
                 presetGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
-            var presetLabels = new[,]
+            // Fluent icons L6: arrows are icons; the centre stays a typographic dot (Fluent has no "centre").
+            var presetLabels = new IconKind?[,]
             {
-                { "↖", "↑", "↗" },
-                { "←", "·", "→" },
-                { "↙", "↓", "↘" }
+                { IconKind.ArrowUpLeft,   IconKind.ArrowUp,   IconKind.ArrowUpRight },
+                { IconKind.ArrowLeft,     null,               IconKind.ArrowRight },
+                { IconKind.ArrowDownLeft, IconKind.ArrowDown, IconKind.ArrowDownRight }
             };
             var presetTooltips = new[,]
             {
@@ -856,7 +859,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     int capturedCol = col;
                     var b = new Button
                     {
-                        Content = presetLabels[row, col],
+                        Content = presetLabels[row, col] is { } arrow ? new IconGlyph { Kind = arrow, Size = 14 } : "·",
                         FontSize = 14,
                         Padding = new Thickness(0, 4, 0, 4),
                         Margin = new Thickness(col == 0 ? 0 : 2, row == 0 ? 0 : 2, 0, 0),
@@ -867,6 +870,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                         BorderThickness = new Thickness(1),
                     };
                     ToolTip.SetTip(b, Loc.Get(presetTooltips[row, col]));
+                    AutomationProperties.SetName(b, Loc.Get(presetTooltips[row, col]));
                     Grid.SetColumn(b, col);
                     Grid.SetRow(b, row);
                     b.Click += (_, _) =>

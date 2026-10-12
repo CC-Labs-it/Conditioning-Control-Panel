@@ -20,6 +20,8 @@
        Click="BtnDismiss_Click"                -> wired in the constructor -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.ProgramsIntroPopup"
         Title="Training Programs"
         Width="620" SizeToContent="Height" MaxHeight="640"
@@ -130,7 +132,7 @@
 
             <!-- Close button -->
             <Button x:Name="BtnCloseX" Classes="closeX"
-                    Content="✕"
+                    AutomationProperties.Name="{loc:Str btn_close}"
                     Grid.Column="1"
                     HorizontalAlignment="Right" VerticalAlignment="Top"
                     Width="28" Height="28" Margin="0,8,12,0"
@@ -138,14 +140,18 @@
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"
                     BorderThickness="0" Cursor="Hand"
-                    ZIndex="1"/>
+                    ZIndex="1">
+                <fx:IconGlyph Kind="Dismiss" Size="14"/>
+            </Button>
 
             <StackPanel Grid.Column="1" Margin="24,22,24,20" VerticalAlignment="Center">
-                <TextBlock Text="📅  Training Programs"
-                           Foreground="{DynamicResource PinkBrush}"
-                           FontWeight="Bold" FontSize="21"
-                           TextWrapping="Wrap"
-                           Margin="0,0,0,4"/>
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,4">
+                    <fx:IconGlyph Kind="Calendar" Size="21" Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Training Programs"
+                               Foreground="{DynamicResource PinkBrush}"
+                               FontWeight="Bold" FontSize="21"
+                               TextWrapping="Wrap" VerticalAlignment="Center"/>
+                </StackPanel>
 
                 <TextBlock Text="Multi-day arcs, not one-off sessions."
                            Foreground="#CCD5D5E5" FontSize="13"

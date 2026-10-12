@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -44,15 +45,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private const double OwnedNodeGlowMinOpacity = 0.38, OwnedNodeGlowMaxOpacity = 0.72, OwnedNodeGlowSeconds = 3.8;
         private const double SkillNodeHoverScale = 1.25;
         private const int SkillNodeHoverInMs = 250, SkillNodeHoverOutMs = 200;
-        private const int AmbientFrameRate = 24;
 
         /// <summary>The FX clock. Tests swap in a stepped clock and call <see cref="StepFx"/>.</summary>
         internal static TimeProvider Time = TimeProvider.System;
 
-        private readonly List<DropShadowEffect> _ownedGlows = new();
+        private readonly List<Border> _ownedGlows = new();
+        private readonly Dictionary<string, Bitmap?> _blurredArt = new();
         private readonly Dictionary<string, Bitmap?> _art = new();
         private LinearGradientBrush? _treeBrush, _headerBrush;
-        private DispatcherTimer? _fxTimer;
+        private BeatLoop? _fxTimer;
         private long _fxStarted;
         private IDisposable? _visibilityWatch;
         private Window? _window;
@@ -70,10 +71,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>True while the tab's one FX clock (breath + gradient drift) runs. Test seam.</summary>
-        internal bool FxRunning => _fxTimer?.IsEnabled == true;
+        internal bool FxRunning => _fxTimer?.IsRunning == true;
 
         /// <summary>The owned nodes' glows the breath drives. Test seam.</summary>
-        internal IReadOnlyList<DropShadowEffect> OwnedGlows => _ownedGlows;
+        internal IReadOnlyList<Border> OwnedGlows => _ownedGlows;
+
+        /// <summary>Locked art blurred once per skill. Test seam.</summary>
+        internal IReadOnlyDictionary<string, Bitmap?> BakedArt => _blurredArt;
 
         // WPF repaints from SkillTreeService events and on every ShowTab; here AppSettings
         // PropertyChanged, the tab becoming visible, a mod switch and a language switch.
@@ -113,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Dispatcher.UIThread.Post(RepaintIfShown);
         }
 
-        private void OnModChanged(object? sender, ModPackage e) => Dispatcher.UIThread.Post(() => { _art.Clear(); RepaintIfShown(); });
+        private void OnModChanged(object? sender, ModPackage e) => Dispatcher.UIThread.Post(() => { _art.Clear(); _blurredArt.Clear(); RepaintIfShown(); });
 
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RepaintIfShown);
 
@@ -199,9 +203,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops) { StopFx(rest: true); return; }
                 bool onScreen = IsEffectivelyVisible && _window is { IsActive: true } w && w.WindowState != WindowState.Minimized;
                 if (!onScreen) { StopFx(rest: false); return; }
-                _fxTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / AmbientFrameRate),
-                    DispatcherPriority.Background, (_, _) => Tick());
-                if (!_fxTimer.IsEnabled) { _fxTimer.Start(); Tick(); }
+                // The window's shared 30 fps beat (WPF AmbientFrameRate 30, MainWindow.EnhancementsFx.cs:186); Start ticks once.
+                _fxTimer ??= new BeatLoop(this, _ => Tick());
+                _fxTimer.Start();
             }
             catch (Exception ex) { Serilog.Log.Debug("Enhancements EvaluateFx: {E}", ex.Message); }
         }
@@ -311,7 +315,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var (px, py) = positions[skill.PrerequisiteId!];
                 var (cx, cy) = positions[skill.Id];
-                SkillTreeCanvas.Children.Add(Connector(px + NodeWidth, py + NodeHeight / 2, cx, cy + NodeHeight / 2,
+                SkillTreeCanvas.Children.AddRange(Connector(px + NodeWidth, py + NodeHeight / 2, cx, cy + NodeHeight / 2,
                     SkillTreeRules.HasSkill(settings, skill.Id), SkillTreeRules.HasSkill(settings, skill.PrerequisiteId!)));
             }
 
@@ -333,15 +337,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>DrawConnectionLines: green + glow when the child is owned, accent when only
         /// the parent is.</summary>
-        private static Control Connector(double x1, double y1, double x2, double y2, bool childOwned, bool parentOwned) => new Line
+        private static Control[] Connector(double x1, double y1, double x2, double y2, bool childOwned, bool parentOwned)
         {
-            StartPoint = new Point(x1, y1),
-            EndPoint = new Point(x2, y2),
-            Stroke = childOwned ? Rgb(100, 255, 150) : parentOwned ? Accent : Rgb(60, 60, 80),
-            StrokeThickness = childOwned ? 3 : 2,
-            Opacity = childOwned || parentOwned ? 1.0 : 0.3,
-            Effect = childOwned ? new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 8, OffsetX = 0, OffsetY = 0, Opacity = 0.6 } : null,
-        };
+            Line L(IBrush stroke, double thickness, double opacity) => new()
+            {
+                StartPoint = new Point(x1, y1), EndPoint = new Point(x2, y2),
+                Stroke = stroke, StrokeThickness = thickness, Opacity = opacity, IsHitTestVisible = false,
+                StrokeLineCap = PenLineCap.Round,
+            };
+            var line = L(childOwned ? Rgb(100, 255, 150) : parentOwned ? Accent : Rgb(60, 60, 80), childOwned ? 3 : 2,
+                childOwned || parentOwned ? 1.0 : 0.3);
+            line.StrokeLineCap = PenLineCap.Flat;
+            if (!childOwned) return new Control[] { line };
+            // WPF's LimeGreen DropShadowEffect (blur 8, 0.6) as two soft underlay strokes: an Effect would re-blur
+            // every line on each frame the tree's gradient drifts (P82 rule 3).
+            return new Control[] { L(Brushes.LimeGreen, 13, 0.12), L(Brushes.LimeGreen, 7, 0.25), line };
+        }
+
+        /// <summary>Locked art blurred once (WPF BlurEffect Radius 8 at the node's 156 px width; Skia's
+        /// radius-to-sigma 0.57735 r + 0.5, scaled to the bitmap's pixels). Null when it cannot be baked.</summary>
+        private Bitmap? BlurredArt(string id, Bitmap src)
+        {
+            if (_blurredArt.TryGetValue(id, out var done)) return done;
+            Bitmap? baked = null;
+            try
+            {
+                using var ms = new System.IO.MemoryStream();
+                src.Save(ms);
+                ms.Position = 0;
+                using var sk = SkiaSharp.SKBitmap.Decode(ms);
+                float sigma = (float)((0.57735 * 8 + 0.5) * sk.Width / NodeWidth);
+                using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(sk.Width, sk.Height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
+                using var paint = new SkiaSharp.SKPaint { ImageFilter = SkiaSharp.SKImageFilter.CreateBlur(sigma, sigma) };
+                surface.Canvas.Clear(SkiaSharp.SKColors.Transparent);
+                surface.Canvas.DrawBitmap(sk, 0, 0, paint);
+                using var image = surface.Snapshot();
+                using var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                baked = new Bitmap(png.AsStream());
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Enhancements blurred art {Id}: {E}", id, ex.Message); }
+            return _blurredArt[id] = baked;
+        }
 
         /// <summary>CreateSkillTreeHeader, minus the four PRO expanders (AddProSection).</summary>
         private Control Header()
@@ -351,7 +387,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var main = new StackPanel();
 
             var title = new StackPanel { Margin = new Thickness(0, 0, 0, 15) };
-            title.Children.Add(Text("✨ " + (mods?.GetEnhancementTreeTitle() ?? Loc.Get("label_enhancement_tree_title")), Accent, 22, bold: true));
+            title.Children.Add(IconRow(Glyph(IconKind.Sparkle, IconVariant.Filled, null, 22, IconBrushes.Gold),
+                Text(mods?.GetEnhancementTreeTitle() ?? Loc.Get("label_enhancement_tree_title"), Accent, 22, bold: true)));
             title.Children.Add(Text(mods?.GetEnhancementTreeSubtitle() ?? Loc.Get("label_enhancement_tree_subtitle"), Rgb(176, 176, 176), 11, italic: true, top: 4));
             title.Children.Add(Text(mods?.GetEnhancementTreeWarning() ?? Loc.Get("label_enhancement_tree_warning"), Rgb(136, 170, 204), 10, italic: true, top: 2));
             if (SkillTreeRules.HasSkill(settings, "certified_data_bimbo"))
@@ -364,7 +401,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Padding = new Thickness(8, 3, 8, 3),
                     Margin = new Thickness(0, 6, 0, 0),
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    Child = Text("🎓 " + Loc.Get("skill_certified_data_bimbo_name"), Rgb(255, 200, 80), 10, bold: true),
+                    Child = IconRow(Glyph(IconKind.HatGraduation, IconVariant.Regular, Rgb(255, 200, 80), 10),
+                        Text(Loc.Get("skill_certified_data_bimbo_name"), Rgb(255, 200, 80), 10, bold: true)),
                 });
             main.Children.Add(title);
 
@@ -381,7 +419,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Sparkle points.
             var points = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            points.Children.Add(new TextBlock { Text = "💎", FontSize = 24, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            var gem = Glyph(IconKind.Diamond, IconVariant.Filled, null, 24, IconBrushes.Gem);
+            gem.Margin = new Thickness(0, 0, 10, 0);
+            points.Children.Add(gem);
             var info = new StackPanel();
             info.Children.Add(Text(mods?.GetPointsLabel() ?? Loc.Get("label_sparkle_points"), Rgb(176, 176, 176), 10));
             info.Children.Add(Text(settings.SkillPoints.ToString("N0"), Accent, 24, bold: true));
@@ -391,13 +431,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Prestige: lifetime points spent, rank 1 + spent / 100.
             var spent = App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0;
             var prestige = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            prestige.Children.Add(new TextBlock { Text = "✦", Foreground = Rgb(255, 200, 80), FontSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            var star = Glyph(IconKind.Sparkle, IconVariant.Filled, Rgb(255, 200, 80), 18);
+            star.Margin = new Thickness(0, 0, 10, 0);
+            prestige.Children.Add(star);
             var pInfo = new StackPanel();
             pInfo.Children.Add(Text(Loc.Get("label_prestige"), Rgb(176, 176, 176), 10));
             var pValue = new StackPanel { Orientation = Orientation.Horizontal };
             pValue.Children.Add(Text(spent.ToString("N0"), Rgb(255, 200, 80), 16, bold: true));
-            pValue.Children.Add(Text("  ✦ " + Loc.GetF("label_prestige_rank", 1 + (int)(spent / 100)), Rgb(210, 180, 120), 10));
-            foreach (var c in pValue.Children) ((TextBlock)c).VerticalAlignment = VerticalAlignment.Center;
+            var rankStar = Glyph(IconKind.Sparkle, IconVariant.Filled, Rgb(210, 180, 120), 10);
+            rankStar.Margin = new Thickness(8, 0, 4, 0);
+            pValue.Children.Add(rankStar);
+            pValue.Children.Add(Text(Loc.GetF("label_prestige_rank", 1 + (int)(spent / 100)), Rgb(210, 180, 120), 10));
+            foreach (var c in pValue.Children) c.VerticalAlignment = VerticalAlignment.Center;
             pInfo.Children.Add(pValue);
             prestige.Children.Add(pInfo);
             var prestigeBox = Box(Rgb(52, 44, 28), new Thickness(15, 6, 15, 6), prestige);
@@ -412,10 +457,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             xp.Children.Add(Text(Loc.Get("label_xp_mult"), Rgb(176, 176, 176), 12));
             xp.Children.Add(Text($"{SkillTreeRules.GetTotalXpMultiplier(settings, DateTime.Now.Hour, 0.0):F2}x", Rgb(0, 255, 136), 14, bold: true));
             if (settings.PinkRushActive)
-                xp.Children.Add(Text(" " + Loc.Get("label_xp_rush"), new SolidColorBrush(Color.Parse(mods?.GetAccentDarkColorHex() ?? "#FF1493")), 12, bold: true));
-            foreach (var c in xp.Children) ((TextBlock)c).VerticalAlignment = VerticalAlignment.Center;
+            {
+                var rush = IconLabel.ForKey("label_xp_rush");
+                rush.Margin = new Thickness(4, 0, 0, 0);
+                rush.SetValue(TextElement.ForegroundProperty, new SolidColorBrush(Color.Parse(mods?.GetAccentDarkColorHex() ?? "#FF1493")));
+                rush.SetValue(TextElement.FontSizeProperty, 12.0);
+                rush.SetValue(TextElement.FontWeightProperty, FontWeight.Bold);
+                xp.Children.Add(rush);
+            }
+            foreach (var c in xp.Children) c.VerticalAlignment = VerticalAlignment.Center;
             var time = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            time.Children.Add(new TextBlock { Text = "⏱️ ", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+            var timer = Glyph(IconKind.Timer, IconVariant.Regular, Rgb(176, 176, 176), 12);
+            timer.Margin = new Thickness(0, 0, 4, 0);
+            time.Children.Add(timer);
             time.Children.Add(Text(SkillTreeRules.FormatConditioningTime(settings), Rgb(176, 176, 176), 12));
             var stats = new StackPanel();
             stats.Children.Add(xp);
@@ -450,12 +504,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The Ditzy Data toggle and its collapsed 3-column stats grid.</summary>
         private static void AddDitzyStats(StackPanel main, string? statsTitle)
         {
-            var arrow = Text(" ▼", Rgb(176, 176, 176), 10);
-            var label = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            label.Children.Add(new TextBlock { Text = "📊 ", FontSize = 12 });
-            label.Children.Add(Text(statsTitle ?? Loc.Get("label_ditzy_data_stats"), AccentLight, 11, bold: true));
-            label.Children.Add(arrow);
-            foreach (var c in label.Children) ((TextBlock)c).VerticalAlignment = VerticalAlignment.Center;
+            var arrow = Glyph(IconKind.ChevronDown, IconVariant.Regular, Rgb(176, 176, 176), 10);
+            arrow.Margin = new Thickness(4, 0, 0, 0);
+            var label = IconRow(Glyph(IconKind.DataBarVertical, IconVariant.Regular, null, 12),
+                Text(statsTitle ?? Loc.Get("label_ditzy_data_stats"), AccentLight, 11, bold: true), arrow);
+            label.HorizontalAlignment = HorizontalAlignment.Center;
             // A focusable Border, not a Button: WPF's is a Border with MouseLeftButtonDown, and a
             // stock Button would draw Fluent chrome. Enter/Space reach it from the keyboard (P17).
             var toggle = new Border
@@ -473,7 +526,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
 
             var stack = new StackPanel();
-            stack.Children.Add(Text("📊 " + (statsTitle ?? "Ditzy Data Stats"), Rgb(176, 176, 176), 11, bold: true, bottom: 8));
+            var statsHead = IconRow(Glyph(IconKind.DataBarVertical, IconVariant.Regular, Rgb(176, 176, 176), 11),
+                Text(statsTitle ?? "Ditzy Data Stats", Rgb(176, 176, 176), 11, bold: true));
+            statsHead.Margin = new Thickness(0, 0, 0, 8);
+            stack.Children.Add(statsHead);
             if (App.Achievements?.Progress is { } a)
             {
                 var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*") };
@@ -528,7 +584,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             void Toggle()
             {
                 details.IsVisible = !details.IsVisible;
-                arrow.Text = details.IsVisible ? " ▲" : " ▼";
+                arrow.Kind = details.IsVisible ? IconKind.ChevronUp : IconKind.ChevronDown;
             }
             toggle.PointerPressed += (_, e) => { if (e.GetCurrentPoint(toggle).Properties.IsLeftButtonPressed) Toggle(); };
             toggle.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Toggle(); e.Handled = true; } };
@@ -552,7 +608,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             art = bitmap != null
                 ? new Image { Source = bitmap, Stretch = Stretch.UniformToFill }
                 : new Border { CornerRadius = new CornerRadius(8, 8, 0, 0), Background = Placeholder(skill.Tier) };
-            if (locked) art.Effect = new BlurEffect { Radius = 8 };
+            // WPF blurs locked art with a BlurEffect (radius 8). An Effect re-blurs on every frame the tree's drifting
+            // gradient repaints (P82 rule 3), so the blur is baked into the bitmap once per skill instead.
+            if (locked && art is Image img && bitmap != null) img.Source = BlurredArt(skill.Id, bitmap) ?? bitmap;
             grid.Children.Add(art);
 
             var name = new Border
@@ -576,15 +634,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 Background = owned ? Rgb(255, 200, 80) : canPurchase ? Accent : Rgb(40, 35, 50),
                 CornerRadius = new CornerRadius(0, 0, 8, 8),
-                Child = new TextBlock
-                {
-                    Text = owned ? $"💎{skill.Cost} {Loc.Get("label_skill_permanent")}" : canPurchase ? $"💎 {skill.Cost}" : $"🔒 {skill.Cost}",
-                    Foreground = owned ? Rgb(20, 20, 30) : canPurchase ? Brushes.White : Rgb(120, 120, 130),
-                    FontSize = 10,
-                    FontWeight = FontWeight.Bold,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
+                // WPF "💎N ★ FOREVER" / "💎 N" / "🔒 N": icons take the badge ink (gem violet or gold
+                // on the gold/pink badge would vanish).
+                Child = CostBadge(skill.Cost, owned ? IconKind.Diamond : canPurchase ? IconKind.Diamond : IconKind.LockClosed,
+                    owned ? Rgb(20, 20, 30) : canPurchase ? Brushes.White : Rgb(120, 120, 130), owned),
             };
             Grid.SetRow(cost, 3);
             grid.Children.Add(cost);
@@ -602,15 +655,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Child = grid,
             };
             var wrapper = new Panel { Tag = skill.Id, RenderTransformOrigin = RelativePoint.Center, RenderTransform = TransformOperations.Parse("scale(1)") };
-            wrapper.Children.Add(node);
-            if (owned)
+            // The owned / purchasable glow is a sibling BoxShadow layer behind the node, not a DropShadowEffect on
+            // the wrapper (P82 rule 3: an Effect makes the node an offscreen layer re-blurred every frame); the
+            // breath moves only its Opacity.
+            if (owned || canPurchase)
             {
-                var glow = new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 18, OffsetX = 0, OffsetY = 0, Opacity = 0.6 };
-                wrapper.Effect = glow;
-                _ownedGlows.Add(glow);
+                var glow = new Border
+                {
+                    Width = NodeWidth, Height = NodeHeight, CornerRadius = new CornerRadius(10), IsHitTestVisible = false,
+                    BoxShadow = new BoxShadows(new BoxShadow { Blur = owned ? 18 : 15, Color = owned ? Colors.LimeGreen : Colors.HotPink }),
+                    Opacity = owned ? 0.6 : 0.7,
+                };
+                wrapper.Children.Add(glow);
+                if (owned) _ownedGlows.Add(glow);
             }
-            else if (canPurchase)
-                wrapper.Effect = new DropShadowEffect { Color = Colors.HotPink, BlurRadius = 15, OffsetX = 0, OffsetY = 0, Opacity = 0.7 };
+            wrapper.Children.Add(node);
 
             wrapper.PointerEntered += (_, _) => ApplyNodeHover(wrapper, true);
             wrapper.PointerExited += (_, _) => ApplyNodeHover(wrapper, false);
@@ -621,7 +680,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!string.IsNullOrEmpty(skill.PrerequisiteId) && !SkillTreeRules.HasSkill(settings, skill.PrerequisiteId))
             {
                 var pre = SkillDefinition.All.FirstOrDefault(s => s.Id == skill.PrerequisiteId);
-                tip.Children.Add(new TextBlock { Text = Loc.GetF("label_skill_requires", pre?.LocalizedName ?? skill.PrerequisiteId), Foreground = Rgb(255, 100, 100), Margin = new Thickness(0, 6, 0, 0) });
+                var requires = IconLabel.ForKey("label_skill_requires", pre?.LocalizedName ?? skill.PrerequisiteId);
+                requires.SetValue(TextElement.ForegroundProperty, Rgb(255, 100, 100));
+                requires.Margin = new Thickness(0, 6, 0, 0);
+                tip.Children.Add(requires);
             }
             ToolTip.SetTip(wrapper, Tip(tip, Rgb(30, 30, 50), Accent));
             return wrapper;
@@ -698,7 +760,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static Control HiddenSecretCard(string requirement)
         {
             var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-            body.Children.Add(new TextBlock { Text = "🔒", FontSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            var padlock = Glyph(IconKind.LockClosed, IconVariant.Filled, Rgb(153, 50, 204), 18);
+            padlock.Margin = new Thickness(0, 0, 8, 0);
+            body.Children.Add(padlock);
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(text, 1);
             text.Children.Add(Text(Loc.Get("label_secret_skill_hidden"), Rgb(153, 50, 204), 11, bold: true));
@@ -718,27 +782,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
             if (!_art.TryGetValue(skill.Id, out var bitmap)) _art[skill.Id] = bitmap = ModArt.TryLoad($"skills/{skill.Id}.png", 312);
-            // 44x30 is the 3:2 the skills/ art is drawn at. The emoji pair is the fallback
-            // (Avalonia draws the pair natively, so it is not lost the way WPF's Twemoji lookup was).
-            body.Children.Add(bitmap != null
-                ? new Image { Source = bitmap, Width = 44, Height = 30, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }
-                : new TextBlock { Text = skill.Icon, FontSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            // 44x30 is the 3:2 the skills/ art is drawn at. Without art, the skill's icon by id (IconMap.ForSkill).
+            Control icon = bitmap != null
+                ? new Image { Source = bitmap, Width = 44, Height = 30, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center }
+                : IconGlyph.Of(IconMap.ForSkill(skill.Id), skill.Icon, 18);
+            icon.Margin = new Thickness(0, 0, 8, 0);
+            body.Children.Add(icon);
 
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(stack, 1);
             var name = Text(CoreMods.MakeModAware(skill.LocalizedName), owned ? Rgb(180, 130, 255) : Rgb(153, 50, 204), 11, bold: true);
             name.TextWrapping = TextWrapping.Wrap;
             stack.Children.Add(name);
-            stack.Children.Add(owned
-                ? Text($"💎{skill.Cost} {Loc.Get("label_skill_owned")}", Rgb(180, 130, 255), 9, top: 2)
-                : Text($"💎 {skill.Cost}", settings.SkillPoints >= skill.Cost ? Rgb(255, 215, 0) : Rgb(120, 120, 120), 10, top: 2));
+            // WPF "💎N ✓ OWNED" / "💎 N".
+            var price = owned
+                ? IconRow(Glyph(IconKind.Diamond, IconVariant.Filled, Rgb(180, 130, 255), 9), Text($"{skill.Cost}", Rgb(180, 130, 255), 9),
+                      Glyph(IconKind.Checkmark, IconVariant.Regular, Rgb(180, 130, 255), 9), Text(IconText.BareLoc("label_skill_owned"), Rgb(180, 130, 255), 9))
+                : IconRow(Glyph(IconKind.Diamond, IconVariant.Filled, settings.SkillPoints >= skill.Cost ? Rgb(255, 215, 0) : Rgb(120, 120, 120), 10),
+                      Text($"{skill.Cost}", settings.SkillPoints >= skill.Cost ? Rgb(255, 215, 0) : Rgb(120, 120, 120), 10));
+            price.Margin = new Thickness(0, 2, 0, 0);
+            stack.Children.Add(price);
             body.Children.Add(stack);
 
             var card = SecretBorder(owned ? Rgb(40, 30, 50) : canPurchase ? Rgb(50, 30, 60) : Rgb(35, 25, 45),
                 owned ? Rgb(180, 100, 255) : canPurchase ? Rgb(153, 50, 204) : Rgb(100, 70, 130), owned ? 2 : 1, body, opacity: 1);
             card.Tag = skill.Id;
-            if (owned) card.Effect = new DropShadowEffect { Color = Colors.Purple, BlurRadius = 12, OffsetX = 0, OffsetY = 0, Opacity = 0.5 };
-            else if (canPurchase) card.Effect = new DropShadowEffect { Color = Colors.MediumPurple, BlurRadius = 10, OffsetX = 0, OffsetY = 0, Opacity = 0.4 };
+            // The card is a Border, so its glow is its own BoxShadow (WPF DropShadowEffect; P82 rule 3).
+            if (owned) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(128, Colors.Purple.R, Colors.Purple.G, Colors.Purple.B) });
+            else if (canPurchase) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 10, Color = Color.FromArgb(102, Colors.MediumPurple.R, Colors.MediumPurple.G, Colors.MediumPurple.B) });
 
             var tip = new StackPanel { MaxWidth = 280 };
             tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = Rgb(200, 150, 255), FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
@@ -760,6 +831,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Opacity = opacity,
             Child = body,
         };
+
+        /// <summary>Icons and texts on one centred line (WPF wrote the emoji into the string).</summary>
+        private static StackPanel IconRow(params Control[] parts)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            foreach (var c in parts) { c.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(c); }
+            return row;
+        }
+
+        /// <summary>An icon in a fixed ink, or (brushKey) a live IconBrushes resource.</summary>
+        private static IconGlyph Glyph(IconKind kind, IconVariant variant, IBrush? ink, double size, string? brushKey = null)
+        {
+            var g = IconGlyph.Of(kind, variant, brushKey, size);
+            if (ink != null) g.Foreground = ink;
+            return g;
+        }
+
+        private static StackPanel CostBadge(int cost, IconKind kind, IBrush ink, bool forever)
+        {
+            var parts = new List<Control> { Glyph(kind, IconVariant.Filled, ink, 10), Text($"{cost}", ink, 10, bold: true) };
+            if (forever)
+            {
+                parts.Add(Glyph(IconKind.Star, IconVariant.Filled, ink, 10));
+                parts.Add(Text(IconText.BareLoc("label_skill_permanent"), ink, 10, bold: true));
+            }
+            var badge = IconRow(parts.ToArray());
+            badge.HorizontalAlignment = HorizontalAlignment.Center;
+            badge.VerticalAlignment = VerticalAlignment.Center;
+            return badge;
+        }
 
         private static TextBlock Text(string text, IBrush colour, double size,
                                       bool bold = false, bool italic = false, double top = 0, double bottom = 0) => new()

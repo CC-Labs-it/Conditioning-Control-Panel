@@ -13,6 +13,7 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -20,6 +21,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -115,7 +117,7 @@ public sealed class DeeperHubTests
 
             // The row's play button opens one player on that file; again only brings it forward.
             var row = RowBorder(view, first);
-            var play = row.GetVisualDescendants().OfType<Button>().First(x => Equals(x.Content, "▶"));
+            var play = row.GetVisualDescendants().OfType<Button>().First(x => x.Content is IconGlyph { Kind: IconKind.Play });
             Click(play);
             Click(play);
             var players = w.OwnedWindows.OfType<EnhancementPlayerWindow>().ToList();
@@ -124,7 +126,7 @@ public sealed class DeeperHubTests
             players[0].Close();
 
             // Delete: the row goes at once, the file waits out the grace; Undo brings it back.
-            var delete = row.GetVisualDescendants().OfType<Button>().First(x => Equals(x.Content, "🗑"));
+            var delete = row.GetVisualDescendants().OfType<Button>().First(x => x.Content is IconGlyph { Kind: IconKind.Delete });
             Click(delete);
             Assert.DoesNotContain(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, first));
             Assert.True(File.Exists(first));
@@ -133,7 +135,7 @@ public sealed class DeeperHubTests
             Assert.Contains(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, first));
 
             // Delete again and let the grace run out on the stepped clock: the file is trashed.
-            Click(RowBorder(view, first).GetVisualDescendants().OfType<Button>().First(x => Equals(x.Content, "🗑")));
+            Click(RowBorder(view, first).GetVisualDescendants().OfType<Button>().First(x => x.Content is IconGlyph { Kind: IconKind.Delete }));
             clock.Step(TimeSpan.FromSeconds(5));
             w.CommitDueDeeperDeletes();
             Assert.True(File.Exists(first), "committed before the 6 s grace");
@@ -181,7 +183,16 @@ public sealed class DeeperHubTests
             var vm = (DeeperTabViewModel)view.DataContext!;
             var row = vm.FilteredEntries.Single(r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, path));
             Assert.True(row.ShowSubmissionBadge);
-            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("deeper_submission_badge_published"), row.SubmissionBadgeText);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("deeper_submission_badge_published"), row.SubmissionBadgeLabel);
+            Assert.Equal(IconKind.CheckmarkCircle, row.SubmissionBadgeGlyph);
+
+            // Fluent icons L6: the sort-direction chevron flips with the order, and the header
+            // wave (now an IconGlyph) is still the control the ambient drift attaches to.
+            Assert.Equal(IconKind.ChevronDown, view.DeeperSortDirGlyph.Kind);
+            Click(view.FindControl<Button>("BtnDeeperSortDir")!);
+            Assert.Equal(IconKind.ChevronUp, view.DeeperSortDirGlyph.Kind);
+            Click(view.FindControl<Button>("BtnDeeperSortDir")!);
+            Assert.IsType<TranslateTransform>(view.DeeperWaveGlyph.RenderTransform);
 
             // Hover lift: the row rises 2px on enter and settles on leave.
             var border = RowBorder(view, path);

@@ -16,6 +16,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using Serilog;
 using ConditioningControlPanel.Services;
@@ -140,7 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtLoadingDots, _txtLoadingFlavor, _txtQuestion, _scoreText;
         private readonly TextBlock _txtAnswerA, _txtAnswerB, _txtAnswerC, _txtAnswerD;
         private readonly TextBlock _txtFinalScore, _txtScoreLabel, _txtProfileText, _txtError;
-        private readonly TextBlock _txtTrySessionIcon, _txtTrySessionLabel, _txtTrendHeader;
+        private readonly TextBlock _txtTrySessionLabel, _txtTrendHeader;
+        private readonly IconGlyph _txtTrySessionIcon;
         private readonly Button _btnMaximizeTitleBar;
 
         /// <summary>Render/design constructor: the windowed first screen, which is the state the
@@ -202,7 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtScoreLabel = this.FindControl<TextBlock>("TxtScoreLabel")!;
             _txtProfileText = this.FindControl<TextBlock>("TxtProfileText")!;
             _txtError = this.FindControl<TextBlock>("TxtError")!;
-            _txtTrySessionIcon = this.FindControl<TextBlock>("TxtTrySessionIcon")!;
+            _txtTrySessionIcon = this.FindControl<IconGlyph>("TxtTrySessionIcon")!;
             _txtTrySessionLabel = this.FindControl<TextBlock>("TxtTrySessionLabel")!;
             _txtTrendHeader = this.FindControl<TextBlock>("TxtTrendHeader")!;
             _btnMaximizeTitleBar = this.FindControl<Button>("BtnMaximizeTitleBar")!;
@@ -212,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // see the header comment in the .axaml.
             _txtLoadingDots.Text = Loc.Get("label_generating_2");
             _txtLoadingFlavor.Text = Loc.Get("label_the_quiz_master_is_thinking_up_something_devi");
-            _txtTrySessionIcon.Text = Loc.Get("label_text_8");
+            _txtTrySessionIcon.Kind = IconKind.HourglassHalf;   // WPF label_text_8 ⏳
             _txtTrySessionLabel.Text = Loc.Get("label_generating_your_session");
 
             if (fullscreen)
@@ -644,7 +646,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _generatedSession = session;
 
                 var displayName = session.Name.Length > 30 ? session.Name.Substring(0, 30) + "..." : session.Name;
-                _txtTrySessionIcon.Text = "\u2728"; // sparkles
+                _txtTrySessionIcon.Kind = IconKind.Sparkle; // WPF ✨
                 _txtTrySessionLabel.Text = Loc.GetF("quiz_save_session", displayName);
                 _btnTrySession.IsHitTestVisible = true;
                 _btnTrySession.Opacity = 1.0;
@@ -1028,12 +1030,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (WindowState == WindowState.Maximized)
             {
                 WindowState = WindowState.Normal;
-                _btnMaximizeTitleBar.Content = "☐";
+                this.FindControl<IconGlyph>("MaximizeGlyph")!.Kind = IconKind.Maximize;   // WPF ☐
             }
             else
             {
                 WindowState = WindowState.Maximized;
-                _btnMaximizeTitleBar.Content = "❐";
+                this.FindControl<IconGlyph>("MaximizeGlyph")!.Kind = IconKind.SquareMultiple;   // WPF ❐
             }
         }
 

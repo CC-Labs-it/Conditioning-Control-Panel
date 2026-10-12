@@ -1,9 +1,8 @@
 // PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.DeeperFx.cs (207 lines).
 //
 // The hero loop is live: the Deeper header's wave glyph drifts. WPF ran two DoubleAnimations with
-// AutoReverse + RepeatBehavior.Forever on one TranslateTransform; Avalonia's twin is two
-// Animations with PlaybackDirection.Alternate + IterationCount.Infinite over the same transform,
-// which is the same motion rather than an approximation of it. The amplitudes and the deliberately
+// AutoReverse + RepeatBehavior.Forever on one TranslateTransform; here one BeatLoop on the window's
+// 30 fps beat writes both axes on the same SineEase InOut curve (lag fix, P82). The amplitudes and the deliberately
 // mismatched half-periods are verbatim (3.0dip over 11.5s, 2.0dip over 15.5s), so the path still
 // never repeats on a beat the eye can find and the glyph reads as floating, not as a pendulum.
 //
@@ -11,9 +10,9 @@
 // puts the glyph back at 0,0. That replaces WPF's OnDeeperTabVisibilityChanged.
 //
 // WPF's gates are kept: MotionFx.AllowAmbientLoops (AmbientFxCanvas.Env) and DeeperFxOnScreen
-// (active, not minimised; Activated/Deactivated/WindowState re-evaluate it). Dropped: only
-// DeeperGlyphFrameRate = 10 - Avalonia has no per-animation clock rate (see
-// MainShellWindow.AmbientFx.cs); a 3px sine over 11.5s is sub-pixel per frame either way.
+// (active, not minimised; Activated/Deactivated/WindowState re-evaluate it). Deviation: WPF's
+// DeeperGlyphFrameRate = 10 becomes the shared 30 fps beat - a separate 10 fps gate would land on
+// frames the 30 fps beat skips and make the window compose more often, not less.
 // OnDeeperRowHover (the 2px library-row lift) is driven by DeeperTabView's row enter/leave.
 
 using System;
@@ -45,7 +44,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _deeperFxInitialized;
         private TranslateTransform? _deeperGlyphDrift;
-        private CancellationTokenSource? _deeperGlyphClock;
+        private global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _deeperGlyphClock;
+
+        /// <summary>True while the wave glyph drifts (tests).</summary>
+        internal bool DeeperGlyphDrifting => _deeperGlyphClock?.IsRunning == true;
 
         /// <summary>
         /// Resolves the glyph and gives it the transform the drift animates. Once, on the first
@@ -65,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // FindControl, not the generated field: DeeperTabView loads with
                 // AvaloniaXamlLoader.Load, so DeeperWaveGlyph is null on it despite compiling.
                 var glyph = Named<Tabs.DeeperTabView>("DeeperTab")
-                    ?.FindControl<TextBlock>("DeeperWaveGlyph");
+                    ?.FindControl<Control>("DeeperWaveGlyph");
                 if (glyph == null) return;
 
                 if (glyph.RenderTransform is TranslateTransform existing) _deeperGlyphDrift = existing;
@@ -95,28 +97,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!wanted) { StopDeeperGlyphDrift(); return; }
                 if (_deeperGlyphClock != null) return;    // already drifting
 
-                _deeperGlyphClock = new CancellationTokenSource();
-                Drift(TranslateTransform.YProperty, DeeperGlyphDriftY, DeeperGlyphDriftYSeconds);
-                Drift(TranslateTransform.XProperty, DeeperGlyphDriftX, DeeperGlyphDriftXSeconds);
+                // WPF :141-147 (-A -> A, AutoReverse, SineEase InOut) on the 30 fps beat. RunAsync on the
+                // TranslateTransform threw (P82), so the drift used to be inert.
+                var drift = _deeperGlyphDrift!;
+                _deeperGlyphClock = new global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop(this, t =>
+                {
+                    drift.Y = DeeperGlyphDriftY * (2 * global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Breath(t, DeeperGlyphDriftYSeconds) - 1);
+                    drift.X = DeeperGlyphDriftX * (2 * global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Breath(t, DeeperGlyphDriftXSeconds) - 1);
+                });
+                _deeperGlyphClock.Start();
             }
             catch (Exception ex) { Log.Debug("ApplyDeeperGlyphDrift: {E}", ex.Message); }
-
-            void Drift(AvaloniaProperty property, double amplitude, double seconds)
-            {
-                var anim = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(seconds),
-                    IterationCount = IterationCount.Infinite,
-                    PlaybackDirection = PlaybackDirection.Alternate,
-                    Easing = new SineEaseInOut(),
-                    Children =
-                    {
-                        new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(property, -amplitude) } },
-                        new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(property, amplitude) } },
-                    },
-                };
-                _ = anim.RunAsync(_deeperGlyphDrift!, _deeperGlyphClock!.Token);
-            }
         }
 
         private void OnDeeperFxWindowStateish(object? sender, EventArgs e) => ApplyDeeperGlyphDrift(CurrentTab ?? "");
@@ -149,10 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _deeperGlyphClock = null;
             try
             {
-                clock.Cancel();
-                clock.Dispose();
-                // A cancelled Avalonia animation leaves the property wherever it stopped, so the
-                // glyph is put back on its baseline explicitly.
+                clock.Stop();
+                // A stopped loop leaves the property wherever it stopped: back to the baseline.
                 if (_deeperGlyphDrift != null) { _deeperGlyphDrift.X = 0; _deeperGlyphDrift.Y = 0; }
             }
             catch (Exception ex) { Log.Debug("StopDeeperGlyphDrift: {E}", ex.Message); }
