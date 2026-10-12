@@ -196,7 +196,7 @@ public sealed class GameWindowTests
     /// <summary>Signed in, owning <paramref name="owned"/> (null = nothing); XP and Sparks go to lists.</summary>
     private static void RunRace(string? owned, Action<LauncherWindow, List<double>, List<double>> body) => Run((_, launcher) =>
     {
-        var (oldOwns, oldBank, oldXp, oldAssets) = (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider);
+        var (oldOwns, oldBank, oldXp, oldAssets, oldClock) = (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow);
         var lib = Directory.CreateTempSubdirectory("race-lib-").FullName;
         var xp = new List<double>();
         var sparks = new List<double>();
@@ -211,7 +211,7 @@ public sealed class GameWindowTests
         }
         finally
         {
-            (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider) = (oldOwns, oldBank, oldXp, oldAssets);
+            (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow) = (oldOwns, oldBank, oldXp, oldAssets, oldClock);
             Directory.Delete(lib, true);
         }
     });
@@ -282,18 +282,21 @@ public sealed class GameWindowTests
     [Fact]
     public void Race_HeartbeatWatchdog_PingsThenCloses() => RunRace("rt.original.00", (_, _, _) =>
     {
+        var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var now = t0;
+        GameWindow.RaceUtcNow = () => now;                // stepped clock (P08); RunRace restores it
         var w = GameWindow.Launch("race")!;
         Assert.True(w.RaceWatchRunning);                // WPF Launch arms the watch
-        var t0 = DateTime.UtcNow;
         Assert.Equal("idle", w.CheckRaceHeartbeat(t0.AddSeconds(60)));
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal("ok", w.CheckRaceHeartbeat(t0.AddSeconds(15)));
         w.HandleMessage("{\"type\":\"run-started\"}");
         Assert.Equal("pinged", w.CheckRaceHeartbeat(t0.AddSeconds(15)));
+        now = t0.AddSeconds(20);
         w.HandleMessage("{\"type\":\"pong\"}");
-        Assert.Equal("ok", w.CheckRaceHeartbeat(DateTime.UtcNow.AddSeconds(5)));
-        Assert.Equal("pinged", w.CheckRaceHeartbeat(DateTime.UtcNow.AddSeconds(30)));
-        Assert.Equal("closed", w.CheckRaceHeartbeat(DateTime.UtcNow.AddSeconds(35)));
+        Assert.Equal("ok", w.CheckRaceHeartbeat(t0.AddSeconds(25)));
+        Assert.Equal("pinged", w.CheckRaceHeartbeat(t0.AddSeconds(31)));
+        Assert.Equal("closed", w.CheckRaceHeartbeat(t0.AddSeconds(36)));
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
         Assert.False(w.RaceWatchRunning);               // DisposeAll stops it (P65)
