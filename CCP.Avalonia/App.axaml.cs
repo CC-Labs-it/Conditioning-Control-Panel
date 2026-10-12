@@ -395,6 +395,8 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
+                global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
