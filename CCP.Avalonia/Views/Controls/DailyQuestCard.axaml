@@ -104,7 +104,7 @@
                         </StackPanel>
                         <TextBlock x:Name="TxtDesc" Text="" Foreground="#D6D6E8"
                                    FontSize="11" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                   MaxHeight="31"/>
+                                   MaxLines="2"/>
                     </StackPanel>
                 </Grid>
             </Border>

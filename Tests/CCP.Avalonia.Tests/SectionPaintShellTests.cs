@@ -77,14 +77,15 @@ public sealed class SectionPaintShellTests
                 Assert.Equal(NavStripRules.ActiveTextOn(hue), Solid(presets.Label.Foreground));
                 Assert.True(strip.ActiveFill.IsVisible);
                 Assert.Equal(hue, Solid(strip.ActiveFill.Background));
-                Assert.Equal(presets.Pill.Bounds.X, strip.ActiveFill.Margin.Left);
+                // The pill sits in its "?" help host (d0ec7aa8d), so the row offset is the host's.
+                Assert.Equal(((Control)presets.Pill.Parent!).Bounds.X, strip.ActiveFill.Margin.Left);
                 Assert.Equal(presets.Pill.Bounds.Width, strip.ActiveFill.Width);
                 Assert.Equal(0, strip.ActiveFill.BoxShadow.Count);   // Motion Off: no glow
 
                 // A click moves the fill to the new pill (instantly at Motion Off).
                 ramp.Pill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 w.UpdateLayout();
-                Assert.Equal(ramp.Pill.Bounds.X, strip.ActiveFill.Margin.Left);
+                Assert.Equal(((Control)ramp.Pill.Parent!).Bounds.X, strip.ActiveFill.Margin.Left);
                 Assert.IsType<LinearGradientBrush>(presets.Face.Background);
 
                 // The HUD band (WPF MainWindow.xaml:805): header + XP rows on 20% black, rows 1-3.
