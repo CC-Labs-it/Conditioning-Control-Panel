@@ -1072,9 +1072,11 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `MainShellWindow.UiUpdates.cs`/`StartStop.cs`) accrues `TotalConditioningMinutes` while the engine runs. Null when no
   log (construction failed / headless render path), 0 for a day with no entry, as WPF.
 - Test: `ChasterMinutesTests.ConditionedDayIsNotIdle_ADayWithoutConditioningIsCharged` (engine run 12 min on a stepped
-  clock -> day log -> today's idle charge 0, yesterday's 1200 s; fail-proven: no MinutesOn -> red, `?? 0` -> red).
+  clock -> day log -> today's idle charge 0, a day after the first log day 1200 s; fail-proven: no MinutesOn -> red, `?? 0` -> red).
   It asserts the head's minutes and `TabDayEnd.IdleCharge`, not JudgeEndedDay's linked/priced gates or BookSeconds.
-- Known edge (accepted, not guarded): if this ships in the same release as the tracker, the first launch on a new day
-  judges the last day seen under the old build, whose day log has 0 minutes, so a linked user with `idle` priced is
-  charged one idle day (1200 s) once. WPF never had that gap; a guard (judge only days after the tracker's first run)
-  was judged not worth new state for a one-off.
+- Upgrade edge, guarded: a day before the tracker existed reads 0 minutes, so the first day-end after upgrading would
+  charge a linked user with `idle` priced one idle day (1200 s) for a day they may well have conditioned. The head's
+  `MinutesOn` returns null (unknown, no charge, as before this lane) for any day before the day log's first day with
+  conditioning minutes (`FeatureDayLogService.FirstConditioningDay`), and null while no such day exists. No new state:
+  the earliest `cm > 0` entry is the tracker's first run. Same test: a day before the first log day is null and not
+  charged (fail-first: red with `Expected null, Actual 0` before the guard).

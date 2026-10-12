@@ -76,7 +76,14 @@ public sealed class ChasterMinutesTests
                 string Key(DateTime d) => d.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                 Assert.Equal(minutes, chaster.MinutesOn?.Invoke(Key(today)));
                 Assert.Equal(0, TabDayEnd.IdleCharge(chaster.MinutesOn?.Invoke(Key(today))));
+                // Upgrade edge: a day before the log's first conditioning day predates the tracker, so it is
+                // unknown (null) and never charged, however the user spent it.
+                Assert.Null(chaster.MinutesOn?.Invoke(Key(today.AddDays(-1))));
+                Assert.Equal(0, TabDayEnd.IdleCharge(chaster.MinutesOn?.Invoke(Key(today.AddDays(-1)))));
+
+                log.Log.GetOrAddDay(Key(today.AddDays(-2))).Cm = 30;   // the tracker ran two days ago
                 Assert.Equal(TabDayEnd.IdleSeconds, TabDayEnd.IdleCharge(chaster.MinutesOn?.Invoke(Key(today.AddDays(-1)))));
+                Assert.Null(chaster.MinutesOn?.Invoke(Key(today.AddDays(-3))));
 
                 DayLog.SetValue(null, null);                       // no log (construction failed): nobody can tell
                 Assert.Null(chaster.MinutesOn?.Invoke(Key(today.AddDays(-1))));
