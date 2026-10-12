@@ -38,7 +38,7 @@ internal static class FirstShowMediaLoader
                     try { entries = await fetch(query.Token); }
                     catch (OperationCanceledException) when (!budget.IsCancellationRequested) { }
                 }
-                App.Logger?.Information("First show media attempt {Attempt}: {Count} feed entries",attempt,entries.Count);
+                Serilog.Log.Information("First show media attempt {Attempt}: {Count} feed entries",attempt,entries.Count);
                 hadEntries |= entries.Count > 0;
                 int ready = 0, total = Math.Min(TargetPictures,entries.Count);
                 if (total > 0) progress?.Invoke(new(false,attempt,0,total));
@@ -58,12 +58,12 @@ internal static class FirstShowMediaLoader
                             return path;
                         }
                         catch (OperationCanceledException) { return null; }
-                        catch (Exception ex) { App.Logger?.Debug("First show image skipped: {Reason}", ex.Message); return null; }
+                        catch (Exception ex) { Serilog.Log.Debug("First show image skipped: {Reason}", ex.Message); return null; }
                     }));
                     paths.AddRange(results.OfType<string>());
                     if (paths.Count >= TargetPictures) break;
                 }
-                App.Logger?.Information("First show media attempt {Attempt}: {Count} downloaded pictures",attempt,paths.Count);
+                Serilog.Log.Information("First show media attempt {Attempt}: {Count} downloaded pictures",attempt,paths.Count);
             }
         }
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { }

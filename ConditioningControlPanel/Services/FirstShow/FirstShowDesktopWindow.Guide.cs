@@ -12,14 +12,7 @@ namespace ConditioningControlPanel.Services.FirstShow;
 internal sealed partial class FirstShowDesktopWindow
 {
     // Steps name real UI targets. This sequence can grow without a second tutorial host.
-    private sealed record GuideStep(string Line, string Tab, string? Target, bool Hover = false);
-    private static readonly GuideStep[] WelcomeSteps =
-    {
-        new("guideHelp", "settings", "feature-help", true),
-        new("guideMedia", "assets", "RemoteSourceChips"),
-        new("guideFolder", "assets", "BtnOpenAssetsFolder"),
-        new("guideSelection", "assets", "AssetTreeView")
-    };
+    private static readonly FirstShowScript.GuideStep[] WelcomeSteps = FirstShowScript.WelcomeSteps;
     private bool _guiding, _waitForHover;
     private int _guideIndex = -1;
     private double _hoverTime, _targetWait;
@@ -163,7 +156,7 @@ internal sealed partial class FirstShowDesktopWindow
                 }
             }
         }
-        var placement = FirstShowLayout.GuideBody(SafeBounds(),BodySize(),SpeechSize(),_highlight.Target);
+        var placement = FirstShowLayoutWpf.GuideBody(SafeBounds(),BodySize(),SpeechSize(),_highlight.Target);
         double tx = placement.X+placement.Width/2, ty = placement.Y+placement.Height/2;
         double ease = MotionFx.Level == Models.MotionLevel.Off ? 1 : 1-Math.Exp(-dt*7);
         _x += (tx-_x)*ease; _y += (ty-_y)*ease;

@@ -58,8 +58,8 @@ internal sealed partial class FirstShowDesktopWindow : Window
     private bool _bundled;
     private double _x, _y;
     private readonly string _panic;
-    private static readonly double[] Beats = { 0,2,7,11,15,19,24,28,32 };
-    private static readonly string[] Cues = { "entrance","flash","pink","drain","words","bubbles","mix","gather","reveal" };
+    private static readonly double[] Beats = FirstShowScript.Beats;
+    private static readonly string[] Cues = FirstShowScript.Cues;
     internal static string Text(string key) => Loc.Get("first_show_" + key);
 
     public FirstShowDesktopWindow(bool preview, EmiDeskWindow emi, MainWindow? main)
@@ -222,7 +222,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
     {
         Say(Text("warning"),true); _choices.Children.Clear();
         _speech.Inlines.Add(new LineBreak()); _speech.Inlines.Add(new LineBreak());
-        _speech.Inlines.Add(new Run(_panic == "Escape" ? "Esc" : _panic) { Foreground = Brushes.Red, FontWeight = FontWeights.Bold });
+        _speech.Inlines.Add(new Run(FirstShowScript.PanicLabel(_panic)) { Foreground = Brushes.Red, FontWeight = FontWeights.Bold });
         _speech.Inlines.Add(new Run(" " + Text("panicHint")));
         _pendingSpeech = _speech.Text;
         Button(Text("ready"), Start); Button(Text("later"), Close);
@@ -244,14 +244,14 @@ internal sealed partial class FirstShowDesktopWindow : Window
             _effects?.Tick(time,dt); _surface.InvalidateVisual();
             while (_beat+1 < Beats.Length && time >= Beats[_beat+1])
             {
-                _beat++; var line = Text("beat"+_beat).Replace("{panicKey}", _panic == "Escape" ? "Esc" : _panic);
+                _beat++; var line = Text("beat"+_beat).Replace("{panicKey}", FirstShowScript.PanicLabel(_panic));
                 Say(_beat == 8 ? Text("tada") : line); _audio.Cue(Cues[_beat]);
                 if (_beat == 0)
                 {
                     _speech.Inlines.Clear();
                     var template = Text("beat0").Split("{panicKey}");
                     _speech.Inlines.Add(new Run(template[0]));
-                    _speech.Inlines.Add(new Run(_panic == "Escape" ? "Esc" : _panic) { Foreground = Brushes.Red, FontWeight = FontWeights.Bold });
+                    _speech.Inlines.Add(new Run(FirstShowScript.PanicLabel(_panic)) { Foreground = Brushes.Red, FontWeight = FontWeights.Bold });
                     if (template.Length > 1) _speech.Inlines.Add(new Run(template[1]));
                 }
             }
@@ -282,7 +282,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
             {
                 var logo = LogoBounds();
                 var bounds = SafeBounds();
-                var beside = FirstShowLayout.GuideBody(bounds,bodySize,SpeechSize(),logo);
+                var beside = FirstShowLayoutWpf.GuideBody(bounds,bodySize,SpeechSize(),logo);
                 double step = m == 0 ? 1 : Math.Clamp((time-31.6)/.7,0,1);
                 step = step*step*(3-2*step);
                 _x += (beside.X+beside.Width/2-_x)*step;
@@ -295,10 +295,8 @@ internal sealed partial class FirstShowDesktopWindow : Window
         var speech = Math.Max(0,1-(now-_spokeAt)/1.4);
         var bob = (Math.Sin(now*2.5)*3 + Math.Sin(now*1.1)*2 + speech*Math.Sin(now*16)*2)*m;
         var turn = (Math.Sin(now*1.5)*1.6 + speech*Math.Sin(now*9))*m;
-        var pose = _playing && time >= 24 && time < 25 && m > 0 ? "smug" : (_playing && time >= 28 || _ending) ? "celebration" : "idle";
-        var expression = _serious ? "o_o" : "^_^";
-        if (!_serious && m > 0 && now%12.7 > 10.9 && now%12.7 < 11.18) expression = "^_~";
-        if (m > 0 && now%5.3 < .12) expression = "-_-";
+        var pose = FirstShowScript.Pose(_playing, _ending, time, m);
+        var expression = FirstShowScript.Face(_serious, m, now);
         if (IsLoaded) _emi.PresentAt(PointToScreen(new Point(_x,_y)), bob, turn, pose, expression);
         if (!_guiding && time >= 32 && (_playing || _ending))
         {
@@ -368,7 +366,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
         var body = new Rect(_x-size.Width/2,_y-size.Height/2,size.Width,size.Height);
         var avoid = _guiding ? _highlight.Target : _logo.Opacity > 0 ? logo : Rect.Empty;
         var preferred = new Point(body.Right+18,body.Top);
-        var rect = FirstShowLayout.Speech(bounds,speech,body,avoid,preferred);
+        var rect = FirstShowLayoutWpf.Speech(bounds,speech,body,avoid,preferred);
         if (_speechPending)
         {
             _speechPending = false; _spokeAt = _life.Elapsed.TotalSeconds;
