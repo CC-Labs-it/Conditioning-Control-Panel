@@ -3913,6 +3913,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     // a passing video lingers for its 'video spotlight time' (S.spotSeconds)
     // instead of bolting through. (Was off mid-run; restored by request.)
     if (ctx.spawner) ctx.spawner.setAutoSpotlight(true);
+    if (ctx.spawner && ctx.spawner.picturesFirst) ctx.spawner.picturesFirst();   // pictures first, clips sparse later
     buildToys();
     syncPhys();
     wireStickyFingers();
