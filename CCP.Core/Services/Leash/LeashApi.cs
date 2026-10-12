@@ -3,7 +3,6 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Friends;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -37,14 +36,14 @@ public sealed class LeashApi : ILeashApi
     public LeashApi(HttpClient? http = null, Func<(string UnifiedId, string Token)?>? identity = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
-        _identity = identity ?? BackRoomApi.AppIdentity;
-        _baseUrl = baseUrl ?? BackRoomApi.BaseUrl;
+        _identity = identity ?? (() => null);
+        _baseUrl = baseUrl ?? "";
     }
 
     public async Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default)
     {
         var id = _identity();
-        if (id == null) return null;
+        if (id == null || string.IsNullOrEmpty(_baseUrl)) return null;
         var o = (JObject)body.DeepClone();
         o["unified_id"] = id.Value.UnifiedId;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -63,7 +62,7 @@ public sealed class LeashApi : ILeashApi
         catch (OperationCanceledException) { return null; }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Leash {Op} failed: {E}", op, ex.Message);
+            Serilog.Log.Debug("Leash {Op} failed: {E}", op, ex.Message);
             return null;
         }
     }
