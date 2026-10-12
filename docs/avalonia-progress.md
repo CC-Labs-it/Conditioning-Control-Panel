@@ -1889,3 +1889,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/wizard-hidpi-wpe: +219
 - First-run wizard capped to the screen working area (pixels divided by scaling): at 200% on 1080p, Enter stays on screen and the 18+ box is reachable by scrolling (F5; distro-check hidpi wizard_done true on ubuntu-24.04).
 - Missing-WPE message: Arch keeps WPE in pacman (extra ships the trio; PKGBUILD unchanged). Other distros get no failing command, and a 9-language line says those pages are unavailable. No unbuilt Flatpak is offered (F2).
+
+## avalonia-port/win-panic: +827
+- Windows panic key (WH_KEYBOARD_LL hook), Lockdown system-key block and unfocused Esc door, all from trunk. Core PanicKeyRules with tests. The Windows code compiles but has never run.
+- SingleInstance sandbox suffix was already on base; this adds the fail-proven test for it.
