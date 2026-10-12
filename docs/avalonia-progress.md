@@ -1945,3 +1945,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-premium-tabs: +133
 - L3 Fluent icons: 9 premium tabs + Circe faces draw fx:IconGlyph; gate padlocks keep PremiumGateFx glow (LockClosed + tier brush); Chaster Key/LockClosed per D6.
 - Ratchets lowered: emoji 971→920, prefixed-loc 234→224, path 26→19; Exclusives feature-emoji data slots and Takeover state strings left (L10/follow-up).
+
+## avalonia-port/icons-voice: +143
+- Fluent icons L4: She's Listening (21 voice-command rows -> IconLabel, gate padlock), lock card voice states, webcam calibration/gaze windows; icon-emoji 971->919, icon-prefixed-loc 234->233. Review P3s: hearts Filled + PinkBrush; shield, sparkle, pause Filled per design ref.
+- Left for L10: the Start/Stop listening button (text swapped in MainShellWindow.SheListening.cs).
