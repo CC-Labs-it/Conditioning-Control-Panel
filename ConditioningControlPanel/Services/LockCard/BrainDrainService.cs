@@ -405,6 +405,7 @@ namespace ConditioningControlPanel.Services
                 if (started)
                 {
                     App.Audio?.NoteOutputSuccess();
+                    Audio.EngineOffAudioLog.Note("braindrain", filePath);
                     // Logged once it actually plays, so a muted endpoint or a lost race never
                     // leaves a Media Log row for a clip nobody heard (ccp-bugs #1098).
                     App.MediaHistory?.RecordAudio(filePath);

@@ -4868,6 +4868,7 @@ namespace ConditioningControlPanel.Services
                 sound.Init(audioFile);
                 sound.Play();
                 App.Audio?.NoteOutputSuccess();
+                Audio.EngineOffAudioLog.Note("flash-voice", path);
 
                 // Only assign to fields after everything succeeded
                 _currentAudioFile = audioFile;

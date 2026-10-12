@@ -1689,6 +1689,7 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Information("[VIDEO] aout live for {File}: deviceApplied={Applied} {Routing}",
                     label, applied, routing);
                 VideoDiag.Log("AOUT", $"{label} deviceApplied={applied} {routing}");
+                Audio.EngineOffAudioLog.Note("video", label);
             }
             catch (Exception ex)
             {
