@@ -8124,5 +8124,6 @@
   "title_no_preset_selected": "未选择预设",
   "title_cannot_update_default": "无法更新默认预设",
   "title_cannot_delete_default": "无法删除默认预设",
-  "title_update_preset": "更新预设"
+  "title_update_preset": "更新预设",
+  "linux_dep_wpe_unavailable": "内置网页需要 WPE WebKit 2.0，目前只有 Arch 和 openSUSE Tumbleweed 完整打包了它；在其他发行版上这些页面暂时不可用。其他功能均可正常使用。"
 }

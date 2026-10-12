@@ -592,7 +592,7 @@
                                         <!-- T4 only: a comet running the rail. Clipped to the track
                                              by its host and hidden (not merely transparent) at every
                                              tier below Ignited. The slide clock lives in
-                                             MainWindow.ProgramsFx.cs, which is not on this head. -->
+                                             ProgramsTabView.Ignition.cs. -->
                                         <Grid x:Name="RailCometHost" ClipToBounds="True" IsVisible="False">
                                             <Rectangle x:Name="RailComet"
                                                        Width="130" HorizontalAlignment="Left"
@@ -731,8 +731,8 @@
                                      in front of a word. -->
 
                                 <!-- T2+: the particle field. An AmbientFxCanvas is added here on
-                                     first use on WPF; empty and clockless below Charged, and empty
-                                     on this head until MainWindow.ProgramsFx.cs has a twin. -->
+                                     first use (ProgramsTabView.Ignition.cs); empty and clockless below
+                                     Charged. -->
                                 <Grid x:Name="TodayFxLayer"
                                       Grid.ColumnSpan="2" IsHitTestVisible="False"
                                       Margin="-22,-20,-22,-6"/>
@@ -1337,8 +1337,7 @@
              scrolling content, never children of it: they must not scroll, must
              not measure, and must never take a click. On WPF everything about
              them - brush, opacity, whether they exist at all - is driven from the
-             one heat scalar in MainWindow.ProgramsFx.cs, which is not on this
-             head, so both rest exactly as they rest on WPF at tier 0.
+             one heat scalar in ProgramsTabView.Ignition.cs (WPF MainWindow.ProgramsFx.cs).
              =================================================================== -->
 
         <!-- T4 / boss day: a soft inner edge glow around the whole tab. Margin and
@@ -1358,7 +1357,8 @@
               Margin="0,0,0,8">
             <Rectangle x:Name="ProgramsSealScrim"
                        RadiusX="12" RadiusY="12" Fill="#B0000000"/>
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+            <StackPanel x:Name="ProgramsSealStamp"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
                         RenderTransformOrigin="50%,50%">
                 <StackPanel.RenderTransform>
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
@@ -1366,9 +1366,8 @@
                 <Border x:Name="ProgramsSealRing"
                         Width="104" Height="104" CornerRadius="52" BorderThickness="3"
                         HorizontalAlignment="Center">
-                    <TextBlock x:Name="TxtProgramsSealGlyph"
-                               Text="✓" FontSize="48" FontWeight="Bold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <hover:IconGlyph x:Name="ProgramsSealGlyph" Kind="Checkmark" Size="48"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <TextBlock x:Name="TxtProgramsSealTitle"
                            FontSize="30" FontWeight="Bold" Margin="0,18,0,0"

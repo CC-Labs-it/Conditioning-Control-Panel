@@ -96,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             try
             {
-                if (!CoreAccount.IsLoggedIn)
+                if (!CoreAccount.IsLoggedIn && !AccountSeed.SandboxWhitelisted)
                 {
                     _txtName.Text = Loc.Get("account_chip_sign_in");
                     _txtTier.Text = Loc.Get("label_login_to_unlock_exclusive_features");
@@ -114,7 +114,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     _tierBadge.IsVisible = true;
                     _tierBadge.BorderBrush = TierBadgeTier2Brush;
                     _tierCard.BorderBrush = TierBadgeTier2Brush;
-                    _txtTier.Text = CoreAccount.IsWhitelisted
+                    // Debug-only sandbox override (AccountSeed.SandboxWhitelistRequested): never shipped, so not localized.
+                    _txtTier.Text = AccountSeed.SandboxWhitelisted ? "Whitelisted (sandbox)"
+                        : CoreAccount.IsWhitelisted
                         ? Loc.Get("label_patreon_tier_whitelisted")
                         : Loc.Get("label_patreon_tier_level2");
                 }
