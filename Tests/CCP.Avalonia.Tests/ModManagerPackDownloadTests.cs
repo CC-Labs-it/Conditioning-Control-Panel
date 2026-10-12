@@ -11,6 +11,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using CCP.Tests.Shared;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -79,7 +80,7 @@ public sealed class ModManagerPackDownloadTests
             var bar = dialog.FindControl<ProgressBar>("PackProgress")!;
             var button = dialog.FindControl<Button>("BtnDownloadPack")!;
             ListBoxItem Row() => list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == BuiltInMods.BambiSleepId);
-            bool Badged() => ((StackPanel)Row().Content!).Children.Count > 1;
+            bool Badged() => ((StackPanel)Row().Content!).Children.OfType<IconLabel>().Any(l => l.Key == "modmgr_badge_needs_download");
 
             list.SelectedItem = Row();
             Assert.True(Badged());

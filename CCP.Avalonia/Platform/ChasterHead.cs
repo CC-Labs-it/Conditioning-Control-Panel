@@ -40,8 +40,9 @@ internal static class ChasterHead
                 Paused: s.ChasterPaused,
                 PriceOverrides: new Dictionary<string, int>(s.ChasterPriceOverrides ?? new Dictionary<string, int>(), StringComparer.Ordinal));
         };
-        // ponytail: no MinutesOn (the feature day log is not on this head); optional on the service,
-        // read as "nobody can tell".
+        // ponytail: no MinutesOn yet, although App.FeatureDayLog now runs on this head (WPF ChasterServiceApp
+        // MinutesFromDayLog = FeatureDayLog.ConditioningMinutesOn(dayKey)). Wiring it arms the idle-day
+        // charge, so it is its own lane; until then it reads as "nobody can tell".
         var target = Target(userDataDir, overrideUrl);
         inner ??= new HttpClientHandler();
         return new ChasterService(

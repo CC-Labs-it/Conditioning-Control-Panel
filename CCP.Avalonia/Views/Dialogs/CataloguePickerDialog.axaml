@@ -19,6 +19,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:ctl="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.CataloguePickerDialog"
         Title="{loc:Str dialog_catalogue_picker_title}"
@@ -66,7 +67,7 @@
 
             <!-- Title -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
-                <TextBlock Text="📥" FontSize="24" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <fx:IconGlyph Kind="ArrowDownload" Size="24" VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <TextBlock Text="{loc:Str dialog_catalogue_picker_title}"
                            Foreground="{DynamicResource PinkBrush}"
                            FontSize="22" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap"/>

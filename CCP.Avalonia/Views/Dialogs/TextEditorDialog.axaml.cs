@@ -10,6 +10,8 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
@@ -57,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _txtNewItem = this.FindControl<TextBox>("TxtNewItem")!;
             _itemList = this.FindControl<ItemsControl>("ItemList")!;
 
-            this.FindControl<TextBlock>("TxtTitle")!.Text = $"📝 {title}";
+            this.FindControl<IconLabel>("TxtTitle")!.Text = title;   // WPF "📝 {title}": the note is the label's Kind
             Title = Loc.GetF("title_manager", title);
 
             // Convert to observable collection for binding
@@ -142,7 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             if ((e.Source as Control)?.DataContext is not TextItem item)
                 return;
 
-            if (e.Source is TextBlock { Name: "BtnRemove" })
+            if ((e.Source as Visual)?.FindAncestorOfType<IconGlyph>(includeSelf: true) is { Name: "BtnRemove" })
             {
                 e.Handled = true; // Prevent triggering the row click
 
@@ -324,7 +326,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         public string LocBtnToggleAll => Loc.Get("btn_toggle_all");
         public string LocBtnAdd => Loc.Get("btn_add_2");
         public string LocTooltipRemoveItem => Loc.Get("tooltip_remove_item");
-        public string LocBtnRemoveSelected => Loc.Get("btn_remove_selected_2");
         public string LocBtnCancel => Loc.Get("btn_cancel");
         public string LocBtnSave => Loc.Get("btn_save");
     }

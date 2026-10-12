@@ -1,7 +1,8 @@
 // PORTED (seam) from ConditioningControlPanel/MainWindow/MainWindow.Leash.cs:95-108 (LeashBlocksGames,
 // PresentLeashGateFromLauncher; WPF 7.1.5). The launcher asks this before a game tile opens
-// (LauncherHost.cs:360-366). No Leash service on this head yet, so nothing seeds the providers and the
-// gate never blocks; when the service lands it sets them (GateDue != null / CheckLeashGate).
+// (LauncherHost.cs:360-366). Platform/LeashHead seeds LeashGateDueProvider (GateDue != null). The gate
+// card that PresentLeashGateProvider brings up is a later unit (LeashGateCard); until it is set a tile
+// is never held, because the player could neither do the punishment nor cut the leash from the panel.
 
 using System;
 
@@ -18,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>True while a punishment stands between a launcher tile and its game.</summary>
         internal static bool LeashBlocksGames
         {
-            get { try { return LeashGateDueProvider?.Invoke() == true; } catch { return false; } }
+            get { try { return PresentLeashGateProvider != null && LeashGateDueProvider?.Invoke() == true; } catch { return false; } }
         }
 
         /// <summary>The launcher's way in: a tile press is a deliberate "I want to play", so the gate comes up now.</summary>
