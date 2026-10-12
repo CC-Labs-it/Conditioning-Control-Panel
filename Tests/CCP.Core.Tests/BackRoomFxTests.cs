@@ -101,7 +101,8 @@ public class BackRoomFxTests
             return GifFromFound;
         }
         public void SpiralLoom(string gifPath, int durationMs, double alpha, bool hold, bool slow)
-            => Add(FormattableString.Invariant($"spiral:{System.IO.Path.GetFileName(gifPath)}:{durationMs}:{alpha:0.###}:{hold}:{slow}"));
+            // The fixtures are Windows paths (C:\woven\...); Path.GetFileName would keep them whole on Linux.
+            => Add(FormattableString.Invariant($"spiral:{gifPath.Split('\\', '/')[^1]}:{durationMs}:{alpha:0.###}:{hold}:{slow}"));
         public void ReleaseSpiralLoom() => Add("spiral-release");
         public void ReleaseBrainDrain() => Add("drain-release");
         public void Tunnel(double level) => Add(FormattableString.Invariant($"tunnel:{level:0.###}"));

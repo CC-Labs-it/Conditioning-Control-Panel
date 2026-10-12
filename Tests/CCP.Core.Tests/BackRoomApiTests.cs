@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
-using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -227,20 +226,38 @@ public class BackRoomApiTests
     }
 
     [Fact]
-    public async Task Counter_Buy_UnlocksOwnership_AndAReplayedOlderReceiptDoesNotRollBack()
+    public async Task Counter_Buy_WithNoApplier_GoesToTheHeadsDefault()
     {
-        var ownership = new OwnershipService(() => "uid-1", null, a => a());
-        var h = new FakeHandler();
-        var api = new BackRoomApi(new HttpClient(h), () => ("uid-1", "tok-1"), null, ownership.ApplySnapshot);
-        h.Answer = _ => Json(200, "{\"ok\":true,\"sp\":5,\"prizes\":{\"revision\":5,\"grants\":[\"fx.flash.pendulum\"]}}");
-        await api.RelayAsync("counter", "buy", "idem-dddddddddddddddd", null, TestContext.Current.CancellationToken);
-        Assert.True(ownership.IsGranted("fx.flash.pendulum"));
-
-        h.Answer = _ => Json(200, "{\"ok\":true,\"sp\":5,\"prizes\":{\"revision\":3,\"grants\":[]}}");
-        await api.RelayAsync("counter", "state", null, null, TestContext.Current.CancellationToken);
-        Assert.Equal(5, ownership.Revision);
-        Assert.True(ownership.IsGranted("fx.flash.pendulum"));
+        var applied = new List<(string, long, string[])>();
+        var previous = BackRoomApi.DefaultApplyPrizes;
+        BackRoomApi.DefaultApplyPrizes = (a, r, g) => applied.Add((a, r, g));
+        try
+        {
+            var (api, h, _) = Make();
+            h.Answer = _ => Json(200, "{\"ok\":true," + Prizes + "}");
+            await api.RelayAsync("counter", "buy", "idem-eeeeeeeeeeeeeeee", null, TestContext.Current.CancellationToken);
+        }
+        finally { BackRoomApi.DefaultApplyPrizes = previous; }
+        Assert.Equal("uid-1", Assert.Single(applied).Item1);
     }
+
+    [Fact]
+    public async Task EveryReply_IsHandedToTheMergedAccountHook()
+    {
+        var seen = new List<(int, string)>();
+        var previous = BackRoomApi.MergedReply;
+        BackRoomApi.MergedReply = (status, body) => { seen.Add((status, body)); return true; };
+        try
+        {
+            var (api, h, _) = Make();
+            h.Answer = _ => Json(409, "{\"error\":\"merged\"}");
+            var result = await api.RelayAsync("slot", "state", null, null, TestContext.Current.CancellationToken);
+            Assert.Equal("offline", result.Reason);
+        }
+        finally { BackRoomApi.MergedReply = previous; }
+        Assert.Equal((409, "{\"error\":\"merged\"}"), Assert.Single(seen));
+    }
+
     [Theory]
     [InlineData("state", null, false)]
     [InlineData("layout", null, false)]

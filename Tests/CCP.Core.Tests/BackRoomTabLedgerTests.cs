@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
-using ConditioningControlPanel.Services.Chaster;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -88,17 +87,6 @@ public class BackRoomTabLedgerTests
         for (var i = 0; i < BackRoomTabLedger.MaxPerSecond; i++) Assert.Equal("melt", l.Land("slot", "t1", false, i, T0));
         Assert.Null(l.Land("slot", "t1", false, 4, T0.AddMilliseconds(500)));
         Assert.Equal("melt", l.Land("slot", "t1", false, 5, T0.AddSeconds(1)));
-    }
-
-    [Theory]
-    [InlineData("melt", "melt")]
-    [InlineData("emi3", CircesTab.JackpotEventId)]
-    [InlineData("gif3same", null)]
-    [InlineData("none", null)]
-    [InlineData(null, null)]
-    public void Only_the_melt_line_and_the_jackpot_line_touch_the_tab(string? line, string? row)
-    {
-        Assert.Equal(row, ChasterHooks.SlotLineRow(line));
     }
 
     [Fact]

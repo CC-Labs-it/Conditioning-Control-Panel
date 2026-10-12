@@ -444,6 +444,8 @@ namespace ConditioningControlPanel
             Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
             Services.Invites.InviteApi.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
+            Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
             CoreProgram.ActivePackVideoCountProvider = () => ContentPacks?.GetAllActivePackVideos().Count ?? 0;
             CoreProgram.RoadmapProvider = () => Roadmap;

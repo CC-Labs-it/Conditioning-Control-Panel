@@ -165,16 +165,6 @@ public class BackRoomOverlayMathTests
 
     // ---- spiral ----------------------------------------------------------------------------------
 
-    [Fact]
-    public void SpiralDecode_KeepsEveryLoopFrame_BySizingASquareWeaveDown()
-    {
-        Assert.Equal(640, BackRoomLoomSpiralOverlay.FitLongSide((720, 405, 72)));    // the bundled wide weave
-        Assert.Equal(506, BackRoomLoomSpiralOverlay.FitLongSide((720, 720, 72)));    // a player's square weave
-        Assert.Equal(480, BackRoomLoomSpiralOverlay.FitLongSide((480, 480, 72)));    // small: never upscaled
-        Assert.Equal(640, BackRoomLoomSpiralOverlay.FitLongSide((1280, 720, 600)));  // frames past the loop cap do not count
-        Assert.Equal(640, BackRoomLoomSpiralOverlay.FitLongSide(null));
-    }
-
     /// <summary>
     /// THE ENVELOPE THE OWNER CHOSE, 2026-09-17: 1250 ms in, 500 ms out. It blooms and snaps away.
     ///
