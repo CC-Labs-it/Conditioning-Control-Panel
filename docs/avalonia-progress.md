@@ -2010,3 +2010,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/lag-fixes-a: +670
 - Shell ambient loops (FeatureCard/SplitFeatureCard, Chaster chip, status pulses, fuse, Deeper, TierBadge, SpiralGlyph, roadmap, Lockdown) now run on the 30 fps BeatLoop, and a hidden or minimised loop unsubscribes its clock. Tile and tier-badge glows are sibling BoxShadows instead of Effects. Three motions that never ran before (chip swing, Deeper drift, TierBadge sway) now animate.
 - A ratchet blocks new infinite Animations (10 files left for lag-fixes-b). There are 16 recorded fail-proofs. Measured live: Play tab CPU 49 -> 32% of a core. Idle Home still composes at about 55 fps in both builds (cause outside this lane).
+
+## avalonia-port/lag-fixes-b: +759
+- Spiral, Quests, Exclusives, Enhancements and Home loops ride the shared 30 fps beat, glows are sibling BoxShadow layers, and FX timers moved onto FrameClock. Idle renders/s: Home 56->37, Play 45->32, Enhancements 59->37, Premium 59->35.
+- Glows under loops are baked once (GlowBake: Spiral digits and waiting line, padlocks) or use sibling BoxShadows, with headless render proofs. Effect ratchets cover code and .axaml. The ~115 comp updates/s are idle 144 Hz ticks (evidence/lag-fixes-b/live-fps.txt).
