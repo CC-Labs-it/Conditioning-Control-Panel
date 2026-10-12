@@ -2,8 +2,8 @@ using System;
 
 namespace ConditioningControlPanel.Services.Leash;
 
-/// <summary>Where leash time meets Circe's tab. Tests hand in a fake; the app's one is
-/// <see cref="ChasterLeashTab"/>.</summary>
+/// <summary>Where leash time meets Circe's tab. Tests hand in a fake; the WPF head's one is
+/// ChasterLeashTab (ConditioningControlPanel/Services/Leash).</summary>
 public interface ILeashTab
 {
     /// <summary>Book a Chaster punishment (+seconds on row <c>leash</c>). Returns what was applied.</summary>

@@ -29,10 +29,6 @@ public sealed class LeashApi : ILeashApi
 
     private static readonly HttpClient SharedHttp = new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
 
-    /// <summary>The head's account door and proxy (WPF BackRoomApi.AppIdentity / BaseUrl). Unseeded: no call.</summary>
-    public static Func<(string UnifiedId, string Token)?>? DefaultIdentity { get; set; }
-    public static string? DefaultBaseUrl { get; set; }
-
     private readonly HttpClient _http;
     private readonly Func<(string UnifiedId, string Token)?> _identity;
     private readonly string _baseUrl;
@@ -40,8 +36,8 @@ public sealed class LeashApi : ILeashApi
     public LeashApi(HttpClient? http = null, Func<(string UnifiedId, string Token)?>? identity = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
-        _identity = identity ?? DefaultIdentity ?? (() => null);
-        _baseUrl = baseUrl ?? DefaultBaseUrl ?? "";
+        _identity = identity ?? (() => null);
+        _baseUrl = baseUrl ?? "";
     }
 
     public async Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default)

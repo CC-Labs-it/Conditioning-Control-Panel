@@ -30,8 +30,8 @@ public static class LeashCutSafety
     public const string StepSettings = "settings";
     public const string StepTab = "tab";
 
-    /// <summary>The live app's targets, seeded by each head at startup (WPF LeashCutSafetyApp.AppTargets,
-    /// Avalonia LeashHead.Targets). Null = nothing seeded: <see cref="Apply()"/> runs no step.</summary>
+    /// <summary>The live app's targets, seeded by each head at startup (WPF LeashCutSafetyApp.AppTargets;
+    /// the Avalonia head does not seed it yet). Null = nothing seeded: <see cref="Apply()"/> runs no step.</summary>
     public static ITargets? LiveTargets { get; set; }
 
     /// <summary>Runs an action synchronously on the head's UI thread (WPF DispatcherHelper.RunOnUISync).</summary>
