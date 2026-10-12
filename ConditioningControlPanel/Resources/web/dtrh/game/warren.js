@@ -799,8 +799,8 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
 
   const STATION_WINDOWS = {
     toybox: [
-      { id: 'hands',  side: 'left',  title: 'POCKETS', sub: 'grab toys in the fall, fire from the dock', render: renderHandsWin },
-      { id: 'toys',   side: 'left',  title: 'TOYS', sub: 'you press them mid-descent', reveal: 'toybox_toys',
+      { id: 'hands',  side: 'left',  title: 'POCKETS', sub: 'grab toys in the fall, they wake on their own', render: renderHandsWin },
+      { id: 'toys',   side: 'left',  title: 'TOYS', sub: 'they wake on their own mid-descent', reveal: 'toybox_toys',
         gate: (v) => catHasDiscovery(v, 'skill'), render: shelfWin('skill') },
       { id: 'accs',   side: 'right', title: 'ACCESSORIES', sub: 'they shape the whole fall', reveal: 'toybox_accessories',
         gate: (v) => catHasDiscovery(v, 'accessory'), render: shelfWin('accessory') },
@@ -1136,8 +1136,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
       el('wr-row-desc', det, b.desc);
       if (b.flavor) el('wr-row-flavor', det, b.flavor);
       if (b.activeUse) {
-        const useHint = b.cooldownSec > 0 ? `${b.cooldownSec}s cooldown` : 'limited uses';
-        el('wr-row-active', det, `CONSUMABLE · grab it in the fall, fire from the dock · ${useHint}`);
+        el('wr-row-active', det, 'TOY · grab it in the fall, it wakes on its own');
       }
       if (b.capstone) el('wr-row-capstone' + (maxed ? ' is-maxed' : ''), det, 'max: ' + b.capstone);
       if (b.flavor || b.activeUse || b.capstone || b.desc.length > 100) wireExpand(row, 'boon:' + b.id);
