@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// PORTED from ConditioningControlPanel/Controls/AmbientFxCanvas.cs.
     ///
     /// <para>The one reusable in-window FX surface: a hit-test-invisible canvas running a
-    /// self-stopping ~30fps <see cref="DispatcherTimer"/>, composed from the layer vocabulary in
+    /// self-stopping ~30fps clock on the window's shared beat (<see cref="Fx.FrameClock"/>), composed from the layer vocabulary in
     /// <see cref="AmbientFxLayers"/>. Deliberately NOT the fullscreen compositor - that is
     /// per-monitor topmost overlay windows, and keeping its shared tick alive for ambient loops
     /// would undo the idle-parking that fixed #550. This control spawns no window of any kind.</para>
@@ -149,7 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Fade-in after a token's stagger delay expires, so it arrives instead of popping.</summary>
         private const float BankTokenFadeInMs = 90f;
 
-        private readonly DispatcherTimer _timer;
+        private readonly ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock _timer;
         private AmbientFxConfig _config = new();
 
         // ---- cached at (re)start: never read per tick ----
@@ -256,11 +256,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
             // this a canvas would paint over its siblings.
             ClipToBounds = true;
 
-            // Background priority on purpose: ambient FX must yield to input and layout, and the
-            // frame gaps that causes are exactly what the governor reads to degrade itself.
-            _timer = new DispatcherTimer(DispatcherPriority.Background)
+            // lag-fixes-b: on the window's shared beat (FrameClock) rather than its own Background timer, so the
+            // canvas ticks on the same frames as every other 30 fps loop instead of between them (which made the
+            // window compose twice as often). A slow frame still shows as a gap, which is what the governor reads.
+            _timer = new ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock(this)
             {
-                Interval = TimeSpan.FromMilliseconds(33),
+                Interval = TimeSpan.FromMilliseconds(1000.0 / 30),
             };
             _timer.Tick += (_, _) => Tick();
 
