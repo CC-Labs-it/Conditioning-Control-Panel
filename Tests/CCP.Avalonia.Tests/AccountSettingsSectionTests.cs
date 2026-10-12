@@ -124,6 +124,29 @@ public sealed class AccountSettingsSectionTests
         });
     }
 
+    /// <summary>The local sandbox whitelist (AccountSeed.SandboxWhitelistRequested) names itself on the tier card in a
+    /// DEBUG build; Release compiles it out, so the signed-out card stays.</summary>
+    [Fact]
+    public void SandboxWhitelistShowsOnTheTierCardOnlyInDebug()
+    {
+        var old = Environment.GetEnvironmentVariable("CCP_SANDBOX_WHITELIST");
+        Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", "1");   // read by Run's Seed
+        try
+        {
+            Run((shell, section, s, secrets) =>
+            {
+                Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); // before Run's cleanup re-seeds
+                section.OnSectionShown();
+#if DEBUG
+                Assert.Equal("Whitelisted (sandbox)", Text(section, "TxtAccountSectionTier"));
+#else
+                Assert.Equal(Loc.Get("label_login_to_unlock_exclusive_features"), Text(section, "TxtAccountSectionTier"));
+#endif
+            });
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); }
+    }
+
     [Fact]
     public void SignedInPatronSeesHerCardsAndTheProviderButtonSignsHerOut()
     {

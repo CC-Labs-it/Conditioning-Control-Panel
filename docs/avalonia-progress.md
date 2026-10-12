@@ -1908,3 +1908,19 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-guard: +355
 - IconGuardTests: font-codepoint hard 0 (1 temporary entry), emoji/loc/Path ratchets (971/234/26) failing both ways, FluentIcons isolation, allowlist liveness on comment-stripped code, with per-line counts for Path entries and reasoned whole-file art entries; every guard mutation-proven.
 - `--render-all` icon census line (1040 icon-led texts, 158 unnamed icon-only buttons); evidence in ~/ccp-port/evidence/icons/icons-guard/.
+
+## avalonia-port/sandbox-full-access: +158
+- Debug+sandbox runs with CCP_SANDBOX_WHITELIST=1 (set by kc start) get whitelist/premium/Lab; Release compiles it out.
+- Tier card shows "Whitelisted (sandbox)"; tests + Release-IL check + live evidence in evidence/sandbox-full-access.
+
+## avalonia-port/mine-safety: +592
+- P0 safety: panic silences the tube (`tube-speech`), the 6-blink stop gesture behind BlinkStopGate (moved to Core), and the camera pill now stops the camera.
+- The explicit-content acknowledgement uses ShowDialogSafe, so a hidden tube no longer throws. Gate OK, no live check.
+
+## avalonia-port/mine-launcher-account: +236
+- The launcher now checks a leash gate before play (the seam exists but nothing sets it yet). Header stat pills are ported and read the last leaderboard page. The bubble sprite is re-read from the active mod on each start.
+- P2 (account/data + devices) is skipped because it overlaps the login-fix lane; face473bd (pause-key capture) has no overlap and can be its own lane.
+
+## avalonia-port/content-packs-store: +960
+- ContentPackStore + PackManifestModels + PackFolderMover on Core (trunk d6a8343db, 1b387ad80); WPF manifest models moved to Core.
+- PackFolderMover is copy -> verify -> rename -> remove source; failure keeps the source (fail-proven tests).
