@@ -127,14 +127,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 // Layout first. On the first ever open the stack has never been measured and every
                 // section would transform to offset 0. UpdateLayout is synchronous; the deferred
-                // retry covers the case where the view is still hidden (nothing to measure yet).
+                // retry covers the case where the view is still hidden (nothing to measure yet). It runs at
+                // Loaded, after the layout pass: at Normal it ran first and the chip's "Sign in" landed on General.
                 if (!TryScrollTo(target))
                 {
                     Dispatcher.UIThread.Post(() =>
                     {
                         try { TryScrollTo(SectionElementFor(key)); }
                         catch { /* the retry is best-effort; a navigation must not throw */ }
-                    }, DispatcherPriority.Normal);
+                    }, DispatcherPriority.Loaded);
                 }
             }
             catch { /* see above */ }

@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -178,13 +180,15 @@ public sealed class AccountSettingsSectionTests
             section.OnSectionShown();
             var discord = AccountSeed.Discord!;
             discord.IsVerifying = true;            // SignInAsync returns at once: no token, the link fails
+            var oldProbe = LoginDialog.ProxyReachable;
+            LoginDialog.ProxyReachable = _ => Task.FromResult(true); // reachable, so the link runs inline
             try
             {
                 Click(section, "BtnLinkDiscord");
                 Assert.True(section.FindControl<Button>("BtnLinkDiscord")!.IsEnabled);
                 Assert.Equal(Loc.Get("btn_link_discord"), Text(section, "TxtBtnLinkDiscord"));
             }
-            finally { discord.IsVerifying = false; }
+            finally { discord.IsVerifying = false; LoginDialog.ProxyReachable = oldProbe; }
         });
     }
 

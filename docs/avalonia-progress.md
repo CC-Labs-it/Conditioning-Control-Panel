@@ -1924,3 +1924,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/content-packs-store: +960
 - ContentPackStore + PackManifestModels + PackFolderMover on Core (trunk d6a8343db, 1b387ad80); WPF manifest models moved to Core.
 - PackFolderMover is copy -> verify -> rename -> remove source; failure keeps the source (fail-proven tests).
+
+## avalonia-port/login-fix: +347
+- User report "login does not work". The window was a sandboxed live-check app. An unreachable sign-in server now ends the attempt at once with WPF's "Login failed" message instead of a 5-minute spinner. Closing the dialog cancels the OAuth, so a retry works again.
+- Title-bar "Sign in" chip lands on Settings · Account on the first open. Offline Mode greys the Home Login button.
+- Sandboxed runs show "[SANDBOX] " in every window title and a SANDBOX badge in the shell title bar. A Settings Link waiting on the browser ends when the Account section leaves the tree. LoginRetryTests: 9 tests; the new one is fail-proven, the rest are asserted.

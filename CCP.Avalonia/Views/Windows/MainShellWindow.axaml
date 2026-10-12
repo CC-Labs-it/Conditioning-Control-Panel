@@ -56,6 +56,7 @@
         xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
         xmlns:cmpPages="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:plat="clr-namespace:ConditioningControlPanel.Avalonia.Platform"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow"
         x:CompileBindings="False"
         Title="Conditioning Control Panel"
@@ -280,6 +281,11 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                     <TextBlock Text="💗" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                     <TextBlock x:Name="TxtTitleBarVersion" Text="{loc:Str app_title}" Foreground="{DynamicResource TextLightBrush}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <!-- A test/kc sandbox (CCP_USERDATA_DIR, network refused) is never mistaken for the real app. -->
+                    <Border x:Name="SandboxBadge" IsVisible="{x:Static plat:SandboxMarker.Active}" Background="#FFC400"
+                            CornerRadius="3" Padding="6,1" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="SANDBOX" Foreground="Black" FontSize="11" FontWeight="Bold"/>
+                    </Border>
                 </StackPanel>
 
                 <!-- Title-bar status pills (right-aligned, visible from every tab):
