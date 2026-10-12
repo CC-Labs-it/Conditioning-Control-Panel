@@ -25,7 +25,24 @@ public class LobbyWireSeamTests
     }
 
     [Fact]
-    public async Task Unseeded_wire_sends_nothing_and_reads_empty()
+    public async Task Signed_out_sends_nothing_even_with_a_proxy_url()
+    {
+        var (oldId, oldUrl) = (LobbyWire.DefaultIdentity, LobbyWire.DefaultBaseUrl);
+        try
+        {
+            var h = new Counting();
+            using var http = new HttpClient(h);
+            // identity left at its unseeded default (signed out); only this class mutates it and restores it
+            LobbyWire.DefaultBaseUrl = () => "http://127.0.0.1:9";
+            Assert.Same(PbpLobbyReply.Empty, await new PbpLobbyApi(http).FetchAsync(TestContext.Current.CancellationToken));
+            Assert.Same(OpenTablesReply.Empty, await new GoonOpenTablesApi(http).FetchAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(0, h.Calls);
+        }
+        finally { (LobbyWire.DefaultIdentity, LobbyWire.DefaultBaseUrl) = (oldId, oldUrl); }
+    }
+
+    [Fact]
+    public async Task No_proxy_url_sends_nothing_then_seeded_url_is_used()
     {
         var (oldId, oldUrl) = (LobbyWire.DefaultIdentity, LobbyWire.DefaultBaseUrl);
         try
