@@ -14,7 +14,7 @@ public class PinkTintLayer : BaseLayer
     private bool _dirty = true;   // #550: a steady tint is static - only repaint when it changes
     private readonly SKPaint _paint = new();
 
-    public PinkTintLayer(CompositorEngine engine) : base(engine) { }
+    public PinkTintLayer(Action wake) : base(wake) { }
 
     public override int ZIndex => CompositorLayers.PinkTint;
 
@@ -22,9 +22,7 @@ public class PinkTintLayer : BaseLayer
     // itself falls back to DualMonitorEnabled when set to -1. The compositor hosts every screen,
     // so a non-targeted monitor just records an empty (transparent) frame for this layer.
     public override bool ShouldRenderOnScreen(System.Drawing.Rectangle screenBoundsPx)
-        => App.ShouldRenderTargetOnScreen(
-               App.Settings?.Current?.PinkFilterTargetMonitor ?? App.MonitorTargetFollowGlobal,
-               screenBoundsPx);
+        => ShouldRenderTargetOnScreen(CoreSettings.Current.PinkFilterTargetMonitor, screenBoundsPx);
 
     public override bool Dirty => _dirty;
     public override void ClearDirty() => _dirty = false;
