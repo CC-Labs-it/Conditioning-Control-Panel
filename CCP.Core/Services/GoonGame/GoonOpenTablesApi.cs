@@ -4,9 +4,10 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.BackRoom;
+using ConditioningControlPanel.Services.Lobby;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.GoonGame;
 
@@ -53,7 +54,7 @@ public static class GoonJoinCode
 
 /// <summary>
 /// THE OPEN TABLES WIRE. One op, <c>POST /v2/goon/open</c> with <c>{ unified_id }</c> and the
-/// account's <c>X-Auth-Token</c> (the same pair <see cref="BackRoomApi.AppIdentity"/> stamps and
+/// account's <c>X-Auth-Token</c> (the same pair <see cref="LobbyWire.DefaultIdentity"/> stamps and
 /// the goon page's own /v2/goon/* calls carry). Never throws. A 404 (the route is not deployed
 /// yet) and every other fault read as <see cref="OpenTablesReply.Empty"/>, so no caller draws an
 /// error for a server that simply has not grown the feature.
@@ -75,14 +76,14 @@ public sealed class GoonOpenTablesApi
     public GoonOpenTablesApi(HttpClient? http = null, Func<(string UnifiedId, string Token)?>? identity = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
-        _identity = identity ?? BackRoomApi.AppIdentity;
-        _baseUrl = baseUrl ?? BackRoomApi.BaseUrl;
+        _identity = identity ?? LobbyWire.DefaultIdentity;
+        _baseUrl = baseUrl ?? LobbyWire.DefaultBaseUrl() ?? "";
     }
 
     public async Task<OpenTablesReply> FetchAsync(CancellationToken ct = default)
     {
         var id = _identity();
-        if (id == null) return OpenTablesReply.Empty;
+        if (id == null || _baseUrl.Length == 0) return OpenTablesReply.Empty;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
         budget.CancelAfter(Timeout);
         try
@@ -100,7 +101,7 @@ public sealed class GoonOpenTablesApi
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("GoonOpenTables: fetch failed: {E}", ex.Message);
+            Log.Debug("GoonOpenTables: fetch failed: {E}", ex.Message);
             return OpenTablesReply.Empty;
         }
     }
@@ -204,7 +205,7 @@ public static class GoonOpenTables
         catch { reply = OpenTablesReply.Empty; }
         lock (Gate) { _inflight = null; }
         Latest = reply;
-        try { Changed?.Invoke(reply); } catch (Exception ex) { App.Logger?.Debug("GoonOpenTables.Changed: {E}", ex.Message); }
+        try { Changed?.Invoke(reply); } catch (Exception ex) { Log.Debug("GoonOpenTables.Changed: {E}", ex.Message); }
         return reply;
     }
 

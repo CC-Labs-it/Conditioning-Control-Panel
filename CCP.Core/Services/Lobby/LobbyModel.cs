@@ -7,6 +7,21 @@ using ConditioningControlPanel.Services.GoonGame;
 
 namespace ConditioningControlPanel.Services.Lobby;
 
+/// <summary>When the next poll runs. Pure: a good answer polls at <see cref="Base"/>, a failed
+/// one doubles the wait up to <see cref="Max"/>.</summary>
+public static class LobbyPollPlan
+{
+    public static readonly TimeSpan Base = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan Max = TimeSpan.FromSeconds(60);
+
+    public static TimeSpan Next(TimeSpan current, bool ok)
+    {
+        if (ok) return Base;
+        var doubled = TimeSpan.FromTicks(Math.Max(Base.Ticks, current.Ticks) * 2);
+        return doubled > Max ? Max : doubled;
+    }
+}
+
 /// <summary>The games the Lobby lists. One row shape for all three.</summary>
 public enum LobbyGame { Chess, Goon, Remote }
 
@@ -61,7 +76,7 @@ public sealed record PbpLobbyReply(IReadOnlyList<PbpOpenSeat> Open, IReadOnlyLis
     public static readonly PbpLobbyReply Empty = new(Array.Empty<PbpOpenSeat>(), Array.Empty<PbpPlayingGame>(), false);
 }
 
-/// <summary>A Remote directory entry as the Lobby reads it (a copy of <see cref="DirectoryEntry"/>
+/// <summary>A Remote directory entry as the Lobby reads it (a copy of <c>DirectoryEntry</c>
 /// taken on the UI thread, so the merge never touches a live ObservableCollection).</summary>
 public sealed record RemoteSeat(string UnifiedId, string Name, int Level, string Tier, IReadOnlyList<string> Tags, bool Claimed);
 

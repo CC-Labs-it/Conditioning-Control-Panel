@@ -3,11 +3,19 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Lobby;
+
+/// <summary>The account door and proxy the open-table wires use (WPF: BackRoomApi.AppIdentity /
+/// BaseUrl, seeded at App startup). Unseeded: signed out and no url, so nothing is sent.</summary>
+public static class LobbyWire
+{
+    public static Func<(string UnifiedId, string Token)?> DefaultIdentity { get; set; } = () => null;
+    public static Func<string?> DefaultBaseUrl { get; set; } = () => null;
+}
 
 /// <summary>
 /// The chess open tables, read the way the chess page's <c>net/lobbyServer.js</c> browses them:
@@ -30,14 +38,14 @@ public sealed class PbpLobbyApi
     public PbpLobbyApi(HttpClient? http = null, Func<(string UnifiedId, string Token)?>? identity = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
-        _identity = identity ?? BackRoomApi.AppIdentity;
-        _baseUrl = baseUrl ?? BackRoomApi.BaseUrl;
+        _identity = identity ?? LobbyWire.DefaultIdentity;
+        _baseUrl = baseUrl ?? LobbyWire.DefaultBaseUrl() ?? "";
     }
 
     public async Task<PbpLobbyReply> FetchAsync(CancellationToken ct = default)
     {
         var id = _identity();
-        if (id == null) return PbpLobbyReply.Empty;
+        if (id == null || _baseUrl.Length == 0) return PbpLobbyReply.Empty;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
         budget.CancelAfter(Timeout);
         try
@@ -52,7 +60,7 @@ public sealed class PbpLobbyApi
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("PbpLobby: fetch failed: {E}", ex.Message);
+            Log.Debug("PbpLobby: fetch failed: {E}", ex.Message);
             return PbpLobbyReply.Empty;
         }
     }
