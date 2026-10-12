@@ -19,8 +19,9 @@ namespace CCP.Avalonia.Tests;
 /// <summary>The Chaster idle-day row reads the day log, as WPF ChasterServiceApp.MinutesFromDayLog
 /// (ChasterServiceApp.cs:40,49). End to end: the engine runs N minutes on a stepped clock, the
 /// conditioning-time tracker grows TotalConditioningMinutes, the day log credits today, and the
-/// day-end judge (ChasterService.JudgeEndedDay -> TabDayEnd.IdleCharge) lets today off and charges a
-/// day without conditioning (docs/avalonia-decisions.md).</summary>
+/// head's MinutesOn fed to TabDayEnd.IdleCharge (the verdict ChasterService.JudgeEndedDay books) lets
+/// today off and charges a day without conditioning (docs/avalonia-decisions.md). JudgeEndedDay's
+/// linked / priced gates and BookSeconds are not driven here (no fake linked lock).</summary>
 public sealed class ChasterMinutesTests
 {
     private static readonly PropertyInfo DayLog = typeof(AvApp).GetProperty("FeatureDayLog", BindingFlags.Static | BindingFlags.NonPublic)!;
@@ -50,13 +51,16 @@ public sealed class ChasterMinutesTests
             var dir = Path.Combine(Path.GetTempPath(), "ccp-chaster-minutes-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             var progress = new AchievementProgress();
-            var log = new FeatureDayLogService(() => progress, Path.Combine(dir, "feature_day_log.json"));   // baseline: 100
-            var chaster = ChasterHead.Create("sandbox", null);
             var clock = new SteppedClock();
-            var shell = new MainShellWindow();
-            shell.Show();
+            FeatureDayLogService? log = null;
+            ChasterService? chaster = null;
+            MainShellWindow? shell = null;
             try
             {
+                log = new FeatureDayLogService(() => progress, Path.Combine(dir, "feature_day_log.json"));   // baseline: 100
+                chaster = ChasterHead.Create("sandbox", null);
+                shell = new MainShellWindow();
+                shell.Show();
                 DayLog.SetValue(null, log);
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 shell.ConditioningTime = new ConditioningTimeTracker(clock);
@@ -81,10 +85,10 @@ public sealed class ChasterMinutesTests
             {
                 CoreEngine.StoppedHook = null;
                 CoreEngine.Stop();
-                shell.Close();
+                shell?.Close();
                 DayLog.SetValue(null, savedLog);
-                chaster.Dispose();
-                log.Dispose();
+                chaster?.Dispose();
+                log?.Dispose();
                 try { Directory.Delete(dir, true); } catch (IOException) { }
                 (s.TotalConditioningMinutes, s.PanicKeyEnabled, s.FlashEnabled, s.OfflineMode) = saved;
                 CoreSettings.ServiceProvider = oldSettings;
