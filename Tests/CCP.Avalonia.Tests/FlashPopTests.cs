@@ -6,6 +6,9 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Services.Haptics.Core;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -88,6 +91,81 @@ public sealed class FlashPopTests
         w.ExitFrame();
         Assert.True(closed);
         Assert.Empty(FlashOverlay.Exiting);
+    });
+
+    [Fact]
+    public Task A_pop_buzzes_the_flash_click_haptic() => OnUi((s, _) =>
+    {
+        var hs = new HapticSettings { Enabled = true, FlashClickEnabled = true };
+        hs.EnsureV2Migrated();
+        hs.V2.Provider("lovense").Enabled = false;
+        hs.V2.Provider("mock").Enabled = true;
+        hs.V2.Rule(HapticEventKind.FlashClick).Enabled = true;
+        var haptics = new HapticService(hs);
+        var posted = new System.Collections.Generic.List<string>();
+        haptics.HapticTriggered += (_, label) => posted.Add(label);
+        var old = CoreHaptics.Service;
+        try
+        {
+            CoreHaptics.Service = haptics;
+            s.FlashExitStyle = FlashExitStyle.None;
+            Shown(clickable: true).MouseDown(new Point(200, 150), MouseButton.Left);
+            Assert.Contains(posted, p => p.StartsWith("Flash Click", StringComparison.Ordinal));
+        }
+        finally
+        {
+            CoreHaptics.Service = old;
+            haptics.Dispose();
+        }
+    });
+
+    [Fact]
+    public Task A_leaving_flash_grows_its_window_so_the_exit_is_not_clipped_and_the_picture_stays_put() => OnUi((s, _) =>
+    {
+        s.FlashExitStyle = FlashExitStyle.Spiral;
+        s.MotionLevel = MotionLevel.Full;
+        var w = Shown(clickable: true);
+        w.Position = new PixelPoint(500, 400);
+        w.UpdateLayout();
+        var picture = w.GetVisualDescendants().OfType<Image>().Single();
+        var before = picture.TranslatePoint(new Point(0, 0), w)!.Value + new Point(w.Position.X, w.Position.Y);
+        var (size, ww, wh) = (picture.Bounds.Size, w.Bounds.Width, w.Bounds.Height);
+        Assert.True(size.Width > 0 && size.Height > 0);
+
+        w.MouseDown(new Point(200, 150), MouseButton.Left);
+        w.UpdateLayout();
+        var side = Math.Max(size.Width, size.Height) / 2;   // half the picture's longer side round, 1.1x its height below
+        Assert.Equal((ww + 2 * side, wh + 2 * side + size.Height * 1.1), (w.Width, w.Height));
+        Assert.Equal(size, picture.Bounds.Size);
+        var after = picture.TranslatePoint(new Point(0, 0), w)!.Value + new Point(w.Position.X, w.Position.Y);
+        Assert.Equal(before, after);
+    });
+
+    [Fact]
+    public Task Startup_seeding_keeps_remote_and_voice_flashes_point_fired_and_skips_a_full_ambient_tick() => OnUi((s, _) =>
+    {
+        var (show, ambient, busy, fire) = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire);
+        var (click, stay) = (s.FlashClickable, s.FlashStayUntilPopped);
+        var fired = new System.Collections.Generic.List<bool>();
+        var host = new Window();
+        try
+        {
+            FlashOverlay.Fire = (_, isAmbient) => fired.Add(isAmbient);
+            FlashOverlay.SeedCore(() => host, () => { });
+            CoreFlash.ShowProvider!();          // remote trigger_flash, voice flash_once, autonomy
+            CoreFlash.AmbientShowProvider!();   // the scheduler tick
+            Assert.Equal(new[] { false, true }, fired);
+
+            (s.FlashClickable, s.FlashStayUntilPopped) = (true, true);
+            Assert.False(CoreFlash.IsBusyProvider!());
+            for (var i = 0; i < FlashStayRule.MaxOnScreen; i++) Shown(clickable: true);
+            Assert.True(CoreFlash.IsBusyProvider!());
+        }
+        finally
+        {
+            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire) = (show, ambient, busy, fire);
+            (s.FlashClickable, s.FlashStayUntilPopped) = (click, stay);
+        }
     });
 
     [Fact]

@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Exit = exit;
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
+            GrowForExit();
             _exitScale = new ScaleTransform();
             _exitRotate = new RotateTransform();
             _exitShift = new TranslateTransform();
@@ -63,6 +64,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _exitTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => ExitFrame());
             _exitTimer.Start();
             Closed += (_, _) => { _exitTimer?.Stop(); _exitTimer = null; };
+        }
+
+        /// <summary>The window is exactly the picture, so Pop's swell, Spiral's corners and Melt's drop
+        /// would clip at its edge (WPF draws exits on a full-screen layer). Grow the window around the
+        /// picture, which stays the same size at the same screen spot: half its longer side on every
+        /// edge, plus 1.1x its height below for the melt.</summary>
+        private void GrowForExit()
+        {
+            var pic = _image.Bounds;
+            double w = Bounds.Width, h = Bounds.Height;
+            if (pic.Width <= 0 || pic.Height <= 0) return;
+            var k = DesktopScaling > 0 ? DesktopScaling : 1;
+            var side = Math.Max(pic.Width, pic.Height) / 2;
+            _image.Width = pic.Width;
+            _image.Height = pic.Height;
+            _image.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left;
+            _image.VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
+            _image.Margin = new Thickness(side + pic.X, side + pic.Y, 0, 0);
+            var shift = (int)Math.Round(side * k);
+            Position = new PixelPoint(Position.X - shift, Position.Y - shift);
+            Width = w + 2 * side;
+            Height = h + 2 * side + pic.Height * 1.1;
         }
 
         /// <summary>One exit frame on real elapsed time (P40); closes the window when it is done.</summary>

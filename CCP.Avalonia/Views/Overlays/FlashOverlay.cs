@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length), on a pop
-    /// the hydra multiply, lucky roll and glow (Core FlashFxRules: imported, not wired yet), Shatter,
+    /// the hydra multiply, lucky roll and glow (trunk FlashFxRules, imported with the wiring), Shatter,
     /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), glow, content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -239,7 +239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var dt = Clock.GetElapsedTime(_lastDriftTick, now).TotalSeconds;
             _lastDriftTick = now;
             foreach (var (w, m) in Drifting)
-                if (FlashMotion.Step(m, dt))
+                if (w is not FlashOverlayWindow { Exit: not null } && FlashMotion.Step(m, dt))   // a leaving flash holds still
                 {
                     var p = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
                     w.Position = p;
@@ -258,6 +258,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
+        }
+
+        /// <summary>The burst a Core provider fires (tests swap it).</summary>
+        internal static Action<Visual, bool> Fire = (host, ambient) => TriggerOnce(host, ambient: ambient);
+
+        /// <summary>Seeds CoreFlash at startup. The scheduler tick is ambient; ShowProvider (remote
+        /// trigger_flash, voice, autonomy) is point-fired like WPF TriggerFlashOnce, so it never stays
+        /// until popped (FlashService.cs:1567). A full screen of staying flashes skips the tick.</summary>
+        internal static void SeedCore(Func<Visual?> host, Action noteUsed)
+        {
+            void Show(bool ambient)
+            {
+                if (host() is not { } h) return;
+                Fire(h, ambient);
+                noteUsed();
+            }
+            CoreFlash.IsBusyProvider = () => IsBusy || StayScreenFull(CoreSettings.Current);
+            CoreFlash.ShowProvider = () => Show(ambient: false);
+            CoreFlash.AmbientShowProvider = () => Show(ambient: true);
         }
 
         // ---- Click to pop, stay until popped (WPF FlashService.OnFlashClicked / BuildExit / FlashStayRule) ----
@@ -292,6 +311,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (w.Exit != null || !Active.Any(e => e.Window == w)) return;
             Active.RemoveAll(e => e.Window == w);
+            _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             if (FlashExit.Pick(s.FlashExitStyle, _lastExitStyle, Rng) is not { } style) { w.Close(); return; }
             _lastExitStyle = style;
