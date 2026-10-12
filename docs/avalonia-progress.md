@@ -2014,3 +2014,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/lag-fixes-b: +759
 - Spiral, Quests, Exclusives, Enhancements and Home loops ride the shared 30 fps beat, glows are sibling BoxShadow layers, and FX timers moved onto FrameClock. Idle renders/s: Home 56->37, Play 45->32, Enhancements 59->37, Premium 59->35.
 - Glows under loops are baked once (GlowBake: Spiral digits and waiting line, padlocks) or use sibling BoxShadows, with headless render proofs. Effect ratchets cover code and .axaml. The ~115 comp updates/s are idle 144 Hz ticks (evidence/lag-fixes-b/live-fps.txt).
+
+## avalonia-port/feature-day-log-core: +210
+- FeatureDayLogService + model moved to Core (same feature_day_log.json); seeded/disposed on the Avalonia head; `ConditioningMinutesOn` accessor for the leash day report.
+- Follow-ups: LeashHead.DayInputs minutes (leash-wire), Chaster MinutesOn, Note/sync hooks on Avalonia.

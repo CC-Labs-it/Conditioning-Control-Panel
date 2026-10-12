@@ -4,8 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services;
@@ -23,27 +21,31 @@ public class FeatureDayLogService : IDisposable
 {
     private readonly string _path;
     private readonly object _lock = new();
-    private readonly DispatcherTimer _timer;
+    private readonly Func<AchievementProgress?> _progress;
+    private readonly System.Threading.Timer _timer;
     private bool _dirty;
     private bool _disposed;
 
     public FeatureDayLog Log { get; private set; }
 
-    public FeatureDayLogService()
+    /// <param name="progress">The head's lifetime achievement counters; null while they are not up
+    /// yet. Settings come from <see cref="CoreSettings"/>.</param>
+    /// <param name="path">Test seam; the heads use the default CorePaths.UserData/feature_day_log.json.</param>
+    public FeatureDayLogService(Func<AchievementProgress?> progress, string? path = null)
     {
-        _path = Path.Combine(App.UserDataPath, "feature_day_log.json");
+        _progress = progress;
+        _path = path ?? Path.Combine(CorePaths.UserData, "feature_day_log.json");
         Log = LoadLog();
 
-        try { Tick(); } catch (Exception ex) { App.Logger?.Debug(ex, "[FeatureDayLog] initial tick failed"); }
+        try { Tick(); } catch (Exception ex) { Serilog.Log.Debug(ex, "[FeatureDayLog] initial tick failed"); }
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
-        _timer.Tick += OnTimerTick;
-        _timer.Start();
+        var period = TimeSpan.FromSeconds(60);
+        _timer = new System.Threading.Timer(_ => OnTimerTick(), null, period, period);
     }
 
-    private void OnTimerTick(object? sender, EventArgs e)
+    private void OnTimerTick()
     {
-        if (Application.Current?.Dispatcher == null || Application.Current.Dispatcher.HasShutdownStarted) return;
+        if (_disposed) return;
         try
         {
             Tick();
@@ -51,7 +53,7 @@ public class FeatureDayLogService : IDisposable
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug(ex, "[FeatureDayLog] tick failed");
+            Serilog.Log.Debug(ex, "[FeatureDayLog] tick failed");
         }
     }
 
@@ -60,10 +62,10 @@ public class FeatureDayLogService : IDisposable
         day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Current lifetime values keyed by wire name. Null when the sources are not up yet.</summary>
-    private static Dictionary<string, double>? ReadCounters()
+    private Dictionary<string, double>? ReadCounters()
     {
-        var p = App.Achievements?.Progress;
-        var settings = App.Settings?.Current;
+        var p = _progress();
+        var settings = CoreSettings.Service?.Current;
         if (p == null || settings == null) return null;
         return new Dictionary<string, double>
         {
@@ -162,7 +164,7 @@ public class FeatureDayLogService : IDisposable
             }
             _dirty = true;
         }
-        App.Logger?.Debug("[FeatureDayLog] re-baselined ({Reason})", reason);
+        Serilog.Log.Debug("[FeatureDayLog] re-baselined ({Reason})", reason);
         SaveIfDirtyAsync();
     }
 
@@ -176,7 +178,7 @@ public class FeatureDayLogService : IDisposable
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug(ex, "[FeatureDayLog] flush failed");
+            Serilog.Log.Debug(ex, "[FeatureDayLog] flush failed");
         }
     }
 
@@ -196,6 +198,18 @@ public class FeatureDayLogService : IDisposable
                 .Select(e => e.ToWire())
                 .ToList();
         }
+    }
+
+    /// <summary>
+    /// Conditioning minutes credited to the local day of <paramref name="local"/> (the leash day
+    /// report's minutes, WPF LeashService.AppDayInputs). 0 when that day has no entry.
+    /// </summary>
+    public int ConditioningMinutesOn(DateTime local) => ConditioningMinutesOn(DayKey(local));
+
+    /// <summary>Same, by day key (yyyy-MM-dd). Under the lock: the 60 s tick runs off the UI thread.</summary>
+    public int ConditioningMinutesOn(string dayKey)
+    {
+        lock (_lock) return Log.Days.FirstOrDefault(d => d?.D == dayKey)?.Cm ?? 0;
     }
 
     #region Persistence
@@ -218,7 +232,7 @@ public class FeatureDayLogService : IDisposable
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning(ex, "[FeatureDayLog] feature_day_log.json unreadable, starting a fresh log");
+            Serilog.Log.Warning(ex, "[FeatureDayLog] feature_day_log.json unreadable, starting a fresh log");
         }
         return new FeatureDayLog();
     }
@@ -249,7 +263,7 @@ public class FeatureDayLogService : IDisposable
         _ = Task.Run(() =>
         {
             try { WriteFile(json); }
-            catch (Exception ex) { App.Logger?.Error(ex, "[FeatureDayLog] save failed"); }
+            catch (Exception ex) { Serilog.Log.Error(ex, "[FeatureDayLog] save failed"); }
         });
     }
 
@@ -259,7 +273,7 @@ public class FeatureDayLogService : IDisposable
         var json = SerializeIfDirty();
         if (json == null) return;
         try { WriteFile(json); }
-        catch (Exception ex) { App.Logger?.Error(ex, "[FeatureDayLog] save failed"); }
+        catch (Exception ex) { Serilog.Log.Error(ex, "[FeatureDayLog] save failed"); }
     }
 
     #endregion
@@ -268,7 +282,7 @@ public class FeatureDayLogService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        try { _timer.Stop(); } catch { }
+        try { _timer.Dispose(); } catch { }
         try { Tick(); } catch { }
         SaveNow();
     }
