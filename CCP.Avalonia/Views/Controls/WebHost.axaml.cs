@@ -98,20 +98,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Func<Uri, (string Name, string Value)?>? RequestHeader { get; set; }
 
-        /// <summary>Requests <see cref="RequestHeader"/> stamped (tests, logs; never the value).</summary>
+        /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>
         internal int StampedRequests { get; private set; }
 
         private void StampRequestHeader(WebResourceRequestedEventArgs e)
         {
-            var rule = RequestHeader;
-            if (rule is null) return;
             try
             {
-                var uri = e.Request?.Uri;
-                if (uri is null || rule(uri) is not { } header) return;
-                if (e.Request!.Headers.TrySet(header.Name, header.Value)) StampedRequests++;
+                if (e.Request?.Uri is { } uri) Stamp(uri, e.Request.Headers.TrySet);
             }
             catch (Exception ex) { Log.Debug("WebHost: request header not set: {Error}", ex.Message); }
+        }
+
+        /// <summary>One request through <see cref="RequestHeader"/>; counts only a header the engine took (tests drive it).</summary>
+        internal bool Stamp(Uri uri, Func<string, string, bool> trySet)
+        {
+            if (RequestHeader?.Invoke(uri) is not { } header || !trySet(header.Name, header.Value)) return false;
+            StampedRequests++;
+            return true;
         }
 
         /// <summary>

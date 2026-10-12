@@ -28,14 +28,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
-        private bool _handoffSpent;
-
         /// <summary>WPF AttachAuthHeader: the token rides the handoff request once in this window's life,
-        /// never any other url (WPF filters to Document requests; this engine names no resource kind).</summary>
+        /// never any other url (WPF filters to Document requests; this engine names no resource kind).
+        /// Spent only once the engine took the header, so a refused set leaves the next try signed in.</summary>
         internal (string Name, string Value)? JustDropHeaderFor(Uri uri, string? authToken)
         {
-            if (_handoffSpent || JustDropHandoff.AuthHeaderFor(uri, authToken) is not { } token) return null;
-            _handoffSpent = true;
+            if (Web.StampedRequests > 0 || JustDropHandoff.AuthHeaderFor(uri, authToken) is not { } token) return null;
             return (JustDropHandoff.AuthHeaderName, token);
         }
 

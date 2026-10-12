@@ -35,7 +35,7 @@ public sealed class JustDropWindowTests
             var s = CoreSettings.Current;
             (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown) = (true, true, 1);   // P52/P76
             var ledger = Path.Combine(Path.GetTempPath(), "jd-ledger-" + Guid.NewGuid().ToString("N") + ".json");
-            var (oldLedger, oldXp, oldIn) = (CreditedOrders.FilePathOverride, CoreProgression.AddXPProvider, CoreAccount.IsLoggedInProvider);
+            var (oldLedger, oldXp, oldIn, oldSecret) = (CreditedOrders.FilePathOverride, CoreProgression.AddXPProvider, CoreAccount.IsLoggedInProvider, CoreSecrets.RetrieveProvider);
             CreditedOrders.FilePathOverride = ledger;
             CoreAccount.IsLoggedInProvider = () => false;
             var shell = new MainShellWindow();
@@ -50,7 +50,7 @@ public sealed class JustDropWindowTests
                 GameWindow.CloseAllForPanic();
                 shell.Close();
                 JustDropService.SetServerEnabledForTests(false);
-                (CreditedOrders.FilePathOverride, CoreProgression.AddXPProvider, CoreAccount.IsLoggedInProvider) = (oldLedger, oldXp, oldIn);
+                (CreditedOrders.FilePathOverride, CoreProgression.AddXPProvider, CoreAccount.IsLoggedInProvider, CoreSecrets.RetrieveProvider) = (oldLedger, oldXp, oldIn, oldSecret);
                 CoreSettings.ServiceProvider = null;
                 try { File.Delete(ledger); } catch { }
             }
@@ -97,9 +97,16 @@ public sealed class JustDropWindowTests
         Dispatcher.UIThread.RunJobs();
         var w = Open()!;
         var handoff = new Uri("https://app.cclabs.app/api/auth/desktop-session?unified_id=u1&next=%2Fdashboard%2Fexpress");
-        Assert.Null(w.JustDropHeaderFor(new Uri("https://app.cclabs.app/dashboard/express"), "tok"));
-        Assert.Equal(("X-CCP-Auth-Token", "tok"), w.JustDropHeaderFor(handoff, "tok"));
-        Assert.Null(w.JustDropHeaderFor(handoff, "tok"));  // spent: a reload or a frame never gets it again
+        var s = CoreSettings.Current;
+        CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;   // AuthToken lives in CoreSecrets
+        (s.PlayerLevel, s.JustDropXpDayKey, s.JustDropCreditedToday) = (1, null, 0);   // P02: the 40 below needs both
+        (string, string)? sent = null;
+        bool Take(string n, string v) { sent = (n, v); return true; }
+        Assert.False(w.Web.Stamp(new Uri("https://app.cclabs.app/dashboard/express"), Take));
+        Assert.False(w.Web.Stamp(handoff, (_, _) => false));   // the engine refused it: not spent
+        Assert.True(w.Web.Stamp(handoff, Take));               // the window's own rule, as wired
+        Assert.Equal(("X-CCP-Auth-Token", "tok"), sent);
+        Assert.False(w.Web.Stamp(handoff, Take));              // spent: a reload or a frame never gets it again
 
         double paid = 0;
         int posted = 0;
