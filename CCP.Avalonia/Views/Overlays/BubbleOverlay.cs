@@ -47,6 +47,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
 
+        /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
+        /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
+        /// cache kept the first mod's art for the life of the process).</summary>
+        internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
 
@@ -68,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (screens.Count == 0) return;
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-            Image ??= Helpers.ModArt.TryLoad("bubble.png");
+            LoadBubbleImage();
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];

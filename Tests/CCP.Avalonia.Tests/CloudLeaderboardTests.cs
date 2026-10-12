@@ -160,6 +160,56 @@ public sealed partial class AccountSeedTests
         }
     }
 
+    /// <summary>WPF MainWindow.UiUpdates.cs:570-607: the Hive Mind / Popular Girl header pills read the
+    /// leaderboard's last page (online users, server-rank percentile); before a page they say Loading.</summary>
+    [Fact]
+    public async Task HeaderStatPills_ReadTheLastLeaderboardPage()
+    {
+        var s = CoreSettings.Current;
+        var (oldOffline, oldClient, oldId) = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
+        var oldSkills = s.UnlockedSkills.ToList();
+        var wire = new BoardWire();
+        try
+        {
+            LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
+            CoreAccount.UnifiedUserId = "u7";
+            s.OfflineMode = false;
+            s.UnlockedSkills.Clear();
+            s.UnlockedSkills.AddRange(new[] { "hive_mind", "popular_girl" });
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (global::Avalonia.Application.Current is null)
+                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                LocalizationManager.Instance.SetLanguage("en");
+                var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                try
+                {
+                    shell.Show();
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    var online = shell.Named<TextBlock>("TxtPillOnlineUsers")!;
+                    var pct = shell.Named<TextBlock>("TxtPillRankPercentile")!;
+                    Assert.True(shell.Named<Border>("PillOnlineUsers")!.IsVisible);
+                    Assert.Equal(Loc.Get("label_loading_2"), pct.Text);      // no page yet
+
+                    await shell.Named<LeaderboardTabView>("LeaderboardTab")!.SetLeaderboardMode(false);
+                    Assert.Equal("2", online.Text);
+                    Assert.Equal("Top 1%", pct.Text);                          // ceil(4 / 1234 * 100) = 1
+                }
+                finally { shell.Close(); }
+            });
+        }
+        finally
+        {
+            (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = (oldOffline, oldClient, oldId);
+            s.UnlockedSkills.Clear();
+            s.UnlockedSkills.AddRange(oldSkills);
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+        }
+    }
+
     [Fact]
     public async Task LeaderboardTab_OneFetchInFlight_AndAModeSwitchMidFetchRefetchesTheNewBoard()
     {
