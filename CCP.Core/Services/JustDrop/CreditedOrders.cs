@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.JustDrop
 {
@@ -37,7 +38,11 @@ namespace ConditioningControlPanel.Services.JustDrop
 
         private static List<string>? _codes;
 
-        private static string FilePath => Path.Combine(CorePaths.UserData, "justdrop_credited.json");
+        private static string FilePath => _filePathOverride ?? Path.Combine(CorePaths.UserData, "justdrop_credited.json");
+
+        /// <summary>Test seam: the ledger file (setting it drops the in-memory cache).</summary>
+        internal static string? FilePathOverride { get => _filePathOverride; set { _filePathOverride = value; _codes = null; } }
+        private static string? _filePathOverride;
 
         /// <summary>
         /// Records <paramref name="orderCode"/> as paid and returns whether it was NEW - i.e.
@@ -89,7 +94,7 @@ namespace ConditioningControlPanel.Services.JustDrop
                 // and the honest user who just finished a drop matters more than the dishonest one
                 // who corrupted a file to be paid twice. Starting empty also self-heals: the next
                 // successful write replaces the bad file.
-                App.Logger?.Warning(ex, "JustDrop: credited-orders ledger unreadable; starting empty");
+                Log.Warning(ex, "JustDrop: credited-orders ledger unreadable; starting empty");
             }
             _codes = new List<string>();
             return _codes;
@@ -100,13 +105,13 @@ namespace ConditioningControlPanel.Services.JustDrop
             _codes = codes;
             try
             {
-                Directory.CreateDirectory(CorePaths.UserData);
+                Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
                 File.WriteAllText(FilePath, JsonConvert.SerializeObject(codes));
             }
             catch (Exception ex)
             {
                 // In-memory state stands, so this session still will not double-pay.
-                App.Logger?.Warning(ex, "JustDrop: could not persist the credited-orders ledger");
+                Log.Warning(ex, "JustDrop: could not persist the credited-orders ledger");
             }
         }
     }
