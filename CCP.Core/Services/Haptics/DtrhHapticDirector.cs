@@ -6,7 +6,14 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Haptics.Core;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
+// MOVED from ConditioningControlPanel/Services/Haptics/DtrhHapticDirector.cs (haptics-core-a), so WPF
+// and Avalonia share one copy. The only changes: App.Settings / App.Haptics / App.Logger became
+// CoreSettings / CoreHaptics / Serilog (WPF seeds both seams at startup), the ambient curve became
+// AmbientTarget, and the internal test readers at the bottom. Every table, tier, gap, cap and curve is
+// unchanged. A head with no device (CoreHaptics.Service null, or not connected) makes every entry a
+// quiet no-op.
 namespace ConditioningControlPanel.Services.Haptics
 {
     /// <summary>
@@ -146,7 +153,7 @@ namespace ConditioningControlPanel.Services.Haptics
         private static Accent? _coalesceBest;
         private const int CoalesceWindowMs = 700;
 
-        private static HapticSettings? Settings => App.Settings?.Current?.Haptics;
+        private static HapticSettings? Settings => CoreSettings.Service?.Current?.Haptics;
 
         /// <summary>
         /// THE control for DtRH haptics is the DtrhAccent row of the Haptics tab's routing matrix
@@ -166,7 +173,7 @@ namespace ConditioningControlPanel.Services.Haptics
                 var s = Settings;
                 return _active && !_testMode && s is { Enabled: true }
                        && AccentRule?.Enabled == true
-                       && App.Haptics is { IsConnected: true };
+                       && CoreHaptics.Service is { IsConnected: true };
             }
         }
 
@@ -317,7 +324,7 @@ namespace ConditioningControlPanel.Services.Haptics
 
         private static async Task PlayAccent(Accent accent, string label)
         {
-            var haptics = App.Haptics;
+            var haptics = CoreHaptics.Service;
             if (haptics == null) return;
 
             CancellationTokenSource cts;
@@ -346,7 +353,7 @@ namespace ConditioningControlPanel.Services.Haptics
                 var intensity = Math.Clamp((AccentRule?.Intensity ?? 0.6) * accent.Rel, 0.06, 1.0);
                 // Buttplug's ~1.3s command latency turns short patterns into mush — stretch them.
                 var ms = haptics.IsButtplugProvider ? accent.Ms * 2 : accent.Ms;
-                App.Logger?.Debug("DtrhHaptics: accent {Label} T{Tier} {Pct}% {Ms}ms {Mode}",
+                Log.Debug("DtrhHaptics: accent {Label} T{Tier} {Pct}% {Ms}ms {Mode}",
                     label, accent.Tier, (int)(intensity * 100), ms, accent.Mode);
                 // Tier becomes mixer priority: a tier-3 moment out-ranks (and evicts) tier-1 chatter.
                 await PlayAccentPattern(intensity, ms, accent.Mode, accent.Tier, cts.Token);
@@ -368,7 +375,7 @@ namespace ConditioningControlPanel.Services.Haptics
 
         private static Task PlayAccentPattern(double intensity, int ms, VibrationMode mode, int tier, CancellationToken token)
         {
-            var haptics = App.Haptics;
+            var haptics = CoreHaptics.Service;
             if (haptics == null) return Task.CompletedTask;
             var target = AccentRule?.Target ?? ToyRole.All;
             return haptics.PlayPatternAsync(intensity, ms, mode, tier, target, token);
@@ -441,8 +448,7 @@ namespace ConditioningControlPanel.Services.Haptics
                     var cap = s?.DtrhAmbientIntensity ?? 0;
                     // The toy as a depth gauge: a whisper at the surface, the slider's full
                     // value at the bottom, and the Surfacing melt pushes past it a touch.
-                    target = cap <= 0 ? 0 : cap * (0.30 + 0.70 * _depth) * (1 + 0.5 * _melt);
-                    if (target > 0) target = Math.Clamp(target, 0.06, 1.0);   // clear Lovense's <=0.05 = off cutoff
+                    target = AmbientTarget(cap, _depth, _melt);   // clears Lovense's <=0.05 = off cutoff
 
                     var refreshDue = (DateTime.UtcNow - _lastAmbientSendUtc).TotalSeconds > 20;
                     if (Math.Abs(target - _lastAmbientSent) < 0.02 && !refreshDue) return;
@@ -451,11 +457,11 @@ namespace ConditioningControlPanel.Services.Haptics
                 }
                 // Level-set: the mixer holds this until we change it, so there is no refresh
                 // traffic at all. Zero is just another level, hence no special-case stop.
-                App.Haptics?.SetLayer(HapticLayer.Dtrh, target);
+                CoreHaptics.Service?.SetLayer(HapticLayer.Dtrh, target);
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("DtrhHaptics ambient tick: {E}", ex.Message);
+                Log.Debug("DtrhHaptics ambient tick: {E}", ex.Message);
             }
         }
 
@@ -483,10 +489,28 @@ namespace ConditioningControlPanel.Services.Haptics
         {
             try
             {
-                App.Haptics?.SetLayer(HapticLayer.Dtrh, 0);
+                CoreHaptics.Service?.SetLayer(HapticLayer.Dtrh, 0);
             }
             catch { }
             return Task.CompletedTask;
         }
+
+        // ============================ test readers ============================
+
+        /// <summary>The page feed and lifecycle as the director holds them (tests).</summary>
+        internal static (bool Active, bool RunActive, bool PageRunning, bool WorldFrozen, bool VideoCovering, double Depth, double Melt) Snapshot
+        {
+            get { lock (Gate) return (_active, _runActive, _pageRunning, _worldFrozen, _videoCovering, _depth, _melt); }
+        }
+
+        /// <summary>The ambient floor for a depth and melt under a cap: WPF AmbientTick's curve (tests).</summary>
+        internal static double AmbientTarget(double cap, double depth, double melt)
+        {
+            var target = cap <= 0 ? 0 : cap * (0.30 + 0.70 * depth) * (1 + 0.5 * melt);
+            return target > 0 ? Math.Clamp(target, 0.06, 1.0) : 0;
+        }
+
+        /// <summary>True while a device could be driven right now (tests).</summary>
+        internal static bool IsReady => Ready;
     }
 }
