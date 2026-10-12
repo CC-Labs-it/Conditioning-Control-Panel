@@ -1977,3 +1977,60 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/render-budget-loc: +175
 - Skia GPU cache raised to 256 MB (trunk RenderBudget) plus Win32 presentation env switches; idle Home CPU (Linux only) 0.67 -> 0.30 cores (dotnet-counters, 2x3 samples each side).
 - Trunk loc fix 6be091d12 already in base, no json in diff (0 of 18 keys differ); FrameClock fps counter not imported (no FrameClock in this head).
+
+## avalonia-port/wpf-findings-a11y: +157
+- Buttons whose content is a panel or TextBlock are named by their text, and the name follows content changes; this fixes 55 type-name accessible names. Offline mode greys Home's unified login as WPF does.
+- WPF UIA findings 2 and 4 reproduced on the real startup path with the CI seed: the shell matches WPF, and the `--uia-dump` harness never seeds settings or services.
+
+## avalonia-port/flash-core: +547
+- Core flash rules from trunk U9 (FlashExit/StayRule/Corners/Shatter moved to Core, tests on Linux).
+- Avalonia flashes honour Click: a press pops with haptic and the chosen leave; Stay until popped (10 min, cap 40) only for scheduler flashes, not remote/voice ones.
+
+## avalonia-port/flash-wire: +677
+- Flash: lucky roll + chime, glow card, XP/achievement/quest per flash, hydra on pop, TvOff/Glitch/Pop exit layers (FlashFxRules imported with its caller).
+- Flash XP still not banked (no idle tracker); Shatter, lucky pulse/toast, FlashCorners, voice pool, remote source left.
+
+## avalonia-port/leash-core-move: +289
+- Leash services, rules and LeashHoldToCut moved to CCP.Core/Services/Leash (git mv, trunk shape). WPF keeps thin head files (LeashServiceApp, LeashCutSafetyApp, ChasterLeashTab).
+- 134 leash tests now run on Linux in CCP.Core.Tests. GATE-OK.
+
+## avalonia-port/leash-wire: +372
+- The Core LeashService now runs on the Avalonia friends poll: seams are seeded, it starts after friends and is dropped on exit, and the launcher leash gate reads it, but holds a tile only once a gate card can present it (LeashGateCard unit). Cut target: `RemoteRelay.EndSessionNow`.
+- The +372 is counted against the stack-tip merge 8d147364d (icons-progress), not 2a4a55570. Tests: LeashHeadTests and a RemoteRelay test, all fail-proven. GATE-OK.
+
+## avalonia-port/content-packs-service: +1000
+- Core ContentPackService network half (trunk U8): manifest, Patreon signed-URL install with Range resume, encrypt, rate limit/auth, V2 link, status, local zip; 13 fake-handler tests incl. bad signed URL rejected with user packs kept.
+- Startup seed, previews and pool wiring follow in content-packs-wire.
+
+## avalonia-port/content-packs-wire: +654
+- Content packs seeded at startup; flash, scheduled video and bubble count draw active pack media through Core PackMediaPool (WPF-weighted).
+- Pack previews (installed picks + URL cache, sandbox-safe) in Core ContentPackService; svc-content-packs stays stub (no packs UI).
+- Review fixes: startup sweep of crash-left ccp_temp_* decrypts; video/bubble weigh pack clips left this cycle like WPF.
+
+## avalonia-port/lag-fixes-a: +670
+- Shell ambient loops (FeatureCard/SplitFeatureCard, Chaster chip, status pulses, fuse, Deeper, TierBadge, SpiralGlyph, roadmap, Lockdown) now run on the 30 fps BeatLoop, and a hidden or minimised loop unsubscribes its clock. Tile and tier-badge glows are sibling BoxShadows instead of Effects. Three motions that never ran before (chip swing, Deeper drift, TierBadge sway) now animate.
+- A ratchet blocks new infinite Animations (10 files left for lag-fixes-b). There are 16 recorded fail-proofs. Measured live: Play tab CPU 49 -> 32% of a core. Idle Home still composes at about 55 fps in both builds (cause outside this lane).
+
+## avalonia-port/lag-fixes-b: +759
+- Spiral, Quests, Exclusives, Enhancements and Home loops ride the shared 30 fps beat, glows are sibling BoxShadow layers, and FX timers moved onto FrameClock. Idle renders/s: Home 56->37, Play 45->32, Enhancements 59->37, Premium 59->35.
+- Glows under loops are baked once (GlowBake: Spiral digits and waiting line, padlocks) or use sibling BoxShadows, with headless render proofs. Effect ratchets cover code and .axaml. The ~115 comp updates/s are idle 144 Hz ticks (evidence/lag-fixes-b/live-fps.txt).
+
+## avalonia-port/feature-day-log-core: +210
+- FeatureDayLogService + model moved to Core (same feature_day_log.json); seeded/disposed on the Avalonia head; `ConditioningMinutesOn` accessor for the leash day report.
+- Follow-ups: LeashHead.DayInputs minutes (leash-wire), Chaster MinutesOn, Note/sync hooks on Avalonia.
+
+## avalonia-port/first-show: +380
+- FirstShow rules (deck, presets, media loader, layout, script) are now in Core and WPF reads them; Core tests moved or ported and fail-proven.
+- The Avalonia stage, EMI presentation, panic and trigger are left to first-show-b; the Guide to first-show-c.
+
+## avalonia-port/lang-italian: +8864 (39 non-data)
+- Italian selectable in both heads: verbatim trunk it.json + one AvailableLanguages entry; missing keys fall back to English.
+- Language test: every file parses strictly and is offered; WPF count asserts 9→10.
+
+## avalonia-port/lang-italian: +8864 (39 non-data)
+- Italian selectable in both heads: verbatim trunk it.json + one AvailableLanguages entry; missing keys fall back to English.
+- Language test: every file parses strictly and is offered; WPF count asserts 9→10.
+
+## avalonia-port/render-all-segv: +188
+- Root-caused the intermittent `--render-all` exit 139 on CI. Avalonia's `SkiaTypeface.TryGetStream` reads an SKStreamAsset it doesn't keep alive, so a GC during the copy finalizes it and the read hits freed memory (use-after-free). It was hit through synthetic bold of the 10.8 MB system emoji font.
+- The system emoji font now loads through `SystemEmojiFontCollection`, which refuses synthetic bold/italic. CI keeps a crash dump and report as an artifact when render-all fails.

@@ -66,7 +66,8 @@ public sealed class ExclusivesVaultMotionTests
             var items = view.FindControl<ItemsControl>("ExclusivesShelf")!.Items;
             Assert.Equal(new[] { "basic", "prime", "free" }, items.OfType<ExclusiveGroupRow>().Select(g => g.Group.ToString().ToLowerInvariant()));
             var mark = Parts(view, "VeilLock").First(l => l.IsEffectivelyVisible);
-            Assert.IsType<DropShadowEffect>(mark.Effect);
+            Assert.Null(mark.Effect);   // the glow is a sibling BoxShadow layer (P82)
+            Assert.True(Lit(mark));
             var tiered = Parts(view, "ExCard").Cast<Border>().First(b => ((ExclusiveCardRow)b.DataContext!).Tier > 0);
             Assert.True(TierFxBorder.GetTier(tiered) > 0);
             Assert.Equal(new Thickness(3), tiered.BorderThickness);
@@ -74,9 +75,9 @@ public sealed class ExclusivesVaultMotionTests
             Assert.True(view.SheenCount > 0);
             // Only padlocks under a shown veil glow (WPF ApplyVeilLockBreath(lock, veil visible)).
             var locks = Parts(view, "VeilLock");
-            Assert.Contains(locks, l => l.IsEffectivelyVisible && l.Effect is DropShadowEffect);
+            Assert.Contains(locks, l => l.IsEffectivelyVisible && Lit(l));
             Assert.Contains(locks, l => !l.IsEffectivelyVisible);
-            Assert.All(locks.Where(l => !l.IsEffectivelyVisible), l => Assert.Null(l.Effect));
+            Assert.All(locks.Where(l => !l.IsEffectivelyVisible), l => Assert.False(Lit(l)));
 
             // FREE TODAY pulse (fade + swell). No roster entry reaches the untiered gold pill today (fyp,
             // the spotlight, re-stamps its badge instead), so the hero pill is shown by hand.
@@ -90,7 +91,7 @@ public sealed class ExclusivesVaultMotionTests
             shell.ShowTab("settings"); Settle();
             Assert.False(view.MotionRunning);
             Assert.Equal(0, view.SheenCount);
-            Assert.Null(mark.Effect);
+            Assert.False(Lit(mark));
             Assert.Equal(1, pill.Opacity);
             Assert.Equal(1, ((ScaleTransform)pill.RenderTransform!).ScaleX);
 
@@ -135,6 +136,8 @@ public sealed class ExclusivesVaultMotionTests
         Assert.Equal(0.35, ExclusivesTabView.Breath(6.8, 3.4, 0.35, 0.9), 6);
         Assert.Equal(0.35 + 0.55 * (1 - Math.Cos(Math.PI / 4)) / 2, ExclusivesTabView.Breath(0.85, 3.4, 0.35, 0.9), 6);   // eased, not linear
     }
+
+    private static bool Lit(Control padlock) => ExclusivesTabView.LockGlow(padlock)!.IsVisible;
 
     private static Control[] Parts(Control root, string name) =>
         root.GetVisualDescendants().OfType<Control>().Where(c => c.Name == name).ToArray();
