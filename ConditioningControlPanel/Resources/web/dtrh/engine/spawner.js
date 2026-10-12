@@ -455,9 +455,12 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   // Moving pictures (hostMedia.drawLoop): silent looping clips worn by a PICTURE card.
   // Each one holds a decoder while it is on screen, so they are capped; past the cap the
   // tube falls back to stills.
-  const MAX_LIVE_LOOPS = Q.tier === 'mobile' ? 2 : 6;
+  const MAX_LIVE_LOOPS = Q.tier === 'mobile' ? 3 : 10;
   const LOOP_SHARE = 0.9;      // of picture cards, when a moving one is to be had
   let liveLoops = 0;
+  // With moving pictures at hand the tube shows NO still picture (owner, 2026-10-12): a card
+  // slot that cannot have a moving one right now stays empty until it can.
+  const movingOnly = () => !!(media.loopCount && media.loopCount() > 0);
   let liveVeils = 0;
   let paused = false;         // ESC pause (scene stops calling update too)
   let spotlight = null;       // the promoted video card, if any
@@ -851,8 +854,9 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     const vidsAhead = ready.filter((r) => r.kind === 'video').length;
     const wantImage = vidsAhead >= PREFETCH_VIDEO_MAX || liveVideos >= MAX_LIVE_VIDEOS || !videoOk();
     const loopsAhead = ready.filter((r) => r.kind === 'loop').length;
-    const loopEntry = (media.drawLoop && loopsAhead < 2 && liveLoops + loopsAhead < MAX_LIVE_LOOPS
-      && Math.random() < LOOP_SHARE) ? media.drawLoop() : null;
+    const moving = movingOnly();
+    const loopEntry = (media.drawLoop && loopsAhead < 3 && liveLoops + loopsAhead < MAX_LIVE_LOOPS
+      && (moving || Math.random() < LOOP_SHARE)) ? media.drawLoop() : null;
     if (loopEntry) {
       DIAG.draws += 1;
       const got = await loopEntry.acquire();
@@ -862,7 +866,9 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
         return loopItem;
       }
     }
-    const entry = (wantImage && media.drawKind('image')) || media.draw();
+    const entry = moving
+      ? (wantImage ? null : media.drawKind('video'))
+      : ((wantImage && media.drawKind('image')) || media.draw());
     if (!entry) return null;
     DIAG.draws += 1;
     const acquired = await entry.acquire();
@@ -1389,6 +1395,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     }
     if (!entry) return null;
     if (entry.kind === 'video' && liveVideos >= MAX_LIVE_VIDEOS) return null;
+    if (entry.kind !== 'video' && movingOnly()) return null;   // no still while a moving one is coming
 
     const acquired = await entry.acquire();
     if (!acquired) return null; // file vanished: skip this slot
@@ -2061,14 +2068,17 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     // AND prefetchVideo can time out to null, which left walled-off doors bare.
     // Either way, retry a couple of draws so one bad file doesn't strip the card.
     for (let attempt = 0; attempt < 3; attempt++) {
-      const entry = prefer === 'still'
+      // a wall-dress card wears a moving picture when there is one (never a still then)
+      const loopEntry = (prefer === 'still' && media.drawLoop) ? media.drawLoop() : null;
+      const entry = loopEntry || (prefer === 'still'
         ? ((media.drawKind && media.drawKind('image')) || media.draw())
-        : ((media.drawKind && media.drawKind('video')) || media.draw());
+        : ((media.drawKind && media.drawKind('video')) || media.draw()));
       if (!entry) return null;
       const acquired = await entry.acquire();
       if (!acquired) continue;
       let item = null;
-      if (entry.kind === 'video') item = await prefetchVideo(acquired);
+      if (loopEntry) { item = await prefetchVideo(acquired); if (item) item.kind = 'loop'; }
+      else if (entry.kind === 'video') item = await prefetchVideo(acquired);
       else if (/\.gif$/i.test(entry.name || '')) item = await prefetchGifAny(acquired);
       else item = await prefetchImage(acquired);
       if (item) return item;
@@ -2092,6 +2102,8 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
       let built = null;
       if (item.kind === 'video') {
         built = buildVideoCard(camDepthNow, null, { withAudio: false, release: item.release, videoEl: item.videoEl, vtex: item.vtex });
+      } else if (item.kind === 'loop') {
+        built = buildLoopCard(camDepthNow, item);
       } else if (item.kind === 'gif') {
         built = buildGifCard(camDepthNow, item);
       } else {
@@ -2127,6 +2139,10 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
       if (rec.vtex && rec.videoEl && !rec.videoEl.paused) {
         rec.texAcc += dt;
         if (rec.texAcc >= VIDEO_TEX_INTERVAL) { rec.texAcc = 0; rec.vtex.needsUpdate = true; }
+      }
+      if (rec.loopTex && !rec.loopEl.paused) {
+        rec.texAcc += dt;
+        if (rec.texAcc >= VIDEO_TEX_INTERVAL * 1.5) { rec.texAcc = 0; rec.loopTex.needsUpdate = true; }
       }
       if (rec.gifAnim && gifDue(rec.gifAnim)) advanceGif(rec);
       if (rec.kb) {

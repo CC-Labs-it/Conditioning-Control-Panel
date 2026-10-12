@@ -98,8 +98,9 @@ const beatOf = (ph) => Math.exp(-ph * 9) + 0.6 * Math.exp(-Math.pow((ph - 0.22) 
 // Every effect draws in a 256 box over the still sprite. t = seconds, m = 1 full / under 1 reduced.
 const FX = {
   flash(ctx, img, t, m) {
+    // no redrawn middle here: the sprite is all light, and the dark disc under a moved
+    // copy read as a black hole in the bubble (owner, 2026-10-12). Rays and glints only.
     const p = Math.sin(t * 1.5);
-    inner(ctx, img, 62, spun(img, Math.sin(t * 0.5) * 0.35, 1 + 0.12 * p * m));
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(C, C); ctx.rotate(-t * 0.22);
     for (let k = 0; k < 4; k++) {
       const L = 74 + 14 * Math.sin(t * 1.1 + k * 1.7);
