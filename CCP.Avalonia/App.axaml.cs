@@ -656,9 +656,8 @@ namespace ConditioningControlPanel.Avalonia
                 // layer, not a seeding decision here.
 
                 // Guided tours (WPF App.Tutorial): the head's TutorialService behind the CoreTutorial
-                // seam every page already calls, and a panic surface that ends a tour at once.
+                // seam every page already calls; PanicSurfaces "tour" ends a tour at once.
                 Tours.TutorialHead.Seed();
-                Tours.TutorialHead.HookPanic();
 
                 await step(0.75, "Loading achievements...");
                 // Achievements: the Core engine over the same achievements.json WPF uses, seeded the

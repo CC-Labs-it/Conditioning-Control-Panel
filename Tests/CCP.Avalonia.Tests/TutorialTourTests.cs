@@ -209,7 +209,6 @@ public sealed class TutorialTourTests : IDisposable
             Dispatcher.UIThread.RunJobs();
             TutorialHead.Seed();
             TutorialHead.ResetForTests();
-            TutorialHead.HookPanic();
             TutorialHeadHooks.ShellProvider = () => shell;
 
             // Start: the seam every page calls puts the overlay on the shell.
@@ -244,10 +243,11 @@ public sealed class TutorialTourTests : IDisposable
             // One tour at a time (WPF: StartTutorial returns while an overlay is up).
             CoreTutorial.Start("Settings");
             Assert.Same(overlay, ShellOverlay());
+            Assert.Equal("GettingStarted", CoreTutorial.CurrentTourName);   // a refused start renames nothing
 
             // Panic: the registered "tour" surface ends it by the abandon route and the overlay closes.
-            Assert.Contains(PanicSurfaces.All, s => s.Id == TutorialHead.PanicSurfaceId);
-            PanicSurfaces.All.First(s => s.Id == TutorialHead.PanicSurfaceId).Stop(shell);
+            Assert.Contains(PanicSurfaces.All, s => s.Id == "tour");
+            PanicSurfaces.All.First(s => s.Id == "tour").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.False(CoreTutorial.IsActive);
             Assert.Null(ShellOverlay());

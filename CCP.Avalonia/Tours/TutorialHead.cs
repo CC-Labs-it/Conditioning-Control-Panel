@@ -111,19 +111,6 @@ namespace ConditioningControlPanel.Avalonia.Tours
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
         }
 
-        internal const string PanicSurfaceId = "tour";
-
-        /// <summary>Puts the tour stop in the panic registry at runtime, as LeashTaskHost.HookPanic
-        /// does, right after "intake". Idempotent.</summary>
-        internal static void HookPanic()
-        {
-            var all = PanicSurfaces.All.ToList();
-            if (all.Any(s => s.Id == PanicSurfaceId)) return;
-            var at = all.FindIndex(s => s.Id == "intake") + 1;
-            all.Insert(at, new PanicSurfaces.Surface(PanicSurfaceId, _ => OnPanic()));
-            PanicSurfaces.All = all.ToArray();
-        }
-
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>
         internal static CoreTutorial.Step Project(TutorialStep s) => Projected.GetValue(s, static step => new CoreTutorial.Step
         {
