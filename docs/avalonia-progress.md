@@ -1969,3 +1969,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-dialogs-windows: +497
 - Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
 - Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
+
+## avalonia-port/icons-dialogs-windows: +497
+- Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
+- Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
