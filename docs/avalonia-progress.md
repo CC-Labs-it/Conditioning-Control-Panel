@@ -1933,3 +1933,11 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-home-settings: +292
 - Fluent icons for Home + Settings (L1): 17 product files, emoji ratchet 971→905, loc ratchet 234→214, census unnamed icon buttons 158→142.
 - Tests now check IconGlyph/IconLabel Kind (fold, drawer, panic key, link labels), each made to fail once on purpose; parity rows marked divergent by decision.
+
+## avalonia-port/icons-studio-features: +434
+- Fluent icons L2: Studio rack, feature pages, feature/intro/settings popups, PinkRush, CornerGif, LayeredAudio, MiniPlayer (play/pause by Kind); emoji ratchet 971→895, loc-prefix 234→198.
+- win-layered-audio snapshot re-baselined (icons only, by decision); snapshot tests can no longer launch a diff GUI.
+
+## avalonia-port/icons-studio-features: +434
+- Fluent icons L2: Studio rack, feature pages, feature/intro/settings popups, PinkRush, CornerGif, LayeredAudio, MiniPlayer (play/pause by Kind); emoji ratchet 971→895, loc-prefix 234→198.
+- win-layered-audio snapshot re-baselined (icons only, by decision); snapshot tests can no longer launch a diff GUI.
