@@ -2018,3 +2018,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/feature-day-log-core: +210
 - FeatureDayLogService + model moved to Core (same feature_day_log.json); seeded/disposed on the Avalonia head; `ConditioningMinutesOn` accessor for the leash day report.
 - Follow-ups: LeashHead.DayInputs minutes (leash-wire), Chaster MinutesOn, Note/sync hooks on Avalonia.
+
+## avalonia-port/first-show: +380
+- FirstShow rules (deck, presets, media loader, layout, script) are now in Core and WPF reads them; Core tests moved or ported and fail-proven.
+- The Avalonia stage, EMI presentation, panic and trigger are left to first-show-b; the Guide to first-show-c.
