@@ -1049,3 +1049,14 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   StartStop.cs:~516 `LockCardWindow.ForceCloseAll()`) and `tube-speech` (KillAllAudio's `StopVoiceLineAudio`). The program
   run, camera, mic, AI and haptics are left alone; the panic key stays the way to stop everything.
 - Test: `BlinkStopTests.SixTrackerBlinksStopEverythingButTheCamera` asserts the exact set and the kept surfaces.
+
+## 2026-10-12: Chaster idle-day charge reads the day log, as on WPF (avalonia-port/chaster-minutes)
+- Question: with `FeatureDayLogService` now in Core and running on this head, should `ChasterHead` give the Chaster
+  service its `MinutesOn` (the idle-day row's eyes)? Wiring it arms WPF's idle-day charge here, which users will see.
+- Options: (A) keep it off: `MinutesOn` stays null, the day-end check reads "nobody can tell" and never books an idle day;
+  (B) parity: `MinutesOn = App.FeatureDayLog?.ConditioningMinutesOn(dayKey)`, exactly WPF `ChasterServiceApp.MinutesFromDayLog`
+  (ConditioningControlPanel/Services/Chaster/ChasterServiceApp.cs:49).
+- Choice: B, parity (advised by: supervisor). Not new behaviour: WPF has charged idle days from the same log since the
+  Chaster tab shipped. Null when no log (construction failed / headless render path), 0 for a day with no entry, as WPF.
+- Test: `ChasterMinutesTests.MinutesOn_ReadsTheDayLogsConditioningMinutes_NullWithoutALog` (fail-proven: no MinutesOn -> red;
+  `?? 0` instead of null -> red).

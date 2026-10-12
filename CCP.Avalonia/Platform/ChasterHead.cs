@@ -40,9 +40,6 @@ internal static class ChasterHead
                 Paused: s.ChasterPaused,
                 PriceOverrides: new Dictionary<string, int>(s.ChasterPriceOverrides ?? new Dictionary<string, int>(), StringComparer.Ordinal));
         };
-        // ponytail: no MinutesOn yet, although App.FeatureDayLog now runs on this head (WPF ChasterServiceApp
-        // MinutesFromDayLog = FeatureDayLog.ConditioningMinutesOn(dayKey)). Wiring it arms the idle-day
-        // charge, so it is its own lane; until then it reads as "nobody can tell".
         var target = Target(userDataDir, overrideUrl);
         inner ??= new HttpClientHandler();
         return new ChasterService(
@@ -57,8 +54,14 @@ internal static class ChasterHead
                 FriendsHead.Identity, ChasterClient.ProxyBase),
             RafflePostDays = () => CoreSettings.Current.ChasterRafflePostDays,
             LadderShowName = () => CoreSettings.Current.ChasterLadderShowName,
+            MinutesOn = MinutesFromDayLog,
         };
     }
+
+    /// <summary>WPF ChasterServiceApp.MinutesFromDayLog: the idle-day row's eyes. A day with no entry
+    /// had none; no log at all means nobody can tell (null). Arms WPF's idle-day charge on this head
+    /// (docs/avalonia-decisions.md, Chaster idle-day charge).</summary>
+    internal static int? MinutesFromDayLog(string dayKey) => App.FeatureDayLog?.ConditioningMinutesOn(dayKey);
 
     /// <summary>WPF ChasterHooks.Attach, for the events this head raises: quests (and the dailies
     /// board) and level-ups. Every call is inert until the tab is on and the row is priced.
