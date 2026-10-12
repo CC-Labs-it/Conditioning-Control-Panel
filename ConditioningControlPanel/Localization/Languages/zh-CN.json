@@ -1775,6 +1775,8 @@
   "label_frames": "帧数",
   "tooltip_text_visibility_lower_more_subtle": "文字可见度。越低 = 越隐蔽。",
   "tooltip_play_whispered_audio_when_subliminal_messages": "当潜意识信息出现时播放耳语音频。",
+  "tooltip_silent_line": "No recorded voice for this line on this mod. It shows, but stays silent.",
+  "hint_silent_lines": "Some lines have no recorded voice on this mod. They show, but stay silent.",
   "setting_audio_whispers": "📊 音频耳语",
   "section_system": "⚙ 系统",
   "tooltip_set_custom_assets_folder": "设置自定义资源文件夹",

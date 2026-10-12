@@ -1536,6 +1536,8 @@ namespace ConditioningControlPanel
 
                 var dialog = new TextEditorDialog("Trigger Phrases", triggerDict);
                 dialog.Owner = this;
+                // Trigger lines speak through SubliminalService.PlayTriggerAudio: same lookup.
+                dialog.MarkSilentLines(t => App.Subliminal?.HasRecordedVoice(t) ?? true);
 
                 if (dialog.ShowDialog() == true && dialog.ResultData != null)
                 {

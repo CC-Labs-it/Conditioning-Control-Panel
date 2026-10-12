@@ -358,23 +358,22 @@ namespace ConditioningControlPanel.Services
                 cleanText.ToUpper().Replace("\u2019", "'"),
             };
 
-            // Check active mod's audio directory first
-            var modPath = App.Mods?.ActiveMod?.InstalledPath;
-            if (modPath != null)
-            {
-                var modAudioDir = Path.Combine(modPath, "resources", "sounds", "flashes_audio");
-                if (Directory.Exists(modAudioDir))
+            // Active mod's audio directory first, then the default sub_audio directory - Bambi-voiced,
+            // so never for CCP Default. Those mods get the recorded neutral clips instead
+            // (Resources/Audio/backroom/words). The order lives in SpokenClipRule.
+            return SpokenClipRule.Resolve(
+                App.Mods?.ActiveModId,
+                modClip: () =>
                 {
-                    var result = SearchAudioDirectory(modAudioDir, cleanText, textVariants, extensions, isModCache: true);
-                    if (result != null) return result;
-                }
-            }
-
-            // Fall back to default sub_audio directory - Bambi-voiced, so never for CCP Default.
-            // Those mods get the recorded neutral clips instead (Resources/Audio/backroom/words).
-            if (!ModAudioPolicy.UsesSharedSubAudio(App.Mods?.ActiveModId))
-                return BackRoom.BackRoomVoice.FindNeutralClip(keyword);
-            return SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false);
+                    var modPath = App.Mods?.ActiveMod?.InstalledPath;
+                    if (modPath == null) return null;
+                    var modAudioDir = Path.Combine(modPath, "resources", "sounds", "flashes_audio");
+                    return Directory.Exists(modAudioDir)
+                        ? SearchAudioDirectory(modAudioDir, cleanText, textVariants, extensions, isModCache: true)
+                        : null;
+                },
+                sharedClip: () => SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false),
+                neutralClip: () => BackRoom.BackRoomVoice.FindNeutralClip(keyword));
         }
 
         private string? SearchAudioDirectory(string directory, string cleanText, string[] textVariants, string[] extensions, bool isModCache)

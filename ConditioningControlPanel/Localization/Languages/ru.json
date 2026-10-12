@@ -1156,6 +1156,8 @@
   "label_frames": "Кадры",
   "tooltip_text_visibility_lower_more_subtle": "Видимость текста. Меньше = более незаметно.",
   "tooltip_play_whispered_audio_when_subliminal_messages": "Воспроизводить шёпот при появлении сублиминальных сообщений.",
+  "tooltip_silent_line": "No recorded voice for this line on this mod. It shows, but stays silent.",
+  "hint_silent_lines": "Some lines have no recorded voice on this mod. They show, but stay silent.",
   "setting_audio_whispers": "📊 Аудиошёпот",
   "section_system": "⚙ Системные настройки",
   "tooltip_set_custom_assets_folder": "Указать свою папку с ассетами",
