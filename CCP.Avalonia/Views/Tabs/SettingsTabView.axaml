@@ -307,8 +307,8 @@
     <!-- ============================================================ -->
     <!-- TRAINING PROGRAMS - "TODAY" CARD (row 0, full width).         -->
     <!-- Collapsed entirely unless a program is running; painted from  -->
-    <!-- MainWindow.ProgramsTab.cs (RefreshProgramTodayCard). Clicking -->
-    <!-- it opens the Programs tab.                                    -->
+    <!-- SettingsTabView.ProgramToday.cs (RefreshProgramTodayCard).  -->
+    <!-- Clicking it opens the Programs tab.                            -->
     <!-- ============================================================ -->
     <Button x:Name="ProgramTodayCard"
             Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4"
@@ -319,7 +319,7 @@
       <Grid>
         <!-- ============================================================ -->
         <!-- BANNER DECORATION (art + FX). Painted and animated entirely   -->
-        <!-- from MainWindow.ProgramBanner.cs; Collapsed until             -->
+        <!-- from SettingsTabView.ProgramToday.cs; Collapsed until        -->
         <!-- ApplyProgramBannerArt() runs, so with no wiring and no PNGs   -->
         <!-- the card renders exactly as it did before this layer existed. -->
         <!-- Every child is empty here on purpose: the brushes are built   -->

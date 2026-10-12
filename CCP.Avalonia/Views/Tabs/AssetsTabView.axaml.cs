@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Confirm = (title, msg) => MessageDialog.ConfirmAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             IsVisibleChanged(this);
+            BtnPickAssetsFolder.Click += BtnPickAssetsFolder_Click;
             InitializeRemoteMediaPicker();   // AssetsTabView.MediaPicker.cs; re-syncs on every show
         }
 
@@ -93,7 +94,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // MainWindow.AssetsFx.cs:OnAssetsTabVisibilityChanged: hidden stops the motion.
                 if (e.Property == IsVisibleProperty && !view.IsVisible) view.StopMediaLogPulse(resetOpacity: true);
+                if (e.Property == IsVisibleProperty && view.IsVisible) view.PaintAssetsFolder();
             };
+
+        // ---- LIBRARY > FOLDERS (WPF AssetsTabView.xaml.cs:25-68, nav rework 7e50c9381) ----------
+
+        /// <summary>"folders": the page does not scroll, so this paints the current folder, brings the
+        /// chip into view and glows it and the preset picker once (NavGlow gates motion). Any other key
+        /// does nothing.</summary>
+        internal void ScrollToZone(string zone)
+        {
+            if (!string.Equals((zone ?? "").Trim(), "folders", StringComparison.OrdinalIgnoreCase)) return;
+            PaintAssetsFolder();
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    ZoneFolders.BringIntoView();
+                    var sage = Views.Controls.NavStripRules.Accent(Services.UI.NavSections.Library);
+                    NavGlow.Once(ZoneFolders, sage, why: "library.folders");
+                    NavGlow.Once(CmbAssetPresets, sage, why: "library.presets");
+                }
+                catch (Exception ex) { Log.Debug("Assets ScrollToZone: {E}", ex.Message); }
+            });
+        }
+
+        /// <summary>The folder the app reads today, as one line; the full path is the tooltip.</summary>
+        internal void PaintAssetsFolder()
+        {
+            var path = CorePaths.EffectiveAssets ?? "";
+            TxtAssetsFolderPath.Text = path;
+            ToolTip.SetTip(TxtAssetsFolderPath, string.IsNullOrEmpty(path) ? null : path);
+        }
+
+        private async void BtnPickAssetsFolder_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow mw) await mw.RequestPickAssetsFolder();
+                PaintAssetsFolder();
+            }
+            catch (Exception ex) { Log.Debug("BtnPickAssetsFolder: {E}", ex.Message); }
+        }
 
         /// <summary>WPF ShowTab("assets"): RefreshAssetTree, InitializeAssetPresets, then the
         /// AssetsFx entrance (the Media Log pulse when entries arrived since it was last opened).</summary>

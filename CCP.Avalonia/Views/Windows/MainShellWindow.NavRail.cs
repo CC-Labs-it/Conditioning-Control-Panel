@@ -7,8 +7,9 @@
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
 // ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
 // hue-bevel ring gradient (a flat hue ring stands in) and the rail shadow (PaintDepthRail) - lane
-// sync6-nav-polish-b; the possession reroute seam and mod door art (ApplyDoorArt) - no mod door
-// art or possession misroute on this head yet. No Lobby producer feeds NavBadges here yet, so the
+// sync6-nav-polish-b; the possession reroute seam (WPF PossessionReroute, written only by
+// Services/Possession/Effects/MisrouteEffect.cs - no Possession service on this head, so a seam
+// would have no writer). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
 using System;
@@ -94,10 +95,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 NavBadges.Changed += OnNavBadgeChanged;
                 Closed += (_, _) => NavBadges.Changed -= OnNavBadgeChanged;
                 foreach (var row in _navSectionRows) PaintNavBadge(row, NavBadges.Get(row.Section));
+                // WPF :118 + MainWindow.xaml.cs:3653: the active mod's medallions, again on a mod switch.
+                ApplyDoorArt();
+                CoreMods.ModChanged += OnModChangedDoorArt;
+                Closed += (_, _) => CoreMods.ModChanged -= OnModChangedDoorArt;
                 _navRailReady = true;
                 RefreshSectionRail(CurrentTab);
             }
             catch (Exception ex) { Log.Warning(ex, "InitializeNavRail failed; rail stays as authored"); }
+        }
+
+        private void OnModChangedDoorArt(object? sender, Models.ModPackage e) => Dispatcher.UIThread.Post(ApplyDoorArt);
+
+        /// <summary>Decode cap for a medallion: 64px native art in a 40px icon, 2x headroom (WPF :816).</summary>
+        private const int NavDoorArtDecodeWidth = 128;
+
+        /// <summary>WPF ApplyDoorArt (:825): points the medallions at the active mod's art. The paths
+        /// (nav/door_*.png) are the mod compatibility surface. A null resolve leaves the authored
+        /// Source alone. Social's XAML placeholder (the Lobby picture under a shade) gives way to the
+        /// shipped or modded nav/door_social.png, and the shade goes with it. ponytail: WPF's
+        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are row 90's (sync6-nav-polish).</summary>
+        internal void ApplyDoorArt()
+        {
+            try
+            {
+                foreach (var key in new[] { "home", "studio", "companion", "play", "social", "you", "library", "settings" })
+                {
+                    var img = Named<Image>("ImgDoor" + char.ToUpperInvariant(key[0]) + key.Substring(1));
+                    if (img == null) continue;
+                    var art = Helpers.ModArt.TryLoad($"nav/door_{key}.png", NavDoorArtDecodeWidth);
+                    if (art != null) img.Source = art;
+                    if (key == "social" && Named<Border>("ShadeDoorSocial") is { } shade) shade.IsVisible = art == null;
+                }
+                var glow = AmbientFxCanvas.Env.GlowColor;
+                foreach (var row in _navSectionRows)
+                    if (row.Label?.Effect is DropShadowEffect fx) fx.Color = glow;
+            }
+            catch (Exception ex) { Log.Warning(ex, "ApplyDoorArt failed; nav rail keeps its embedded medallions"); }
         }
 
         private static readonly IValueConverter NavCaps =
