@@ -61,6 +61,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private const string ServerUrl = "https://codebambi-proxy.vercel.app";
         private static readonly HttpClient Http = new();
         private CancellationTokenSource? _checkCts;
+        /// <summary>The provider browser flow. Closing the dialog cancels it: left running it kept the provider's
+        /// callback port and its IsVerifying latch for 5 minutes, so every retry from any door silently bounced.</summary>
+        private readonly CancellationTokenSource _oauthCts = new();
+
+        /// <summary>Can the sign-in proxy be reached at all? The provider flow makes no request of its own until the
+        /// browser comes back, so with no network (or in a sandbox, which refuses every remote host) it spun for the full
+        /// 5-minute wait. Any HTTP answer counts as reachable. Test seam.</summary>
+        internal static Func<CancellationToken, Task<bool>> ProxyReachable = async ct =>
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(10));
+            try
+            {
+                using var r = await Http.GetAsync(ProviderSubscription.ProxyBaseUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                return true;
+            }
+            catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+            {
+                Log.Warning("Sign-in server unreachable: {Error}", ex.Message);
+                return false;
+            }
+        };
         private bool _closed;
         private string? _firstProviderToken;
 
@@ -215,6 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Closed += (_, _) =>
             {
                 _closed = true;
+                _oauthCts.Cancel();
                 _deviceCts?.Cancel();
                 _checkCts?.Cancel();
                 _checkCts?.Dispose();
@@ -264,13 +287,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             try
             {
                 // Start OAuth flow (Core); the browser opens through Avalonia's Launcher (xdg-open on Linux).
+                // WPF's failure copy, now instead of after a 5-minute spinner.
+                if (!await ProxyReachable(_oauthCts.Token)) { await ShowError(Loc.Get("login_failed_please_try_again")); return; }
+
                 var purpose = provider == "discord" ? "sign in with Discord" : provider == "substar" ? "sign in with SubscribeStar" : "sign in with Patreon";
                 Action<string> open = url => _ = OpenBrowserAsync(url, purpose);
                 string? accessToken;
                 if (provider == "discord")
                 {
                     if (AccountSeed.Discord is not { } discord) { await ShowError(Loc.Get("login_discord_service_not_available")); return; }
-                    await discord.SignInAsync(open);
+                    await discord.SignInAsync(open, _oauthCts.Token);
                     accessToken = discord.GetAccessToken();
                 }
                 else
@@ -281,7 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                         await ShowError(provider == "substar" ? "SubscribeStar service not available." : Loc.Get("login_patreon_service_not_available"));
                         return;
                     }
-                    await sub.SignInAsync(open);
+                    await sub.SignInAsync(open, _oauthCts.Token);
                     accessToken = sub.GetAccessToken();
                 }
 
@@ -335,6 +361,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             catch (OperationCanceledException)
             {
                 ShowProviderSelection();
+            }
+            catch (TimeoutException) when (_closed)
+            {
+                // Core ends a cancelled wait as a timeout; here that is the dialog closing, not a failure.
+                Log.Information("{Provider} sign-in stopped: the login dialog closed", provider);
             }
             catch (Exception ex)
             {

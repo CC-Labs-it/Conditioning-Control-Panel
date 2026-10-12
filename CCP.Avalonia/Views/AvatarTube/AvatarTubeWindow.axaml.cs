@@ -1159,11 +1159,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
         /// </list>
         ///
-        /// <para><b>ponytail: two lines in quick succession can overlap.</b> WPF cuts the previous
-        /// voiceline with <c>StopSpokenAudio</c>, which needs an <c>AudioPlaybackHandle</c>;
-        /// <c>CoreAudio.PlayOneShot</c> is fire-and-forget and returns none. The bubble still
-        /// preempts correctly - this is audio only, and it is audible rather than silent, which is
-        /// why it ships as a note instead of as a dropped voiceline.</para>
+        /// <para>A new line cuts the previous clip (WPF StopSpokenAudio), so <c>_stopSpoken</c> always
+        /// holds the one clip in the air and <see cref="PanicSilence"/> silences it.</para>
         /// </summary>
         public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true,
                                    string? phraseAudioPath = null, bool barkVoice = false,
@@ -1365,7 +1362,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     if (!File.Exists(phraseAudioPath)) return;
                     handedOff = true;
-                    CoreAudio.PlayOneShot(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
+                    _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
+                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
                                           barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
                     return;
                 }
@@ -1393,7 +1391,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var path = CoreModArt.OverridePath($"sounds/{name}")
                        ?? System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", name);
             if (!File.Exists(path)) return;
-            CoreAudio.PlayOneShot(path, curvedVolume * 0.7f, "giggle");
+            _stopSpoken();   // as above: one clip at a time, so panic's single stop reaches it
+            _stopSpoken = CoreAudio.PlayStoppable(path, curvedVolume * 0.7f, "giggle");
         }
 
         // =========================================================================================

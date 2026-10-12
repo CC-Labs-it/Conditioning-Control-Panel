@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -124,6 +126,29 @@ public sealed class AccountSettingsSectionTests
         });
     }
 
+    /// <summary>The local sandbox whitelist (AccountSeed.SandboxWhitelistRequested) names itself on the tier card in a
+    /// DEBUG build; Release compiles it out, so the signed-out card stays.</summary>
+    [Fact]
+    public void SandboxWhitelistShowsOnTheTierCardOnlyInDebug()
+    {
+        var old = Environment.GetEnvironmentVariable("CCP_SANDBOX_WHITELIST");
+        Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", "1");   // read by Run's Seed
+        try
+        {
+            Run((shell, section, s, secrets) =>
+            {
+                Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); // before Run's cleanup re-seeds
+                section.OnSectionShown();
+#if DEBUG
+                Assert.Equal("Whitelisted (sandbox)", Text(section, "TxtAccountSectionTier"));
+#else
+                Assert.Equal(Loc.Get("label_login_to_unlock_exclusive_features"), Text(section, "TxtAccountSectionTier"));
+#endif
+            });
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); }
+    }
+
     [Fact]
     public void SignedInPatronSeesHerCardsAndTheProviderButtonSignsHerOut()
     {
@@ -187,13 +212,15 @@ public sealed class AccountSettingsSectionTests
             section.OnSectionShown();
             var discord = AccountSeed.Discord!;
             discord.IsVerifying = true;            // SignInAsync returns at once: no token, the link fails
+            var oldProbe = LoginDialog.ProxyReachable;
+            LoginDialog.ProxyReachable = _ => Task.FromResult(true); // reachable, so the link runs inline
             try
             {
                 Click(section, "BtnLinkDiscord");
                 Assert.True(section.FindControl<Button>("BtnLinkDiscord")!.IsEnabled);
                 Assert.Equal("btn_link_discord", section.FindControl<IconLabel>("TxtBtnLinkDiscord")!.Key);
             }
-            finally { discord.IsVerifying = false; }
+            finally { discord.IsVerifying = false; LoginDialog.ProxyReachable = oldProbe; }
         });
     }
 
