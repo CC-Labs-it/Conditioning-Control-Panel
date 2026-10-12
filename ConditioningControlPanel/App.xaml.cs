@@ -2983,7 +2983,7 @@ namespace ConditioningControlPanel
             {
                 _friendsService = Services.Friends.FriendsServiceApp.CreateForApp();
                 Friends = _friendsService;
-                try { FriendsFeed = Services.Friends.FriendsFeed.CreateForApp(_friendsService); } catch (Exception exFeed) { Logger?.Debug("Friends feed failed to start: {E}", exFeed.Message); }
+                try { FriendsFeed = Services.Friends.FriendsFeed.CreateForApp(_friendsService, () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId); } catch (Exception exFeed) { Logger?.Debug("Friends feed failed to start: {E}", exFeed.Message); }
                 ProfileSync.ProfileLoaded += (_, _) => _friendsService?.Kick();
                 _friendsService.Start(new Services.Friends.FriendsServiceApp.Timer());
             }

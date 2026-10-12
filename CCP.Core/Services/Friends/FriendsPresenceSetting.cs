@@ -31,10 +31,10 @@ public static class FriendsPresenceSetting
                 done = true;
             }
         }
-        catch (Exception ex) { App.Logger?.Debug("[Friends] presence write failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] presence write failed: {E}", ex.Message); }
         if (!done)
         {
-            try { save(shared); } catch (Exception ex) { App.Logger?.Debug("[Friends] presence save failed: {E}", ex.Message); }
+            try { save(shared); } catch (Exception ex) { Serilog.Log.Debug("[Friends] presence save failed: {E}", ex.Message); }
         }
         try { markAsked(); } catch { }
     }

@@ -397,7 +397,7 @@ public class FriendsFeedTests
             .Concat(PokeSet.All.Select(p => "friends_poke_" + p))
             .Concat(InviteDestination.All.Select(d => "friends_invite_" + d))
             .ToList();
-        var dir = SourceRoots.LanguagesDirectory;
+        var dir = Path.Combine(RepoRoot(), "CCP.Core", "Localization", "Languages");
         foreach (var lang in new[] { "en", "de", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN" })
         {
             var json = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(dir, lang + ".json")));
@@ -415,7 +415,7 @@ public class FriendsFeedTests
     private static string RepoRoot()
     {
         var d = new DirectoryInfo(AppContext.BaseDirectory);
-        while (d != null && !Directory.Exists(Path.Combine(d.FullName, "ConditioningControlPanel", "Localization")))
+        while (d != null && !Directory.Exists(Path.Combine(d.FullName, "CCP.Core", "Localization")))
             d = d.Parent;
         return d?.FullName ?? throw new InvalidOperationException("repo root not found");
     }

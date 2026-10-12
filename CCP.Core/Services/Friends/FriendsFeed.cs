@@ -17,7 +17,7 @@ public sealed record FeedEntry(FriendEvent Event, bool Read)
 }
 
 /// <summary>
-/// THE FRIENDS FEED ("What happened", Wave 1, 2026-09-29), hung off <c>App.FriendsFeed</c>.
+/// THE FRIENDS FEED ("What happened", Wave 1, 2026-09-29), hung off the head (WPF <c>App.FriendsFeed</c>).
 /// Keeps what the friends service says happened (<see cref="IFriendsService.Happened"/>): the
 /// newest <see cref="Cap"/> lines, newest first, one per <see cref="FriendEvent.Key"/>, and which of
 /// them nobody has looked at yet (the badges on the chips and the tray read <see cref="Unread"/>).
@@ -62,12 +62,13 @@ public sealed class FriendsFeed
         _save = save ?? ((_, _) => { });
     }
 
-    /// <summary>The app's own feed: the account the friends service polls for, the file store,
-    /// listening to <paramref name="service"/>. Never throws; the disk is only touched on use.</summary>
-    public static FriendsFeed CreateForApp(IFriendsService? service)
+    /// <summary>The app's own feed: the account the friends service polls for (the head's
+    /// <paramref name="account"/>), the file store, listening to <paramref name="service"/>.
+    /// Never throws; the disk is only touched on use.</summary>
+    public static FriendsFeed CreateForApp(IFriendsService? service, Func<string?> account)
     {
         var feed = new FriendsFeed(
-            () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId,
+            account,
             FriendsFeedFile.Load,
             FriendsFeedFile.Save);
         feed.Attach(service);
@@ -189,7 +190,7 @@ public sealed class FriendsFeed
     private void OnHappened(FriendEvent e)
     {
         try { Add(e); }
-        catch (Exception ex) { App.Logger?.Debug("[Friends] feed add failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] feed add failed: {E}", ex.Message); }
     }
 
     /// <summary>Loads the signed-in account's lines when the account changed since the last call.</summary>
@@ -209,7 +210,7 @@ public sealed class FriendsFeed
         try { stored = _load(now); }
         catch (Exception ex)
         {
-            App.Logger?.Debug("[Friends] feed unreadable: {E}", ex.Message);
+            Serilog.Log.Debug("[Friends] feed unreadable: {E}", ex.Message);
             stored = null;
         }
         if (stored == null) return;
@@ -227,13 +228,13 @@ public sealed class FriendsFeed
     private void Persist(string account, IReadOnlyList<FeedEntry> lines)
     {
         try { _save(account, lines); }
-        catch (Exception ex) { App.Logger?.Debug("[Friends] feed not saved: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] feed not saved: {E}", ex.Message); }
     }
 
     private void RaiseChanged()
     {
         try { Changed?.Invoke(); }
-        catch (Exception ex) { App.Logger?.Debug("[Friends] feed handler failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] feed handler failed: {E}", ex.Message); }
     }
 }
 
@@ -250,7 +251,7 @@ public static class FriendsFeedFile
     public const int Version = 1;
 
     /// <summary>Where the files live. Swappable for the suite.</summary>
-    internal static Func<string> Folder { get; set; } = () => Path.Combine(App.UserDataPath, "friends_feed");
+    internal static Func<string> Folder { get; set; } = () => Path.Combine(CorePaths.UserData, "friends_feed");
 
     /// <summary>The file for one account: the first 16 hex of the id's SHA-256, so the id itself
     /// never becomes a path.</summary>
