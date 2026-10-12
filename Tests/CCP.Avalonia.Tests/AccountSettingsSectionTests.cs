@@ -99,17 +99,20 @@ public sealed class AccountSettingsSectionTests
     {
         var old = Environment.GetEnvironmentVariable("CCP_SANDBOX_WHITELIST");
         Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", "1");   // read by Run's Seed
-        Run((shell, section, s, secrets) =>
+        try
         {
-            Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); // before Run's cleanup re-seeds
-            section.OnSectionShown();
+            Run((shell, section, s, secrets) =>
+            {
+                Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); // before Run's cleanup re-seeds
+                section.OnSectionShown();
 #if DEBUG
-            Assert.Equal("Whitelisted (sandbox)", Text(section, "TxtAccountSectionTier"));
+                Assert.Equal("Whitelisted (sandbox)", Text(section, "TxtAccountSectionTier"));
 #else
-            Assert.Equal(Loc.Get("label_login_to_unlock_exclusive_features"), Text(section, "TxtAccountSectionTier"));
+                Assert.Equal(Loc.Get("label_login_to_unlock_exclusive_features"), Text(section, "TxtAccountSectionTier"));
 #endif
-        });
-        Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old);
+            });
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_SANDBOX_WHITELIST", old); }
     }
 
     [Fact]
