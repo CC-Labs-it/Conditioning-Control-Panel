@@ -22,8 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// while the service IsReadOnly); the ritual picker shows only once ProgramCapabilities.RitualsAvailable.
     /// A day the program clock has moved past without a rollover (a
     /// read-only service, or the minute poll not yet run) is labelled "last saved" (<see cref="IsSnapshotStale"/>).
-    /// ponytail: ignition FX, day/task pops, node breathe and the live session clock are programs
-    /// slice 5 (~/ccp-port/briefs/programs-run-plan.md).
+    /// The ignition rig lives in ProgramsTabView.Ignition.cs (programs slice 5).
     /// </summary>
     public partial class ProgramsTabView
     {
@@ -78,11 +77,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property != IsVisibleProperty || !IsVisible || VisualRoot is null) return;
+            if (change.Property != IsVisibleProperty) return;
+            if (!IsVisible || VisualRoot is null) { SyncIgnition(); return; }
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
             if (_refreshPending || boundaryCrossed) RefreshPrograms();
+            SyncIgnition();   // WPF :1661: clocks stop behind a hidden tab and re-arm on the way back
         }
 
         /// <summary>WPF RefreshProgramsUI + RebuildProgramsTab (:490-584): pick the panel, build it, reveal it.</summary>
@@ -105,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var graduated = !browse && enrollment!.State == ProgramEnrollmentState.Graduated;
             var run = !browse && !lapsed && !graduated;
             _builtStale = null;
+            ResetRunPopsIfRunChanged(enrollment);
 
             try
             {
@@ -117,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Find<TextBlock>("TxtGraduatedSub").Text = Loc.GetF("programs_graduated_sub", program!.Title);
                     Find<TextBlock>("TxtGraduatedStats").Text = Loc.GetF("programs_graduated_stats",
                         enrollment!.AttemptNumber, enrollment.PerfectDayCount, program.LengthDays);
+                    CelebrateGraduation(program!, enrollment);
                 }
                 else BuildRunPanel(svc!, program!, enrollment!);
             }
@@ -140,6 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Find<Button>("BtnProgramRestart").IsEnabled = !readOnly && restartBlocked == null;
                 ToolTip.SetTip(Find<Button>("BtnProgramRestart"), restartBlocked);
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
+                // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
+                if (!run) { StopIgnitionLoops(); _ignitionEnrollment = null; }
             }
         }
 
@@ -147,9 +152,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BuildRunPanel(ProgramService svc, ProgramDefinition program, ProgramEnrollment enrollment)
         {
+            // WPF :660-674: the ignition rig's three decisions, all before anything is dressed.
+            NoteDayCompletion(enrollment, svc.TodayRecord, IsVisible);
+            NoteChapterSeal(program, enrollment, IsVisible);
             var chapter = svc.TodayChapter;
-            var accent = MainShellWindow.AccentBrush(
-                !string.IsNullOrWhiteSpace(chapter?.AccentColor) ? chapter!.AccentColor : program.AccentColor);
+            var accent = RunAccent(program, chapter, enrollment);
+            ComputeHeat(program, enrollment, svc.Today);
             var stale = IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
             _builtStale = stale;
 
@@ -210,6 +218,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             BuildDayStrip(program, enrollment, accent, stale);
             BuildTodayPanel(svc, program, enrollment, accent, stale);
+            ApplyIgnition(enrollment);
+            if (_dayJustCompleted) PlayDayCompleteMoment(svc.Today);
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
