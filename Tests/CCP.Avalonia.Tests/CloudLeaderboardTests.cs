@@ -168,6 +168,7 @@ public sealed partial class AccountSeedTests
         var s = CoreSettings.Current;
         var (oldOffline, oldClient, oldId) = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
         var oldSkills = s.UnlockedSkills.ToList();
+        var (oldMinutes, oldShields) = (s.TotalConditioningMinutes, s.StreakShieldsRemaining);
         var wire = new BoardWire();
         try
         {
@@ -197,6 +198,23 @@ public sealed partial class AccountSeedTests
                     await shell.Named<LeaderboardTabView>("LeaderboardTab")!.SetLeaderboardMode(false);
                     Assert.Equal("2", online.Text);
                     Assert.Equal("Top 1%", pct.Text);                          // ceil(4 / 1234 * 100) = 1
+
+                    // Each pill shows only with its skill (WPF UiUpdates.cs:538-627).
+                    Assert.False(shell.Named<Border>("PillConditioningTime")!.IsVisible);
+                    Assert.False(shell.Named<Border>("StreakFirePill")!.IsVisible);
+                    s.UnlockedSkills.Remove("hive_mind");
+                    s.UnlockedSkills.AddRange(new[] { "pink_hours", "good_girl_streak" });
+                    s.TotalConditioningMinutes = 61.5;
+                    s.StreakShieldsRemaining = 1;
+                    shell.UpdateStatPills();
+                    Assert.False(shell.Named<Border>("PillOnlineUsers")!.IsVisible);
+                    Assert.True(shell.Named<Border>("PillConditioningTime")!.IsVisible);
+                    Assert.Equal("1h 1m 30s", shell.Named<TextBlock>("TxtPillConditioningTime")!.Text);
+                    Assert.True(shell.Named<Border>("StreakFirePill")!.IsVisible);
+                    Assert.True(shell.Named<Control>("TxtStreakShieldIcon")!.IsVisible);
+                    s.StreakShieldsRemaining = 0;
+                    shell.UpdateStatPills();
+                    Assert.False(shell.Named<Control>("TxtStreakShieldIcon")!.IsVisible);
                 }
                 finally { shell.Close(); }
             });
@@ -207,6 +225,7 @@ public sealed partial class AccountSeedTests
             s.UnlockedSkills.Clear();
             s.UnlockedSkills.AddRange(oldSkills);
             global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+            (s.TotalConditioningMinutes, s.StreakShieldsRemaining) = (oldMinutes, oldShields);
         }
     }
 
