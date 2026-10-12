@@ -31,9 +31,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length), on a pop
-    /// the hydra multiply, lucky roll and glow (trunk FlashFxRules, imported with the wiring), Shatter,
-    /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), glow, content-pack and remote pools, avatar pre-announce.</para>
+    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length), Shatter,
+    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
     {
@@ -95,36 +95,87 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
 
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
-                // staggers 300 ms per image. Dispatcher timers, not Task.Delay: measured on this
-                // head, a Task.Delay(300) continuation intermittently landed 1.7 s late (thread-pool
-                // timer), while dispatcher timers stayed on time.
-                var refused = false;
-                for (var i = 0; i < flashes.Count; i++)
-                {
-                    var (bmp, rect, path, screen) = flashes[i];
-                    var last = i == flashes.Count - 1;
-                    DispatcherTimer.RunOnce(() =>
-                    {
-                        try
-                        {
-                            if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
-                            refused = !Spawn(bmp, rect, screen, alpha, fade, lifetime, clickable);
-                            // WPF FlashService.cs:1608 records the batch; per shown image here, so the
-                            // log's media count is exactly what reached the screen.
-                            if (!refused) App.Sessions?.SessionLog.RecordImages(new[] { path });
-                            if (!refused) App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
-                            // WPF FlashService.cs:2102 -> AchievementService.cs:416: one quest tick per image.
-                            if (!refused) App.Quests?.TrackFlashImage();
-                        }
-                        catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
-                        finally { if (last) _busy = false; }
-                    }, TimeSpan.FromMilliseconds(1000 + i * StaggerMs));
-                }
+                // staggers 300 ms per image.
+                Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
+                    done: () => _busy = false);
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
             finally { if (!scheduled) _busy = false; }
         }
+
+        /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
+        /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
+        /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
+        private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+            int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done)
+        {
+            var refused = false;
+            for (var i = 0; i < flashes.Count; i++)
+            {
+                var (bmp, rect, path, screen) = flashes[i];
+                var last = i == flashes.Count - 1;
+                DispatcherTimer.RunOnce(() =>
+                {
+                    try
+                    {
+                        if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
+                        refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration);
+                    }
+                    catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
+                    finally { if (last) done?.Invoke(); }
+                }, TimeSpan.FromMilliseconds(firstMs + i * staggerMs));
+            }
+        }
+
+        /// <summary>One flash on screen plus what WPF SpawnFlashWindow pays for it: the lucky roll
+        /// before the show (FlashService.cs:1851) and its glow (1881-1967).</summary>
+        internal static bool Show(Bitmap bmp, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
+            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration)
+        {
+            var s = CoreSettings.Current;
+            var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
+            var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
+                multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
+            var w = new FlashOverlayWindow(bmp)
+            {
+                HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
+                SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen,
+            };
+            if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
+            Paid(path, s, hydraGeneration, multiplier);
+            return true;
+        }
+
+        /// <summary>What a shown flash pays (WPF FlashService.cs:1608, 1834-1877, 2165-2172): session
+        /// log and history, the lucky chime, XP (4: this head plays no flash sound; a hydra child with
+        /// independent timing pays less; x10 lucky), and the achievement + quest tick, which a linked
+        /// hydra child skips only when timing is independent.</summary>
+        internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier)
+        {
+            App.Sessions?.SessionLog.RecordImages(new[] { path });
+            App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
+            if (multiplier > 1) LuckyChime(s);
+            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
+            if (s.HydraLinkedTiming || hydraGeneration == 0)
+            {
+                App.Achievements?.TrackFlashImage();   // WPF AchievementService.cs:388
+                App.Quests?.TrackFlashImage();         // ...which credits the quest (:399)
+            }
+        }
+
+        /// <summary>The chime a lucky flash plays (tests swap it).</summary>
+        internal static Action<AppSettings> LuckyChime = s =>
+        {
+            // WPF PlayLuckyFlashSound (FlashService.cs:4439): a random chime at master^1.5 x 0.35.
+            try
+            {
+                var file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", $"chime{Rng.Next(1, 4)}.mp3");
+                if (File.Exists(file)) CoreAudio.PlayOneShot(file, (float)Math.Pow(s.MasterVolume / 100f, 1.5) * 0.35f, "lucky-flash");
+                Log.Information("Lucky Flash! 10x XP!");
+            }
+            catch (Exception ex) { Log.Debug("Lucky flash chime failed: {E}", ex.Message); }
+        };
 
         /// <summary>
         /// Where one flash goes on one screen, in physical pixels. WPF does the math in that
@@ -156,17 +207,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return rect;
         }
 
+        /// <summary>The platform half of <see cref="Spawn"/> (tests swap it; headless has no X11).</summary>
+        internal static Func<FlashOverlayWindow, PixelRect, bool, bool> Present = (w, rect, clickable) =>
+            X11Overlay.SetClickThrough(w, !clickable) && X11Overlay.SetOpacity(w, 0) && X11Overlay.SetOverrideRedirect(w, rect, passive: clickable);
+
         /// <summary>The pre-map recipe proved by --overlay-check, with every attribute requested
         /// BEFORE SetOverrideRedirect so its XSync covers them: the window maps already
         /// click-through and at alpha 0, never as one opaque or clickable frame. False (window
         /// closed) when the platform refuses.</summary>
-        private static bool Spawn(Bitmap bmp, PixelRect rect, PixelRect screen, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable)
+        private static bool Spawn(FlashOverlayWindow w, PixelRect rect, PixelRect screen, double scaling, FlashGlowLook glow,
+            double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable)
         {
-            var w = new FlashOverlayWindow(bmp);
+            var pad = w.ApplyGlow(glow, scaling);
+            var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
             if (clickable) w.MakeClickable(() => Pop(w));
-            if (!X11Overlay.SetClickThrough(w, !clickable) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, rect, passive: clickable))
+            if (!Present(w, winRect, clickable))
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: the platform refused a click-through topmost overlay window; flashes skipped");
                 _warnedUnavailable = true;
@@ -242,7 +299,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (w is not FlashOverlayWindow { Exit: not null } && FlashMotion.Step(m, dt))   // a leaving flash holds still
                 {
                     var p = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
-                    w.Position = p;
+                    var pad = (w as FlashOverlayWindow)?.GlowPadPx ?? 0;   // the glow card sits round the picture
+                    w.Position = new PixelPoint(p.X - pad, p.Y - pad);
                     // The overlap check of later bursts reads the LIVE rect, as WPF reads MotionState X/Y.
                     for (var i = 0; i < Active.Count; i++)   // a loop, not FindIndex: no closure per frame
                         if (Active[i].Window == w) Active[i] = (Active[i].Window, new PixelRect(p, Active[i].Rect.Size));
@@ -313,11 +371,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Active.RemoveAll(e => e.Window == w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
+            // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
+            var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: false, fromGaze: false, w.HydraGeneration, Active.Count);
+            if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
             if (FlashExit.Pick(s.FlashExitStyle, _lastExitStyle, Rng) is not { } style) { w.Close(); return; }
             _lastExitStyle = style;
             Exiting.Add(w);
             w.Closed += (_, _) => Exiting.Remove(w);
             w.BeginExit(FlashExit.Begin(style, s.MotionLevel, Rng.Next()));
+        }
+
+        /// <summary>Spawns hydra children of a popped flash (tests swap it): parent, count, lifetime, generation.</summary>
+        internal static Action<FlashOverlayWindow, int, TimeSpan, int> Multiply = SpawnChildren;
+
+        /// <summary>WPF TriggerMultiplication + ShowImages: linked timing inherits what the parent had
+        /// left (at least 1 s), independent a fresh full lifetime; children of an ambient flash still
+        /// stay until popped.</summary>
+        internal static TimeSpan ChildLifetime(FlashOverlayWindow parent, AppSettings s)
+        {
+            if (Stays(s, parent.Ambient)) return TimeSpan.FromMilliseconds(FlashStayRule.SafetyLifetimeMs);
+            var remaining = (parent.Lifetime - Clock.GetElapsedTime(parent.SpawnedAt)).TotalMilliseconds;
+            return TimeSpan.FromMilliseconds(FlashFxRules.HydraChildLifetimeMs(s.HydraLinkedTiming, (int)parent.Lifetime.TotalMilliseconds, remaining));
+        }
+
+        /// <summary>WPF TriggerMultiplication: the children stay on the parent's screen, play no
+        /// sound and spawn 100 ms apart; a CloseAll in between drops them.</summary>
+        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
+        {
+            if (_closed || parent.SpawnScreen is not { } screen) return;
+            var generation = _generation;
+            try
+            {
+                var s = CoreSettings.Current;
+                var occupied = Active.Select(a => a.Rect).ToList();
+                var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
+                if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
+                Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
+                    TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
+                    parent.Ambient, hydraGeneration, done: null);
+            }
+            catch (Exception ex) { Log.Error(ex, "Flash: hydra spawn failed"); }
         }
 
         /// <summary>Images in one burst (WPF TriggerFlashOnce, #658): the caller's override, else
@@ -340,12 +433,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// from the header size alone, so each picture is decoded AT its display size like WPF's
         /// decode-at-display-size - never a full-resolution source held per window.
         /// </summary>
-        private static List<(Bitmap Bitmap, PixelRect Rect, string Path, PixelRect Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
+        private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
             int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
         {
             var root = CorePaths.EffectiveAssets;
             var dir = Path.Combine(root, "images");
-            var result = new List<(Bitmap, PixelRect, string, PixelRect)>(count);
+            var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
             if (!Directory.Exists(dir) || targets.Length == 0) return result;
 
             var files = Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
@@ -368,7 +461,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var screen = screens[targets[Rng.Next(targets.Length)]];
                     var rect = Place(screen.Bounds, screen.Scaling, info.Width, info.Height, s, Rng, occupied, size);
                     using var stream = File.OpenRead(path);
-                    result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, path, screen.Bounds));
+                    result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, path, screen));
                     occupied.Add(rect);
                 }
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
