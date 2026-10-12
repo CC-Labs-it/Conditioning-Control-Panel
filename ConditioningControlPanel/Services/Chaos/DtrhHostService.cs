@@ -80,6 +80,25 @@ internal static class DtrhHostService
 
     public static bool IsActive => _host != null;
 
+    /// <summary>The game window is up AND in front: the panic key's Escape is the game's pause then
+    /// (PanicPolicy.GameClaimsEscapeAsPause), as it is for the race and the chess board.</summary>
+    public static bool IsInFront => _host?.IsForeground == true;
+
+    /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+    public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+    /// <summary>Hand the page an Escape the panel kept as its pause (engine/scene.js plays it once
+    /// unless the real key reached it too), and give it the keyboard back.</summary>
+    public static void PostKeptEscape()
+    {
+        try
+        {
+            _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+            _host?.FocusWeb();
+        }
+        catch (Exception ex) { App.Logger?.Debug("DtrhHost: kept Escape post failed: {E}", ex.Message); }
+    }
+
     /// <summary>A DtRH descent is currently running (between run-started and run-ended). Used to
     /// cheaply gate optional per-run telemetry off the global bark/audio paths.</summary>
     public static bool IsRunActive => _runActive;
