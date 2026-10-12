@@ -2,35 +2,35 @@ using System.IO;
 using System.Reflection;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaster;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>The idle-day row's eyes (WPF ChasterServiceApp.MinutesFromDayLog): the head's Chaster
-/// service reads a day's conditioning minutes from App.FeatureDayLog, and null when there is no log.</summary>
+/// <summary>The idle-day row stays blind on this head until the conditioning-time tracker is ported:
+/// nothing here adds to TotalConditioningMinutes, so the day log reads 0 for every day and WPF's
+/// MinutesFromDayLog would charge every day CCP was open as idle (docs/avalonia-decisions.md).</summary>
 public sealed class ChasterMinutesTests
 {
     private static readonly PropertyInfo DayLog = typeof(AvApp).GetProperty("FeatureDayLog", BindingFlags.Static | BindingFlags.NonPublic)!;
 
     [Fact]
-    public void MinutesOn_ReadsTheDayLogsConditioningMinutes_NullWithoutALog()
+    public void IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource()
     {
         var saved = DayLog.GetValue(null);
         var dir = Path.Combine(Path.GetTempPath(), "ccp-chaster-minutes-" + System.Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        // A day log that is up and has seen the day, with the 0 minutes this head can only ever book.
         var log = new FeatureDayLogService(() => null, Path.Combine(dir, "feature_day_log.json"));
         var chaster = ChasterHead.Create("sandbox", null);
         try
         {
-            log.Log.GetOrAddDay("2026-10-01").Cm = 47;
+            log.Log.GetOrAddDay("2026-10-01").Cm = 0;
             DayLog.SetValue(null, log);
-            Assert.NotNull(chaster.MinutesOn);
-            Assert.Equal(47, chaster.MinutesOn!("2026-10-01"));
-            Assert.Equal(0, chaster.MinutesOn("2026-10-02")); // a day with no entry had none
-
-            DayLog.SetValue(null, null);
-            Assert.Null(chaster.MinutesOn("2026-10-01")); // no log: nobody can tell
+            Assert.Null(chaster.MinutesOn);
+            // The day-end judge (ChasterService.JudgeEndedDay) charges exactly this.
+            Assert.Equal(0, TabDayEnd.IdleCharge(chaster.MinutesOn?.Invoke("2026-10-01")));
         }
         finally
         {
