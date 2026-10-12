@@ -71,6 +71,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Started and not parked by the ambient gate.</summary>
         internal bool IsScrolling => _loop.IsRunning;
 
+        /// <summary>The beat's clock is subscribed: false while Home is hidden (P01).</summary>
+        internal bool IsTicking => _loop.IsTicking;
+
         /// <summary>The upper-cased message the strip was last built from.</summary>
         internal string CurrentMessage { get; private set; } = "";
 
