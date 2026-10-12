@@ -63,6 +63,25 @@ public sealed class LanguageSelectorTests
             new(new SessionFileService(_customFolder, _builtInFolder));
     }
 
+    /// <summary>Every offered language ships a strict-JSON file, and every shipped file is offered.</summary>
+    [Fact]
+    public void EveryLanguageFileParsesStrictlyAndIsOffered()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "Localization", "Languages");
+        var shipped = Directory.GetFiles(dir, "*.json").Select(Path.GetFileNameWithoutExtension).Order().ToArray();
+        var offered = LocalizationManager.AvailableLanguages.Select(l => l.Code).Order().ToArray();
+        Assert.Equal(offered, shipped);
+        Assert.Contains("it", offered);
+        var en = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(
+            File.ReadAllText(Path.Combine(dir, "en.json")))!;
+        foreach (var code in offered)
+        {
+            var strings = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(
+                File.ReadAllText(Path.Combine(dir, code + ".json")))!;
+            Assert.True(strings.Keys.Count(en.ContainsKey) > en.Count / 2, code + ".json covers under half of en.json");
+        }
+    }
+
     [Fact]
     public void LanguageSelectorsRestoreAndDesktopExitFlushesPendingState()
     {
@@ -194,6 +213,13 @@ public sealed class LanguageSelectorTests
             Assert.True(shell.FindControl<TextBlock>("TxtBannerSecondary")?.Opacity > 0);
             WaitForPersistedSetting(settingsPath, "Language", "fr");
             Assert.Equal("fr", new SettingsService().Current.Language);
+
+            // Italian is offered like the other languages, and a key it.json lacks falls back to English.
+            Select(Pill(shell), "it");
+            Assert.Equal("it", LocalizationManager.Instance.CurrentLanguage);
+            Assert.Equal("it", SelectedCode(General(shell)));
+            Assert.NotEqual(LocalizationManager.Instance.GetEnglish("msg_restart_to_apply"), Loc.Get("msg_restart_to_apply"));
+            Assert.Equal(LocalizationManager.Instance.GetEnglish("programs_photo_not_local"), Loc.Get("programs_photo_not_local"));
 
             Select(General(shell), "de");
 
