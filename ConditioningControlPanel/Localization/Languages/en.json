@@ -2014,6 +2014,8 @@
   "label_frames": "Frames",
   "tooltip_text_visibility_lower_more_subtle": "Text visibility. Lower = more subtle.",
   "tooltip_play_whispered_audio_when_subliminal_messages": "Play whispered audio when subliminal messages appear.",
+  "tooltip_silent_line": "No recorded voice for this line on this mod. It shows, but stays silent.",
+  "hint_silent_lines": "Some lines have no recorded voice on this mod. They show, but stay silent.",
   "setting_audio_whispers": "📊 Audio Whispers",
   "section_system": "⚙ System",
   "tooltip_set_custom_assets_folder": "Set custom assets folder",

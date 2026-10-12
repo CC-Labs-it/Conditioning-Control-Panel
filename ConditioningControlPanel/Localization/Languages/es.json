@@ -1156,6 +1156,8 @@
   "label_frames": "Cuadros",
   "tooltip_text_visibility_lower_more_subtle": "Visibilidad del texto. Menor = más sutil.",
   "tooltip_play_whispered_audio_when_subliminal_messages": "Reproducir audio susurrado cuando aparecen mensajes subliminales.",
+  "tooltip_silent_line": "No recorded voice for this line on this mod. It shows, but stays silent.",
+  "hint_silent_lines": "Some lines have no recorded voice on this mod. They show, but stay silent.",
   "setting_audio_whispers": "📊 Susurros de Audio",
   "section_system": "⚙ Sistema",
   "tooltip_set_custom_assets_folder": "Establecer carpeta de recursos personalizada",

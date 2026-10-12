@@ -518,19 +518,29 @@ namespace ConditioningControlPanel.Services
                 cleanText.ToUpper().Replace("\u2019", "'"),
             };
 
-            // Check active mod's audio directory first
-            var modAudioPath = GetModAudioPath();
-            if (modAudioPath != null)
-            {
-                var result = SearchAudioDirectory(modAudioPath, cleanText, textVariants, extensions, isModCache: true);
-                if (result != null) return result;
-            }
+            // Active mod's audio directory first, then the default sub_audio directory - Bambi-voiced,
+            // so never for CCP Default. Those mods get the recorded neutral clips instead
+            // (Resources/Audio/backroom/words). The order lives in SpokenClipRule.
+            return SpokenClipRule.Resolve(
+                App.Mods?.ActiveModId,
+                modClip: () =>
+                {
+                    var modAudioPath = GetModAudioPath();
+                    return modAudioPath == null
+                        ? null
+                        : SearchAudioDirectory(modAudioPath, cleanText, textVariants, extensions, isModCache: true);
+                },
+                sharedClip: () => SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false),
+                neutralClip: () => BackRoom.BackRoomVoice.FindNeutralClip(text));
+        }
 
-            // Fall back to default sub_audio directory - Bambi-voiced, so never for CCP Default.
-            // Those mods get the recorded neutral clips instead (Resources/Audio/backroom/words).
-            if (!ModAudioPolicy.UsesSharedSubAudio(App.Mods?.ActiveModId))
-                return BackRoom.BackRoomVoice.FindNeutralClip(text);
-            return SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false);
+        /// <summary>True when the phrase has a recorded clip on the active mod: the same lookup the
+        /// player runs before it speaks, so the editors can mark the lines that will stay silent.</summary>
+        public bool HasRecordedVoice(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            try { return FindLinkedAudio(text) != null; }
+            catch { return false; }
         }
 
         private string? GetModAudioPath()

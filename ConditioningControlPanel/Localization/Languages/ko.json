@@ -1156,6 +1156,8 @@
   "label_frames": "프레임",
   "tooltip_text_visibility_lower_more_subtle": "텍스트 가시성. 낮을수록 은은해요.",
   "tooltip_play_whispered_audio_when_subliminal_messages": "서브리미널 메시지가 나타날 때 속삭임 오디오를 재생해요.",
+  "tooltip_silent_line": "No recorded voice for this line on this mod. It shows, but stays silent.",
+  "hint_silent_lines": "Some lines have no recorded voice on this mod. They show, but stay silent.",
   "setting_audio_whispers": "📊 오디오 속삭임",
   "section_system": "⚙ 시스템",
   "tooltip_set_custom_assets_folder": "사용자 정의 에셋 폴더 설정",

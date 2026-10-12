@@ -1156,6 +1156,8 @@
   "label_frames": "Frames",
   "tooltip_text_visibility_lower_more_subtle": "Text-Sichtbarkeit. Niedriger = subtiler.",
   "tooltip_play_whispered_audio_when_subliminal_messages": "Geflüstertes Audio abspielen, wenn subliminale Nachrichten erscheinen.",
+  "tooltip_silent_line": "No recorded voice for this line on this mod. It shows, but stays silent.",
+  "hint_silent_lines": "Some lines have no recorded voice on this mod. They show, but stay silent.",
   "setting_audio_whispers": "📊 Audio-Flüstern",
   "section_system": "⚙ System",
   "tooltip_set_custom_assets_folder": "Benutzerdefinierten Dateien-Ordner festlegen",

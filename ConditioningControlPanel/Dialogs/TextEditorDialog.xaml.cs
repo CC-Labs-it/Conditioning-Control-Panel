@@ -17,6 +17,7 @@ namespace ConditioningControlPanel
         private Dictionary<string, bool> _originalData;
         private ObservableCollection<TextItem> _items;
         private bool _hasChanges = false;
+        private Func<string, bool>? _hasVoice;
 
         /// <summary>
         /// The edited data after Save is clicked
@@ -40,6 +41,27 @@ namespace ConditioningControlPanel
             );
             
             ItemList.ItemsSource = _items;
+        }
+
+        /// <summary>
+        /// For a list whose phrases can be SPOKEN (subliminals, trigger lines): marks every line with
+        /// no recorded clip on the active mod and shows the one hint line. The caller hands in the
+        /// player's own lookup, so the mark and the sound cannot disagree. Lists that are never
+        /// spoken do not call this and stay unmarked.
+        /// </summary>
+        public void MarkSilentLines(Func<string, bool> hasVoice)
+        {
+            _hasVoice = hasVoice;
+            foreach (var item in _items)
+                item.IsSilent = Services.SpokenClipRule.IsSilent(item.Text, hasVoice);
+            RefreshSilentHint();
+        }
+
+        private void RefreshSilentHint()
+        {
+            var any = _hasVoice != null
+                && Services.SpokenClipRule.AnySilent(_items.Select(x => x.Text), _hasVoice);
+            TxtSilentHint.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void BtnAdd_Click(object sender, RoutedEventArgs e)
@@ -69,7 +91,13 @@ namespace ConditioningControlPanel
                 return;
             }
             
-            _items.Add(new TextItem { Text = text, IsEnabled = true });
+            _items.Add(new TextItem
+            {
+                Text = text,
+                IsEnabled = true,
+                IsSilent = _hasVoice != null && Services.SpokenClipRule.IsSilent(text, _hasVoice),
+            });
+            RefreshSilentHint();
             TxtNewItem.Clear();
             TxtNewItem.Focus();
             _hasChanges = true;
@@ -133,6 +161,7 @@ namespace ConditioningControlPanel
                 {
                     _items.Remove(item);
                     _hasChanges = true;
+                    RefreshSilentHint();
                 }
             }
         }
@@ -158,6 +187,7 @@ namespace ConditioningControlPanel
                     _items.Remove(item);
                 }
                 _hasChanges = true;
+                RefreshSilentHint();
             }
         }
 
@@ -217,6 +247,14 @@ namespace ConditioningControlPanel
         private string _text = "";
         private bool _isEnabled = true;
         private bool _isSelected = false;
+        private bool _isSilent = false;
+
+        /// <summary>True when the line has no recorded voice on the active mod (shows, stays silent).</summary>
+        public bool IsSilent
+        {
+            get => _isSilent;
+            set { _isSilent = value; OnPropertyChanged(nameof(IsSilent)); }
+        }
 
         public string Text
         {

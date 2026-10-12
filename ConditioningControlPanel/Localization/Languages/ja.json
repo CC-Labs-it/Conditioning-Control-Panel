@@ -1156,6 +1156,8 @@
   "label_frames": "フレーム",
   "tooltip_text_visibility_lower_more_subtle": "テキストの視認性。低い = より微妙",
   "tooltip_play_whispered_audio_when_subliminal_messages": "サブリミナルメッセージ表示時にささやきオーディオを再生",
+  "tooltip_silent_line": "No recorded voice for this line on this mod. It shows, but stays silent.",
+  "hint_silent_lines": "Some lines have no recorded voice on this mod. They show, but stay silent.",
   "setting_audio_whispers": "📊 オーディオウィスパー",
   "section_system": "⚙ システム",
   "tooltip_set_custom_assets_folder": "カスタムアセットフォルダを設定",
