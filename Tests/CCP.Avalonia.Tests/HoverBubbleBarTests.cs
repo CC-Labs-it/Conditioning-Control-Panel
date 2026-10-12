@@ -40,11 +40,12 @@ public sealed class HoverBubbleBarTests
         {
             EnsureApp();
             var s = CoreSettings.Current;
-            var motionBefore = s.MotionLevel;
+            var (motionBefore, linkedBefore, rpBefore) = (s.MotionLevel, s.HasLinkedDiscord, s.DiscordRichPresenceEnabled);
             MainShellWindow? w = null;
             try
             {
                 s.MotionLevel = MotionLevel.Off;   // instant states: widths are assertable
+                s.HasLinkedDiscord = true;         // the RP switch refuses an unlinked account (WPF AccountShell.cs:279)
                 w = new MainShellWindow();
                 w.Show();
                 Dispatcher.UIThread.RunJobs();
@@ -115,7 +116,7 @@ public sealed class HoverBubbleBarTests
             finally
             {
                 w?.Close();
-                s.MotionLevel = motionBefore;
+                (s.MotionLevel, s.HasLinkedDiscord, s.DiscordRichPresenceEnabled) = (motionBefore, linkedBefore, rpBefore);
             }
         }
     }
