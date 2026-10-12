@@ -56,6 +56,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
+            // or a Lines task reopens the card the press just dismissed.
+            Platform.LeashTaskHost.OnPanicPress(this);
 
             // Same evaluation order as WPF: asking the palette closes it, so never ask with a card up.
             bool lockCardOpen = LockCardWindow.IsAnyOpen();

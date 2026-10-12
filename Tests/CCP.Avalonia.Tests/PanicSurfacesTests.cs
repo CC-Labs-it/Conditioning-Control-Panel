@@ -79,7 +79,7 @@ public sealed class PanicSurfacesTests
     /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "haptics",
+        "intake", "leash-task", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "haptics",
         "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "attention-test", "deeper-editor-audio", "camera",
     };
 
@@ -113,6 +113,10 @@ public sealed class PanicSurfacesTests
         ("corner-gif", "tube-speech", "tube after corner GIFs"),
         // WPF :2030 StopAdHocEffects closes lock cards after the media stops; engine before lock cards.
         ("engine", "lock-cards", "engine before lock cards"),
+        // WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does: the task parks before
+        // the tail's StopEngine and lock-card close, so nothing it drives comes back by itself.
+        ("leash-task", "engine", "leash task parks before the engine stop"),
+        ("leash-task", "lock-cards", "leash task parks before its lock card closes"),
         // gaze minigame ends before the camera it reads (PanicSurfaces.cs comment).
         ("gaze-minigame", "camera", "gaze ends before the camera stops"),
     };
