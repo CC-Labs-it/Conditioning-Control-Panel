@@ -299,6 +299,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     return;
                 }
                 _page = page;
+                // The header stat pills read the last page (WPF App.Leaderboard, MainWindow.UiUpdates.cs:570-607).
+                Windows.MainShellWindow.NoteLeaderboardPage(page.OnlineUsers, page.YourRank, page.YourTotal, page.Entries?.Count ?? 0);
+                (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.UpdateStatPills();
                 _ranked.Clear();
                 _ranked.AddRange(LeaderboardClient.Rank(page.Entries!, allTime));
                 _sortKey = "rank";

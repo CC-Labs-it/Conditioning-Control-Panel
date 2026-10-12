@@ -1,7 +1,6 @@
 // Ported from ConditioningControlPanel/MainWindow/MainWindow.UiUpdates.cs (SetOfflineDisabled,
 // UpdateOfflineModeUI, DisconnectNetworkServices) and MainWindow.xaml.cs SyncOfflineModeState.
-// Not ported: Discord Rich Presence (no such service on this head) and SettingsTab.BtnUnifiedLogin
-// (dead markup on this head, SettingsTabView.axaml "live code (BtnUnifiedLogin ...").
+// Not ported: Discord Rich Presence (no such service on this head).
 
 using System;
 using System.Linq;
@@ -61,7 +60,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                // Login buttons: Settings · Account and the Profile tab's privacy panel.
+                // Login buttons: Settings · Account, the Home account strip and the Profile tab's privacy panel.
+                SetOfflineDisabled(SettingsPage?.FindControl<Button>("BtnUnifiedLogin"), isOffline);
                 SetOfflineDisabled(Deep<Button>("BtnPatreonLogin"), isOffline);
                 SetOfflineDisabled(Deep<Button>("BtnDiscordLogin"), isOffline);
                 SetOfflineDisabled(Deep<Button>("BtnDiscordTabLogin"), isOffline);

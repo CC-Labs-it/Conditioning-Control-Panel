@@ -160,6 +160,75 @@ public sealed partial class AccountSeedTests
         }
     }
 
+    /// <summary>WPF MainWindow.UiUpdates.cs:570-607: the Hive Mind / Popular Girl header pills read the
+    /// leaderboard's last page (online users, server-rank percentile); before a page they say Loading.</summary>
+    [Fact]
+    public async Task HeaderStatPills_ReadTheLastLeaderboardPage()
+    {
+        var s = CoreSettings.Current;
+        var (oldOffline, oldClient, oldId) = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
+        var oldSkills = s.UnlockedSkills.ToList();
+        var (oldMinutes, oldShields) = (s.TotalConditioningMinutes, s.StreakShieldsRemaining);
+        var wire = new BoardWire();
+        try
+        {
+            LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
+            CoreAccount.UnifiedUserId = "u7";
+            s.OfflineMode = false;
+            s.UnlockedSkills.Clear();
+            s.UnlockedSkills.AddRange(new[] { "hive_mind", "popular_girl" });
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (global::Avalonia.Application.Current is null)
+                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                LocalizationManager.Instance.SetLanguage("en");
+                var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                try
+                {
+                    shell.Show();
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    var online = shell.Named<TextBlock>("TxtPillOnlineUsers")!;
+                    var pct = shell.Named<TextBlock>("TxtPillRankPercentile")!;
+                    Assert.True(shell.Named<Border>("PillOnlineUsers")!.IsVisible);
+                    Assert.Equal(Loc.Get("label_loading_2"), pct.Text);      // no page yet
+
+                    await shell.Named<LeaderboardTabView>("LeaderboardTab")!.SetLeaderboardMode(false);
+                    Assert.Equal("2", online.Text);
+                    Assert.Equal("Top 1%", pct.Text);                          // ceil(4 / 1234 * 100) = 1
+
+                    // Each pill shows only with its skill (WPF UiUpdates.cs:538-627).
+                    Assert.False(shell.Named<Border>("PillConditioningTime")!.IsVisible);
+                    Assert.False(shell.Named<Border>("StreakFirePill")!.IsVisible);
+                    s.UnlockedSkills.Remove("hive_mind");
+                    s.UnlockedSkills.AddRange(new[] { "pink_hours", "good_girl_streak" });
+                    s.TotalConditioningMinutes = 61.5;
+                    s.StreakShieldsRemaining = 1;
+                    shell.UpdateStatPills();
+                    Assert.False(shell.Named<Border>("PillOnlineUsers")!.IsVisible);
+                    Assert.True(shell.Named<Border>("PillConditioningTime")!.IsVisible);
+                    Assert.Equal("1h 1m 30s", shell.Named<TextBlock>("TxtPillConditioningTime")!.Text);
+                    Assert.True(shell.Named<Border>("StreakFirePill")!.IsVisible);
+                    Assert.True(shell.Named<Control>("TxtStreakShieldIcon")!.IsVisible);
+                    s.StreakShieldsRemaining = 0;
+                    shell.UpdateStatPills();
+                    Assert.False(shell.Named<Control>("TxtStreakShieldIcon")!.IsVisible);
+                }
+                finally { shell.Close(); }
+            });
+        }
+        finally
+        {
+            (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = (oldOffline, oldClient, oldId);
+            s.UnlockedSkills.Clear();
+            s.UnlockedSkills.AddRange(oldSkills);
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+            (s.TotalConditioningMinutes, s.StreakShieldsRemaining) = (oldMinutes, oldShields);
+        }
+    }
+
     [Fact]
     public async Task LeaderboardTab_OneFetchInFlight_AndAModeSwitchMidFetchRefetchesTheNewBoard()
     {

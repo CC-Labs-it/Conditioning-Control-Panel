@@ -118,6 +118,60 @@ public sealed class TubeContentGatesTests
         await Task.CompletedTask;
     });
 
+    /// <summary>The tube hidden (tray / docked away): raw ShowDialog threw "Cannot show window with
+    /// non-visible owner"; WPF (ChatInput.cs:1298) shows the gate anyway. It opens ownerless, its
+    /// close box still switches nothing, and its Accept still switches.</summary>
+    [Fact]
+    public Task HiddenTubeStillAsksAndCloseStillRefuses() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        s.CompanionPrompt ??= new CompanionPromptSettings();
+        s.CompanionPrompt.UseCustomPrompt = false;
+        s.CompanionPrompt.ExplicitContentAcknowledged = false;
+        s.SlutModeEnabled = true;
+        var tube = new AvatarTubeWindow(null);
+        ExplicitContentAcknowledgementDialog? shown = null;
+        void OnOpened(object? o, RoutedEventArgs e) => shown = o as ExplicitContentAcknowledgementDialog;
+        using var hook = Window.WindowOpenedEvent.AddClassHandler<ExplicitContentAcknowledgementDialog>(OnOpened);
+        try
+        {
+            var explicitPreset = PersonalityService.Shared.GetAllPresets()
+                .First(p => p.Id != PersonalityPresets.SlutModeId && ExplicitContentGate.RequiresAcknowledgement(p, true)
+                            && p.Id != s.ActivePersonalityPresetId);
+            var before = s.ActivePersonalityPresetId;
+
+            var close = tube.ActivatePresetFromMenuAsync(explicitPreset.Id);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(close.IsFaulted, close.Exception?.ToString());
+            Assert.NotNull(shown);
+            shown!.Close();
+            Dispatcher.UIThread.RunJobs();
+            await close;
+            Assert.Equal(before, s.ActivePersonalityPresetId);
+            Assert.False(ExplicitContentGate.IsAlreadyAcknowledged(s.CompanionPrompt));
+
+            shown = null;
+            var accept = tube.ActivatePresetFromMenuAsync(explicitPreset.Id);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(shown);
+            shown!.FindControl<CheckBox>("ChkAgeConfirm")!.IsChecked = true;
+            shown.FindControl<Button>("BtnAccept")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await accept;
+            Assert.Equal(explicitPreset.Id, s.ActivePersonalityPresetId);
+        }
+        finally
+        {
+            shown?.Close();
+            tube.Close();
+            CoreSettings.ServiceProvider = previous;
+        }
+    });
+
     [Fact]
     public Task ThirdModerationHitOpensTheContentPolicyWarning() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
