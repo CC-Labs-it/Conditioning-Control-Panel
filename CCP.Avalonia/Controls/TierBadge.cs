@@ -143,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private readonly ScaleTransform _stampScale = new(1, 1);
         private readonly RotateTransform _stampRotate = new(0);
 
-        private CancellationTokenSource? _ambient;
+        private global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _ambient;
         private CancellationTokenSource? _thunk;
         private double _appliedWidth = -1;
         private bool _stampShown;
@@ -567,153 +567,41 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!AmbientAllowed) return;
 
                 _motionRunning = true;
-                _ambient = new CancellationTokenSource();
-                var token = _ambient.Token;
                 double period = Tier >= 2 ? BreathT2 : BreathT1;
-
-                // Scale: starts at rest and swells. Half a period each way (Alternate), so one
-                // full breath is exactly `period`.
-                var swell = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(period / 2),
-                    IterationCount = IterationCount.Infinite,
-                    PlaybackDirection = PlaybackDirection.Alternate,
-                    Easing = new SineEaseInOut(),
-                    Children =
-                    {
-                        new KeyFrame
-                        {
-                            Cue = new Cue(0d),
-                            Setters =
-                            {
-                                new Setter(ScaleTransform.ScaleXProperty, 1.0),
-                                new Setter(ScaleTransform.ScaleYProperty, 1.0),
-                            },
-                        },
-                        new KeyFrame
-                        {
-                            Cue = new Cue(1d),
-                            Setters =
-                            {
-                                new Setter(ScaleTransform.ScaleXProperty, WobbleScale),
-                                new Setter(ScaleTransform.ScaleYProperty, WobbleScale),
-                            },
-                        },
-                    },
-                };
-                // The SIGN, not _tierScale - the animator resolves the transform (see the fields).
-                _ = swell.RunAsync(_tierSign, token);
-
-                // Rotation: the same period, keyframed to START at its maximum - which is the 90
-                // degree phase offset the spec asks for. The badge then "breathes and settles"
-                // instead of pumping scale and angle together.
                 double tilt = TierTilt;
-                var sway = new Animation
+                bool hum = !FreeToday, glints = Tier >= 2;   // a papered-over sign hums no more; the stamp is the star
+                var glow = _tierSign.Effect as DropShadowEffect;
+                // WPF StartMotion (TierBadge.cs:416-535), every track at AmbientFrameRate 30, on the
+                // window's 30 fps beat instead of five infinite Animations (P82); the swell and the sway
+                // used to be inert (RunAsync of a transform property on the sign).
+                //  - swell 1 -> WobbleScale, AutoReverse SineEase InOut, half a period each way;
+                //  - sway keyed to START at its maximum (the 90 degree phase offset), SineEase InOut keys;
+                //  - glow hum 0.55 -> 1.0 on the swell's clock; Tier 1 flicker tic / Tier 2 glints, linear.
+                var sway = new[] { (0.0, tilt + WobbleDegrees), (period / 4, tilt), (period / 2, tilt - WobbleDegrees), (period * 3 / 4, tilt), (period, tilt + WobbleDegrees) };
+                var tic = new[] { (0.0, 1.0), (FlickerCycle - 0.20, 1.0), (FlickerCycle - 0.14, 0.85), (FlickerCycle - 0.08, 1.0), (FlickerCycle - 0.04, 0.88), (FlickerCycle, 1.0) };
+                var glintA = Glint(0.22);
+                var glintB = Glint(0.64);
+                _ambient = new global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop(this, t =>
                 {
-                    Duration = TimeSpan.FromSeconds(period),
-                    IterationCount = IterationCount.Infinite,
-                    Easing = new SineEaseInOut(),
-                };
-                void Key(double at, double angle) =>
-                    sway.Children.Add(new KeyFrame
+                    double k = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Breath(t, period / 2);
+                    _tierScale.ScaleX = _tierScale.ScaleY = 1 + (WobbleScale - 1) * k;
+                    _tierRotate.Angle = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % period, sway, sine: true);
+                    if (!hum) return;
+                    if (glow != null) glow.Opacity = 0.55 + 0.45 * k;
+                    if (glints)
                     {
-                        Cue = new Cue(at),
-                        Setters = { new Setter(RotateTransform.AngleProperty, angle) },
-                    });
-                Key(0.00, tilt + WobbleDegrees);
-                Key(0.25, tilt);
-                Key(0.50, tilt - WobbleDegrees);
-                Key(0.75, tilt);
-                Key(1.00, tilt + WobbleDegrees);
-                // Same sign as the swell: the two clocks reach different children of its group.
-                _ = sway.RunAsync(_tierSign, token);
+                        _glintA.Opacity = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % period, glintA);
+                        _glintB.Opacity = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % period, glintB);
+                    }
+                    else _tierSign.Opacity = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % FlickerCycle, tic);
+                });
+                _ambient.Start();
 
-                if (FreeToday) return;   // a papered-over sign hums no more; the stamp is the star
-
-                StartGlowBreath(period, token);
-                if (Tier >= 2) StartGlints(period, token);
-                else StartFlickerTic(token);
+                // Tier 2's two glints per cycle at fixed offsets (never a runtime Random): 0.3 s each.
+                (double, double)[] Glint(double at) =>
+                    new[] { (at * period, 0.0), (at * period + 0.15, 1.0), (at * period + 0.30, 0.0) };
             }
             catch (Exception ex) { Log.Debug("TierBadge.StartMotion: {E}", ex.Message); }
-        }
-
-        /// <summary>The neon hum: the glow's opacity swells 0.55 -> 1.0 on the wobble's period.</summary>
-        private void StartGlowBreath(double period, CancellationToken token)
-        {
-            if (_tierSign.Effect is not DropShadowEffect glow) return;
-            var hum = new Animation
-            {
-                Duration = TimeSpan.FromSeconds(period / 2),
-                IterationCount = IterationCount.Infinite,
-                PlaybackDirection = PlaybackDirection.Alternate,
-                Easing = new SineEaseInOut(),
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(DropShadowEffect.OpacityProperty, 0.55) } },
-                    new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(DropShadowEffect.OpacityProperty, 1.0) } },
-                },
-            };
-            _ = hum.RunAsync(glow, token);
-        }
-
-        /// <summary>
-        /// Tier 1's tic: once per border-shimmer lap, a quick two-step flicker (1 -> 0.85 -> 1
-        /// inside 180ms). A real sign's fault, deliberately NOT a strobe - the rest of the 6.5s
-        /// cycle is flat.
-        /// </summary>
-        private void StartFlickerTic(CancellationToken token)
-        {
-            var tic = new Animation
-            {
-                Duration = TimeSpan.FromSeconds(FlickerCycle),
-                IterationCount = IterationCount.Infinite,
-                Easing = new LinearEasing(),
-            };
-            void Key(double seconds, double value) =>
-                tic.Children.Add(new KeyFrame
-                {
-                    // WPF keys in absolute time; Avalonia keys in a 0..1 cue over the same duration.
-                    Cue = new Cue(Math.Clamp(seconds / FlickerCycle, 0, 1)),
-                    Setters = { new Setter(OpacityProperty, value) },
-                });
-            Key(0.00, 1.00);
-            Key(FlickerCycle - 0.20, 1.00);
-            Key(FlickerCycle - 0.14, 0.85);
-            Key(FlickerCycle - 0.08, 1.00);
-            Key(FlickerCycle - 0.04, 0.88);
-            Key(FlickerCycle, 1.00);
-            _ = tic.RunAsync(_tierSign, token);
-        }
-
-        /// <summary>Tier 2's two glints per cycle, at fixed offsets - precomputed keyframes, never
-        /// a runtime <c>Random</c>, so the same badge sparkles the same way twice.</summary>
-        private void StartGlints(double period, CancellationToken token)
-        {
-            Pop(_glintA, period, 0.22);
-            Pop(_glintB, period, 0.64);
-
-            void Pop(Ellipse glint, double cycle, double at)
-            {
-                var life = 0.30 / cycle;
-                var anim = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(cycle),
-                    IterationCount = IterationCount.Infinite,
-                    Easing = new LinearEasing(),
-                };
-                void Key(double t, double v) =>
-                    anim.Children.Add(new KeyFrame
-                    {
-                        Cue = new Cue(Math.Clamp(t, 0, 1)),
-                        Setters = { new Setter(OpacityProperty, v) },
-                    });
-                Key(0, 0);
-                Key(at, 0);
-                Key(at + (life / 2), 1);
-                Key(at + life, 0);
-                Key(1, 0);
-                _ = anim.RunAsync(glint, token);
-            }
         }
 
         /// <summary>
@@ -726,7 +614,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             try
             {
                 _motionRunning = false;
-                _ambient?.Cancel();
+                _ambient?.Stop();
                 _ambient = null;
 
                 _tierScale.ScaleX = _tierScale.ScaleY = 1.0;

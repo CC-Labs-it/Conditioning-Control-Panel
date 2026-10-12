@@ -4,10 +4,9 @@
 // What is real: the registry (_statusPulses), its single decision point (ApplyStatusPulse) and the
 // four per-tab entry points. A dot breathes only while its feature genuinely runs, which is the
 // whole "zero idle loops" rule the WPF file is held to. WPF's DoubleAnimation with AutoReverse +
-// RepeatBehavior.Forever over DropShadowEffect.Opacity becomes one Avalonia Animation with
-// PlaybackDirection.Alternate + IterationCount.Infinite over the same property - the same motion,
-// not an approximation - cancelled through a CancellationTokenSource the way every other loop on
-// this head is (see MainShellWindow.DeeperFx.cs).
+// RepeatBehavior.Forever over DropShadowEffect.Opacity becomes a BeatLoop on the window's 30 fps
+// beat writing the same property on the same SineEase InOut curve (lag fix, P82: an infinite
+// Animation kept the whole window composing at render rate).
 //
 // On WPF each status tab calls its Set*StatusPulse from the state-change method it already has.
 // Here SetBlinkTrainerStatusPulse is called by BlinkTrainerTabView.RefreshStatusRow and
@@ -40,6 +39,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 using Serilog;
 
@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             internal double Blur;
             internal Color Tint;
             internal DropShadowEffect? Glow;
-            internal CancellationTokenSource? Clock;
+            internal BeatLoop? Clock;
         }
 
         /// <summary>Window focus + not minimised: the ambient gate every loop in this file passes
@@ -243,20 +243,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 };
                 dot.Effect = req.Glow;
 
-                req.Clock = new CancellationTokenSource();
-                var anim = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(StatusPulseSeconds),
-                    IterationCount = IterationCount.Infinite,
-                    PlaybackDirection = PlaybackDirection.Alternate,
-                    Easing = new SineEaseInOut(),
-                    Children =
-                    {
-                        new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(DropShadowEffect.OpacityProperty, StatusPulseMinOpacity) } },
-                        new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(DropShadowEffect.OpacityProperty, StatusPulseMaxOpacity) } },
-                    },
-                };
-                _ = anim.RunAsync(req.Glow, req.Clock.Token);
+                // AutoReverse + SineEase InOut over 2.8 s on the 30 fps beat, not an infinite Animation (P82).
+                var glow = req.Glow;
+                req.Clock = new BeatLoop(dot, t => glow.Opacity =
+                    StatusPulseMinOpacity + (StatusPulseMaxOpacity - StatusPulseMinOpacity) * BeatLoop.Breath(t, StatusPulseSeconds));
+                req.Clock.Start();
             }
             catch (Exception ex) { Log.Debug("ApplyStatusPulse: {E}", ex.Message); }
         }
@@ -266,7 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var clock = req.Clock;
             if (clock == null) return;
             req.Clock = null;
-            try { clock.Cancel(); clock.Dispose(); } catch { }
+            clock.Stop();
         }
 
         // ---- the four tabs' entry points -------------------------------------------

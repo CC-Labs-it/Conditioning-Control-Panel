@@ -24,15 +24,24 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private static readonly HashSet<BeatLoop> Live = new();
 
         private readonly FrameClock _clock;
+        private readonly Visual _owner;
         private readonly Action<double> _step;
         private long _started;
 
         public BeatLoop(Visual owner, Action<double> step)
         {
+            _owner = owner;
             _step = step;
             _clock = new FrameClock(owner) { Interval = TimeSpan.FromSeconds(1.0 / 30) };
-            _clock.Tick += (_, _) => Step();
+            _clock.Tick += (_, _) => { if (!Parked) Step(); };
         }
+
+        /// <summary>A beat writes nothing while its owner is hidden or its window minimised, so the
+        /// window has nothing to compose (WPF renders nothing for a minimised window either). Time
+        /// keeps running, so the loop resumes in phase.</summary>
+        internal bool Parked =>
+            !_owner.IsEffectivelyVisible
+            || global::Avalonia.Controls.TopLevel.GetTopLevel(_owner) is global::Avalonia.Controls.Window { WindowState: global::Avalonia.Controls.WindowState.Minimized };
 
         public bool IsRunning => _clock.IsEnabled;
 
@@ -61,5 +70,22 @@ namespace ConditioningControlPanel.Avalonia.Helpers
 
         /// <summary>0 -> 1 -> 0 over 2 x <paramref name="period"/> seconds: Alternate + SineEaseInOut.</summary>
         public static double Breath(double t, double period) => (1 - Math.Cos(Math.PI * t / period)) / 2;
+
+        /// <summary>A WPF keyframe track (DoubleAnimationUsingKeyFrames) at <paramref name="t"/>: keys sorted by
+        /// time, held flat before the first and after the last; each segment Linear, or SineEase InOut
+        /// when <paramref name="sine"/> (EasingDoubleKeyFrame).</summary>
+        public static double Keys(double t, (double At, double V)[] keys, bool sine = false)
+        {
+            if (t <= keys[0].At) return keys[0].V;
+            for (int i = 1; i < keys.Length; i++)
+            {
+                var (a, b) = (keys[i - 1], keys[i]);
+                if (t > b.At) continue;
+                double p = b.At > a.At ? (t - a.At) / (b.At - a.At) : 1;
+                if (sine) p = (1 - Math.Cos(Math.PI * p)) / 2;
+                return a.V + (b.V - a.V) * p;
+            }
+            return keys[^1].V;
+        }
     }
 }
