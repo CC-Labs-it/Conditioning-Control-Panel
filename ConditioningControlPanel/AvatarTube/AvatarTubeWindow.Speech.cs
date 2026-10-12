@@ -944,8 +944,25 @@ namespace ConditioningControlPanel
                     if (bx != _bubbleX || by != _bubbleY)
                     {
                         _bubbleX = bx; _bubbleY = by;
-                        SetWindowPos(_bubbleHandle, IntPtr.Zero, bx, by, 0, 0,
-                            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                        // Moving a visible WPF window waits on the render thread twice (HwndTarget
+                        // disables the render target on WM_WINDOWPOSCHANGING and flushes
+                        // synchronously, then again on re-enable). When the render thread is backed
+                        // up, this call is where the UI thread parks (ccp-bugs #1412, the same family
+                        // as the lock card's #494). Nothing here can shorten that wait; the mark and
+                        // the line below only make the next report say so. No behaviour change.
+                        long moveStart = Environment.TickCount64;
+                        using (VideoDiag.UiScope(BubbleMoveMark))
+                        {
+                            SetWindowPos(_bubbleHandle, IntPtr.Zero, bx, by, 0, 0,
+                                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                        }
+                        long moveMs = Environment.TickCount64 - moveStart;
+                        if (IsSlowBubbleMove(moveMs))
+                        {
+                            App.Logger?.Warning(
+                                "Speech bubble move waited {Ms} ms on the render thread (lockCard={LockCard}, bubbleVisible={Visible})",
+                                moveMs, LockCardWindow.IsAnyOpen(), _bubbleWindow?.IsVisible == true);
+                        }
                     }
                 }
 
@@ -1104,6 +1121,12 @@ namespace ConditioningControlPanel
             catch { /* a bubble that pops the app forward beats a bubble that never shows */ }
             return IntPtr.Zero;
         }
+
+        /// <summary>What a hang report names when the UI thread is parked in the bubble's move.</summary>
+        internal const string BubbleMoveMark = "AvatarTube.SpeechBubble.Move";
+        /// <summary>A healthy move is a few ms; past this the render thread kept the UI thread waiting.</summary>
+        internal const int SlowBubbleMoveMs = 250;
+        internal static bool IsSlowBubbleMove(long elapsedMs) => elapsedMs >= SlowBubbleMoveMs;
 
         private bool _placingSpeechBubble;
         private bool _speechBubblePlacementHooked;
