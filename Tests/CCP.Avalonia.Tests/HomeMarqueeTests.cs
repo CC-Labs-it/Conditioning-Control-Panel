@@ -9,6 +9,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -169,6 +171,19 @@ public sealed class HomeMarqueeTests
         w.ShowTab("settings");
         Dispatcher.UIThread.RunJobs();
         Assert.True(dash.Marquee.IsTicking);
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF MainWindow.xaml:1366: the urgent pill is crimson with a 3 px border, not just new text.</summary>
+    [Fact]
+    public Task UrgentUpdatePillIsRed() => WithShell((w, _) =>
+    {
+        var pill = w.Named<Button>("BtnUpdateAvailable")!;
+        w.ApplyServerUpdateBanner("99.0.0", "http://127.0.0.1/dl");
+        Dispatcher.UIThread.RunJobs();
+        var border = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "border");
+        Assert.Equal(Color.Parse("#DC143C"), ((ISolidColorBrush)border.Background!).Color);
+        Assert.Equal(new Thickness(3), border.BorderThickness);
         return Task.CompletedTask;
     });
 
