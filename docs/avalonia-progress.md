@@ -1997,3 +1997,24 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/leash-wire: +372
 - The Core LeashService now runs on the Avalonia friends poll: seams are seeded, it starts after friends and is dropped on exit, and the launcher leash gate reads it, but holds a tile only once a gate card can present it (LeashGateCard unit). Cut target: `RemoteRelay.EndSessionNow`.
 - The +372 is counted against the stack-tip merge 8d147364d (icons-progress), not 2a4a55570. Tests: LeashHeadTests and a RemoteRelay test, all fail-proven. GATE-OK.
+
+## avalonia-port/content-packs-service: +1000
+- Core ContentPackService network half (trunk U8): manifest, Patreon signed-URL install with Range resume, encrypt, rate limit/auth, V2 link, status, local zip; 13 fake-handler tests incl. bad signed URL rejected with user packs kept.
+- Startup seed, previews and pool wiring follow in content-packs-wire.
+
+## avalonia-port/content-packs-wire: +654
+- Content packs seeded at startup; flash, scheduled video and bubble count draw active pack media through Core PackMediaPool (WPF-weighted).
+- Pack previews (installed picks + URL cache, sandbox-safe) in Core ContentPackService; svc-content-packs stays stub (no packs UI).
+- Review fixes: startup sweep of crash-left ccp_temp_* decrypts; video/bubble weigh pack clips left this cycle like WPF.
+
+## avalonia-port/lag-fixes-a: +670
+- Shell ambient loops (FeatureCard/SplitFeatureCard, Chaster chip, status pulses, fuse, Deeper, TierBadge, SpiralGlyph, roadmap, Lockdown) now run on the 30 fps BeatLoop, and a hidden or minimised loop unsubscribes its clock. Tile and tier-badge glows are sibling BoxShadows instead of Effects. Three motions that never ran before (chip swing, Deeper drift, TierBadge sway) now animate.
+- A ratchet blocks new infinite Animations (10 files left for lag-fixes-b). There are 16 recorded fail-proofs. Measured live: Play tab CPU 49 -> 32% of a core. Idle Home still composes at about 55 fps in both builds (cause outside this lane).
+
+## avalonia-port/lag-fixes-b: +759
+- Spiral, Quests, Exclusives, Enhancements and Home loops ride the shared 30 fps beat, glows are sibling BoxShadow layers, and FX timers moved onto FrameClock. Idle renders/s: Home 56->37, Play 45->32, Enhancements 59->37, Premium 59->35.
+- Glows under loops are baked once (GlowBake: Spiral digits and waiting line, padlocks) or use sibling BoxShadows, with headless render proofs. Effect ratchets cover code and .axaml. The ~115 comp updates/s are idle 144 Hz ticks (evidence/lag-fixes-b/live-fps.txt).
+
+## avalonia-port/feature-day-log-core: +210
+- FeatureDayLogService + model moved to Core (same feature_day_log.json); seeded/disposed on the Avalonia head; `ConditioningMinutesOn` accessor for the leash day report.
+- Follow-ups: LeashHead.DayInputs minutes (leash-wire), Chaster MinutesOn, Note/sync hooks on Avalonia.
