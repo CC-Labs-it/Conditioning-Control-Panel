@@ -1885,3 +1885,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/sync6-nav-rail-d: +732
 - Settings > Monitors (System bubble scrolls to it, crumb follows; SystemFeatureControl retired), Library Folders zone + Data logs row, ? badge beside every strip pill, mod door art on the rail.
 - Ledger rows 1/25/33 ported, 6/11/17/21/96 partial; Account & Plans, Games cards, Just Drop ask, Moved note -> sync6-nav-rail-e.
+
+## avalonia-port/wizard-hidpi-wpe: +219
+- First-run wizard capped to the screen working area (pixels divided by scaling): at 200% on 1080p, Enter stays on screen and the 18+ box is reachable by scrolling (F5; distro-check hidpi wizard_done true on ubuntu-24.04).
+- Missing-WPE message: Arch keeps WPE in pacman (extra ships the trio; PKGBUILD unchanged). Other distros get no failing command, and a 9-language line says those pages are unavailable. No unbuilt Flatpak is offered (F2).
