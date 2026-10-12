@@ -57,12 +57,17 @@ internal static class LeashHead
             try { LeashedChanged?.Invoke(on); }
             catch (Exception ex) { Serilog.Log.Debug("Leash changed handler failed: {E}", ex.Message); }
         };
+        Publish(svc);
+        return svc;
+    }
+
+    /// <summary>WPF MainWindow.Leash.cs:95 LeashBlocksGames: the launcher's gate asks the service, and the
+    /// panel's gate card presents it.</summary>
+    private static void Publish(ILeashService svc)
+    {
         Service = svc;
-        // WPF MainWindow.Leash.cs:95 LeashBlocksGames: the launcher's gate asks the service (and holds a
-        // tile only once a gate card can present it: MainShellWindow.LeashBlocksGames).
         Views.Windows.MainShellWindow.LeashGateDueProvider = () => Service?.GateDue != null;
         Views.Windows.MainShellWindow.PresentLeashGateProvider = shell => shell.PresentLeashGate();
-        return svc;
     }
 
     /// <summary>WPF LeashLocator's CCP_LEASH_DEMO: a Debug build in a sandbox (CCP_USERDATA_DIR) with
@@ -78,9 +83,7 @@ internal static class LeashHead
         // As the wire reads it: dates stay strings (JObject.Parse would turn them into local DateTimes).
         svc.ApplyBlock(Newtonsoft.Json.JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(File.ReadAllText(path),
             new Newtonsoft.Json.JsonSerializerSettings { DateParseHandling = Newtonsoft.Json.DateParseHandling.None }));
-        Service = svc;
-        Views.Windows.MainShellWindow.LeashGateDueProvider = () => Service?.GateDue != null;
-        Views.Windows.MainShellWindow.PresentLeashGateProvider = shell => shell.PresentLeashGate();
+        Publish(svc);
         Serilog.Log.Information("[Leash] demo leash from {Path}", path);
 #endif
     }

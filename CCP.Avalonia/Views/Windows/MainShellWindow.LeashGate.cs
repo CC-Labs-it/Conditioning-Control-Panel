@@ -6,8 +6,10 @@
 // opens (LauncherHost.cs:360-366). Platform/LeashHead seeds both providers.
 // ponytail: the task runner and the punishment video window (WPF LeashTaskRunner/AppLeashTaskHost +
 // LeashPunishWindow, WebView2) are lane leash-punish: until then the gate's action says it cannot start,
-// as WPF does when its runner refuses. Not read yet: StartupLadder/Tutorial modals and the browser hide
-// (WPF airspace; this head's browser is not a native child).
+// as WPF does when its runner refuses, and the card carries "Not now" (the 10 min stand-back) so a gate
+// that cannot run its task never pins the panel. Not read yet: StartupLadder/Tutorial modals.
+// The browser card hides while the gate is up (WPF airspace, MainWindow.Leash.cs:184-201: NativeWebView
+// is a native host here too, SettingsTabView.axaml:971, and would cover Panic and Cut).
 using System;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -30,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private LeashGateCard? _leashGate;
         private DateTime _leashSnoozeUntilUtc = DateTime.MinValue;
+        private bool _leashHidBrowser;
 
         /// <summary>The card on this panel (tests read it).</summary>
         internal LeashGateCard? LeashGate => _leashGate;
@@ -59,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (Named<Border>("RemoteControlOverlay") is not { Parent: Grid host } overlay) return;
-                _leashGate = new LeashGateCard();
+                _leashGate = new LeashGateCard { CanStartTasks = false };   // no task runner on this head yet
                 Grid.SetRow(_leashGate, Grid.GetRow(overlay));
                 Grid.SetRowSpan(_leashGate, Grid.GetRowSpan(overlay));
                 Grid.SetColumn(_leashGate, Grid.GetColumn(overlay));
@@ -71,7 +74,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _leashGate.PardonRequested += p => _ = PardonLeashAsync(p);
                 _leashGate.PanicRequested += PanicFromLeashGate;
                 _leashGate.CutRequested += () => _ = CutFromLeashGateAsync();
-                _leashGate.LaterRequested += HideLeashGate;
+                // "Not now": stands back like a panic press (the punishment stays pending; a tile press brings it back).
+                _leashGate.LaterRequested += () => { _leashSnoozeUntilUtc = DateTime.UtcNow + LeashUiRules.PanicSnooze; HideLeashGate(); };
 
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
                 timer.Tick += (_, _) => CheckLeashGate();
@@ -88,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var svc = LeashHead.Service;
                 var due = svc?.GateDue;
                 if (due != null && LeashGateRule.ShouldShow(ReadLeashWorld(true)))
-                    _leashGate?.Present(due, svc!.Snapshot.Me?.Pardons ?? 0);
+                    ShowLeashGate(due, svc!.Snapshot.Me?.Pardons ?? 0);
                 else HideLeashGate();
             }
             catch (Exception ex) { Serilog.Log.Debug("Leash gate check failed: {E}", ex.Message); }
@@ -104,10 +108,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PanelAway: !IsVisible || WindowState == WindowState.Minimized,
             Watching: DateTime.UtcNow < _leashSnoozeUntilUtc);
 
+        private void ShowLeashGate(Punishment p, int pardons)
+        {
+            if (_leashGate == null) return;
+            if (!_leashGate.IsUp && LeashBrowser is { IsVisible: true } b)
+            {
+                b.IsVisible = false;
+                _leashHidBrowser = true;
+            }
+            _leashGate.Present(p, pardons);
+        }
+
         private void HideLeashGate()
         {
-            if (_leashGate?.IsUp == true) _leashGate.Dismiss();
+            if (_leashGate?.IsUp != true) return;
+            _leashGate.Dismiss();
+            if (!_leashHidBrowser) return;
+            _leashHidBrowser = false;
+            // Never hand the browser back over the remote overlay's own blindfold.
+            if (Named<Border>("RemoteControlOverlay")?.IsVisible != true && LeashBrowser is { } b) b.IsVisible = true;
         }
+
+        /// <summary>The browser card's native host (WPF SettingsTab.BrowserContainer).</summary>
+        internal Control? LeashBrowser => Named<Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
 
         private async System.Threading.Tasks.Task PardonLeashAsync(Punishment p)
         {

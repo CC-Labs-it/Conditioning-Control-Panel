@@ -151,6 +151,25 @@ public sealed class LeashGateCardTests
         finally { (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldTargets, oldUi); }
     });
 
+    /// <summary>WPF MainWindow.Leash.cs:184-201: the native browser never sits over Panic and Cut. And with no
+    /// task runner on this head, "Not now" stands the gate back so it never pins the panel.</summary>
+    [Fact]
+    public void TheBrowserHidesUnderTheGate_AndNotNowStandsItBack() => Run(punished: true, (shell, launcher, _) =>
+    {
+        var browser = shell.LeashBrowser!;
+        browser.IsVisible = true;
+        PressTile(launcher);
+        Assert.True(shell.LeashGate!.IsUp);
+        Assert.False(browser.IsVisible);
+        Click(Find(shell, "leash-gate-later"));
+        Assert.False(shell.LeashGate.IsUp);
+        Assert.True(browser.IsVisible);
+        shell.CheckLeashGate();                         // the 2 s check: still standing back
+        Assert.False(shell.LeashGate.IsUp);
+        PressTile(launcher);                            // a tile press brings it back
+        Assert.True(shell.LeashGate.IsUp);
+    });
+
     [Fact]
     public void NoPunishment_TileOpensItsGame() => Run(punished: false, (shell, launcher, _) =>
     {
