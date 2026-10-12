@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -43,6 +42,7 @@ public sealed class FeatureDayLogServiceTests : IDisposable
             Assert.Equal(47, svc.ConditioningMinutesOn(new DateTime(2026, 10, 1, 23, 59, 0)));
             Assert.Equal(0, svc.ConditioningMinutesOn(new DateTime(2026, 9, 30, 8, 0, 0)));
             Assert.Equal(0, svc.ConditioningMinutesOn(new DateTime(2026, 10, 2)));
+            Assert.Equal(47, svc.ConditioningMinutesOn("2026-10-01")); // WPF Chaster MinutesFromDayLog's key form
         }
         finally { svc.Dispose(); }
 
@@ -52,13 +52,15 @@ public sealed class FeatureDayLogServiceTests : IDisposable
     [Fact]
     public void Note_WritesWpfShape_AndReloads()
     {
-        var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        string today;
         using (var svc = new FeatureDayLogService(() => null, LogPath))
         {
             svc.Note("e_bt", 2);
             svc.Note("not_a_key");
             svc.SaveNow();
+            today = svc.Log.Days[0].D; // the service's own day key: no midnight race (P08)
         }
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", today);
 
         var expected = "{\n  \"baseline\": {},\n  \"days\": [\n    {\n      \"d\": \"" + today + "\",\n" +
             string.Concat(Array.ConvertAll(FeatureDayEntry.CounterKeys, k => $"      \"{k}\": 0,\n")) +
@@ -67,6 +69,25 @@ public sealed class FeatureDayLogServiceTests : IDisposable
 
         using var reloaded = new FeatureDayLogService(() => null, LogPath);
         Assert.Equal(2, reloaded.Log.Days[0].Get("e_bt"));
+    }
+
+    [Fact]
+    public void CorruptOrMissingFile_StartsEmpty_WithoutWritingOrThrowing()
+    {
+        // WPF behaviour, kept: an unreadable file means a fresh log in memory; nothing is written
+        // until something is credited, so a run that credits nothing leaves the bad file as it was.
+        File.WriteAllText(LogPath, "{ not json");
+        using (var svc = new FeatureDayLogService(() => null, LogPath))
+        {
+            Assert.Empty(svc.Log.Days);
+            Assert.Empty(svc.Log.Baseline);
+        }
+        Assert.Equal("{ not json", File.ReadAllText(LogPath));
+
+        File.Delete(LogPath);
+        using (var svc = new FeatureDayLogService(() => null, LogPath))
+            Assert.Equal(0, svc.ConditioningMinutesOn(DateTime.Now));
+        Assert.False(File.Exists(LogPath));
     }
 
     [Fact]

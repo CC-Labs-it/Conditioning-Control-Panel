@@ -204,10 +204,12 @@ public class FeatureDayLogService : IDisposable
     /// Conditioning minutes credited to the local day of <paramref name="local"/> (the leash day
     /// report's minutes, WPF LeashService.AppDayInputs). 0 when that day has no entry.
     /// </summary>
-    public int ConditioningMinutesOn(DateTime local)
+    public int ConditioningMinutesOn(DateTime local) => ConditioningMinutesOn(DayKey(local));
+
+    /// <summary>Same, by day key (yyyy-MM-dd). Under the lock: the 60 s tick runs off the UI thread.</summary>
+    public int ConditioningMinutesOn(string dayKey)
     {
-        var key = DayKey(local);
-        lock (_lock) return Log.Days.FirstOrDefault(d => d?.D == key)?.Cm ?? 0;
+        lock (_lock) return Log.Days.FirstOrDefault(d => d?.D == dayKey)?.Cm ?? 0;
     }
 
     #region Persistence
