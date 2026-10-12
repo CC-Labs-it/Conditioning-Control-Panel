@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
-using NAudio.Wave;
 using Serilog;
 
 namespace ConditioningControlPanel.Services.Audio
@@ -51,6 +50,7 @@ namespace ConditioningControlPanel.Services.Audio
         private readonly HapticTrack _track;
         private readonly HapticTrack _lowTrack;
         private readonly HapticTrack _highTrack;
+        private readonly Func<string, TimeSpan, TimeSpan, CancellationToken, float[]> _extractAudioRange;
 
         private readonly List<AudioChunk> _chunks = new();
         private readonly object _lock = new();
@@ -129,9 +129,13 @@ namespace ConditioningControlPanel.Services.Audio
             return (int)(time.TotalSeconds / _settings.ChunkDurationSeconds);
         }
 
-        public ChunkManager(AudioSyncSettings settings)
+        /// <param name="extractAudioRange">Reads mono samples for [start, end) of a local video file; an
+        /// empty array on failure. The decoder is the head's: WPF uses NAudio's MediaFoundationReader.</param>
+        public ChunkManager(AudioSyncSettings settings,
+            Func<string, TimeSpan, TimeSpan, CancellationToken, float[]> extractAudioRange)
         {
             _settings = settings;
+            _extractAudioRange = extractAudioRange;
             _downloader = new VideoDownloader();
             _analyzer = new AudioAnalyzer();
             _track = new HapticTrack(_analyzer.OutputSampleRate, settings.ChunkDurationSeconds);
@@ -191,7 +195,7 @@ namespace ConditioningControlPanel.Services.Audio
                     currentTime = endTime;
                 }
 
-                App.Logger?.Information("ChunkManager: Initialized with {ChunkCount} chunks for video duration {Duration}",
+                Log.Information("ChunkManager: Initialized with {ChunkCount} chunks for video duration {Duration}",
                     _chunks.Count, _videoDuration);
             }
         }
@@ -248,7 +252,7 @@ namespace ConditioningControlPanel.Services.Audio
                 {
                     if (i < _chunks.Count && _chunks[i].State == ChunkState.NotStarted)
                     {
-                        App.Logger?.Information("ChunkManager: Starting chunk {Index} (current time: {Time:F1}s)",
+                        Log.Information("ChunkManager: Starting chunk {Index} (current time: {Time:F1}s)",
                             i, currentPlaybackTime.TotalSeconds);
 
                         // Start background processing
@@ -287,7 +291,7 @@ namespace ConditioningControlPanel.Services.Audio
                     _currentlyProcessingChunk = chunkIndex;
                 }
 
-                App.Logger?.Information("ChunkManager: Processing chunk {Index} ({Start:F0}s - {End:F0}s)",
+                Log.Information("ChunkManager: Processing chunk {Index} ({Start:F0}s - {End:F0}s)",
                     chunkIndex, chunk.StartTime.TotalSeconds, chunk.EndTime.TotalSeconds);
 
                 // Download video if not already cached
@@ -295,7 +299,7 @@ namespace ConditioningControlPanel.Services.Audio
                 {
                     Progress?.Invoke(this, new ChunkProgressEventArgs(chunkIndex, "Downloading video...", 0));
                     _cachedVideoPath = await _downloader.DownloadAsync(_videoUrl!, ct);
-                    App.Logger?.Information("ChunkManager: Video downloaded to {Path}", _cachedVideoPath);
+                    Log.Information("ChunkManager: Video downloaded to {Path}", _cachedVideoPath);
                 }
 
                 lock (_lock)
@@ -306,11 +310,12 @@ namespace ConditioningControlPanel.Services.Audio
                 Progress?.Invoke(this, new ChunkProgressEventArgs(chunkIndex, $"Extracting audio (chunk {chunkIndex + 1})...", 33));
 
                 // Extract audio for THIS CHUNK ONLY
-                var samples = await ExtractAudioRangeAsync(_cachedVideoPath, chunk.StartTime, chunk.EndTime, ct);
+                var videoPath = _cachedVideoPath;
+                var samples = await Task.Run(() => _extractAudioRange(videoPath, chunk.StartTime, chunk.EndTime, ct), ct);
 
                 if (samples.Length == 0)
                 {
-                    App.Logger?.Warning("ChunkManager: No audio samples extracted for chunk {Index}", chunkIndex);
+                    Log.Warning("ChunkManager: No audio samples extracted for chunk {Index}", chunkIndex);
                     lock (_lock)
                     {
                         chunk.State = ChunkState.Failed;
@@ -355,7 +360,7 @@ namespace ConditioningControlPanel.Services.Audio
                 Progress?.Invoke(this, new ChunkProgressEventArgs(chunkIndex, "Ready", 100));
                 ChunkReady?.Invoke(this, chunk);
 
-                App.Logger?.Information("ChunkManager: Chunk {Index} ready with {Samples} intensity samples ({Duration:F1}s of audio)",
+                Log.Information("ChunkManager: Chunk {Index} ready with {Samples} intensity samples ({Duration:F1}s of audio)",
                     chunkIndex, intensities.Length, (double)intensities.Length / _analyzer.OutputSampleRate);
             }
             catch (OperationCanceledException)
@@ -379,79 +384,12 @@ namespace ConditioningControlPanel.Services.Audio
                     _currentlyProcessingChunk = -1;
                 }
                 Error?.Invoke(this, $"Chunk {chunkIndex} failed: {ex.Message}");
-                App.Logger?.Error(ex, "ChunkManager: Failed to process chunk {Index}", chunkIndex);
+                Log.Error(ex, "ChunkManager: Failed to process chunk {Index}", chunkIndex);
             }
             finally
             {
                 _processingSemaphore.Release();
             }
-        }
-
-        /// <summary>
-        /// Extract audio samples for a specific time range
-        /// </summary>
-        private async Task<float[]> ExtractAudioRangeAsync(string videoPath, TimeSpan startTime, TimeSpan endTime, CancellationToken ct)
-        {
-            return await Task.Run(() =>
-            {
-                try
-                {
-                    using var reader = new MediaFoundationReader(videoPath);
-
-                    // Seek FIRST before creating sample provider
-                    if (startTime > TimeSpan.Zero)
-                    {
-                        reader.CurrentTime = startTime;
-                        App.Logger?.Debug("ChunkManager: Seeked to {Time:F1}s", startTime.TotalSeconds);
-                    }
-
-                    // Now create sample provider from seeked position
-                    var sampleProvider = reader.ToSampleProvider();
-
-                    // Convert to mono if stereo
-                    if (sampleProvider.WaveFormat.Channels > 1)
-                    {
-                        sampleProvider = sampleProvider.ToMono();
-                    }
-
-                    var sampleRate = sampleProvider.WaveFormat.SampleRate;
-                    var durationSeconds = (endTime - startTime).TotalSeconds;
-                    var samplesToRead = (int)(durationSeconds * sampleRate);
-
-                    // Read samples for this chunk only
-                    var samples = new List<float>(samplesToRead);
-                    var buffer = new float[4096];
-                    int totalRead = 0;
-
-                    while (totalRead < samplesToRead)
-                    {
-                        ct.ThrowIfCancellationRequested();
-
-                        var toRead = Math.Min(buffer.Length, samplesToRead - totalRead);
-                        var read = sampleProvider.Read(buffer, 0, toRead);
-
-                        if (read == 0)
-                            break; // End of file
-
-                        for (int i = 0; i < read; i++)
-                        {
-                            samples.Add(buffer[i]);
-                        }
-                        totalRead += read;
-                    }
-
-                    App.Logger?.Information("ChunkManager: Extracted {Count} samples for range {Start:F1}s - {End:F1}s",
-                        samples.Count, startTime.TotalSeconds, endTime.TotalSeconds);
-
-                    return samples.ToArray();
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Error(ex, "ChunkManager: Failed to extract audio for range {Start:F1}s - {End:F1}s",
-                        startTime.TotalSeconds, endTime.TotalSeconds);
-                    return Array.Empty<float>();
-                }
-            }, ct);
         }
 
         /// <summary>
