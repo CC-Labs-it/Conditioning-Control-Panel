@@ -2,7 +2,7 @@
 // Services/Leash/LeashServiceApp.cs CreateForApp + AppDayInputs, LeashCutSafetyApp.cs AppTargets and
 // ChasterLeashTab.cs. The service itself is Core (CCP.Core/Services/Leash); this is the head's half.
 // ponytail: the task runner (WPF AppLeashTaskHost + LeashTaskRunner, App.xaml.cs:3010-3013) and the
-// gate/explainer/locator UI land with the LeashGateCard / PunishWindow / Drawer units.
+// explainer/drawer UI land with the leash-punish / Drawer units (the gate card is MainShellWindow.LeashGate).
 using System;
 using System.IO;
 using Avalonia.Threading;
@@ -61,14 +61,44 @@ internal static class LeashHead
         // WPF MainWindow.Leash.cs:95 LeashBlocksGames: the launcher's gate asks the service (and holds a
         // tile only once a gate card can present it: MainShellWindow.LeashBlocksGames).
         Views.Windows.MainShellWindow.LeashGateDueProvider = () => Service?.GateDue != null;
+        Views.Windows.MainShellWindow.PresentLeashGateProvider = shell => shell.PresentLeashGate();
         return svc;
     }
+
+    /// <summary>WPF LeashLocator's CCP_LEASH_DEMO: a Debug build in a sandbox (CCP_USERDATA_DIR) with
+    /// CCP_LEASH_DEMO=&lt;block.json&gt; runs a leash with no server, fed that friends-poll leash block, so a
+    /// live check can see the gate. Never in a Release build, never outside a sandbox.</summary>
+    internal static void StartDemoIfAsked()
+    {
+#if DEBUG
+        var path = Environment.GetEnvironmentVariable("CCP_LEASH_DEMO");
+        if (Service != null || !SandboxNet.Active || string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        Seed();
+        var svc = new LeashService(new DemoApi(), () => "u_demo");
+        // As the wire reads it: dates stay strings (JObject.Parse would turn them into local DateTimes).
+        svc.ApplyBlock(Newtonsoft.Json.JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(File.ReadAllText(path),
+            new Newtonsoft.Json.JsonSerializerSettings { DateParseHandling = Newtonsoft.Json.DateParseHandling.None }));
+        Service = svc;
+        Views.Windows.MainShellWindow.LeashGateDueProvider = () => Service?.GateDue != null;
+        Views.Windows.MainShellWindow.PresentLeashGateProvider = shell => shell.PresentLeashGate();
+        Serilog.Log.Information("[Leash] demo leash from {Path}", path);
+#endif
+    }
+
+#if DEBUG
+    private sealed class DemoApi : ILeashApi
+    {
+        public System.Threading.Tasks.Task<Newtonsoft.Json.Linq.JObject?> CallAsync(string op, Newtonsoft.Json.Linq.JObject body, System.Threading.CancellationToken ct = default) =>
+            System.Threading.Tasks.Task.FromResult<Newtonsoft.Json.Linq.JObject?>(new Newtonsoft.Json.Linq.JObject { ["ok"] = true });
+    }
+#endif
 
     /// <summary>WPF App.OnExit:6289-6292: the leash goes with the app.</summary>
     internal static void Stop()
     {
         Service = null;
         Views.Windows.MainShellWindow.LeashGateDueProvider = null;
+        Views.Windows.MainShellWindow.PresentLeashGateProvider = null;
     }
 
     /// <summary>WPF LeashServiceApp.AppDayInputs: R's numbers, read fresh.</summary>
