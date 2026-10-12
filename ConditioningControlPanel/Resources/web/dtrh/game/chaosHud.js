@@ -704,6 +704,32 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     window.setTimeout(() => { el.classList.add('is-gone'); window.setTimeout(() => el.remove(), 700); }, 4200);
   }
 
+  // ---- a toy wakes on its own: say so where the eye is (owner, 2026-10-12) ----
+  // A named chip low in the middle of the view, and a soft ring from the pop that woke it.
+  const wakeWrap = document.createElement('div');
+  wakeWrap.className = 'cf-wake-wrap';
+  hud.appendChild(wakeWrap);
+  function toyWake({ glyph, name, x, y } = {}) {
+    while (wakeWrap.children.length >= 2) wakeWrap.firstChild.remove();
+    const el = document.createElement('div');
+    el.className = 'cf-wake';
+    const g = document.createElement('span');
+    g.className = 'cf-wake-glyph';
+    g.textContent = glyph || '◈';
+    const n = document.createElement('span');
+    n.textContent = (name || 'a toy') + ' wakes';
+    el.appendChild(g); el.appendChild(n);
+    wakeWrap.appendChild(el);
+    window.setTimeout(() => el.remove(), 2400);
+    if (x != null && y != null) {
+      const ring = document.createElement('div');
+      ring.className = 'cf-wake-ring';
+      ring.style.left = x + 'px'; ring.style.top = y + 'px';
+      hud.appendChild(ring);
+      window.setTimeout(() => ring.remove(), 1200);
+    }
+  }
+
   // ---- full-screen pulse (the WPF ChaosFxWindow color flash, config-gated upstream) ----
   const pulseEl = document.createElement('div');
   pulseEl.className = 'cf-pulse';
@@ -728,6 +754,7 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
   return {
     announce,
     toast,
+    toyWake,
     pulse,
     setPicks,
     setHabits,
