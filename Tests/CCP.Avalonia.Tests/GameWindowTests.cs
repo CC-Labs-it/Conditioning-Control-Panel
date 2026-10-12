@@ -338,7 +338,7 @@ public sealed class GameWindowTests
         finally
         {
             TrackDecoder.DecodeProvider = old;
-            foreach (var f in files) File.Delete(TrackChartCache.PathFor(TrackDecoder.HashFile(f)));
+            foreach (var f in files) if (File.Exists(TrackChartCache.PathFor(TrackDecoder.HashFile(f)))) File.Delete(TrackChartCache.PathFor(TrackDecoder.HashFile(f)));
             Directory.Delete(dir, true);
         }
     }
@@ -364,6 +364,7 @@ public sealed class GameWindowTests
         {
             var player = new FakeTrackPlayer();
             var w = GameWindow.Launch("race")!;
+            using (var real = w.RaceNewPlayer!()) Assert.IsType<RaceTrackPlayer>(real);   // this head's own player
             w.RaceNewPlayer = () => player;
             w.RacePickFile = () => Task.FromResult<string?>(files[0]);
             var sent = new List<JObject>();
@@ -411,6 +412,7 @@ public sealed class GameWindowTests
         WithTrackFiles(null, files =>
         {
             var w = GameWindow.Launch("race")!;
+            w.RaceNewPlayer = null;   // a build with no player
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.RacePickFile = () => Task.FromResult<string?>(null);
