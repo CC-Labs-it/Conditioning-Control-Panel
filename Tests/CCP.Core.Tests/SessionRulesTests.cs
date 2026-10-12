@@ -110,7 +110,7 @@ public sealed class SessionRulesTests
         while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Services", "Session", "SessionEngine.cs")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        var engine = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Session", "SessionEngine.cs"));
+        var engine = CodeOnly(System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Session", "SessionEngine.cs")));
         foreach (var call in new[] { "SessionClock.Elapsed(", "SessionXp.Compute(", "SessionXp.PausePenalty",
                      "SessionTimeline.PhaseIndexAt(", "DeferredStartQueue _pendingFeatureStarts", "PhrasePoolCustody.FoldUserPoolEdit(",
                      "SessionRunner.RandomizedStart(" })
@@ -118,9 +118,15 @@ public sealed class SessionRulesTests
         foreach (var copy in new[] { "static void FoldUserPoolEdit(", "divergence.TotalSeconds", "Math.Min(2500",
                      "_currentSession.Phases[i]", "_random.NextDouble() * 6" })
             Assert.DoesNotContain(copy, engine);
-        var progression = System.IO.File.ReadAllText(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Services", "Progression", "ProgressionService.cs"));
+        var progression = CodeOnly(System.IO.File.ReadAllText(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Services", "Progression", "ProgressionService.cs")));
         Assert.Contains("GetSessionXPMultiplier(int level) => SessionXp.Multiplier(level)", progression);
+        Assert.DoesNotContain("PauseCount * 100", engine);
     }
+
+    /// <summary>Source with comments and string/char literals removed (PLAYBOOK P23): a call that only
+    /// survives in a comment or a log message does not count as wired.</summary>
+    private static string CodeOnly(string src) => System.Text.RegularExpressions.Regex.Replace(src,
+        @"@""(?:[^""]|"""")*""|""(?:\\.|[^""\\\n])*""|'(?:\\.|[^'\\\n])+'|//[^\n]*|/\*[\s\S]*?\*/", " ");
 
     /// <summary>WPF SaveCurrentSettings' 36 fields, in order (SessionEngine.cs:1060-1114), plus
     /// SubliminalDuration (37): WPF writes it from the session and never restores it (decision log).</summary>

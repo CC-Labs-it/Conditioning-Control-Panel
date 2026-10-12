@@ -2385,7 +2385,7 @@ namespace ConditioningControlPanel.Services
         public TimeSpan Duration { get; }
         public int XPEarned { get; }
         public int PauseCount { get; }
-        public int XPPenalty => PauseCount * 100;
+        public int XPPenalty => PauseCount * SessionXp.PausePenalty;
 
         public SessionCompletedEventArgs(Session session, TimeSpan duration, int xp, int pauseCount = 0)
         {
