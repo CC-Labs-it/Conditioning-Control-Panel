@@ -96,7 +96,8 @@ namespace ConditioningControlPanel.Services.Descent
             {
                 try
                 {
-                    var s = CoreSettings.Current;
+                    var s = CoreSettings.Service?.Current;
+                    if (s == null) return 0;
                     if (!string.Equals(s.VatPouredAccount ?? string.Empty, Account, StringComparison.Ordinal)) return 0;
                     if (!string.Equals(s.VatPouredDayUtc ?? string.Empty, DayKey(UtcNow()), StringComparison.Ordinal)) return 0;
                     return Math.Max(0, s.VatPouredTodayXp);
@@ -113,7 +114,8 @@ namespace ConditioningControlPanel.Services.Descent
         {
             try
             {
-                var s = CoreSettings.Current;
+                var s = CoreSettings.Service?.Current;
+                if (s == null) return;
                 s.VatPouredTodayXp = Math.Max(0, todayXp);
                 s.VatPouredDayUtc = DayKey(UtcNow());
                 s.VatPouredAccount = Account;

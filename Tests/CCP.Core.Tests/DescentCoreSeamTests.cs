@@ -61,6 +61,23 @@ public sealed class DescentCoreSeamTests
     }
 
     [Fact]
+    public void PourLedgerWithoutSettingsServiceWritesNothing()
+    {
+        // WPF had `if (s == null) return;`: no head settings means no write, not a write into
+        // Core's shared default AppSettings.
+        var oldProvider = CoreSettings.ServiceProvider;
+        try
+        {
+            CoreSettings.ServiceProvider = null;
+            var before = CoreSettings.Current.VatPouredTodayXp;
+            new AppSettingsVatPourLedger().Record(before + 777);
+            Assert.Equal(before, CoreSettings.Current.VatPouredTodayXp);
+            Assert.Equal(0, new AppSettingsVatPourLedger().PouredTodayXp);
+        }
+        finally { CoreSettings.ServiceProvider = oldProvider; }
+    }
+
+    [Fact]
     public void ActiveCycleXpBonusFollowsTheSeededSettings()
     {
         WithSeededSettings(svc =>
