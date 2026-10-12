@@ -1,4 +1,4 @@
-// Namespace matches OverlayService (its only in-folder neighbour), which is
+// Namespace matches WPF's OverlayService (where this lived before the Core move), which is
 // ConditioningControlPanel.Services rather than ...Services.Notifications.
 namespace ConditioningControlPanel.Services
 {
