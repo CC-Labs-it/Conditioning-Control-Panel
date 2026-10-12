@@ -124,6 +124,49 @@ public sealed class NotificationsSettingsSectionTests
         });
     }
 
+    /// <summary>WPF NotificationsSettingsSection.xaml.cs:80,101-108: the banner pool row paints from
+    /// BannerPoolEnabled and writes it live; the Settings palette's "banner_pool" entry targets it.</summary>
+    [Fact]
+    public void BannerPoolSwitchPaintsAndWritesBannerPoolEnabled()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+            File.Delete(settingsPath);
+            Window? host = null;
+            try
+            {
+                EnsureAvalonia();
+                var service = new SettingsService();
+                service.Current.BannerPoolEnabled = false;
+                CoreSettings.ServiceProvider = () => service;
+
+                NotificationsSettingsSection? section = null;
+                OnUi(() =>
+                {
+                    section = new NotificationsSettingsSection();
+                    host = new Window { Width = 760, Height = 260, Content = section };
+                    host.Show();
+                });
+                var pool = section!.FindControl<CheckBox>("ChkBannerPool");
+                Assert.NotNull(pool);
+                Assert.False(pool!.IsChecked == true);        // painted from settings, not the XAML default
+                Assert.False(service.Current.BannerPoolEnabled); // painting did not write
+
+                OnUi(() => pool.IsChecked = true);
+                Assert.True(service.Current.BannerPoolEnabled);
+                OnUi(() => pool.IsChecked = false);
+                Assert.False(service.Current.BannerPoolEnabled);
+            }
+            finally
+            {
+                try { if (host is not null) OnUi(host.Close); } catch { }
+                CoreSettings.ServiceProvider = null;
+                File.Delete(settingsPath);
+            }
+        });
+    }
+
     private static void EnsureAvalonia()
     {
         Assert.True(AvaloniaTestDispatcher.IsDispatcherThread, "Avalonia setup did not stay on the test dispatcher");
