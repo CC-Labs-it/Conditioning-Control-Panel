@@ -281,9 +281,9 @@
                                     </RadialGradientBrush>
                                 </Border.Background>
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <!-- The padlock glow (lag fix, P82): a sibling BoxShadow layer, never an Effect on the glyph. -->
+                                    <!-- The padlock glow (lag fix, P82): the glyph's DropShadow baked once (GlowBake) behind it, never a live Effect. -->
                                     <Panel HorizontalAlignment="Center">
-                                    <Border Classes="lockglow" Margin="4" CornerRadius="18" IsVisible="False" IsHitTestVisible="False"/>
+                                    <Image Classes="lockglow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Top" IsVisible="False" IsHitTestVisible="False"/>
                                     <TextBlock x:Name="SpotVeilLock"
                                                Text="🔒" FontSize="44" HorizontalAlignment="Center"/>
                                     </Panel>
@@ -425,7 +425,7 @@
                                             </Border.Background>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                                 <Panel HorizontalAlignment="Center">
-                                                <Border Classes="lockglow" Margin="4" CornerRadius="18" IsVisible="False" IsHitTestVisible="False"/>
+                                                <Image Classes="lockglow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Top" IsVisible="False" IsHitTestVisible="False"/>
                                                 <TextBlock Name="VeilLock" Text="🔒" FontSize="34" HorizontalAlignment="Center"
                                                            Loaded="FxPart_Loaded" Unloaded="FxPart_Unloaded"/>
                                                 </Panel>

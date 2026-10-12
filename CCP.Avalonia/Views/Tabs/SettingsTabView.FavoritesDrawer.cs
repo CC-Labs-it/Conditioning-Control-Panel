@@ -217,7 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             FavoritesDrawerGlow.IsVisible = true;
             if (!AmbientFxCanvas.Env.AllowAmbientLoops) return;
             _drawerBreathStart = FxAdorner.Time.GetTimestamp();
-            // On the window's 30 fps beat (WPF 24); parks while minimised.
+            // On the window's 30 fps beat (WPF MainWindow.AmbientFrameRate 30, SettingsTabView.xaml.cs:238); parks while minimised.
             _drawerBreath ??= new BeatLoop(this, _ =>
             {
                 double half = FavoritesGlowBreathMs / 1000.0;

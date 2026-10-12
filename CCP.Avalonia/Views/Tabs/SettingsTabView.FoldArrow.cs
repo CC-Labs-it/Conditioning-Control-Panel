@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!AmbientFxCanvas.Env.AllowAmbientLoops || !IsVisible || VisualRoot == null || !_hostShown) { FoldGlow.Opacity = BrowserFoldRule.GlowStatic; return; }
             FoldGlow.Opacity = BrowserFoldRule.GlowLow;
             _foldBreathStart = FxAdorner.Time.GetTimestamp();
-            // A sine breath, low -> high -> low over GlowBreathMs, on the window's 30 fps beat (WPF set 24;
+            // A sine breath, low -> high -> low over GlowBreathMs, on the window's 30 fps beat (WPF SettingsTabView.xaml.cs:588 sets 24;
             // one shared beat composes fewer frames than a second rate). It parks while minimised.
             _foldBreath ??= new BeatLoop(this, _ => StepFoldBreath());
             _foldBreath.Start();

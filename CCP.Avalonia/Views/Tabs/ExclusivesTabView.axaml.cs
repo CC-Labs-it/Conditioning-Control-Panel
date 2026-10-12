@@ -219,7 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             else if (want)
             {
                 _motionStart = FxAdorner.Time.GetTimestamp();
-                // WPF caps every ambient loop on this tab at 24fps (AmbientFrameRate); here they ride the window's
+                // WPF caps every ambient loop on this tab at AmbientFrameRate 30 (MainWindow.Exclusives.cs:1274); here they ride the window's
                 // shared 30 fps beat, which parks while the window is minimised (P82 rule 2).
                 _motion = new BeatLoop(this, _ => MotionFrame());
                 _motion.Start();
@@ -284,18 +284,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             else
             {
-                // WPF ApplyVeilLockBreath (MainWindow.Exclusives.cs:1241) breathes a DropShadowEffect on the glyph; here
-                // a sibling BoxShadow layer behind it breathes by Opacity (P82 rule 3).
-                if (LockGlow(part) is not { } g) return;
+                // WPF ApplyVeilLockBreath (MainWindow.Exclusives.cs:1241) breathes a DropShadowEffect on the glyph. Here
+                // that same shadow is baked once into a bitmap behind the glyph (glyph-shaped, GlowBake) and the
+                // breath moves only the bitmap's Opacity: a live Effect re-blurs every frame (P82 rule 3).
+                if (LockGlow(part) is not { } g || part is not TextBlock glyph) return;
                 g.IsVisible = _motion != null && glow && part.IsEffectivelyVisible;
-                g.BoxShadow = Glow(AmbientFxCanvas.Env.GlowColor, 1, Math.Min(20, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)));
+                if (!g.IsVisible) return;
+                double blur = Math.Min(20, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)), pad = 2 * blur;
+                var key = $"{glyph.Text}|{glyph.FontSize}|{AmbientFxCanvas.Env.GlowColor}|{blur}";
+                if (!LockGlowBakes.TryGetValue(key, out var baked))
+                    LockGlowBakes[key] = baked = GlowBake.Text(glyph, Brushes.White,
+                        new DropShadowEffect { Color = AmbientFxCanvas.Env.GlowColor, BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 1 }, pad);
+                g.Source = baked;
+                g.Margin = new Thickness(-pad);
                 g.Opacity = 0.8;
             }
         }
 
         /// <summary>The padlock's glow layer: the lockglow Border beside it (ExclusivesTabView.axaml).</summary>
-        internal static Border? LockGlow(Control part) =>
-            (part.Parent as Panel)?.Children.OfType<Border>().FirstOrDefault(b => b.Classes.Contains("lockglow"));
+        internal static Image? LockGlow(Control part) =>
+            (part.Parent as Panel)?.Children.OfType<Image>().FirstOrDefault(b => b.Classes.Contains("lockglow"));
+
+        /// <summary>Baked padlock glows, one per glyph size / mod colour / blur (a handful per process).</summary>
+        private static readonly Dictionary<string, global::Avalonia.Media.Imaging.Bitmap?> LockGlowBakes = new();
 
         private static BoxShadows Glow(Color c, double opacity, double blur) =>
             new(new BoxShadow { Blur = blur, Color = Color.FromArgb((byte)Math.Round(255 * opacity), c.R, c.G, c.B) });

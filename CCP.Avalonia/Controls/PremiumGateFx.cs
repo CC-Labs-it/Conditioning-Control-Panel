@@ -177,7 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 Opacity = LockGlowMaxOpacity,
             };
             padlock.Effect = glow;
-            // WPF: a 3.6s SineEase in/out, auto-reversed, capped at 24fps (SetDesiredFrameRate). Here on the
+            // WPF: a 3.6s SineEase in/out, auto-reversed, capped at AmbientFrameRate 30 (WPF PremiumGateFx.cs:52,249). Here on the
             // window's shared 30 fps beat, which parks while hidden or minimised (lag-fixes-b).
             _lockStart = FxAdorner.Time.GetTimestamp();
             _lockClock = new Helpers.BeatLoop(padlock, _ =>

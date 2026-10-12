@@ -202,7 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops) { StopFx(rest: true); return; }
                 bool onScreen = IsEffectivelyVisible && _window is { IsActive: true } w && w.WindowState != WindowState.Minimized;
                 if (!onScreen) { StopFx(rest: false); return; }
-                // The window's shared 30 fps beat (WPF ran these at 24, AmbientFrameRate); Start ticks once.
+                // The window's shared 30 fps beat (WPF AmbientFrameRate 30, MainWindow.EnhancementsFx.cs:186); Start ticks once.
                 _fxTimer ??= new BeatLoop(this, _ => Tick());
                 _fxTimer.Start();
             }

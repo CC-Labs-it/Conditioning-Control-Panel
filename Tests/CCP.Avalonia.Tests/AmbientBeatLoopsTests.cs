@@ -82,6 +82,37 @@ public sealed class AmbientBeatLoopsTests
         "Views/Windows/SettingsPaletteWindow.axaml.cs", "Views/Windows/TeaseRevealPopup.axaml.cs",
     };
 
+    /// <summary>The same rule for markup: .axaml files that still declare an Effect. Shrink only.</summary>
+    private static readonly string[] XamlEffects =
+    {
+        "Views/AvatarTube/AvatarTubeWindow.axaml", "Views/Chaos/ChaosHubWindow.axaml", "Views/Chaos/ChaosOverlayWindow.axaml",
+        "Views/Chaos/ChaosSlotPickerWindow.axaml", "Views/Controls/AttentionCheckControl.axaml",
+        "Views/Controls/Companion/ChatThresholdView.axaml", "Views/Controls/Companion/CompanionHeroCard.axaml",
+        "Views/Controls/Companion/MakeHerYoursView.axaml", "Views/Controls/Companion/RelationshipConstellation.axaml",
+        "Views/Controls/Companion/Themes/CompanionTheme.axaml", "Views/Controls/DailyQuestCard.axaml", "Views/Controls/EmiDock.axaml",
+        "Views/Controls/SeasonRecapCard.axaml", "Views/Dialogs/AttentionTargetEditorDialog.axaml",
+        "Views/Dialogs/ProfilePrivacyDialog.axaml", "Views/Dialogs/RoadmapStepPopup.axaml",
+        "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml", "Views/Tabs/AchievementsTabView.axaml", "Views/Tabs/ChasterTabView.axaml",
+        "Views/Tabs/DiscordTabView.axaml", "Views/Tabs/ExclusivesTabView.axaml", "Views/Tabs/LeaderboardTabView.axaml",
+        "Views/Tabs/LockdownTabView.axaml", "Views/Tabs/PlayTabView.axaml", "Views/Tabs/QuestsTabView.axaml",
+        "Views/Tabs/SettingsTabView.axaml", "Views/Windows/AchievementPopup.axaml", "Views/Windows/AnnouncementPopup.axaml",
+        "Views/Windows/BubbleCountResultWindow.axaml", "Views/Windows/BubbleCountWindow.axaml", "Views/Windows/FeatureIntroPopup.axaml",
+        "Views/Windows/LauncherWindow.axaml", "Views/Windows/LockCardWindow.axaml", "Views/Windows/MainShellWindow.axaml",
+        "Views/Windows/MantraWindow.axaml", "Views/Windows/PinkRushPopup.axaml", "Views/Windows/PopQuizWindow.axaml",
+        "Views/Windows/ProgramsIntroPopup.axaml", "Views/Windows/QuestCompletePopup.axaml", "Views/Windows/QuizCategoryEditorWindow.axaml",
+        "Views/Windows/QuizReportWindow.axaml", "Views/Windows/QuizWindow.axaml", "Views/Windows/SettingsPaletteWindow.axaml",
+        "Views/Windows/SplashScreen.axaml", "Views/Windows/TeaseRevealPopup.axaml", "Views/Windows/TutorialOverlay.axaml",
+        "Views/Windows/WebcamCalibrationWindow.axaml", "Views/Windows/WebcamGazeTrackerWindow.axaml",
+        "Views/Windows/WebcamQuickRecalWindow.axaml", "Views/Windows/WhatMovedCard.axaml",
+    };
+
+    internal static readonly Regex EffectInXaml = new(@"\.Effect>|\sEffect\s*=\s*""");
+
+    [Fact]
+    public void NoNewEffectInXaml() =>
+        Ratchet(Scan(code => EffectInXaml.IsMatch(code), axaml: true, cs: false), XamlEffects,
+            "An Effect in markup is re-blurred on every frame anything under it moves; bake it (GlowBake) or use a sibling BoxShadow (P82)");
+
     internal static readonly Regex EffectInCode = new(@"\.Effect\s*=(?!=)|Effect\s+is\s+\w*Effect|\.Effect\s+as\s+");
 
     [Fact]
@@ -111,17 +142,17 @@ public sealed class AmbientBeatLoopsTests
         Ratchet(Scan(code => code.Contains("DispatcherTimer") && FrameRate.IsMatch(code), axaml: false), OwnFrameTimers,
             "A per-view frame timer composes off the shared beat; use BeatLoop");
 
-    private static List<string> Scan(Func<string, bool> hit, bool axaml)
+    private static List<string> Scan(Func<string, bool> hit, bool axaml, bool cs = true)
     {
         var head = System.IO.Path.Combine(RepoRoot(), "CCP.Avalonia");
         var hits = new List<string>();
         foreach (var path in Directory.EnumerateFiles(head, "*.*", SearchOption.AllDirectories))
         {
-            bool cs = path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
-            if (!cs && !(axaml && path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase))) continue;
+            bool isCs = path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+            if (isCs ? !cs : !(axaml && path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase))) continue;
             var sep = System.IO.Path.DirectorySeparatorChar;
             if (path.Contains($"{sep}obj{sep}") || path.Contains($"{sep}bin{sep}")) continue;
-            var code = (cs ? CsComments : XmlComments).Replace(File.ReadAllText(path), "");
+            var code = (isCs ? CsComments : XmlComments).Replace(File.ReadAllText(path), "");
             if (hit(code)) hits.Add(System.IO.Path.GetRelativePath(head, path).Replace('\\', '/'));
         }
         return hits;
@@ -148,6 +179,8 @@ public sealed class AmbientBeatLoopsTests
         Assert.DoesNotMatch(EffectInCode, "if (part.Effect == null)");
         Assert.Matches(FrameRate, "TimeSpan.FromMilliseconds(1000.0 / 24)");
         Assert.Matches(FrameRate, "Interval = TimeSpan.FromMilliseconds(16)");
+        Assert.Matches(EffectInXaml, "<TextBlock.Effect>");
+        Assert.Matches(EffectInXaml, "<Border Effect=\"{StaticResource Glow}\"/>");
         Assert.DoesNotMatch(FrameRate, "TimeSpan.FromMilliseconds(160)");
     }
 
@@ -407,7 +440,12 @@ public sealed class AmbientBeatLoopsTests
 
             // The waiting room: glow 0.18 <-> 0.70 over 3.1 s, motes rise linearly and fade in to 42% (WPF :1407-1438).
             Call("StartWaitingAmbience");
-            var glow = F<TextBlock>(tab, "_waitingGlow");
+            var glow = F<Image>(tab, "_waitingGlow");
+            // Both glows are baked bitmaps; no live Effect is left anywhere under the tab's loops (P82 rule 3).
+            Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(glow.Source);
+            F<TextBlock>(tab, "_fogDigits").Text = "12:34";                 // the digits' glow is re-baked per text
+            Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(F<Image>(tab, "_fogDigitsGlow").Source);
+            Assert.DoesNotContain(global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab), v => v.Effect != null);
             Assert.Equal(0.18, glow.Opacity, 3);
             Step(time, 5.6 * 0.42);
             var mote = F<global::Avalonia.Controls.Canvas>(tab, "_waitingMotes").Children.OfType<Ellipse>().First();
