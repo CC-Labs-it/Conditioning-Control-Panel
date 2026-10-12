@@ -421,7 +421,7 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
 
         private static string DefaultModId()
         {
-            try { return App.Mods?.ActiveModId ?? ""; }
+            try { return CoreMods.ActiveModId ?? ""; }
             catch { return ""; }
         }
 
@@ -434,13 +434,13 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
         {
             try
             {
-                var settings = App.Settings?.Current;
+                var settings = CoreSettings.Service?.Current;
                 if (BambiSprite.UsesCustomPrompt(settings)) return settings?.CompanionPrompt?.Personality;
-                return App.Personality?.GetActivePreset()?.PromptSettings?.Personality;
+                return PersonalityService.Shared.GetActivePreset()?.PromptSettings?.Personality;
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("AwarenessPromptBuilder: personality lookup failed: {Error}", ex.Message);
+                Serilog.Log.Debug("AwarenessPromptBuilder: personality lookup failed: {Error}", ex.Message);
                 return null;
             }
         }

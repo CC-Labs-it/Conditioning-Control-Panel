@@ -201,7 +201,7 @@ namespace ConditioningControlPanel.Services.Awareness
 
         /// <summary>Where an override would be read from. Same folder as <c>app_clusters.json</c>.</summary>
         public static string FilePath =>
-            Path.Combine(CompanionPhraseService.CompanionAudioFolder, FileName);
+            Path.Combine(Models.CompanionPhrase.DefaultAudioFolder, FileName);
 
         /// <summary>
         /// The active deck. Loads on first use: embedded first (so there is always a floor), then the

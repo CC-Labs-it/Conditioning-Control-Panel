@@ -91,7 +91,7 @@ namespace ConditioningControlPanel.Services.Awareness
         {
             try
             {
-                var s = App.Settings?.Current;
+                var s = CoreSettings.Service?.Current;
                 if (s == null) return null;
 
                 return new AwarenessPolicySettings(
@@ -276,7 +276,7 @@ namespace ConditioningControlPanel.Services.Awareness
             {
                 // AppClusterMap reads a mod-supplied override file; a malformed one must not be able
                 // to widen anything. When the classifier cannot answer, the frame does not exist.
-                App.Logger?.Debug("AwarenessObserver: identity resolution failed - {Error}", ex.Message);
+                Serilog.Log.Debug("AwarenessObserver: identity resolution failed - {Error}", ex.Message);
                 return PrivacyVerdict.Dropped(FrameDrop.PolicyUnavailable);
             }
 
