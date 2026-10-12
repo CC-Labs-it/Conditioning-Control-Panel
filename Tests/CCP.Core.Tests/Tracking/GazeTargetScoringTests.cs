@@ -44,11 +44,13 @@ public class GazeTargetScoringTests
     {
         Assert.Equal(-1, AmbiguousLeader(new List<GazeScore> { At(0.9, 0, 0) }, Id));                     // one target
         Assert.Equal(-1, AmbiguousLeader(new List<GazeScore> { At(0.29, 0, 0), At(0.28, 50, 0) }, Id));   // winner a wisp
-        Assert.Equal(-1, AmbiguousLeader(new List<GazeScore> { At(0.22, 0, 0), At(0.19, 50, 0) }, Id) );  // runner-up a wisp
+        // Runner-up wisp (< 0.20) cannot be reached alone: a winner >= 0.30 within 0.85 forces a runner-up >= 0.255,
+        // so that clause is kept for WPF parity but is implied by the two around it.
         Assert.Equal(-1, AmbiguousLeader(new List<GazeScore> { At(0.9, 0, 0), At(0.7, 50, 0) }, Id));     // not close (0.78 < 0.85)
         Assert.Equal(-1, AmbiguousLeader(new List<GazeScore> { At(0.9, 0, 0), At(0.9, 281, 0) }, Id));    // not one blob
         Assert.Equal(0, AmbiguousLeader(new List<GazeScore> { At(0.9, 0, 0), At(0.9, 280, 0) }, Id));     // spread is inclusive
-        Assert.Equal(0, AmbiguousLeader(new List<GazeScore> { At(0.30, 0, 0), At(0.255, 50, 0) }, Id));   // 0.85 exactly
+        Assert.Equal(0, AmbiguousLeader(new List<GazeScore> { At(1.0, 0, 0), At(0.85, 50, 0) }, Id));     // 0.85 exactly (exact in double)
+        Assert.Equal(-1, AmbiguousLeader(new List<GazeScore> { At(1.0, 0, 0), At(0.849, 50, 0) }, Id));   // just under the ratio
     }
 
     [Fact]
