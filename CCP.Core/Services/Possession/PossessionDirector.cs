@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using ConditioningControlPanel.Helpers;
+using Serilog;
 using ConditioningControlPanel.Services.Possession.Scenes;
 
 namespace ConditioningControlPanel.Services.Possession;
@@ -22,13 +21,16 @@ namespace ConditioningControlPanel.Services.Possession;
 //  safety, cancellation, live-effect bookkeeping and the event wiring to LockdownService. Nothing here
 //  may throw into a WPF event handler, and nothing may block the UI thread - a wedged director would
 //  freeze the app for the whole lockdown, which is exactly the bug the theme is imitating.
+//
+//  Moved from the WPF head unchanged; what it read from App.*, the dispatcher and the visual tree now
+//  comes through PossessionDirectorHead (bottom of this file), which each head fills in.
 // =====================================================================================================
 public sealed class PossessionDirector : IDisposable
 {
     private readonly Services.LockdownService _lockdown;
     private readonly List<IPossessionEffect> _effects;
-    private readonly List<IPossessionScene> _scenes = PossessionSceneCatalog.CreateAll();
-    private readonly PossessionEvents _events = new();
+    private readonly PossessionDirectorHead _head;
+    private readonly List<IPossessionScene> _scenes;
     private readonly List<HostEntry> _hosts = new();
     private readonly List<LiveGhost> _live = new();
     private readonly Random _rng = new();
@@ -78,9 +80,11 @@ public sealed class PossessionDirector : IDisposable
     private static readonly TimeSpan WardenVerbTimeout = TimeSpan.FromSeconds(15);
     private const string FallEffectId = "fall";
 
-    public PossessionDirector(Services.LockdownService lockdown, IEnumerable<IPossessionEffect>? effects)
+    public PossessionDirector(Services.LockdownService lockdown, IEnumerable<IPossessionEffect>? effects, PossessionDirectorHead? head = null)
     {
         _lockdown = lockdown ?? throw new ArgumentNullException(nameof(lockdown));
+        _head = head ?? new PossessionDirectorHead();
+        _scenes = _head.Scenes().ToList();
         _effects = (effects ?? Enumerable.Empty<IPossessionEffect>()).Where(e => e != null).ToList();
 
         _lockdown.LockdownActivated += OnLockdownActivated;
@@ -112,19 +116,19 @@ public sealed class PossessionDirector : IDisposable
     public void AttachHost(IPossessionHost host)
     {
         if (host == null || _disposed) return;
-        DispatcherHelper.RunOnUI(() =>
+        _head.OnUi(() =>
         {
             if (_hosts.Any(h => ReferenceEquals(h.Host, host))) return;
-            _hosts.Add(new HostEntry(host, new EmberAttribution(host, () => App.Settings?.Current?.LockdownPhotosafe == true)));
-            try { _events.Attach(this, host); } catch (Exception ex) { App.Logger?.Warning("Possession: reactive adapter attach failed: {Error}", ex.Message); }
-            App.Logger?.Debug("Possession: host attached ({Host})", host.GetType().Name);
+            _hosts.Add(new HostEntry(host, _head.Attribution(host)));
+            try { _head.AttachReactive(this, host); } catch (Exception ex) { Log.Warning("Possession: reactive adapter attach failed: {Error}", ex.Message); }
+            Log.Debug("Possession: host attached ({Host})", host.GetType().Name);
         });
     }
 
     public void DetachHost(IPossessionHost host)
     {
         if (host == null) return;
-        DispatcherHelper.RunOnUI(() =>
+        _head.OnUi(() =>
         {
             var entry = _hosts.FirstOrDefault(h => ReferenceEquals(h.Host, host));
             if (entry == null) return;
@@ -132,7 +136,7 @@ public sealed class PossessionDirector : IDisposable
             // down now rather than leaking a ghost that outlives its room.
             foreach (var g in _live.Where(g => ReferenceEquals(g.Host.Host, host)).ToArray())
                 UndoGhostSync(g);
-            try { _events.Detach(host); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { _head.DetachReactive(host); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { entry.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _hosts.Remove(entry);
         });
@@ -152,14 +156,14 @@ public sealed class PossessionDirector : IDisposable
             _liveKeys.Clear();
             foreach (var h in _hosts) { try { h.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); } }
         }
-        catch (Exception ex) { App.Logger?.Warning("Possession UndoAll failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession UndoAll failed: {Error}", ex.Message); }
     }
 
     // ---------------------------------------------------------------------------------------------
     //  Lockdown lifecycle
     // ---------------------------------------------------------------------------------------------
 
-    private void OnLockdownActivated()
+    internal void OnLockdownActivated()
     {
         try
         {
@@ -167,7 +171,7 @@ public sealed class PossessionDirector : IDisposable
             // invalidates a reassembly the previous one left in flight.
             _generation++;
 
-            var s = App.Settings?.Current;
+            var s = _head.Settings();
             if (s == null || !s.LockdownPossessionEnabled)
             {
                 IsHaunting = false;
@@ -198,10 +202,10 @@ public sealed class PossessionDirector : IDisposable
 
             // Let the room settle before the first twitch (PossessionDeck.FirstWait).
             _nextDue = DateTime.Now + PossessionDeck.FirstDelay(CurrentRung, _intensity, _rng);
-            App.Logger?.Information("Possession armed: intensity={Intensity}, first haunt in {Sec:F0}s, {Count} effects",
+            Log.Information("Possession armed: intensity={Intensity}, first haunt in {Sec:F0}s, {Count} effects",
                 _intensity, (_nextDue - DateTime.Now).TotalSeconds, _effects.Count);
         }
-        catch (Exception ex) { App.Logger?.Warning("Possession activate failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession activate failed: {Error}", ex.Message); }
     }
 
     private void OnLockdownDeactivated()
@@ -215,8 +219,7 @@ public sealed class PossessionDirector : IDisposable
     private void OnCountdownTick(TimeSpan remaining)
     {
         if (!IsHaunting || _disposed) return;
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.HasShutdownStarted) return;
+        if (!_head.UiAlive()) return;
 
         try
         {
@@ -229,7 +232,7 @@ public sealed class PossessionDirector : IDisposable
             {
                 var previous = CurrentRung;
                 CurrentRung = rung;
-                App.Logger?.Information("Possession rung {From} -> {To} at {Pct:P0}", previous, rung, frac);
+                Log.Information("Possession rung {From} -> {To} at {Pct:P0}", previous, rung, frac);
                 try { RungChanged?.Invoke(rung); } catch (Exception ex) { Diag.Swallowed(ex); }
 
                 // Belt for the timer restart: a restart sets the rung, pulses the edge at 0.6 and
@@ -241,7 +244,7 @@ public sealed class PossessionDirector : IDisposable
                 // The rung change itself is an event: the whole window flares once so the escalation is
                 // never something the user only notices in hindsight.
                 if (!justRestarted) PulseAll(0.35 + 0.15 * (int)rung);
-                if (_barkedRungs.Add(rung) && !justRestarted) { try { App.Bark?.NotifyPossessionRung((int)rung); } catch (Exception ex) { Diag.Swallowed(ex); } }
+                if (_barkedRungs.Add(rung) && !justRestarted) { try { _head.BarkRung((int)rung); } catch (Exception ex) { Diag.Swallowed(ex); } }
 
                 if (rung == PossessionRung.ItKnows && _wardenEnabled && Warden?.IsAvailable == true)
                     FireAndForget(RunWardenAsync(ct => Warden!.LeaveAsync(ct), "leave"), "warden leave");
@@ -265,13 +268,13 @@ public sealed class PossessionDirector : IDisposable
         catch (Exception ex)
         {
             _picking = false;
-            App.Logger?.Warning("Possession tick failed: {Error}", ex.Message);
+            Log.Warning("Possession tick failed: {Error}", ex.Message);
         }
     }
 
     private void ReadLiveSettings()
     {
-        var s = App.Settings?.Current;
+        var s = _head.Settings();
         if (s == null) return;
         _intensity = (PossessionIntensity)Math.Clamp(s.LockdownPossessionIntensity, 0, 2);
         _photosafe = s.LockdownPhotosafe;
@@ -282,7 +285,7 @@ public sealed class PossessionDirector : IDisposable
     private void EnsureHost()
     {
         if (_hosts.Count > 0) return;
-        if (App.MainWindowRef is IPossessionHost host) AttachHost(host);
+        if (_head.MainHost() is { } host) AttachHost(host);
     }
 
     private static bool SafeIsUsable(IPossessionHost host)
@@ -322,7 +325,7 @@ public sealed class PossessionDirector : IDisposable
             // A5: half the picks look where the user is looking first. A ghost on a control at the far
             // end of the window is a tree falling in an empty forest.
             IReadOnlyCollection<int>? near = null;
-            if (PossessionDeck.ShouldUseProximity(_rng)) near = NearTargetIndexes(host, targets);
+            if (PossessionDeck.ShouldUseProximity(_rng)) near = NearTargetIndexes(_head, host, targets);
 
             var pick = PossessionDeck.Pick(effectMetas, targetMetas, rung, _intensity, _photosafe, _lastTargetKey, _rng, near);
             if (pick == null)
@@ -371,7 +374,7 @@ public sealed class PossessionDirector : IDisposable
             _live.Add(ghost);
             _nextDue = now + PossessionDeck.NextDelay(rung, _intensity, _rng);
 
-            App.Logger?.Information("Possession: {Effect} on {Target} at rung {Rung} (live {Live})",
+            Log.Information("Possession: {Effect} on {Target} at rung {Rung} (live {Live})",
                 effect.Id, target?.Key ?? "(window)", rung, _live.Count);
             try { EffectStarted?.Invoke(effect.Id, target?.Key, effect.IsBig); } catch (Exception ex) { Diag.Swallowed(ex); }
 
@@ -385,7 +388,7 @@ public sealed class PossessionDirector : IDisposable
             catch (OperationCanceledException) { } // swallow: exit or UndoAll pulled it
             catch (Exception ex)
             {
-                App.Logger?.Warning("Possession effect {Effect} failed: {Error}", effect.Id, ex.Message);
+                Log.Warning("Possession effect {Effect} failed: {Error}", effect.Id, ex.Message);
                 await UndoGhostAsync(ghost, TimeSpan.Zero).ConfigureAwait(true);
                 return;
             }
@@ -397,7 +400,7 @@ public sealed class PossessionDirector : IDisposable
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("Possession pick failed: {Error}", ex.Message);
+            Log.Warning("Possession pick failed: {Error}", ex.Message);
             if (ghost != null) { try { await UndoGhostAsync(ghost, TimeSpan.Zero).ConfigureAwait(true); } catch (Exception exIgnored) { Diag.Swallowed(exIgnored); } }
         }
         finally
@@ -422,11 +425,11 @@ public sealed class PossessionDirector : IDisposable
     /// cursor. Null when we have no cursor reading yet (nothing has moved the mouse since launch) or
     /// when fewer than two controls qualify - in both cases the plain full-pool pick is the honest
     /// answer, and the deck falls back to it anyway.</summary>
-    private static IReadOnlyCollection<int>? NearTargetIndexes(HostEntry host, List<PossessionTarget> targets)
+    private static IReadOnlyCollection<int>? NearTargetIndexes(PossessionDirectorHead head, HostEntry host, List<PossessionTarget> targets)
     {
         try
         {
-            var origin = PossessionPointer.Position;
+            var origin = head.Pointer();
             if (origin.X <= 0 && origin.Y <= 0) return null;
 
             var centres = new List<(double X, double Y)>(targets.Count);
@@ -434,8 +437,8 @@ public sealed class PossessionDirector : IDisposable
             {
                 try
                 {
-                    var r = Effects.PossessionVisual.BoundsOf(host.Host, t.Element);
-                    centres.Add(r.IsEmpty ? (double.NaN, double.NaN) : (r.X + r.Width / 2, r.Y + r.Height / 2));
+                    var r = head.BoundsOf(host.Host, t.Visual);
+                    centres.Add(r is not { } b ? (double.NaN, double.NaN) : (b.X + b.Width / 2, b.Y + b.Height / 2));
                 }
                 catch { centres.Add((double.NaN, double.NaN)); }
             }
@@ -461,7 +464,7 @@ public sealed class PossessionDirector : IDisposable
             foreach (var sc in _scenes)
             {
                 if (rung < sc.MinRung) continue;
-                if (sc is PossessionSceneBase { IsRunning: true }) continue;
+                if (sc.IsRunning) continue;
                 if (_live.Exists(g => ReferenceEquals((g.Effect as PossessionSceneEffect)?.Scene, sc))) continue;
                 eligible.Add(sc);
             }
@@ -474,7 +477,7 @@ public sealed class PossessionDirector : IDisposable
             var slots = Math.Max(1, scene.Beats);
             if (!PossessionDeck.FitsConcurrency(LiveSlots, slots, rung))
             {
-                App.Logger?.Debug("Possession scene {Scene} ({Slots} slots) does not fit at rung {Rung} (live {Live}/{Max})",
+                Log.Debug("Possession scene {Scene} ({Slots} slots) does not fit at rung {Rung} (live {Live}/{Max})",
                     scene.Id, slots, rung, LiveSlots, PossessionDeck.MaxLive(rung));
                 return false;
             }
@@ -502,7 +505,7 @@ public sealed class PossessionDirector : IDisposable
                     if (matches.Count == 0) return null;
 
                     // Nearest the cursor wins when we know where it is - the same reason A5 exists.
-                    var origin = PossessionPointer.Position;
+                    var origin = _head.Pointer();
                     if (origin.X > 0 || origin.Y > 0)
                     {
                         matches.Sort((a, b) => Dist(a).CompareTo(Dist(b)));
@@ -510,8 +513,7 @@ public sealed class PossessionDirector : IDisposable
                         {
                             try
                             {
-                                var r = Effects.PossessionVisual.BoundsOf(host.Host, t.Element);
-                                if (r.IsEmpty) return double.MaxValue;
+                                if (_head.BoundsOf(host.Host, t.Visual) is not { } r) return double.MaxValue;
                                 var dx = r.X + r.Width / 2 - origin.X;
                                 var dy = r.Y + r.Height / 2 - origin.Y;
                                 return dx * dx + dy * dy;
@@ -550,7 +552,7 @@ public sealed class PossessionDirector : IDisposable
             };
             _live.Add(ghost);
 
-            App.Logger?.Information("Possession scene: {Scene} at rung {Rung} (live slots {Slots})",
+            Log.Information("Possession scene: {Scene} at rung {Rung} (live slots {Slots})",
                 scene.Id, rung, LiveSlots);
             try { EffectStarted?.Invoke(scene.Id, null, true); } catch (Exception ex) { Diag.Swallowed(ex); }
 
@@ -564,7 +566,7 @@ public sealed class PossessionDirector : IDisposable
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("Possession scene start failed: {Error}", ex.Message);
+            Log.Warning("Possession scene start failed: {Error}", ex.Message);
             if (ghost != null) { try { await UndoGhostAsync(ghost, TimeSpan.Zero).ConfigureAwait(true); } catch (Exception exIgnored) { Diag.Swallowed(exIgnored); } }
             return true;   // the beat was spent either way; do not immediately try a second thing
         }
@@ -588,7 +590,7 @@ public sealed class PossessionDirector : IDisposable
         // rides AppSettings.PropertyChanged, which fires on whatever thread wrote the setter, and the
         // body below mutates the live ledger and walks the visual tree. RunOnUI executes inline when
         // we are already on the UI thread, so the input path is unchanged.
-        DispatcherHelper.RunOnUI(() => RequestReactiveCore(effectId, target, minRung));
+        _head.OnUi(() => RequestReactiveCore(effectId, target, minRung));
     }
 
     private void RequestReactiveCore(string effectId, PossessionTarget? target, PossessionRung minRung)
@@ -635,13 +637,13 @@ public sealed class PossessionDirector : IDisposable
             var ghost = new LiveGhost(effect, target, host, cts);
             _live.Add(ghost);
 
-            App.Logger?.Information("Possession reactive: {Effect} on {Target} at rung {Rung}",
+            Log.Information("Possession reactive: {Effect} on {Target} at rung {Rung}",
                 effect.Id, target?.Key ?? "(window)", rung);
             try { EffectStarted?.Invoke(effect.Id, target?.Key, effect.IsBig); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             FireAndForget(RunReactiveAsync(ghost, ctx, effect, target, cts), "reactive");
         }
-        catch (Exception ex) { App.Logger?.Warning("Possession reactive request failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession reactive request failed: {Error}", ex.Message); }
     }
 
     private async Task RunReactiveAsync(LiveGhost ghost, PossessionContext ctx, IPossessionEffect effect,
@@ -654,7 +656,7 @@ public sealed class PossessionDirector : IDisposable
         catch (OperationCanceledException) { } // swallow: the effect was cancelled
         catch (Exception ex)
         {
-            App.Logger?.Warning("Possession reactive {Effect} failed: {Error}", effect.Id, ex.Message);
+            Log.Warning("Possession reactive {Effect} failed: {Error}", effect.Id, ex.Message);
             await UndoGhostAsync(ghost, TimeSpan.Zero).ConfigureAwait(true);
             return;
         }
@@ -665,7 +667,7 @@ public sealed class PossessionDirector : IDisposable
 
     /// <summary>Find the registered target for an element, or for the nearest ancestor that has one.
     /// The reactive layer gets raw hit-test results; a click on a card lands on the TextBlock inside it.</summary>
-    public PossessionTarget? TargetFor(DependencyObject? element, PossessionRole? role = null)
+    public PossessionTarget? TargetFor(object? element, PossessionRole? role = null)
     {
         try
         {
@@ -680,11 +682,11 @@ public sealed class PossessionDirector : IDisposable
             {
                 foreach (var t in targets)
                 {
-                    if (!ReferenceEquals(t.Element, node)) continue;
+                    if (!ReferenceEquals(t.Visual, node)) continue;
                     if (role.HasValue && t.Role != role.Value) break;   // keep climbing for the asked role
                     return t;
                 }
-                node = node is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node);
+                node = _head.ParentOf(node);
             }
             return null;
         }
@@ -703,7 +705,7 @@ public sealed class PossessionDirector : IDisposable
             try { targets = host.Host.Targets ?? Array.Empty<PossessionTarget>(); }
             catch { return null; }
 
-            var origin = PossessionPointer.Position;
+            var origin = _head.Pointer();
             PossessionTarget? best = null;
             double bestDist = double.MaxValue;
             foreach (var t in targets)
@@ -711,8 +713,7 @@ public sealed class PossessionDirector : IDisposable
                 if (t.Role != role || t.IsLive) continue;
                 try
                 {
-                    var r = Effects.PossessionVisual.BoundsOf(host.Host, t.Element);
-                    if (r.IsEmpty) continue;
+                    if (_head.BoundsOf(host.Host, t.Visual) is not { } r) continue;
                     var dx = r.X + r.Width / 2 - origin.X;
                     var dy = r.Y + r.Height / 2 - origin.Y;
                     var d = dx * dx + dy * dy;
@@ -741,7 +742,7 @@ public sealed class PossessionDirector : IDisposable
     private void OnTimerRestarted(string reason)
     {
         if (!IsHaunting || _disposed) return;
-        DispatcherHelper.RunOnUI(() =>
+        _head.OnUi(() =>
         {
             try
             {
@@ -756,10 +757,10 @@ public sealed class PossessionDirector : IDisposable
                 _nextDue = DateTime.Now + PossessionDeck.FirstDelay(CurrentRung, _intensity, _rng);
                 try { RungChanged?.Invoke(CurrentRung); } catch (Exception ex) { Diag.Swallowed(ex); }
 
-                App.Logger?.Information("Possession: timer restarted ({Reason}), rung reset to {Rung}, next haunt in {Sec:F0}s",
+                Log.Information("Possession: timer restarted ({Reason}), rung reset to {Rung}, next haunt in {Sec:F0}s",
                     reason, CurrentRung, (_nextDue - DateTime.Now).TotalSeconds);
             }
-            catch (Exception ex) { App.Logger?.Warning("Possession timer-restart handling failed: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Warning("Possession timer-restart handling failed: {Error}", ex.Message); }
         });
     }
 
@@ -826,7 +827,7 @@ public sealed class PossessionDirector : IDisposable
             foreach (var g in ghosts)
             {
                 try { await UndoGhostAsync(g, TimeSpan.FromMilliseconds(500)).ConfigureAwait(true); }
-                catch (Exception ex) { App.Logger?.Warning("Possession restart undo step failed: {Error}", ex.Message); }
+                catch (Exception ex) { Log.Warning("Possession restart undo step failed: {Error}", ex.Message); }
             }
 
             // No Clear() here. Release() already took every ghost in the snapshot off the books, and
@@ -836,13 +837,13 @@ public sealed class PossessionDirector : IDisposable
             // stays true so CanApply refuses it for the rest of the session, and a HoldFor==Zero
             // effect (RoomWarp) never runs its Undo at all, leaking its event handlers with it.
         }
-        catch (Exception ex) { App.Logger?.Warning("Possession restart undo failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession restart undo failed: {Error}", ex.Message); }
     }
 
-    private static void BarkTimerRestarted(string reason, int restart)
+    private void BarkTimerRestarted(string reason, int restart)
     {
-        try { App.Bark?.NotifyPossessionTimerRestarted(reason ?? "", restart); }
-        catch (Exception ex) { App.Logger?.Debug("Possession: timer-restart bark failed: {Error}", ex.Message); }
+        try { _head.BarkTimerRestarted(reason ?? "", restart); }
+        catch (Exception ex) { Log.Debug("Possession: timer-restart bark failed: {Error}", ex.Message); }
     }
 
     private async Task HoldThenUndoAsync(LiveGhost ghost, TimeSpan hold)
@@ -874,7 +875,7 @@ public sealed class PossessionDirector : IDisposable
             {
                 try
                 {
-                    if (effect().IsBig) App.Bark?.NotifyPossessionEffect(id, targetName);
+                    if (effect().IsBig) _head.BarkEffect(id, targetName);
                 }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             },
@@ -891,9 +892,9 @@ public sealed class PossessionDirector : IDisposable
 
         foreach (var t in raw)
         {
-            if (t?.Element == null || string.IsNullOrEmpty(t.Key)) continue;
+            if (t?.Visual == null || string.IsNullOrEmpty(t.Key)) continue;
             bool visible;
-            try { visible = t.Element.IsVisible; } catch { continue; }
+            try { visible = _head.IsVisible(t.Visual); } catch { continue; }
             if (!visible) continue;
 
             var live = t.IsLive || _liveKeys.Contains(t.Key);
@@ -912,7 +913,7 @@ public sealed class PossessionDirector : IDisposable
     {
         if (!Release(ghost)) return;
         try { await ghost.Effect.UndoAsync(duration).ConfigureAwait(true); }
-        catch (Exception ex) { App.Logger?.Warning("Possession undo {Effect} failed: {Error}", ghost.Effect.Id, ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession undo {Effect} failed: {Error}", ghost.Effect.Id, ex.Message); }
         finally { ghost.Dispose(); }
     }
 
@@ -924,12 +925,12 @@ public sealed class PossessionDirector : IDisposable
             var t = ghost.Effect.UndoAsync(TimeSpan.Zero);
             if (t != null)
             {
-                t.ContinueWith(x => App.Logger?.Warning("Possession undo {Effect} failed: {Error}",
+                t.ContinueWith(x => Log.Warning("Possession undo {Effect} failed: {Error}",
                         ghost.Effect.Id, x.Exception?.GetBaseException().Message),
                     TaskContinuationOptions.OnlyOnFaulted);
             }
         }
-        catch (Exception ex) { App.Logger?.Warning("Possession undo {Effect} threw: {Error}", ghost.Effect.Id, ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession undo {Effect} threw: {Error}", ghost.Effect.Id, ex.Message); }
         finally { ghost.Dispose(); }
     }
 
@@ -974,14 +975,14 @@ public sealed class PossessionDirector : IDisposable
             foreach (var g in ghosts)
             {
                 try { await UndoGhostAsync(g, per).ConfigureAwait(true); }
-                catch (Exception ex) { App.Logger?.Warning("Possession reassembly step failed: {Error}", ex.Message); }
+                catch (Exception ex) { Log.Warning("Possession reassembly step failed: {Error}", ex.Message); }
             }
 
             // No Clear() here either: Release() took every ghost in the snapshot off the books, so
             // anything still on them was added underneath us and belongs to a NEW lockdown.
             if (!ShouldFinishReassembly(generation, _generation, IsHaunting))
             {
-                App.Logger?.Debug("Possession: reassembly tail skipped, a new lockdown started underneath it");
+                Log.Debug("Possession: reassembly tail skipped, a new lockdown started underneath it");
                 return;
             }
 
@@ -996,9 +997,9 @@ public sealed class PossessionDirector : IDisposable
 
             CurrentRung = PossessionRung.Settle;
             try { RungChanged?.Invoke(CurrentRung); } catch (Exception ex) { Diag.Swallowed(ex); }
-            App.Logger?.Information("Possession: reassembled, room is quiet");
+            Log.Information("Possession: reassembled, room is quiet");
         }
-        catch (Exception ex) { App.Logger?.Warning("Possession reassembly failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession reassembly failed: {Error}", ex.Message); }
     }
 
     /// <summary>Is the reassembly that started at <paramref name="startGeneration"/> still the room's
@@ -1014,7 +1015,7 @@ public sealed class PossessionDirector : IDisposable
     //  Tripwires
     // ---------------------------------------------------------------------------------------------
 
-    private void OnEscapeAttempted(EscapeAttempt attempt)
+    internal void OnEscapeAttempted(EscapeAttempt attempt)
     {
         if (!IsHaunting || !_tripwiresEnabled) return;
         try
@@ -1029,7 +1030,7 @@ public sealed class PossessionDirector : IDisposable
             var strength = repeat <= 1 ? 0.5 : 0.8;
             PulseAll(strength);
             try { TripwireReacted?.Invoke(attempt); } catch (Exception ex) { Diag.Swallowed(ex); }
-            try { App.Bark?.NotifyPossessionTripwire(attempt.Kind, attempt.Repeat, attempt.Total); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { _head.BarkTripwire(attempt.Kind, attempt.Repeat, attempt.Total); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             if (repeat >= 2)
             {
@@ -1037,7 +1038,7 @@ public sealed class PossessionDirector : IDisposable
                 {
                     // A blink, not a strobe: one extra flare 120 ms later plus a short shake.
                     FireAndForget(BlinkAsync(), "tripwire blink");
-                    try { App.ScreenShake?.Shake(0.4, 250); } catch (Exception ex) { Diag.Swallowed(ex); }
+                    try { _head.Shake(0.4, 250); } catch (Exception ex) { Diag.Swallowed(ex); }
                 }
             }
 
@@ -1047,7 +1048,7 @@ public sealed class PossessionDirector : IDisposable
                 FireAndForget(RunWardenAsync(ct => Warden!.StareAsync(attempt.Kind, ct), "stare"), "warden stare");
             }
         }
-        catch (Exception ex) { App.Logger?.Warning("Possession tripwire failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("Possession tripwire failed: {Error}", ex.Message); }
     }
 
     private async Task BlinkAsync()
@@ -1089,14 +1090,14 @@ public sealed class PossessionDirector : IDisposable
             var t = verb(cts.Token);
             if (t != null) await t.ConfigureAwait(true);
         }
-        catch (OperationCanceledException) { App.Logger?.Debug("Possession warden {Verb} timed out", name); }
-        catch (Exception ex) { App.Logger?.Warning("Possession warden {Verb} failed: {Error}", name, ex.Message); }
+        catch (OperationCanceledException) { Log.Debug("Possession warden {Verb} timed out", name); }
+        catch (Exception ex) { Log.Warning("Possession warden {Verb} failed: {Error}", name, ex.Message); }
     }
 
     private static void FireAndForget(Task? task, string what)
     {
         if (task == null) return;
-        task.ContinueWith(t => App.Logger?.Warning("Possession {What} faulted: {Error}",
+        task.ContinueWith(t => Log.Warning("Possession {What} faulted: {Error}",
                 what, t.Exception?.GetBaseException().Message),
             TaskContinuationOptions.OnlyOnFaulted);
     }
@@ -1116,20 +1117,20 @@ public sealed class PossessionDirector : IDisposable
             _lockdown.TimerRestarted -= OnTimerRestarted;
         }
         catch (Exception ex) { Diag.Swallowed(ex); }
-        try { _events.DetachAll(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        try { _head.DetachAllReactive(); } catch (Exception ex) { Diag.Swallowed(ex); }
         IsHaunting = false;
         UndoAll();
     }
 
     private sealed class HostEntry
     {
-        public HostEntry(IPossessionHost host, EmberAttribution attribution)
+        public HostEntry(IPossessionHost host, IPossessionAttribution attribution)
         {
             Host = host;
             Attribution = attribution;
         }
         public IPossessionHost Host { get; }
-        public EmberAttribution Attribution { get; }
+        public IPossessionAttribution Attribution { get; }
     }
 
     private sealed class LiveGhost
@@ -1152,5 +1153,49 @@ public sealed class PossessionDirector : IDisposable
         public Action? OnRelease { get; set; }
 
         public void Dispose() { try { Cts.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); } }
+    }
+}
+
+/// <summary>
+/// The head's half of the director: everything the WPF file read from App.*, the dispatcher and the
+/// visual tree. The WPF head builds one in App (PossessionWpfHead); the defaults are inert, so a
+/// director without a head (tests) runs the ladder and touches nothing.
+/// </summary>
+public sealed class PossessionDirectorHead
+{
+    /// <summary>Run on the UI thread (inline when already there; WPF DispatcherHelper.RunOnUI).</summary>
+    public Action<Action> OnUi { get; init; } = a => a();
+    /// <summary>False once the UI is gone or shutting down; ticks are ignored then.</summary>
+    public Func<bool> UiAlive { get; init; } = () => true;
+    public Func<Models.AppSettings?> Settings { get; init; } = () => CoreSettings.Service?.Current;
+    /// <summary>The main window, once it is up (attached lazily on a tick).</summary>
+    public Func<IPossessionHost?> MainHost { get; init; } = () => null;
+    public Func<IPossessionHost, IPossessionAttribution> Attribution { get; init; } = _ => NoAttribution.Instance;
+    public Func<IEnumerable<IPossessionScene>> Scenes { get; init; } = Array.Empty<IPossessionScene>;
+    /// <summary>The reactive adapter (WPF PossessionEvents): attach / detach one host, detach all.</summary>
+    public Action<PossessionDirector, IPossessionHost> AttachReactive { get; init; } = (_, _) => { };
+    public Action<IPossessionHost> DetachReactive { get; init; } = _ => { };
+    public Action DetachAllReactive { get; init; } = () => { };
+    /// <summary>Last cursor position in ghost-layer coordinates; (0,0) until the mouse has moved.</summary>
+    public Func<(double X, double Y)> Pointer { get; init; } = () => (0, 0);
+    /// <summary>A control's bounds in ghost-layer coordinates, or null when it has none.</summary>
+    public Func<IPossessionHost, object, (double X, double Y, double Width, double Height)?> BoundsOf { get; init; } = (_, _) => null;
+    public Func<object, bool> IsVisible { get; init; } = _ => true;
+    /// <summary>The visual (or logical) parent of a control, for TargetFor's climb.</summary>
+    public Func<object, object?> ParentOf { get; init; } = _ => null;
+    public Action<int> BarkRung { get; init; } = _ => { };
+    public Action<string, int> BarkTimerRestarted { get; init; } = (_, _) => { };
+    public Action<string, string?> BarkEffect { get; init; } = (_, _) => { };
+    public Action<string, int, int> BarkTripwire { get; init; } = (_, _, _) => { };
+    public Action<double, int> Shake { get; init; } = (_, _) => { };
+
+    private sealed class NoAttribution : IPossessionAttribution
+    {
+        public static readonly NoAttribution Instance = new();
+        public Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400) => Task.CompletedTask;
+        public IDisposable Possess(object target) => new CancellationTokenSource();
+        public void EdgePulse(double strength) { }
+        public bool AnyPossessed => false;
+        public void ReleaseAll() { }
     }
 }
