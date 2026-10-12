@@ -125,7 +125,8 @@ internal sealed class ArcademyMetaStore
     private JObject _state;
     // Core has no dispatcher: the 500 ms debounce is a thread-pool timer, so FlushSave can now run
     // on the timer and on the UI thread at once; _writeGate keeps their two writes from sharing the .tmp.
-    private System.Threading.Timer? _saveDebounce;
+    private System.Threading.ITimer? _saveDebounce;
+    private readonly TimeProvider _time;
     private readonly object _writeGate = new();
     private bool _dirty;
 
@@ -133,10 +134,11 @@ internal sealed class ArcademyMetaStore
         : this(broadcast, Path.Combine(CorePaths.UserData, "arcademy_meta.json")) { }
 
     /// <summary>A named file (tests; CorePaths.UserData is fixed for the process).</summary>
-    internal ArcademyMetaStore(Action<object> broadcast, string path)
+    internal ArcademyMetaStore(Action<object> broadcast, string path, TimeProvider? time = null)
     {
         _broadcast = broadcast;
         _path = path;
+        _time = time ?? TimeProvider.System;
         _state = Load(_path);
     }
 
@@ -758,7 +760,8 @@ internal sealed class ArcademyMetaStore
     /// <summary>Flush any debounced write now (teardown / app exit).</summary>
     public void FlushSave()
     {
-        try { _saveDebounce?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite); } catch { }
+        // Disposed, not just stopped: the next Touch arms a fresh one, so nothing is left behind at exit.
+        lock (_lock) { _saveDebounce?.Dispose(); _saveDebounce = null; }
         lock (_writeGate)
         {
             JObject snapshot;
@@ -785,11 +788,11 @@ internal sealed class ArcademyMetaStore
 
     private void DebounceSave()
     {
-        _saveDebounce ??= new System.Threading.Timer(_ =>
+        _saveDebounce ??= _time.CreateTimer(_ =>
         {
             try { FlushSave(); } catch (Exception ex) { Log.Debug("ArcademyMetaStore: debounced save failed: {E}", ex.Message); }
-        }, null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
-        _saveDebounce.Change(500, System.Threading.Timeout.Infinite);
+        }, null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+        _saveDebounce.Change(TimeSpan.FromMilliseconds(500), System.Threading.Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>False (and logged) for a key the host owns. The page gets a reply either way, so a

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using ConditioningControlPanel.Services.Arcademy;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -12,13 +11,19 @@ namespace CCP.Core.Tests;
 /// needed a dispatcher in WPF and could only be tripwired there), the page's write guard, and the
 /// debounced atomic save that replaced the DispatcherTimer. Each test owns a temp file.
 /// </summary>
-public class ArcademyMetaStoreTests
+public sealed class ArcademyMetaStoreTests : System.IDisposable
 {
-    private static string TempPath() =>
-        Path.Combine(Path.GetTempPath(), "ccp-arcademy-" + System.Guid.NewGuid().ToString("N"), "arcademy_meta.json");
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "ccp-arcademy-" + System.Guid.NewGuid().ToString("N"));
 
-    private static ArcademyMetaStore Store(string path, List<object>? sent = null) =>
-        new(m => sent?.Add(m), path);
+    public void Dispose()
+    {
+        if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
+    }
+
+    private string TempPath() => Path.Combine(_dir, System.Guid.NewGuid().ToString("N"), "arcademy_meta.json");
+
+    private static ArcademyMetaStore Store(string path, List<object>? sent = null, System.TimeProvider? time = null) =>
+        new(m => sent?.Add(m), path, time);
 
     private static void GiveSlips(ArcademyMetaStore store, int n) =>
         store.Set(ArcademyMetaStore.WalletKey, new JObject
@@ -73,11 +78,14 @@ public class ArcademyMetaStoreTests
     public void AWriteReachesDiskOnTheDebounceWithoutAFlush()
     {
         var path = TempPath();
-        var store = Store(path);
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var store = Store(path, time: clock);
         store.Set("theme", "drone");
 
+        clock.Advance(System.TimeSpan.FromMilliseconds(499));
         Assert.False(File.Exists(path));   // debounced, not written through
-        Assert.True(SpinWait.SpinUntil(() => File.Exists(path), 5000), "the 500 ms debounce never wrote");
+        clock.Advance(System.TimeSpan.FromMilliseconds(1));
+        Assert.True(File.Exists(path), "the 500 ms debounce never wrote");
         Assert.Equal("drone", (string?)Store(path).Get("theme"));
     }
 
