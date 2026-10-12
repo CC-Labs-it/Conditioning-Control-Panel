@@ -10,6 +10,8 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -101,15 +103,17 @@ public sealed class PresetsSessionCatalogueTests
                 AssertDetails(view, first);
                 Assert.True(start.IsEnabled);
 
-                // A locked row selects like any other; Start greys and reads "🔒 Coming Soon".
+                // A locked row selects like any other; Start greys and reads "🔒 Coming Soon" (padlock icon + text).
                 var locked = all.First(session => !session.IsAvailable);
                 Click(host, rows.Single(row => (row.Tag as Session)?.Id == locked.Id));
                 AssertDetails(view, locked);
                 Assert.False(start.IsEnabled);
-                Assert.Equal("🔒 " + Loc.Get("label_coming_soon"), ((TextBlock)start.Content!).Text);
+                var lockedLabel = Assert.IsType<IconLabel>(start.Content);
+                Assert.Equal(IconKind.LockClosed, lockedLabel.Kind);
+                Assert.Equal(Loc.Get("label_coming_soon"), lockedLabel.Label.Text);
                 Click(host, firstRow);
                 Assert.True(start.IsEnabled);
-                Assert.NotEqual("🔒 " + Loc.Get("label_coming_soon"), ((TextBlock)start.Content!).Text);
+                Assert.IsNotType<IconLabel>(start.Content);
             }
             finally
             {

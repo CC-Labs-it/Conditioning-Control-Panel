@@ -13,6 +13,7 @@
      access-key parsing has nothing to swallow. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.LayeredAudioWindow"
         Title="Audio Layers"
         Width="480" Height="660"
@@ -31,11 +32,11 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Text="🎧 Audio Layers"
-                   Foreground="{DynamicResource PinkBrush}"
-                   FontSize="20"
-                   FontWeight="SemiBold"/>
+        <fx:IconLabel Grid.Row="0"
+                      Kind="Headphones" Text="Audio Layers"
+                      TextElement.Foreground="{DynamicResource PinkBrush}"
+                      TextElement.FontSize="20"
+                      TextElement.FontWeight="SemiBold"/>
 
         <TextBlock Grid.Row="1"
                    Text="Build your own looping soundscape — add several audio files and they all play together, each on its own volume. Everything mixes through one output so it stays light. Turn the master on to hear it now; it also plays automatically for audio-only sessions."
@@ -105,11 +106,12 @@
         <!-- Add track -->
         <Button Grid.Row="3"
                 x:Name="BtnAddTrack"
-                Content="➕  Add audio file…"
                 Theme="{StaticResource OutlineButton}"
                 Padding="12,8"
                 HorizontalAlignment="Left"
-                Margin="0,0,0,10"/>
+                Margin="0,0,0,10">
+            <fx:IconLabel Kind="Add" Text="Add audio file…"/>
+        </Button>
 
         <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="SlotsPanel"/>

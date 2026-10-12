@@ -1,7 +1,8 @@
 // PORTED from ConditioningControlPanel/Controls/Friends/FriendsDrawer.Pickers.cs (+ FriendsDrawer.cs
 // BuildCard/ActionButton/ShowResult): the card's Invite / Poke / Send a watch buttons and the picker
 // each opens inline in the card, over IFriendsService.
-// ponytail: no Segoe MDL2 glyphs on the action buttons (no such font on Linux), no Pop() juice and no FriendsSfx sounds (.Juice.cs / FriendsSfx are not on this head). The Goon
+// The action buttons carry WPF's MDL2 glyphs as Fluent icons (E8A7/E7C9/E714, fluent-icons 2026-10-10).
+// ponytail: no Pop() juice and no FriendsSfx sounds (.Juice.cs / FriendsSfx are not on this head). The Goon
 // and chess tiles stay shut here: GoonHostService and PieceByPieceHostService are WPF-only, so this head
 // can neither open a room nor a board (FriendsInviteCodes is the seam that lights them when they move).
 using System;
@@ -14,6 +15,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
@@ -42,7 +44,8 @@ public sealed partial class FriendsDrawer
         {
             if (act == "more") continue;
             bool lit = _picker == act;
-            var b = Pill(Loc.Get("friends_action_" + act), lit ? ButtonHover : ButtonBg, Text, "friends-action:" + act, lit ? Lilac : Line2);
+            var kind = act switch { "invite" => IconKind.Open, "poke" => IconKind.HandPoint, _ => IconKind.Video };   // WPF ActionButton
+            var b = Pill(GlyphContent(kind, Loc.Get("friends_action_" + act), glyphFg: Lilac), lit ? ButtonHover : ButtonBg, Text, "friends-action:" + act, lit ? Lilac : Line2);
             (b.CornerRadius, b.Padding, b.HorizontalAlignment) = (new CornerRadius(10), new Thickness(10, 8, 10, 8), HorizontalAlignment.Stretch);
             b.Margin = grid.Children.Count % 2 == 0 ? new Thickness(0, 0, 3, 6) : new Thickness(3, 0, 0, 6);
             b.Click += (_, _) => { _picker = _picker == act ? null : act; Render(); };

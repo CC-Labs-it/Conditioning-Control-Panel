@@ -33,8 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             btn.Background = Tint(HomeHue, BrowserFoldRule.ArrowFill);
             btn.Tag = Tint(HomeHue, BrowserFoldRule.ArrowHoverFill);
             btn.BorderBrush = Tint(HomeHue, BrowserFoldRule.ArrowBorder);
-            // Core's chevrons are Segoe MDL2 code points (no such font on Linux): plain arrows.
-            TxtFoldBrowser.Text = collapsed ? "▾" : "▴";
+            // Core's chevrons are Segoe MDL2 code points: Fluent chevrons here (fluent-icons 2026-10-10).
+            TxtFoldBrowser.Kind = collapsed ? IconKind.ChevronDown : IconKind.ChevronUp;
             // Bound, not assigned, so a language switch re-reads them (P09).
             var label = BrowserFoldRule.LabelKey(collapsed);
             TxtFoldBrowserLabel.Bind(TextBlock.TextProperty, LocBinding(label));

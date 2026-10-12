@@ -1929,3 +1929,71 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - User report "login does not work". The window was a sandboxed live-check app. An unreachable sign-in server now ends the attempt at once with WPF's "Login failed" message instead of a 5-minute spinner. Closing the dialog cancels the OAuth, so a retry works again.
 - Title-bar "Sign in" chip lands on Settings · Account on the first open. Offline Mode greys the Home Login button.
 - Sandboxed runs show "[SANDBOX] " in every window title and a SANDBOX badge in the shell title bar. A Settings Link waiting on the browser ends when the Account section leaves the tree. LoginRetryTests: 9 tests; the new one is fail-proven, the rest are asserted.
+
+## avalonia-port/icons-home-settings: +292
+- Fluent icons for Home + Settings (L1): 17 product files, emoji ratchet 971→905, loc ratchet 234→214, census unnamed icon buttons 158→142.
+- Tests now check IconGlyph/IconLabel Kind (fold, drawer, panic key, link labels), each made to fail once on purpose; parity rows marked divergent by decision.
+
+## avalonia-port/icons-studio-features: +434
+- Fluent icons L2: Studio rack, feature pages, feature/intro/settings popups, PinkRush, CornerGif, LayeredAudio, MiniPlayer (play/pause by Kind); emoji ratchet 971→895, loc-prefix 234→198.
+- win-layered-audio snapshot re-baselined (icons only, by decision); snapshot tests can no longer launch a diff GUI.
+
+## avalonia-port/icons-studio-features: +434
+- Fluent icons L2: Studio rack, feature pages, feature/intro/settings popups, PinkRush, CornerGif, LayeredAudio, MiniPlayer (play/pause by Kind); emoji ratchet 971→895, loc-prefix 234→198.
+- win-layered-audio snapshot re-baselined (icons only, by decision); snapshot tests can no longer launch a diff GUI.
+
+## avalonia-port/icons-premium-tabs: +133
+- L3 Fluent icons: 9 premium tabs + Circe faces draw fx:IconGlyph; gate padlocks keep PremiumGateFx glow (LockClosed + tier brush); Chaster Key/LockClosed per D6.
+- Ratchets lowered: emoji 971→920, prefixed-loc 234→224, path 26→19; Exclusives feature-emoji data slots and Takeover state strings left (L10/follow-up).
+
+## avalonia-port/icons-voice: +143
+- Fluent icons L4: She's Listening (21 voice-command rows -> IconLabel, gate padlock), lock card voice states, webcam calibration/gaze windows; icon-emoji 971->919, icon-prefixed-loc 234->233. Review P3s: hearts Filled + PinkBrush; shield, sparkle, pause Filled per design ref.
+- Left for L10: the Start/Stop listening button (text swapped in MainShellWindow.SheListening.cs).
+
+## avalonia-port/icons-progress: +506
+- Fluent icons on the quest, achievement, skill-tree and program surfaces and their 7 popups and dialogs (L5). Icon-led loc keys go through IconLabel/StrBare; gold/success/tier brushes follow the D tables.
+- Ratchets: icon-emoji 971→880, icon-prefixed-loc 234→210; census 1040→820. IconLabel.Args now re-renders, so a reroll count that changed under the same key no longer stays stale.
+
+## avalonia-port/icons-deeper-media: +385
+- Fluent icons L6: Deeper tab/editor/player/new dialog, Media Log, Assets (+MediaPicker), WebHost converted to IconGlyph/IconLabel/StrBare; ratchets 971→838 emoji, 234→215 prefixed loc.
+- Deeper header-wave drift now finds the IconGlyph (fail-proven test); Keincheck before/after in evidence/icons-deeper-media/.
+
+## avalonia-port/icons-companion-social: +327
+- Fluent icons lane L7: Companion room, Profile/Discord (tick Paths too), Friends drawer (WPF MDL2 action glyphs restored), InvitePanel, ProfileCustomize; ratchets emoji 971→905, loc 234→224, path 26→23.
+- Fail-proven asserts in WorkshopCells/ProfileWardrobe/FriendsDrawer tests; Keincheck shots of Companion and Profile tabs.
+
+## avalonia-port/icons-chaos-play: +470
+- Fluent icons lane L8: Chaos hub/HUD/overlay/slot picker, Play tab, Gaze minigame, AvatarTube, BubbleCount and EasterEgg glyphs become IconGlyph/IconLabel with an arcade look (filled marks, tier/gold brushes, pip counts kept); icon-emoji ratchet 971 -> 846.
+- Tests: new ChaosPlayIconsTests; ChaosRunHostTests and ChaosHubStateTests assert icon Kinds; all fail-proven; Keincheck Play tab, headless Chaos hub render.
+
+## avalonia-port/icons-dialogs-windows: +497
+- Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
+- Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
+
+## avalonia-port/icons-dialogs-windows: +497
+- Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
+- Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
+
+## avalonia-port/render-budget-loc: +175
+- Skia GPU cache raised to 256 MB (trunk RenderBudget) plus Win32 presentation env switches; idle Home CPU (Linux only) 0.67 -> 0.30 cores (dotnet-counters, 2x3 samples each side).
+- Trunk loc fix 6be091d12 already in base, no json in diff (0 of 18 keys differ); FrameClock fps counter not imported (no FrameClock in this head).
+
+## avalonia-port/wpf-findings-a11y: +157
+- Buttons whose content is a panel or TextBlock are named by their text, and the name follows content changes; this fixes 55 type-name accessible names. Offline mode greys Home's unified login as WPF does.
+- WPF UIA findings 2 and 4 reproduced on the real startup path with the CI seed: the shell matches WPF, and the `--uia-dump` harness never seeds settings or services.
+
+## avalonia-port/flash-core: +547
+- Core flash rules from trunk U9 (FlashExit/StayRule/Corners/Shatter moved to Core, tests on Linux).
+- Avalonia flashes honour Click: a press pops with haptic and the chosen leave; Stay until popped (10 min, cap 40) only for scheduler flashes, not remote/voice ones.
+
+## avalonia-port/flash-wire: +677
+- Flash: lucky roll + chime, glow card, XP/achievement/quest per flash, hydra on pop, TvOff/Glitch/Pop exit layers (FlashFxRules imported with its caller).
+- Flash XP still not banked (no idle tracker); Shatter, lucky pulse/toast, FlashCorners, voice pool, remote source left.
+
+## avalonia-port/leash-core-move: +289
+- Leash services, rules and LeashHoldToCut moved to CCP.Core/Services/Leash (git mv, trunk shape). WPF keeps thin head files (LeashServiceApp, LeashCutSafetyApp, ChasterLeashTab).
+- 134 leash tests now run on Linux in CCP.Core.Tests. GATE-OK.
+
+## avalonia-port/leash-wire: +372
+- The Core LeashService now runs on the Avalonia friends poll: seams are seeded, it starts after friends and is dropped on exit, and the launcher leash gate reads it, but holds a tile only once a gate card can present it (LeashGateCard unit). Cut target: `RemoteRelay.EndSessionNow`.
+- The +372 is counted against the stack-tip merge 8d147364d (icons-progress), not 2a4a55570. Tests: LeashHeadTests and a RemoteRelay test, all fail-proven. GATE-OK.

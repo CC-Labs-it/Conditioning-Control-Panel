@@ -43,6 +43,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800"
@@ -112,7 +113,7 @@
                         </Border>
 
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
-                            <TextBlock Text="👁" FontSize="22" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <fx:IconGlyph Kind="Eye" Size="22" VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Theme="{StaticResource Type.CardTitle}" Text="Awareness Engine"/>
                                 <TextBlock Text="She's watching your screen and your typing. React in real time."
@@ -127,7 +128,7 @@
                                     VerticalAlignment="Center" Margin="0,0,14,0"
                                     Click="BtnAwarenessTutorial_Click"
                                     ToolTip.Tip="Walk through the Awareness Engine — sources, cooldowns, presets, and the editor.">
-                                <TextBlock Text="🎓 Tutorial"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph Kind="HatGraduation" VerticalAlignment="Center"/><TextBlock Text="Tutorial"/></StackPanel>
                             </Button>
                             <Ellipse x:Name="AwarenessStatusDot" Width="8" Height="8"
                                      Fill="#606060" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -312,7 +313,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="🖥️" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <fx:IconGlyph Kind="Desktop" Size="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                             <TextBlock Text="Screen OCR" FontSize="13" FontWeight="SemiBold"
                                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
@@ -338,7 +339,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="⌨️" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <fx:IconGlyph Kind="Keyboard" Size="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                             <TextBlock Text="Keyboard" FontSize="13" FontWeight="SemiBold"
                                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
@@ -613,7 +614,7 @@
                                              Foreground="{DynamicResource PinkBrush}"
                                              Click="LnkAwarenessAdvanced_Click">
                                 <TextBlock x:Name="LnkAwarenessAdvancedText"
-                                           Text="Customize individual triggers (advanced) →"
+                                           Text="{loc:Str cp5_awareness_advanced_link_editor}"
                                            TextDecorations="Underline"/>
                             </hover:SafeHyperlinkButton>
                         </Grid>
@@ -638,7 +639,7 @@
                                     <GradientStop Color="#00000000" Offset="0.45"/>
                                 </LinearGradientBrush>
                             </Border.Background>
-                            <TextBlock Text="👁" FontSize="72" Opacity="0.45"
+                            <fx:IconGlyph Kind="Eye" Size="72" Opacity="0.45"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Border>
@@ -653,14 +654,14 @@
                 Background="#99000010" BorderBrush="{DynamicResource FxGlowBrush}" BorderThickness="2"
                 CornerRadius="14" IsHitTestVisible="True">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="🔒" FontSize="52" HorizontalAlignment="Center"/>
+                <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="52" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"/>
                 <TextBlock Text="{loc:Str gate_premium_locked}" FontSize="22"
                            FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
                 <TextBlock Text="{loc:Str gate_premium_subtitle}" FontSize="14"
                            Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,12"/>
                 <Button Click="BtnGateUnlock_Click" Padding="20,8" Background="{DynamicResource FxGlowBrush}"
                         Foreground="White" FontWeight="Bold" Cursor="Hand" BorderThickness="0">
-                    <TextBlock Text="{loc:Str gate_unlock_with_patreon}"/>
+                    <fx:IconLabel Key="gate_unlock_with_patreon"/>
                 </Button>
             </StackPanel>
         </Border>

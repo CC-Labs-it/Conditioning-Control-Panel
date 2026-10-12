@@ -530,4 +530,74 @@ public class LeashTaskRunnerTests
         Assert.True(LeashPlayability.GiveUp(T0, T0.AddSeconds(20), everPlayed: false));
         Assert.False(LeashPlayability.GiveUp(T0, T0.AddMinutes(5), everPlayed: true));
     }
+
+    private sealed class FakeTimer : ConditioningControlPanel.Services.Friends.IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public bool Running;
+        public event EventHandler? Tick;
+        public void Start() => Running = true;
+        public void Stop() => Running = false;
+        public void OnUiThread(Action action) => action();
+        public void Fire() => Tick?.Invoke(this, EventArgs.Empty);
+    }
+
+    [Fact]
+    public void The_head_timer_ticks_the_runner_once_a_second()
+    {
+        var timer = new FakeTimer();
+        var old = LeashTaskRunner.TimerFactory;
+        LeashTaskRunner.TimerFactory = () => timer;
+        try
+        {
+            var r = new Rig();
+            r.Host.LockCardsCompleted = 5;
+            Assert.True(r.Runner.Start(Pun("p1", PunishKind.Lines, 1)));
+            Assert.True(timer.Running);
+            Assert.Equal(TimeSpan.FromSeconds(1), timer.Interval);
+            r.Host.LockCardsCompleted++;
+            r.Host.LockCardOpen = false;
+            timer.Fire();
+            Assert.Equal(new[] { "p1" }, r.Completed);
+        }
+        finally { LeashTaskRunner.TimerFactory = old; }
+    }
+}
+
+/// <summary>The head seam of the cut safety: unseeded it runs nothing; seeded it runs on the head's UI thread.</summary>
+public class LeashCutSafetySeamTests
+{
+    private sealed class Targets : LeashCutSafety.ITargets
+    {
+        public bool LockdownActive => false;
+        public void EndLockdown() { }
+        public void DiscardLockdownRecovery() { }
+        public bool RemoteActive => false;
+        public void EndRemote() { }
+        public bool StrictVideoRunning => false;
+        public void StopVideo() { }
+        public bool Released;
+        public void ReleaseSafetySettings() => Released = true;
+        public bool DropUnpushedLeashBookings() => false;
+    }
+
+    [Fact]
+    public void Unseeded_apply_runs_no_step_and_seeded_apply_goes_through_RunOnUi()
+    {
+        var (oldT, oldUi) = (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi);
+        try
+        {
+            LeashCutSafety.LiveTargets = null;
+            Assert.Empty(LeashCutSafety.Apply());
+
+            var t = new Targets();
+            var onUi = 0;
+            LeashCutSafety.LiveTargets = t;
+            LeashCutSafety.RunOnUi = a => { onUi++; a(); };
+            Assert.Contains(LeashCutSafety.StepSettings, LeashCutSafety.Apply());
+            Assert.True(t.Released);
+            Assert.Equal(1, onUi);
+        }
+        finally { (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldT, oldUi); }
+    }
 }

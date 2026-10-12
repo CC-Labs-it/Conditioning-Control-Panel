@@ -15,6 +15,7 @@
        pack:// merged dictionary    ->  avares:// ResourceInclude -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -133,7 +134,7 @@
             <StackPanel>
                 <Grid>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="⚠️" FontSize="11" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="Warning" Variant="Filled" Size="11" Foreground="{DynamicResource IconWarnBrush}" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Str label_privacy_notice}" Foreground="#FF6B6B" FontSize="11"
                                    FontWeight="Bold" VerticalAlignment="Center" Margin="3,0,0,0"/>
                     </StackPanel>

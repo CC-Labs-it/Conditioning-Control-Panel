@@ -405,7 +405,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             bool consented = WebcamConsent.IsCurrent(CoreSettings.Current);
             BlinkTrainerConsentCard.Background = new SolidColorBrush(consented ? Color.FromArgb(0x1A, 0x4A, 0xDE, 0x80) : Color.FromArgb(0x1A, 0xFF, 0xD0, 0x80));
             BlinkTrainerConsentCard.BorderBrush = consented ? Green : Amber;
-            BindLoc(BlinkTrainerConsentStatus, consented ? "blink_trainer_consent_granted" : "blink_trainer_consent_required");
+            BlinkTrainerConsentStatus.Key = consented ? "blink_trainer_consent_granted" : "blink_trainer_consent_required";
             BtnBlinkTrainerManageConsent.Content = BindLoc(new TextBlock { FontSize = 11 }, consented ? "blink_trainer_consent_manage" : "blink_trainer_consent_grant");
             BtnBlinkTrainerRevokeConsent.IsVisible = consented;
             var cal = Platform.WebcamTracker.Instance.Calibration;
@@ -450,7 +450,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             var remove = new Button
             {
-                Content = new TextBlock { Text = "×", FontSize = 16 }, Background = Brushes.Transparent,
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 14 }, Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0), Foreground = muted, Padding = new Thickness(6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
                 Tag = folder,

@@ -290,4 +290,19 @@ public sealed class NavSearchTests
         body();
         return Task.CompletedTask;
     });
+
+    /// <summary>Palette rows take their icon from the stable entry id (fluent-icons design c.3), not
+    /// the Core emoji; an id icon that carries a tier brush keeps the emoji route, which resolves to
+    /// the same icon with its colour.</summary>
+    [Fact]
+    public void PaletteRowsMapTheirIconByEntryId()
+    {
+        var studio = new PaletteRow(SettingsPaletteIndex.ById("door.studio")!, null);
+        Assert.Equal(FluentIcons.Common.Symbol.Color, studio.Kind);
+        Assert.Null(studio.Emoji);
+
+        var lockdown = new PaletteRow(SettingsPaletteIndex.ById("tab.lockdown")!, null);
+        Assert.Equal(FluentIcons.Common.Symbol.LockClosed, lockdown.Kind);
+        Assert.Equal("🔒", lockdown.Emoji);
+    }
 }

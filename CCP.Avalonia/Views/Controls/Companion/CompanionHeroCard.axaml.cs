@@ -430,7 +430,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         // ---- daily mood token (Train 4): dormant on WPF too ----
         public bool IsMoodLive => false;
-        public string MoodGlyph => "✧";
         public string MoodWord => Loc.Get("companion_hero_mood_asleep");
         public string MoodCaption => Loc.Get("companion_hero_mood_caption_dormant");
 

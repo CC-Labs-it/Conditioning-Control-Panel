@@ -16,6 +16,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.BouncingTextFeatureControl">
 
     <Grid>
@@ -39,11 +40,12 @@
                     </Border>
 
                     <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
-                        <TextBlock Text="{loc:Str label_bouncing_text}" FontSize="17" FontWeight="Bold"
-                                   Foreground="{StaticResource TextLightBrush}"/>
-                        <TextBlock Text="{loc:Str label_10_xp_per_bounce}" FontSize="11.5"
-                                   Foreground="{StaticResource TextMutedBrush}"
-                                   TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                        <fx:IconLabel Key="label_bouncing_text" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
+                        <DockPanel Margin="0,2,0,0" TextElement.Foreground="{StaticResource TextMutedBrush}">
+                            <fx:IconGlyph DockPanel.Dock="Left" Kind="Money" Size="11.5" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:StrBare label_10_xp_per_bounce}" FontSize="11.5"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
                     </StackPanel>
 
                     <Border HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,14,0"
@@ -216,8 +218,7 @@
                             <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                                     Background="{StaticResource SectionHueStudioBrush}"/>
                             <StackPanel Margin="16,8,16,8">
-                                <TextBlock Text="{loc:Str label_effects}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" Margin="0,0,0,2"/>
+                                <fx:IconLabel Key="label_effects" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextLightBrush}" Margin="0,0,0,2"/>
                                 <UniformGrid Columns="2">
                                     <Grid Height="30" Margin="0,0,10,0">
                                         <Grid.ColumnDefinitions>
@@ -302,7 +303,7 @@
                     </Border>
 
                     <Button x:Name="BtnEditPhrases" Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch">
-                        <TextBlock Text="{loc:Str btn_edit_phrases}"/>
+                        <fx:IconLabel Key="btn_edit_phrases"/>
                     </Button>
                 </StackPanel>
 
