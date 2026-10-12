@@ -6,6 +6,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Flash;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -27,6 +28,69 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed class FlashOverlayWindow : Window
     {
         private readonly Image _image;
+        private double _alpha = 1;
+        private DispatcherTimer? _exitTimer;
+        private long _lastExitTick;
+        private ScaleTransform? _exitScale;
+        private RotateTransform? _exitRotate;
+        private TranslateTransform? _exitShift;
+
+        /// <summary>The leave animation running after a pop, or null.</summary>
+        internal FlashExitState? Exit { get; private set; }
+
+        /// <summary>WPF FlashService.cs:1765 IsClickable: this flash takes the mouse, and a press
+        /// pops it (<paramref name="onPop"/>). Without this call the window stays hit-test invisible.</summary>
+        internal void MakeClickable(Action onPop)
+        {
+            IsHitTestVisible = true;
+            PointerPressed += (_, e) => { e.Handled = true; onPop(); };
+        }
+
+        /// <summary>Play <paramref name="exit"/> (WPF FlashLayer draws FlashExit.Sample the same way)
+        /// and close when it is done. The flash no longer takes clicks while it leaves.</summary>
+        internal void BeginExit(FlashExitState exit)
+        {
+            if (Exit != null) return;
+            Exit = exit;
+            IsHitTestVisible = false;
+            X11Overlay.SetClickThrough(this, true);
+            _exitScale = new ScaleTransform();
+            _exitRotate = new RotateTransform();
+            _exitShift = new TranslateTransform();
+            _image.RenderTransform = new TransformGroup { Children = { _exitScale, _exitRotate, _exitShift } };
+            _lastExitTick = FlashOverlay.Clock.GetTimestamp();
+            Apply(FlashExit.Sample(exit));
+            _exitTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => ExitFrame());
+            _exitTimer.Start();
+            Closed += (_, _) => { _exitTimer?.Stop(); _exitTimer = null; };
+        }
+
+        /// <summary>One exit frame on real elapsed time (P40); closes the window when it is done.</summary>
+        internal void ExitFrame()
+        {
+            if (Exit is not { } exit) return;
+            var now = FlashOverlay.Clock.GetTimestamp();
+            FlashExit.Step(exit, FlashOverlay.Clock.GetElapsedTime(_lastExitTick, now).TotalSeconds);
+            _lastExitTick = now;
+            Apply(FlashExit.Sample(exit));
+            if (exit.Done) { _exitTimer?.Stop(); _exitTimer = null; Close(); }
+        }
+
+        // ponytail: WPF also draws the TvOff whiten, the Glitch slices and the Pop sparks
+        // (FlashExit.SliceOffset/Spark); this window plays scale, spin, drop and alpha only.
+        private void Apply(FlashExitSample s)
+        {
+            // Avalonia's origin defaults to Center; WPF's pivot is (0.5, PivotY) of the rect.
+            _image.RenderTransformOrigin = new RelativePoint(0.5, s.PivotY, RelativeUnit.Relative);
+            _exitScale!.ScaleX = s.ScaleX;
+            _exitScale.ScaleY = s.ScaleY;
+            _exitRotate!.Angle = s.RotationDeg;
+            _exitShift!.Y = s.OffsetY * _image.Bounds.Height;
+            X11Overlay.SetOpacity(this, _alpha * Math.Clamp(s.Alpha, 0, 1));
+        }
+
+        /// <summary>Test seam: the picture's current transform (null before an exit).</summary>
+        internal Transform? PictureTransform => _image.RenderTransform as Transform;
 
         /// <summary>--render-all only: the flash card art as a sample picture.</summary>
         internal FlashOverlayWindow()
@@ -59,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// </summary>
         public void Run(double alpha, TimeSpan fade, TimeSpan lifetime)
         {
+            _alpha = alpha;
             Fade(0, alpha, fade);
             DispatcherTimer.RunOnce(() => Fade(alpha, 0, fade, Close), lifetime);
         }
@@ -75,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var v = from + (to - from) * i / steps;
                 var last = i == steps;
-                DispatcherTimer.RunOnce(() => { X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
+                DispatcherTimer.RunOnce(() => { if (Exit != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
             }
         }
     }

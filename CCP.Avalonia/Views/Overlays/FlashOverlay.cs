@@ -31,8 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length), clickable
-    /// flashes (hydra multiply / XP / pops - FlashClickable is ignored, always click-through),
+    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length), on a pop
+    /// the hydra multiply, lucky roll and glow (Core FlashFxRules: imported, not wired yet), Shatter,
     /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), glow, content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -59,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// reaches <c>Screens</c>. Like WPF's _isBusy, a second press is ignored from the click
         /// until the burst's last flash has spawned. The overrides are WPF TriggerFlashOnce's
         /// (amount, duration ms, size %); null keeps the user's setting.</summary>
-        public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null)
+        public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false)
         {
             if (_busy) return;
             if (!X11Overlay.IsAvailable)
@@ -88,7 +88,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
 
-                var lifetime = TimeSpan.FromMilliseconds((durationMs ?? s.FlashDuration * 1000) + 1000);
+                var clickable = s.FlashClickable;
+                var lifetime = Lifetime(s, ambient, durationMs);
+                var cap = Cap(s, ambient);
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
                 var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
 
@@ -105,8 +107,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         try
                         {
-                            if (refused || _closed || generation != _generation || Active.Count >= MaxConcurrent) { bmp.Dispose(); return; }
-                            refused = !Spawn(bmp, rect, screen, alpha, fade, lifetime);
+                            if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
+                            refused = !Spawn(bmp, rect, screen, alpha, fade, lifetime, clickable);
                             // WPF FlashService.cs:1608 records the batch; per shown image here, so the
                             // log's media count is exactly what reached the screen.
                             if (!refused) App.Sessions?.SessionLog.RecordImages(new[] { path });
@@ -158,10 +160,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// BEFORE SetOverrideRedirect so its XSync covers them: the window maps already
         /// click-through and at alpha 0, never as one opaque or clickable frame. False (window
         /// closed) when the platform refuses.</summary>
-        private static bool Spawn(Bitmap bmp, PixelRect rect, PixelRect screen, double alpha, TimeSpan fade, TimeSpan lifetime)
+        private static bool Spawn(Bitmap bmp, PixelRect rect, PixelRect screen, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable)
         {
             var w = new FlashOverlayWindow(bmp);
-            if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, rect))
+            // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
+            // (passive); off: exactly the click-through recipe above.
+            if (clickable) w.MakeClickable(() => Pop(w));
+            if (!X11Overlay.SetClickThrough(w, !clickable) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, rect, passive: clickable))
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: the platform refused a click-through topmost overlay window; flashes skipped");
                 _warnedUnavailable = true;
@@ -252,6 +257,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _generation++;
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
+            foreach (var w in Exiting.ToList()) w.Close();
+        }
+
+        // ---- Click to pop, stay until popped (WPF FlashService.OnFlashClicked / BuildExit / FlashStayRule) ----
+
+        /// <summary>Popped flashes still playing their leave animation; off <see cref="Active"/> like WPF,
+        /// but panic and Stop still close them.</summary>
+        internal static readonly List<FlashOverlayWindow> Exiting = new();
+        private static FlashExitStyle? _lastExitStyle;
+
+        /// <summary>WPF FlashService.cs:84-92 StayUntilPopped: no solid host on this head, so Click alone
+        /// decides MouseClickable; only the ambient tick is not point-fired.</summary>
+        internal static bool Stays(AppSettings s, bool ambient) =>
+            FlashStayRule.Applies(s.FlashStayUntilPopped, s.FlashClickable, pointFired: !ambient);
+
+        /// <summary>WPF FlashService.cs:1557-1568: FlashDuration + 1 s (or the caller's override + 1 s),
+        /// and the 10-minute safety lifetime for a flash that stays until popped.</summary>
+        internal static TimeSpan Lifetime(AppSettings s, bool ambient, int? durationMs) => Stays(s, ambient)
+            ? TimeSpan.FromMilliseconds(FlashStayRule.SafetyLifetimeMs)
+            : TimeSpan.FromMilliseconds((durationMs ?? s.FlashDuration * 1000) + 1000);
+
+        /// <summary>WPF FlashService.cs:1692: the shared-host cap (30), 40 while flashes stay.</summary>
+        internal static int Cap(AppSettings s, bool ambient) => FlashStayRule.Cap(MaxConcurrent, Stays(s, ambient), sharedHost: true);
+
+        /// <summary>WPF FlashService.cs:696-706: with stay on and the screen full, the ambient tick
+        /// skips whole (picture and whisper) and waits for a pop.</summary>
+        internal static bool StayScreenFull(AppSettings s) =>
+            FlashStayRule.ScreenFull(Stays(s, ambient: true), Active.Count, Cap(s, ambient: true));
+
+        /// <summary>WPF OnFlashClicked: off the active list (cap, overlap), then the leave animation
+        /// (BuildExit, FlashService.cs:2334) or the plain cut for None.</summary>
+        internal static void Pop(FlashOverlayWindow w)
+        {
+            if (w.Exit != null || !Active.Any(e => e.Window == w)) return;
+            Active.RemoveAll(e => e.Window == w);
+            var s = CoreSettings.Current;
+            if (FlashExit.Pick(s.FlashExitStyle, _lastExitStyle, Rng) is not { } style) { w.Close(); return; }
+            _lastExitStyle = style;
+            Exiting.Add(w);
+            w.Closed += (_, _) => Exiting.Remove(w);
+            w.BeginExit(FlashExit.Begin(style, s.MotionLevel, Rng.Next()));
         }
 
         /// <summary>Images in one burst (WPF TriggerFlashOnce, #658): the caller's override, else

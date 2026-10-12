@@ -435,11 +435,12 @@ namespace ConditioningControlPanel.Avalonia
                 await step(0.4, "Initializing flash service...");
                 // The ambient flash surface. CoreFlash owns the rhythm; a burst needs any attached
                 // visual to reach Screens, and the main window is the one that always is.
-                CoreFlash.IsBusyProvider = () => Views.Overlays.FlashOverlay.IsBusy;
+                CoreFlash.IsBusyProvider = () => Views.Overlays.FlashOverlay.IsBusy
+                    || Views.Overlays.FlashOverlay.StayScreenFull(CoreSettings.Current);
                 CoreFlash.ShowProvider = () =>
                 {
                     if (desktop.MainWindow is not { } host) return;
-                    Views.Overlays.FlashOverlay.TriggerOnce(host);
+                    Views.Overlays.FlashOverlay.TriggerOnce(host, ambient: true);
                     NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash);
                 };
 

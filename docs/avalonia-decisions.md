@@ -1028,3 +1028,11 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `AccountSeedTests.FreshLinuxInstall_AfterLoad_SendsOnlyKnownFields_NeverLowerThanTheServer` (SyncPushTests.cs),
   `AccountSeedTests.AProfileWithoutAchievements_SendsNoAchievementsKey` (SyncPushTests.cs), `ProfileCosmeticsSyncTests.cs` (CustomizeSave_*);
   log: ~/ccp-port/evidence/server-sync-unblock/fail-proofs.log.
+## 2026-10-12: FlashClickable is honoured by the Avalonia flash overlay (flash-core)
+- Question: the Avalonia flash windows were always click-through, ignoring the user's Click setting; stay-until-popped
+  and the leave picker had nothing to act on. May the overlay make flash windows take clicks when Click is on?
+- Answer (advised by: supervisor): yes, WPF parity (FlashService.cs:1765 IsClickable). Click off keeps exactly the old
+  click-through recipe; Click on keeps the window's input and never takes focus (X11 override-redirect, Win32 passive
+  NOACTIVATE); a press pops it with its FlashExit leave. Panic/Stop (FlashOverlay.CloseAll) closes flashes mid-leave too.
+  Native Wayland is unchanged: no X11 overlay, so no flashes at all (logged once).
+- Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.
