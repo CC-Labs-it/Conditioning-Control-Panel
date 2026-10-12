@@ -40,12 +40,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// "What you can say" names only what this head can do. The axaml keeps WPF's full list; each
-        /// row header carries <c>Tag="voice:intent|intent"</c>. A row whose phrase lines match its
+        /// row header (an fx:IconLabel) carries <c>Tag="voice:intent|intent"</c>. A row whose phrase lines match its
         /// intents one to one keeps only the runnable lines; any other row shows iff one is runnable.
         /// </summary>
         internal void ShowOnlyVoiceCommands(ISet<string> runnable)
         {
-            foreach (var head in this.GetLogicalDescendants().OfType<TextBlock>()
+            foreach (var head in this.GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>()
                          .Where(t => t.Tag is string tag && tag.StartsWith("voice:")).ToList())
             {
                 var names = ((string)head.Tag!)["voice:".Length..].Split('|');

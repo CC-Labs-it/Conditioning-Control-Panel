@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -138,7 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 // Safety (MainWindow.Settings.cs:77/78). ChkNoPanic is the INVERSE of the enable.
                 ChkNoPanic.IsChecked = !s.PanicKeyEnabled;
                 ChkPanicOverridesAll.IsChecked = s.PanicOverridesAll;
-                SetButtonLabel(BtnPanicKey, $"🔑 {s.PanicKey}");
+                SetButtonLabel(BtnPanicKey, IconKind.Key, s.PanicKey);
                 PaintPauseKey();
 
                 RefreshChatShortcutLabel();
@@ -154,6 +155,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// a snake_case string; replacing that child keeps the opt-out.</summary>
         private static void SetButtonLabel(Button button, string text) =>
             button.Content = new TextBlock { Text = text };
+
+        // WPF's key glyph prefix is a Fluent icon here (fluent-icons 2026-10-10).
+        private static void SetButtonLabel(Button button, IconKind icon, string text) =>
+            button.Content = new IconLabel { Kind = icon, Text = text };
 
         // =====================================================================================
         //  microphone - ported wholesale from the retired WebcamFeatureControl popup
@@ -667,7 +672,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             {
                 Detach();
                 MainShellWindow.CapturingPanicKey = false;
-                SetButtonLabel(BtnPanicKey, $"🔑 {CoreSettings.Current.PanicKey}");
+                SetButtonLabel(BtnPanicKey, IconKind.Key, CoreSettings.Current.PanicKey);
             }
 
             void OnCaptureKey(object? s, KeyEventArgs k)
@@ -676,7 +681,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 k.Handled = true;
                 CoreSettings.Current.PanicKey = k.Key.ToString();
                 CoreSettings.Save();
-                SetButtonLabel(BtnPanicKey, $"🔑 {CoreSettings.Current.PanicKey}");
+                SetButtonLabel(BtnPanicKey, IconKind.Key, CoreSettings.Current.PanicKey);
                 Log.Information("Panic key changed to: {Key}", k.Key);
                 DispatcherTimer.RunOnce(() => MainShellWindow.CapturingPanicKey = false, TimeSpan.FromMilliseconds(300));
             }
@@ -687,9 +692,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         internal static bool CapturingPauseKey { get; set; }
         private bool _capturingPauseKey;
 
-        private void PaintPauseKey() => SetButtonLabel(BtnPauseKey, string.IsNullOrEmpty(CoreSettings.Current.PauseKey)
-            ? Loc.Get("btn_pause_key_unbound")
-            : $"⏸ {CoreSettings.Current.PauseKey}");
+        private void PaintPauseKey()
+        {
+            if (string.IsNullOrEmpty(CoreSettings.Current.PauseKey)) SetButtonLabel(BtnPauseKey, Loc.Get("btn_pause_key_unbound"));
+            else SetButtonLabel(BtnPauseKey, IconKind.Pause, CoreSettings.Current.PauseKey);
+        }
 
         /// <summary>
         /// WPF BtnPauseKey_Click (MainWindow.UiUpdates.cs:2429) + the capture branch of

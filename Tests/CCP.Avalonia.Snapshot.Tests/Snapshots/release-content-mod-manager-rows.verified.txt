@@ -118,8 +118,14 @@
                     Orientation: Horizontal,
                     Children: [
                       {
+                        Type: IconGlyph,
+                        Width: 16.0,
+                        VerticalAlignment: Center,
+                        Opacity: 1.0
+                      },
+                      {
                         Type: TextBlock,
-                        Text: ★ CCP Default,
+                        Text: CCP Default,
                         VerticalAlignment: Center
                       }
                     ]
@@ -135,8 +141,14 @@
                       Orientation: Horizontal,
                       Children: [
                         {
+                          Type: IconGlyph,
+                          Width: 16.0,
+                          VerticalAlignment: Center,
+                          Opacity: 1.0
+                        },
+                        {
                           Type: TextBlock,
-                          Text: ★ CCP Default,
+                          Text: CCP Default,
                           VerticalAlignment: Center
                         }
                       ]
@@ -154,8 +166,14 @@
                         Orientation: Horizontal,
                         Children: [
                           {
+                            Type: IconGlyph,
+                            Width: 16.0,
+                            VerticalAlignment: Center,
+                            Opacity: 1.0
+                          },
+                          {
                             Type: TextBlock,
-                            Text: ★ CCP Default,
+                            Text: CCP Default,
                             VerticalAlignment: Center
                           }
                         ]
@@ -172,8 +190,14 @@
                         Orientation: Horizontal,
                         Children: [
                           {
+                            Type: IconGlyph,
+                            Width: 16.0,
+                            VerticalAlignment: Center,
+                            Opacity: 1.0
+                          },
+                          {
                             Type: TextBlock,
-                            Text: ★ CCP Default,
+                            Text: CCP Default,
                             VerticalAlignment: Center
                           }
                         ]
@@ -193,8 +217,14 @@
                       Orientation: Horizontal,
                       Children: [
                         {
+                          Type: IconGlyph,
+                          Width: 16.0,
+                          VerticalAlignment: Center,
+                          Opacity: 1.0
+                        },
+                        {
                           Type: TextBlock,
-                          Text: ★ CCP Default,
+                          Text: CCP Default,
                           VerticalAlignment: Center
                         }
                       ]
@@ -210,8 +240,14 @@
                         Orientation: Horizontal,
                         Children: [
                           {
+                            Type: IconGlyph,
+                            Width: 16.0,
+                            VerticalAlignment: Center,
+                            Opacity: 1.0
+                          },
+                          {
                             Type: TextBlock,
-                            Text: ★ CCP Default,
+                            Text: CCP Default,
                             VerticalAlignment: Center
                           }
                         ]
@@ -648,7 +684,21 @@
               {
                 Type: Button,
                 Content: {
-                  Type: TextBlock
+                  Type: IconLabel,
+                  Spacing: 6.0,
+                  Orientation: Horizontal,
+                  Children: [
+                    {
+                      Type: IconGlyph,
+                      VerticalAlignment: Center
+                    },
+                    {
+                      Type: TextBlock,
+                      Text: Get Mods,
+                      VerticalAlignment: Center,
+                      IsVisible: true
+                    }
+                  ]
                 },
                 Background: {
                   Type: SolidColorBrush,

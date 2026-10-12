@@ -45,6 +45,7 @@
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.GradedIntakeTabView">
 
     <!-- Velvet Kit 2 · round 4. Lime is the intake's hue - the graded, clinical end of the app,
@@ -136,7 +137,7 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="🎟️" FontSize="18"
+                                                <fx:IconGlyph Grid.Column="0" Kind="TicketDiagonal" Size="18"
                                                            VerticalAlignment="Top" Margin="0,1,12,0"/>
                                                 <StackPanel Grid.Column="1">
                                                     <TextBlock Text="{loc:Str intake_pass_banner_headline}" Foreground="{DynamicResource PinkBrush}"
@@ -179,7 +180,7 @@
                                                     BorderThickness="0" Padding="18,10" CornerRadius="8"
                                                     ToolTip.Tip="A banded descent that drafts a personalised session from how you answer (Beta)."
                                                     Click="BtnStartIntake_Click">
-                                                <TextBlock Text="✨ Begin Intake" FontWeight="Bold" FontSize="13"/>
+                                                <fx:IconLabel Kind="Sparkle" Text="Begin Intake" TextElement.FontWeight="Bold" TextElement.FontSize="13"/>
                                             </Button>
                                         </StackPanel>
 
@@ -234,7 +235,7 @@
                                     </Border.BorderBrush>
 
                                     <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="🔒" FontSize="34"
+                                        <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="34" Foreground="{DynamicResource IconTier2Brush}"
                                                    HorizontalAlignment="Center"
                                                    Margin="0,0,0,12"/>
                                         <!-- The three text values below are placeholders for the designer and

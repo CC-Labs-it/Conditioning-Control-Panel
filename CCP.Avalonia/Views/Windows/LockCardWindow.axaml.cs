@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -13,6 +14,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Speech;
@@ -103,8 +105,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF named nine SolidColorBrushes and a ScaleTransform directly. Avalonia only name-scopes
         // StyledElements, so each is reached through the control that owns it.
-        private readonly TextBlock _txtTitle, _txtPhrase, _txtVoiceState, _txtVoiceHeard,
+        private readonly TextBlock _txtTitle, _txtPhrase, _txtVoiceHeard,
                                    _txtProgress, _txtStrict, _txtHint, _txtEscHint;
+        private readonly IconLabel _txtVoiceState;
         private readonly TextBox _txtInput;
         private readonly Border _cardBorder, _inputBorder, _voiceLevelFill,
                                 _progressBar, _progressBarContainer;
@@ -122,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _inputBorder = this.FindControl<Border>("InputBorder")!;
             _txtInput = this.FindControl<TextBox>("TxtInput")!;
             _voicePanel = this.FindControl<StackPanel>("VoicePanel")!;
-            _txtVoiceState = this.FindControl<TextBlock>("TxtVoiceState")!;
+            _txtVoiceState = this.FindControl<IconLabel>("TxtVoiceState")!;
             _voiceLevelFill = this.FindControl<Border>("VoiceLevelFill")!;
             _txtVoiceHeard = this.FindControl<TextBlock>("TxtVoiceHeard")!;
             _txtProgress = this.FindControl<TextBlock>("TxtProgress")!;
@@ -272,7 +275,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _txtInput.IsReadOnly = true;
                 _txtInput.Focusable = false;
                 SetLocalized(_txtHint, "label_input_synced_from_primary_monitor");
-                if (_voiceMode) _txtVoiceState.Text = "🎤 Speak on the main monitor";
+                if (_voiceMode) SetVoiceState(IconKind.Mic, "Speak on the main monitor");
                 return;
             }
 
@@ -280,7 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtInput.Focusable = true;
             if (_voiceMode)
             {
-                _txtVoiceState.Text = "🎤 Listening…";
+                SetVoiceState(IconKind.Mic, "Listening…");
                 SetPlain(_txtHint, "Say the phrase out loud, clearly.");
             }
             else SetLocalized(_txtHint, "label_type_the_phrase_exactly_as_shown_above");
@@ -936,18 +939,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     if (res.Matched)
                     {
-                        SetVoiceState("✓ Yes~", VoiceGreen);
+                        SetVoiceState(IconKind.Checkmark, "Yes~", VoiceGreen);
                         RegisterSuccessfulRepeat();
                         if (_isCompleted) break;
                         await Task.Delay(700, ct);
-                        SetVoiceState("🎤 Listening…", VoicePink);
+                        SetVoiceState(IconKind.Mic, "Listening…", VoicePink);
                     }
                     else if (!res.LoudEnough && res.Score >= 0.45)
                     {
                         SetVoiceHeard(res.Transcript);
-                        SetVoiceState("🔊 Louder…", VoiceAmber);
+                        SetVoiceState(IconKind.Speaker2, "Louder…", VoiceAmber);
                         await Task.Delay(800, ct);
-                        SetVoiceState("🎤 Listening…", VoicePink);
+                        SetVoiceState(IconKind.Mic, "Listening…", VoicePink);
                     }
                     else if (res.TimedOut && string.IsNullOrWhiteSpace(res.Transcript))
                     {
@@ -956,9 +959,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     else
                     {
                         SetVoiceHeard(res.Transcript);
-                        SetVoiceState("✗ Again, slower…", VoiceAmber);
+                        SetVoiceState(IconKind.Dismiss, "Again, slower…", VoiceAmber);
                         await Task.Delay(800, ct);
-                        SetVoiceState("🎤 Listening…", VoicePink);
+                        SetVoiceState(IconKind.Mic, "Listening…", VoicePink);
                     }
                 }
             }
@@ -987,16 +990,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void SetVoiceHeard(string text) =>
             _txtVoiceHeard.Text = string.IsNullOrWhiteSpace(text) ? "I heard: …" : $"I heard: {text}";
 
-        private void SetVoiceState(string text, Color color)
+        /// <summary>The state line: a Fluent icon (WPF's leading emoji) and its text; colour unchanged when null.</summary>
+        private void SetVoiceState(IconKind kind, string text, Color? color = null)
         {
+            _txtVoiceState.Kind = kind;
             _txtVoiceState.Text = text;
-            SetVoiceStateColor(color);
+            if (color is { } c) SetVoiceStateColor(c);
         }
 
         private void SetVoiceStateColor(Color color)
         {
-            if (_txtVoiceState.Foreground is SolidColorBrush b) b.Color = color;
-            else _txtVoiceState.Foreground = new SolidColorBrush(color);
+            if (_txtVoiceState.GetValue(TextElement.ForegroundProperty) is SolidColorBrush b) b.Color = color;
+            else _txtVoiceState.SetValue(TextElement.ForegroundProperty, new SolidColorBrush(color));
         }
 
         /// <summary>Drop back to typed solve if speech dies mid-card, so the user is never stuck.</summary>
@@ -1198,5 +1203,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal bool VoiceMode => _voiceMode;
         internal string VoiceState => _txtVoiceState.Text ?? "";
+        internal IconKind? VoiceStateKind => _txtVoiceState.Kind;
     }
 }

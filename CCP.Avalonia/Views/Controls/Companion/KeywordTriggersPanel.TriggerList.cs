@@ -3,7 +3,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -156,10 +158,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             });
             var delete = new Button
             {
-                Content = "\u2716", Background = Brushes.Transparent, Foreground = Rgb(0xFF, 0x69, 0xB4),
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 14 }, Background = Brushes.Transparent, Foreground = Rgb(0xFF, 0x69, 0xB4),
                 BorderThickness = new Thickness(0), FontSize = 14, Padding = new Thickness(6, 2, 6, 2),
                 Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             };
+            AutomationProperties.SetName(delete, Loc.Get("tooltip_remove_item"));   // WPF ✖ was its own name
             delete.Click += (_, _) =>
             {
                 if (CoreSettings.Current.KeywordTriggers.Remove(t)) { CoreSettings.Save(); RefreshTriggerList(); }

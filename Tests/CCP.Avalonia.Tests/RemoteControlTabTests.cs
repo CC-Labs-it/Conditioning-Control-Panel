@@ -3,7 +3,9 @@ using System.Threading.Tasks;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -85,7 +87,7 @@ public sealed class RemoteControlTabTests
                 var preset = CoreSettings.Current.RemoteEmotePresets[0];
                 var buttons = view.FindControl<ItemsControl>("LstEmotePresets")!.GetVisualDescendants().OfType<Button>()
                     .Where(b => ReferenceEquals(b.Tag, preset)).ToList();
-                var edit = buttons.First(b => b.Content as string == "✎");
+                var edit = buttons.First(b => b.Content is IconGlyph { Kind: IconKind.Edit });
                 edit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.True(view.FindControl<Popup>("EmoteEditPopup")!.IsOpen);
                 var text = view.FindControl<TextBox>("TxtEditEmoteText")!;

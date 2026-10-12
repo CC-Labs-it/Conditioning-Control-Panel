@@ -4,11 +4,13 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
@@ -126,10 +128,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 FontWeight = FontWeight.Bold,
                 Foreground = TextMut,
             });
-            body.Children.Add(new TextBlock
+            body.Children.Add(new IconGlyph
             {
-                Text = "🔒",
-                FontSize = 34,
+                Kind = IconKind.LockClosed,
+                Size = 36,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 34, 0, 8),
             });
@@ -184,10 +186,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             if (!s.Exists)
             {
-                body.Children.Add(new TextBlock
+                body.Children.Add(new IconGlyph
                 {
-                    Text = "✨",
-                    FontSize = 34,
+                    Kind = IconKind.Sparkle,
+                    Variant = IconVariant.Filled,
+                    Size = 36,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Margin = new Thickness(0, 34, 0, 8),
                 });
@@ -220,8 +223,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     TextTrimming = TextTrimming.CharacterEllipsis,
                 });
                 body.Children.Add(StatRow($"{s.RunsCompleted}", s.RunsCompleted == 1 ? "descent" : "descents"));
-                body.Children.Add(StatRow($"✦ {s.Sparks:N0}", "drops"));
-                body.Children.Add(StatRow($"🪙 {s.Gold:N0}", "gold"));
+                body.Children.Add(StatRow($"{s.Sparks:N0}", "drops", IconKind.Sparkle));
+                body.Children.Add(StatRow($"{s.Gold:N0}", "gold", IconKind.CoinMultiple, IconBrushes.Gold));
                 if (s.BestScore > 0) body.Children.Add(StatRow($"{s.BestScore:N0}", "best score"));
 
                 var when = s.LastPlayedUtc.HasValue
@@ -246,7 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 var del = new Button
                 {
-                    Content = new TextBlock { Text = "🗑" },
+                    Content = new IconGlyph { Kind = IconKind.Delete, Size = 14 },
                     Width = 28,
                     Height = 28,
                     Padding = new Thickness(0),
@@ -261,6 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Tag = s.Slot,
                 };
                 ToolTip.SetTip(del, $"Erase Save {s.Slot}");
+                AutomationProperties.SetName(del, $"Erase Save {s.Slot}");
                 del.Click += DeleteSlot_Click;
                 content.Children.Add(del);
             }
@@ -282,9 +286,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return card;
         }
 
-        private static StackPanel StatRow(string value, string label)
+        private static StackPanel StatRow(string value, string label, IconKind? icon = null, string? brush = null)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            if (icon is { } k)   // WPF "✦ 1,234" / "🪙 56": the currency glyph is a filled icon (fluent-icons)
+            {
+                var g = new IconGlyph { Kind = k, Variant = IconVariant.Filled, Size = 14, Foreground = White,
+                                        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
+                if (brush != null) g.Bind(IconGlyph.ForegroundProperty, g.GetResourceObservable(brush));
+                row.Children.Add(g);
+            }
             row.Children.Add(new TextBlock { Text = value, FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = White });
             row.Children.Add(new TextBlock { Text = "  " + label, FontSize = 12, Foreground = TextDim, VerticalAlignment = VerticalAlignment.Center });
             return row;

@@ -12,6 +12,8 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -139,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // GIF picker
             body.Children.Add(SectionLabel("GIF"));
-            var pickLabel = new TextBlock { Text = PickerLabel(setting.GifPath) };
+            var pickLabel = new IconLabel { Kind = IconKind.Folder, Text = PickerLabel(setting.GifPath) };
             var pickBtn = new Button
             {
                 Content = pickLabel,
@@ -194,7 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             body.Children.Add(SectionLabel("Position"));
             var cornerPanel = new WrapPanel { Margin = new Thickness(0, 2, 0, 12) };
             var cornerButtons = new Dictionary<CornerPosition, Border>();
-            void AddCorner(CornerPosition pos, string label)
+            void AddCorner(CornerPosition pos, IconKind arrow, string label)
             {
                 var b = new Border
                 {
@@ -205,13 +207,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Padding = new Thickness(10, 6, 10, 6),
                     Margin = new Thickness(0, 0, 6, 6),
                     Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new TextBlock
-                    {
-                        Text = label,
-                        Foreground = Brushes.White,
-                        FontSize = 11,
-                    },
+                    Child = new IconLabel { Kind = arrow, Text = label, Spacing = 4 },
                 };
+                b.SetValue(TextElement.ForegroundProperty, Brushes.White);
+                b.SetValue(TextElement.FontSizeProperty, 11d);
                 b.PointerReleased += (_, e) =>
                 {
                     if (e.InitialPressMouseButton != MouseButton.Left) return;
@@ -225,10 +224,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 cornerButtons[pos] = b;
                 cornerPanel.Children.Add(b);
             }
-            AddCorner(CornerPosition.TopLeft, "↖ Top left");
-            AddCorner(CornerPosition.TopRight, "↗ Top right");
-            AddCorner(CornerPosition.BottomLeft, "↙ Bottom left");
-            AddCorner(CornerPosition.BottomRight, "↘ Bottom right");
+            AddCorner(CornerPosition.TopLeft, IconKind.ArrowUpLeft, "Top left");
+            AddCorner(CornerPosition.TopRight, IconKind.ArrowUpRight, "Top right");
+            AddCorner(CornerPosition.BottomLeft, IconKind.ArrowDownLeft, "Bottom left");
+            AddCorner(CornerPosition.BottomRight, IconKind.ArrowDownRight, "Bottom right");
             body.Children.Add(cornerPanel);
 
             // Size slider
@@ -339,8 +338,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static string PickerLabel(string path) =>
             string.IsNullOrEmpty(path) || !File.Exists(path)
-                ? "📁 Choose GIF…  (uses selected spiral)"
-                : $"📁 {Path.GetFileName(path)}";
+                ? "Choose GIF…  (uses selected spiral)"
+                : Path.GetFileName(path);
 
         private void ApplyLiveDebounced(int index)
         {

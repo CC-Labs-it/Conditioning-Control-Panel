@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Input;
 using ConditioningControlPanel.Services;
 using Xunit;
+using IconLabel = ConditioningControlPanel.Avalonia.Controls.IconLabel;
 
 namespace CCP.Avalonia.Tests;
 
@@ -55,7 +56,8 @@ public sealed class PauseKeyCaptureTests
 
                 window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.P });
                 Assert.Equal("P", s.PauseKey);
-                Assert.Equal("⏸ P", ((TextBlock)button.Content!).Text);
+                var label = Assert.IsType<IconLabel>(button.Content);
+                Assert.Equal(("P", FluentIcons.Common.Symbol.Pause), (label.Text, label.Kind));
 
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });

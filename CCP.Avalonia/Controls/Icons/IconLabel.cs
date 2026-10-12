@@ -35,8 +35,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         public IconKind? Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
         public double IconSize { get => GetValue(IconSizeProperty); set => SetValue(IconSizeProperty, value); }
 
-        /// <summary>Loc.GetF arguments for <see cref="Key"/> (code-built labels).</summary>
-        public object[]? Args { get; set; }
+        /// <summary>Loc.GetF arguments for <see cref="Key"/> (code-built labels); a new count re-renders.</summary>
+        public object[]? Args { get => _args; set { _args = value; Rebuild(); } }
+        private object[]? _args;
 
         /// <summary>The text shown after the icon(s).</summary>
         public TextBlock Label { get; } = new() { VerticalAlignment = VerticalAlignment.Center };

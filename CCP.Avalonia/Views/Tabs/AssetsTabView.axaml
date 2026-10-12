@@ -37,6 +37,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
              xmlns:models="clr-namespace:ConditioningControlPanel.Models;assembly=CCP.Core"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView"
@@ -96,7 +97,9 @@
         <!-- Header with title and actions -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="{loc:Str section_assets_content_packs}" Theme="{StaticResource SectionHeader}" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Box" Size="13" Margin="0,0,6,8" VerticalAlignment="Center"
+                              Foreground="{DynamicResource SectionInkBrush}"/>
+                <TextBlock Text="{loc:StrBare section_assets_content_packs}" Theme="{StaticResource SectionHeader}" VerticalAlignment="Center"/>
                 <Button x:Name="HelpBtnAssets" Theme="{StaticResource HelpButtonStyle}"
                         VerticalAlignment="Center" Margin="8,0,0,0" Tag="Assets"/>
                 <!-- LIBRARY > FOLDERS (WPF 7e50c9381): the assets folder picker that used to hide in the
@@ -124,26 +127,26 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="BtnRefreshPacks" Theme="{StaticResource OutlineButton}" Margin="0,0,8,0" Padding="12,6"
                         ToolTip.Tip="{loc:Str tooltip_refresh_available_packs}" IsVisible="False">
-                    <TextBlock Text="{loc:Str btn_refresh_2}"/>
+                    <fx:IconLabel Key="btn_refresh_2"/>
                 </Button>
                 <Button x:Name="BtnDeleteDownloadedPacks" Theme="{StaticResource OutlineButton}" Margin="0,0,8,0" Padding="12,6"
                         ToolTip.Tip="{loc:Str tooltip_delete_all_downloaded_content_packs_your_loca}" IsVisible="False">
-                    <TextBlock Text="{loc:Str btn_delete_downloaded_packs}"/>
+                    <fx:IconLabel Key="btn_delete_downloaded_packs"/>
                 </Button>
                 <Button x:Name="BtnRefreshAssets" Theme="{StaticResource OutlineButton}" Margin="0,0,8,0" Padding="12,6"
                         Click="BtnRefreshAssets_Click"
                         ToolTip.Tip="{loc:Str tooltip_refresh_assets}">
-                    <TextBlock Text="{loc:Str btn_refresh_2}"/>
+                    <fx:IconLabel Key="btn_refresh_2"/>
                 </Button>
                 <Button x:Name="BtnGetPacks" Theme="{StaticResource OutlineButton}" Margin="0,0,8,0" Padding="12,6"
                         Click="BtnGetPacks_Click"
                         ToolTip.Tip="{loc:Str tooltip_get_packs}">
-                    <TextBlock Text="{loc:Str btn_get_packs}"/>
+                    <fx:IconLabel Key="btn_get_packs"/>
                 </Button>
                 <Button x:Name="BtnOpenAssetsFolder" Theme="{StaticResource OutlineButton}" Margin="0,0,8,0" Padding="12,6"
                         Click="BtnOpenAssetsFolder_Click"
                         ToolTip.Tip="{loc:Str tooltip_open_assets_folder_in_explorer}">
-                    <TextBlock Text="{loc:Str btn_open_folder}"/>
+                    <fx:IconLabel Key="btn_open_folder"/>
                 </Button>
                 <!-- MainWindow.AssetsFx pulses this button when media has been logged since the
                      log was last opened. Event-driven: a fixed 3-cycle animation fired on tab
@@ -151,7 +154,7 @@
                 <Button x:Name="BtnMediaLog" Theme="{StaticResource OutlineButton}" Padding="12,6"
                         Click="BtnMediaLog_Click"
                         ToolTip.Tip="{loc:Str tooltip_media_log}">
-                    <TextBlock Text="{loc:Str btn_media_log}"/>
+                    <fx:IconLabel Key="btn_media_log"/>
                 </Button>
             </StackPanel>
         </Grid>
@@ -273,8 +276,8 @@
                     <!-- Row 3, FINE-TUNE: one row says what is in the pool; a click opens the list. -->
                     <Button x:Name="BtnRemoteFineTune" Margin="0,8,0,0" Theme="{StaticResource RemoteFineTuneRow}">
                         <DockPanel>
-                            <TextBlock x:Name="TxtRemoteFineTuneChevron" DockPanel.Dock="Right" Text="▾"
-                                       FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                            <fx:IconGlyph x:Name="TxtRemoteFineTuneChevron" DockPanel.Dock="Right" Kind="ChevronDown"
+                                          Size="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtRemoteSummary" Foreground="#E6FFFFFF" FontSize="12.5"
                                        FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                         </DockPanel>
@@ -324,7 +327,9 @@
                 <!-- Header -->
                 <Grid Grid.Row="0" Margin="0,0,0,6">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{loc:Str label_community_content_packs}"
+                        <fx:IconGlyph Kind="Gift" Size="13" Margin="0,0,6,8" VerticalAlignment="Center"
+                              Foreground="{DynamicResource SectionInkBrush}"/>
+                <TextBlock Text="{loc:StrBare label_community_content_packs}"
                                    Theme="{StaticResource SectionHeader}"/>
                         <Button x:Name="HelpBtnPacks" Theme="{StaticResource HelpButtonStyle}"
                                 VerticalAlignment="Center" Margin="8,0,0,0" Tag="ContentPacks"/>
@@ -464,7 +469,7 @@
                                 <!-- Discord Preview -->
                                 <Border Grid.Row="0" CornerRadius="8,8,0,0" ClipToBounds="True" Background="#5865F2">
                                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <TextBlock Text="🎮" FontSize="34" HorizontalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Games" Size="34" Foreground="White" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Border>
 
@@ -531,7 +536,9 @@
                 <!-- Header -->
                 <Grid Grid.Row="0" Margin="0,0,0,8">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{loc:Str section_asset_browser}" Theme="{StaticResource SectionHeader}"/>
+                        <fx:IconGlyph Kind="FolderOpen" Size="13" Margin="0,0,6,8" VerticalAlignment="Center"
+                              Foreground="{DynamicResource SectionInkBrush}"/>
+                <TextBlock Text="{loc:StrBare section_asset_browser}" Theme="{StaticResource SectionHeader}"/>
                         <Button x:Name="HelpBtnAssetBrowser" Theme="{StaticResource HelpButtonStyle}"
                                 VerticalAlignment="Center" Margin="8,0,0,0" Tag="AssetBrowser"/>
                     </StackPanel>
@@ -626,7 +633,7 @@
                                         <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
                                                   IsThreeState="False" Click="FolderCheckBox_Click"
                                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                        <TextBlock Text="📁" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Folder" Size="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding FileCountDisplay}"
                                                    Foreground="{DynamicResource TextMutedBrush}"
@@ -677,7 +684,7 @@
                                                             <!-- Video placeholder icon (shows when IsVideo and no thumbnail) -->
                                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                         IsVisible="{Binding IsVideo}">
-                                                                <TextBlock Text="🎬" FontSize="26" HorizontalAlignment="Center"/>
+                                                                <fx:IconGlyph Kind="Video" Size="26" HorizontalAlignment="Center"/>
                                                                 <TextBlock Text="{loc:Str label_video}" FontSize="9"
                                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                                            HorizontalAlignment="Center" Margin="0,4,0,0"/>
@@ -685,7 +692,7 @@
                                                             <!-- Image thumbnail (for images, or video if we had one) -->
                                                             <Image hover:HoverPop.IsEnabled="True" Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
                                                             <!-- Loading indicator -->
-                                                            <TextBlock Text="⏳" FontSize="14"
+                                                            <fx:IconGlyph Kind="HourglassHalf" Size="14"
                                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                        IsVisible="{Binding IsLoadingThumbnail}"/>
                                                         </Grid>

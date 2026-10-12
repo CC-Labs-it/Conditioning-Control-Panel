@@ -26,6 +26,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:ctl="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateNotificationDialog"
         Title="{loc:Str dialog_update_available}"
@@ -100,7 +101,7 @@
 
             <!-- Title -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,18">
-                <TextBlock Text="{loc:Str label_text_10}" FontSize="28" Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <fx:IconGlyph Kind="ArrowCircleUp" Size="28" Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
                 <TextBlock Text="{loc:Str label_update_available}" Foreground="{DynamicResource PinkBrush}" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"/>
             </StackPanel>
 

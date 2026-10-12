@@ -25,6 +25,8 @@
      Content as an access key (CLAUDE.md trap 1). -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.PinkRushPopup"
         Title="Pink Rush!"
         Width="350" Height="150"
@@ -60,14 +62,17 @@
             <!-- Skill Image -->
             <Border Grid.Column="0" Width="80" Height="80" Background="{DynamicResource DarkerBgBrush}"
                     CornerRadius="8" Margin="0,0,15,0">
-                <TextBlock Text="&#x26A1;" FontSize="36"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Flash" Variant="Filled" Size="36" Foreground="{DynamicResource PinkBrush}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
 
             <!-- Text Content -->
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock x:Name="TxtPinkRushTitle" Text="⚡ PINK RUSH!" Foreground="#FF1493"
-                           FontWeight="Bold" FontSize="18" Margin="0,0,0,4"/>
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,4">
+                    <fx:IconGlyph Kind="Flash" Variant="Filled" Size="18" Foreground="#FF1493" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtPinkRushTitle" Text="PINK RUSH!" Foreground="#FF1493"
+                               FontWeight="Bold" FontSize="18" VerticalAlignment="Center"/>
+                </StackPanel>
                 <TextBlock x:Name="TxtPinkRushSubtitle" Text="3x XP for 60 seconds!" Foreground="{DynamicResource PinkBrush}"
                            FontSize="13" Margin="0,0,0,6"/>
                 <TextBlock x:Name="TxtCountdown" Text="60s remaining" Foreground="{DynamicResource TextMutedBrush}"
@@ -80,8 +85,8 @@
                     Width="24" Height="24" Margin="0,-5,-5,0" Padding="0"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"
-                    BorderThickness="0" Cursor="Hand">
-                <TextBlock Text="✕"/>
+                    BorderThickness="0" Cursor="Hand" AutomationProperties.Name="{loc:Str btn_close}">
+                <fx:IconGlyph Kind="Dismiss" Size="12"/>
             </Button>
         </Grid>
     </Border>

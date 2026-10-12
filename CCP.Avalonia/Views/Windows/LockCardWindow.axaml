@@ -29,6 +29,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow"
         Title="{loc:Str dialog_lock_card}"
         SystemDecorations="None"
@@ -76,10 +77,8 @@
 
             <StackPanel>
                 <!-- Lock icon and title -->
-                <!-- WPF: a 52x52 emoji Image. Native colour emoji here, boxed to the same 52x52. -->
-                <Viewbox Width="52" Height="52" HorizontalAlignment="Center" Margin="0,0,0,10">
-                    <TextBlock Text="🔐"/>
-                </Viewbox>
+                <!-- WPF: a 52x52 emoji Image. A Fluent icon here (decision 2026-10-10), the same 52x52. -->
+                <fx:IconGlyph Kind="LockClosedKey" Variant="Filled" Size="52" HorizontalAlignment="Center" Margin="0,0,0,10"/>
                 <TextBlock x:Name="TxtTitle" Text="{loc:Str label_type_to_unlock_2}"
                            FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,25">
                     <TextBlock.Foreground>
@@ -125,12 +124,12 @@
 
                 <!-- Voice panel (voice mode) — hidden unless the card is solved by speaking -->
                 <StackPanel x:Name="VoicePanel" IsVisible="False" Margin="0,0,0,20">
-                    <TextBlock x:Name="TxtVoiceState" Text="🎤 Listening…" FontSize="15" FontWeight="SemiBold"
-                               HorizontalAlignment="Center" Margin="0,0,0,10">
-                        <TextBlock.Foreground>
+                    <fx:IconLabel x:Name="TxtVoiceState" Kind="Mic" Text="Listening…" TextElement.FontSize="15" TextElement.FontWeight="SemiBold"
+                                  HorizontalAlignment="Center" Margin="0,0,0,10">
+                        <TextElement.Foreground>
                             <SolidColorBrush Color="{StaticResource PinkColor}"/>
-                        </TextBlock.Foreground>
-                    </TextBlock>
+                        </TextElement.Foreground>
+                    </fx:IconLabel>
                     <!-- Level meter -->
                     <Border CornerRadius="5" Height="10" Background="#33FFFFFF" MinWidth="280" Margin="0,0,0,8">
                         <Border x:Name="VoiceLevelFill" CornerRadius="5" HorizontalAlignment="Left" Width="280"
@@ -176,8 +175,8 @@
 
                 <!-- Completion message (hidden initially) -->
                 <StackPanel x:Name="CompletionPanel" IsVisible="False" Margin="0,20,0,0">
-                    <TextBlock Text="{loc:Str label_good_girl_2}" FontSize="24" FontWeight="Bold"
-                               HorizontalAlignment="Center" Foreground="#00E676"/>
+                    <fx:IconLabel Key="label_good_girl_2" TextElement.FontSize="24" TextElement.FontWeight="Bold"
+                                  HorizontalAlignment="Center" TextElement.Foreground="#00E676"/>
                 </StackPanel>
             </StackPanel>
         </Border>

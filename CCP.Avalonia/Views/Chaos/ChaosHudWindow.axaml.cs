@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -18,6 +19,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using Serilog;
 
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -85,10 +87,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private readonly Border _strip, _panel, _portraitHost, _sideLeftBtn, _sideRightBtn, _sideLeftBtn2, _sideRightBtn2;
         private readonly TextBlock _txtStripClock, _txtStripScore, _txtStreakLbl, _txtStreakNum, _txtStripMult,
                                    _rippleStripText, _txtActWave, _txtRunTime, _txtPanelScore, _txtPanelMult,
-                                   _txtShields, _txtPauseHint, _txtHero,
-                                   _sideLeftGlyph, _sideRightGlyph, _sideLeftGlyph2, _sideRightGlyph2,
+                                   _txtShields,
                                    _hdrStack, _hdrResistance, _hdrFocus, _hdrPockets, _hdrAccessories,
                                    _hdrConditioning, _hdrModifiers, _hdrFeed;
+        private readonly IconLabel _txtPauseHint, _txtHero;
+
+        // Feed lines lead with a glyph ("◈ name", "⏸ held…"): the HUD draws it as an icon and trims the
+        // rest. A curse's ☠ has no Fluent skull (oracle D4), so it reads as the filled warning sign.
+        public static readonly FuncValueConverter<string?, string?> FeedGlyph =
+            new(s => IconText.Split(s).Icons.FirstOrDefault() is { } g ? (g == "☠" ? "⚠" : g) : null);
+        public static readonly FuncValueConverter<string?, string> FeedText = new(IconText.Bare);
+        private readonly IconGlyph _sideLeftGlyph, _sideRightGlyph, _sideLeftGlyph2, _sideRightGlyph2;
         private readonly StackPanel _streakBlock, _focusStripBlock, _rippleStripBlock, _focusPanelBlock;
         private readonly Grid _rowStreak, _rowDifficulty, _rowLust, _rowMantras, _pauseChoiceRow;
         private readonly ProgressBar _focusStripBar, _focusPanelBar, _barRunProgress, _barLust;
@@ -136,12 +145,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _txtPanelScore = this.FindControl<TextBlock>("TxtPanelScore")!;
             _txtPanelMult = this.FindControl<TextBlock>("TxtPanelMult")!;
             _txtShields = this.FindControl<TextBlock>("TxtShields")!;
-            _txtPauseHint = this.FindControl<TextBlock>("TxtPauseHint")!;
-            _txtHero = this.FindControl<TextBlock>("TxtHero")!;
-            _sideLeftGlyph = this.FindControl<TextBlock>("SideLeftGlyph")!;
-            _sideRightGlyph = this.FindControl<TextBlock>("SideRightGlyph")!;
-            _sideLeftGlyph2 = this.FindControl<TextBlock>("SideLeftGlyph2")!;
-            _sideRightGlyph2 = this.FindControl<TextBlock>("SideRightGlyph2")!;
+            _txtPauseHint = this.FindControl<IconLabel>("TxtPauseHint")!;
+            _txtHero = this.FindControl<IconLabel>("TxtHero")!;
+            _sideLeftGlyph = this.FindControl<IconGlyph>("SideLeftGlyph")!;
+            _sideRightGlyph = this.FindControl<IconGlyph>("SideRightGlyph")!;
+            _sideLeftGlyph2 = this.FindControl<IconGlyph>("SideLeftGlyph2")!;
+            _sideRightGlyph2 = this.FindControl<IconGlyph>("SideRightGlyph2")!;
             _hdrStack = this.FindControl<TextBlock>("HdrStack")!;
             _hdrResistance = this.FindControl<TextBlock>("HdrResistance")!;
             _hdrFocus = this.FindControl<TextBlock>("HdrFocus")!;
@@ -631,7 +640,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             StyleSwitch(_sideLeftBtn2, _sideRightBtn2, _sideLeftGlyph2, _sideRightGlyph2, onRight);
         }
 
-        private void StyleSwitch(Border leftBtn, Border rightBtn, TextBlock leftGlyph, TextBlock rightGlyph, bool onRight)
+        private void StyleSwitch(Border leftBtn, Border rightBtn, IconGlyph leftGlyph, IconGlyph rightGlyph, bool onRight)
         {
             var pink = this.FindResource("Pink") as IBrush ?? Brushes.HotPink;
             var dim = this.FindResource("TextDim") as IBrush ?? Brushes.Gray;
@@ -797,8 +806,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _pauseChoiceRow.IsVisible = paused;
                 var settings = CoreSettings.Current;
                 _txtPauseHint.Text = settings.PanicKeyEnabled
-                    ? $"⏸ HELD · {settings.PanicKey} again wakes you up"
-                    : "⏸ HELD · the hole waits";
+                    ? $"HELD · {settings.PanicKey} again wakes you up"
+                    : "HELD · the hole waits";
                 _txtPauseHint.IsVisible = paused;
                 _pinnedOpen = paused;
                 if (paused)
@@ -823,7 +832,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public void SetHeroMode(bool preRun)
         {
             _preRunMode = preRun;
-            _txtHero.Text = preRun ? "▶ FALL IN" : "⏸ PAUSE";
+            _txtHero.Kind = preRun ? IconKind.Play : IconKind.Pause;
+            _txtHero.Text = preRun ? "FALL IN" : "PAUSE";
             _btnHero.IsVisible = true;
             _btnCloseMode.IsVisible = preRun;
             _pauseChoiceRow.IsVisible = false;
