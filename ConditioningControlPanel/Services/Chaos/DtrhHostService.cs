@@ -80,6 +80,33 @@ internal static class DtrhHostService
 
     public static bool IsActive => _host != null;
 
+    private static void PostManifest()
+    {
+        var m = DtrhAssetManifest.Build();
+        DtrhModContent.MergeMedia(m);   // creator mods: mix/replace descent media
+        _host?.Post(new
+        {
+            type = "manifest",
+            images = m.Images.Select(e => new { name = e.Name, url = e.Url }),
+            videos = m.Videos.Select(e => new { name = e.Name, url = e.Url }),
+            skipped = m.Skipped,
+            truncated = m.Truncated,
+        });
+    }
+
+    private static void OnRemoteCopiesReady()
+    {
+        try
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { if (_host != null && _host.IsReady && !_exiting) PostManifest(); }
+                catch (Exception ex) { App.Logger?.Debug("DtrhHost: manifest re-post failed: {E}", ex.Message); }
+            }));
+        }
+        catch (Exception ex) { App.Logger?.Debug("DtrhHost: copies-ready dispatch failed: {E}", ex.Message); }
+    }
+
     /// <summary>The game window is up AND in front: the panic key's Escape is the game's pause then
     /// (PanicPolicy.GameClaimsEscapeAsPause), as it is for the race and the chess board.</summary>
     public static bool IsInFront => _host?.IsForeground == true;
@@ -270,16 +297,11 @@ internal static class DtrhHostService
                 m2Test = _testMode,
             });
             if (_meta != null) _host?.Post(_meta.SnapshotMessage());
-            var m = DtrhAssetManifest.Build();
-            DtrhModContent.MergeMedia(m);   // creator mods: mix/replace descent media
-            _host?.Post(new
-            {
-                type = "manifest",
-                images = m.Images.Select(e => new { name = e.Name, url = e.Url }),
-                videos = m.Videos.Select(e => new { name = e.Name, url = e.Url }),
-                skipped = m.Skipped,
-                truncated = m.Truncated,
-            });
+            PostManifest();
+            // Online media copied to this machine after this frame reaches the page as a fresh
+            // manifest (the page replaces its pools), so the tube fills without a relaunch.
+            DtrhAssetManifest.RemoteCopiesReady -= OnRemoteCopiesReady;
+            DtrhAssetManifest.RemoteCopiesReady += OnRemoteCopiesReady;
             PostLoomList();   // THE LOOM: seed the page's saved-spiral pool
             // THE BIOMES (S3 read-back): the cumulative engagement ranking, so the
             // page can bias toward the media the user actually likes (the exact

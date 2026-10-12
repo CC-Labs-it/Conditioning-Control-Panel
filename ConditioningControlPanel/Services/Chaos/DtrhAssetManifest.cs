@@ -290,14 +290,38 @@ internal static class DtrhAssetManifest
             var pool = LoadRemoteCache();
             int pct = s.MediaSource == "online" ? 100 : Math.Clamp(s.RemoteMediaRatio, 5, 95);
             int added = 0;
+            // An entry with a copy on this machine goes out as a ccp.assets url: the page
+            // decides remote-ness by ORIGIN (hostMedia.js), so that copy is one the tube may
+            // draw (walls, cards). The rest stay CDN urls for the page's DOM layer.
+            var root = App.EffectiveAssetsPath;
+            var entries = new List<(bool IsImage, Entry Entry)>(pool.Count);
+            int copies = 0;
             // `pool` is a snapshot, so no lock is needed to walk it.
             foreach (var e in pool)
             {
                 var name = $"{RemoteNamePrefix}{pct}:{NameFor(e)}";
-                (e.IsImage ? m.Images : m.Videos).Add(new Entry(name, e.Url));
+                var url = e.Url;
+                if (LocalCopies.TryGetValue(e.Url, out var copy) && File.Exists(copy))
+                {
+                    url = ToAssetUrl(root, copy);
+                    copies++;
+                }
+                entries.Add((e.IsImage, new Entry(name, url)));
+            }
+            // "Online" is online only: once enough copies are here to dress the tube, the
+            // library steps aside (owner, 2026-10-12: Scrolller picked, only local files showed).
+            if (pct == 100 && copies >= OnlineOnlyMinCopies)
+            {
+                m.Images.Clear();
+                m.Videos.Clear();
+            }
+            foreach (var (isImage, entry) in entries)
+            {
+                (isImage ? m.Images : m.Videos).Add(entry);
                 added++;
             }
             KickRemoteRefill();
+            KickLocalCopies(pool);
             return added;
         }
         catch (Exception ex)
@@ -305,6 +329,68 @@ internal static class DtrhAssetManifest
             App.Logger?.Debug("DtrhAssetManifest: remote append failed: {E}", ex.Message);
             return 0;
         }
+    }
+
+    // ---- copies on this machine: what lets the tube draw online media ----
+    //
+    // A CDN url is CORS-tainted, so the page can only show it in its DOM layer (flash and
+    // cascade cards). The bytes are fetched provider -> this machine by RemoteMediaCache and
+    // parked in {EffectiveAssetsPath}/.temp, which the page sees as https://ccp.assets/.
+    // The files are ours to release (ownerReleases) and the startup sweep takes them.
+
+    /// <summary>Remote url -> the temp file holding its bytes.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> LocalCopies =
+        new(StringComparer.Ordinal);
+    private static int _copyInFlight;                    // 0/1 via Interlocked
+    private const int OnlineOnlyMinCopies = 8;
+    private const int MaxClipCopies = 24;                // clips are the heavy ones
+    private const int CopyReadyEvery = 10;               // tell the host as they land, not only at the end
+
+    /// <summary>Raised off the UI thread when new copies landed: the host re-posts the manifest
+    /// so a page that is already up starts drawing them.</summary>
+    internal static event Action? RemoteCopiesReady;
+
+    /// <summary>Copy the pool's entries to this machine, stills first, single-flight.</summary>
+    private static void KickLocalCopies(List<RemoteEntry> pool)
+    {
+        var todo = pool.Where(e => e.IsImage && !LocalCopies.ContainsKey(e.Url))
+            .Concat(pool.Where(e => !e.IsImage).Take(MaxClipCopies).Where(e => !LocalCopies.ContainsKey(e.Url)))
+            .ToList();
+        if (todo.Count == 0) return;
+        if (Interlocked.CompareExchange(ref _copyInFlight, 1, 0) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            int landed = 0, told = 0;
+            try
+            {
+                foreach (var e in todo)
+                {
+                    var s = App.Settings?.Current;
+                    if (s == null || s.MediaSource == "local" || !s.HasRemoteMediaConsent) break;
+                    var path = await RemoteMediaCache.MaterializeAsync(e.Url, CancellationToken.None, ownerReleases: true).ConfigureAwait(false);
+                    if (path == null) continue;
+                    if (!LocalCopies.TryAdd(e.Url, path)) { RemoteMediaCache.ReleaseTempFile(path); continue; }
+                    landed++;
+                    if (landed - told >= CopyReadyEvery) { told = landed; RaiseCopiesReady(); }
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("DtrhAssetManifest: local copies threw: {E}", ex.Message);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _copyInFlight, 0);
+                if (landed > 0) App.Logger?.Information("DtrhAssetManifest: {N} online entries copied for the tube", landed);
+                if (landed > told) RaiseCopiesReady();
+            }
+        });
+    }
+
+    private static void RaiseCopiesReady()
+    {
+        try { RemoteCopiesReady?.Invoke(); }
+        catch (Exception ex) { App.Logger?.Debug("DtrhAssetManifest: copies-ready handler threw: {E}", ex.Message); }
     }
 
     /// <summary>"scrolller/EroticHypnosis/12345" + ".webm" -> "EroticHypnosis-12345.webm".
