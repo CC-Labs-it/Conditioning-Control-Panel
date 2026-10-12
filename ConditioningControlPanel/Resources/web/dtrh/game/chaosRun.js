@@ -539,6 +539,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   // commentary line and the native (WPF-voiced) bark stands down - one voice
   // at a time. Unclaimed events pass through untouched.
   const bark = (event, data) => {
+    // Feel seam: every game moment is also a window 'dtrh:feel' {kind:'moment', event}, voiced or not.
+    feelEvent({ ...(data || {}), kind: 'moment', event });
     try { if (guide && guide.onEvent(event, data)) return; } catch (e) { /* the tee must never eat a bark */ }
     bridge.send({ type: 'bark', event, ...(data || {}) });
   };
