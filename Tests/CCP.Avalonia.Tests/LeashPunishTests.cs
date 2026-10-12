@@ -130,6 +130,32 @@ public sealed class LeashPunishTests
             w.OnMessage("leash-error");
             Dispatcher.UIThread.RunJobs();
             Assert.Equal((1, 1), (finished, failed));
+            // Panic and the window's Cut close a LOCKED window; an Escape that only closes the palette does not
+            // (WPF MainWindow.Leash.cs:382).
+            var (oldCut, oldKey) = (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey);
+            int cuts = 0;
+            try
+            {
+                (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (() => cuts++, "Escape");
+                SettingsPaletteWindow.Toggle(w);
+                Assert.True(SettingsPaletteWindow.IsOpen);
+                LeashTaskHost.OnPanicPress(shell);
+                Assert.Same(w, LeashPunishWindow.Current);
+                SettingsPaletteWindow.CloseIfOpen();
+                Dispatcher.UIThread.RunJobs();
+                LeashTaskHost.OnPanicPress(shell);
+                Assert.Null(LeashPunishWindow.Current);
+                Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)));
+                Assert.True(LeashPunishWindow.Current!.Locked);
+                LeashPunishWindow.Current.CutFromWindow();
+                Assert.Null(LeashPunishWindow.Current);
+                Assert.Equal(1, cuts);
+            }
+            finally
+            {
+                SettingsPaletteWindow.CloseIfOpen();
+                (LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (oldCut, oldKey);
+            }
             Assert.True(host.OpenWatch(new LeashWatch("ht", "456", null)));
             Assert.False(LeashPunishWindow.Current!.Locked);   // a task watch closes normally
             host.EndWatch();

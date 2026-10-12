@@ -64,6 +64,9 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     {
         var r = Runner;
         if (r?.IsRunning != true && LeashPunishWindow.Current == null) return;
+        // WPF MainWindow.Leash.cs:382: an Escape aimed at closing the Ctrl+K palette is not a panic.
+        if (SettingsPaletteWindow.IsOpen && !LockCardWindow.IsAnyOpen()
+            && string.Equals(CoreSettings.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)) return;
         Serilog.Log.Information("Leash: panic press stops the running task (kept pending)");
         try { r?.Park(); } catch (Exception ex) { Serilog.Log.Debug("Leash park failed: {E}", ex.Message); }
         LeashPunishWindow.CloseNow();
