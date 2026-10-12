@@ -24,6 +24,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:models="clr-namespace:ConditioningControlPanel.Models;assembly=CCP.Core"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView"
              mc:Ignorable="d"
@@ -160,7 +161,7 @@
                             <Grid>
                                 <Border Background="{StaticResource TabHueWashBrush}" CornerRadius="11"/>
                                 <StackPanel Margin="16,14">
-                                    <TextBlock Text="✨" FontSize="22" HorizontalAlignment="Left"/>
+                                    <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="22" HorizontalAlignment="Left"/>
                                     <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str label_remote_tier_light}" Margin="0,6,0,4"/>
                                     <TextBlock Text="Visual triggers only"
                                                Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"
@@ -179,7 +180,7 @@
                             <Grid>
                                 <Border Background="{StaticResource TabHueWashBrush}" CornerRadius="11"/>
                                 <StackPanel Margin="16,14">
-                                    <TextBlock Text="🎯" FontSize="22" HorizontalAlignment="Left"/>
+                                    <fx:IconGlyph Kind="Target" Size="22" HorizontalAlignment="Left"/>
                                     <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str label_remote_tier_standard}" Margin="0,6,0,4"/>
                                     <TextBlock Text="Light + audio + overlays"
                                                Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"
@@ -198,7 +199,7 @@
                             <Grid>
                                 <Border Background="{StaticResource TabHueWashBrush}" CornerRadius="11"/>
                                 <StackPanel Margin="16,14">
-                                    <TextBlock Text="🔥" FontSize="22" HorizontalAlignment="Left"/>
+                                    <fx:IconGlyph Kind="Fire" Variant="Filled" Foreground="{DynamicResource IconFireBrush}" Size="22" HorizontalAlignment="Left"/>
                                     <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str label_remote_tier_full}" Margin="0,6,0,4"/>
                                     <TextBlock Text="Everything including session control"
                                                Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"
@@ -266,8 +267,8 @@
                                             Background="#1E2E1E" BorderBrush="{DynamicResource SuccessGreenBrush}"
                                             BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,14,0,0">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="✓" Foreground="{DynamicResource SuccessGreenBrush}"
-                                                       FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <fx:IconGlyph Kind="Checkmark" Foreground="{DynamicResource IconSuccessBrush}"
+                                                       Size="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                             <TextBlock Text="You're listed in the Subjects Directory"
                                                        Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="SemiBold"
                                                        VerticalAlignment="Center" TextWrapping="Wrap"/>
@@ -462,8 +463,10 @@
                                                         HorizontalAlignment="Right"
                                                         VerticalAlignment="Top"
                                                         Margin="0,-4,8,0"
-                                                        Content="✎"
-                                                        ToolTip.Tip="{loc:Str btn_emote_edit_tooltip}"/>
+                                                        AutomationProperties.Name="{loc:Str btn_emote_edit_tooltip}"
+                                                        ToolTip.Tip="{loc:Str btn_emote_edit_tooltip}">
+                                                    <fx:IconGlyph Kind="Edit" Size="12"/>
+                                                </Button>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -478,7 +481,7 @@
                                 <Grid ColumnDefinitions="Auto,*,Auto">
                                     <Border Grid.Column="0" Width="44" Height="44" CornerRadius="22"
                                             Background="#252542" BorderBrush="#3A3A55" BorderThickness="2">
-                                        <TextBlock Text="✏️" FontSize="18"
+                                        <fx:IconGlyph Kind="Edit" Size="18"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBox Grid.Column="1" x:Name="TxtEmoteCustom"
@@ -613,14 +616,14 @@
                     Background="#99000010" BorderBrush="{DynamicResource FxGlowBrush}" BorderThickness="2"
                     CornerRadius="16">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="🔒" FontSize="44" HorizontalAlignment="Center"/>
+                    <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="44" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"/>
                     <TextBlock Text="{loc:Str gate_premium_locked}" FontSize="22"
                                FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
                     <TextBlock Text="{loc:Str gate_premium_subtitle}" FontSize="14"
                                Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,12"/>
                     <Button Click="BtnGateUnlock_Click" Padding="20,8" Background="{DynamicResource FxGlowBrush}"
                             Foreground="White" FontWeight="Bold" Cursor="Hand" BorderThickness="0">
-                        <TextBlock Text="{loc:Str gate_unlock_with_patreon}"/>
+                        <fx:IconLabel Key="gate_unlock_with_patreon"/>
                     </Button>
                 </StackPanel>
             </Border>

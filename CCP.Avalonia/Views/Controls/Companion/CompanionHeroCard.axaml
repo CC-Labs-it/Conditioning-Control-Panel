@@ -462,7 +462,7 @@
                             <!-- one-line flavor, or the asleep copy when she is disabled -->
                             <TextBlock Text="{Binding Flavor}" Margin="0,7,0,0" FontSize="13"
                                        Foreground="{StaticResource CmpDimBrush}" TextWrapping="Wrap"
-                                       MaxHeight="38" TextTrimming="CharacterEllipsis"
+                                       MaxLines="2" TextTrimming="CharacterEllipsis"
                                        IsVisible="{Binding IsCompanionEnabled}"/>
 
                             <WrapPanel Orientation="Horizontal" Margin="0,7,0,0"

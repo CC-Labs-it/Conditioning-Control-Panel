@@ -59,7 +59,8 @@ public sealed class IconGuardTests
     {
         var en = JsonSerializer.Deserialize<Dictionary<string, string>>(
             File.ReadAllText(Path.Combine(Root, "CCP.Core", "Localization", "Languages", "en.json")))!;
-        var keys = en.Where(kv => IconClusters(LeadingCluster(kv.Value)).Any()).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
+        // nav_crumb_sep "›" is typography, not an icon (oracle (c).4): it joins words in breadcrumbs and the OS title bar.
+        var keys = en.Where(kv => kv.Key != "nav_crumb_sep" && IconClusters(LeadingCluster(kv.Value)).Any()).Select(kv => kv.Key).ToHashSet(StringComparer.Ordinal);
         Assert.Contains("section_system", keys); // "⚙ System": proves the key set is live, not empty by a parse slip
         // Plain references only: {loc:Str K}, Loc.Get("K"), Loc.GetF("K", LabelKeys="..K..". IconLabel Key=,
         // {loc:StrBare K} and IconLabel.ForKey are the sanctioned forms and do not match these patterns.
@@ -146,9 +147,12 @@ public sealed class IconGuardTests
             File.WriteAllText(Path.Combine(dump, baselineFile + ".sites.txt"), lines + "\n");
         if (count > baseline)
         {
-            Assert.Fail($"{baselineFile}: {count} > baseline {baseline}. Use fx:IconGlyph / IconLabel / StrBare, or allow-list content with a reason.\n{lines}");
+            Assert.Fail($"{baselineFile}: {count} > baseline {baseline}. Use fx:IconGlyph / IconLabel / StrBare, or allow-list content with a reason.\n" +
+                "After merging the stack tip: sites that came in from the tip and that this branch does not touch are pre-guard code; " +
+                "raise the baseline by exactly those (list them in the commit message), never for sites this branch adds.\n{lines}");
         }
-        Assert.True(count == baseline, $"ratchet: lower {baselineFile} to {count} in this PR (was {baseline}).\n{report}");
+        Assert.True(count == baseline, $"ratchet: lower {baselineFile} to {count} in this PR (was {baseline}). " +
+            "A drop after a stack-tip merge means the tip converted icons: just lower the baseline.\n{report}");
     }
 
     private sealed record AllowEntry(string Path, string Literal, string Reason);

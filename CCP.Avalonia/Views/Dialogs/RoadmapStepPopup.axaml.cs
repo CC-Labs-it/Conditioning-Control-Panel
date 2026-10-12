@@ -8,6 +8,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 using Serilog;
 
@@ -35,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly DispatcherTimer _autoCloseTimer;
         private readonly TextBlock _txtStepTitle;
         private readonly TextBlock _txtTrackName;
-        private readonly TextBlock _checkmarkIcon;
+        private readonly IconGlyph _checkmarkIcon;
         private readonly Ellipse _photoEllipse;
         private readonly bool _animate;
         private bool _closing;
@@ -61,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             _txtStepTitle = this.FindControl<TextBlock>("TxtStepTitle")!;
             _txtTrackName = this.FindControl<TextBlock>("TxtTrackName")!;
-            _checkmarkIcon = this.FindControl<TextBlock>("CheckmarkIcon")!;
+            _checkmarkIcon = this.FindControl<IconGlyph>("CheckmarkIcon")!;
             _photoEllipse = this.FindControl<Ellipse>("PhotoEllipse")!;
 
             // Set content
