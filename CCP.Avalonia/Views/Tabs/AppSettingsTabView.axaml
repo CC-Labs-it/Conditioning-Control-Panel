@@ -147,6 +147,17 @@
                         </Grid>
                     </RadioButton>
 
+                    <RadioButton x:Name="SectionPillMonitors" Tag="monitors"
+                                 Theme="{StaticResource SectionPill}">
+                        <Grid ColumnDefinitions="Auto,Auto,*">
+                            <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
+                                     Fill="{StaticResource SectionHueDevicesBrush}"/>
+                            <fx:IconGlyph Grid.Column="1" Kind="Desktop" Size="12" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="{loc:Str settings_section_monitors}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </Grid>
+                    </RadioButton>
+
                     <RadioButton x:Name="SectionPillPerformance" Tag="performance"
                                  Theme="{StaticResource SectionPill}">
                         <Grid ColumnDefinitions="Auto,Auto,*">
@@ -230,6 +241,7 @@
                     <appset:GeneralSettingsSection       x:Name="SectionGeneral"       Margin="0,0,0,10"/>
                     <appset:AudioSettingsSection         x:Name="SectionAudio"         Margin="0,0,0,10"/>
                     <appset:DevicesSettingsSection       x:Name="SectionDevices"       Margin="0,0,0,10"/>
+                    <appset:MonitorsSettingsSection      x:Name="SectionMonitors"      Margin="0,0,0,10"/>
                     <appset:PerformanceSettingsSection   x:Name="SectionPerformance"   Margin="0,0,0,10"/>
                     <appset:NotificationsSettingsSection x:Name="SectionNotifications" Margin="0,0,0,10"/>
                     <appset:EmiDeskSettingsSection       x:Name="SectionEmidesk"       Margin="0,0,0,10"/>

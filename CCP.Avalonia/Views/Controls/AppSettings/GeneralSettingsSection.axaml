@@ -79,7 +79,7 @@
                                    Foreground="{StaticResource SectionHueGeneralBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
-                    <feat:MonitorTargetPicker x:Name="ContentMonitorPicker"/>
+                    <!-- Nav rework (2026-10-06, WPF 5a3123f71): the monitor picker lives in Settings > Monitors only. -->
 
                     <!-- The START button's MM:SS while a session runs. Default on; AppSettings.ShowSessionCountdown. -->
                     <Border Theme="{StaticResource SettingChip}" Margin="0,8,0,0"

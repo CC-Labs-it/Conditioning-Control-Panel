@@ -7615,5 +7615,6 @@
   "title_no_preset_selected": "Пресет не выбран",
   "title_cannot_update_default": "Нельзя обновить стандартный",
   "title_cannot_delete_default": "Нельзя удалить стандартный",
-  "title_update_preset": "Обновить пресет"
+  "title_update_preset": "Обновить пресет",
+  "linux_dep_wpe_unavailable": "Встроенным веб-страницам нужен WPE WebKit 2.0, который полностью упакован только в Arch и openSUSE Tumbleweed; в других дистрибутивах эти страницы пока недоступны. Всё остальное работает без него."
 }

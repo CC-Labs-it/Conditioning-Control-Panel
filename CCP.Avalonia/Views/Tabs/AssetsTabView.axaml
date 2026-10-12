@@ -99,6 +99,27 @@
                 <TextBlock Text="{loc:Str section_assets_content_packs}" Theme="{StaticResource SectionHeader}" VerticalAlignment="Center"/>
                 <Button x:Name="HelpBtnAssets" Theme="{StaticResource HelpButtonStyle}"
                         VerticalAlignment="Center" Margin="8,0,0,0" Tag="Assets"/>
+                <!-- LIBRARY > FOLDERS (WPF 7e50c9381): the assets folder picker that used to hide in the
+                     Home System popup, as a chip in the header row; ScrollToZone("folders") glows it
+                     and the preset picker. -->
+                <Border x:Name="ZoneFolders" Margin="14,0,0,0" Padding="10,3,4,3"
+                        CornerRadius="99" VerticalAlignment="Center"
+                        Background="{DynamicResource DarkerBgBrush}" BorderThickness="1"
+                        BorderBrush="{DynamicResource GlassBorderBrush}"
+                        ToolTip.Tip="{loc:Str library_folders_tip}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{loc:Str nav_tab_folders}" Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="TxtAssetsFolderPath" MaxWidth="280"
+                                   Foreground="{StaticResource TextLightBrush}" FontSize="11"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                        <Button x:Name="BtnPickAssetsFolder" Theme="{StaticResource OutlineButton}"
+                                Padding="10,3" FontSize="11" Margin="8,0,0,0"
+                                ToolTip.Tip="{loc:Str tooltip_set_custom_assets_folder}">
+                            <TextBlock Text="{loc:Str library_folders_pick}"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="BtnRefreshPacks" Theme="{StaticResource OutlineButton}" Margin="0,0,8,0" Padding="12,6"
@@ -391,7 +412,7 @@
                                                 <TextBlock Grid.Row="1" Text="{Binding Description}"
                                                            Foreground="{DynamicResource TextMutedBrush}" FontSize="9"
                                                            TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                                           MaxHeight="60" VerticalAlignment="Top"
+                                                           MaxLines="5" VerticalAlignment="Top"
                                                            ToolTip.Tip="{Binding Description}"/>
                                                 <TextBlock Grid.Row="2" Text="{Binding CountsDisplay}"
                                                            Foreground="{DynamicResource PinkBrush}" FontSize="8"
@@ -461,7 +482,7 @@
                                                Margin="0,0,0,2"/>
                                     <TextBlock Grid.Row="1" Text="{loc:Str label_are_you_a_content_creator_join_our_discord_to}"
                                                Foreground="{DynamicResource TextMutedBrush}" FontSize="10"
-                                               TextWrapping="Wrap" MaxHeight="52" VerticalAlignment="Top"/>
+                                               TextWrapping="Wrap" MaxLines="4" VerticalAlignment="Top"/>
                                     <TextBlock Grid.Row="2" Text="Get featured in the app"
                                                Foreground="#5865F2" FontSize="9" Margin="0,2,0,4" FontWeight="SemiBold"/>
 
