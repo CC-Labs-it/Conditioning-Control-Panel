@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
@@ -126,12 +127,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private readonly Grid _contentRoot;
         private readonly Path _hoverWashA, _hoverWashB, _peekScrimA, _peekScrimB, _seamLine, _activeRingA, _activeRingB;
         private readonly TextBlock _txtTitleA, _txtTitleB;
-        private readonly DropShadowEffect _activeGlow;
+        private readonly Border _activeGlow;   // the GlowLayer sibling (CardGlow)
+        private double _glowBlur = -1;
         private readonly ScaleTransform _rootScale = new(1, 1), _titleScaleA = new(1, 1), _titleScaleB = new(1, 1);
         /// <summary>Drives SplitProgress. ONE instance, mutated per sweep: replacing it mid-flight
         /// drops the animated value and the seam snaps to the old target before the new sweep.</summary>
         private readonly DoubleTransition _splitTransition = new() { Property = SplitProgressProperty };
-        private CancellationTokenSource? _breath;
+        private BeatLoop? _breath;
         private IDisposable? _visibilityWatch;
         private readonly Button _btnHelpA, _btnHelpB;
         private Window? _hostWindow;
@@ -158,7 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _activeRingB = this.FindControl<Path>("ActiveRingB")!;
             _txtTitleA = this.FindControl<TextBlock>("TxtTitleA")!;
             _txtTitleB = this.FindControl<TextBlock>("TxtTitleB")!;
-            _activeGlow = (DropShadowEffect)_rootBorder.Effect!;
+            _activeGlow = this.FindControl<Border>("GlowLayer")!;
             _btnHelpA = this.FindControl<Button>("BtnHelpA")!;
             _btnHelpB = this.FindControl<Button>("BtnHelpB")!;
 
@@ -166,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _titleScaleA.Transitions = ScaleTransitions(SplitExpandMs, new QuadraticEaseOut());
             _titleScaleB.Transitions = ScaleTransitions(SplitExpandMs, new QuadraticEaseOut());
             _rootBorder.RenderTransform = _rootScale;
+            _activeGlow.RenderTransform = _rootScale;   // the glow lifts with the tile, as WPF's Effect did
             _titlePillA.RenderTransform = _titleScaleA;
             _titlePillB.RenderTransform = _titleScaleB;
 
@@ -540,7 +543,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// halved); the per-half rings breathe with it.</summary>
         private void ApplyActiveBreath(bool active)
         {
-            _breath?.Cancel();
+            _breath?.Stop();
             _breath = null;
             _activeRingA.Opacity = ActiveRingMaxOpacity;
             _activeRingB.Opacity = ActiveRingMaxOpacity;
@@ -548,29 +551,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             var tier = Env.CurrentTier;
             bool glow = Env.AllowGlow(tier) && Env.Level != MotionLevel.Off;
-            if (glow) _activeGlow.BlurRadius = Math.Min(18, Env.MaxGlowBlurRadius(tier));
+            if (glow) SetGlowBlur(Math.Min(CardGlow.BlurRadius, Env.MaxGlowBlurRadius(tier)));
             // Visibility + window focus + motion + tier, exactly WPF's AmbientAllowed: parked at peak.
             if (!AmbientAllowed) { _activeGlow.Opacity = glow ? ActiveGlowMaxOpacity : 0; return; }
 
-            _breath = new CancellationTokenSource();
-            if (glow) _ = Breathe(DropShadowEffect.OpacityProperty, ActiveGlowMinOpacity, ActiveGlowMaxOpacity).RunAsync(_activeGlow, _breath.Token);
-            else _activeGlow.Opacity = 0;
-            if (IsActiveA) _ = Breathe(OpacityProperty, ActiveRingMinOpacity, ActiveRingMaxOpacity).RunAsync(_activeRingA, _breath.Token);
-            if (IsActiveB) _ = Breathe(OpacityProperty, ActiveRingMinOpacity, ActiveRingMaxOpacity).RunAsync(_activeRingB, _breath.Token);
+            // WPF Breathe: 3.5 s, AutoReverse, SineEase InOut, 30 fps; on the shared 30 fps beat
+            // instead of an infinite Animation (P82). Only the ring of a half that is on breathes.
+            bool a = IsActiveA, b = IsActiveB;
+            _breath = new BeatLoop(this, t =>
+            {
+                double k = BeatLoop.Breath(t, ActiveBreathSeconds);
+                double ring = ActiveRingMinOpacity + (ActiveRingMaxOpacity - ActiveRingMinOpacity) * k;
+                _activeGlow.Opacity = glow ? ActiveGlowMinOpacity + (ActiveGlowMaxOpacity - ActiveGlowMinOpacity) * k : 0;
+                if (a) _activeRingA.Opacity = ring;
+                if (b) _activeRingB.Opacity = ring;
+            });
+            _breath.Start();
         }
 
-        private static Animation Breathe(AvaloniaProperty prop, double min, double max) => new()
+        private void SetGlowBlur(double blur)
         {
-            Duration = TimeSpan.FromSeconds(ActiveBreathSeconds),
-            IterationCount = IterationCount.Infinite,
-            PlaybackDirection = PlaybackDirection.Alternate,
-            Easing = new SineEaseInOut(),
-            Children =
-            {
-                new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(prop, min) } },
-                new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(prop, max) } },
-            },
-        };
+            if (blur == _glowBlur) return;
+            _glowBlur = blur;
+            CardGlow.Bind(_activeGlow, blur);
+        }
 
         private bool AmbientAllowed =>
             IsEffectivelyVisible
