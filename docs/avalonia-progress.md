@@ -1989,3 +1989,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/flash-wire: +677
 - Flash: lucky roll + chime, glow card, XP/achievement/quest per flash, hydra on pop, TvOff/Glitch/Pop exit layers (FlashFxRules imported with its caller).
 - Flash XP still not banked (no idle tracker); Shatter, lucky pulse/toast, FlashCorners, voice pool, remote source left.
+
+## avalonia-port/leash-core-move: +289
+- Leash services, rules and LeashHoldToCut moved to CCP.Core/Services/Leash (git mv, trunk shape). WPF keeps thin head files (LeashServiceApp, LeashCutSafetyApp, ChasterLeashTab).
+- 134 leash tests now run on Linux in CCP.Core.Tests. GATE-OK.
