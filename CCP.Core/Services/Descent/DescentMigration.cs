@@ -62,10 +62,10 @@ namespace ConditioningControlPanel.Services.Descent
         public const double CycleXpBonus = DescentCycleXp.CycleXpBonus;
 
         /// <summary>
-        /// The multiplier <see cref="ProgressionService.AddXP"/> actually applies:
+        /// The multiplier <c>ProgressionService.AddXP</c> actually applies:
         /// <see cref="CycleXpBonus"/> for a migrated account, 1.0 for everyone else.
         /// </summary>
-        public static double ActiveCycleXpBonus => XpBonusFor(App.Settings?.Current);
+        public static double ActiveCycleXpBonus => XpBonusFor(CoreSettings.Current);
 
         /// <summary>
         /// ONE RULE: migrated = bonus. Migrated means the server has acked the migration, or a
@@ -114,7 +114,7 @@ namespace ConditioningControlPanel.Services.Descent
             var basis = offer.RestoreBasisXp;
             if (double.IsNaN(basis) || basis <= 0) basis = lifetime;
 
-            var (level, into) = ProgressionService.DeriveLevelFromLifetimeXp(
+            var (level, into) = XpCurve.DeriveLevelFromLifetimeXp(
                 basis, DescentEpochs.AccountDescent);
             return new DescentRelevelResult(level, into, basis);
         }

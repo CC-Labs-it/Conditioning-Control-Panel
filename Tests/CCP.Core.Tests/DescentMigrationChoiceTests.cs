@@ -26,7 +26,7 @@ public class DescentMigrationChoiceTests
     [Fact]
     public void Restore_RederivesLevelFromTheServersLifetimeFigure()
     {
-        var lifetime = ProgressionService.CumulativeXpToReachLevel(150, ProgressionService.CurveEpochLegacy);
+        var lifetime = XpCurve.CumulativeXpToReachLevel(150, XpCurve.CurveEpochLegacy);
 
         var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, Offer(lifetime));
 
@@ -51,7 +51,7 @@ public class DescentMigrationChoiceTests
     {
         var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, Offer(lifetime));
 
-        var floor = ProgressionService.CumulativeXpToReachLevel(result.Level, ProgressionService.CurveEpochDescent);
+        var floor = XpCurve.CumulativeXpToReachLevel(result.Level, XpCurve.CurveEpochDescent);
         Assert.Equal(lifetime, floor + result.XpIntoLevel);
     }
 
@@ -59,7 +59,7 @@ public class DescentMigrationChoiceTests
     [Fact]
     public void Restore_LeavesTheHoneymoonUntouched()
     {
-        var lifetime = ProgressionService.CumulativeXpToReachLevel(30, ProgressionService.CurveEpochLegacy);
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
         var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, Offer(lifetime));
 
         Assert.Equal(30, result.Level);
@@ -75,7 +75,7 @@ public class DescentMigrationChoiceTests
     [Fact]
     public void Cycle_IsLevelOneAndKeepsLifetimeXp()
     {
-        var lifetime = ProgressionService.CumulativeXpToReachLevel(150, ProgressionService.CurveEpochLegacy);
+        var lifetime = XpCurve.CumulativeXpToReachLevel(150, XpCurve.CurveEpochLegacy);
 
         var result = DescentMigration.Resolve(DescentMigrationChoices.Cycle, Offer(lifetime));
 
@@ -112,7 +112,7 @@ public class DescentMigrationChoiceTests
     [Fact]
     public void Resolve_ARestoreAfterAnUnackedCycleStillRestoresFully()
     {
-        var offer = Offer(ProgressionService.CumulativeXpToReachLevel(150, ProgressionService.CurveEpochLegacy));
+        var offer = Offer(XpCurve.CumulativeXpToReachLevel(150, XpCurve.CurveEpochLegacy));
 
         DescentMigration.Resolve(DescentMigrationChoices.Cycle, offer);
         var restore = DescentMigration.Resolve(DescentMigrationChoices.Restore, offer);
@@ -131,8 +131,8 @@ public class DescentMigrationChoiceTests
     [Fact]
     public void Restore_PricesTheServersBasisWhenItIsPresent()
     {
-        var lifetime = ProgressionService.CumulativeXpToReachLevel(30, ProgressionService.CurveEpochLegacy);
-        var basis = ProgressionService.CumulativeXpToReachLevel(50, ProgressionService.CurveEpochDescent);
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
+        var basis = XpCurve.CumulativeXpToReachLevel(50, XpCurve.CurveEpochDescent);
         var offer = new DescentMigrationOffer
             { TotalXpEarned = lifetime, DevotionDays = 180, RestoreBasisXp = basis };
 
@@ -155,7 +155,7 @@ public class DescentMigrationChoiceTests
         var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, offer);
 
         Assert.Equal(70_343, result.LedgerXp);
-        var floor = ProgressionService.CumulativeXpToReachLevel(result.Level, ProgressionService.CurveEpochDescent);
+        var floor = XpCurve.CumulativeXpToReachLevel(result.Level, XpCurve.CurveEpochDescent);
         Assert.Equal(70_343, floor + result.XpIntoLevel);
     }
 
@@ -164,7 +164,7 @@ public class DescentMigrationChoiceTests
     [Fact]
     public void Restore_FallsBackToLifetimeWhenTheServerSentNoBasis()
     {
-        var lifetime = ProgressionService.CumulativeXpToReachLevel(30, ProgressionService.CurveEpochLegacy);
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
 
         var withBasisZero = DescentMigration.Resolve(DescentMigrationChoices.Restore,
             new DescentMigrationOffer { TotalXpEarned = lifetime, RestoreBasisXp = 0 });
@@ -192,7 +192,7 @@ public class DescentMigrationChoiceTests
     [InlineData(-500)]
     public void Restore_TreatsAJunkBasisAsAbsent(double basis)
     {
-        var lifetime = ProgressionService.CumulativeXpToReachLevel(30, ProgressionService.CurveEpochLegacy);
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
         var result = DescentMigration.Resolve(DescentMigrationChoices.Restore,
             new DescentMigrationOffer { TotalXpEarned = lifetime, RestoreBasisXp = basis });
 
@@ -227,7 +227,7 @@ public class DescentMigrationChoiceTests
     {
         Assert.False(DescentMigrationChoices.IsValid(choice));
 
-        var lifetime = ProgressionService.CumulativeXpToReachLevel(100, ProgressionService.CurveEpochLegacy);
+        var lifetime = XpCurve.CumulativeXpToReachLevel(100, XpCurve.CurveEpochLegacy);
         var result = DescentMigration.Resolve(choice, Offer(lifetime));
 
         Assert.Equal(86, result.Level);   // the restore answer, not level 1
