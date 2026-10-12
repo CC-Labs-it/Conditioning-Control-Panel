@@ -124,7 +124,7 @@ internal sealed partial class FirstShowDesktopWindow
             else _guideTarget = all.FirstOrDefault(x => x.Name == _targetName);
             _targetWait += dt;
             // A customized dashboard may have no feature cards. Never strand that player.
-            if (_guideTarget == null && _targetWait > 3)
+            if (_guideTarget == null && _targetWait > FirstShowScript.TargetGiveUpSeconds)
             {
                 _targetName = null; _waitForHover = false;
                 if (_guideIndex == 0) Button(Text("next"), NextGuideStep);
@@ -147,7 +147,7 @@ internal sealed partial class FirstShowDesktopWindow
             if (_waitForHover)
             {
                 _hoverTime = _guideTarget.IsMouseOver ? _hoverTime+dt : 0;
-                if (_hoverTime >= .65)
+                if (_hoverTime >= FirstShowScript.HoverSeconds)
                 {
                     _waitForHover = false;
                     _audio.Cue("pop"); Say(Text("foundHelp"));

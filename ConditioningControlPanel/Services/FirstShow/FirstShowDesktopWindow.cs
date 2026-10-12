@@ -107,7 +107,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
         };
         MouseLeftButtonDown += (_, e) =>
         {
-            if (!_playing || _show.Elapsed.TotalSeconds >= 28 || e.OriginalSource is not Canvas) return;
+            if (!_playing || _show.Elapsed.TotalSeconds >= FirstShowScript.GatherAt || e.OriginalSource is not Canvas) return;
             var p = e.GetPosition(_surface); var dpi = VisualTreeHelper.GetDpi(this);
             _effects?.Pop(p.X*dpi.DpiScaleX,p.Y*dpi.DpiScaleY);
         };
@@ -255,7 +255,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
                     if (template.Length > 1) _speech.Inlines.Add(new Run(template[1]));
                 }
             }
-            if (time >= 35)
+            if (time >= FirstShowScript.Length)
             {
                 _playing = false; _ending = true; _show.Stop(); _stage.Background = null;
                 AskVerdict();
@@ -298,9 +298,9 @@ internal sealed partial class FirstShowDesktopWindow : Window
         var pose = FirstShowScript.Pose(_playing, _ending, time, m);
         var expression = FirstShowScript.Face(_serious, m, now);
         if (IsLoaded) _emi.PresentAt(PointToScreen(new Point(_x,_y)), bob, turn, pose, expression);
-        if (!_guiding && time >= 32 && (_playing || _ending))
+        if (!_guiding && time >= FirstShowScript.RevealAt && (_playing || _ending))
         {
-            var reveal = Math.Clamp((time-32)/.85,0,1);
+            var reveal = Math.Clamp((time-FirstShowScript.RevealAt)/.85,0,1);
             _logo.Opacity = reveal*(m == 0 ? 1 : .95+.05*Math.Sin(now*1.7));
             _logo.RenderTransformOrigin = new Point(.5,.5);
             _logo.RenderTransform = new ScaleTransform(.82+.18*reveal,.82+.18*reveal);

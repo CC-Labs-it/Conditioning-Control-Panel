@@ -101,13 +101,18 @@ public class FirstShowScriptTests
         Assert.Equal(new[] { 0d, 2, 7, 11, 15, 19, 24, 28, 32 }, FirstShowScript.Beats);
     }
 
-    [Theory]
-    [InlineData(false, false, false, true)]
-    [InlineData(true, false, false, false)]
-    [InlineData(false, true, false, false)]
-    [InlineData(false, false, true, false)]
-    public void The_show_never_opens_over_a_session_Lockdown_or_Strict_Lock(bool session, bool lockdown, bool strict, bool may) =>
-        Assert.Equal(may, FirstShowScript.MayOpen(session, lockdown, strict));
+    [Fact]
+    public void A_zero_area_target_is_still_aimed_at_and_only_Empty_means_no_target()
+    {
+        // WPF Rect: Intersect can leave a target that only touches the safe-area edge (width 0); it is
+        // still a target. Only Rect.Empty sends Emi to the screen centre.
+        var bounds = new RectD(16, 16, 1888, 1016);
+        var edge = new RectD(16, 200, 0, 40);
+        var body = FirstShowLayout.GuideBody(bounds, new ShowSize(220, 224), new ShowSize(390, 180), edge);
+        var none = FirstShowLayout.GuideBody(bounds, new ShowSize(220, 224), new ShowSize(390, 180), FirstShowLayout.Empty);
+        Assert.True(body.Left < 400, $"aimed at the edge target, got {body}");
+        Assert.True(none.Left > 700, $"no target means the centre, got {none}");
+    }
 
     [Fact]
     public void Escape_reads_as_Esc_and_other_keys_keep_their_name()

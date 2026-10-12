@@ -60,13 +60,6 @@ internal static class FirstShowScript
     internal static string PanicLabel(string? panicKey) =>
         string.IsNullOrWhiteSpace(panicKey) || panicKey == "Escape" ? "Esc" : panicKey!;
 
-    /// <summary>
-    /// May the show open now. It plays flashes and audio over the desktop, so it never starts on top of
-    /// something that already owns the player: a running session, Lockdown, or Strict Lock.
-    /// </summary>
-    internal static bool MayOpen(bool sessionRunning, bool lockdownActive, bool strictLock) =>
-        !sessionRunning && !lockdownActive && !strictLock;
-
     /// <summary>EMI's face for a frame (WPF Frame: serious, the slow wink, the blink).</summary>
     internal static string Face(bool serious, double motion, double now)
     {

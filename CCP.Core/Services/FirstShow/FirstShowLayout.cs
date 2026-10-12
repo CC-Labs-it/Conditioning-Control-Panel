@@ -12,9 +12,9 @@ internal readonly record struct ShowSize(double Width, double Height);
 // All rectangles use stage DIPs. A monitor work area, never the virtual desktop, is the safe boundary.
 internal static class FirstShowLayout
 {
-    /// <summary>WPF Rect.Empty: "no target".</summary>
-    internal static readonly RectD Empty = default;
-    internal static bool IsEmpty(RectD r) => r.Width <= 0 || r.Height <= 0;
+    /// <summary>WPF Rect.Empty: "no target". A zero-area target (an edge left by Intersect) is still a target.</summary>
+    internal static readonly RectD Empty = new(double.PositiveInfinity, double.PositiveInfinity, double.NegativeInfinity, double.NegativeInfinity);
+    internal static bool IsEmpty(RectD r) => r.Width < 0;
 
     internal static RectD Fit(RectD rect, RectD bounds) => new(
         Math.Clamp(rect.Left, bounds.Left, Math.Max(bounds.Left, bounds.Right - rect.Width)),
