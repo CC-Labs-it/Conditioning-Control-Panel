@@ -9,6 +9,8 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 using Serilog;
 
+using ConditioningControlPanel.Avalonia.Helpers;
+
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
     /// <summary>
@@ -27,13 +29,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal const int FavoritesTwinkleEveryMs = 6500;
 
         private readonly DispatcherTimer _drawerPeekTimer = new() { Interval = TimeSpan.FromMilliseconds(FavoritesDrawerPeekMs) };
-        private DispatcherTimer? _drawerTwinkle, _drawerBreath;
-        private DropShadowEffect? _drawerGlow;
+        private DispatcherTimer? _drawerTwinkle;
+        private BeatLoop? _drawerBreath;
         private long _drawerBreathStart;
         private bool _drawerOpen, _drawerPeeking, _drawerModHooked;
 
         internal bool FavoritesDrawerIsOpen => _drawerOpen;
-        internal bool FavoritesDrawerBreathing => _drawerBreath?.IsEnabled == true;
+        internal bool FavoritesDrawerBreathing => _drawerBreath?.IsRunning == true;
 
         /// <summary>False while the window is minimised: the shell's ApplyDashboardFxLoops funnel
         /// sets it, and every Home loop parks.</summary>
@@ -144,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 res["FavHandleBorderHover"] = TintA(c, 0xFF);
                 res["FavHandleText"] = TintA(Lighten(c, 0.18), 0xFF);
                 res["FavHandleTextHover"] = TintA(Lighten(c, 0.55), 0xFF);
-                if (_drawerGlow != null) _drawerGlow.Color = c;
+                if (FavoritesDrawerGlow.IsVisible) FavoritesDrawerGlow.BoxShadow = new BoxShadows(new BoxShadow { Blur = 18, Color = c });
             }
             catch (Exception ex) { Log.Debug("Favorites drawer paint: {E}", ex.Message); }
         }
@@ -204,24 +206,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF ApplyFavoritesDrawerGlow: a soft glow in the mod colour under the handle that
-        /// breathes under ambient loops (24 fps), holds still under Reduced and is absent under Off.</summary>
+        /// breathes under ambient loops (30 fps beat), holds still under Reduced and is absent under Off.</summary>
         private void ApplyFavoritesDrawerGlow()
         {
             _drawerBreath?.Stop();
-            if (!AmbientFxCanvas.Env.AllowTransitions) { FavoritesDrawerHandle.ClearValue(Visual.EffectProperty); _drawerGlow = null; return; }
-            _drawerGlow ??= new DropShadowEffect { BlurRadius = 18, OffsetX = 0, OffsetY = 0 };
-            _drawerGlow.Color = AmbientFxCanvas.Env.GlowColor;
-            _drawerGlow.Opacity = (FavoritesGlowLow + FavoritesGlowHigh) / 2;
-            FavoritesDrawerHandle.Effect = _drawerGlow;
+            if (!AmbientFxCanvas.Env.AllowTransitions) { FavoritesDrawerGlow.IsVisible = false; return; }
+            // A sibling BoxShadow layer, not a DropShadowEffect on the handle (P82 rule 3): only its Opacity moves.
+            FavoritesDrawerGlow.BoxShadow = new BoxShadows(new BoxShadow { Blur = 18, Color = AmbientFxCanvas.Env.GlowColor });
+            FavoritesDrawerGlow.Opacity = (FavoritesGlowLow + FavoritesGlowHigh) / 2;
+            FavoritesDrawerGlow.IsVisible = true;
             if (!AmbientFxCanvas.Env.AllowAmbientLoops) return;
             _drawerBreathStart = FxAdorner.Time.GetTimestamp();
-            _drawerBreath ??= new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / 24), DispatcherPriority.Background, (_, _) =>
+            // On the window's 30 fps beat (WPF 24); parks while minimised.
+            _drawerBreath ??= new BeatLoop(this, _ =>
             {
-                if (_drawerGlow == null) return;
                 double half = FavoritesGlowBreathMs / 1000.0;
                 double t = FxAdorner.Time.GetElapsedTime(_drawerBreathStart).TotalSeconds % (2 * half);
                 double u = t < half ? t / half : 2 - (t / half);
-                _drawerGlow.Opacity = FavoritesGlowLow + ((FavoritesGlowHigh - FavoritesGlowLow) * (1 - Math.Cos(Math.PI * u)) / 2);
+                FavoritesDrawerGlow.Opacity = FavoritesGlowLow + ((FavoritesGlowHigh - FavoritesGlowLow) * (1 - Math.Cos(Math.PI * u)) / 2);
             });
             _drawerBreath.Start();
         }

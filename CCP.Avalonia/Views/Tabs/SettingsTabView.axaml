@@ -392,7 +392,10 @@
         <SolidColorBrush x:Key="FavHandleText" Color="#FFB79CFF"/>
         <SolidColorBrush x:Key="FavHandleTextHover" Color="#FFE4DAFF"/>
       </Grid.Resources>
-      <Button x:Name="FavoritesDrawerHandle" Grid.Column="0" Margin="2,5,2,5" Cursor="Hand"
+      <!-- The handle glow (lag fix, P82): a sibling BoxShadow layer, never an Effect on the handle. -->
+      <Panel Grid.Column="0" Margin="2,5,2,5">
+      <Border x:Name="FavoritesDrawerGlow" CornerRadius="9" IsVisible="False" IsHitTestVisible="False"/>
+      <Button x:Name="FavoritesDrawerHandle" Cursor="Hand"
               HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
               Theme="{StaticResource FavoritesDrawerHandleStyle}"
               AutomationProperties.Name="{loc:Str rail_favorites_drawer}"
@@ -413,6 +416,7 @@
                      Margin="0,0,0,7" HorizontalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}"/>
         </Grid>
       </Button>
+      </Panel>
       <!-- THE BODY: 92 open = the old column 0, so the chip sum is unchanged (92 - 5 - 2 - 8 - 8
            = 69). The rail is pinned at 87 and right-aligned so it slides in from the edge. -->
       <Grid x:Name="FavoritesDrawerBody" Grid.Column="1" Width="0" ClipToBounds="True">
@@ -1036,9 +1040,12 @@
                  the breathing glow while folded are painted by SettingsTabView.PaintFoldArrow from
                  MainShellWindow.DashboardFold.cs; these values are only the first paint (Home's
                  lilac at 24% fill, a 70% border, 40% on hover - Tag carries the hover brush). -->
-            <Button Grid.Column="2" x:Name="BtnFoldBrowser" Theme="{StaticResource FoldArrowButton}"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    MinWidth="120" Height="26" Padding="12,0" Margin="48,0,8,0"
+            <!-- The folded glow (lag fix, P82): a sibling BoxShadow layer whose Opacity breathes on the
+                 30 fps beat, never a DropShadowEffect on the button (PaintFoldArrow). -->
+            <Panel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0">
+            <Border x:Name="FoldGlow" CornerRadius="13" IsVisible="False" IsHitTestVisible="False"/>
+            <Button x:Name="BtnFoldBrowser" Theme="{StaticResource FoldArrowButton}"
+                    MinWidth="120" Height="26" Padding="12,0"
                     Background="#3DB79CFF" BorderBrush="#B3B79CFF" BorderThickness="1.5"
                     ToolTip.Tip="{loc:Str tooltip_browser_unfold}"
                     AutomationProperties.Name="{loc:Str btn_browser_fold_show}">
@@ -1052,6 +1059,7 @@
                            FontSize="12" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
+            </Panel>
             <!-- Status indicator -->
             <TextBlock Grid.Column="3" x:Name="TxtBrowserStatus" Text="{loc:Str label_loading}"
                        Foreground="{DynamicResource PinkBrush}" FontSize="10"

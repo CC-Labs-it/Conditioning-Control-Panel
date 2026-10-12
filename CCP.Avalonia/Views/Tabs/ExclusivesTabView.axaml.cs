@@ -201,11 +201,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly ScaleTransform _kenBurns = new();
         private readonly HashSet<Control> _fxParts = new();
         private readonly Dictionary<Control, CardSheenAdorner?> _sheens = new();
-        private DispatcherTimer? _motion;
+        private BeatLoop? _motion;
         private long _motionStart;
 
         /// <summary>True while the one ambient clock runs. Test seam.</summary>
-        internal bool MotionRunning => _motion != null;
+        internal bool MotionRunning => _motion?.IsRunning == true;
 
         /// <summary>Shelf cards currently wearing a sheen. Test seam.</summary>
         internal int SheenCount => _sheens.Values.Count(s => s != null);
@@ -219,8 +219,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             else if (want)
             {
                 _motionStart = FxAdorner.Time.GetTimestamp();
-                // WPF caps every ambient loop on this tab at 24fps (AmbientFrameRate).
-                _motion = new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / 24), DispatcherPriority.Background, (_, _) => MotionFrame());
+                // WPF caps every ambient loop on this tab at 24fps (AmbientFrameRate); here they ride the window's
+                // shared 30 fps beat, which parks while the window is minimised (P82 rule 2).
+                _motion = new BeatLoop(this, _ => MotionFrame());
+                _motion.Start();
             }
             else
             {
@@ -250,7 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     part.Opacity = fade;
                     if (part.RenderTransform is ScaleTransform s) s.ScaleX = s.ScaleY = swell;
                 }
-                else if (part.Effect is DropShadowEffect g) g.Opacity = glow;
+                else if (LockGlow(part) is { IsVisible: true } g) g.Opacity = glow;
             }
             // WPF AttachExclusiveSheens retries cards whose adorner layer was not there yet.
             foreach (var card in _sheens.Where(p => p.Value == null).Select(p => p.Key).ToList())
@@ -277,15 +279,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 part.Opacity = 1;
                 if (part.RenderTransform is ScaleTransform s) s.ScaleX = s.ScaleY = 1;
-                part.Effect = glow ? new DropShadowEffect { Color = FreeTodayGold, BlurRadius = Math.Min(16, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)), OffsetX = 0, OffsetY = 0, Opacity = 0.7 } : null;
+                // The pill is a Border: its own BoxShadow, not an Effect that makes the swelling pill an offscreen layer (P82).
+                ((Border)part).BoxShadow = glow ? Glow(FreeTodayGold, 0.7, Math.Min(16, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier))) : default;
             }
             else
             {
-                part.Effect = _motion != null && glow && part.IsEffectivelyVisible
-                    ? new DropShadowEffect { Color = AmbientFxCanvas.Env.GlowColor, BlurRadius = Math.Min(20, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)), OffsetX = 0, OffsetY = 0, Opacity = 0.8 }
-                    : null;
+                // WPF ApplyVeilLockBreath (MainWindow.Exclusives.cs:1241) breathes a DropShadowEffect on the glyph; here
+                // a sibling BoxShadow layer behind it breathes by Opacity (P82 rule 3).
+                if (LockGlow(part) is not { } g) return;
+                g.IsVisible = _motion != null && glow && part.IsEffectivelyVisible;
+                g.BoxShadow = Glow(AmbientFxCanvas.Env.GlowColor, 1, Math.Min(20, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)));
+                g.Opacity = 0.8;
             }
         }
+
+        /// <summary>The padlock's glow layer: the lockglow Border beside it (ExclusivesTabView.axaml).</summary>
+        internal static Border? LockGlow(Control part) =>
+            (part.Parent as Panel)?.Children.OfType<Border>().FirstOrDefault(b => b.Classes.Contains("lockglow"));
+
+        private static BoxShadows Glow(Color c, double opacity, double blur) =>
+            new(new BoxShadow { Blur = blur, Color = Color.FromArgb((byte)Math.Round(255 * opacity), c.R, c.G, c.B) });
 
         /// <summary>Template parts (padlock, FREE TODAY pill, teaser mark, card) join the clock while realized.</summary>
         private void FxPart_Loaded(object? sender, RoutedEventArgs e)

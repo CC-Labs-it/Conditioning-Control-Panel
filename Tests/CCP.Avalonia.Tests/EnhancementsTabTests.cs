@@ -25,6 +25,9 @@ namespace CCP.Avalonia.Tests;
 /// PopulateSecretSkills) and MainWindow.EnhancementsFx.cs (owned breath, hover pop), on a stepped clock.</summary>
 public sealed class EnhancementsTabTests
 {
+    private static Border? Glow(Control node) =>
+        ((Panel)node).Children.OfType<Border>().FirstOrDefault(b => b.BoxShadow.Count > 0);
+
     private static void Setup()
     {
         if (global::Avalonia.Application.Current is null)
@@ -71,15 +74,18 @@ public sealed class EnhancementsTabTests
             var nodes = tab.FindControl<Canvas>("SkillTreeCanvas")!.Children.OfType<Control>()
                 .Where(c => c.Tag is string).ToDictionary(c => (string)c.Tag!);
             // Owned: breathing green glow, FOREVER badge. Purchasable: pink glow, "💎 cost". Locked: blurred art, padlock.
-            Assert.Equal(Colors.LimeGreen, Assert.IsType<DropShadowEffect>(nodes["pink_hours"].Effect).Color);
+            // Glows are sibling BoxShadow layers, never an Effect on a node (P82 rule 3).
+            Assert.DoesNotContain(nodes.Values.SelectMany(n => n.GetVisualDescendants().Prepend(n)), v => v.Effect != null);
+            Assert.Equal(Colors.LimeGreen, Glow(nodes["pink_hours"])!.BoxShadow[0].Color);
             var buyable = SkillDefinition.All.Single(x => x.Id == "sparkle_boost_2");
-            Assert.Equal(Colors.HotPink, Assert.IsType<DropShadowEffect>(nodes["sparkle_boost_2"].Effect).Color);
+            Assert.Equal(Colors.HotPink, Glow(nodes["sparkle_boost_2"])!.BoxShadow[0].Color);
             Assert.Contains($"💎 {buyable.Cost}", Texts(nodes["sparkle_boost_2"]));
             var locked = SkillDefinition.All.Single(x => x.Id == "lucky_bimbo");
-            Assert.Null(nodes["lucky_bimbo"].Effect);
+            Assert.Null(Glow(nodes["lucky_bimbo"]));
             Assert.Contains($"🔒 {locked.Cost}", Texts(nodes["lucky_bimbo"]));
-            Assert.Contains(nodes["lucky_bimbo"].GetVisualDescendants(), v => v.Effect is BlurEffect);
-            Assert.Contains(nodes["lucky_bimbo"].GetVisualDescendants(), v => v is Image);   // skills/ art is packaged
+            var lockedArt = Assert.Single(nodes["lucky_bimbo"].GetVisualDescendants().OfType<Image>());   // skills/ art is packaged
+            Assert.NotNull(tab.BakedArt["lucky_bimbo"]);                     // blurred once into the bitmap
+            Assert.Same(tab.BakedArt["lucky_bimbo"], lockedArt.Source);
 
             // Header: prestige, active bonus chip for sparkle_boost_1, the XP multiplier and the Ditzy stats toggle.
             var canvasTexts = tab.FindControl<Canvas>("SkillTreeCanvas")!.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
@@ -102,7 +108,7 @@ public sealed class EnhancementsTabTests
 
             // Breath: one clock, sine 0.38 <-> 0.72 over 3.8 s, on screen only.
             Assert.True(tab.FxRunning);
-            var glow = Assert.Single(tab.OwnedGlows, g => ReferenceEquals(g, nodes["pink_hours"].Effect));
+            var glow = Assert.Single(tab.OwnedGlows, g => ReferenceEquals(g, Glow(nodes["pink_hours"])));
             clock.Now += TimeSpan.FromSeconds(3.8).Ticks;
             tab.StepFx();
             Assert.Equal(0.72, glow.Opacity, 3);
