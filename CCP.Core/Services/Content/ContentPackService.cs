@@ -82,7 +82,6 @@ namespace ConditioningControlPanel.Services.Packs
         private readonly Action _save;
         private readonly Func<string?> _patreonToken;
         private readonly Func<(string UnifiedId, string Token)?> _identity;
-        private readonly Func<string> _previewCacheRoot;
         private readonly Func<TimeSpan, Task> _delay;
 
         public event EventHandler<ContentPack>? PackDownloadStarted;
@@ -101,7 +100,6 @@ namespace ConditioningControlPanel.Services.Packs
             Action? save = null,
             Func<string?>? patreonToken = null,
             Func<(string UnifiedId, string Token)?>? identity = null,
-            Func<string>? previewCacheRoot = null,
             Func<TimeSpan, Task>? delay = null)
         {
             _store = store;
@@ -111,7 +109,6 @@ namespace ConditioningControlPanel.Services.Packs
             _save = save ?? (() => CoreSettings.Save());
             _patreonToken = patreonToken ?? (() => CoreAccount.PatreonAccessToken);
             _identity = identity ?? DefaultIdentity;
-            _previewCacheRoot = previewCacheRoot ?? (() => Path.Combine(CorePaths.UserData, "pack-previews"));
             _delay = delay ?? (t => Task.Delay(t));
         }
 
@@ -140,9 +137,7 @@ namespace ConditioningControlPanel.Services.Packs
             }
         }
 
-        // =========================================================================================
-        //  catalogue
-        // =========================================================================================
+        // ---- catalogue ----
 
         /// <summary>WPF GetBuiltInPacks: the two built-in packs with live installed/active state.</summary>
         public List<ContentPack> GetBuiltInPacks() => Stamp(NewBuiltInPacks().ToList());
@@ -177,9 +172,7 @@ namespace ConditioningControlPanel.Services.Packs
             return packs;
         }
 
-        // =========================================================================================
-        //  install
-        // =========================================================================================
+        // ---- install ----
 
         /// <summary>
         /// WPF InstallPackAsync: Patreon token -> <c>POST /pack/download-url</c> (Bearer) -> resumable
@@ -303,7 +296,7 @@ namespace ConditioningControlPanel.Services.Packs
                     var pct = totalBytes > 0 ? current * 100 / totalBytes : 0;
                     Log.Warning("Download attempt {Attempt}/{Max} failed at {Pct}%: {Error}", attempt, maxRetries, pct, ex.Message);
                     PackInstallStatus?.Invoke(this, (pack, $"Connection lost at {pct}%, resuming..."));
-                    await _delay(retryDelay).ConfigureAwait(false);
+                    await _delay(retryDelay).WaitAsync(ct).ConfigureAwait(false);
                     retryDelay = TimeSpan.FromSeconds(Math.Min(retryDelay.TotalSeconds * 1.5, 30));
                 }
             }
@@ -340,7 +333,8 @@ namespace ConditioningControlPanel.Services.Packs
             try
             {
                 status?.Invoke("Extracting...");
-                await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, extractPath)).ConfigureAwait(false);
+                // The one extraction path (WPF ContentPackService.cs:487, :621): Windows "images\\a.png" entries land in images/ on Linux.
+                await Task.Run(() => CcpmodArchive.Extract(zipPath, extractPath)).ConfigureAwait(false);
 
                 var contentFolder = Path.Combine(packFolder, ContentPackStore.ContentFolderName);
                 Directory.CreateDirectory(contentFolder);
@@ -423,9 +417,7 @@ namespace ConditioningControlPanel.Services.Packs
             try { if (File.Exists(path)) File.Delete(path); } catch { }
         }
 
-        // =========================================================================================
-        //  server calls
-        // =========================================================================================
+        // ---- server calls ----
 
         private async Task<string> GetSignedDownloadUrlAsync(string baseUrl, string packId, string accessToken, CancellationToken ct)
         {

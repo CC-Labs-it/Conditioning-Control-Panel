@@ -41,7 +41,7 @@ public sealed class ContentPackServiceTests : IDisposable
     {
         var store = new ContentPackStore(() => _root, () => _settings, () => { }, tempDir: () => Path.Combine(_root, ".temp"));
         var svc = new ContentPackService(store, new HttpClient(_h), () => baseUrl, () => _settings, () => { },
-            () => token, () => identity, () => Path.Combine(_root, "previews"), _ => Task.CompletedTask);
+            () => token, () => identity, _ => Task.CompletedTask);
         return (svc, store);
     }
 
@@ -130,6 +130,17 @@ public sealed class ContentPackServiceTests : IDisposable
         Assert.Equal(1, completed);
         Assert.Empty(Directory.GetFiles(store.PacksFolder, ".*_temp.zip"));
         Assert.Empty(Directory.GetDirectories(store.PacksFolder, ".*_extract"));
+    }
+
+    [Fact]
+    public async Task Install_WindowsZipWithBackslashEntries_FindsImagesOnEveryOs()
+    {
+        ServeSignedUrl();
+        var zip = Zip(("Pack\\images\\a.png", new string('A', 1500)));
+        _h.On("GET", Cdn, _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(zip) });
+        var (svc, store) = New();
+        await svc.InstallPackAsync(new ContentPack { Id = "w1", Name = "Win" });
+        Assert.Equal(new[] { "a.png" }, store.GetPackFiles("w1", "image").Select(f => f.OriginalName));
     }
 
     [Fact]
