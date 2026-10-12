@@ -16,6 +16,8 @@ on:
       - 'Tests/ConditioningControlPanel.Tests/WpfReferenceRender*'
       - '.github/workflows/reference-render.yml'
       - '.github/scripts/pair-renders.py'
+      - '.github/scripts/uia-parity.py'
+      - '.github/wpf-uia/**'
 
 concurrency:
   group: reference-render-${{ github.ref }}
@@ -77,6 +79,99 @@ jobs:
         with:
           name: avalonia-render
           path: ${{ runner.temp }}/avalonia/
+          retention-days: 30
+      # Same view keys and JSON schema as the wpf-behaviour job; the uia-parity job diffs the two.
+      - name: Dump the Avalonia automation tree
+        if: ${{ !cancelled() }}
+        # Same seed as the WPF profile below, so offline-gated controls compare like for like.
+        run: |
+          mkdir -p "$CCP_USERDATA_DIR"
+          echo '{"Welcomed":true,"HasAcceptedAgeVerification":true,"OfflineMode":true,"LauncherSkipToPanel":true,"FirstRunAssetsPromptShown":true}' > "$CCP_USERDATA_DIR/settings.json"
+          dotnet run --no-build --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --uia-dump $RUNNER_TEMP/avalonia-uia
+        env:
+          CCP_USERDATA_DIR: ${{ runner.temp }}/ccp-profile-uia
+          XDG_CONFIG_HOME: ${{ runner.temp }}/xdg
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: avalonia-uia
+          path: ${{ runner.temp }}/avalonia-uia/
+          retention-days: 30
+
+  # The real WPF app driven by FlaUI (.github/wpf-uia): automation tree per view + default/hover/
+  # pressed/opened screenshots of the nav doors and the dialogs reachable without an account.
+  # Offline by construction: an outbound firewall block on the exe (and WebView2), a throwaway
+  # CCP_USERDATA_DIR seeded offline/first-run-done, a dead proxy, no account, no secrets.
+  wpf-behaviour:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+      - name: Build the WPF app and the FlaUI driver
+        run: |
+          dotnet build ConditioningControlPanel/ConditioningControlPanel.csproj -c Release
+          dotnet build .github/wpf-uia/WpfUia.csproj -c Release -o ${{ runner.temp }}/wpfuia
+      - name: Block the app's network and seed an offline profile
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem ConditioningControlPanel/bin/Release -Recurse -Filter ConditioningControlPanel.exe | Select-Object -First 1
+          if (-not $exe) { throw "no ConditioningControlPanel.exe" }
+          # A rule in a disabled profile blocks nothing: turn every profile on and prove it.
+          Set-NetFirewallProfile -All -Enabled True
+          $off = @(Get-NetFirewallProfile | Where-Object { $_.Enabled -ne 'True' })
+          Get-NetFirewallProfile | Format-Table Name, Enabled, DefaultOutboundAction -AutoSize
+          if ($off.Count -gt 0) { throw "firewall profile(s) off: $($off.Name -join ', ')" }
+          New-NetFirewallRule -DisplayName ccp-wpf-block -Direction Outbound -Program $exe.FullName -Action Block | Out-Null
+          Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application" -Recurse -Filter msedgewebview2.exe -ErrorAction SilentlyContinue |
+            ForEach-Object { New-NetFirewallRule -DisplayName ccp-webview-block -Direction Outbound -Program $_.FullName -Action Block | Out-Null }
+          $rules = @(Get-NetFirewallRule -DisplayName ccp-wpf-block | Where-Object { $_.Enabled -eq 'True' -and $_.Action -eq 'Block' })
+          if ($rules.Count -eq 0) { throw "no enabled ccp-wpf-block rule" }
+          Get-NetFirewallRule -DisplayName ccp-* | Get-NetFirewallApplicationFilter | Format-Table Program -AutoSize
+          $prof = "${{ runner.temp }}/ccp-profile"
+          New-Item -ItemType Directory -Force $prof | Out-Null
+          '{"Welcomed":true,"HasAcceptedAgeVerification":true,"OfflineMode":true,"LauncherSkipToPanel":true,"FirstRunAssetsPromptShown":true}' | Set-Content -Encoding utf8 "$prof\settings.json"
+          "WPF_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Drive the WPF app
+        env:
+          CCP_USERDATA_DIR: ${{ runner.temp }}/ccp-profile
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --proxy-server=127.0.0.1:9
+        run: |
+          & "${{ runner.temp }}/wpfuia/WpfUia.exe" "$env:WPF_EXE" "${{ runner.temp }}/wpf-uia"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wpf-behaviour
+          path: ${{ runner.temp }}/wpf-uia/
+          retention-days: 30
+
+  uia-parity:
+    runs-on: ubuntu-latest
+    needs: [wpf-behaviour, avalonia-render]
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wpf-behaviour
+          path: ${{ runner.temp }}/wpf-uia
+      - uses: actions/download-artifact@v4
+        with:
+          name: avalonia-uia
+          path: ${{ runner.temp }}/avalonia-uia
+      - run: |
+          python3 .github/scripts/uia-parity.py docs/avalonia-parity.md $RUNNER_TEMP/wpf-uia $RUNNER_TEMP/avalonia-uia $RUNNER_TEMP/uia-parity
+          sed -n '1,40p' $RUNNER_TEMP/uia-parity/parity-diff.md >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uia-parity-diff
+          path: ${{ runner.temp }}/uia-parity/
           retention-days: 30
 
   side-by-side:

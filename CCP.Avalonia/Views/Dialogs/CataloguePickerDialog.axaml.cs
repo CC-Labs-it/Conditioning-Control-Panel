@@ -174,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     FontSize = 13,
                     TextWrapping = TextWrapping.Wrap,
                     TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxHeight = 38, // ~2 lines at 13pt
+                    MaxLines = 2, // WPF MaxHeight 38: ~2 lines at 13pt
                     Margin = new Thickness(0, 6, 0, 0),
                 };
                 textStack.Children.Add(desc);

@@ -18,6 +18,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.PinkFilterFeatureControl">
 
     <StackPanel>
@@ -35,8 +36,7 @@
                     </Border.OpacityMask>
                 </Border>
                 <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                    <TextBlock Text="{loc:Str label_pink_filter}" FontSize="17" FontWeight="Bold"
-                               Foreground="{StaticResource TextLightBrush}"/>
+                    <fx:IconLabel Key="label_pink_filter" TextElement.FontSize="17" TextElement.FontWeight="Bold" TextElement.Foreground="{StaticResource TextLightBrush}"/>
                     <TextBlock Text="{loc:Str tooltip_apply_pink_color_filter_to_all_monitors}" FontSize="11.5"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"/>
                 </StackPanel>

@@ -547,6 +547,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Entry = entry;
             Glyph = entry.Glyph;
+            // Map by stable id (fluent-icons design c.3). A mapped icon that carries colour or a brand
+            // glyph keeps the emoji route, which resolves to the same icon WITH its brush/brand.
+            if (IconMap.ForPalette(entry.Id) is { Brush: null, Brand: IconBrand.None } hit)
+            {
+                Kind = hit.Kind;
+                Variant = hit.Variant;
+                Emoji = null;
+            }
+            else
+            {
+                // Kind/Variant agree with what Emoji resolves to, so a recycled row whose bindings
+                // land in either order draws the same icon.
+                if (IconMap.TryGet(entry.Glyph, out var e)) { Kind = e.Kind; Variant = e.Variant; }
+                Emoji = entry.Glyph;
+            }
             Label = entry.Label;
             Context = entry.Context;
             var was = SettingsPaletteIndex.WasHint(entry, query);
@@ -563,6 +578,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         public SettingsPaletteEntry Entry { get; }
         public string Glyph { get; }
+        public IconKind Kind { get; }
+        public IconVariant Variant { get; }
+        /// <summary>Null when the row's icon comes from its id (<see cref="Kind"/>).</summary>
+        public string? Emoji { get; }
         public string Label { get; }
         public string Context { get; }
 
