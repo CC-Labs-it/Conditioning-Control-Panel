@@ -115,6 +115,8 @@ namespace ConditioningControlPanel.Services
                 }
                 catch (Exception ex) { Log.Warning(ex, "Failed to register pack from manifest: {Path}", manifestPath); }
             }
+            try { Directory.Delete(Path.Combine(newAssets, StagingFolderName)); }   // non-recursive: only when empty
+            catch { }
             Log.Information("Moved {Moved}/{Total} packs, registered {Registered} in settings", moved, packs.Count, registered);
             return (moved, registered);
         }

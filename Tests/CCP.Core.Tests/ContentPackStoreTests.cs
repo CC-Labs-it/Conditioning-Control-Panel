@@ -154,6 +154,29 @@ public sealed class ContentPackStoreTests : IDisposable
     }
 
     [Fact]
+    public void Uninstall_WhenTheFolderCannotBeDeleted_KeepsThePackInstalledButInactive()
+    {
+        var (guid, _) = WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var content = Path.Combine(_root, ".packs", guid);         // the pack folder: its manifest survives
+        var file = Path.Combine(content, ".manifest.enc");
+        FileStream? held = null;
+        if (OperatingSystem.IsWindows()) held = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+        else File.SetUnixFileMode(content, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try { store.UninstallPack("p1"); }
+        finally
+        {
+            held?.Dispose();
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(content, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        Assert.True(store.IsPackInstalled("p1"));
+        Assert.False(store.IsPackActive("p1"));
+        store.Rescan();                                            // not re-registered as an active orphan
+        Assert.False(store.IsPackActive("p1"));
+    }
+
+    [Fact]
     public void MissingAssetsRoot_IsQuiet()
     {
         var store = new ContentPackStore(() => Path.Combine(_root, "nope"), () => _settings, () => _saves++);

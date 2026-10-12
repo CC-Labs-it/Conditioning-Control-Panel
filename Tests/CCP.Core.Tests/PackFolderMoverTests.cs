@@ -46,7 +46,7 @@ public sealed class PackFolderMoverTests : IDisposable
         Assert.Equal(before1, Snapshot(Path.Combine(New, ".packs", g1)));
         Assert.False(Directory.Exists(Path.Combine(Old, ".packs", g1)));
         Assert.False(Directory.Exists(Path.Combine(Default, ".packs", g2)));
-        Assert.False(Directory.Exists(Path.Combine(New, PackFolderMover.StagingFolderName, g1)));
+        Assert.False(Directory.Exists(Path.Combine(New, PackFolderMover.StagingFolderName)));   // no empty staging left
         Assert.Equal(g1, settings.PackGuidMap["p1"]);
         Assert.Equal(g2, settings.PackGuidMap["p2"]);
         Assert.Contains("p1", settings.ActivePackIds);

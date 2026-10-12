@@ -270,7 +270,16 @@ namespace ConditioningControlPanel.Services
             {
                 if (folder != null && Directory.Exists(folder)) Directory.Delete(folder, true);
             }
-            catch (Exception ex) { Log.Warning(ex, "ContentPacks: could not delete {Folder}", folder); }
+            catch (Exception ex)
+            {
+                // WPF (ContentPackService.cs UninstallPack) throws here after the deactivate has saved, so the
+                // pack stays installed but inactive. Forgetting it would let the next Rescan re-register and
+                // re-ACTIVATE it as an orphan.
+                Log.Warning(ex, "ContentPacks: could not delete {Folder}; pack kept installed, deactivated", folder);
+                SafeSave();
+                PacksChanged?.Invoke();
+                return;
+            }
             s.PackGuidMap?.Remove(packId);
             s.InstalledPackIds?.Remove(packId);
             lock (_gate) _manifests.Remove(packId);
