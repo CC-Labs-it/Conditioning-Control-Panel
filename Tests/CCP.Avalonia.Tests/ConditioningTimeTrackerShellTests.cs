@@ -62,6 +62,7 @@ public sealed class ConditioningTimeTrackerShellTests
                 Assert.Equal(101.5, s.TotalConditioningMinutes, 6);
 
                 // A session start arms it too (WPF: sessions start through StartEngine).
+                var oldSessions = global::ConditioningControlPanel.Avalonia.App.Sessions;
                 var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
                 try
                 {
@@ -71,7 +72,7 @@ public sealed class ConditioningTimeTrackerShellTests
                 finally
                 {
                     runner.Stop();
-                    global::ConditioningControlPanel.Avalonia.App.Sessions = null;
+                    global::ConditioningControlPanel.Avalonia.App.Sessions = oldSessions;   // P02: restore, not null
                     CoreSession.IsSessionRunningProvider = null;
                 }
                 MainShellWindow.StopEngine();
