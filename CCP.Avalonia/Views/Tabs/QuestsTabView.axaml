@@ -425,7 +425,7 @@
                             </StackPanel>
                             <TextBlock x:Name="TxtWeeklyQuestDesc" Text=""
                                        Foreground="#D6D6E8" FontSize="11" TextWrapping="Wrap"
-                                       TextTrimming="CharacterEllipsis" MaxHeight="31"/>
+                                       TextTrimming="CharacterEllipsis" MaxLines="2"/>
                           </StackPanel>
                         </Grid>
                       </Border>

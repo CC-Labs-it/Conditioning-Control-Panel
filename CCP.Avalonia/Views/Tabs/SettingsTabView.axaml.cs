@@ -365,8 +365,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // -- quick-toggles row -----------------------------------------------------------
         private void VelvetBtnWebcam_Click(object? sender, RoutedEventArgs e) { }            // mw.VelvetBtnWebcam_Click(...)
         /// <summary>Quick-toggles row · "System". This pill is the ONLY route to
-        /// <c>MainWindow.CardSystem_Click</c> since the mosaic tile was deleted.</summary>
-        private void VelvetBtnSystem_Click(object? sender, RoutedEventArgs e) { }            // mw.CardSystem_Click(...)
+        /// <c>MainWindow.CardSystem_Click</c> since the mosaic tile was deleted; since the nav rework
+        /// it opens Settings > Monitors (WPF MainWindow.Presets.cs CardSystem_Click). ponytail: WPF's
+        /// NotifyFeatureOpened("System") bark has no BarkService on this head.</summary>
+        private void VelvetBtnSystem_Click(object? sender, RoutedEventArgs e) => Shell?.OpenAppSettingsSection("monitors");
         private void VelvetBtnAppInfo_Click(object? sender, RoutedEventArgs e) { }           // mw.VelvetBtnAppInfo_Click(...)
         private void VelvetBtnSchedulerRamp_Click(object? sender, RoutedEventArgs e) => Shell?.OpenStudioModule("scheduler");
         private void VelvetBtnCatalogue_Click(object? sender, RoutedEventArgs e) => Shell?.BtnCatalogue_Click(sender, e);

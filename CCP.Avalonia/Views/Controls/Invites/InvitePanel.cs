@@ -197,7 +197,7 @@ public sealed class InvitePanel : Border
         {
             Text = Loc.Get($"achievement_{rung.AchievementId}_name"), Foreground = reached ? Brushes.White : Text, FontSize = 12,
             FontWeight = FontWeight.SemiBold, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, LineHeight = 15,
-            MaxHeight = 30, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 7, 0, 0),
+            MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 7, 0, 0),
         });
         stack.Children.Add(new TextBlock
         {
