@@ -4,8 +4,8 @@
 // watchdog (:595) and the teardown funnel (:686). Shell frames the race shares (boot-error, exit's 1200 ms
 // watchdog, exit-done) stay in GameWindow.HandleMessage, and panic closes it with every other game.
 // ponytail: still missing on this head, each its own unit (parity row game-race): BambiCloud levels
-// (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), own tracks + charting
-// (track-*), the track player, sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
+// (cloud-open/cloud-start, settings.cloud stays false so the page hides the verb), the track player and
+// its decoder seed (own tracks + charting are GameWindow.RaceTracks.cs), sfx / fire-payload (no ChaosSfx bank or payload bridge here), favorites +
 // loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
 // no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
 using System;
@@ -60,7 +60,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:317). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleRace(JObject o)
         {
-            switch ((string?)o["type"])
+            var type = (string?)o["type"];
+            if (HandleRaceTrack(type, o)) return true;
+            switch (type)
             {
                 case "ready":
                     IsReady = true;
@@ -192,6 +194,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _raceDisposed = true;
             try { _raceHeartbeatWatch?.Stop(); } catch { }
             _raceHeartbeatWatch = null;
+            try { DisposeRaceTracks(); }
+            catch (Exception ex) { Log.Debug("RaceHost: track teardown: {E}", ex.Message); }
             _raceRun.Reset();
             Log.Information("CaucusHostService: closed");
             try { Platform.FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); }   // WPF :722

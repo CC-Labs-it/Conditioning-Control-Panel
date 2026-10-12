@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Skia;
@@ -297,5 +299,170 @@ public sealed class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
         Assert.False(w.RaceWatchRunning);               // DisposeAll stops it (P65)
+    });
+
+    // ---- Racing Thoughts own tracks (WPF CaucusHostService.cs :353-368, :736-1035) ----
+
+    private sealed class FakeTrackPlayer : IRaceTrackPlayer
+    {
+        public readonly List<string> Calls = new();
+        public string? Loaded;
+        public bool Disposed;
+#pragma warning disable CS0067
+        public event Action? Ended;
+#pragma warning restore CS0067
+        public double PositionSec => 1.5;
+        public double DurationSec => 30;
+        public bool IsPlaying { get; private set; }
+        public void Load(string path) { Loaded = path; Calls.Add("Load"); }
+        public void RefreshVolume() => Calls.Add("RefreshVolume");
+        public void Play() { IsPlaying = true; Calls.Add("Play"); }
+        public void Pause() { IsPlaying = false; Calls.Add("Pause"); }
+        public void Resume() { IsPlaying = true; Calls.Add("Resume"); }
+        public void Stop() { IsPlaying = false; Calls.Add("Stop"); }
+        public void Dispose() => Disposed = true;
+    }
+
+    /// <summary>A unique audio-ish file (its hash keys the chart cache) and a decoder seed; both undone after.</summary>
+    private static void WithTrackFiles(Func<string, CancellationToken, float[]>? decode, Action<string[]> body)
+    {
+        var old = TrackDecoder.DecodeProvider;
+        var dir = Directory.CreateTempSubdirectory("race-track-").FullName;
+        var files = new[] { Path.Combine(dir, "one.mp3"), Path.Combine(dir, "two.mp3") };
+        foreach (var f in files) File.WriteAllBytes(f, Guid.NewGuid().ToByteArray());
+        try
+        {
+            TrackDecoder.DecodeProvider = decode == null ? null : (path, _, ct) => decode(path, ct);
+            body(files);
+        }
+        finally
+        {
+            TrackDecoder.DecodeProvider = old;
+            foreach (var f in files) File.Delete(TrackChartCache.PathFor(TrackDecoder.HashFile(f)));
+            Directory.Delete(dir, true);
+        }
+    }
+
+    private static float[] Tone(int seconds) =>
+        Enumerable.Range(0, TrackPcm.SampleRate * seconds).Select(i => (float)Math.Sin(i * 0.05) * (i / 8000 % 2)).ToArray();
+
+    private static void Settle(GameWindow w)
+    {
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(w.RaceAnalysis.Wait(TimeSpan.FromSeconds(20)));
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>WPF PickTrack -> BeginTrack -> AnalyzeTrack (:781-940): progress, a partial chart then the full one,
+    /// cached so a second pick of the same file is one chart and no decode; play/pause drive the player and post
+    /// the clock (:957-1035); panic tears it down (DisposeAll :686: StopTrack, player disposed, clock stopped).</summary>
+    [Fact]
+    public void Race_TrackPick_ChartsPlaysAndPanicStops() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        int decodes = 0;
+        WithTrackFiles((_, _) => { decodes++; return Tone(4); }, files =>
+        {
+            var player = new FakeTrackPlayer();
+            var w = GameWindow.Launch("race")!;
+            w.RaceNewPlayer = () => player;
+            w.RacePickFile = () => Task.FromResult<string?>(files[0]);
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Settle(w);
+            Assert.Equal(files[0], player.Loaded);
+            Assert.True(w.RaceTrackClockRunning);
+            Assert.DoesNotContain(sent, o => (string?)o["type"] == "track-error");
+            var first = sent.First();
+            Assert.Equal(("track-progress", "decode", "one.mp3"), ((string?)first["type"], (string?)first["stage"], (string?)first["name"]));
+            Assert.Equal(new[] { true, false }, sent.Where(o => (string?)o["type"] == "track-chart").Select(o => (bool)o["partial"]!));
+            Assert.Equal(1, decodes);
+
+            sent.Clear();
+            w.HandleMessage("{\"type\":\"track-pick\"}");   // same file again: the cache door
+            Settle(w);
+            Assert.Equal(new[] { false }, sent.Where(o => (string?)o["type"] == "track-chart").Select(o => (bool)o["partial"]!));
+            Assert.Equal(1, decodes);
+
+            sent.Clear();
+            player.Calls.Clear();
+            w.HandleMessage("{\"type\":\"track-play\"}");
+            var clock = sent.Last(o => (string?)o["type"] == "track-clock");
+            Assert.Equal((1.5, true, 30.0), ((double)clock["t"]!, (bool)clock["playing"]!, (double)clock["durationSec"]!));
+            w.HandleMessage("{\"type\":\"track-pause\",\"on\":true}");
+            Assert.False((bool)sent.Last(o => (string?)o["type"] == "track-clock")["playing"]!);
+            w.HandleMessage("{\"type\":\"track-pause\",\"on\":false}");
+            Assert.Equal(new[] { "RefreshVolume", "Play", "Pause", "Resume" }, player.Calls);
+
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.True(player.Disposed);
+            Assert.Equal("Stop", player.Calls.Last());
+            Assert.False(w.RaceTrackClockRunning);
+        });
+    });
+
+    /// <summary>A cancelled dialog and a track-cancel with nothing running answer progress "cancelled" (:796, :947);
+    /// a build with no player and no decoder answers track-error, never a crash (:836, :929).</summary>
+    [Fact]
+    public void Race_TrackPick_CancelAndNoAudioAreFramesNotCrashes() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        WithTrackFiles(null, files =>
+        {
+            var w = GameWindow.Launch("race")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.RacePickFile = () => Task.FromResult<string?>(null);
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Settle(w);
+            w.HandleMessage("{\"type\":\"track-cancel\"}");
+            Assert.Equal(new[] { "cancelled", "cancelled" }, sent.Select(o => (string?)o["stage"]));
+
+            sent.Clear();
+            w.RacePickFile = () => Task.FromResult<string?>(files[0]);
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Settle(w);
+            var errors = sent.Where(o => (string?)o["type"] == "track-error").Select(o => (string?)o["message"]).ToList();
+            Assert.Equal(new[] { GameWindow.RaceNoAudioMessage, "this build cannot decode audio" }, errors);
+            Assert.False(w.RaceTrackClockRunning);
+            w.HandleMessage("{\"type\":\"track-play\"}");   // nothing loaded: no clock, no throw
+            Assert.DoesNotContain(sent, o => (string?)o["type"] == "track-clock");
+            w.Close();
+        });
+    });
+
+    /// <summary>WPF BeginTrack/AnalyzeTrack generations (:812, :922): a newer pick cancels the one in flight, and
+    /// the superseded worker says nothing (no "cancelled", no chart); only the new pick's charts reach the page.</summary>
+    [Fact]
+    public void Race_TrackPick_NewerPickSilencesTheOldWorker() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        using var entered = new ManualResetEventSlim(false);
+        WithTrackFiles((path, ct) =>
+        {
+            if (path.EndsWith("one.mp3")) { entered.Set(); ct.WaitHandle.WaitOne(TimeSpan.FromSeconds(20)); ct.ThrowIfCancellationRequested(); }
+            return Tone(3);
+        }, files =>
+        {
+            var w = GameWindow.Launch("race")!;
+            w.RaceNewPlayer = () => new FakeTrackPlayer();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.RacePickFile = () => Task.FromResult<string?>(files[0]);
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Dispatcher.UIThread.RunJobs();
+            var stale = w.RaceAnalysis;
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(20)));   // the first worker is really inside its decode
+            w.RacePickFile = () => Task.FromResult<string?>(files[1]);
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Settle(w);
+            Assert.True(stale.Wait(TimeSpan.FromSeconds(20)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(sent, o => (string?)o["stage"] == "cancelled" || (string?)o["type"] == "track-error");
+            var charts = sent.Where(o => (string?)o["type"] == "track-chart").ToList();
+            Assert.Equal(2, charts.Count);
+            Assert.All(charts, c => Assert.Equal("two.mp3", (string?)c["chart"]!["source"]!["name"]));
+            w.Close();
+        });
     });
 }
