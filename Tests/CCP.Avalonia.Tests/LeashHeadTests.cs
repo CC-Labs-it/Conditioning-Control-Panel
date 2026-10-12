@@ -69,9 +69,12 @@ public sealed class LeashHeadTests
         var s = CoreSettings.Current;
         var (oldId, oldOffline) = (s.UnifiedId, s.OfflineMode);
         var (oldTargets, oldUi, oldTimer, oldGuard) = (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi, LeashTaskRunner.TimerFactory, LeashGuard.IsLeashed);
-        var (oldService, oldDue) = (LeashHead.Service, MainShellWindow.LeashGateDueProvider);
+        var (oldService, oldDue, oldPresent) = (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider);
         try
         {
+            MainShellWindow.PresentLeashGateProvider = _ => { };   // a gate the panel can show
+            // AuthToken lives in CoreSecrets, which is swapped for `secrets` above and restored in finally:
+            // the write never reaches the real store, so there is no old token to put back.
             (s.UnifiedId, s.AuthToken, s.OfflineMode) = ("u_me", "tok", false);
             LeashTaskRunner.TimerFactory = null;
             var wire = new Wire();
@@ -91,6 +94,9 @@ public sealed class LeashHeadTests
             await friends.TickAsync();           // the block comes back on the friends poll
             Assert.True(MainShellWindow.LeashBlocksGames);
             Assert.True(LeashGuard.IsLeashed());
+            MainShellWindow.PresentLeashGateProvider = null;   // no gate on the panel: never hold a tile
+            Assert.False(MainShellWindow.LeashBlocksGames);
+            MainShellWindow.PresentLeashGateProvider = _ => { };
 
             await friends.TickAsync();           // and the report goes out on the next one
             Assert.NotNull(wire.Bodies.FindLast(b => b["shared"] != null)?["leash_report"]);
@@ -110,7 +116,7 @@ public sealed class LeashHeadTests
             (s.UnifiedId, s.OfflineMode) = (oldId, oldOffline);
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (oldGet, oldPut);
             (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi, LeashTaskRunner.TimerFactory, LeashGuard.IsLeashed) = (oldTargets, oldUi, oldTimer, oldGuard);
-            (LeashHead.Service, MainShellWindow.LeashGateDueProvider) = (oldService, oldDue);
+            (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider) = (oldService, oldDue, oldPresent);
         }
     }
 

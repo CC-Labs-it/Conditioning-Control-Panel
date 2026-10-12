@@ -58,7 +58,8 @@ internal static class LeashHead
             catch (Exception ex) { Serilog.Log.Debug("Leash changed handler failed: {E}", ex.Message); }
         };
         Service = svc;
-        // WPF MainWindow.Leash.cs:95 LeashBlocksGames: the launcher's gate asks the service.
+        // WPF MainWindow.Leash.cs:95 LeashBlocksGames: the launcher's gate asks the service (and holds a
+        // tile only once a gate card can present it: MainShellWindow.LeashBlocksGames).
         Views.Windows.MainShellWindow.LeashGateDueProvider = () => Service?.GateDue != null;
         return svc;
     }
@@ -109,7 +110,8 @@ internal static class LeashHead
         catch (Exception ex) { Serilog.Log.Debug("Leash chaster read failed: {E}", ex.Message); }
 
         // ponytail: WPF reads today's conditioning minutes from App.FeatureDayLog; that log is not on
-        // this head, so minutes report 0 until it moves.
+        // this head, so minutes report 0 and a Minutes assignment cannot complete (LeashAssignRule.Met)
+        // until lane feature-day-log-core moves it to Core writing the same feature_day_log.json.
         return new LeashDayInputs(DateTime.Now, 0, done, total, streak, linked, ends, hidden, tab);
     }
 
