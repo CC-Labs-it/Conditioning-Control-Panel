@@ -1896,3 +1896,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/windows-ci-flakes: +94
 - Windows CI flakes fixed at the root: the NavGlow glow now reads a steppable TimeProvider instead of a real animation clock, the hit test no longer races ToolTipService, and the Windows Avalonia suite runs sharded (it ran out of memory in one testhost).
+
+## avalonia-port/juice-clock: +621
+- Trunk U1 infra: FrameGate (Core), FrameClock (30 fps shared beat), BeatLoop; TransformTween/BreathClock/Easings/Keyframes/MotionGate/MotionTimings deferred to their first user.
+- Profile OG border spin and vault CTA breath were inert (Animation.RunAsync on a Transform threw); now BeatLoops on the 30 fps beat, angle/scale asserted, red run saved.
