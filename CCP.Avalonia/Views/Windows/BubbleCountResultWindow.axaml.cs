@@ -72,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBox _txtAnswer;
         private readonly TextBlock _txtAttempts, _txtStrict, _txtEscHint;
         private readonly IconLabel _txtFeedback;
+        private readonly IconGlyph _feedbackMirror;
         private readonly Button _btnSubmit;
 
         /// <summary>Render/design constructor: sample data so --render-view can draw the window.</summary>
@@ -85,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtAnswer = this.FindControl<TextBox>("TxtAnswer")!;
             _txtAttempts = this.FindControl<TextBlock>("TxtAttempts")!;
             _txtFeedback = this.FindControl<IconLabel>("TxtFeedback")!;
+            _feedbackMirror = this.FindControl<IconGlyph>("FeedbackMirror")!;
             _txtStrict = this.FindControl<TextBlock>("TxtStrict")!;
             _txtEscHint = this.FindControl<TextBlock>("TxtEscHint")!;
             _btnSubmit = this.FindControl<Button>("BtnSubmit")!;
@@ -308,8 +310,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 window._txtFeedback.Kind = icon;
                 window._txtFeedback.Text = message;
-                if (icon is { } k && mirror)
-                    window._txtFeedback.Children.Add(new IconGlyph { Kind = k, Size = 20, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center });
+                if (icon is { } k) window._feedbackMirror.Kind = k;
+                window._feedbackMirror.IsVisible = mirror && icon != null;
+                window._feedbackMirror[global::Avalonia.Controls.Documents.TextElement.ForegroundProperty] = new SolidColorBrush(color);
                 window._txtFeedback[global::Avalonia.Controls.Documents.TextElement.ForegroundProperty] = new SolidColorBrush(color);
                 window._txtFeedback.IsVisible = true;
             }

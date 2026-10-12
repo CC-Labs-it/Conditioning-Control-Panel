@@ -298,8 +298,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// ponytail: needs RevealService, wired when it moves to Core.</summary>
         private static bool DiaryUnlocked => true;
 
-        /// <summary>Settings tab: fold the dev/test knobs (bubble pool, mantra toggles, loops)
-        /// in and out. Collapsed every open — the casual read stays short.</summary>
         /// <summary>WPF "🧪 testing options ▸/▾": a Tier-2 violet beaker and a fold chevron.</summary>
         private static StackPanel TestingLabel(bool open)
         {
@@ -308,6 +306,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return label;
         }
 
+        /// <summary>Settings tab: fold the dev/test knobs (bubble pool, mantra toggles, loops)
+        /// in and out. Collapsed every open — the casual read stays short.</summary>
         private void TestingToggle_Click(object? sender, RoutedEventArgs e)
         {
             bool open = _tglTesting.IsChecked == true;
@@ -1329,11 +1329,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 var badge = new TextBlock
                 {
-                    Text = isStart ? "start ★" : b.IsCurse ? "taken, never chosen" : "set start",
+                    Text = isStart ? null : b.IsCurse ? "taken, never chosen" : "set start",
                     Foreground = isStart ? GoldBrush : new SolidColorBrush(Color.FromArgb(0x90, 0xB8, 0xB8, 0xD0)),
                     FontSize = 10.5, FontWeight = isStart ? FontWeight.Bold : FontWeight.Normal,
                     VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0)
                 };
+                if (isStart)   // WPF "start ★": the star is a filled icon after the word
+                    badge.Inlines = new InlineCollection
+                    {
+                        new Run("start "),
+                        new InlineUIContainer(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 10.5 }) { BaselineAlignment = BaselineAlignment.Center },
+                    };
                 Grid.SetColumn(badge, 2);
                 row.Children.Add(badge);
             }
