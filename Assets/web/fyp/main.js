@@ -4,6 +4,7 @@
 import * as stats from './stats.js';
 import { createFeed } from './feed.js';
 import { createPage } from './surfaces.js';
+import { carrier } from '../shared/carrier.js';
 
 const PAGE_TRANSITION_MS = 340;
 // Neighbour pages this many steps from the active one stay mounted in PREVIEW
@@ -43,7 +44,8 @@ const track = $('track');
 
 // ---------- bridge ----------
 
-const bridge = window.chrome?.webview;
+// WebView2's chrome.webview on WPF, the WebKitGTK string carrier on Avalonia (shared/carrier.js).
+const bridge = carrier(window);
 function post(msg) {
   try { bridge?.postMessage(msg); } catch { /* host gone */ }
 }

@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// Ported from trunk's Views/Games/GameWindow.cs with only the Breakout demo registered; every other
     /// game lands with its own frames.</para>
     /// </summary>
-    internal sealed class GameWindow : Window
+    internal sealed partial class GameWindow : Window
     {
         /// <summary>A game this head can open: its launcher id, title key, page under Resources/web, the
         /// WPF gate run before the window is built (null = free) and the page's query.</summary>
@@ -40,6 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
             ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
+            [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -115,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == FypId && HandleFyp(o)) return;
             switch ((string?)o["type"])
             {
                 case "ready":
