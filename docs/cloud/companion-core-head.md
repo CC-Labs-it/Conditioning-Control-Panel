@@ -10,7 +10,7 @@ Companion core/head (P2): the WPF 7.1.5 bark engine and companion XP in Core, th
 
 ## Verification limits
 
-- `dotnet test Tests/CCP.Core.Tests` (all), plus `BarkEngineTests`, `CompanionCoreTests` and `DrainSaveThrottleTests` on their own. Fail-first: 18 single-rule mutations of the engine, manifest, companion core and bank each turned these tests red.
-- `dotnet test Tests/CCP.Avalonia.Tests --filter CompanionBarkHeadTests`: startup order (source scan); the seams are seeded over the shipped rules; the doorbell reaches the engine.
-- Built: CCP.Core, CCP.Avalonia, and the Linux test projects in build.yml. `bash .github/scripts/core-guards.sh` passes.
+- `dotnet test Tests/CCP.Core.Tests`: 1148 passed, 5 skipped, 2 failed. The same 2 also fail on the untouched base, so they come from this container: no IPv6 loopback (`LoopbackOAuthTests [::1]`), and root can delete the folder (`ContentPackStoreTests` uninstall). Also run on their own: `BarkEngineTests`, `CompanionCoreTests` and `DrainSaveThrottleTests` on their own. Fail-first: 18 single-rule mutations of the engine, manifest, companion core and bank each turned these tests red.
+- `dotnet test Tests/CCP.Avalonia.Tests --filter CompanionBarkHeadTests`: startup order (source scan); the seams are seeded over the shipped rules; the doorbell reaches the engine. Both tests fail when one seam or the startup call is removed.
+- Built: CCP.Core, CCP.Avalonia, the Linux test projects in build.yml, and `Tests/ConditioningControlPanel.Tests` (with `EnableWindowsTargeting`; built, not run). `bash .github/scripts/core-guards.sh` passes.
 - Not run: the WPF head and WPF tests (Windows only). The only WPF change is the `DrainSaveThrottle` move. The real tube voice was not exercised, because headless tests have no live tube.
