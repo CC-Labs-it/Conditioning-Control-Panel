@@ -2038,3 +2038,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/possession-core-a: +253
 - Pure Possession rules (deck, off-limits name rule, toast/rewrite pools, enums, bark triggers) moved from WPF to CCP.Core via git mv; WPF keeps the FrameworkElement contracts and the tree walk.
 - Deck tests moved to CCP.Core.Tests; new CoreMods mod-routing test (fail-proven).
+
+## avalonia-port/games-host: +710
+- Launcher opens games: shared GameWindow host (init, media-request deal from the library, exit, panic surface "games"), backroom bridge.js on the WebKitGTK string carrier; Breakout demo wired (demo=1, leash check first).
+- Tests: GameWindowTests (fail-proven via WebHost carrier, origin guard, demo=1, media deal, leash, panic), node bridge-carrier.test.js (string carrier = hosted for in-window fx, pause Exit and the F2 dev-panel gate; red run saved); GameWindow acks fx (WPF BackRoomBridge.OnFx), media deal walks images/ once per window, single-flight; live: tile Play opened the GameWindow (page boot not visible in capture).
