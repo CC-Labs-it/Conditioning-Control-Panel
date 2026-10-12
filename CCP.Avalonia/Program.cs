@@ -242,8 +242,8 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>The Win32 presentation path. Avalonia's defaults (WinUI composition over ANGLE on
         /// the primary adapter) unless CCP_WIN32_COMPOSITION / CCP_WIN32_RENDERING / CCP_GPU_ADAPTER
-        /// say otherwise (Platform/RenderBudget.cs); the adapter list is logged once either way, so a
-        /// log says which GPU drew the frames.</summary>
+        /// say otherwise (Platform/RenderBudget.cs); with CCP_GPU_ADAPTER set the adapter list is logged
+        /// once, so a log says which GPU drew the frames.</summary>
         private static global::Avalonia.Win32PlatformOptions Win32Options()
         {
             var o = new global::Avalonia.Win32PlatformOptions();
@@ -270,6 +270,9 @@ namespace ConditioningControlPanel.Avalonia
             if (comp != null || rend != null)
                 Serilog.Log.Information("Win32 presentation override: composition {C}, rendering {R}",
                     comp == null ? "default" : string.Join(",", comp), rend == null ? "default" : string.Join(",", rend));
+            // Only when asked: unset, Avalonia keeps its own adapter choice (index 0 is not proven
+            // to be what it picks on every machine).
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CCP_GPU_ADAPTER"))) return o;
             o.GraphicsAdapterSelectionCallback = adapters =>
             {
                 var names = adapters.Select(a => a.Description).ToList();
