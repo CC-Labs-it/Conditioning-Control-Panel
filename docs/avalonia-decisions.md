@@ -1058,15 +1058,18 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   Native Wayland is unchanged: no X11 overlay, so no flashes at all (logged once).
 - Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.
 
-## 2026-10-12: Chaster idle-day charge stays off until the conditioning-time tracker is ported (avalonia-port/chaster-minutes)
+## 2026-10-12: Chaster idle-day charge reads the day log, as on WPF (avalonia-port/chaster-minutes, then chaster-leash-minutes)
 - Question: with `FeatureDayLogService` now in Core and running on this head, should `ChasterHead` give the Chaster
   service its `MinutesOn` (the idle-day row's eyes)? Wiring it arms WPF's idle-day charge here, which users will see.
 - Options: (A) keep it off: `MinutesOn` stays null, the day-end check reads "nobody can tell" and never books an idle day;
   (B) parity: `MinutesOn = App.FeatureDayLog?.ConditioningMinutesOn(dayKey)`, exactly WPF `ChasterServiceApp.MinutesFromDayLog`
   (ConditioningControlPanel/Services/Chaster/ChasterServiceApp.cs:49).
-- Choice: A for now. The supervisor first advised B, but review found that the input WPF relies on is missing here. The
-  day log's minutes come from `TotalConditioningMinutes` (`FeatureDayLogService.cs:73`), which WPF grows through
-  `SkillTreeService.AddConditioningTime`. Nothing on this head adds to it: the tracker is "STILL OUT" in
-  `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
-  user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
-- Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
+- Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
+  `TotalConditioningMinutes` (`FeatureDayLogService.cs:73`), and nothing on this head grew it, so B would have charged
+  every day CCP was open as idle on the user's real lock.
+- Choice now (chaster-leash-minutes): B, exactly WPF `ChasterServiceApp.cs:40,49`. The input exists: the
+  conditioning-time tracker lane (avalonia-port/conditioning-time-tracker, Core `ConditioningTimeTracker`, wired in
+  `MainShellWindow.UiUpdates.cs`/`StartStop.cs`) accrues `TotalConditioningMinutes` while the engine runs. Null when no
+  log (construction failed / headless render path), 0 for a day with no entry, as WPF.
+- Test: `ChasterMinutesTests.ConditionedDayIsNotIdle_ADayWithoutConditioningIsCharged` (engine run 12 min on a stepped
+  clock -> day log -> today's idle charge 0, yesterday's 1200 s; fail-proven: no MinutesOn -> red, `?? 0` -> red).
