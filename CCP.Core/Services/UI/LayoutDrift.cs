@@ -8,8 +8,7 @@ namespace ConditioningControlPanel.Services.UI
     /// by the tube's make-room), the HWND can end up bigger than the size WPF laid the root out at.
     /// WPF paints nothing past its own layout, so the rest of the window shows as bare black inside
     /// the Windows border (owner report on 6.11.5, 2026-09-29). A real resize makes WPF catch up;
-    /// this decides when to force one. See the WPF head's MainWindow.WorkAreaFit.cs. Lives in Core with
-    /// the other WPF-free UI rules; Avalonia has no drift path (its shell lays out from ClientSize).
+    /// this decides when to force one. See MainWindow.WorkAreaFit.cs.
     /// </summary>
     public static class LayoutDrift
     {
