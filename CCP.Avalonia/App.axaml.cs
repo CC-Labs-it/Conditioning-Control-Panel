@@ -439,13 +439,8 @@ namespace ConditioningControlPanel.Avalonia
                 await step(0.4, "Initializing flash service...");
                 // The ambient flash surface. CoreFlash owns the rhythm; a burst needs any attached
                 // visual to reach Screens, and the main window is the one that always is.
-                CoreFlash.IsBusyProvider = () => Views.Overlays.FlashOverlay.IsBusy;
-                CoreFlash.ShowProvider = () =>
-                {
-                    if (desktop.MainWindow is not { } host) return;
-                    Views.Overlays.FlashOverlay.TriggerOnce(host);
-                    NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash);
-                };
+                Views.Overlays.FlashOverlay.SeedCore(() => desktop.MainWindow,
+                    () => NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash));
 
                 // Subliminal and bouncing-text surfaces. Core owns the schedule / the motion;
                 // these draw on click-through overlays (Views/Overlays), hosted like the flash.

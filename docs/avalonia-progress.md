@@ -1981,3 +1981,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/wpf-findings-a11y: +157
 - Buttons whose content is a panel or TextBlock are named by their text, and the name follows content changes; this fixes 55 type-name accessible names. Offline mode greys Home's unified login as WPF does.
 - WPF UIA findings 2 and 4 reproduced on the real startup path with the CI seed: the shell matches WPF, and the `--uia-dump` harness never seeds settings or services.
+
+## avalonia-port/flash-core: +547
+- Core flash rules from trunk U9 (FlashExit/StayRule/Corners/Shatter moved to Core, tests on Linux).
+- Avalonia flashes honour Click: a press pops with haptic and the chosen leave; Stay until popped (10 min, cap 40) only for scheduler flashes, not remote/voice ones.
