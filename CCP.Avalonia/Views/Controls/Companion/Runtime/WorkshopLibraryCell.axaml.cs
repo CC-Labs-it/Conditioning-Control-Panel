@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -32,8 +34,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         private static readonly IBrush BoxBorder = new SolidColorBrush(Color.FromArgb(0x55, 0x80, 0x80, 0x80));
         private static readonly IBrush BoxBack = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x2E));
         private static readonly IBrush RemoveBrush = new SolidColorBrush(Color.FromRgb(255, 100, 100));
-        private const string OpenGlyph = "↗";
-        private const string WarnGlyph = "⚠";
 
         private readonly StackPanel _pool;
         private readonly TextBlock _noLinks;
@@ -107,7 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             row.Children.Add(urlBox);
 
             // Preview: open the link externally so the user can check it (HTTPS only).
-            var openBtn = MakeGlyphButton(OpenGlyph, UrlBrush, Loc.Get("tooltip_preview_video_link"));
+            var openBtn = MakeGlyphButton(IconKind.Open, UrlBrush, Loc.Get("tooltip_preview_video_link"));
             openBtn.Click += (_, _) =>
             {
                 var u = urlBox.Text?.Trim() ?? "";
@@ -117,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             Grid.SetColumn(openBtn, 3);
             row.Children.Add(openBtn);
 
-            var removeBtn = MakeGlyphButton("🗑", RemoveBrush, Loc.Get("tooltip_remove_video_link"));
+            var removeBtn = MakeGlyphButton(IconKind.Delete, RemoveBrush, Loc.Get("tooltip_remove_video_link"));
             var entry = (NameBox: nameBox, UrlBox: urlBox);
             removeBtn.Click += (_, _) =>
             {
@@ -137,11 +137,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 bool invalid = u.Length > 0 && !VideoLinkPool.IsUsableUrl(u);
                 row.Opacity = invalid ? 0.55 : 1.0;
                 urlBox.BorderBrush = invalid ? WarnBrush : BoxBorder;
-                ((TextBlock)openBtn.Content!).Text = invalid ? WarnGlyph : OpenGlyph;
+                ((IconGlyph)openBtn.Content!).Kind = invalid ? IconKind.Warning : IconKind.Open;   // WPF ⚠ / ↗
                 openBtn.Foreground = invalid ? WarnBrush : UrlBrush;
                 // Hardcoded English in WPF too (MainWindow.xaml.cs AddVideoLinkRow); kept verbatim.
                 ToolTip.SetTip(openBtn, invalid ? "Not a valid http(s) link — this row won't be saved."
                                                 : Loc.Get("tooltip_preview_video_link"));
+                AutomationProperties.SetName(openBtn, ToolTip.GetTip(openBtn) as string);
             }
             urlBox.TextChanged += (_, _) => UpdateValidity();
             nameBox.LostFocus += (_, _) => Persist();
@@ -166,11 +167,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             FontSize = 12,
         };
 
-        private static Button MakeGlyphButton(string glyph, IBrush fg, string tip)
+        private static Button MakeGlyphButton(IconKind kind, IBrush fg, string tip)
         {
             var b = new Button
             {
-                Content = new TextBlock { Text = glyph, FontSize = 13 },
+                Content = new IconGlyph { Kind = kind, Size = 13 },
                 Width = 28, Height = 28,
                 Background = Brushes.Transparent,
                 Foreground = fg,
@@ -182,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
             ToolTip.SetTip(b, tip);
+            AutomationProperties.SetName(b, tip);
             return b;
         }
 

@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -276,11 +277,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             if (hex == null)
             {
-                swatch.Child = new TextBlock
+                swatch.Child = new IconGlyph
                 {
-                    Text = "✕",
+                    Kind = IconKind.Dismiss,
                     Foreground = Muted,
-                    FontSize = 13,
+                    Size = 13,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
@@ -407,11 +408,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 Margin = new Thickness(5),
                 IsHitTestVisible = false
             });
-            content.Children.Add(new TextBlock
+            content.Children.Add(new IconGlyph
             {
-                Text = "★",
+                Kind = IconKind.Star,
+                Variant = IconVariant.Filled,
                 Foreground = SelectedGold,
-                FontSize = 12,
+                Size = 12,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 2, 4, 0),
@@ -470,7 +472,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 if (tile.Child is Grid grid)
                 {
-                    var star = grid.Children.OfType<TextBlock>()
+                    var star = grid.Children.OfType<IconGlyph>()
                         .FirstOrDefault(t => (t.Tag as string) == "star");
                     if (star != null) star.IsVisible = on;
                 }
@@ -592,9 +594,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     Margin = new Thickness(4),
                     IsHitTestVisible = false
                 });
-                content.Children.Add(new TextBlock
+                content.Children.Add(new IconGlyph
                 {
-                    Text = "🔒", FontSize = 11, Opacity = 0.85, IsHitTestVisible = false,
+                    Kind = IconKind.LockClosed, Variant = IconVariant.Filled, Size = 11, Opacity = 0.85, IsHitTestVisible = false,
                     HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
                     Margin = new Thickness(0, 0, 3, 2)
                 });
@@ -603,9 +605,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 content.Children.Add(new Image { Source = art, Stretch = Stretch.Uniform, Margin = new Thickness(4), IsHitTestVisible = false });
             }
-            content.Children.Add(new TextBlock
+            content.Children.Add(new IconGlyph
             {
-                Text = "✓", Foreground = SelectedCyan, FontSize = 12, FontWeight = FontWeight.Bold,
+                Kind = IconKind.Checkmark, Foreground = SelectedCyan, Size = 12,
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 2, 4, 0), IsVisible = false, Tag = "check", IsHitTestVisible = false
             });
@@ -676,7 +678,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 tile.BorderBrush = on ? SelectedCyan : IdleBorder;
                 tile.Background = on ? SelectedCyanBg : TileBg;
                 if (tile.Child is Grid grid
-                    && grid.Children.OfType<TextBlock>().FirstOrDefault(t => (t.Tag as string) == "check") is { } check)
+                    && grid.Children.OfType<IconGlyph>().FirstOrDefault(t => (t.Tag as string) == "check") is { } check)
                     check.IsVisible = on;
             }
 

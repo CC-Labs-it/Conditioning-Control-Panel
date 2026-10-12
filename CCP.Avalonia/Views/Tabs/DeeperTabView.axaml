@@ -7,7 +7,7 @@
        Visibility="Collapsed"            ->  IsVisible="False"
        ToolTip="..."                     ->  ToolTip.Tip="..."
        Content="{loc:Str ...}" on Button ->  a <TextBlock> child (trap 1: "_" is an access key)
-       Image + EmojiToImageSource        ->  TextBlock (Avalonia renders colour emoji natively)
+       Image + EmojiToImageSource        ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        MouseEnter/MouseLeave             ->  PointerEntered/PointerExited
        MouseLeftButtonUp                 ->  PointerReleased
        ControlTemplate.Triggers          ->  ^:pointerover / ^:checked / ^:pressed selectors
@@ -32,6 +32,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.DeeperTabView"
              x:DataType="vm:DeeperTabViewModel">
@@ -212,8 +213,8 @@
                             CornerRadius="6" Margin="0,0,10,0"
                             Background="{Binding MediaTypeBadgeBg}"
                             VerticalAlignment="Center">
-                        <TextBlock Text="{Binding MediaTypeIcon}" FontSize="16"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="{Binding MediaTypeIcon}" Size="18"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
 
                     <!-- CENTER: name + meta line -->
@@ -228,9 +229,13 @@
                                     IsVisible="{Binding ShowSubmissionBadge}"
                                     CornerRadius="8" Padding="6,1" Margin="0,0,6,0"
                                     ToolTip.Tip="{Binding SubmissionBadgeTooltip}">
-                                <TextBlock Text="{Binding SubmissionBadgeText}"
-                                           Foreground="{Binding SubmissionBadgeFg}"
-                                           FontSize="10" FontWeight="SemiBold"/>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <fx:IconGlyph Kind="{Binding SubmissionBadgeGlyph}" Variant="Filled" Size="10"
+                                                  Foreground="{Binding SubmissionBadgeFg}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding SubmissionBadgeLabel}"
+                                               Foreground="{Binding SubmissionBadgeFg}"
+                                               FontSize="10" FontWeight="SemiBold"/>
+                                </StackPanel>
                             </Border>
                             <!-- Creator -->
                             <TextBlock Text="{Binding CreatorDisplay}"
@@ -242,10 +247,10 @@
                             <!-- Media source (status glyph + label) -->
                             <StackPanel Orientation="Horizontal"
                                         IsVisible="{Binding ShowMediaSource}">
-                                <TextBlock Text="{Binding MediaSourceGlyph}"
-                                           Foreground="{Binding MediaSourceBrush}"
-                                           FontSize="11" FontWeight="Bold"
-                                           Margin="0,0,4,0"/>
+                                <fx:IconGlyph Kind="{Binding MediaSourceGlyph}"
+                                              Foreground="{Binding MediaSourceBrush}"
+                                              Size="11" VerticalAlignment="Center"
+                                              Margin="0,0,4,0"/>
                                 <TextBlock Text="{Binding MediaSourceLabel}"
                                            Foreground="{DynamicResource TextDimBrush}" FontSize="11"
                                            MaxWidth="220" TextTrimming="CharacterEllipsis"/>
@@ -265,8 +270,12 @@
                                         <Border Background="{Binding Background}"
                                                 CornerRadius="8"
                                                 Padding="6,1" Margin="0,0,4,0">
-                                            <TextBlock Text="{Binding Display}"
-                                                       Foreground="{Binding Foreground}" FontSize="10"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <fx:IconGlyph Kind="{Binding Glyph}" Size="10"
+                                                              Foreground="{Binding Foreground}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Label}"
+                                                           Foreground="{Binding Foreground}" FontSize="10"/>
+                                            </StackPanel>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -284,18 +293,27 @@
                          At rest the cluster is invisible - that is the WPF behaviour too. -->
                     <StackPanel Grid.Column="2" Classes="row-actions"
                                 Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="📤" Click="DeeperRowSubmit_Click"
+                        <Button Click="DeeperRowSubmit_Click"
                                 IsVisible="{Binding ShowSubmitButton}"
                                 IsEnabled="{Binding SubmitEnabled}"
                                 ToolTip.Tip="{Binding SubmitTooltip}"
-                                Theme="{StaticResource DeeperRowActionBtnStyle}"/>
-                        <Button Content="▶" Click="DeeperRowPlay_Click"
+                                AutomationProperties.Name="{Binding SubmitTooltip}"
+                                Theme="{StaticResource DeeperRowActionBtnStyle}">
+                            <fx:IconGlyph Kind="ArrowUpload" Size="14"/>
+                        </Button>
+                        <Button Click="DeeperRowPlay_Click"
                                 ToolTip.Tip="{loc:Str deeper_hub_tip_row_play}"
-                                Theme="{StaticResource DeeperRowActionBtnStyle}"/>
-                        <Button Content="🗑" Click="DeeperRowDelete_Click"
+                                AutomationProperties.Name="{loc:Str deeper_hub_tip_row_play}"
+                                Theme="{StaticResource DeeperRowActionBtnStyle}">
+                            <fx:IconGlyph Kind="Play" Variant="Filled" Size="14"/>
+                        </Button>
+                        <Button Click="DeeperRowDelete_Click"
                                 ToolTip.Tip="{loc:Str deeper_hub_tip_row_delete}"
+                                AutomationProperties.Name="{loc:Str deeper_hub_tip_row_delete}"
                                 Foreground="{DynamicResource DangerBrush}"
-                                Theme="{StaticResource DeeperRowActionBtnStyle}"/>
+                                Theme="{StaticResource DeeperRowActionBtnStyle}">
+                            <fx:IconGlyph Kind="Delete" Size="14"/>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -370,10 +388,10 @@
                          ellipsis actually engages instead of overrunning the button cluster. -->
                     <Grid Grid.Column="0" VerticalAlignment="Center" Margin="18,0,10,0"
                           ColumnDefinitions="Auto,*">
-                        <TextBlock x:Name="DeeperWaveGlyph" x:FieldModifier="internal"
-                                   Grid.Column="0" Text="🌊" FontSize="30" Width="38" Height="38"
-                                   TextAlignment="Center"
-                                   VerticalAlignment="Center" Margin="0,0,14,0"/>
+                        <fx:IconGlyph x:Name="DeeperWaveGlyph" x:FieldModifier="internal"
+                                      Grid.Column="0" Kind="Water" Size="30" Width="38" Height="38"
+                                      Foreground="{DynamicResource DeeperAccentBrush}"
+                                      VerticalAlignment="Center" Margin="0,0,14,0"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str deeper_empty_title}"
@@ -411,7 +429,7 @@
                                 Foreground="{DynamicResource DeeperAccentBrush}"
                                 BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
                                 Margin="0,0,8,0">
-                            <TextBlock Text="{loc:Str deeper_tab_tutorial_btn}"/>
+                            <fx:IconLabel Key="deeper_tab_tutorial_btn"/>
                         </Button>
                         <Button x:Name="BtnDeeperOpenPlayer"
                                 Theme="{StaticResource DeeperRoundButton}"
@@ -433,7 +451,7 @@
                                 Foreground="{DynamicResource DeeperAccentBrush}"
                                 BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
                                 Margin="0,0,8,0">
-                            <TextBlock Text="📥 Import"/>
+                            <fx:IconLabel Key="deeper_tab_import_btn"/>
                         </Button>
                         <Button x:Name="BtnDeeperNewEnhancement"
                                 Theme="{StaticResource DeeperPrimaryCtaButton}"
@@ -476,8 +494,9 @@
                             <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                                     Background="{DynamicResource DeeperAccentBrush}"/>
                             <Grid Margin="16,12,16,12" ColumnDefinitions="Auto,*">
-                                <TextBlock Grid.Column="0" Text="✨" FontSize="26"
-                                           VerticalAlignment="Top" Margin="0,0,14,0"/>
+                                <fx:IconGlyph Grid.Column="0" Kind="Sparkle" Variant="Filled" Size="26"
+                                              Foreground="{DynamicResource DeeperAccentBrush}"
+                                              VerticalAlignment="Top" Margin="0,0,14,0"/>
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="{loc:Str deeper_welcome_card_title}"
                                                Foreground="{DynamicResource DeeperAccentBrush}"
@@ -568,14 +587,17 @@
                                                  TextChanged="DeeperSearch_TextChanged"/>
                                         <Button Grid.Column="1" x:Name="BtnDeeperOpenLibraryFolder"
                                                 Theme="{StaticResource DeeperRoundIconButton}"
-                                                Content="📁" Click="BtnDeeperOpenLibraryFolder_Click"
+                                                Click="BtnDeeperOpenLibraryFolder_Click"
                                                 ToolTip.Tip="{loc:Str deeper_library_open_folder_tooltip}"
+                                                AutomationProperties.Name="{loc:Str deeper_library_open_folder_tooltip}"
                                                 Width="36" Height="36" Padding="0" FontSize="14"
                                                 Margin="8,0,0,0" Cursor="Hand"
                                                 Background="Transparent"
                                                 Foreground="{DynamicResource DeeperAccentBrush}"
                                                 BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
-                                                BorderThickness="1"/>
+                                                BorderThickness="1">
+                                            <fx:IconGlyph Kind="FolderOpen" Size="16"/>
+                                        </Button>
                                     </Grid>
 
                                     <!-- Row B: filter pills + sort dropdown. WPF put the pills in a
@@ -628,7 +650,7 @@
                                                           Click="DeeperPillHaptics_Click"
                                                           ToolTip.Tip="{loc:Str deeper_hub_tip_pill_haptics}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="📳" FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                    <fx:IconGlyph Kind="PhoneVibrate" Size="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{loc:Str deeper_hub_pill_haptics}"/>
                                                     <TextBlock x:Name="TxtDeeperPillHapticsCount" x:FieldModifier="internal"
                                                                Text="{Binding PillHapticsCount}"
@@ -641,7 +663,7 @@
                                                           Click="DeeperPillWebcam_Click"
                                                           ToolTip.Tip="{loc:Str deeper_hub_tip_pill_webcam}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="📷" FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                    <fx:IconGlyph Kind="Camera" Size="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{loc:Str deeper_hub_pill_webcam}"/>
                                                     <TextBlock x:Name="TxtDeeperPillWebcamCount" x:FieldModifier="internal"
                                                                Text="{Binding PillWebcamCount}"
@@ -664,12 +686,12 @@
                                                     Foreground="White"
                                                     BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="🛍" FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                    <fx:IconGlyph Kind="ShoppingBag" Size="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{loc:Str deeper_hub_catalogue_btn}"
                                                                VerticalAlignment="Center"/>
-                                                    <TextBlock Text=" ↗" Margin="2,0,0,0"
-                                                               Foreground="{DynamicResource DeeperAccentSoftBrush}"
-                                                               VerticalAlignment="Center"/>
+                                                    <fx:IconGlyph Kind="Open" Size="11" Margin="5,0,0,0"
+                                                                  Foreground="{DynamicResource DeeperAccentSoftBrush}"
+                                                                  VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
                                             <TextBlock Text="{loc:Str deeper_hub_sort_label}"
@@ -689,14 +711,18 @@
                                             </ComboBox>
                                             <Button x:Name="BtnDeeperSortDir"
                                                     Theme="{StaticResource DeeperRoundIconButton}"
-                                                    Content="▼" Click="DeeperSortDir_Click"
+                                                    Click="DeeperSortDir_Click"
                                                     ToolTip.Tip="{loc:Str deeper_hub_tip_sort_dir}"
+                                                    AutomationProperties.Name="{loc:Str deeper_hub_tip_sort_dir}"
                                                     Width="28" Height="28" Padding="0" FontSize="10"
                                                     Margin="6,0,0,0" Cursor="Hand"
                                                     Background="Transparent"
                                                     Foreground="{DynamicResource DeeperAccentBrush}"
                                                     BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
-                                                    BorderThickness="1"/>
+                                                    BorderThickness="1">
+                                                <fx:IconGlyph x:Name="DeeperSortDirGlyph" x:FieldModifier="internal"
+                                                              Kind="ChevronDown" Size="12"/>
+                                            </Button>
                                         </StackPanel>
                                     </Grid>
                                 </StackPanel>
@@ -744,7 +770,7 @@
                                     Background="{DynamicResource DeeperAccentBrush}"/>
                             <StackPanel Margin="16,10,16,12">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                    <TextBlock Text="📷" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <fx:IconGlyph Kind="Camera" Size="12" Foreground="{DynamicResource DeeperAccentBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <TextBlock Text="{loc:Str blink_trainer_section_webcam}"
                                                Foreground="{DynamicResource DeeperAccentBrush}"
                                                FontSize="10" FontWeight="Bold"
@@ -877,8 +903,9 @@
                         Background="{StaticResource DeeperHueWashBrush}"
                         VerticalAlignment="Top" Height="520">
                     <Grid>
-                        <TextBlock Text="🌊" FontSize="120" Opacity="0.18"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="Water" Variant="Filled" Size="120" Opacity="0.18"
+                                      Foreground="{DynamicResource DeeperAccentBrush}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <!-- Scrim so the plate sits under the page instead of fighting it. -->
                         <Border CornerRadius="12">
                             <Border.Background>

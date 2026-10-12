@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Features
@@ -15,15 +16,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
     public partial class FeaturePopupWindow : Window
     {
         /// <summary>Render/design constructor: sample content so --render-view can draw the window.</summary>
-        public FeaturePopupWindow() : this(new AppInfoFeatureControl(), "App Info", null, "ℹ") { }
+        public FeaturePopupWindow() : this(new AppInfoFeatureControl(), "App Info", null, IconKind.Info) { }
 
-        public FeaturePopupWindow(Control content, string title, IImage? icon = null, string? glyph = null)
+        public FeaturePopupWindow(Control content, string title, IImage? icon = null, IconKind? glyph = null)
         {
             AvaloniaXamlLoader.Load(this);
 
             var txtTitle = this.FindControl<TextBlock>("TxtTitle")!;
             var imgIcon = this.FindControl<Image>("ImgIcon")!;
-            var txtGlyph = this.FindControl<TextBlock>("TxtGlyph")!;
+            var txtGlyph = this.FindControl<IconGlyph>("TxtGlyph")!;
             var contentHost = this.FindControl<ContentControl>("ContentHost")!;
 
             txtTitle.Text = title;
@@ -35,9 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 imgIcon.IsVisible = true;
                 txtGlyph.IsVisible = false;
             }
-            else if (!string.IsNullOrEmpty(glyph))
+            else if (glyph is { } kind)
             {
-                txtGlyph.Text = glyph;
+                txtGlyph.Kind = kind;
                 txtGlyph.IsVisible = true;
                 imgIcon.IsVisible = false;
             }

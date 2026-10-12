@@ -298,6 +298,7 @@ namespace ConditioningControlPanel.Avalonia
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
+            Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
             // App.OnStartup; every head must, because LocalizationManager holds no language until
@@ -322,6 +323,9 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
+            // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
+            // reach this callback too and must keep the real titles.
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();
             // WPF App.xaml.cs:1949 shows the splash before anything else and threads SetProgress
             // through startup. One UI thread here, so startup yields a frame per step instead.
             var splash = SplashOnStartup && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
@@ -1091,6 +1095,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
+            try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
 
             // Roadmap is lazy: do not construct it merely to dispose it on a profile that never
             // opened the quest page.

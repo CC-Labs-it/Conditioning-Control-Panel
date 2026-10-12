@@ -30,6 +30,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:ctrl="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView">
@@ -250,8 +251,8 @@
             <!-- Header -->
             <Grid Margin="0,0,0,20">
               <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{loc:Str label_quests}" Foreground="{DynamicResource PinkBrush}"
-                           FontSize="18" FontWeight="Bold"/>
+                <fx:IconLabel Key="label_quests" TextElement.Foreground="{DynamicResource PinkBrush}"
+                              TextElement.FontSize="18" TextElement.FontWeight="Bold"/>
                 <Button x:Name="HelpBtnQuests" Theme="{StaticResource HelpButtonStyle}" Tag="Quests"/>
               </StackPanel>
               <TextBlock x:Name="TxtQuestStats" Text="{loc:Str label_0_completed_this_week}"
@@ -268,7 +269,7 @@
                   <!-- Card Header -->
                   <Grid Margin="0,0,0,12">
                     <StackPanel Orientation="Horizontal">
-                      <TextBlock Text="&#x2600;&#xFE0F;" FontSize="18" VerticalAlignment="Center"/>
+                      <fx:IconGlyph Kind="WeatherSunny" Size="18" Foreground="#FFD700" VerticalAlignment="Center"/>
                       <TextBlock Text="{loc:Str label_daily_quest}" Foreground="#FFD700"
                                  FontSize="16" FontWeight="Bold" Margin="8,0,0,0"
                                  VerticalAlignment="Center"/>
@@ -320,8 +321,9 @@
                   <Border x:Name="DailyAllCompletedMessage" Background="#2D4A2D" CornerRadius="10"
                           Padding="15,12" Margin="0,14,0,0" IsVisible="False">
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                      <TextBlock Text="&#x2705;" FontSize="28" HorizontalAlignment="Center"
-                                 Margin="0,0,0,6"/>
+                      <fx:IconGlyph Kind="CheckmarkCircle" Variant="Filled" Size="28"
+                                    Foreground="{DynamicResource IconSuccessBrush}" HorizontalAlignment="Center"
+                                    Margin="0,0,0,6"/>
                       <TextBlock Text="{loc:Str label_all_daily_quests_completed}" Foreground="#00E676"
                                  FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
                                  Margin="0,0,0,5"/>
@@ -332,9 +334,9 @@
                   </Border>
 
                   <!-- One shared reroll pool across all three seats, said once here. -->
-                  <TextBlock x:Name="TxtDailyRerollPool" Text=""
-                             Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
-                             HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                  <fx:IconLabel x:Name="TxtDailyRerollPool"
+                                TextElement.Foreground="{DynamicResource TextMutedBrush}" TextElement.FontSize="11"
+                                HorizontalAlignment="Center" Margin="0,12,0,0"/>
                 </StackPanel>
               </ContentControl>
 
@@ -351,7 +353,7 @@
                        note will not share a line. -->
                   <StackPanel Margin="0,0,0,10">
                     <StackPanel Orientation="Horizontal">
-                      <TextBlock Text="&#x1F319;" FontSize="16" VerticalAlignment="Center"/>
+                      <fx:IconGlyph Kind="WeatherMoon" Size="16" Foreground="#9370DB" VerticalAlignment="Center"/>
                       <TextBlock Text="{loc:Str label_weekly_quest}" Foreground="#9370DB"
                                  FontSize="15" FontWeight="Bold" Margin="8,0,0,0"
                                  VerticalAlignment="Center"/>
@@ -388,13 +390,13 @@
                           <!-- Completed. Under the caption, so a finished weekly still says which
                                weekly it was. -->
                           <Border x:Name="WeeklyCompletedOverlay" Background="#992D4A2D" IsVisible="False">
-                            <TextBlock Text="&#x2713;" Foreground="#00E676" FontSize="72"
-                                       FontWeight="Bold" HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" Margin="0,0,0,38">
-                              <TextBlock.Effect>
+                            <fx:IconGlyph Kind="Checkmark" Size="72" Foreground="#00E676"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" Margin="0,0,0,38">
+                              <fx:IconGlyph.Effect>
                                 <DropShadowEffect Color="Black" BlurRadius="8" OffsetX="0" OffsetY="2"/>
-                              </TextBlock.Effect>
-                            </TextBlock>
+                              </fx:IconGlyph.Effect>
+                            </fx:IconGlyph>
                           </Border>
 
                           <!-- XP, on the art, same corner the daily cards use. -->
@@ -402,7 +404,9 @@
                                   HorizontalAlignment="Right" VerticalAlignment="Top"
                                   IsHitTestVisible="False">
                             <StackPanel Orientation="Horizontal">
-                              <TextBlock x:Name="TxtWeeklyXP" Text="{loc:Str label_0_xp}"
+                              <fx:IconGlyph x:Name="WeeklyXpIcon" Kind="Gift" Size="11"
+                                            Foreground="{DynamicResource PinkBrush}" Margin="0,0,4,0"/>
+                              <TextBlock x:Name="TxtWeeklyXP" Text="{loc:StrBare label_0_xp}"
                                          Foreground="{DynamicResource PinkBrush}" FontSize="11"
                                          FontWeight="Bold" VerticalAlignment="Center"/>
                               <TextBlock x:Name="TxtWeeklyStreakBonus" Text=""
@@ -417,7 +421,7 @@
                           <!-- CAPTION -->
                           <StackPanel VerticalAlignment="Bottom" Margin="11,0,11,9" IsHitTestVisible="False">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                              <TextBlock x:Name="TxtWeeklyQuestIcon" Text="" FontSize="15"
+                              <fx:IconGlyph x:Name="TxtWeeklyQuestIcon" Size="15"
                                          VerticalAlignment="Center" Margin="0,0,6,0" IsVisible="False"/>
                               <TextBlock x:Name="TxtWeeklyQuestName" Text="{loc:Str label_loading_2}"
                                          Foreground="White" FontSize="14" FontWeight="Bold"
@@ -425,7 +429,7 @@
                             </StackPanel>
                             <TextBlock x:Name="TxtWeeklyQuestDesc" Text=""
                                        Foreground="#D6D6E8" FontSize="11" TextWrapping="Wrap"
-                                       TextTrimming="CharacterEllipsis" MaxHeight="31"/>
+                                       TextTrimming="CharacterEllipsis" MaxLines="2"/>
                           </StackPanel>
                         </Grid>
                       </Border>
@@ -452,7 +456,7 @@
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                           ToolTip.ShowOnDisabled="True"
                           ToolTip.Tip="{loc:Str tooltip_reroll_for_a_different_quest_once_per_week}">
-                    <TextBlock Text="{loc:Str btn_reroll}"/>
+                    <fx:IconLabel x:Name="TxtWeeklyReroll" Key="btn_reroll"/>
                   </Button>
                 </StackPanel>
               </ContentControl>
@@ -462,11 +466,11 @@
             <Border x:Name="QuestCompleteBanner" Background="#2D4A2D" CornerRadius="10"
                     Padding="15" Margin="0,20,0,0" IsVisible="False">
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <TextBlock Text="&#x2728;" FontSize="22" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="22" Foreground="#FFD700" VerticalAlignment="Center"/>
                 <TextBlock x:Name="TxtQuestComplete" Text="{loc:Str label_quest_complete}"
                            Foreground="#00E676" FontSize="18" FontWeight="Bold"
                            Margin="10,0" VerticalAlignment="Center"/>
-                <TextBlock Text="&#x2728;" FontSize="22" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Sparkle" Variant="Filled" Size="22" Foreground="#FFD700" VerticalAlignment="Center"/>
               </StackPanel>
             </Border>
 
@@ -480,7 +484,7 @@
               <StackPanel>
                 <Grid Margin="0,0,0,10">
                   <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F39F;" FontSize="15" VerticalAlignment="Center"/>
+                    <fx:IconGlyph Kind="TicketDiagonal" Size="15" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Str label_intake_punch_card}" Foreground="White"
                                FontSize="14" FontWeight="Bold" VerticalAlignment="Center"
                                Margin="8,0,0,0"/>
@@ -511,15 +515,15 @@
                     Padding="15,12" Margin="0,20,0,0">
               <StackPanel>
                 <Grid Margin="0,0,0,10" ColumnDefinitions="Auto,*,Auto">
-                  <TextBlock Grid.Column="0" Text="{loc:Str label_quest_streak}" Foreground="White"
-                             FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                  <fx:IconLabel Grid.Column="0" Key="label_quest_streak" TextElement.Foreground="White"
+                                TextElement.FontSize="14" TextElement.FontWeight="Bold" VerticalAlignment="Center"/>
                   <TextBlock x:Name="TxtQuestStreakCount" Grid.Column="1" Text="" Foreground="#FFD700"
                              FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Right"
                              VerticalAlignment="Center" Margin="0,0,10,0"/>
                   <Button x:Name="BtnFixStreak" Grid.Column="2" Theme="{StaticResource OutlineButton}"
                           Padding="8,3" FontSize="11" IsVisible="False" VerticalAlignment="Center"
                           ToolTip.ShowOnDisabled="True">
-                    <TextBlock Text="{loc:Str btn_fix_day}"/>
+                    <fx:IconLabel Key="btn_fix_day"/>
                   </Button>
                 </Grid>
                 <Canvas x:Name="StreakCalendarCanvas" Height="50" ClipToBounds="True"/>
@@ -533,8 +537,8 @@
                     Padding="15" Margin="0,20,0,0">
               <StackPanel>
                 <Grid Margin="0,0,0,15">
-                  <TextBlock Text="{loc:Str label_quest_statistics}" Foreground="White"
-                             FontSize="14" FontWeight="Bold"/>
+                  <fx:IconLabel Key="label_quest_statistics" TextElement.Foreground="White"
+                                TextElement.FontSize="14" TextElement.FontWeight="Bold"/>
                   <Button x:Name="HelpBtnQuestStats" Theme="{StaticResource HelpButtonStyle}"
                           HorizontalAlignment="Right" Tag="QuestStats"/>
                 </Grid>
@@ -584,8 +588,8 @@
                     CornerRadius="6" Padding="14,10" Margin="20,0,20,14" MaxWidth="700"
                     HorizontalAlignment="Center">
               <StackPanel>
-                <TextBlock Text="{loc:Str label_what_is_the_bimbo_journal}" Foreground="#FFD700"
-                           FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
+                <fx:IconLabel Key="label_what_is_the_bimbo_journal" TextElement.Foreground="#FFD700"
+                              TextElement.FontSize="14" TextElement.FontWeight="Bold" Margin="0,0,0,6"/>
                 <TextBlock TextWrapping="Wrap" Foreground="#DDFFFFFF" FontSize="12" LineHeight="18">
                   <Run Text="{loc:Str label_each_track_has_steps_that_ask_you_to_take_a_p}"/>
                   <LineBreak/>
@@ -633,7 +637,7 @@
                 </StackPanel>
                 <StackPanel x:Name="BadgeIndicator" Orientation="Horizontal"
                             HorizontalAlignment="Right" VerticalAlignment="Center" IsVisible="False">
-                  <TextBlock Text="&#x1F3C6;" FontSize="22" VerticalAlignment="Center"/>
+                  <fx:IconGlyph Kind="Trophy" Variant="Filled" Size="22" Foreground="{DynamicResource IconGoldBrush}" VerticalAlignment="Center"/>
                   <TextBlock Text="{loc:Str label_badge_earned}" Foreground="#FFD700" FontSize="14"
                              FontWeight="Bold" VerticalAlignment="Center" Margin="5,0,0,0"/>
                 </StackPanel>
@@ -644,7 +648,7 @@
             <Border x:Name="TrackLockedOverlay" Background="#CC1A1A2E" CornerRadius="10"
                     Padding="40" IsVisible="False">
               <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                <TextBlock Text="&#x1F512;" FontSize="44" HorizontalAlignment="Center"/>
+                <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="44" Foreground="{DynamicResource IconTier1Brush}" HorizontalAlignment="Center"/>
                 <TextBlock x:Name="TxtLockReason"
                            Text="Complete the previous track to unlock"
                            Foreground="White" FontSize="16" Margin="0,15,0,0"
@@ -665,8 +669,8 @@
                     Padding="15" Margin="0,15,0,0">
               <StackPanel>
                 <Grid Margin="0,0,0,15">
-                  <TextBlock Text="{loc:Str label_transformation_progress}" Foreground="White"
-                             FontSize="14" FontWeight="Bold"/>
+                  <fx:IconLabel Key="label_transformation_progress" TextElement.Foreground="White"
+                                TextElement.FontSize="14" TextElement.FontWeight="Bold"/>
                   <Button x:Name="HelpBtnRoadmapStats" Theme="{StaticResource HelpButtonStyle}"
                           HorizontalAlignment="Right" Tag="RoadmapStats"/>
                 </Grid>
@@ -705,7 +709,7 @@
     <!-- Login Required Overlay -->
     <Border x:Name="QuestsLoginOverlay" Background="#E6151528" CornerRadius="12" IsVisible="False">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40">
-        <TextBlock Text="&#x1F512;" FontSize="44" HorizontalAlignment="Center" Margin="0,0,0,15"/>
+        <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="44" Foreground="{DynamicResource IconTier1Brush}" HorizontalAlignment="Center" Margin="0,0,0,15"/>
         <TextBlock Text="{loc:Str label_login_required}" Foreground="{DynamicResource PinkBrush}"
                    FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
         <TextBlock Text="{loc:Str label_log_in_with_discord_or_patreon_to_access_ques}"

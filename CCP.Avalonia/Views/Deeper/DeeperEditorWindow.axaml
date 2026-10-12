@@ -33,6 +33,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:controls="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
         xmlns:deeper="clr-namespace:ConditioningControlPanel.Avalonia.Views.Deeper"
         x:Class="ConditioningControlPanel.Avalonia.Views.Deeper.DeeperEditorWindow"
@@ -129,6 +130,10 @@
         <Style Selector="MenuItem">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
         </Style>
+        <!-- Fluent icons L6: the items list's Overlay square keeps WPF's violet (🟪). -->
+        <Style Selector="fx|IconGlyph.overlay">
+            <Setter Property="Foreground" Value="#9B59FF"/>
+        </Style>
     </Window.Styles>
 
     <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -152,9 +157,9 @@
                 <TextBlock x:Name="TxtTitle" DockPanel.Dock="Left" Margin="22,0,0,0"
                            Foreground="{DynamicResource DeeperAccentSoftBrush}"
                            FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                <TextBlock x:Name="TxtDirty" DockPanel.Dock="Left" Margin="6,0,0,0" Text="●"
-                           Foreground="{DynamicResource DeeperAccentBrush}" IsVisible="False"
-                           FontSize="14" VerticalAlignment="Center"
+                <fx:IconGlyph x:Name="TxtDirty" DockPanel.Dock="Left" Margin="6,0,0,0" Kind="Circle" Variant="Filled"
+                              Foreground="{DynamicResource DeeperAccentBrush}" IsVisible="False"
+                              Size="9" VerticalAlignment="Center"
                            ToolTip.Tip="{loc:Str deeper_editor_unsaved_marker}"/>
                 <Button x:Name="BtnEditorHelp" DockPanel.Dock="Right" Margin="0,0,0,0"
                         ToolTip.Tip="{loc:Str deeper_editor_help_tooltip}"
@@ -179,7 +184,7 @@
 
                 <!-- Project (JSON) -->
                 <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" RowDefinitions="Auto,Auto">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="📄" FontSize="13"
+                    <fx:IconGlyph Grid.Row="0" Grid.Column="0" Kind="Document" Size="14"
                                VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtLinkedJsonName"
                                Foreground="{DynamicResource TextLightBrush}"
@@ -200,29 +205,37 @@
                                 Orientation="Horizontal" VerticalAlignment="Center"
                                 Margin="8,0,0,0"
                                 IsVisible="False">
-                        <TextBlock Text="🔍" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <Button x:Name="BtnPreviewZoomOut" Content="−"
+                        <fx:IconGlyph Kind="Search" Size="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <Button x:Name="BtnPreviewZoomOut"
                                 ToolTip.Tip="{loc:Str deeper_zoom_out_tt}"
                                 Width="22" Height="22" Padding="0" FontSize="13" FontWeight="Bold"
                                 Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                 Foreground="{DynamicResource DeeperAccentBrush}"
-                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"/>
-                        <Button x:Name="BtnPreviewZoomIn" Content="+"
+                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
+                                AutomationProperties.Name="{loc:Str deeper_zoom_out_tt}">
+                            <fx:IconGlyph Kind="Subtract" Size="12"/>
+                        </Button>
+                        <Button x:Name="BtnPreviewZoomIn"
                                 ToolTip.Tip="{loc:Str deeper_zoom_in_tt}"
                                 Width="22" Height="22" Padding="0" FontSize="13" FontWeight="Bold" Margin="3,0,0,0"
                                 Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                 Foreground="{DynamicResource DeeperAccentBrush}"
-                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"/>
+                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
+                                AutomationProperties.Name="{loc:Str deeper_zoom_in_tt}">
+                            <fx:IconGlyph Kind="Add" Size="12"/>
+                        </Button>
                     </StackPanel>
 
                     <Button Grid.Row="0" Grid.Column="3" x:Name="BtnLinkedJsonOpenFolder"
-                            Content="📁"
                             ToolTip.Tip="{loc:Str deeper_editor_linked_open_folder_tt}"
                             Width="30" Height="26" Padding="0" Cursor="Hand" FontSize="12"
                             Margin="6,0,0,0"
                             Background="Transparent"
                             Foreground="{DynamicResource DeeperAccentBrush}"
-                            BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"/>
+                            BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
+                            AutomationProperties.Name="{loc:Str deeper_editor_linked_open_folder_tt}">
+                        <fx:IconGlyph Kind="FolderOpen" Size="14"/>
+                    </Button>
                     <Button Grid.Row="0" Grid.Column="4" x:Name="BtnLinkedJsonSwap"
                             ToolTip.Tip="{loc:Str deeper_editor_tip_linked_swap_json}"
                             Padding="8,3" Margin="6,0,0,0" Cursor="Hand"
@@ -239,12 +252,12 @@
 
                 <!-- Linked media -->
                 <Grid Grid.Column="2" ColumnDefinitions="Auto,Auto,*,Auto,Auto" RowDefinitions="Auto,Auto">
-                    <TextBlock Grid.Row="0" Grid.Column="0" x:Name="TxtLinkedMediaIcon"
-                               Text="🎬" FontSize="13"
+                    <fx:IconGlyph Grid.Row="0" Grid.Column="0" x:Name="TxtLinkedMediaIcon"
+                               Kind="Video" Size="14"
                                VerticalAlignment="Center" Margin="0,0,4,0"
                                Foreground="{DynamicResource DeeperAccentSoftBrush}"/>
-                    <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtLinkedMediaStatus"
-                               Text="✓" FontSize="12" FontWeight="Bold"
+                    <fx:IconGlyph Grid.Row="0" Grid.Column="1" x:Name="TxtLinkedMediaStatus"
+                               Kind="Checkmark" Size="12"
                                VerticalAlignment="Center" Margin="0,0,6,0"
                                Foreground="{DynamicResource DeeperAccentBrush}"/>
                     <TextBlock Grid.Row="0" Grid.Column="2" x:Name="TxtLinkedMediaName"
@@ -350,7 +363,7 @@
 
                         <StackPanel x:Name="PreviewPlaceholder" HorizontalAlignment="Center" VerticalAlignment="Center"
                                     IsVisible="False">
-                            <TextBlock x:Name="TxtPlaceholderIcon" Text="🌐" FontSize="42" HorizontalAlignment="Center"
+                            <fx:IconGlyph x:Name="TxtPlaceholderIcon" Kind="Globe" Size="42" HorizontalAlignment="Center"
                                        Foreground="{DynamicResource DeeperAccentSoftBrush}" Margin="0,0,0,12"/>
                             <TextBlock x:Name="TxtPlaceholderTitle"
                                        Foreground="{DynamicResource TextLightBrush}" FontSize="14"
@@ -373,13 +386,15 @@
                              + Effect. The scrub hint is LastChild and eats slack first. -->
                         <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,6">
                             <Button x:Name="BtnPlayPause" DockPanel.Dock="Left"
-                                    Content="▶"
                                     ToolTip.Tip="{loc:Str deeper_editor_tt_play}"
                                     Width="34" Height="28" Padding="0" Cursor="Hand"
                                     Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                     Foreground="{DynamicResource DeeperAccentBrush}"
                                     BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"
-                                    FontSize="13"/>
+                                    FontSize="13"
+                                    AutomationProperties.Name="{loc:Str deeper_editor_tt_play}">
+                                <fx:IconGlyph x:Name="PlayPauseGlyph" x:FieldModifier="internal" Kind="Play" Variant="Filled" Size="14"/>
+                            </Button>
                             <TextBlock x:Name="TxtCurrentTime" DockPanel.Dock="Left"
                                        Text="0:00" Foreground="{DynamicResource TextLightBrush}"
                                        FontSize="12" VerticalAlignment="Center" Margin="10,0,4,0"/>
@@ -388,24 +403,30 @@
                             <TextBlock x:Name="TxtTotalTime" DockPanel.Dock="Left"
                                        Text="0:00" Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="12" VerticalAlignment="Center" Margin="4,0,12,0"/>
-                            <Button x:Name="BtnZoomOut" DockPanel.Dock="Left" Content="−"
+                            <Button x:Name="BtnZoomOut" DockPanel.Dock="Left"
                                     ToolTip.Tip="{loc:Str deeper_editor_tip_zoom_out}"
                                     Width="28" Height="26" Padding="0" Margin="0,0,2,0" Cursor="Hand"
                                     FontSize="14" FontWeight="Bold"
                                     Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                     Foreground="{DynamicResource DeeperAccentBrush}"
-                                    BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"/>
+                                    BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"
+                                    AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_out}">
+                                <fx:IconGlyph Kind="Subtract" Size="13"/>
+                            </Button>
                             <TextBlock x:Name="TxtZoomLevel" DockPanel.Dock="Left" Text="100%"
                                        Width="52" TextAlignment="Center"
                                        Foreground="{DynamicResource TextDimBrush}" FontSize="11"
                                        VerticalAlignment="Center"/>
-                            <Button x:Name="BtnZoomIn" DockPanel.Dock="Left" Content="+"
+                            <Button x:Name="BtnZoomIn" DockPanel.Dock="Left"
                                     ToolTip.Tip="{loc:Str deeper_editor_tip_zoom_in}"
                                     Width="28" Height="26" Padding="0" Margin="2,0,12,0" Cursor="Hand"
                                     FontSize="14" FontWeight="Bold"
                                     Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                     Foreground="{DynamicResource DeeperAccentBrush}"
-                                    BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"/>
+                                    BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"
+                                    AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_in}">
+                                <fx:IconGlyph Kind="Add" Size="13"/>
+                            </Button>
                             <Button x:Name="BtnPreview" DockPanel.Dock="Right"
                                     ToolTip.Tip="{loc:Str deeper_editor_tt_preview}"
                                     Cursor="Hand"
@@ -465,7 +486,7 @@
                                         BorderThickness="0,0,1,1" Padding="6,2"
                                         ToolTip.Tip="{loc:Str deeper_editor_tt_lane_regions}">
                                     <DockPanel LastChildFill="True">
-                                        <TextBlock DockPanel.Dock="Left" Text="▦" FontSize="11"
+                                        <fx:IconGlyph DockPanel.Dock="Left" Kind="Grid" Size="12"
                                                    Foreground="{DynamicResource DeeperAccentBrush}"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
                                         <TextBlock x:Name="TxtRegionsLaneCount" DockPanel.Dock="Right"
@@ -485,7 +506,7 @@
                                         BorderThickness="0,0,1,1" Padding="6,2"
                                         ToolTip.Tip="{loc:Str deeper_editor_tt_lane_effects}">
                                     <DockPanel LastChildFill="True">
-                                        <TextBlock DockPanel.Dock="Left" Text="✨" FontSize="12"
+                                        <fx:IconGlyph DockPanel.Dock="Left" Kind="Sparkle" Size="12"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
                                         <TextBlock x:Name="TxtEffectsLaneCount" DockPanel.Dock="Right"
                                                    Foreground="{DynamicResource TextDimBrush}"
@@ -504,7 +525,7 @@
                                         BorderThickness="0,0,1,0" Padding="6,2"
                                         ToolTip.Tip="{loc:Str deeper_editor_tt_lane_haptics}">
                                     <DockPanel LastChildFill="True">
-                                        <TextBlock DockPanel.Dock="Left" Text="📳" FontSize="12"
+                                        <fx:IconGlyph DockPanel.Dock="Left" Kind="PhoneVibrate" Size="12"
                                                    VerticalAlignment="Center" Margin="0,0,4,0"/>
                                         <TextBlock x:Name="TxtHapticsLaneCount" DockPanel.Dock="Right"
                                                    Foreground="{DynamicResource TextDimBrush}"
@@ -600,8 +621,8 @@
                                       Foreground="{DynamicResource TextLightBrush}"
                                       ToolTip.Tip="{loc:Str deeper_editor_tt_metadata_drawer}">
                             <DockPanel LastChildFill="True">
-                                <TextBlock x:Name="MetadataDrawerChevron" DockPanel.Dock="Left"
-                                           Text="▶" FontSize="10"
+                                <fx:IconGlyph x:Name="MetadataDrawerChevron" DockPanel.Dock="Left"
+                                           Kind="ChevronRight" Size="11"
                                            Foreground="{DynamicResource DeeperAccentBrush}"
                                            VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBlock x:Name="TxtMetadataDrawerSubtitle" DockPanel.Dock="Right"
@@ -627,13 +648,15 @@
                                     <DockPanel Margin="0,0,0,4" LastChildFill="True">
                                         <TextBlock DockPanel.Dock="Left" Text="{loc:Str deeper_editor_label_creator}"
                                                    Theme="{StaticResource EditorLabel}" VerticalAlignment="Center"/>
-                                        <ToggleButton x:Name="BtnCreatorLockToggle" DockPanel.Dock="Right"
-                                                      Content="🔒" FontSize="11"
+                                        <ToggleButton x:Name="BtnCreatorLockToggle" DockPanel.Dock="Right" FontSize="11"
                                                       Width="22" Height="20" Padding="0" Cursor="Hand"
                                                       Background="Transparent"
                                                       Foreground="{DynamicResource TextDimBrush}"
                                                       BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
-                                                      ToolTip.Tip="{loc:Str deeper_editor_tip_creator_lock}"/>
+                                                      ToolTip.Tip="{loc:Str deeper_editor_tip_creator_lock}"
+                                                AutomationProperties.Name="{loc:Str deeper_editor_tip_creator_lock}">
+                                            <fx:IconGlyph x:Name="CreatorLockGlyph" Kind="LockClosed" Size="11"/>
+                                        </ToggleButton>
                                         <TextBlock/>
                                     </DockPanel>
                                     <TextBox x:Name="TxtMetaCreator" Theme="{StaticResource EditorTextBox}"
@@ -670,7 +693,7 @@
                         <Grid RowDefinitions="Auto,Auto">
 
                             <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,6">
-                                <TextBlock DockPanel.Dock="Left" Text="📋" FontSize="13"
+                                <fx:IconGlyph DockPanel.Dock="Left" Kind="Clipboard" Size="14"
                                            VerticalAlignment="Center" Margin="0,0,6,0"/>
                                 <TextBlock DockPanel.Dock="Left" Text="Items"
                                            Foreground="{DynamicResource DeeperAccentBrush}"
@@ -734,8 +757,9 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate x:DataType="deeper:TimelineListEntry">
                                             <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
-                                                <TextBlock Grid.Column="0" Text="{Binding Icon}"
-                                                           FontSize="12" VerticalAlignment="Center"
+                                                <fx:IconGlyph Grid.Column="0" Kind="{Binding Icon}"
+                                                           Variant="{Binding IconVariant}" Classes.overlay="{Binding IsOverlayIcon}"
+                                                           Size="12" VerticalAlignment="Center"
                                                            Margin="0,0,6,0"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding KindLabel}"
                                                            Foreground="{Binding KindBrush}"
@@ -752,7 +776,6 @@
                                                            VerticalAlignment="Center"
                                                            Margin="8,0,6,0"/>
                                                 <Button Grid.Column="4"
-                                                        Content="×"
                                                         Tag="{Binding}"
                                                         Classes="itemsListDelete"
                                                         ToolTip.Tip="Delete this item"
@@ -763,7 +786,10 @@
                                                         Foreground="{DynamicResource TextDimBrush}"
                                                         BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
                                                         BorderThickness="1"
-                                                        VerticalAlignment="Center"/>
+                                                        VerticalAlignment="Center"
+                                                        AutomationProperties.Name="Delete this item">
+                                                    <fx:IconGlyph Kind="Dismiss" Size="11"/>
+                                                </Button>
                                             </Grid>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
@@ -820,13 +846,15 @@
                                                 <TextBox x:Name="TxtRegionStart" Theme="{StaticResource EditorTextBox}"
                                                          ToolTip.Tip="{loc:Str deeper_editor_tt_region_start}"/>
                                                 <Button x:Name="BtnSnapRegionStartPrev" Grid.Column="1"
-                                                        Content="⇤"
                                                         ToolTip.Tip="{loc:Str deeper_editor_tt_region_snap_prev}"
                                                         Width="26" Margin="4,0,0,8" Padding="0" FontSize="13" Cursor="Hand"
                                                         Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                                         Foreground="{DynamicResource DeeperAccentBrush}"
                                                         BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
-                                                        BorderThickness="1"/>
+                                                        BorderThickness="1"
+                                                        AutomationProperties.Name="{loc:Str deeper_editor_tt_region_snap_prev}">
+                                                    <fx:IconGlyph Kind="ArrowPrevious" Size="13"/>
+                                                </Button>
                                             </Grid>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2">
@@ -835,13 +863,15 @@
                                                 <TextBox x:Name="TxtRegionEnd" Theme="{StaticResource EditorTextBox}"
                                                          ToolTip.Tip="{loc:Str deeper_editor_tt_region_end}"/>
                                                 <Button x:Name="BtnSnapRegionEndNext" Grid.Column="1"
-                                                        Content="⇥"
                                                         ToolTip.Tip="{loc:Str deeper_editor_tt_region_snap_next}"
                                                         Width="26" Margin="4,0,0,8" Padding="0" FontSize="13" Cursor="Hand"
                                                         Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                                         Foreground="{DynamicResource DeeperAccentBrush}"
                                                         BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
-                                                        BorderThickness="1"/>
+                                                        BorderThickness="1"
+                                                        AutomationProperties.Name="{loc:Str deeper_editor_tt_region_snap_next}">
+                                                    <fx:IconGlyph Kind="ArrowNext" Size="13"/>
+                                                </Button>
                                             </Grid>
                                         </StackPanel>
                                     </Grid>
@@ -1264,6 +1294,11 @@
                     <TextBlock Text="{loc:Str btn_export_media}" FontWeight="SemiBold"
                                Foreground="{DynamicResource DeeperAccentBrush}"/>
                 </Button>
+                <!-- Fluent icons L6: the clean state is the Core string "✓ All clear." drawn as icon + text. -->
+                <fx:IconLabel x:Name="TxtValidationClean" Key="deeper_editor_validation_clean" IsVisible="False"
+                              TextElement.Foreground="{DynamicResource TextLightBrush}" TextElement.FontSize="12"
+                              VerticalAlignment="Center" Margin="0,0,12,0"
+                              ToolTip.Tip="{loc:Str deeper_editor_tt_validation}"/>
                 <TextBlock x:Name="TxtValidationSummary"
                            Foreground="{DynamicResource TextLightBrush}"
                            FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"
@@ -1287,10 +1322,10 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="deeper:ValidationIssueRow">
                                             <Grid Margin="0,0,0,6" ColumnDefinitions="Auto,*">
-                                                <TextBlock Grid.Column="0"
-                                                           Text="{Binding Glyph}"
+                                                <fx:IconGlyph Grid.Column="0"
+                                                           Kind="{Binding Glyph}" Variant="{Binding Variant}"
                                                            Foreground="{Binding Brush}"
-                                                           FontSize="11" FontWeight="Bold"
+                                                           Size="11"
                                                            VerticalAlignment="Top"
                                                            Margin="0,0,8,0"/>
                                                 <TextBlock Grid.Column="1"
