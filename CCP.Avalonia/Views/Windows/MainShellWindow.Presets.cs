@@ -76,7 +76,7 @@
 //   private void OnSettingsPropertyChangedForWall(…)   RESTORED as HookWallRings
 //   internal void RefreshWallActiveStates(…)           RESTORED
 //   private static void SetTierBadge(…)
-//   internal void CardSystem_Click(…)
+//   internal void CardSystem_Click(…)                 RESTORED in SettingsTabView VelvetBtnSystem_Click (Settings > Monitors)
 //   internal void VelvetBtnWebcam_Click(…)
 //   internal void VelvetBtnAppInfo_Click(…)
 //   internal void VelvetBtnSchedulerRamp_Click(…)
