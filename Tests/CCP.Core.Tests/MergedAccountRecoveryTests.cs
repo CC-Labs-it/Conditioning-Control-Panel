@@ -1,17 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Split-accounts contract D, the pure halves: the wire shape of a merged-account refusal
 /// (409 {"error":"merged","canonical_unified_id":"u_..."}) and the loop guard that decides
-/// whether the desktop swaps to the canonical. The app-facing runner is not exercised here
-/// (it touches settings, timers and the sign-in); these pin what it decides on.
+/// whether the desktop swaps to the canonical. The swap itself is <see cref="MergedSwapRunTests"/>.
 /// </summary>
 public class MergedAccountRecoveryTests
 {
@@ -188,10 +190,115 @@ public class MergedAccountRecoveryTests
     public void LiveHandlerIgnoresAResponseThatIsNotMerged()
     {
         // The static entry point must be a no-op for anything but a merged 409, so wiring it
-        // into every door is free on the common path. (A real merged 409 would touch app
-        // state, which is why the live swap itself is not driven from here.)
+        // into every door is free on the common path.
         Assert.False(MergedAccountRecovery.TryHandle(200, "{\"ok\":true}"));
         Assert.False(MergedAccountRecovery.TryHandle(409, "{\"error\":\"merge_required\"}"));
         Assert.False(MergedAccountRecovery.TryHandle(401, "{\"error\":\"merged\",\"canonical_unified_id\":\"" + Canonical + "\"}"));
+    }
+}
+
+/// <summary>
+/// The swap the live handler runs on a merged 409, through the head seams (WPF seeds them in
+/// MergedAccountRecoveryHead): identity in, tombstone token out, once per canonical. The auth token
+/// lives in CoreSecrets (process-wide), so this runs in that collection with an in-memory store.
+/// </summary>
+[Collection(CoreSecretsStatics.Name)]
+public sealed class MergedSwapRunTests : IDisposable
+{
+    private readonly Func<string, string?>? _oldGet = CoreSecrets.RetrieveProvider;
+    private readonly Action<string, string?>? _oldSet = CoreSecrets.StoreProvider;
+    private readonly Dictionary<string, string?> _secrets = new();
+    private readonly string? _accountId = CoreAccount.UnifiedUserId;
+    private readonly AppSettings _settings = new();
+
+    public MergedSwapRunTests()
+    {
+        CoreSecrets.RetrieveProvider = name => _secrets.TryGetValue(name, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (name, value) => _secrets[name] = value;
+        _settings.UnifiedId = "u_tombstone1";
+        _settings.AuthToken = "tok";
+        ClearSeams();
+        MergedAccountRecovery.SettingsForTest = () => _settings;
+    }
+
+    public void Dispose()
+    {
+        ClearSeams();
+        CoreAccount.UnifiedUserId = _accountId;
+        CoreSecrets.RetrieveProvider = _oldGet;
+        CoreSecrets.StoreProvider = _oldSet;
+    }
+
+    private static void ClearSeams()
+    {
+        MergedAccountRecovery.ResetForTest();
+        MergedAccountRecovery.StopSync = null;
+        MergedAccountRecovery.StampQuests = null;
+        MergedAccountRecovery.Reauthenticate = null;
+        MergedAccountRecovery.ReloadProfile = null;
+        MergedAccountRecovery.Finished = null;
+    }
+
+    [Fact]
+    public async Task AMergedReplyAdoptsTheCanonicalOnceAndReSignsIn()
+    {
+        var steps = new List<string>();
+        MergedAccountRecovery.StopSync = () => steps.Add("stop");
+        MergedAccountRecovery.StampQuests = id => steps.Add("stamp " + id);
+        MergedAccountRecovery.Reauthenticate = () =>
+        {
+            steps.Add("reauth token=" + (_settings.AuthToken ?? "none"));
+            _settings.AuthToken = "canon-token";
+            return Task.FromResult(true);
+        };
+        MergedAccountRecovery.ReloadProfile = () => { steps.Add("reload"); return Task.CompletedTask; };
+        MergedAccountRecovery.Finished = (id, ok) => steps.Add($"finished {id} {ok}");
+        const string body = "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}";
+
+        Assert.True(MergedAccountRecovery.TryHandle(409, body));
+        await MergedAccountRecovery.LastSwap;
+
+        Assert.Equal("u_canon123", _settings.UnifiedId);
+        Assert.Equal("u_canon123", CoreAccount.UnifiedUserId);
+        Assert.Equal("canon-token", _settings.AuthToken);
+        Assert.Equal(new[] { "stop", "stamp u_canon123", "reauth token=none", "reload", "finished u_canon123 True" }, steps);
+
+        // Every other door answers the same 409 after the swap: handled, never swapped twice.
+        Assert.True(MergedAccountRecovery.TryHandle(409, body));
+        await MergedAccountRecovery.LastSwap;
+        Assert.Equal(5, steps.Count);
+    }
+
+    [Fact]
+    public async Task WithNoProviderTheSwapEndsSignedOutAndOffersTheSignIn()
+    {
+        (string Id, bool Reauthed)? finished = null;
+        bool reloaded = false;
+        MergedAccountRecovery.ReloadProfile = () => { reloaded = true; return Task.CompletedTask; };
+        MergedAccountRecovery.Finished = (id, ok) => finished = (id, ok);
+
+        Assert.True(MergedAccountRecovery.TryHandle(409, "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon456\"}"));
+        await MergedAccountRecovery.LastSwap;
+
+        Assert.Equal("u_canon456", _settings.UnifiedId);
+        Assert.Null(_settings.AuthToken);
+        Assert.False(reloaded);
+        Assert.Equal(("u_canon456", false), finished);
+    }
+
+    [Fact]
+    public async Task AThrowingSeamNeverStopsTheIdentitySwap()
+    {
+        MergedAccountRecovery.StopSync = () => throw new InvalidOperationException("timer gone");
+        MergedAccountRecovery.Reauthenticate = () => throw new InvalidOperationException("provider down");
+        bool? reauthed = null;
+        MergedAccountRecovery.Finished = (_, ok) => reauthed = ok;
+
+        Assert.True(MergedAccountRecovery.TryHandle(409, "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon789\"}"));
+        await MergedAccountRecovery.LastSwap;
+
+        Assert.Equal("u_canon789", _settings.UnifiedId);
+        Assert.Null(_settings.AuthToken);
+        Assert.False(reauthed);
     }
 }
