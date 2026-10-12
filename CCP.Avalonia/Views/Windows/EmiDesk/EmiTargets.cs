@@ -60,8 +60,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "remote" => Premium(id, "remote", () => Nav("remotecontrol")),
             "takeover" => Premium(id, "takeover", () => Nav("bambitakeover")),
             "lockdown" => Premium(id, null, () => Nav("lockdown")),
-            // WPF :215: ShowTab("fyp") is intercepted into the feed, whose gate demands premium itself.
-            "fyp" => Premium(id, "fyp", () => Nav("fyp")),
+            // WPF :215 opens the feed directly (Mw.OpenFypFeed), not the panel; the feed's gate demands premium.
+            "fyp" => Premium(id, "fyp", () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.FypId)),
             "vault" => Free(() => Nav("premium")),
             "companion" => Free(() => Nav("companion")),
             "progression" => Free(() => Nav("progression")),

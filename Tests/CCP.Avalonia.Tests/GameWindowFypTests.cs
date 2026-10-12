@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -77,6 +78,7 @@ public sealed class GameWindowFypTests
         Assert.False(GameWindow.IsAnyOpen());
         Assert.Equal(1, denied);
         CoreEntitlement.HasPremiumProvider = () => true;
+        var score = EmiSuggester.ScoreOf("fyp");
         var tab = shell.CurrentTab;
         shell.ShowTab("fyp");
         Dispatcher.UIThread.RunJobs();
@@ -89,6 +91,13 @@ public sealed class GameWindowFypTests
         PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
+        Assert.True(EmiSuggester.ScoreOf("fyp") > score);   // WPF Launch NoteOpen("fyp")
+        // The EMI door opens the feed itself (WPF EmiTargets.cs:215), not the panel.
+        shell.Hide();
+        ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Find("fyp")!.Open();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(GameWindow.IsAnyOpen());
+        Assert.False(shell.IsVisible);
     });
 
     /// <summary>WPF OnPageMessage: init on this window's asset gate, WPF's own ghost/eye refusals, clip XP.</summary>
@@ -119,6 +128,7 @@ public sealed class GameWindowFypTests
         Assert.False(CoreSettings.Current.FypEyeControl);
         Assert.Equal("eyeStatus", (string?)sent.Single()["type"]);
         Assert.False((bool)sent[0]["enabled"]!);
+        Assert.Equal("unsupported", (string?)sent[0]["reason"]);   // the camera exists; this host does not drive it
         w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"muted\",\"value\":true}");
         Assert.True(CoreSettings.Current.FypMuted);
         w.HandleMessage("{\"type\":\"clip-viewed\",\"segId\":\"videos/clip.mp4\"}");

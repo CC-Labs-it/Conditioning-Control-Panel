@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Fyp;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json.Linq;
@@ -19,7 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// The For You feed's host (WPF Services/Fyp/FypHostService.cs): <c>fyp/index.html</c> on the app's origin,
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
-    /// <para>ponytail: not on this head yet - eye control (init says off; a toggle gets eyeStatus "no-camera"),
+    /// <para>ponytail: not on this head yet - eye control (init says off; a toggle gets eyeStatus "unsupported"),
     /// ghost mode (WPF's own unavailable answer), the file-menu, calibrate and EMI's fypOpened/fypClosed.</para>
     /// </summary>
     internal sealed partial class GameWindow
@@ -39,7 +40,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static string FypStatsPath => Path.Combine(CorePaths.UserData, "fyp_stats.json");
 
         /// <summary>WPF OpenFypFeed (MainWindow.Lab.cs:246): premium at the door, refused out loud, free day by key.</summary>
-        private static bool FypGate() => TierGate.DemandPremium(Loc.Get("tab_fyp"), "fyp");
+        private static bool FypGate()
+        {
+            if (!TierGate.DemandPremium(Loc.Get("tab_fyp"), "fyp")) return false;
+            EmiState.NoteUsage(FypId);   // WPF Launch :78 NoteOpen("fyp"): the ring learns from every open
+            return true;
+        }
 
         /// <summary>WPF PostInit (:162): one init payload on page-ready.</summary>
         private void PostFypInit()
@@ -150,9 +156,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Post(new { type = "ghost-unavailable", reason = "unsupported" });
                     break;
                 case FypRules.SettingEffect.EyeControlOn:
-                    // WPF FailEyeControl (:1278): stored off again, and the page told what is true.
+                    // WPF FailEyeControl (:1278): stored off again, and the page told the truth - the camera
+                    // exists (WebcamTracker), this host just does not drive the feed from it yet.
                     s.FypEyeControl = false;
-                    PostFypEyeStatus("no-camera");
+                    PostFypEyeStatus("unsupported");
                     break;
                 case FypRules.SettingEffect.EyeControlOff:
                 case FypRules.SettingEffect.EyeGazeChanged:

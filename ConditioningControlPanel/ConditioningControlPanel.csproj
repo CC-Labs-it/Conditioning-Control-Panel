@@ -570,6 +570,7 @@
       ..\Assets\web\backroom\**\tests\**\*;
       ..\Assets\web\backroom\shared\hypno\tests\**\*;
       ..\Assets\web\backroom\stations\breakout\**\*.test.js;
+      ..\Assets\web\shared\tests\**\*;
       ..\Assets\web\backroom\stations\breakout\**\*.md;
       ..\Assets\web\backroom\stations\breakout\dev.html;
       ..\Assets\web\backroom\stations\breakout\showcase*;
@@ -598,6 +599,7 @@
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\**\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\shared\hypno\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\**\*.test.js;
+      $(MSBuildProjectDirectory)\..\Assets\web\shared\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\dev.html;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\showcase*;

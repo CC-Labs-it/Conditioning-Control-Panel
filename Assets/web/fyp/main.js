@@ -1001,6 +1001,7 @@ function eyeStatusText() {
     case 'consent': return 'Webcam permission declined - eye control is off.';
     case 'no-camera': return 'Webcam unavailable - eye control is off.';
     case 'error': return 'Webcam error - eye control is off.';
+    case 'unsupported': return 'Eye control is not available in this version yet.';
     default: break;
   }
   if (!settings.eyeControl) return null;
