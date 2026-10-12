@@ -44,6 +44,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView">
 
     <!-- Velvet Kit 2 · round 4. Lockdown's hue is burnt orange: the page is a timed cage, not a
@@ -158,7 +159,7 @@
                             </Border>
 
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,252,0">
-                                <TextBlock Text="🔒" FontSize="26" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="26" Foreground="{DynamicResource IconTier1Brush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str tab_lockdown_mode}"/>
                                     <TextBlock Text="{loc:Str label_lock_yourself_into_a_timed_conditioning_sessi}"
@@ -610,8 +611,8 @@
                             <Border.Effect>
                                 <DropShadowEffect Color="#FF1493" BlurRadius="14" OffsetX="0" OffsetY="0" Opacity="0.7"/>
                             </Border.Effect>
-                            <TextBlock Text="🔒" FontSize="64" Opacity="0.55"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="64" Opacity="0.55"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Grid>
                 </StackPanel>
@@ -621,14 +622,15 @@
                         Background="#99000010" BorderBrush="{DynamicResource FxGlowBrush}" BorderThickness="2"
                         CornerRadius="16" IsHitTestVisible="True">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="🔒" FontSize="44" HorizontalAlignment="Center"/>
+                        <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="44" HorizontalAlignment="Center"
+                                      Foreground="{DynamicResource IconTier1Brush}"/>
                         <TextBlock Text="{loc:Str gate_premium_locked}" FontSize="22"
                                    FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
                         <TextBlock Text="{loc:Str gate_premium_subtitle}" FontSize="14"
                                    Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,12"/>
                         <Button Click="BtnGateUnlock_Click" Padding="20,8" Background="{DynamicResource FxGlowBrush}"
                                 Foreground="White" FontWeight="Bold" Cursor="Hand" BorderThickness="0">
-                            <TextBlock Text="{loc:Str gate_unlock_with_patreon}"/>
+                            <fx:IconLabel Key="gate_unlock_with_patreon"/>
                         </Button>
                     </StackPanel>
                 </Border>

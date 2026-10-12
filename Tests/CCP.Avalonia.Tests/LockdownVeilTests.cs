@@ -42,11 +42,20 @@ public sealed class LockdownVeilTests
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
             s.Welcomed = s.HasAcceptedAgeVerification = true;
+            // P52: a passive card arriving mid-test takes the keyboard. The startup ladder holds
+            // intro cards behind its 3 s settle and re-pumps them on a real 1 s DispatcherTimer,
+            // which the headless input helpers run just before a key press: under gate load the
+            // Lockdown intro (queued by the badge click) opened there, took focus from the badge and
+            // swallowed the Enter. These tests are about doors, not intros: spend every card.
+            foreach (var k in FeatureIntros.All.Keys) s.SeenFeatureIntros.Add(k);
+            s.WhatMovedCardShown = 1;
             s.PanicKeyEnabled = true;
             s.PanicKey = "F8";
             s.StrictLockEnabled = false;
             s.LockdownForceStrictLock = s.LockdownDisablePanicKey = true;
             s.MotionLevel = MotionLevel.Full;
+            s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);   // P76: no intro card stealing the badge's Enter
+            s.WhatMovedCardShown = 1;
             var ld = LockdownService.Current = new LockdownService();
             var shell = new MainShellWindow();
             try

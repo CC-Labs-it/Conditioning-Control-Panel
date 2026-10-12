@@ -25,6 +25,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:studio="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Studio"
              xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
@@ -112,8 +113,8 @@
                     BorderThickness="1" BorderBrush="{DynamicResource SectionHueStudioBorderBrush}"
                     ClipToBounds="True">
                 <Panel>
-                    <TextBlock x:Name="TxtStudioDoorGlyph" Text="🎛" FontSize="15"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <fx:IconGlyph x:Name="TxtStudioDoorGlyph" Kind="Options" Size="15"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     <!-- ApplyDoorIcon writes the medallion here and hides the glyph; a null
                          resolve leaves this collapsed and the wash chip standing, which is the
                          WPF null path. -->
@@ -153,8 +154,8 @@
                         Background="{DynamicResource SurfaceBgBrush}" BorderBrush="#2A2A46"
                         BorderThickness="1" CornerRadius="10">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock x:Name="TxtDetailIcon" FontSize="15"
-                                   VerticalAlignment="Center" Margin="0,0,9,0"/>
+                        <fx:IconGlyph x:Name="TxtDetailIcon" Size="15"
+                                      VerticalAlignment="Center" Margin="0,0,9,0"/>
                         <TextBlock x:Name="TxtDetailTitle" Foreground="White" FontSize="14"
                                    FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </StackPanel>

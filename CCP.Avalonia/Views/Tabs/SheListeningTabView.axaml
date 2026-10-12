@@ -5,8 +5,8 @@
        Style="{StaticResource X}"        -> Theme="{StaticResource X}"
        ToolTip="..."                     -> ToolTip.Tip="..."
        Visibility="Collapsed"            -> IsVisible="False"
-       helpers:EmojiTextBlock            -> TextBlock (Avalonia renders colour emoji natively)
-       Image + EmojiToImageSource        -> TextBlock with the emoji (CLAUDE.md trap 3)
+       helpers:EmojiTextBlock            -> fx:IconGlyph / fx:IconLabel (Fluent icons, decision 2026-10-10)
+       Image + EmojiToImageSource        -> fx:IconGlyph (CLAUDE.md trap 3)
        Content="..." on a Button         -> a TextBlock child (Avalonia parses "_" as an access key)
        ImageBrush + BitmapImage pack://  -> the two Borders are NAMED (SheListeningHeroArt,
                                             SheListeningSideArt) and painted in code-behind through
@@ -33,9 +33,32 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.SheListeningTabView"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
+
+    <UserControl.Styles>
+        <!-- "What you can say" row heads (fluent-icons 2026-10-10): one icon per row, text colour;
+             Filled where the design ref says so (shield, sparkle, pause; hearts also pink). -->
+        <Style Selector="fx|IconLabel.vhead">
+            <Setter Property="TextElement.Foreground" Value="{StaticResource TextLightBrush}"/>
+            <Setter Property="TextElement.FontSize" Value="13"/>
+            <Setter Property="TextElement.FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style Selector="fx|IconLabel.filled > fx|IconGlyph">
+            <Setter Property="Variant" Value="Filled"/>
+        </Style>
+        <Style Selector="fx|IconLabel.heart > fx|IconGlyph">
+            <Setter Property="Variant" Value="Filled"/>
+            <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+        </Style>
+        <!-- No Fluent spiral: the in-house extension glyph (IconMap 🌀). -->
+        <Style Selector="fx|IconLabel.spiral > fx|IconGlyph">
+            <Setter Property="Brand" Value="Spiral"/>
+        </Style>
+    </UserControl.Styles>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <!-- Root Grid, not a StackPanel: the premium gate is the LAST sibling here so the bar
@@ -132,8 +155,8 @@
                                     <Grid Grid.Column="0" Width="64" Height="64" VerticalAlignment="Center">
                                         <Ellipse x:Name="SL_StatusDot" Width="64" Height="64" Fill="#3A3A52"
                                                  Stroke="{StaticResource SectionHueStudioBorderBrush}" StrokeThickness="2"/>
-                                        <TextBlock Text="🎤" FontSize="24"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Mic" Size="24" Foreground="{StaticResource TextLightBrush}"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Grid>
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                         <TextBlock x:Name="SL_StatusTitle" Text="Checking microphone…"
@@ -192,7 +215,7 @@
 
                                             <Grid Margin="0,2">
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="🎚" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,5,0"/>
+                                                    <fx:IconGlyph Kind="Options" Size="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{loc:Str set2_devices_mic_input}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                                 </StackPanel>
                                                 <TextBlock x:Name="TxtSL_MicDeviceChip"
@@ -202,7 +225,7 @@
                                             </Grid>
                                             <Grid Margin="0,2">
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="👂" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,5,0"/>
+                                                    <fx:IconGlyph Kind="HeadphonesSoundWave" Size="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{loc:Str rf_sl_chip_wake_word}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                                 </StackPanel>
                                                 <TextBlock x:Name="TxtSL_WakeWordChip"
@@ -212,7 +235,7 @@
                                             </Grid>
                                             <Grid Margin="0,2">
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="🎙" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,5,0"/>
+                                                    <fx:IconGlyph Kind="Mic" Size="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{loc:Str rf_sl_chip_ptt}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                                 </StackPanel>
                                                 <TextBlock x:Name="TxtSL_PttChip"
@@ -221,7 +244,7 @@
                                             </Grid>
                                             <Grid Margin="0,2">
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="🎧" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,5,0"/>
+                                                    <fx:IconGlyph Kind="Headphones" Size="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{loc:Str rf_sl_chip_headphones}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                                 </StackPanel>
                                                 <TextBlock x:Name="TxtSL_HeadphonesChip"
@@ -242,8 +265,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="🔉 Mic sensitivity" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <fx:IconLabel Grid.Column="0" Kind="Speaker1" Text="Mic sensitivity" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                     TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                         <Slider x:Name="SldSL_MicSensitivity" Grid.Column="1" VerticalAlignment="Center"
                                                 Theme="{StaticResource PinkSlider}" Margin="14,0"
                                                 Minimum="0" Maximum="100" SmallChange="5" LargeChange="20" TickFrequency="10"/>
@@ -263,8 +286,8 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
-                                            <TextBlock Text="🎤 Spoken mantras" FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextLightBrush}"/>
+                                            <fx:IconLabel Kind="Mic" Text="Spoken mantras" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                         TextElement.Foreground="{StaticResource TextLightBrush}"/>
                                             <TextBlock x:Name="SL_MantrasHint"
                                                        Text="She asks you to repeat a phrase; the mic opens only when she prompts you."
                                                        FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap"/>
@@ -285,8 +308,8 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="✨ Reliable wake" FontSize="13" FontWeight="SemiBold"
-                                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                <fx:IconLabel Classes="filled" Kind="Sparkle" Text="Reliable wake" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                             TextElement.Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="open-source, offline, no key" FontSize="9"
                                                            Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                             </StackPanel>
@@ -300,7 +323,7 @@
                                                 BorderBrush="{StaticResource SectionHueStudioBorderBrush}"
                                                 Foreground="{StaticResource SectionHueStudioBrush}"
                                                 ToolTip.Tip="Tune the wake word to your own voice and mic — say 'Hey Bambi' a few times and it finds the right sensitivity. Re-run any time (new mic, noisy room).">
-                                            <TextBlock Text="🎚 Calibrate"/>
+                                            <fx:IconLabel Kind="Options" Text="Calibrate"/>
                                         </Button>
                                     </Grid>
                                 </StackPanel>
@@ -333,7 +356,7 @@
                                                 BorderBrush="{StaticResource SectionHueStudioBorderBrush}" Foreground="#90EE90"
                                                 FontWeight="Bold" FontSize="12" Padding="14,7" VerticalAlignment="Center"
                                                 ToolTip.Tip="Fire a spoken mantra now.">
-                                            <TextBlock Text="🎤 Test mantra"/>
+                                            <fx:IconLabel Kind="Mic" Text="Test mantra"/>
                                         </Button>
                                     </Grid>
 
@@ -378,7 +401,7 @@
                                         Background="{StaticResource SectionHueStudioBrush}"/>
                                 <StackPanel Margin="16,10,16,12">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                        <TextBlock Text="💡" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <fx:IconGlyph Kind="Lightbulb" Size="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                         <TextBlock Text="How it works" Foreground="{StaticResource SectionHueStudioBrush}"
                                                    FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
                                     </StackPanel>
@@ -401,8 +424,12 @@
                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,8,0,10"/>
 
                                     <Border Background="#22FF69B4" CornerRadius="6" Padding="10,8">
-                                        <TextBlock Foreground="{DynamicResource PinkBrush}" FontSize="12" TextWrapping="Wrap" LineHeight="17"
-                                                   Text="🛟 Safety word: say &quot;red&quot; (or &quot;stop everything&quot;) any time to stop all effects."/>
+                                        <DockPanel>
+                                            <fx:IconGlyph DockPanel.Dock="Left" Kind="Shield" Variant="Filled" Size="12" Foreground="{DynamicResource PinkBrush}"
+                                                          VerticalAlignment="Top" Margin="0,2,6,0"/>
+                                            <TextBlock Foreground="{DynamicResource PinkBrush}" FontSize="12" TextWrapping="Wrap" LineHeight="17"
+                                                       Text="Safety word: say &quot;red&quot; (or &quot;stop everything&quot;) any time to stop all effects."/>
+                                        </DockPanel>
                                     </Border>
 
                                     <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" LineHeight="16" FontStyle="Italic"
@@ -450,7 +477,7 @@
                             <Border Background="#22FF69B4" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
                                     CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
                                 <StackPanel>
-                                    <TextBlock Text="🛟  Safety word — stops every effect, instantly" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Shield" Text="Safety word — stops every effect, instantly"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="20"
                                                Text="“red”  ·  “stop everything”  ·  “make it stop”  ·  “all stop”"/>
                                 </StackPanel>
@@ -466,26 +493,26 @@
                                 <!-- Left column -->
                                 <StackPanel Grid.Column="0">
 
-                                    <TextBlock Text="🫧  Bubbles" Tag="voice:bubbles_on|bubbles_off" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="BubbleMultiple" Text="Bubbles" Tag="voice:bubbles_on|bubbles_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“show me some bubbles” · “bubbles on” · “give me bubbles”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“stop the bubbles” · “no more bubbles” · “bubbles off”"/></TextBlock>
 
-                                    <TextBlock Text="📺  Video" Tag="voice:video_on|video_off|video_pause" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Tv" Text="Video" Tag="voice:video_on|video_off|video_pause"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="play "/><Run Text="“show me a video” · “play a video” · “put on a video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="stop "/><Run Text="“stop the video” · “no more videos” · “video off”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="pause "/><Run Text="“pause the video” · “resume the video” · “keep playing”"/></TextBlock>
 
-                                    <TextBlock Text="✨  Flash" Tag="voice:flash_once" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Sparkle" Text="Flash" Tag="voice:flash_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“flash me” · “one flash” · “give me a flash”"/>
 
-                                    <TextBlock Text="🌀  Spiral" Tag="voice:spiral_on|spiral_off" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead spiral" Kind="Circle" Text="Spiral" Tag="voice:spiral_on|spiral_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“show me the spiral” · “spiral on” · “bring up the spiral”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“stop the spiral” · “hide the spiral” · “spiral off”"/></TextBlock>
 
-                                    <TextBlock Text="🩷  Pink filter" Tag="voice:pink_on|pink_off" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead heart" Kind="Heart" Text="Pink filter" Tag="voice:pink_on|pink_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“make it pink” · “go pink” · “pink filter on”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“make it normal” · “stop the pink filter” · “pink filter off”"/></TextBlock>
 
-                                    <TextBlock Text="💬  Subliminals" Tag="voice:subliminals_on|subliminals_off" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Chat" Text="Subliminals" Tag="voice:subliminals_on|subliminals_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“show me subliminals” · “subliminals on” · “start the subliminals”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“stop the subliminals” · “no more subliminals” · “subliminals off”"/></TextBlock>
 
-                                    <TextBlock Text="🔤  Bouncing text" Tag="voice:bouncing_on|bouncing_off" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="TextFont" Text="Bouncing text" Tag="voice:bouncing_on|bouncing_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“show me bouncing text” · “bouncing text on” · “start the bouncing text”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“stop the bouncing text” · “no more bouncing text” · “bouncing text off”"/></TextBlock>
 
                                 </StackPanel>
@@ -493,29 +520,29 @@
                                 <!-- Right column -->
                                 <StackPanel Grid.Column="2">
 
-                                    <TextBlock Text="🧠  Mind wipe" Tag="voice:wipe_once" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="BrainCircuit" Text="Mind wipe" Tag="voice:wipe_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“wipe my mind” · “empty my head” · “blank my mind”"/>
 
-                                    <TextBlock Text="🔒  Lock card" Tag="voice:lock_once" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="LockClosed" Text="Lock card" Tag="voice:lock_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“lock me” · “give me a lock card” · “lock me up”"/>
 
-                                    <TextBlock Text="📝  Pop quiz" Tag="voice:quiz_once" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="NoteEdit" Text="Pop quiz" Tag="voice:quiz_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“quiz me” · “test me” · “ask me a question”"/>
 
-                                    <TextBlock Text="⚡  Keyword triggers" Tag="voice:keyword_on|keyword_off" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Flash" Text="Keyword triggers" Tag="voice:keyword_on|keyword_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“trigger words on” · “keyword triggers on” · “start the keyword triggers”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“trigger words off” · “stop the keyword triggers”"/></TextBlock>
 
-                                    <TextBlock Text="🎯  Quick toys" Tag="voice:freeze_once|shake_once|count_once" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Target" Text="Quick toys" Tag="voice:freeze_once|shake_once|count_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="freeze "/><Run Text="“freeze” · “freeze me” · “hold still”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="shake "/><Run Text="“shake the screen” · “shake it” · “make it shake”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="count "/><Run Text="“count for me” · “counting game” · “make me count”"/></TextBlock>
 
-                                    <TextBlock Text="🌊  Go deeper" Tag="voice:deeper" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Water" Text="Go deeper" Tag="voice:deeper"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“deeper” · “take me deeper” · “drop me down”"/>
 
-                                    <TextBlock Text="🎀  Takeover" Tag="voice:takeover_on|takeover_off" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Bot" Text="Takeover" Tag="voice:takeover_on|takeover_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“take over” · “take control” · “you’re in charge”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“give me control back” · “stop the takeover” · “release control”"/></TextBlock>
 
                                 </StackPanel>
@@ -532,29 +559,29 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="⏸  Session" Tag="voice:pause" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Pause" Text="Session" Tag="voice:pause"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“pause” · “resume” · “keep going”"/>
 
-                                    <TextBlock Text="🔊  Volume" Tag="voice:louder" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Speaker2" Text="Volume" Tag="voice:louder"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“louder” · “quieter” · “mute”"/>
 
-                                    <TextBlock Text="💗  Mantra" Tag="voice:mantra" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead heart" Kind="Heart" Text="Mantra" Tag="voice:mantra"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21"
                                                Text="“give me a mantra” · “say a mantra” · “give me something to say”"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2">
-                                    <TextBlock Text="🔁  Again" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="ArrowRepeatAll" Text="Again"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“again” · “one more” · “harder”  (repeats the last thing)"/>
 
-                                    <TextBlock Text="❓  Help" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="QuestionCircle" Text="Help"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
                                                Text="“what can I say” · “what can you do” · “commands”"/>
 
-                                    <TextBlock Text="🎤  Stop the mic" Tag="voice:stop_listening" Foreground="{StaticResource TextLightBrush}" FontSize="13" FontWeight="Bold" Margin="0,0,0,3"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Mic" Text="Stop the mic" Tag="voice:stop_listening"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21"
                                                Text="“stop listening” · “mic off” · “you can stop listening”"/>
                                 </StackPanel>
@@ -575,20 +602,21 @@
                  the hero, both columns and the cheat-sheet. Its content is pinned near the top: the
                  page is several screens tall, and a padlock centred in THAT is a padlock nobody
                  sees. RefreshPremiumGate flips it; PremiumGateFx re-parents Child, finds the first
-                 padlock and the first ButtonBase - keep both, keep one Child. (The padlock is a
-                 TextBlock here, not an Image: see the emoji note in the header.) -->
+                 padlock and the first ButtonBase - keep both, keep one Child. (The padlock is an
+                 fx:IconGlyph LockClosed, which PremiumGateFx.IsPadlock accepts.) -->
             <Border x:Name="SheListeningGate" IsVisible="False"
                     Background="#99000010" BorderBrush="{DynamicResource FxGlowBrush}" BorderThickness="2"
                     CornerRadius="16" IsHitTestVisible="True">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,120,0,0">
-                    <TextBlock Text="🔒" FontSize="44" HorizontalAlignment="Center"/>
+                    <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="44" Foreground="{DynamicResource IconTier1Brush}"
+                                  HorizontalAlignment="Center" AutomationProperties.Name="Premium feature"/>
                     <TextBlock Text="Premium feature" FontSize="22"
                                FontWeight="Bold" Foreground="{StaticResource TextLightBrush}" HorizontalAlignment="Center"/>
                     <TextBlock Text="Support to unlock voice control." FontSize="14"
                                Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,12"/>
                     <Button x:Name="BtnSL_GateUnlock" Padding="20,8" Background="{DynamicResource FxGlowBrush}"
                             Foreground="White" FontWeight="Bold" Cursor="Hand" BorderThickness="0">
-                        <TextBlock Text="🔓 Unlock with Patreon"/>
+                        <fx:IconLabel Kind="LockOpen" Text="Unlock with Patreon"/>
                     </Button>
                 </StackPanel>
             </Border>

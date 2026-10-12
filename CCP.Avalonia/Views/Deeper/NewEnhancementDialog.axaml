@@ -13,6 +13,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Deeper.NewEnhancementDialog"
         Title="{loc:Str deeper_dialog_new_title}"
         Height="410" Width="540"
@@ -47,12 +48,16 @@
                        Margin="0,0,0,6"/>
 
             <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,16">
-                <RadioButton x:Name="RbVideo" Content="🎬  Video" IsChecked="True" GroupName="MediaType"
+                <RadioButton x:Name="RbVideo" IsChecked="True" GroupName="MediaType"
                              Foreground="{DynamicResource TextLightBrush}" FontSize="13"
-                             Padding="8,6" Margin="0,0,16,0"/>
-                <RadioButton x:Name="RbAudio" Content="🎵  Audio" GroupName="MediaType"
+                             Padding="8,6" Margin="0,0,16,0">
+                    <fx:IconLabel Kind="Video" Text="Video"/>
+                </RadioButton>
+                <RadioButton x:Name="RbAudio" GroupName="MediaType"
                              Foreground="{DynamicResource TextLightBrush}" FontSize="13"
-                             Padding="8,6"/>
+                             Padding="8,6">
+                    <fx:IconLabel Kind="MusicNote2" Text="Audio"/>
+                </RadioButton>
             </StackPanel>
 
             <TextBlock Grid.Row="4" Text="{loc:Str deeper_dialog_source_label}"
@@ -100,7 +105,7 @@
                             Foreground="{DynamicResource DeeperAccentSoftBrush}"
                             BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
                             BorderThickness="1">
-                        <TextBlock Text="{loc:Str deeper_tutorial_local_video_btn}"/>
+                        <fx:IconLabel Key="deeper_tutorial_local_video_btn"/>
                     </Button>
                     <Button x:Name="BtnLocalAudioTutorial"
                             ToolTip.Tip="{loc:Str deeper_tutorial_local_audio_tooltip}"
@@ -109,7 +114,7 @@
                             Foreground="{DynamicResource DeeperAccentSoftBrush}"
                             BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
                             BorderThickness="1">
-                        <TextBlock Text="{loc:Str deeper_tutorial_local_audio_btn}"/>
+                        <fx:IconLabel Key="deeper_tutorial_local_audio_btn"/>
                     </Button>
                     <Button x:Name="BtnTryHypnoTubeTutorial"
                             ToolTip.Tip="{loc:Str deeper_tutorial_ht_tooltip}"
@@ -118,7 +123,7 @@
                             Foreground="{DynamicResource DeeperAccentSoftBrush}"
                             BorderBrush="{DynamicResource DeeperAccentBrush}"
                             BorderThickness="1">
-                        <TextBlock Text="{loc:Str deeper_tutorial_ht_btn}"/>
+                        <fx:IconLabel Key="deeper_tutorial_ht_btn"/>
                     </Button>
                 </StackPanel>
             </StackPanel>

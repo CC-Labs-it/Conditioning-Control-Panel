@@ -3,6 +3,7 @@ using System.IO;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
@@ -55,8 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<TextBlock>("TxtFlavor")!.Text = flavorText;
 
             // Custom header text/icon if provided. The WPF original ran headerIcon through
-            // EmojiImage/Twemoji; Avalonia draws the codepoint directly (CLAUDE.md trap 3).
-            if (headerIcon != null) this.FindControl<TextBlock>("TxtHeaderIcon")!.Text = headerIcon;
+            // EmojiImage/Twemoji; here it maps through IconMap (fluent icons, CLAUDE.md trap 3).
+            if (headerIcon != null) this.FindControl<IconGlyph>("TxtHeaderIcon")!.Emoji = headerIcon;
             if (headerText != null) this.FindControl<TextBlock>("TxtHeaderText")!.Text = headerText;
 
             LoadAchievementImage(imageName);

@@ -18,6 +18,8 @@
      Content as an access key. See the porting notes in CLAUDE.md. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.QuestCompletePopup"
         Title="Quest Complete!"
         Width="350" Height="130"
@@ -60,8 +62,8 @@
 
             <!-- Checkmark Icon -->
             <Border Grid.Column="0" Width="60" Height="60" Background="#2D4A2D" CornerRadius="30" Margin="0,0,15,0">
-                <TextBlock Text="✓" Foreground="#00E676" FontSize="32" FontWeight="Bold"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <fx:IconGlyph Kind="Checkmark" Foreground="#00E676" Size="32"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
 
             <!-- Text Content -->
@@ -81,8 +83,9 @@
                     Width="24" Height="24" Margin="0,-5,-5,0" Padding="0"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"
-                    BorderThickness="0" Cursor="Hand">
-                <TextBlock Text="✕"/>
+                    BorderThickness="0" Cursor="Hand"
+                    AutomationProperties.Name="{loc:Str btn_close}">
+                <fx:IconGlyph Kind="Dismiss" Size="12"/>
             </Button>
         </Grid>
     </Border>

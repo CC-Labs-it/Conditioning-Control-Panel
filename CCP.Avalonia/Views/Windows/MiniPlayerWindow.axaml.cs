@@ -13,6 +13,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -57,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly TextBlock _txtFileName, _txtTime;
         private readonly Button _btnPlayPause;
+        private readonly IconGlyph _icoPlayPause;
         private readonly Slider _seekSlider;
         private readonly Border _videoContainer;
         private readonly Image _imagePreview, _videoImage;
@@ -96,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtFileName = this.FindControl<TextBlock>("TxtFileName")!;
             _txtTime = this.FindControl<TextBlock>("TxtTime")!;
             _btnPlayPause = this.FindControl<Button>("BtnPlayPause")!;
+            _icoPlayPause = this.FindControl<IconGlyph>("IcoPlayPause")!;
             _seekSlider = this.FindControl<Slider>("SeekSlider")!;
             _videoContainer = this.FindControl<Border>("VideoContainer")!;
             _imagePreview = this.FindControl<Image>("ImagePreview")!;
@@ -183,14 +186,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _mediaPlayer.Playing += (s, e) => Dispatcher.UIThread.Post(() =>
                 {
                     _isPlaying = true;
-                    _btnPlayPause.Content = "⏸";
+                    _icoPlayPause.Kind = IconKind.Pause;
                     _loadingOverlay.IsVisible = false;
                 });
 
                 _mediaPlayer.Paused += (s, e) => Dispatcher.UIThread.Post(() =>
                 {
                     _isPlaying = false;
-                    _btnPlayPause.Content = "▶";
+                    _icoPlayPause.Kind = IconKind.Play;
                 });
 
                 _mediaPlayer.EndReached += (s, e) =>
