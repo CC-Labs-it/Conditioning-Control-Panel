@@ -1912,3 +1912,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/sandbox-full-access: +158
 - Debug+sandbox runs with CCP_SANDBOX_WHITELIST=1 (set by kc start) get whitelist/premium/Lab; Release compiles it out.
 - Tier card shows "Whitelisted (sandbox)"; tests + Release-IL check + live evidence in evidence/sandbox-full-access.
+
+## avalonia-port/mine-safety: +592
+- P0 safety: panic silences the tube (`tube-speech`), the 6-blink stop gesture behind BlinkStopGate (moved to Core), and the camera pill now stops the camera.
+- The explicit-content acknowledgement uses ShowDialogSafe, so a hidden tube no longer throws. Gate OK, no live check.
