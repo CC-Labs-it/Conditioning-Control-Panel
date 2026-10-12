@@ -49,7 +49,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Where <c>/v2/pbp/*</c> lives on this head: the proxy, or null in a sandbox with no loopback
         /// (FriendsHead.BaseUrl), which answers every call status 0.</summary>
         internal static Func<string?> PbpServerBase { get; set; } = () =>
-            FriendsHead.BaseUrl(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"), null);
+            FriendsHead.BaseUrl(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                Environment.GetEnvironmentVariable(FriendsHead.EnvVar));
 
         private static readonly Random PbpRng = new();
 
@@ -60,6 +61,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private DateTime _pbpLastBeatUtc = DateTime.UtcNow;
         private DateTime _pbpLastProgressUtc = DateTime.UtcNow;
         private DispatcherTimer? _pbpWatch;
+        private Lazy<(string Rel, string Url, bool IsImage)[]>? _pbpLibrary;   // walked once per window, off the UI thread
+
+        /// <summary>Test seam: the last off-thread media / net reply; done once its frame is queued on the UI thread.</summary>
+        internal System.Threading.Tasks.Task PbpPending { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
 
         /// <summary>The page's LAST boot attempt failed (WPF BootFailedThisSession), cleared by a boot that reaches ready.</summary>
         internal static bool PbpBootFailedThisSession { get; private set; }
@@ -161,17 +166,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnMediaRequest (:447): the player's own library, local disk only, any list may be empty.</summary>
         private void OnPbpMediaRequest(JObject o)
         {
-            var media = PbpHostRules.SampleMedia(PbpLibrary(), PbpHostRules.ReadKinds(o["kinds"]), PbpHostRules.ReadCount(o), PbpRng);
-            Post(PbpHostRules.MediaFrame(media));
-            Log.Debug("PieceByPiece: media reply {I} images, {G} gifs, {V} videos", media.Images.Length, media.Gifs.Length, media.Videos.Length);
+            var kinds = PbpHostRules.ReadKinds(o["kinds"]);
+            var count = PbpHostRules.ReadCount(o);
+            if (_pbpLibrary == null)
+            {
+                var (server, assets, disabled) = (_server, CorePaths.EffectiveAssets, CoreSettings.Current.DisabledAssetPaths?.ToArray());
+                _pbpLibrary = new(() => PbpLibrary(server, assets, disabled).ToArray());
+            }
+            var library = _pbpLibrary;
+            PbpPending = Task.Run(() =>
+            {
+                (string[] Images, string[] Gifs, string[] Videos) media;
+                try { lock (PbpRng) media = PbpHostRules.SampleMedia(library.Value, kinds, count, PbpRng); }
+                catch (Exception ex) { Log.Debug("PieceByPiece: media walk failed: {E}", ex.Message); media = (Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()); }
+                Dispatcher.UIThread.Post(() => { if (!_closing) Post(PbpHostRules.MediaFrame(media)); });
+                Log.Debug("PieceByPiece: media reply {I} images, {G} gifs, {V} videos", media.Images.Length, media.Gifs.Length, media.Videos.Length);
+            });
         }
 
         /// <summary>The active pool (WPF DtrhAssetManifest.EnumerateActive; here GameMediaManifest, the port's one authority on it).</summary>
-        private IEnumerable<(string Rel, string Url, bool IsImage)> PbpLibrary()
+        private static IEnumerable<(string Rel, string Url, bool IsImage)> PbpLibrary(WebAssetServer? server, string assets,
+            IEnumerable<string>? disabled)
         {
-            if (_server == null) return Array.Empty<(string, string, bool)>();
+            if (server == null) return Array.Empty<(string, string, bool)>();
             // Videos too: WPF EnumerateActive walks both trees (BuildLocal is the picture-only Breakout deal).
-            var m = GameMediaManifest.Build(CorePaths.EffectiveAssets, _server.AssetUrl, CoreSettings.Current.DisabledAssetPaths);
+            var m = GameMediaManifest.Build(assets, server.AssetUrl, disabled);
             return m.Images.Select(e => (e.Name, e.Url, true)).Concat(m.Videos.Select(e => (e.Name, e.Url, false)));
         }
 
@@ -188,7 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var token = PbpAuthToken();
             var baseUrl = PbpServerBase();
             var http = PbpHttpClient();
-            _ = Task.Run(async () =>
+            PbpPending = Task.Run(async () =>
             {
                 var (status, body) = await PbpHostRules.SendAsync(http, baseUrl, call, token, CoreReleaseContent.AppVersion).ConfigureAwait(false);
                 Dispatcher.UIThread.Post(() => { if (!_closing) Post(PbpHostRules.NetResult(call.Id, status, body)); });

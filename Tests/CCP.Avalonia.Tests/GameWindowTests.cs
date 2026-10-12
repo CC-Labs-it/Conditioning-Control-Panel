@@ -212,10 +212,14 @@ public sealed class GameWindowTests
         var lib = Directory.CreateTempSubdirectory("pbp-lib-").FullName;
         var (oldAssets, oldHttp, oldBase) = (CorePaths.EffectiveAssetsProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var oldSecret = CoreSecrets.RetrieveProvider;
+        var oldLoopback = Environment.GetEnvironmentVariable(FriendsHead.EnvVar);
         var fake = new FakeHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
+            // The sandboxed head honours the loopback override like App's FriendsHead.Create (WPF has no sandbox).
+            Environment.SetEnvironmentVariable(FriendsHead.EnvVar, "http://127.0.0.1:9");
+            Assert.Equal("http://127.0.0.1:9", oldBase());
             Directory.CreateDirectory(Path.Combine(lib, "images"));
             Directory.CreateDirectory(Path.Combine(lib, "videos"));
             File.WriteAllBytes(Path.Combine(lib, "images", "spin.gif"), new byte[] { 1 });
@@ -251,18 +255,26 @@ public sealed class GameWindowTests
             Assert.Equal("tok", (string?)sent[1]["net"]!["authToken"]);
 
             w.Web.OnWebMessage("{\"type\":\"pbp:media-request\",\"kinds\":[\"gif\",\"video\"],\"count\":8}");
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(10)));   // off the UI thread; the frame is queued when it ends
+            Dispatcher.UIThread.RunJobs();
             var media = sent.Last();
             Assert.Equal("pbp:media", (string?)media["type"]);
             Assert.Empty(media["images"]!);
             Assert.EndsWith("/ccp.assets/images/spin.gif", (string?)media["gifs"]!.Single());
             Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)media["videos"]!.Single());
+            // Walked once per window, like the Breakout deal: a file added mid-game is not re-scanned.
+            File.WriteAllBytes(Path.Combine(lib, "images", "late.gif"), new byte[] { 1 });
+            w.Web.OnWebMessage("{\"type\":\"pbp:media-request\",\"kinds\":[\"gif\"],\"count\":8}");
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.EndsWith("/ccp.assets/images/spin.gif", (string?)sent.Last()["gifs"]!.Single());
 
             w.Web.OnWebMessage("{\"type\":\"pbp:net\",\"id\":\"n1\",\"method\":\"GET\",\"path\":\"/v2/stakes/x\"}");
             Assert.Equal("forbidden_path", (string?)sent.Last()["body"]);
             Assert.Null(fake.Seen);
             w.Web.OnWebMessage("{\"type\":\"pbp:net\",\"id\":\"n2\",\"method\":\"POST\",\"path\":\"/v2/pbp/lobby\",\"body\":{\"a\":1}}");
-            var until = DateTime.UtcNow.AddSeconds(10);
-            while (!sent.Any(o => (string?)o["id"] == "n2") && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(10)));   // the net reply's own completion signal (P57)
+            Dispatcher.UIThread.RunJobs();
             var result = sent.Single(o => (string?)o["id"] == "n2");
             Assert.Equal(200, (int)result["status"]!);
             Assert.Equal("http://pbp.test/v2/pbp/lobby", fake.Seen!.RequestUri!.ToString());
@@ -290,6 +302,7 @@ public sealed class GameWindowTests
         {
             (CorePaths.EffectiveAssetsProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldAssets, oldHttp, oldBase);
             CoreSecrets.RetrieveProvider = oldSecret;
+            Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
         }
     });
