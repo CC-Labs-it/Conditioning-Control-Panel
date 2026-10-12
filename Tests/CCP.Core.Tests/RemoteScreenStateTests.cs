@@ -3,7 +3,7 @@ using ConditioningControlPanel.Services.Remote;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Remote Control v2 live preview: the <c>screen</c> object's shape (brief section 4), its

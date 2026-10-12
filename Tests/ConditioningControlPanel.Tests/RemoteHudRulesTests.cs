@@ -91,4 +91,13 @@ public class RemoteHudRulesTests
         Assert.True(RemoteHudRules.LocalPanicAllowed(panicKeyEnabled: true));
         Assert.False(RemoteHudRules.LocalPanicAllowed(panicKeyEnabled: false));
     }
+
+    [Fact]
+    public void Signals_post_kind_signal_and_stop_takes_the_panic_path()
+    {
+        var src = SourceRoots.ReadProductFile("Services", "Remote", "RemoteControlService.V2.cs");
+        Assert.Contains("kind = \"signal\"", src);
+        Assert.Contains("StopAllRemoteEffects(force: true)", src);
+        Assert.Contains("\"more\", \"easy\", \"stop\"", src);
+    }
 }

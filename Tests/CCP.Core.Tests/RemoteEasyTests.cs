@@ -1,11 +1,9 @@
-using System;
-using System.IO;
 using ConditioningControlPanel.Services.Remote;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
-/// <summary>Remote Control v2: the subject's Easy button and the More / Easy / Stop signal.</summary>
+/// <summary>Remote Control v2: the subject's Easy button and the HUD's "Last: ..." labels.</summary>
 public class RemoteEasyTests
 {
     [Fact]
@@ -51,15 +49,11 @@ public class RemoteEasyTests
     }
 
     [Fact]
-    public void Signals_post_kind_signal_and_stop_takes_the_panic_path()
+    public void Labels_name_the_new_commands_and_never_return_nothing()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        var src = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Remote", "RemoteControlService.V2.cs"));
-        Assert.Contains("kind = \"signal\"", src);
-        Assert.Contains("StopAllRemoteEffects(force: true)", src);
-        Assert.Contains("\"more\", \"easy\", \"stop\"", src);
+        Assert.Equal("Toy pattern", RemoteActionLabels.For("haptic_pattern"));
+        Assert.Equal("Melt", RemoteActionLabels.For("start_brain_drain"));
+        Assert.Equal("some thing", RemoteActionLabels.For("some_thing"));
+        Assert.Equal("", RemoteActionLabels.For(null));
     }
 }
