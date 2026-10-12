@@ -12,6 +12,7 @@
      The button carries a TextBlock child rather than Content (CLAUDE.md trap 1). -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.WelcomeDialog"
         Title="{loc:Str dialog_welcome}"
@@ -40,7 +41,7 @@
             <!-- Title Bar with Pink Background -->
             <Border Grid.Row="0" Background="{DynamicResource PinkBrush}" CornerRadius="8" Margin="-10,-10,-10,20" Padding="20,15">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBlock Text="💖" FontSize="24" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <fx:IconGlyph Kind="Heart" Variant="Filled" Size="24" Foreground="White" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     <TextBlock Text="{loc:Str app_title}" Foreground="White" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
@@ -62,9 +63,7 @@
 
                 <Border Background="{DynamicResource PanelBgBrush}" CornerRadius="8" Padding="15" Margin="0,20,0,0">
                     <StackPanel>
-                        <TextBlock Foreground="#FFB347" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center">
-                            <Run Text="{loc:Str label_tips}"/>
-                        </TextBlock>
+                        <fx:IconLabel Key="label_tips" TextElement.Foreground="#FFB347" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" HorizontalAlignment="Center"/>
                         <TextBlock Foreground="{DynamicResource PinkBrush}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0" FontWeight="SemiBold">
                             <Run Text="{loc:Str label_click_the}"/>
                             <Run Text=" ? " FontWeight="Bold" Foreground="White" Background="{DynamicResource PinkBrush}"/>
@@ -84,9 +83,7 @@
 
                 <Border Background="{DynamicResource PanelBgBrush}" CornerRadius="8" Padding="15" Margin="0,20,0,0">
                     <StackPanel>
-                        <TextBlock Foreground="#FFB347" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center">
-                            <Run Text="{loc:Str label_performance_warning}"/>
-                        </TextBlock>
+                        <fx:IconLabel Key="label_performance_warning" TextElement.Foreground="#FFB347" TextElement.FontSize="13" TextElement.FontWeight="SemiBold" HorizontalAlignment="Center"/>
                         <TextBlock Foreground="#FFB347" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0">
                             <Run Text="{loc:Str label_running_many_features_especially_with_high_fr}"/>
                             <LineBreak/>
@@ -102,7 +99,7 @@
                     FontWeight="Bold" FontSize="16" Padding="40,16"
                     BorderThickness="0" CornerRadius="8"
                     HorizontalAlignment="Center">
-                <TextBlock Text="{loc:Str btn_let_s_begin}"/>
+                <fx:IconLabel Key="btn_let_s_begin"/>
             </Button>
         </Grid>
     </Border>

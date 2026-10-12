@@ -10,6 +10,8 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -345,11 +347,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             foreach (var mod in CoreMods.InstalledMods.Values.OrderBy(m => !m.IsBuiltIn).ThenBy(m => m.Name))
             {
-                var prefix = mod.Id == _activeModId ? "★ " : "  "; // star for active
+                // WPF prefixes "★ " for the active mod and two spaces otherwise: a fixed-width slot keeps names aligned.
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
+                var star = new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 12, Width = 16,
+                    VerticalAlignment = VerticalAlignment.Center, Opacity = mod.Id == _activeModId ? 1 : 0 };
+                star.Bind(IconGlyph.ForegroundProperty, star.GetResourceObservable(IconBrushes.Gold));
+                row.Children.Add(star);
                 row.Children.Add(new TextBlock
                 {
-                    Text = prefix + mod.Name,
+                    Text = mod.Name,
                     VerticalAlignment = VerticalAlignment.Center
                 });
 
@@ -361,11 +367,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 // "media not downloaded yet" marker for built-ins on a modular install.
                 if (ModPickerCatalog.NeedsDownload(mod.Id))
                 {
-                    row.Children.Add(new TextBlock
+                    row.Children.Add(new IconLabel
                     {
-                        Text = Loc.Get("modmgr_badge_needs_download"),
-                        Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x47)),
-                        FontSize = 10,
+                        Key = "modmgr_badge_needs_download",
+                        Spacing = 3,
+                        [TextElement.ForegroundProperty] = new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x47)),
+                        [TextElement.FontSizeProperty] = 10d,
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(6, 0, 0, 0)
                     });

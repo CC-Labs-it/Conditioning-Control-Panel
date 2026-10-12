@@ -1965,3 +1965,11 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/icons-chaos-play: +470
 - Fluent icons lane L8: Chaos hub/HUD/overlay/slot picker, Play tab, Gaze minigame, AvatarTube, BubbleCount and EasterEgg glyphs become IconGlyph/IconLabel with an arcade look (filled marks, tier/gold brushes, pip counts kept); icon-emoji ratchet 971 -> 846.
 - Tests: new ChaosPlayIconsTests; ChaosRunHostTests and ChaosHubStateTests assert icon Kinds; all fail-proven; Keincheck Play tab, headless Chaos hub render.
+
+## avalonia-port/icons-dialogs-windows: +497
+- Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
+- Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
+
+## avalonia-port/icons-dialogs-windows: +497
+- Fluent icons lane L9: dialogs, PresetsTabView, ModCreator/Quiz/SessionEditor/HelpVideo/WhatMoved/Announcement/EmiOptions/EmiRing; BuildActionChips returns icons.
+- Ratchets 971→832 emoji, 234→185 loc, 26→25 path; mod-manager snapshot re-baselined by decision.
