@@ -535,7 +535,11 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
+                {
                     Views.Windows.MainShellWindow.AnnouncementClient = () => new V2AuthService();
+                    // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
+                    Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
+                }
                 if (Platform.AccountSeed.Seed())
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
@@ -812,6 +816,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.ShowDeniedHandler = verdict => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     shell.ShowTierDenied(verdict, Notifications));
                 // WPF App.xaml.cs:509-511 (main 2e9080399). No Arcademy host here: unseeded, so its card stays hidden.
+                // WPF App.xaml.cs:289: the palette row and the Premium card read the server door flag.
+                SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
                 Models.ExclusiveFeature.JustDropDoorProvider = SettingsPaletteIndex.JustDropDoorAvailable;
                 Models.ExclusiveFeature.BreakoutFullProvider = () => TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
                 // WPF MainWindow.xaml.cs:484 (the ? box rolled over or its override landed) and

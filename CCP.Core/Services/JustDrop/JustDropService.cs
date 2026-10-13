@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
-using System.Windows;
 using ConditioningControlPanel.Localization;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.JustDrop
 {
@@ -98,6 +98,14 @@ namespace ConditioningControlPanel.Services.JustDrop
 
         private const string ConfigUrl = "https://codebambi-proxy.vercel.app/config/justdrop";
 
+        /// <summary>Test seam: answers the config GET instead of the network (status ok, body).</summary>
+        internal static Func<Task<(bool Ok, string? Body)>>? ConfigFetchOverride;
+
+        /// <summary>Test seam: the host clock the settlement measures with.</summary>
+        internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+
+        internal static void SetServerEnabledForTests(bool enabled) => ServerEnabled = enabled;
+
         /// <summary>
         /// Ask the server whether this door exists. Fire-and-forget from MainWindow's startup
         /// stagger; every failure path leaves <see cref="ServerEnabled"/> exactly as it was, which
@@ -109,43 +117,42 @@ namespace ConditioningControlPanel.Services.JustDrop
 
             try
             {
-                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                var response = await http.GetAsync(ConfigUrl).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
-                {
-                    App.Logger?.Debug("JustDrop: /config/justdrop returned {Status}; door stays hidden",
-                        (int)response.StatusCode);
-                    return;
-                }
-
-                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var (ok, body) = await (ConfigFetchOverride ?? FetchConfigAsync)().ConfigureAwait(false);
+                if (!ok) return;
                 JObject? parsed = null;
                 try { if (!string.IsNullOrWhiteSpace(body)) parsed = JObject.Parse(body); } catch { }
                 var enabled = parsed?["enabled"]?.Value<bool>() == true;
 
                 if (enabled == ServerEnabled) return;
                 ServerEnabled = enabled;
-                App.Logger?.Information("JustDrop: server flag = {Enabled}", enabled);
+                Log.Information("JustDrop: server flag = {Enabled}", enabled);
                 RaiseAvailabilityChanged();
             }
             catch (Exception ex)
             {
                 // Debug, not Warning: a shop nobody has been given yet failing to answer is the
                 // normal case, and this runs on every launch for every user.
-                App.Logger?.Debug("JustDrop: availability check failed ({Error}); door stays hidden", ex.Message);
+                Log.Debug("JustDrop: availability check failed ({Error}); door stays hidden", ex.Message);
             }
         }
 
-        private static void RaiseAvailabilityChanged()
+        private static async Task<(bool Ok, string? Body)> FetchConfigAsync()
         {
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null || dispatcher.HasShutdownStarted) return;
-            dispatcher.BeginInvoke(new Action(() =>
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var response = await http.GetAsync(ConfigUrl).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
             {
-                try { AvailabilityChanged?.Invoke(null, EventArgs.Empty); }
-                catch (Exception ex) { App.Logger?.Warning(ex, "JustDrop: AvailabilityChanged handler threw"); }
-            }));
+                Log.Debug("JustDrop: /config/justdrop returned {Status}; door stays hidden", (int)response.StatusCode);
+                return (false, null);
+            }
+            return (true, await response.Content.ReadAsStringAsync().ConfigureAwait(false));
         }
+
+        private static void RaiseAvailabilityChanged() => CoreDispatch.Post(() =>
+        {
+            try { AvailabilityChanged?.Invoke(null, EventArgs.Empty); }
+            catch (Exception ex) { Log.Warning(ex, "JustDrop: AvailabilityChanged handler threw"); }
+        });
 
         // ============================== the bridge ==============================
 
@@ -213,7 +220,7 @@ namespace ConditioningControlPanel.Services.JustDrop
                 try { envelope = JObject.Parse(json); }
                 catch (Exception ex)
                 {
-                    App.Logger?.Debug("JustDrop bridge: unparseable message dropped ({Error})", ex.Message);
+                    Log.Debug("JustDrop bridge: unparseable message dropped ({Error})", ex.Message);
                     return;
                 }
 
@@ -224,7 +231,7 @@ namespace ConditioningControlPanel.Services.JustDrop
                 var version = envelope["v"]?.Value<int?>() ?? 0;
                 if (version != BridgeVersion)
                 {
-                    App.Logger?.Debug("JustDrop bridge: envelope v{V} ignored (host speaks v{Ours})",
+                    Log.Debug("JustDrop bridge: envelope v{V} ignored (host speaks v{Ours})",
                         version, BridgeVersion);
                     return;
                 }
@@ -238,25 +245,25 @@ namespace ConditioningControlPanel.Services.JustDrop
                 switch (type)
                 {
                     case "ready":
-                        App.Logger?.Debug("JustDrop bridge: page ready");
+                        Log.Debug("JustDrop bridge: page ready");
                         break;
 
                     case "session-start":
-                        App.Logger?.Information("JustDrop bridge: session-start order={Order} size={Size} duration={Duration}s",
+                        Log.Information("JustDrop bridge: session-start order={Order} size={Size} duration={Duration}s",
                             orderCode ?? "?", sizeId ?? "?", durationSec ?? 0);
                         // Start the HOST's clock for this order. A restart for the same code
                         // overwrites — the newest run is the one a completion will describe.
                         if (!string.IsNullOrEmpty(orderCode))
-                            SessionStartUtc[orderCode] = DateTime.UtcNow;
+                            SessionStartUtc[orderCode] = UtcNow();
                         break;
 
                     case "session-exit":
-                        App.Logger?.Information("JustDrop bridge: session-exit order={Order} after {Duration}s",
+                        Log.Information("JustDrop bridge: session-exit order={Order} after {Duration}s",
                             orderCode ?? "?", durationSec ?? 0);
                         break;
 
                     case "session-complete":
-                        App.Logger?.Information("JustDrop bridge: session-complete order={Order} size={Size} duration={Duration}s",
+                        Log.Information("JustDrop bridge: session-complete order={Order} size={Size} duration={Duration}s",
                             orderCode ?? "?", sizeId ?? "?", durationSec ?? 0);
                         AwardSessionComplete(orderCode, sizeId);
                         break;
@@ -264,13 +271,13 @@ namespace ConditioningControlPanel.Services.JustDrop
                     default:
                         // A page shipped ahead of the host: log the name so the next reader knows
                         // what to implement, and do nothing.
-                        App.Logger?.Debug("JustDrop bridge: unknown type '{Type}' ignored", type ?? "(null)");
+                        Log.Debug("JustDrop bridge: unknown type '{Type}' ignored", type ?? "(null)");
                         break;
                 }
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "JustDrop bridge: message handling failed");
+                Log.Warning(ex, "JustDrop bridge: message handling failed");
             }
         }
 
@@ -311,7 +318,7 @@ namespace ConditioningControlPanel.Services.JustDrop
                     double? hostElapsedSec = null;
                     if (SessionStartUtc.Remove(orderCode!, out var startedUtc))
                     {
-                        var elapsed = (DateTime.UtcNow - startedUtc).TotalSeconds;
+                        var elapsed = (UtcNow() - startedUtc).TotalSeconds;
                         if (elapsed >= 0) hostElapsedSec = elapsed;
                     }
 
@@ -320,10 +327,10 @@ namespace ConditioningControlPanel.Services.JustDrop
                     // XPSource.Other, matching Programs / Quests / Pop Quiz / the Intake. NOT
                     // XPSource.Session: that source is the session engine's, and borrowing it would
                     // make companion bonuses and quest counters read a web drop as a local session.
-                    App.Progression?.AddXP(xp, XPSource.Other);
-                    App.Settings?.Save();   // the daily counter must survive a crash between drops
+                    if (!CoreProgression.AddXP(xp, "Other")) throw new InvalidOperationException("the XP provider threw");
+                    CoreSettings.Save();   // the daily counter must survive a crash between drops
 
-                    App.Logger?.Information("JustDrop: drop settled — order={Order} size={Size} elapsed={Elapsed}s taste={Taste} diminished={Dim} xp={Xp}",
+                    Log.Information("JustDrop: drop settled — order={Order} size={Size} elapsed={Elapsed}s taste={Taste} diminished={Dim} xp={Xp}",
                         code, sizeId ?? "?", hostElapsedSec.HasValue ? (int)hostElapsedSec.Value : -1,
                         quickTaste, diminished, xp);
                 }
@@ -331,13 +338,13 @@ namespace ConditioningControlPanel.Services.JustDrop
                 {
                     // No toast on a failed grant: the completion toast quotes the amount paid,
                     // and quoting XP that was never granted would be worse than silence.
-                    App.Logger?.Warning(ex, "JustDrop: session-complete XP failed");
+                    Log.Warning(ex, "JustDrop: session-complete XP failed");
                     return;
                 }
             }
             else
             {
-                App.Logger?.Information("JustDrop: session-complete for {Order} paid nothing (replay)",
+                Log.Information("JustDrop: session-complete for {Order} paid nothing (replay)",
                     string.IsNullOrEmpty(code) ? "(no code)" : code);
             }
 
@@ -346,9 +353,9 @@ namespace ConditioningControlPanel.Services.JustDrop
                 var message = firstPlay
                     ? Loc.GetF("jd_toast_session_complete", xp)
                     : Loc.Get("jd_toast_session_replayed");
-                App.Notifications?.Show(message, NotificationType.Success, TimeSpan.FromSeconds(6));
+                CoreProgram.Notify(message, "Success", TimeSpan.FromSeconds(6));
             }
-            catch (Exception ex) { App.Logger?.Warning(ex, "JustDrop: session-complete toast failed"); }
+            catch (Exception ex) { Log.Warning(ex, "JustDrop: session-complete toast failed"); }
         }
 
         /// <summary>
@@ -373,8 +380,7 @@ namespace ConditioningControlPanel.Services.JustDrop
             diminished = BumpDailyDropCount() >= DiminishAfter;
             if (diminished) subtotal *= DiminishFactor;
 
-            var level = App.Settings?.Current?.PlayerLevel ?? 1;
-            var multiplier = App.Progression?.GetSessionXPMultiplier(level) ?? 1.0;
+            var multiplier = SessionXp.Multiplier(CoreSettings.Current.PlayerLevel);
 
             return (int)Math.Round(subtotal * multiplier);
         }
@@ -387,8 +393,7 @@ namespace ConditioningControlPanel.Services.JustDrop
         /// </summary>
         private static int BumpDailyDropCount()
         {
-            var settings = App.Settings?.Current;
-            if (settings == null) return 0;
+            var settings = CoreSettings.Current;
 
             var today = DateTime.Now.ToString("yyyy-MM-dd");
             if (!string.Equals(settings.JustDropXpDayKey, today, StringComparison.Ordinal))
