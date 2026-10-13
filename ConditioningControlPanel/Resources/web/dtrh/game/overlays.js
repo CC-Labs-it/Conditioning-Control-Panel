@@ -7,6 +7,7 @@
  * ==========================================================================*/
 
 import { createMomentFeel } from './momentFeel.js';
+import { planRowFor, buildPlanRow, postFunnel, PLAN_FEATURE, PLAN_ROW_DELAY_MS } from './planCard.js';
 
 const ART = 'https://ccp.art/';
 
@@ -349,7 +350,7 @@ export function createOverlays(hud) {
     mf.staggerRows(card);
   }
 
-  function showPayout(p) {
+  function showPayout(p, opts) {
     if (!payoutSlot || rc.hidden) return;
     mf.finishCounts();
     payoutSlot.innerHTML = '';
@@ -378,6 +379,27 @@ export function createOverlays(hud) {
       payoutSlot.appendChild(l4);
     }
     mf.staggerRows(payoutSlot, 0);   // the card is already up: the payout rows start at once, one after another
+    showPlanRow(p, opts);
+  }
+
+  /* THE PLAN ROW (brief C10, game/planCard.js): a Daily Gift run's summary gets one calm line and one link,
+   * last on the card, under the buttons. It waits for the payout rows to land and then only fades in. */
+  let planTimer = 0;
+  const clearPlan = () => { if (planTimer) { clearTimeout(planTimer); planTimer = 0; } };
+  function showPlanRow(p, opts) {
+    clearPlan();
+    try {
+      const row = planRowFor(p);
+      if (!row || card.querySelector('.cf-recap-plan')) return;
+      const box = buildPlanRow({ doc: document, row, plans: opts && opts.plans });
+      card.appendChild(box);
+      planTimer = setTimeout(() => {
+        planTimer = 0;
+        if (rc.hidden || !box.isConnected) return;
+        box.classList.add('is-in');
+        postFunnel('gate_shown', PLAN_FEATURE, row.key);
+      }, PLAN_ROW_DELAY_MS);
+    } catch (e) { /* the summary stands without it */ }
   }
 
   return {
@@ -391,8 +413,8 @@ export function createOverlays(hud) {
     isDraftUp: () => !dr.hidden,
     showRecap,
     showPayout,
-    hideRecap() { mf.finishCounts(); rc.hidden = true; payoutSlot = null; },
+    hideRecap() { mf.finishCounts(); clearPlan(); rc.hidden = true; payoutSlot = null; },
     isRecapUp: () => !rc.hidden,
-    dispose() { clearCd(); clearDraftTimers(); clearWashTimers(); cd.remove(); dr.remove(); rc.remove(); wash.remove(); mf.dispose(); },
+    dispose() { clearPlan(); clearCd(); clearDraftTimers(); clearWashTimers(); cd.remove(); dr.remove(); rc.remove(); wash.remove(); mf.dispose(); },
   };
 }
