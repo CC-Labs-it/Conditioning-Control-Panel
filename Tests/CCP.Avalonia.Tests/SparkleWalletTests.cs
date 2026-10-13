@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -77,11 +78,12 @@ public sealed class SparkleWalletTests
             Step(time, 0.7);
             Assert.False(wallet.RewardShowing);
 
-            // Closing the shell unsubscribes: a later award reaches nothing.
+            // Closing the shell unsubscribes (WPF ShutdownSparkleWallet): the static award event no
+            // longer holds the shell (a detached wallet would ignore rewards anyway, so check the list).
+            Assert.True(AwardSubscribed(shell));
             shell.Close();
             Dispatcher.UIThread.RunJobs();
-            SparklePointRewards.PublishCredit(1203, 1204, SparklePointSource.LevelUp);
-            Assert.False(wallet.RewardShowing);
+            Assert.False(AwardSubscribed(shell));
             shell = null;
         }
         finally
@@ -91,6 +93,11 @@ public sealed class SparkleWalletTests
             BeatLoop.Time = TimeProvider.System;
         }
     });
+
+    private static bool AwardSubscribed(object target) =>
+        (typeof(SparklePointRewards).GetField(nameof(SparklePointRewards.Awarded),
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null) as Delegate)?.GetInvocationList().Any(d => ReferenceEquals(d.Target, target)) == true;
 
     [Fact]
     public void WalletPopupsWaveAndVisitBehaveLikeWpf() => AvaloniaTestDispatcher.Run(() =>
