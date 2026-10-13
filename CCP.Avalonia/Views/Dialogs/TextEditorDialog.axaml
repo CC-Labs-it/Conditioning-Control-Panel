@@ -21,6 +21,7 @@
      The buttons also gained x:Names, because the handlers are wired in the constructor. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.TextEditorDialog"
         x:DataType="vm:TextEditorViewModel"
         xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Dialogs"
@@ -50,8 +51,8 @@
 
         <!-- Header -->
         <Grid Grid.Row="0" Margin="0,0,0,15">
-            <TextBlock x:Name="TxtTitle" Text="{Binding LocDialogTextManager}" Foreground="{StaticResource PinkBrush}"
-                       FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+            <fx:IconLabel x:Name="TxtTitle" Kind="NoteEdit" Text="{Binding LocDialogTextManager}" TextElement.Foreground="{StaticResource PinkBrush}"
+                          TextElement.FontSize="18" TextElement.FontWeight="Bold" VerticalAlignment="Center"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="BtnSort" Theme="{StaticResource SecondaryButton}"
                         Margin="0,0,8,0">
@@ -100,20 +101,20 @@
                                     <TextBlock Grid.Column="1" Text="{Binding Text}"
                                                Foreground="White" FontSize="13"
                                                VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="BtnRemove" Grid.Column="2" Text="✕" Foreground="{DynamicResource TextMutedBrush}"
-                                               FontSize="14" VerticalAlignment="Center"
+                                    <fx:IconGlyph x:Name="BtnRemove" Grid.Column="2" Kind="Dismiss" Foreground="{DynamicResource TextMutedBrush}"
+                                               Size="14" VerticalAlignment="Center"
                                                Cursor="Hand"
                                                ToolTip.Tip="{Binding $parent[Window].((vm:TextEditorViewModel)DataContext).LocTooltipRemoveItem}">
-                                        <TextBlock.Styles>
+                                        <fx:IconGlyph.Styles>
                                             <!-- Shape-for-shape copy of the WPF Style.Triggers block. It was
                                                  already dead there - a local Foreground outranks a style
                                                  trigger - and it is dead here for the same reason. Kept so
                                                  the two files still diff, not "fixed". -->
-                                            <Style Selector="TextBlock:pointerover">
+                                            <Style Selector="fx|IconGlyph:pointerover">
                                                 <Setter Property="Foreground" Value="#FF4757"/>
                                             </Style>
-                                        </TextBlock.Styles>
-                                    </TextBlock>
+                                        </fx:IconGlyph.Styles>
+                                    </fx:IconGlyph>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -130,7 +131,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Button x:Name="BtnRemoveSelected" Grid.Column="0" Theme="{StaticResource DangerButton}">
-                <TextBlock Text="{Binding LocBtnRemoveSelected}"/>
+                <fx:IconLabel Key="btn_remove_selected_2"/>
             </Button>
             <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <Button x:Name="BtnCancel" Theme="{StaticResource SecondaryButton}"

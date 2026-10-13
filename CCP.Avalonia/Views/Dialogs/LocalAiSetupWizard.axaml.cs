@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.AIService;
@@ -50,7 +51,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly StackPanel _panelDetecting, _panelConsent, _panelDownloadInstaller, _panelInstalling,
             _panelPullModel, _panelSmokeTest, _panelDone, _panelError;
         private readonly TextBlock _txtStepTitle, _txtStepSubtitle, _txtConsentLine2, _txtDownloadProgress,
-            _txtPullHeader, _txtPullStatus, _txtPullDetail, _txtDoneDetail, _txtPrimary, _txtSecondary;
+            _txtPullHeader, _txtPullStatus, _txtPullDetail, _txtDoneDetail, _txtSecondary;
+        private readonly IconLabel _txtPrimary;
         private readonly Button _btnPrimary, _btnSecondary;
         private readonly CheckBox _chkAdvanced;
         private readonly Grid _advancedPanel;
@@ -78,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _txtPullStatus = C<TextBlock>("TxtPullStatus");
             _txtPullDetail = C<TextBlock>("TxtPullDetail");
             _txtDoneDetail = C<TextBlock>("TxtDoneDetail");
-            _txtPrimary = C<TextBlock>("TxtPrimary");
+            _txtPrimary = C<IconLabel>("TxtPrimary");
             _txtSecondary = C<TextBlock>("TxtSecondary");
             _btnPrimary = C<Button>("BtnPrimary");
             _btnSecondary = C<Button>("BtnSecondary");
@@ -157,7 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     _txtStepTitle.Text = Loc.Get("label_local_ai_step_consent");
                     _txtStepSubtitle.Text = Loc.Get("label_local_ai_step_consent_sub");
                     _btnPrimary.IsVisible = true;
-                    _txtPrimary.Text = Loc.Get("btn_continue");
+                    _txtPrimary.Key = "btn_continue";
                     _txtSecondary.Text = Loc.Get("btn_cancel");
                     _btnPrimary.IsEnabled = true;
                     _btnSecondary.IsEnabled = true;
@@ -195,7 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     _txtStepTitle.Text = Loc.Get("label_local_ai_step_done");
                     _txtStepSubtitle.Text = Loc.Get("label_local_ai_step_done_sub");
                     _btnPrimary.IsVisible = true;
-                    _txtPrimary.Text = Loc.Get("btn_close");
+                    _txtPrimary.Key = "btn_close";
                     _btnPrimary.IsEnabled = true;
                     _btnSecondary.IsVisible = false;
                     break;
@@ -203,7 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     _txtStepTitle.Text = Loc.Get("label_local_ai_step_error");
                     _txtStepSubtitle.Text = Loc.Get("label_local_ai_step_error_sub");
                     _btnPrimary.IsVisible = true;
-                    _txtPrimary.Text = Loc.Get("btn_retry");
+                    _txtPrimary.Key = "btn_retry";
                     _txtSecondary.Text = Loc.Get("btn_close");
                     _btnPrimary.IsEnabled = true;
                     _btnSecondary.IsEnabled = true;

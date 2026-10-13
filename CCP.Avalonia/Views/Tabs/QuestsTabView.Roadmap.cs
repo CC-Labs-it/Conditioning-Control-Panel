@@ -62,14 +62,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private RoadmapTrack _currentRoadmapTrack = RoadmapTrack.EmptyDoll;
 
         /// <summary>
-        /// Cancels the active step's pulse when the nodes are rebuilt. WPF needs no equivalent:
-        /// its TimeManager holds animation clocks weakly, so a Storyboard on a detached Ellipse
-        /// stops on its own. Avalonia's animator subscribes to the global clock and HOLDS its
-        /// target, so an infinite RunAsync on a node that has been cleared out of
-        /// RoadmapNodesPanel keeps ticking on a dead subtree forever — one leaked node per track
-        /// click, sub-tab click and photo submit.
+        /// The active step's pulse, stopped when the nodes are rebuilt so a cleared node never keeps a
+        /// clock. WPF :251-260 (0.5 -> 1.0, 0.8 s, AutoReverse, linear) on the window's 30 fps beat
+        /// instead of an infinite Animation (P82); it parks while the tab is hidden.
         /// </summary>
-        private CancellationTokenSource? _pulseCts;
+        private global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _pulse;
+
+        /// <summary>The active step's ring opacity (tests).</summary>
+        internal double? RoadmapPulseOpacity => _pulse?.IsRunning == true ? _pulseTarget?.Opacity : null;
+        private Ellipse? _pulseTarget;
 
         private static RoadmapService Roadmap => MainShellWindow.Roadmap;
 
@@ -118,8 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void GenerateRoadmapNodes()
         {
-            _pulseCts?.Cancel();
-            _pulseCts = new CancellationTokenSource();
+            _pulse?.Stop();
+            _pulse = null;
 
             RoadmapNodesPanel.Children.Clear();
 
@@ -215,18 +216,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 camera.HorizontalAlignment = HorizontalAlignment.Center;
                 circle.Children.Add(camera);
 
-                _ = new Animation
+                _pulse?.Stop();
+                _pulseTarget = bgEllipse;
+                var pulse = _pulse = new global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop(bgEllipse, t =>
                 {
-                    Duration = TimeSpan.FromSeconds(0.8),
-                    Easing = new LinearEasing(),
-                    IterationCount = IterationCount.Infinite,
-                    PlaybackDirection = PlaybackDirection.Alternate,
-                    Children =
-                    {
-                        new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(OpacityProperty, 0.5) } },
-                        new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(OpacityProperty, 1.0) } },
-                    },
-                }.RunAsync(bgEllipse, _pulseCts?.Token ?? CancellationToken.None);
+                    double p = t / 0.8 % 2;
+                    bgEllipse.Opacity = 0.5 + 0.5 * (p <= 1 ? p : 2 - p);
+                });
+                // Started on attach, so the clock locks to the window's frames (a node is built detached).
+                bgEllipse.AttachedToVisualTree += (_, _) => { if (_pulse == pulse) pulse.Start(); };
+                bgEllipse.DetachedFromVisualTree += (_, _) => pulse.Stop();
             }
 
             // ---- objective box, above the circle

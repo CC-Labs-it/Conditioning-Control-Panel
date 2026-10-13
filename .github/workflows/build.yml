@@ -106,7 +106,21 @@ jobs:
       # One PNG per ported view. A view that throws on construction fails the job; one that nulls
       # its own template or binds a missing property does NOT - Avalonia keeps bindings silent -
       # so the run prints every binding error per view and the PNGs are the proof. Read them.
-      - run: dotnet run --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --render-all $RUNNER_TEMP/render
+      # A native crash (exit 139) leaves a createdump core + crash report (native and managed frames) here;
+      # that is how the render-all SIGSEGV was traced to Avalonia's synthetic-typeface copy (SystemEmojiFontCollection).
+      - run: |
+          mkdir -p $RUNNER_TEMP/dumps
+          dotnet run --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --render-all $RUNNER_TEMP/render
+        env:
+          DOTNET_DbgEnableMiniDump: 1
+          DOTNET_DbgMiniDumpType: 2
+          DOTNET_EnableCrashReport: 1
+          DOTNET_DbgMiniDumpName: ${{ runner.temp }}/dumps/core.%p
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: render-all-crash
+          path: ${{ runner.temp }}/dumps/
       # always(): the PNGs matter MOST when a view failed - a reviewer needs the 23 that drew.
       - uses: actions/upload-artifact@v4
         if: always()
@@ -188,6 +202,23 @@ jobs:
           $p = Start-Process -FilePath CCP.Avalonia\bin\publish\win-x64\CCP.Avalonia.exe -ArgumentList '--smoke' -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoke.out -RedirectStandardError smoke.err
           Get-Content smoke.out, smoke.err
           if ($p.ExitCode -ne 0) { throw "--smoke exited $($p.ExitCode)" }
+      # The WH_KEYBOARD_LL panic hook (Platform/Win32PanicKey.cs) on a real desktop: injects F24 and
+      # asserts one press stops, a held key is one press, two presses exit. The F23 run binds a key that
+      # is never pressed, so it MUST fail: proof the check can fail. Sandbox profile only.
+      - name: Avalonia Windows panic key check (WH_KEYBOARD_LL)
+        timeout-minutes: 5
+        run: |
+          $exe = 'CCP.Avalonia\bin\publish\win-x64\CCP.Avalonia.exe'
+          function Check($key) {
+            $env:CCP_USERDATA_DIR = Join-Path $env:RUNNER_TEMP "panic-$key"
+            $p = Start-Process -FilePath $exe -ArgumentList '--win-panic-check', $key -Wait -PassThru -NoNewWindow -RedirectStandardOutput "panic-$key.out" -RedirectStandardError "panic-$key.err"
+            Get-Content "panic-$key.out", "panic-$key.err" | Out-Host
+            return $p.ExitCode
+          }
+          $ok = Check 'F24'
+          if ($ok -ne 0) { throw "--win-panic-check F24 exited $ok" }
+          $neg = Check 'F23'
+          if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
 
   # build-content-packs.ps1 is Windows-only (\\?\ long paths), so its proof runs here.
   # (a) The committed install-relative [InstallDelete] list must regenerate unchanged.

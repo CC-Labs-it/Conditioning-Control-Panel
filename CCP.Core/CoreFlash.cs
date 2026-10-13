@@ -13,8 +13,13 @@ namespace ConditioningControlPanel
     /// </summary>
     public static class CoreFlash
     {
-        /// <summary>Draw one ambient burst. Null when no head has a flash surface.</summary>
+        /// <summary>Draw one point-fired burst (WPF <c>TriggerFlashOnce</c>: remote, voice, autonomy).
+        /// Null when no head has a flash surface.</summary>
         public static volatile Action? ShowProvider;
+
+        /// <summary>Draw one burst from the scheduler tick (WPF <c>TriggerFlash</c>): the only spawn
+        /// "stay until popped" applies to. Falls back to <see cref="ShowProvider"/> when unseeded.</summary>
+        public static volatile Action? AmbientShowProvider;
 
         /// <summary>True while the head's previous burst is still going (WPF <c>_isBusy</c>).</summary>
         public static volatile Func<bool>? IsBusyProvider;
@@ -99,7 +104,7 @@ namespace ConditioningControlPanel
                 }
                 if (fire)
                 {
-                    try { ShowProvider?.Invoke(); }
+                    try { (AmbientShowProvider ?? ShowProvider)?.Invoke(); }
                     catch (Exception ex) { Log.Debug("Flash show provider failed: {Error}", ex.Message); }
                 }
                 lock (Gate) ArmLocked();
