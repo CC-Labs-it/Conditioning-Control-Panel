@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.AudioPlayer;
 
@@ -23,6 +25,8 @@ namespace ConditioningControlPanel.Views.Controls
         {
             InitializeComponent();
             Bind(_model);
+            // WPF marks the groove press handled, so this listens to handled presses too.
+            SliderSeek.AddHandler(PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(SliderSeek_Pressed), true);
             Loaded += (_, _) =>
             {
                 // The service is created at startup, after this card may have been built.
@@ -103,9 +107,20 @@ namespace ConditioningControlPanel.Views.Controls
         private void RowDown_Click(object sender, RoutedEventArgs e) => _model.MoveDown(RowIndex(sender));
         private void RowRemove_Click(object sender, RoutedEventArgs e) => _model.Remove(RowIndex(sender));
 
-        // A press on the bar (thumb or groove) is a drag from WPF's side. The model holds the bar
-        // still under the hand from the press on, and the one seek happens on release. Value
-        // changes outside a drag are the model (or a Maximum coercion) and are never a seek.
+        // A press on the THUMB is a drag: the model holds the bar still under the hand and the one
+        // seek happens on release. A press on the GROOVE is not a drag (desk run 2026-10-13: WPF
+        // jumps the value to the point, raises no drag events, and the click did nothing), so it
+        // seeks at once. Any other value change is the model (or a Maximum coercion), never a seek.
+        private void SliderSeek_Pressed(object sender, MouseButtonEventArgs e)
+        {
+            for (var d = e.OriginalSource as DependencyObject; d != null && !ReferenceEquals(d, SliderSeek);
+                 d = d is Visual ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+            {
+                if (d is Thumb) return;
+            }
+            if (!_dragging) _model.Seek(SliderSeek.Value);
+        }
+
         private void SliderSeek_DragStarted(object sender, DragStartedEventArgs e)
         {
             _dragging = true;

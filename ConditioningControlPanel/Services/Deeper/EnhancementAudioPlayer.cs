@@ -191,7 +191,8 @@ namespace ConditioningControlPanel.Services.Deeper
                 try
                 {
                     _tickTimer?.Stop();
-                    bool naturalEnd = _reader != null && _reader.Position >= _reader.Length - 1024;
+                    bool naturalEnd = IsNaturalEnd(ex != null, _reader?.Position ?? -1, _reader?.Length ?? 0,
+                        _reader?.WaveFormat.AverageBytesPerSecond ?? 0);
                     if (naturalEnd)
                     {
                         try { Ended?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -210,6 +211,20 @@ namespace ConditioningControlPanel.Services.Deeper
 
             if (dispatcher.CheckAccess()) Handle();
             else { try { dispatcher.BeginInvoke((Action)Handle); } catch (Exception ex2) { Diag.Swallowed(ex2); } }
+        }
+
+        /// <summary>
+        /// Did the file play out? Stop() unhooks this handler first, so a stop that arrives here with
+        /// no error IS the end of the file. Never compare Position with Length alone: an MP3 ends
+        /// about a kilobyte short of the length MediaFoundation reports (1055 bytes measured on a
+        /// mono file), so a fixed 1024-byte margin missed every MP3 and the playlist sat silent
+        /// after track one. A device error counts as the end only inside the last half second.
+        /// </summary>
+        internal static bool IsNaturalEnd(bool hadError, long position, long length, int bytesPerSecond)
+        {
+            if (position < 0 || length <= 0) return false;
+            if (!hadError) return true;
+            return position >= length - Math.Max(1024, bytesPerSecond / 2);
         }
 
         public void Dispose()
