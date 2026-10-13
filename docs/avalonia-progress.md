@@ -2191,3 +2191,13 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/video-core-a: +345
 - Cloud session (Opus), local review + gate. Review P3 fix: unsafe-video cache save/reload test on a stepped clock (TimeProvider seam).
+
+## avalonia-port/compositor-core-a: +170
+- Cloud session (Opus), local review + gate.
+- Review fixes: FillGate test settings isolation (P02), PrimaryOnlyUnlessDualMonitor test; both fail-proven; rgate GATE-OK.
+
+## avalonia-port/haptics-core-a: +159
+- Cloud session (Opus), local review + gate; review follow-up adds a fail-proven device-backed stop test.
+
+## avalonia-port/haptics-core-a: +159
+- Cloud session (Opus), local review + gate; review follow-up adds a fail-proven device-backed stop test.

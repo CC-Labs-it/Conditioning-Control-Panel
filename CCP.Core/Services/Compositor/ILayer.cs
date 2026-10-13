@@ -3,7 +3,7 @@ using SkiaSharp;
 namespace ConditioningControlPanel.Services.Compositor;
 
 /// <summary>
-/// A z-ordered visual layer rendered by the <see cref="CompositorEngine"/> into the shared
+/// A z-ordered visual layer rendered by the WPF head's <c>CompositorEngine</c> into the shared
 /// per-monitor overlay host, replacing a dedicated per-effect window.
 /// Contract mirrors the Avalonia port's ILayer/IAvaloniaLayer seam (same member names and
 /// semantics) so layer implementations stay portable between the two heads.

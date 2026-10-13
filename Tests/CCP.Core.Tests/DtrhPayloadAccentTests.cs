@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.Haptics;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// ccp-bugs #1244: "images and bubble pops do not fire the toy" in Down the Rabbit Hole.

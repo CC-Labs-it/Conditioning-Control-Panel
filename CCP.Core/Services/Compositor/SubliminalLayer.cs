@@ -104,7 +104,7 @@ public sealed class SubliminalLayer : BaseLayer
         Typeface = BoldArial
     };
 
-    public SubliminalLayer(CompositorEngine engine) : base(engine) { }
+    public SubliminalLayer(Action wake) : base(wake) { }
 
     public override int ZIndex => CompositorLayers.Subliminal;
 

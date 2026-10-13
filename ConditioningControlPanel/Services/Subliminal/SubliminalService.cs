@@ -698,7 +698,7 @@ namespace ConditioningControlPanel.Services
 
                 if (_layer == null)
                 {
-                    _layer = new Compositor.SubliminalLayer(App.Compositor!);
+                    _layer = new Compositor.SubliminalLayer(App.Compositor!.Wake);
                     App.Compositor!.RegisterLayer(_layer);
                 }
                 _layer.Flash(placements, text,
