@@ -2143,3 +2143,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/mine-tube-speech: +404
 - Tube speech queue as in WPF: presets queue in order with the earned gap. Priority lines, panic and the listening bubble drop the queue, and each new line cuts the previous clip. 4 tests, each fail-proven.
 - Talk clips and CompanionPhraseAudio are deferred: this tip has no emote system and nothing that speaks lines by phrase category.
+
+## avalonia-port/chaster-leash-minutes: +146
+- Chaster idle-day row now reads the day log (WPF MinutesFromDayLog), fed by the conditioning-time tracker; end-to-end test engine run -> day log -> idle charge 0 today / charged otherwise.
+- Upgrade edge guarded: a day before the day log's first conditioning day reads null (no charge), so a pre-tracker day is never billed (FeatureDayLogService.FirstConditioningDay).
+- Follow-up: LeashHead day minutes once leash-wire is in the base.
