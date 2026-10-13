@@ -106,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Width = 1280;
             Height = 720;
             Build(new ChaosAnnouncement("the hole is closing…", ChaosAnnounceKind.Depth, "ending_soon", "ten seconds",
-                ChaosAnnounceTiming.HoldMs, 0), workAreaTop: 0, workAreaWidth: double.NaN);
+                ChaosAnnounceTiming.HoldMs, 0), (0, 0, double.NaN));
             _host.Opacity = 1;
             _scale!.ScaleX = _scale.ScaleY = 1;
         }
@@ -143,8 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF DisplayCore: swap the label, restart the envelope.</summary>
         private void Display(ChaosAnnouncement a)
         {
-            var (top, width) = WorkAreaAnchor();
-            Build(a, top, width);
+            Build(a, WorkAreaAnchor());
             _current = a;
             _startTs = Clock.GetTimestamp();
             Step();
@@ -168,7 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ShowNext();
         }
 
-        private void Build(ChaosAnnouncement a, double workAreaTop, double workAreaWidth)
+        private void Build(ChaosAnnouncement a, (double left, double top, double width) wa)
         {
             var (fill, stroke) = Palette(a.Kind);
             var label = new OutlinedTextBlock
@@ -189,12 +188,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // Anchored just under the effect-banner strip, centred over the primary work area.
             var anchor = new Grid
             {
-                HorizontalAlignment = double.IsNaN(workAreaWidth) ? HorizontalAlignment.Stretch : HorizontalAlignment.Left,
+                HorizontalAlignment = double.IsNaN(wa.width) ? HorizontalAlignment.Stretch : HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, workAreaTop + TopOffsetDip, 0, 0),
+                Margin = new Thickness(wa.left, wa.top + TopOffsetDip, 0, 0),
                 IsHitTestVisible = false,
             };
-            if (!double.IsNaN(workAreaWidth)) anchor.Width = workAreaWidth;
+            if (!double.IsNaN(wa.width)) anchor.Width = wa.width;
             anchor.Children.Add(label);
             _host.Children.Clear();
             _host.Children.Add(anchor);
@@ -202,17 +201,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF read SystemParameters.WorkArea; the twin is Screens.Primary (physical pixels, hence
         /// the scaling). This window covers the primary screen, so the anchor is relative to its bounds.</summary>
-        private (double top, double width) WorkAreaAnchor()
+        private (double left, double top, double width) WorkAreaAnchor()
         {
             try
             {
                 var screen = Screens?.Primary ?? Screens?.All?.FirstOrDefault();
-                if (screen is null) return (0, double.NaN);
-                return (Math.Max(0, (screen.WorkingArea.Y - screen.Bounds.Y) / screen.Scaling),
-                        screen.WorkingArea.Width / screen.Scaling);
+                if (screen is null) return (0, 0, double.NaN);
+                return WorkAreaAnchor(screen.Bounds, screen.WorkingArea, screen.Scaling);
             }
-            catch { return (0, double.NaN); }
+            catch { return (0, 0, double.NaN); }
         }
+
+        /// <summary>WPF adds wa.Left too (ChaosAnnouncerOverlay.cs:244), so a left-docked panel keeps
+        /// the line centred on the work area, not the screen.</summary>
+        internal static (double left, double top, double width) WorkAreaAnchor(PixelRect bounds, PixelRect workingArea, double scaling)
+            => (Math.Max(0, (workingArea.X - bounds.X) / scaling),
+                Math.Max(0, (workingArea.Y - bounds.Y) / scaling),
+                workingArea.Width / scaling);
 
         private void SizeToPrimaryScreen()
         {

@@ -135,4 +135,14 @@ public sealed class ChaosAnnouncerOverlayTests
             Assert.False(w.IsVisible);
         });
     }
+    [Fact]
+    public void Line_is_anchored_to_the_work_area_including_a_left_docked_panel()
+    {
+        // 1.5x screen, 96 px panel docked left, 48 px top bar (WPF adds wa.Left, ChaosAnnouncerOverlay.cs:244).
+        var (left, top, width) = ChaosAnnouncerOverlay.WorkAreaAnchor(
+            new PixelRect(0, 0, 1920, 1080), new PixelRect(96, 48, 1824, 1032), 1.5);
+        Assert.Equal(64, left);
+        Assert.Equal(32, top);
+        Assert.Equal(1216, width);
+    }
 }
