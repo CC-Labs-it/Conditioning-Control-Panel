@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (url is null) return;
             CurrentUrl = url;
+            if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
         }
 
@@ -89,6 +90,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// JSON-stringifies objects). The stand-in for WPF's <c>CoreWebView2.WebMessageReceived</c>.
         /// </summary>
         public event Action<string>? WebMessage;
+
+        /// <summary>
+        /// One extra request header for a url, or null (the usual answer). The stand-in for WPF's
+        /// <c>AddWebResourceRequestedFilter</c> + <c>Request.Headers.SetHeader</c> (JustDropHostService.AttachAuthHeader):
+        /// the caller's rule decides, per request, whether its credential rides along. Never logged.
+        /// </summary>
+        public Func<Uri, (string Name, string Value)?>? RequestHeader { get; set; }
+
+        /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>
+        internal int StampedRequests { get; private set; }
+
+        private void StampRequestHeader(WebResourceRequestedEventArgs e)
+        {
+            try
+            {
+                if (e.Request?.Uri is { } uri) Stamp(uri, e.Request.Headers.TrySet);
+            }
+            catch (Exception ex) { Log.Debug("WebHost: request header not set: {Error}", ex.Message); }
+        }
+
+        /// <summary>One request through <see cref="RequestHeader"/>; counts only a header the engine took (tests drive it).</summary>
+        internal bool Stamp(Uri uri, Func<string, string, bool> trySet)
+        {
+            if (RequestHeader?.Invoke(uri) is not { } header || !trySet(header.Name, header.Value)) return false;
+            StampedRequests++;
+            return true;
+        }
+
+        /// <summary>
+        /// The shared page carrier, for any page this head hosts (local games, remote sites). Pages
+        /// written for WebView2 talk through <c>window.chrome.webview</c> (postMessage out, a
+        /// <c>message</c> event in); WebKitGTK injects only <c>window.invokeCSharpAction</c> (strings).
+        /// <see cref="CarrierShim"/> gives such a page a <c>chrome.webview</c> over that string
+        /// channel (and <c>__ccpRnPush</c> back), and is a no-op where a real one exists (WebView2).
+        /// With <see cref="InjectCarrier"/> it runs after every completed navigation: the engine has
+        /// no document-created script seam, so a page that probes the carrier only at load misses it.
+        /// </summary>
+        internal const string CarrierShim =
+            "(function(){var w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;"
+            + "if(typeof w.invokeCSharpAction!=='function')return;var t=new EventTarget();"
+            + "t.postMessage=function(m){w.invokeCSharpAction(typeof m==='string'?m:JSON.stringify(m));};"
+            + "w.chrome=w.chrome||{};w.chrome.webview=t;"
+            + "if(typeof w.__ccpRnPush!=='function')w.__ccpRnPush=function(j){var m;try{m=JSON.parse(j);}catch(e){return;}"
+            + "t.dispatchEvent(new MessageEvent('message',{data:m}));};})();";
+
+        /// <summary>Run <see cref="CarrierShim"/> after each completed navigation (see there).</summary>
+        public bool InjectCarrier { get; set; }
+
+        /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
+        /// event on <c>chrome.webview</c>. Every hosted page shares this one carrier script.</summary>
+        public Task<string?> PostJsonAsync(string json) => InvokeScriptAsync(
+            "(function(m){try{if(typeof window.__ccpRnPush==='function'){window.__ccpRnPush(JSON.stringify(m));return;}"
+            + "var w=window.chrome&&window.chrome.webview;if(w&&w.dispatchEvent){w.dispatchEvent(new MessageEvent('message',{data:m}));}}catch(e){}})("
+            + json + ");");
 
         /// <summary>The seam the engine's WebMessageReceived routes through (headless tests drive it).</summary>
         internal void OnWebMessage(string? body)
@@ -168,6 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
+                    _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);
                 }
                 catch (Exception ex)
