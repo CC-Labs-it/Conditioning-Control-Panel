@@ -51,4 +51,42 @@ public static class ChaosFieldMath
 
     /// <summary>Blank Eyes: a pop's payout floats only when the sin is on and it paid something.</summary>
     public static bool ShowsPopScore(bool showPopScores, double points) => showPopScores && points > 0;
+
+    /// <summary>Taking Chances (WPF ChanceFlip): x2 at the level's odds, else x0.5; 1.0 when unworn.</summary>
+    public static double ChanceFlip(ChaosRunState s, Random rng) =>
+        s.ChanceDoubleOdds > 0 ? (rng.NextDouble() < s.ChanceDoubleOdds ? 2.0 : 0.5) : 1.0;
+
+    /// <summary>
+    /// OnBenignPopped's ordinary-treat state change, in WPF order: effects and combo count, focus
+    /// refuel, heat, the score itself, then the Drip Feed trickle (doubled in the relapse loop,
+    /// clamped to the per-descent cap). The boon pay mult is WPF's BoonPayMult (Blindfold). Returns
+    /// the points the pop paid.
+    /// </summary>
+    public static double ApplyTreatPop(ChaosRunState s, EffectBubbleSpec spec, double pendulum, double chanceFlip)
+    {
+        s.EffectsFired++;
+        s.Combo++;
+        s.Focus += TreatFocusGain(spec.PayMult);
+        s.Heat = Math.Min(1.0, s.Heat + 0.04);
+        double pts = TreatPoints(spec.Strength, s.BenignBaseline, spec.PayMult, pendulum, chanceFlip,
+                                 s.TotalMult, s.BlindfoldPayMult);
+        s.Score += pts;
+        if (s.DropPerPop > 0)
+            s.TrickleDrops = Math.Min(ChaosLifetimeBoons.DripFeedCap(s.DropPerPop),
+                                      s.TrickleDrops + ChaosRunEngine.DropsPerPop(s));
+        return pts;
+    }
+
+    /// <summary>OnBenignPopped's mimic-prism state change: focus, effects, combo, heat, ten-times
+    /// score. Returns the points paid.</summary>
+    public static double ApplyPrismPop(ChaosRunState s, EffectBubbleSpec spec)
+    {
+        s.Focus += ChaosTuning.FOCUS_PER_PRISM;
+        s.EffectsFired++;
+        s.Combo++;
+        s.Heat = Math.Min(1.0, s.Heat + 0.05);
+        double pts = PrismPoints(spec.Strength, s.TotalMult, s.BlindfoldPayMult);
+        s.Score += pts;
+        return pts;
+    }
 }

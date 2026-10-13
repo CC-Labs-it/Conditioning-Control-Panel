@@ -56,6 +56,8 @@ namespace ConditioningControlPanel.Services
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
         public bool Clickable, Popping, Lucky;
+        /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
+        public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
 
@@ -77,6 +79,23 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;   // start at the bottom
+            return b;
+        }
+
+        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
+        /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
+        public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
+            double scaling, Chaos.EffectBubbleSpec spec)
+        {
+            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
+                       * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
+            b._animType = r.Next(4);
+            b._wobbleOffset = r.NextDouble() * 100;
+            b.Angle = r.Next(360);
+            b._top = areaY / scaling - b.Size - 50;
+            b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
+            b.Y = (areaY + areaH) / scaling;
             return b;
         }
 

@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -196,6 +197,37 @@ public sealed class ChaosRunHostTests
                 Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
                 overlay.Close();   // "wake up": OnDismissed tears down
                 Assert.False(ChaosRunHost.IsActive);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF SpawnTick + OnBenignPopped on BubbleOverlay: stepped spawns fill the field,
+    /// a pop scores, and panic clears every chaos bubble.</summary>
+    [Fact]
+    public async Task Spawn_ticks_fill_the_field_a_pop_scores_and_panic_clears_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.SpawnTick();   // countdown up: nothing spawns
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                for (int i = 0; i < 3; i++) ChaosRunHost.SpawnTick();
+                Assert.True(BubbleOverlay.ChaosCount >= 3);
+                var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                Assert.False(b.Spec!.IsLive);   // treats only until live bubbles land
+                BubbleOverlay.Pop(b);
+                Assert.True(state.Score > 0);
+                Assert.Equal(1, state.Combo);
+                ChaosRunHost.ForceShutdown();
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, x => x.Spec != null);
             }
             finally { ChaosRunHost.ForceShutdown(); }
             return Task.CompletedTask;
