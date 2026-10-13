@@ -34,6 +34,16 @@ html[data-motion="reduced"] {
   --cf-jelly-a: 0.07;
 }
 
+/* ---- the living picture (game/bubbleLife.js): a canvas over the sprite, under the label ---- */
+.cf-bubble-life {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
 /* ---- idle breath: each bubble on its own period and phase (set at spawn) ---- */
 .cf-bubble-body {
   animation: cfFeelBreath var(--breath-dur, 4s) ease-in-out var(--breath-delay, 0s) infinite;

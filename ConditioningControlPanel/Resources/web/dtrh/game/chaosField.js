@@ -24,6 +24,7 @@
 
 import { motionOff, motionScale } from '../shared/motion.js';
 import { SHARD_CAP, RAIN_CAP, shardCount, breathPhase, dimLevels } from './fieldFeel.js';
+import { attachLife } from './bubbleLife.js';
 import { MOTION, RING_FLASH_FROM_MS, RING_BRINK_MS, popWordFor,
   DARTER_SPEED_PXS, DARTER_MAX_BOUNCES, BOUND_WINDOW_MS, BOUND_ENRAGE_SPEED_MULT,
   TEASE_CENTER_PULL, CHAPERONE_ORBIT_RADIUS, CHAPERONE_ORBIT_GAP, CHAPERONE_ORBIT_PERIOD_SEC } from './variants.js';
@@ -208,6 +209,8 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
       }
     }
     wrap.appendChild(body);
+    // The bubble's own picture moves (bubbleLife.js). A disguised bubble stays a still.
+    if (!dis) attachLife(body, spec);
     // Idle breath (feel-field.css): every bubble gets its own period and a
     // negative delay, so copies never breathe in unison.
     const bp = breathPhase(Math.random(), Math.random());
