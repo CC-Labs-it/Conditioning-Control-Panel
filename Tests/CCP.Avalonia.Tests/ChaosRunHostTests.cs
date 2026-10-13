@@ -225,6 +225,26 @@ public sealed class ChaosRunHostTests
                 BubbleOverlay.Pop(b);
                 Assert.True(state.Score > 0);
                 Assert.Equal(1, state.Combo);
+
+                // WPF ToggleManualPause :265-268: a held field neither moves nor takes clicks.
+                var held = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                double score = state.Score, y = held.Y;
+                ChaosRunHost.ToggleManualPause();
+                BubbleOverlay.Field.Step();
+                BubbleOverlay.Pop(held);
+                Assert.Equal((y, false, score), (held.Y, held.Popping, state.Score));
+                ChaosRunHost.ToggleManualPause();
+                BubbleOverlay.Field.Step();
+                Assert.True(held.Y < y);   // moving again
+
+                // Headless never opens windows, so fake the chaos-only state: it is not the ambient game.
+                var t = typeof(BubbleOverlay);
+                const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+                t.GetField("_running", F)!.SetValue(null, true);
+                t.GetField("_chaosOpenedWindows", F)!.SetValue(null, true);
+                try { Assert.False(BubbleOverlay.IsRunning); }
+                finally { t.GetField("_running", F)!.SetValue(null, false); t.GetField("_chaosOpenedWindows", F)!.SetValue(null, false); }
+
                 ChaosRunHost.ForceShutdown();
                 Assert.Equal(0, BubbleOverlay.ChaosCount);
                 Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, x => x.Spec != null);

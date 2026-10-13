@@ -64,7 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static double _statMax, _statSum;
         private static int _statN, _statBubbles;
 
-        public static bool IsRunning => _running;
+        /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
+        public static bool IsRunning => _running && !_chaosOpenedWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
 
         /// <summary><paramref name="frequency"/> per minute overrides the setting (WPF Start's).</summary>
@@ -190,9 +191,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosOpenedWindows = _running;
         }
 
+        /// <summary>WPF SetChaosFrozen + SetChaosInputLocked (manual pause): chaos bubbles hold
+        /// still and a click on one is swallowed, so a paused field cannot be farmed.</summary>
+        internal static void HoldChaos(bool held)
+        {
+            Field.HoldChaos = held;
+            RequestFrame();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
+            Field.HoldChaos = false;
             _chaosPopped = null;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
@@ -220,7 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF Bubble.Pop with a spec: anchor the pop point, start the burst, hand it to the run.</summary>
         internal static void PopChaos(AmbientBubble b)
         {
-            if (b.Popping || b.Spec == null) return;
+            if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
@@ -289,6 +299,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
+
+        /// <summary>One fill + pen per variant tint, built once (the render pass stays allocation-free).</summary>
+        private static (IBrush, IPen) TintPaint(uint argb)
+        {
+            if (TintCache.TryGetValue(argb, out var p)) return p;
+            var c = Color.FromUInt32(argb);
+            return TintCache[argb] = (new SolidColorBrush(c, 0.45), new Pen(new SolidColorBrush(c), 3));
+        }
 
         internal readonly int Index;
         internal readonly PixelRect Bounds;
@@ -390,9 +409,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
                         {
-                            var tint = Color.FromUInt32(b.Spec.Tint);
-                            dc.DrawEllipse(new SolidColorBrush(tint, 0.45), new Pen(new SolidColorBrush(tint), 3),
-                                new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            var (fill, pen) = TintPaint(b.Spec.Tint);
+                            dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);

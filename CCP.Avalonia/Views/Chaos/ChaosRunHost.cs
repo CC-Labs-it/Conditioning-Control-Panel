@@ -222,6 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_spawning) return;
             _manualPaused = !_manualPaused;
+            BubbleOverlay.HoldChaos(_manualPaused);   // WPF :267-268 freeze + input lock
             _state?.PushEvent(_manualPaused ? "⏸ held. the hole waits." : "▶ sinking again");
             _hud?.SetPausedUi(_manualPaused);
         }

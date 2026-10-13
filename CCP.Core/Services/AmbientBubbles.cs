@@ -156,6 +156,8 @@ namespace ConditioningControlPanel.Services
 
         public readonly List<AmbientBubble> Bubbles = new();
         public readonly Random Random = new();
+        /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
+        public bool HoldChaos;
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
 
@@ -190,6 +192,7 @@ namespace ConditioningControlPanel.Services
             var missed = 0;
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
+                if (HoldChaos && Bubbles[i].Spec != null && !Bubbles[i].Popping) continue;
                 var r = Bubbles[i].Step();
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Missed) missed++;
