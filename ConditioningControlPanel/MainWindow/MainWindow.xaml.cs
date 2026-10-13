@@ -1136,6 +1136,7 @@ namespace ConditioningControlPanel
                 // rather than via App.KillAllAudio, which also touches services never audited for
                 // off-thread calls.
                 try { App.StopAudioPlaylist(); }         catch (Exception ex) { LogPanicFallbackStep("audio playlist", ex); }
+                try { Services.GoonGame.GoonToyDirector.Stop(); } catch (Exception ex) { LogPanicFallbackStep("goon toys", ex); }
                 try { App.MindWipe?.Stop(); }            catch (Exception ex) { LogPanicFallbackStep("mind wipe", ex); }
                 try { App.BrainDrain?.Stop(); }          catch (Exception ex) { LogPanicFallbackStep("brain drain", ex); }
                 try { App.Audio?.ForceUnduck(); }        catch (Exception ex) { LogPanicFallbackStep("unduck", ex); }

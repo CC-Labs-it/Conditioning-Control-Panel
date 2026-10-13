@@ -1232,6 +1232,8 @@ namespace ConditioningControlPanel
             // The audio player first and on its own: the pass below is one try/catch, and the
             // player's own files are the loudest thing a panic can leave running.
             StopAudioPlaylist();
+            // A Goon toy cue is a sound-alike: a panic or stop-all never leaves it running (ccp-bugs #1429).
+            try { Services.GoonGame.GoonToyDirector.Stop(); } catch { }
 
             try
             {

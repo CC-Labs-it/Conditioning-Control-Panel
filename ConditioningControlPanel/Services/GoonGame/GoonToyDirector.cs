@@ -144,7 +144,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     await haptics.PlayPatternAsync(cue.Level, seg, cue.Mode, PriorityFor(cue.Level), ToyRole.All, cts.Token)
                         .ConfigureAwait(false);
                     // Cut short from outside (panic stop): never start the toy again on our own.
-                    if (sw.ElapsedMilliseconds < seg / 2) break;
+                    if (sw.ElapsedMilliseconds < seg - 300) break;
                     left -= seg;
                 }
             }
