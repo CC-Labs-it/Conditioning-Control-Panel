@@ -250,19 +250,26 @@ namespace ConditioningControlPanel.Services.Commands
             });
         }
 
+        /// <summary>The ONE folder a random AI audio pick draws from: <c>&lt;assets&gt;\audio</c>.
+        /// It is local files only - no online source feeds it (ccp-bugs #1428).</summary>
+        internal static string AudioFolderUnder(string assetsRoot) => Path.Combine(assetsRoot, "audio");
+
+        /// <summary>Every playable audio file under <paramref name="audioRoot"/>, subfolders
+        /// included. Empty when the folder is missing.</summary>
+        internal static string[] AudioFilesIn(string audioRoot)
+        {
+            if (string.IsNullOrWhiteSpace(audioRoot) || !Directory.Exists(audioRoot)) return Array.Empty<string>();
+            return Directory.GetFiles(audioRoot, "*.*", SearchOption.AllDirectories)
+                .Where(f => IsAudio(Path.GetExtension(f).ToLowerInvariant()))
+                .ToArray();
+        }
+
         private static bool PlayRandomAudio()
         {
             try
             {
-                var assetsRoot = App.EffectiveAssetsPath;
-                var audioRoot = Path.Combine(assetsRoot, "audio");
-                string[] candidates = Array.Empty<string>();
-                if (Directory.Exists(audioRoot))
-                {
-                    candidates = Directory.GetFiles(audioRoot, "*.*", SearchOption.AllDirectories)
-                        .Where(f => IsAudio(Path.GetExtension(f).ToLowerInvariant()))
-                        .ToArray();
-                }
+                var audioRoot = AudioFolderUnder(App.EffectiveAssetsPath);
+                var candidates = AudioFilesIn(audioRoot);
 
                 if (candidates.Length == 0)
                 {
