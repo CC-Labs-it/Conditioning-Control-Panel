@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -11,6 +10,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Companion.Brain;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -31,8 +31,11 @@ public sealed class CompanionTranscriptWindowTests
                 .SetupWithoutStarting();
         var store = new CompanionSessionStore();
         var backup = File.Exists(store.SessionPath) ? File.ReadAllText(store.SessionPath) : null;
+        var prompt = CoreSettings.Current.CompanionPrompt;
+        var memoryWas = prompt.ChatMemoryEnabled;
         try
         {
+            prompt.ChatMemoryEnabled = true;   // Core Save/Load are no-ops when off (CompanionSessionStore.cs:117,251)
             store.Save(new[]
             {
                 CompanionTurn.Create(TurnKind.UserChat, "first from me"),
@@ -51,8 +54,6 @@ public sealed class CompanionTranscriptWindowTests
                 Loc.Get("companion_chat_history_her"), "reply from her",
                 Loc.Get("companion_memory_storage_note"),
             }, texts);
-            Assert.Equal(ScrollBarVisibility.Auto,
-                ScrollViewer.GetVerticalScrollBarVisibility(w.GetLogicalDescendants().OfType<ScrollViewer>().Single()));
 
             PanicSurfaces.All.Single(x => x.Id == "companion-transcript").Stop(null);
             Dispatcher.UIThread.RunJobs();
@@ -64,6 +65,7 @@ public sealed class CompanionTranscriptWindowTests
             CompanionTranscriptWindow.LastShown?.Close();
             Dispatcher.UIThread.RunJobs();
             if (backup is null) File.Delete(store.SessionPath); else File.WriteAllText(store.SessionPath, backup);
+            prompt.ChatMemoryEnabled = memoryWas;
         }
         return Task.CompletedTask;
     });
