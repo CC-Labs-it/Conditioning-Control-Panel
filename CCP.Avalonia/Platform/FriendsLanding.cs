@@ -123,7 +123,8 @@ internal static class FriendsLanding
     }
 
     private static void ShowCard(Window anchor, InboxItem item) =>
-        KnockCard.Show(anchor, item, KnockLine(item), Str("friends_land_join", "Join"),
+        // No Join where this head has no host: a Join that opens nothing would tell the sender "joined".
+        KnockCard.Show(anchor, item, KnockLine(item), CanJoin(item) ? Str("friends_land_join", "Join") : null,
             Str("friends_land_not_now", "Not now"), Str("friends_land_answer_later", "Answer later"),
             OnKnockDone, shown: i => FriendsSeen.Shared.Seen(FriendsHead.Service, i.Id));
 
@@ -200,20 +201,32 @@ internal static class FriendsLanding
                 Sfx("chaos/sink.mp3", 0.10f, "friends-sink");   // WPF FriendsSfx.Dismiss
                 return;
         }
+        if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
+        if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
-        if (item.Kind != SendKind.Invite) return;
         FriendsSeen.Shared.Report(FriendsHead.Service, ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
     }
 
-    /// <summary>WPF Join :522. Ramp opens the Studio tab, where its card lives.</summary>
+    /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
+    /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
+    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+
+    /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
+    /// Tests replace it.</summary>
+    internal static Action<string> OpenPanelTab { get; set; } = tab =>
+    {
+        if (MainShellWindow.Current is not { } mw) return;
+        LauncherWindow.OpenPanel(mw);
+        mw.ShowTab(tab);
+    };
+
+    /// <summary>WPF Join :522. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
     private static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
-        if (item.Destination == InviteDestination.Ramp) { MainShellWindow.Current?.ShowTab("studio"); return; }
-        // ponytail: Back Room / Goon / chess hosts are not on this head (GameWindow has the Breakout demo only).
-        Log.Warning("[Friends] no {Dest} host on this head", item.Destination);
+        if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
 
     private static readonly FriendsSfxGate SfxGate = new();

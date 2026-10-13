@@ -70,6 +70,7 @@ public sealed class KnockCardTests
         var s = CoreSettings.Current;
         var (motion, bell, volume) = (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume);
         var (oldSvc, oldClock, oldWorld, oldAnchor) = (FriendsHead.Service, KnockCard.Clock, FriendsLanding.World, FriendsLanding.Anchor);
+        var oldOpenTab = FriendsLanding.OpenPanelTab;
         var now = T0;
         var world = new LandingWorld(false, false, false, PanelVisible: true, LauncherVisible: false, GameHostActive: false);
         var host = new Window { Width = 1000, Height = 700 };
@@ -93,6 +94,7 @@ public sealed class KnockCardTests
         {
             FriendsLanding.Stop();
             (FriendsHead.Service, KnockCard.Clock, FriendsLanding.World, FriendsLanding.Anchor) = (oldSvc, oldClock, oldWorld, oldAnchor);
+            FriendsLanding.OpenPanelTab = oldOpenTab;
             (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume) = (motion, bell, volume);
             StartupLadder.ResetForTests();
             FriendsSeen.Shared.Clear();
@@ -162,7 +164,10 @@ public sealed class KnockCardTests
         Assert.Equal(2, KnockCard.Up.Count);
         var (a, b) = (KnockCard.Up[0], KnockCard.Up[1]);
         Assert.Equal(a.Position.X, b.Position.X);
-        Assert.True(b.Position.Y > a.Position.Y, $"{a.Position} then {b.Position}");
+        // WPF's 12 px card margin is the gap between windows here, not transparent window area (no click-through).
+        Assert.Equal(a.Position.Y + (int)Math.Round(a.ClientSize.Height + 12), b.Position.Y);
+        Assert.Equal(232, a.ClientSize.Width);
+        Assert.Equal(((Control)a.Content!).Bounds.Height, a.ClientSize.Height);   // no transparent strip in the window
         Assert.True(a.Position.X > host.Position.X + 500, $"right-hand side: {a.Position}");
 
         PanicSurfaces.All.Single(x => x.Id == "knock-cards").Stop(null);
@@ -180,6 +185,30 @@ public sealed class KnockCardTests
         setWorld(new LandingWorld(false, false, false, true, false, false));
         FriendsLanding.Tick();
         Assert.Equal("00000000000000b3", Assert.Single(KnockCard.Up).Item.Id);
+    });
+
+    /// <summary>Join only where this head has a host: a Join that opened nothing would tell the sender "joined".
+    /// Ramp's Join opens the panel on the Studio tab (WPF Join :545 OpenTab) and reports Joined.</summary>
+    [Fact]
+    public Task JoinOnlyWhereThisHeadCanOpenTheDestination() => Run((svc, _, _, _) =>
+    {
+        var tabs = new List<string>();
+        FriendsLanding.OpenPanelTab = tabs.Add;
+        svc.Deliver(Invite("00000000000000c1"));
+        var backRoom = Assert.Single(KnockCard.Up);
+        Assert.Null(backRoom.GoButton);
+        // Even a Go that reaches it (Enter on a stale card) never says joined: it waits in the Inbox.
+        backRoom.Fold(KnockOutcome.Go);
+        Assert.DoesNotContain(svc.Receipts, r => r.State == ReceiptState.Joined);
+        Assert.Contains(StartupLadder.Inbox.Items, i => i.Key == "friends:00000000000000c1");
+        Assert.Empty(tabs);
+
+        svc.Deliver(Invite("00000000000000c2", InviteDestination.Ramp));
+        var ramp = Assert.Single(KnockCard.Up);
+        Press(ramp.GoButton!);
+        Assert.Empty(KnockCard.Up);
+        Assert.Contains(svc.Receipts, r => r.State == ReceiptState.Joined && r.Key.Contains("00000000000000c2"));
+        Assert.Equal(new[] { "studio" }, tabs);
     });
 
     /// <summary>P04/P11: startup starts the landing on the friends service; exit stops it before the poll goes.</summary>

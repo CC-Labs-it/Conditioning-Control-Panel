@@ -32,6 +32,9 @@ internal enum KnockOutcome { Go, NotNow, Later, RanOut }
 internal sealed class KnockCard : Window
 {
     private const double CardWidth = 232, TuckedWidth = 206, RingSize = 22;   // WPF :31-33
+    // WPF's card Margin bottom 12 (:155) as stack spacing: a transparent margin inside this window would take
+    // clicks over the panel (no per-pixel click-through here), so the gap lives between windows instead.
+    private const double Gap = 12;
     private static readonly IBrush Ground = new SolidColorBrush(Color.FromRgb(0x22, 0x16, 0x41));
     private static readonly List<KnockCard> Open = new();
 
@@ -57,15 +60,15 @@ internal sealed class KnockCard : Window
     private TimeSpan? _animStart;
 
     internal bool IsTucked => _tucked && !_hovered;
-    internal Button GoButton { get; }
+    internal Button? GoButton { get; }
     internal Button NotNowButton { get; }
     internal Button LaterButton { get; }
 
-    /// <summary>--render-all only: a Back Room invite, two minutes left.</summary>
-    internal KnockCard() : this(null, new InboxItem("render", SendKind.Invite, "f", "Bambi", null, null, InviteDestination.BackRoom, null, null,
-        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(2)), "invites you to the Back Room", "Join", "Not now", "Answer later", (_, _) => { }, null) { }
+    /// <summary>--render-all only: a Ramp invite (a destination this head can Join), two minutes left.</summary>
+    internal KnockCard() : this(null, new InboxItem("render", SendKind.Invite, "f", "Bambi", null, null, InviteDestination.Ramp, null, null,
+        DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(2)), "invites you to a Ramp link", "Join", "Not now", "Answer later", (_, _) => { }, null) { }
 
-    private KnockCard(Window? anchor, InboxItem item, string line, string goLabel, string notNowLabel, string laterTip,
+    private KnockCard(Window? anchor, InboxItem item, string line, string? goLabel, string notNowLabel, string laterTip,
         Action<InboxItem, KnockOutcome> done, Action<InboxItem>? shown)
     {
         // WPF LandingChrome.Dress: borderless, transparent, no taskbar, never activated, topmost, sized to content.
@@ -139,22 +142,25 @@ internal sealed class KnockCard : Window
         stack.Children.Add(_art);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-        GoButton = FriendsDrawer.Pill(goLabel, FriendsDrawer.Mint, FriendsDrawer.MintInk, "knock-go", FriendsDrawer.Mint);
-        GoButton.Padding = new Thickness(10, 5, 10, 5);
-        ((TextBlock)GoButton.Content!).FontWeight = FontWeight.SemiBold;
-        GoButton.Click += (_, _) => Fold(KnockOutcome.Go);
+        if (goLabel != null)
+        {
+            GoButton = FriendsDrawer.Pill(goLabel, FriendsDrawer.Mint, FriendsDrawer.MintInk, "knock-go", FriendsDrawer.Mint);
+            GoButton.Padding = new Thickness(10, 5, 10, 5);
+            ((TextBlock)GoButton.Content!).FontWeight = FontWeight.SemiBold;
+            GoButton.Click += (_, _) => Fold(KnockOutcome.Go);
+            buttons.Children.Add(GoButton);
+        }
         NotNowButton = FriendsDrawer.Pill(notNowLabel, Brushes.Transparent, FriendsDrawer.Muted, "knock-not-now", FriendsDrawer.Line2);
         NotNowButton.Padding = new Thickness(10, 5, 10, 5);
-        NotNowButton.Margin = new Thickness(6, 0, 0, 0);
+        NotNowButton.Margin = new Thickness(GoButton != null ? 6 : 0, 0, 0, 0);
         NotNowButton.Click += (_, _) => Fold(KnockOutcome.NotNow);
-        buttons.Children.Add(GoButton);
         buttons.Children.Add(NotNowButton);
         stack.Children.Add(buttons);
 
         _card = new Border
         {
             Width = CardWidth, Background = Ground, BorderBrush = FriendsDrawer.Line2, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 10, 10, 9), Margin = new Thickness(0, 0, 0, 12),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 10, 10, 9),
             BoxShadow = BoxShadows.Parse("0 8 24 0 #8C000000"),   // WPF DropShadow blur 24, depth 8, 0.55
             Child = stack, RenderTransform = _shift, Tag = "knock-card", VerticalAlignment = VerticalAlignment.Top,
         };
@@ -306,7 +312,7 @@ internal sealed class KnockCard : Window
                 var size = card._anchor.ClientSize;
                 var w = card.ClientSize.Width > 0 ? card.ClientSize.Width : CardWidth;
                 card.Position = card._anchor.Position + new PixelPoint((int)Math.Round((size.Width - w - 14) * k), (int)Math.Round((34 + y) * k));
-                y += card.ClientSize.Height;
+                y += card.ClientSize.Height + Gap;
             }
             catch (Exception ex) { Log.Debug("[Friends] knock restack: {E}", ex.Message); }
         }
@@ -315,7 +321,7 @@ internal sealed class KnockCard : Window
     internal static IReadOnlyList<KnockCard> Up => Open;
 
     /// <summary>Puts a card up for <paramref name="item"/> unless one is already up for it (WPF Show :330).</summary>
-    public static KnockCard? Show(Window? anchor, InboxItem item, string line, string goLabel, string notNowLabel, string laterTip,
+    public static KnockCard? Show(Window? anchor, InboxItem item, string line, string? goLabel, string notNowLabel, string laterTip,
         Action<InboxItem, KnockOutcome> done, Action<InboxItem>? shown = null)
     {
         if (anchor == null || item == null) return null;
