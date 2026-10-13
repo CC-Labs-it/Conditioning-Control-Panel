@@ -590,6 +590,7 @@ namespace ConditioningControlPanel.Avalonia
                     }
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
+                Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
                 // WPF App.xaml.cs:2940-2968. EnsureBaselineAsync keeps WPF's rules: no-op on a full
                 // install, under a debugger, in offline mode, or when nothing is missing. A Linux dev
                 // build never reads as a full install (flashes_audio is not shipped here), so an
