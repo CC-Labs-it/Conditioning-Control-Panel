@@ -75,8 +75,13 @@ public sealed class WebAssetServer : IDisposable
     }
 
     /// <summary>The URL a web view navigates to for a page under the root, e.g. "intake/index.html".</summary>
-    public string Url(string relativePath) =>
-        $"http://127.0.0.1:{Port}/{relativePath.TrimStart('/')}?ccp_t={Token}";
+    public string Url(string relativePath, string? query = null) =>
+        $"http://127.0.0.1:{Port}/{relativePath.TrimStart('/')}?ccp_t={Token}" + (string.IsNullOrEmpty(query) ? "" : "&" + query);
+
+    /// <summary>The URL a page loads a library file by (WPF DtrhAssetManifest.AssetUrl's https://ccp.assets/&lt;rel&gt;):
+    /// same origin as the page, so the token cookie covers it; each path segment escaped.</summary>
+    public string AssetUrl(string rel) =>
+        $"http://127.0.0.1:{Port}/{AssetsPrefix}" + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
 
     /// <summary>Per-port so two runs on 127.0.0.1 (cookies ignore the port) never overwrite each other.</summary>
     string CookieName => $"ccp_t_{Port}";
