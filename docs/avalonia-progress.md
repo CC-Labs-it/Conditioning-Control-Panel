@@ -2185,3 +2185,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/webcam-core-a: +304
 - Cloud session (Opus), local review + gate.
 - Review fix: LongStareDetectorTests split out, all 8 tests fail-proven, tracker ponytail note refreshed; rgate GATE-OK incl. WPF suite on windows.
+
+## avalonia-port/media-core-a: +173
+- Cloud session (Opus), local review + gate.
