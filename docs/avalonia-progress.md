@@ -2135,3 +2135,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/ci-hybrid-gate: +21
 - build.yml `scope=windows` dispatch input: GitHub runs only Windows jobs, Linux half runs locally (bin/rgate hybrid). Hybrid rgate GATE-OK (run 38397970327).
+
+## avalonia-port/platform-heads: +440
+- Discord Rich Presence: the service moved to Core, one copy for both heads (PostToUi seam). Armed only when enabled, a Discord is linked and the app is online, on both switches and at startup. Bubbles and Mind Wipe now set the presence text. A sandboxed run never connects.
+- MPRIS/SMTC media watcher deferred to platform-heads-b (needs the AwarenessObserver Core move first).
