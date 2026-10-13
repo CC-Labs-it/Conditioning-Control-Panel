@@ -2292,6 +2292,7 @@ namespace ConditioningControlPanel
             // the 100-line app-log tail, and a hard power reset can roll a buffered write back.
             // Its own file + WriteThrough per line survives both. See VideoDiag.
             Services.VideoDiag.Start(Dispatcher);
+            Services.VideoSurfaceHealth.TraceSink = Services.VideoDiag.Log;   // CCP.Core: surface lines reach the video trace
 
             splash?.SetProgress(0.1, "Initializing...");
 

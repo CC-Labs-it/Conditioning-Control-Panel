@@ -279,6 +279,10 @@ namespace ConditioningControlPanel.Services
             return sb.ToString();
         }
 
+        /// <summary>The video trace sink (WPF: VideoDiag.Log, seeded in App startup). Null on a head
+        /// without one, and then <see cref="Report"/> writes Serilog only.</summary>
+        internal static volatile Action<string, string>? TraceSink;
+
         /// <summary>
         /// Emit one <see cref="FormatSurfaceLine"/> to BOTH sinks: Serilog (Information, so it lands in
         /// the log the support flow collects) and the video trace (which is the file reporters attach).
@@ -290,7 +294,7 @@ namespace ConditioningControlPanel.Services
             {
                 var line = FormatSurfaceLine(engine, monitor, primary, firstFrameMs, failureReason);
                 Log.Information("VideoSurface: {Surface}", line);
-                VideoDiag.Log("SURFACE", line);
+                TraceSink?.Invoke("SURFACE", line);
             }
             catch (Exception ex)
             {

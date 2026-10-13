@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
         {
             string? env = null;
             try { env = Environment.GetEnvironmentVariable(TestOverrideVariable); } catch { }
-            var s = App.Settings?.Current;
+            var s = CoreSettings.Service?.Current;
             return Resolve(s?.AudioOutputDeviceId, s?.AudioOutputDeviceName, env);
         }
 

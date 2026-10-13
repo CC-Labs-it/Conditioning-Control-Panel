@@ -256,7 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _stageSink = new Platform.VlcFrameSink(_stagePlayer, () => _stageMedia,
                 bmp => BlinkTrainerStageVideo.Source = bmp, () => BlinkTrainerStageVideo.InvalidateVisual());
             _stageMedia = new VlcMedia(vlc, path, LibVLCSharp.Shared.FromType.FromPath);
-            _stageMedia.AddOption(":no-audio");
+            _stageMedia.AddOption(LibVlcSilence.NoAudioOption);
             _stageMedia.AddOption(":input-repeat=65535");
             _stagePlayer.Play(_stageMedia);
         }

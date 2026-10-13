@@ -343,7 +343,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
             _media = new Media(vlc, path, FromType.FromPath);
             _media.AddOption(":input-repeat=65535");   // WPF PreviewVideo_MediaEnded: loop
-            _media.AddOption(":no-audio");
+            _media.AddOption(LibVlcSilence.NoAudioOption);
             player.Play(_media);
         }
 

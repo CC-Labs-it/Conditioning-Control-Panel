@@ -294,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true, Mute = true };
             _sink = new VlcFrameSink(_player, () => _media, bmp => images.ForEach(i => i.Source = bmp), () => images.ForEach(i => i.InvalidateVisual()));
             _media = new Media(vlc, path, FromType.FromPath);
-            _media.AddOption(":no-audio");
+            _media.AddOption(LibVlcSilence.NoAudioOption);
             _media.AddOption(":input-repeat=65535");   // WPF MediaEnded -> Position 0 -> Play
             _player.Play(_media);
         }
