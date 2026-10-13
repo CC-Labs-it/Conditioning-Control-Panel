@@ -130,6 +130,16 @@ public sealed class WebHostProbeTests
     public void OnlyAnExplicitGtkSkipsTheAudioSinkCheck(string? value, bool skips) =>
         Assert.Equal(skips, WebHost.SkipsAudioSinkCheck(value));
 
+    // The wiring ProbeUnavailableReason uses: the override turns a missing sink into ready; the default stays gated.
+    [Fact]
+    public void TheGtkOverrideReachesTheProbe()
+    {
+        Assert.True(WebHost.AudioSinkReady(linux: true, headless: false, probe: () => false, env: "gtk"));
+        Assert.False(WebHost.AudioSinkReady(linux: true, headless: false, probe: () => false, env: null));
+        Assert.True(WebHost.AudioSinkReady(linux: true, headless: false, probe: () => true, env: null));
+        Assert.True(WebHost.AudioSinkReady(linux: false, headless: false, probe: () => false, env: null));
+    }
+
     [Theory]
     [InlineData(null, true, "gtk")]
     [InlineData(null, false, "gtk")]

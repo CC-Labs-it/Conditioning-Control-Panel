@@ -188,7 +188,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 // Linux: name the distro's install command (docs/avalonia-linux-install.md) instead of
                 // the adapter's generic "Install webkit2gtk 4.0+ package.", which stays the fallback.
-                var hint = _linuxHint.Value;
+                // CCP_LINUX_WEBVIEW=off: the reason is the user's own choice, not a missing package.
+                var hint = LinuxChoice == "off" ? null : _linuxHint.Value;
                 _txtReason.Text = hint?.Text ?? UnavailableReason!;   // the hint ends with LinuxDependencies.RestartHint
                 if (hint?.Command is { } command)
                 {
@@ -305,13 +306,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // always draw the fallback, even on a box with WPE/WebKitGTK installed.
             var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
             var linux = OperatingSystem.IsLinux();
-            var sink = !linux || headless || ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so");
-            if (!sink && SkipsAudioSinkCheck(Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW")))
-            {
-                Log.Warning("WebHost: GStreamer autoaudiosink not found, CCP_LINUX_WEBVIEW=gtk overrides the check (a page's first sound may freeze it)");
-                sink = true;
-            }
+            var sink = AudioSinkReady(linux, headless, () => ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"),
+                Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW"));
             return DecideUnavailableReason(adapters, linux, headless, LinuxChoice, audioSink: sink);
+        }
+
+        /// <summary>The audioSink input of <see cref="DecideUnavailableReason"/>: probed only on the real Linux desktop app,
+        /// and an explicit CCP_LINUX_WEBVIEW=gtk overrides a negative probe with one warning.</summary>
+        internal static bool AudioSinkReady(bool linux, bool headless, Func<bool> probe, string? env)
+        {
+            if (!linux || headless || probe()) return true;
+            if (!SkipsAudioSinkCheck(env)) return false;
+            Log.Warning("WebHost: GStreamer autoaudiosink not found, CCP_LINUX_WEBVIEW=gtk overrides the check (a page's first sound may freeze it)");
+            return true;
         }
 
         /// <summary>An explicit CCP_LINUX_WEBVIEW=gtk overrides the audio-sink probe, so a false negative (a plugin dir the probe
