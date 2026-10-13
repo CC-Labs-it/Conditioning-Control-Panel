@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         // Weak: a gate whose tab is torn down must not be kept alive by its decoration.
         private static readonly ConditionalWeakTable<Border, PremiumGateFx> Attached = new();
 
-        private DispatcherTimer? _lockClock;
+        private Helpers.BeatLoop? _lockClock;
         private long _lockStart;
         private CardSheenAdorner? _ctaSheen;
         private bool _running;
@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         internal bool IsRunning => _running;
         internal bool HasLockGlow => padlock?.Effect is DropShadowEffect;
         internal CardSheenAdorner? CtaSheen => _ctaSheen;
-        internal bool GlowTicking => _lockClock?.IsEnabled == true;
+        internal bool GlowTicking => _lockClock?.IsRunning == true;
 
         /// <summary>Decorates a gate once and re-evaluates its clocks. Idempotent, never throws;
         /// null when the gate is not a shape this can decorate.</summary>
@@ -177,14 +177,16 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 Opacity = LockGlowMaxOpacity,
             };
             padlock.Effect = glow;
-            // WPF: a 3.6s SineEase in/out, auto-reversed, capped at 24fps (SetDesiredFrameRate).
+            // WPF: a 3.6s SineEase in/out, auto-reversed, capped at AmbientFrameRate 30 (WPF PremiumGateFx.cs:52,249). Here on the
+            // window's shared 30 fps beat, which parks while hidden or minimised (lag-fixes-b).
             _lockStart = FxAdorner.Time.GetTimestamp();
-            _lockClock = new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / 24), DispatcherPriority.Background, (_, _) =>
+            _lockClock = new Helpers.BeatLoop(padlock, _ =>
             {
                 double t = FxAdorner.Time.GetElapsedTime(_lockStart).TotalSeconds % (2 * LockGlowSeconds);
                 double u = t < LockGlowSeconds ? t / LockGlowSeconds : 2 - (t / LockGlowSeconds);
                 glow.Opacity = LockGlowMinOpacity + ((LockGlowMaxOpacity - LockGlowMinOpacity) * (1 - Math.Cos(Math.PI * u)) / 2);
-            });   // this constructor starts the timer
+            });
+            _lockClock.Start();
         }
 
         /// <summary>The Presets-style travelling band on the CTA, in the adorner layer so the

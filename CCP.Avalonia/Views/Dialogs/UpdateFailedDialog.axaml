@@ -22,6 +22,7 @@
                                        to its StackPanel by default, Avalonia's does not. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateFailedDialog"
         Title="{loc:Str title_update_failed}"
@@ -98,7 +99,7 @@
 
             <!-- Title -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
-                <TextBlock Text="&#x26A0;" FontSize="26" Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <fx:IconGlyph Kind="Warning" Variant="Filled" Size="26" Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
                 <TextBlock x:Name="TxtTitle" Foreground="{DynamicResource PinkBrush}"
                            FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
             </StackPanel>
