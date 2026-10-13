@@ -45,15 +45,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private const double OwnedNodeGlowMinOpacity = 0.38, OwnedNodeGlowMaxOpacity = 0.72, OwnedNodeGlowSeconds = 3.8;
         private const double SkillNodeHoverScale = 1.25;
         private const int SkillNodeHoverInMs = 250, SkillNodeHoverOutMs = 200;
-        private const int AmbientFrameRate = 24;
 
         /// <summary>The FX clock. Tests swap in a stepped clock and call <see cref="StepFx"/>.</summary>
         internal static TimeProvider Time = TimeProvider.System;
 
-        private readonly List<DropShadowEffect> _ownedGlows = new();
+        private readonly List<Border> _ownedGlows = new();
+        private readonly Dictionary<string, Bitmap?> _blurredArt = new();
         private readonly Dictionary<string, Bitmap?> _art = new();
         private LinearGradientBrush? _treeBrush, _headerBrush;
-        private DispatcherTimer? _fxTimer;
+        private BeatLoop? _fxTimer;
         private long _fxStarted;
         private IDisposable? _visibilityWatch;
         private Window? _window;
@@ -71,10 +71,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>True while the tab's one FX clock (breath + gradient drift) runs. Test seam.</summary>
-        internal bool FxRunning => _fxTimer?.IsEnabled == true;
+        internal bool FxRunning => _fxTimer?.IsRunning == true;
 
         /// <summary>The owned nodes' glows the breath drives. Test seam.</summary>
-        internal IReadOnlyList<DropShadowEffect> OwnedGlows => _ownedGlows;
+        internal IReadOnlyList<Border> OwnedGlows => _ownedGlows;
+
+        /// <summary>Locked art blurred once per skill. Test seam.</summary>
+        internal IReadOnlyDictionary<string, Bitmap?> BakedArt => _blurredArt;
 
         // WPF repaints from SkillTreeService events and on every ShowTab; here AppSettings
         // PropertyChanged, the tab becoming visible, a mod switch and a language switch.
@@ -114,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Dispatcher.UIThread.Post(RepaintIfShown);
         }
 
-        private void OnModChanged(object? sender, ModPackage e) => Dispatcher.UIThread.Post(() => { _art.Clear(); RepaintIfShown(); });
+        private void OnModChanged(object? sender, ModPackage e) => Dispatcher.UIThread.Post(() => { _art.Clear(); _blurredArt.Clear(); RepaintIfShown(); });
 
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RepaintIfShown);
 
@@ -200,9 +203,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops) { StopFx(rest: true); return; }
                 bool onScreen = IsEffectivelyVisible && _window is { IsActive: true } w && w.WindowState != WindowState.Minimized;
                 if (!onScreen) { StopFx(rest: false); return; }
-                _fxTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / AmbientFrameRate),
-                    DispatcherPriority.Background, (_, _) => Tick());
-                if (!_fxTimer.IsEnabled) { _fxTimer.Start(); Tick(); }
+                // The window's shared 30 fps beat (WPF AmbientFrameRate 30, MainWindow.EnhancementsFx.cs:186); Start ticks once.
+                _fxTimer ??= new BeatLoop(this, _ => Tick());
+                _fxTimer.Start();
             }
             catch (Exception ex) { Serilog.Log.Debug("Enhancements EvaluateFx: {E}", ex.Message); }
         }
@@ -312,7 +315,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var (px, py) = positions[skill.PrerequisiteId!];
                 var (cx, cy) = positions[skill.Id];
-                SkillTreeCanvas.Children.Add(Connector(px + NodeWidth, py + NodeHeight / 2, cx, cy + NodeHeight / 2,
+                SkillTreeCanvas.Children.AddRange(Connector(px + NodeWidth, py + NodeHeight / 2, cx, cy + NodeHeight / 2,
                     SkillTreeRules.HasSkill(settings, skill.Id), SkillTreeRules.HasSkill(settings, skill.PrerequisiteId!)));
             }
 
@@ -334,15 +337,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>DrawConnectionLines: green + glow when the child is owned, accent when only
         /// the parent is.</summary>
-        private static Control Connector(double x1, double y1, double x2, double y2, bool childOwned, bool parentOwned) => new Line
+        private static Control[] Connector(double x1, double y1, double x2, double y2, bool childOwned, bool parentOwned)
         {
-            StartPoint = new Point(x1, y1),
-            EndPoint = new Point(x2, y2),
-            Stroke = childOwned ? Rgb(100, 255, 150) : parentOwned ? Accent : Rgb(60, 60, 80),
-            StrokeThickness = childOwned ? 3 : 2,
-            Opacity = childOwned || parentOwned ? 1.0 : 0.3,
-            Effect = childOwned ? new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 8, OffsetX = 0, OffsetY = 0, Opacity = 0.6 } : null,
-        };
+            Line L(IBrush stroke, double thickness, double opacity) => new()
+            {
+                StartPoint = new Point(x1, y1), EndPoint = new Point(x2, y2),
+                Stroke = stroke, StrokeThickness = thickness, Opacity = opacity, IsHitTestVisible = false,
+                StrokeLineCap = PenLineCap.Round,
+            };
+            var line = L(childOwned ? Rgb(100, 255, 150) : parentOwned ? Accent : Rgb(60, 60, 80), childOwned ? 3 : 2,
+                childOwned || parentOwned ? 1.0 : 0.3);
+            line.StrokeLineCap = PenLineCap.Flat;
+            if (!childOwned) return new Control[] { line };
+            // WPF's LimeGreen DropShadowEffect (blur 8, 0.6) as two soft underlay strokes: an Effect would re-blur
+            // every line on each frame the tree's gradient drifts (P82 rule 3).
+            return new Control[] { L(Brushes.LimeGreen, 13, 0.12), L(Brushes.LimeGreen, 7, 0.25), line };
+        }
+
+        /// <summary>Locked art blurred once (WPF BlurEffect Radius 8 at the node's 156 px width; Skia's
+        /// radius-to-sigma 0.57735 r + 0.5, scaled to the bitmap's pixels). Null when it cannot be baked.</summary>
+        private Bitmap? BlurredArt(string id, Bitmap src)
+        {
+            if (_blurredArt.TryGetValue(id, out var done)) return done;
+            Bitmap? baked = null;
+            try
+            {
+                using var ms = new System.IO.MemoryStream();
+                src.Save(ms);
+                ms.Position = 0;
+                using var sk = SkiaSharp.SKBitmap.Decode(ms);
+                float sigma = (float)((0.57735 * 8 + 0.5) * sk.Width / NodeWidth);
+                using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(sk.Width, sk.Height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
+                using var paint = new SkiaSharp.SKPaint { ImageFilter = SkiaSharp.SKImageFilter.CreateBlur(sigma, sigma) };
+                surface.Canvas.Clear(SkiaSharp.SKColors.Transparent);
+                surface.Canvas.DrawBitmap(sk, 0, 0, paint);
+                using var image = surface.Snapshot();
+                using var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                baked = new Bitmap(png.AsStream());
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Enhancements blurred art {Id}: {E}", id, ex.Message); }
+            return _blurredArt[id] = baked;
+        }
 
         /// <summary>CreateSkillTreeHeader, minus the four PRO expanders (AddProSection).</summary>
         private Control Header()
@@ -573,7 +608,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             art = bitmap != null
                 ? new Image { Source = bitmap, Stretch = Stretch.UniformToFill }
                 : new Border { CornerRadius = new CornerRadius(8, 8, 0, 0), Background = Placeholder(skill.Tier) };
-            if (locked) art.Effect = new BlurEffect { Radius = 8 };
+            // WPF blurs locked art with a BlurEffect (radius 8). An Effect re-blurs on every frame the tree's drifting
+            // gradient repaints (P82 rule 3), so the blur is baked into the bitmap once per skill instead.
+            if (locked && art is Image img && bitmap != null) img.Source = BlurredArt(skill.Id, bitmap) ?? bitmap;
             grid.Children.Add(art);
 
             var name = new Border
@@ -618,15 +655,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Child = grid,
             };
             var wrapper = new Panel { Tag = skill.Id, RenderTransformOrigin = RelativePoint.Center, RenderTransform = TransformOperations.Parse("scale(1)") };
-            wrapper.Children.Add(node);
-            if (owned)
+            // The owned / purchasable glow is a sibling BoxShadow layer behind the node, not a DropShadowEffect on
+            // the wrapper (P82 rule 3: an Effect makes the node an offscreen layer re-blurred every frame); the
+            // breath moves only its Opacity.
+            if (owned || canPurchase)
             {
-                var glow = new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 18, OffsetX = 0, OffsetY = 0, Opacity = 0.6 };
-                wrapper.Effect = glow;
-                _ownedGlows.Add(glow);
+                var glow = new Border
+                {
+                    Width = NodeWidth, Height = NodeHeight, CornerRadius = new CornerRadius(10), IsHitTestVisible = false,
+                    BoxShadow = new BoxShadows(new BoxShadow { Blur = owned ? 18 : 15, Color = owned ? Colors.LimeGreen : Colors.HotPink }),
+                    Opacity = owned ? 0.6 : 0.7,
+                };
+                wrapper.Children.Add(glow);
+                if (owned) _ownedGlows.Add(glow);
             }
-            else if (canPurchase)
-                wrapper.Effect = new DropShadowEffect { Color = Colors.HotPink, BlurRadius = 15, OffsetX = 0, OffsetY = 0, Opacity = 0.7 };
+            wrapper.Children.Add(node);
 
             wrapper.PointerEntered += (_, _) => ApplyNodeHover(wrapper, true);
             wrapper.PointerExited += (_, _) => ApplyNodeHover(wrapper, false);
@@ -764,8 +807,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var card = SecretBorder(owned ? Rgb(40, 30, 50) : canPurchase ? Rgb(50, 30, 60) : Rgb(35, 25, 45),
                 owned ? Rgb(180, 100, 255) : canPurchase ? Rgb(153, 50, 204) : Rgb(100, 70, 130), owned ? 2 : 1, body, opacity: 1);
             card.Tag = skill.Id;
-            if (owned) card.Effect = new DropShadowEffect { Color = Colors.Purple, BlurRadius = 12, OffsetX = 0, OffsetY = 0, Opacity = 0.5 };
-            else if (canPurchase) card.Effect = new DropShadowEffect { Color = Colors.MediumPurple, BlurRadius = 10, OffsetX = 0, OffsetY = 0, Opacity = 0.4 };
+            // The card is a Border, so its glow is its own BoxShadow (WPF DropShadowEffect; P82 rule 3).
+            if (owned) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(128, Colors.Purple.R, Colors.Purple.G, Colors.Purple.B) });
+            else if (canPurchase) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 10, Color = Color.FromArgb(102, Colors.MediumPurple.R, Colors.MediumPurple.G, Colors.MediumPurple.B) });
 
             var tip = new StackPanel { MaxWidth = 280 };
             tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = Rgb(200, 150, 255), FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });

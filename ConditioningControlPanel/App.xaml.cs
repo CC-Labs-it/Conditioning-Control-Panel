@@ -2662,7 +2662,7 @@ namespace ConditioningControlPanel
             };
             // Spiral rail day log. Needs Achievements and Settings (both up by now); reads them on
             // a 60 s timer and on sync, never hooks a feature. Its loss must not cost the launch.
-            try { FeatureDayLog = new FeatureDayLogService(); }
+            try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
             catch (Exception exDayLog) { Logger?.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
             // Intake onboarding. Both are cheap and synchronous (the pass reads AppSettings; the
             // punch card loads one small json), and both must exist before MainWindow paints the
@@ -2998,7 +2998,7 @@ namespace ConditioningControlPanel
                 if (_friendsService != null)
                 {
                     var friends = _friendsService;
-                    _leashService = Services.Leash.LeashService.CreateForApp(() => friends.Kick());
+                    _leashService = Services.Leash.LeashServiceApp.CreateForApp(() => friends.Kick());
                     Leash = _leashService;
                     friends.LeashReportProvider = _leashService.BuildReportJson;
                     friends.LeashActive = () => _leashService?.Active == true;
@@ -3011,6 +3011,7 @@ namespace ConditioningControlPanel
                     };
 
                     _leashTaskHost = new Services.Leash.AppLeashTaskHost();
+                    Services.Leash.LeashTaskRunner.TimerFactory ??= () => new Services.Friends.FriendsServiceApp.Timer(System.Windows.Threading.DispatcherPriority.Normal);
                     LeashRunner = new Services.Leash.LeashTaskRunner(_leashTaskHost);
                     LeashRunner.AssignmentWatched += aid => _leashService?.NoteAssignmentWatched(aid);
                     Controls.Leash.LeashLocator.Service = () => App.Leash;

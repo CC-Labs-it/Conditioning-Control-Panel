@@ -110,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>The sign plates. Each hosts the real PNG when it loads and the vector
         /// stand-in when it does not (see the class remarks); the Border stays either way,
         /// because it is what carries the transforms, the glow and the layout box.</summary>
-        private readonly Border _tierSign;
+        private readonly Border _tierSign, _tierGlow;
         private readonly Border _stampSign;
         private readonly Image _tierImage;
         private readonly Image _stampImage;
@@ -143,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private readonly ScaleTransform _stampScale = new(1, 1);
         private readonly RotateTransform _stampRotate = new(0);
 
-        private CancellationTokenSource? _ambient;
+        private global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _ambient;
         private CancellationTokenSource? _thunk;
         private double _appliedWidth = -1;
         private bool _stampShown;
@@ -172,6 +172,22 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 TextAlignment = TextAlignment.Center,
             };
 
+            // The neon glow (lag fix, P82): a sibling BoxShadow layer under the sign that shares its
+            // transforms, never a DropShadowEffect on the sign - an Effect under the looping swell/sway
+            // re-renders and re-blurs the sign on every beat, eight times over on the Play tab.
+            var signTransform = new TransformGroup { Children = { _tierScale, _tierRotate } };
+            _tierGlow = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                RenderTransformOrigin = RelativePoint.Center,
+                RenderTransform = signTransform,
+                IsHitTestVisible = false,
+                IsVisible = false,
+            };
+            Children.Add(_tierGlow);
+
             _tierSign = new Border
             {
                 CornerRadius = new CornerRadius(6),
@@ -179,7 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 RenderTransformOrigin = RelativePoint.Center,
-                RenderTransform = new TransformGroup { Children = { _tierScale, _tierRotate } },
+                RenderTransform = signTransform,
                 Child = _tierWords,
             };
             Children.Add(_tierSign);
@@ -290,6 +306,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         internal new bool IsAnimating => _motionRunning;
 
         internal Border TierSign => _tierSign;
+        internal Border TierGlow => _tierGlow;
         internal Border StampSign => _stampSign;
         internal double TierTilt => Tier >= 2 ? TiltT2 : TiltT1;
 
@@ -380,21 +397,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 // The tier badge behind a stamp is dimmed and DEAD - a neon sign that has been
                 // papered over does not keep humming. Its glow comes off with its brightness.
                 _tierSign.Opacity = restamped ? DimmedTierOpacity : 1.0;
-                if (restamped || !GlowAllowed)
-                {
-                    _tierSign.Effect = null;
-                }
-                else if (_tierSign.Effect is not DropShadowEffect)
-                {
-                    _tierSign.Effect = new DropShadowEffect
-                    {
-                        Color = tier >= 2 ? GlowT2 : GlowT1,
-                        BlurRadius = GlowBlurRadius,
-                        OffsetX = 0,
-                        OffsetY = 0,
-                        Opacity = 1.0,
-                    };
-                }
+                _tierGlow.IsVisible = !restamped && GlowAllowed;
+                _tierGlow.Opacity = 1.0;
+                _tierGlow.BoxShadow = new BoxShadows(new BoxShadow { Blur = GlowBlurRadius, Color = tier >= 2 ? GlowT2 : GlowT1 });
 
                 bool glints = tier >= 2 && !restamped;
                 _glintA.IsVisible = glints;
@@ -567,153 +572,41 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!AmbientAllowed) return;
 
                 _motionRunning = true;
-                _ambient = new CancellationTokenSource();
-                var token = _ambient.Token;
                 double period = Tier >= 2 ? BreathT2 : BreathT1;
-
-                // Scale: starts at rest and swells. Half a period each way (Alternate), so one
-                // full breath is exactly `period`.
-                var swell = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(period / 2),
-                    IterationCount = IterationCount.Infinite,
-                    PlaybackDirection = PlaybackDirection.Alternate,
-                    Easing = new SineEaseInOut(),
-                    Children =
-                    {
-                        new KeyFrame
-                        {
-                            Cue = new Cue(0d),
-                            Setters =
-                            {
-                                new Setter(ScaleTransform.ScaleXProperty, 1.0),
-                                new Setter(ScaleTransform.ScaleYProperty, 1.0),
-                            },
-                        },
-                        new KeyFrame
-                        {
-                            Cue = new Cue(1d),
-                            Setters =
-                            {
-                                new Setter(ScaleTransform.ScaleXProperty, WobbleScale),
-                                new Setter(ScaleTransform.ScaleYProperty, WobbleScale),
-                            },
-                        },
-                    },
-                };
-                // The SIGN, not _tierScale - the animator resolves the transform (see the fields).
-                _ = swell.RunAsync(_tierSign, token);
-
-                // Rotation: the same period, keyframed to START at its maximum - which is the 90
-                // degree phase offset the spec asks for. The badge then "breathes and settles"
-                // instead of pumping scale and angle together.
                 double tilt = TierTilt;
-                var sway = new Animation
+                bool hum = !FreeToday, glints = Tier >= 2;   // a papered-over sign hums no more; the stamp is the star
+                var glow = _tierGlow.IsVisible ? _tierGlow : null;
+                // WPF StartMotion (TierBadge.cs:416-535), every track at AmbientFrameRate 30, on the
+                // window's 30 fps beat instead of five infinite Animations (P82); the swell and the sway
+                // used to be inert (RunAsync of a transform property on the sign).
+                //  - swell 1 -> WobbleScale, AutoReverse SineEase InOut, half a period each way;
+                //  - sway keyed to START at its maximum (the 90 degree phase offset), SineEase InOut keys;
+                //  - glow hum 0.55 -> 1.0 on the swell's clock; Tier 1 flicker tic / Tier 2 glints, linear.
+                var sway = new[] { (0.0, tilt + WobbleDegrees), (period / 4, tilt), (period / 2, tilt - WobbleDegrees), (period * 3 / 4, tilt), (period, tilt + WobbleDegrees) };
+                var tic = new[] { (0.0, 1.0), (FlickerCycle - 0.20, 1.0), (FlickerCycle - 0.14, 0.85), (FlickerCycle - 0.08, 1.0), (FlickerCycle - 0.04, 0.88), (FlickerCycle, 1.0) };
+                var glintA = Glint(0.22);
+                var glintB = Glint(0.64);
+                _ambient = new global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop(this, t =>
                 {
-                    Duration = TimeSpan.FromSeconds(period),
-                    IterationCount = IterationCount.Infinite,
-                    Easing = new SineEaseInOut(),
-                };
-                void Key(double at, double angle) =>
-                    sway.Children.Add(new KeyFrame
+                    double k = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Breath(t, period / 2);
+                    _tierScale.ScaleX = _tierScale.ScaleY = 1 + (WobbleScale - 1) * k;
+                    _tierRotate.Angle = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % period, sway, sine: true);
+                    if (!hum) return;
+                    if (glow != null) glow.Opacity = 0.55 + 0.45 * k;
+                    if (glints)
                     {
-                        Cue = new Cue(at),
-                        Setters = { new Setter(RotateTransform.AngleProperty, angle) },
-                    });
-                Key(0.00, tilt + WobbleDegrees);
-                Key(0.25, tilt);
-                Key(0.50, tilt - WobbleDegrees);
-                Key(0.75, tilt);
-                Key(1.00, tilt + WobbleDegrees);
-                // Same sign as the swell: the two clocks reach different children of its group.
-                _ = sway.RunAsync(_tierSign, token);
+                        _glintA.Opacity = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % period, glintA);
+                        _glintB.Opacity = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % period, glintB);
+                    }
+                    else _tierSign.Opacity = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Keys(t % FlickerCycle, tic);
+                });
+                _ambient.Start();
 
-                if (FreeToday) return;   // a papered-over sign hums no more; the stamp is the star
-
-                StartGlowBreath(period, token);
-                if (Tier >= 2) StartGlints(period, token);
-                else StartFlickerTic(token);
+                // Tier 2's two glints per cycle at fixed offsets (never a runtime Random): 0.3 s each.
+                (double, double)[] Glint(double at) =>
+                    new[] { (at * period, 0.0), (at * period + 0.15, 1.0), (at * period + 0.30, 0.0) };
             }
             catch (Exception ex) { Log.Debug("TierBadge.StartMotion: {E}", ex.Message); }
-        }
-
-        /// <summary>The neon hum: the glow's opacity swells 0.55 -> 1.0 on the wobble's period.</summary>
-        private void StartGlowBreath(double period, CancellationToken token)
-        {
-            if (_tierSign.Effect is not DropShadowEffect glow) return;
-            var hum = new Animation
-            {
-                Duration = TimeSpan.FromSeconds(period / 2),
-                IterationCount = IterationCount.Infinite,
-                PlaybackDirection = PlaybackDirection.Alternate,
-                Easing = new SineEaseInOut(),
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(DropShadowEffect.OpacityProperty, 0.55) } },
-                    new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(DropShadowEffect.OpacityProperty, 1.0) } },
-                },
-            };
-            _ = hum.RunAsync(glow, token);
-        }
-
-        /// <summary>
-        /// Tier 1's tic: once per border-shimmer lap, a quick two-step flicker (1 -> 0.85 -> 1
-        /// inside 180ms). A real sign's fault, deliberately NOT a strobe - the rest of the 6.5s
-        /// cycle is flat.
-        /// </summary>
-        private void StartFlickerTic(CancellationToken token)
-        {
-            var tic = new Animation
-            {
-                Duration = TimeSpan.FromSeconds(FlickerCycle),
-                IterationCount = IterationCount.Infinite,
-                Easing = new LinearEasing(),
-            };
-            void Key(double seconds, double value) =>
-                tic.Children.Add(new KeyFrame
-                {
-                    // WPF keys in absolute time; Avalonia keys in a 0..1 cue over the same duration.
-                    Cue = new Cue(Math.Clamp(seconds / FlickerCycle, 0, 1)),
-                    Setters = { new Setter(OpacityProperty, value) },
-                });
-            Key(0.00, 1.00);
-            Key(FlickerCycle - 0.20, 1.00);
-            Key(FlickerCycle - 0.14, 0.85);
-            Key(FlickerCycle - 0.08, 1.00);
-            Key(FlickerCycle - 0.04, 0.88);
-            Key(FlickerCycle, 1.00);
-            _ = tic.RunAsync(_tierSign, token);
-        }
-
-        /// <summary>Tier 2's two glints per cycle, at fixed offsets - precomputed keyframes, never
-        /// a runtime <c>Random</c>, so the same badge sparkles the same way twice.</summary>
-        private void StartGlints(double period, CancellationToken token)
-        {
-            Pop(_glintA, period, 0.22);
-            Pop(_glintB, period, 0.64);
-
-            void Pop(Ellipse glint, double cycle, double at)
-            {
-                var life = 0.30 / cycle;
-                var anim = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(cycle),
-                    IterationCount = IterationCount.Infinite,
-                    Easing = new LinearEasing(),
-                };
-                void Key(double t, double v) =>
-                    anim.Children.Add(new KeyFrame
-                    {
-                        Cue = new Cue(Math.Clamp(t, 0, 1)),
-                        Setters = { new Setter(OpacityProperty, v) },
-                    });
-                Key(0, 0);
-                Key(at, 0);
-                Key(at + (life / 2), 1);
-                Key(at + life, 0);
-                Key(1, 0);
-                _ = anim.RunAsync(glint, token);
-            }
         }
 
         /// <summary>
@@ -726,14 +619,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
             try
             {
                 _motionRunning = false;
-                _ambient?.Cancel();
+                _ambient?.Stop();
                 _ambient = null;
 
                 _tierScale.ScaleX = _tierScale.ScaleY = 1.0;
                 _tierRotate.Angle = TierTilt;
                 _tierSign.Opacity = FreeToday ? DimmedTierOpacity : 1.0;
 
-                if (_tierSign.Effect is DropShadowEffect glow) glow.Opacity = 1.0;
+                _tierGlow.Opacity = 1.0;
 
                 foreach (var glint in new[] { _glintA, _glintB }) glint.Opacity = 0;
             }
@@ -776,8 +669,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
             // WPF gets the height from Stretch=Uniform on the bitmap; a Border has to be told, so
             // each sign is boxed at its art's own aspect - and at the measured constant when the
             // art is missing and the vector plate is standing in.
-            _tierSign.Width = width;
-            _tierSign.Height = width / Aspect(TierArt(Tier), Tier >= 2 ? AspectT2 : AspectT1);
+            _tierGlow.Width = _tierSign.Width = width;
+            _tierGlow.Height = _tierSign.Height = width / Aspect(TierArt(Tier), Tier >= 2 ? AspectT2 : AspectT1);
             _tierWords.FontSize = Math.Max(7, Math.Round(width * 0.125));
 
             // The stamp is deliberately a touch bigger than what it covers, and lands down-left of

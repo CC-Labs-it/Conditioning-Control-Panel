@@ -42,8 +42,8 @@
          the fuse's own gold, never the mod accent.
 
          ANIMATION LAW: opacity and transform only, everywhere in this file. The two
-         BlurEffects below are STATIC - set once, never animated - and the glow they
-         sit on breathes by opacity.
+         glows are blurred once into bitmaps (GlowBake) and breathe by opacity; no live
+         Effect sits under a loop.
          ================================================================ -->
 
     <UserControl.Resources>
@@ -97,17 +97,10 @@
             <Grid x:Name="FogDigitsHost" Margin="0,30,0,0"
                   HorizontalAlignment="Center">
 
-                <TextBlock x:Name="FogDigitsGlow" HorizontalAlignment="Center"
-                           Text="{Binding #FogDigits.Text}"
-                           FontSize="{Binding #FogDigits.FontSize}"
-                           FontFamily="{DynamicResource Font.Mono}"
-                           FontWeight="Bold" Foreground="#E0B052" Opacity="0.42"
-                           FontFeatures="tnum"
-                           IsHitTestVisible="False">
-                    <TextBlock.Effect>
-                        <BlurEffect Radius="16"/>
-                    </TextBlock.Effect>
-                </TextBlock>
+                <!-- The digits' glow: FogDigits blurred (radius 16) ONCE per text change into a bitmap
+                     (GlowBake), because a live BlurEffect under the pulse re-ran every frame (P82). -->
+                <Image x:Name="FogDigitsGlow" HorizontalAlignment="Center" VerticalAlignment="Top"
+                       Stretch="None" Opacity="0.42" IsHitTestVisible="False"/>
 
                 <TextBlock x:Name="FogDigits" HorizontalAlignment="Center"
                            FontSize="56" FontWeight="Bold"
@@ -184,14 +177,9 @@
                 Background="#B00A0514" BorderBrush="#40E0B052" BorderThickness="1">
             <StackPanel>
                 <Grid HorizontalAlignment="Center">
-                    <TextBlock x:Name="WaitingGlow" HorizontalAlignment="Center"
-                               Text="{Binding #WaitingLine.Text}"
-                               FontSize="16" Foreground="#E0B052" Opacity="0.5"
-                               IsHitTestVisible="False">
-                        <TextBlock.Effect>
-                            <BlurEffect Radius="9"/>
-                        </TextBlock.Effect>
-                    </TextBlock>
+                    <!-- WaitingLine blurred (radius 9) once per text change (GlowBake); the breath moves only Opacity. -->
+                    <Image x:Name="WaitingGlow" HorizontalAlignment="Center" VerticalAlignment="Top"
+                           Stretch="None" Opacity="0.5" IsHitTestVisible="False"/>
 
                     <TextBlock x:Name="WaitingLine" HorizontalAlignment="Center"
                                FontSize="16" Foreground="#E0B052"/>
