@@ -14,6 +14,7 @@ using ConditioningControlPanel.Controls.Invites;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.BackRoom;
+using ConditioningControlPanel.Services.Funnel;
 using ConditioningControlPanel.Services.Invites;
 using ConditioningControlPanel.Services.Vault;
 
@@ -67,6 +68,10 @@ public sealed class VaultGateDialog : Window
     private readonly ExclusiveFeature? _feature;
     private readonly int _tier;
     private readonly Action _signIn;
+
+    /// <summary>The feature key the funnel counters carry for this card ("vault" for the generic
+    /// card, "invite_ending" for the last-day card).</summary>
+    private string _funnelKey = "vault";
     /// <summary>The price list the card paints from: the cached plan list at open, replaced when a
     /// fresh read lands (<see cref="FillPlansAsync"/>). Buttons read it at click time.</summary>
     private PlanSet _plans = PlanCatalog.Current;
@@ -117,8 +122,10 @@ public sealed class VaultGateDialog : Window
     {
         var feature = VaultOffer.Feature(featureKey);
         var dialog = new VaultGateDialog(feature, Math.Max(tier, feature?.Tier ?? 1), signIn) { Owner = owner };
+        dialog._funnelKey = FunnelBeacon.Clean(featureKey) is { Length: > 0 } k ? k : "vault";
         dialog.BuildOffer();
         Present(dialog);
+        FunnelBeacon.Post("gate_shown", dialog._funnelKey, FunnelBeacon.TierName(dialog._tier));
         _ = dialog.FillPlansAsync();
         _ = dialog.FillAsyncBits();
     }
@@ -136,8 +143,10 @@ public sealed class VaultGateDialog : Window
     public static void ShowEnding(Window? owner, DateTime grantUntilUtc, Action signIn)
     {
         var dialog = new VaultGateDialog(null, 1, signIn) { Owner = owner };
+        dialog._funnelKey = "invite_ending";
         dialog.BuildEnding(grantUntilUtc);
         Present(dialog);
+        FunnelBeacon.Post("gate_shown", dialog._funnelKey, "basic");
         _ = dialog.FillPlansAsync();
     }
 
@@ -387,6 +396,7 @@ public sealed class VaultGateDialog : Window
     {
         var plan = _plans.For(tier);
         App.Logger?.Information("[VaultGate] open {Plan} checkout from {From}", plan.Key, from);
+        FunnelBeacon.Post("cta_clicked", _funnelKey, "patreon");
         OpenUrl(plan.PatreonUrl);
     }
 
@@ -412,6 +422,7 @@ public sealed class VaultGateDialog : Window
     {
         var plan = _plans.For(tier);
         App.Logger?.Information("[VaultGate] open card checkout ({Plan}) from {From}", plan.Key, from);
+        FunnelBeacon.Post("cta_clicked", _funnelKey, "web");
         OpenUrl(PlanCatalog.WebUrlFor(plan, "panel"));
     }
 
