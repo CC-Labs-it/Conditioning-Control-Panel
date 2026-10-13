@@ -82,4 +82,35 @@ public sealed class ChaosEffectBannerOverlayTests
             return Task.CompletedTask;
         });
     }
+
+    [Fact]
+    public async Task A_refusal_is_remembered_for_the_run_and_cleared_by_teardown()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+            try
+            {
+                ChaosEffectBannerOverlay.CloseActive();
+                ChaosEffectBannerOverlay.Refused = true;   // the platform said no earlier this run
+                ChaosEffectBannerOverlay.Show("vibe", "VibePopping", Colors.Orange);
+                Assert.Null(ChaosEffectBannerOverlay.Active);   // no rebuild, no second Warning
+
+                ChaosEffectBannerOverlay.CloseActive();   // run teardown
+                Assert.False(ChaosEffectBannerOverlay.Refused);
+                ChaosEffectBannerOverlay.Show("vibe", "VibePopping", Colors.Orange);
+                Assert.NotNull(ChaosEffectBannerOverlay.Active);   // the next run asks again
+            }
+            finally
+            {
+                ChaosEffectBannerOverlay.CloseActive();
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = false;
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

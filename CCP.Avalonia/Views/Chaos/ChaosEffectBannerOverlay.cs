@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         internal static TimeProvider Clock = TimeProvider.System;
         internal static bool SkipPlatformChecksForTests;
+        internal static bool Refused;   // per run: one refusal, one Warning; cleared by CloseActive (run teardown)
         private static ChaosEffectBannerOverlay? _active;
         private static readonly Dictionary<string, Bitmap?> ArtCache = new();
 
@@ -77,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Instant teardown (run end / shutdown).</summary>
         public static void CloseActive()
         {
+            Refused = false;
             try { _active?.CloseNow(); } catch (Exception ex) { Log.Debug("ChaosEffectBanner.CloseActive: {E}", ex.Message); }
         }
 
@@ -94,10 +96,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosEffectBannerOverlay? Create()
         {
             if (_active != null) return _active;
+            if (Refused) return null;
+            // No compositor = no per-pixel alpha: the empty 80px strip would be an opaque band all run.
+            if (!SkipPlatformChecksForTests && (!X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
+            {
+                Log.Warning("ChaosEffectBanner: no composited click-through overlay on this platform, so no effect banners");
+                Refused = true;
+                return null;
+            }
             var w = new ChaosEffectBannerOverlay();
             if ((!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w.StripBounds())) && !SkipPlatformChecksForTests)
             {
                 Log.Warning("ChaosEffectBanner: the platform refused a click-through topmost window, so no effect banners");
+                Refused = true;
                 w.Close();
                 return null;
             }
