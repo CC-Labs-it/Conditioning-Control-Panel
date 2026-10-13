@@ -2128,3 +2128,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/companion-heads: +289
 - Avalonia BarkHead/CompanionHead seeded at startup, ladder panic bark, head tests with full teardown; feat-companion-barks missing -> stub.
+
+## avalonia-port/mine-dnd-tube: +589
+- Tube right-click menu acts through the shell (engine #479, takeover #514/#978, mutes, trigger); Shrink/Grow/Dismiss with saved scale; panic stops what it starts.
+- Chat box closes on outside press; closing the tube stops her voice and unhooks ask cards. DND was already ported.
