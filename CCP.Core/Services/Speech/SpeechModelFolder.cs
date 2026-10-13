@@ -1,11 +1,12 @@
 using System;
 using System.IO;
-using ConditioningControlPanel.Helpers;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Speech
 {
     /// <summary>
-    /// The folder the offline speech model goes in, and the one button that opens it.
+    /// The folder the offline speech model goes in. Opening it is the head's job (Explorer on
+    /// WPF, the platform opener on Avalonia); making sure it exists first is this rule.
     ///
     /// <para>Four people spent forty-minute support threads on this in one week, and every thread
     /// was the same shape: the hint says <c>Resources\Models\vosk</c>, the folder is under
@@ -17,13 +18,13 @@ namespace ConditioningControlPanel.Services.Speech
     ///
     /// <para><see cref="Ensure"/> creates it precisely so the button is never a dead end. That is
     /// the whole trick: an empty folder sitting open in Explorer is an unambiguous "drop it
-    /// here", and <c>SpeechService.ResolveModelDir</c> already treats an empty folder exactly as
+    /// here", and <see cref="SpeechEngine.ResolveModelDir"/> already treats an empty folder exactly as
     /// it treats a missing one.</para>
     /// </summary>
     internal static class SpeechModelFolder
     {
-        /// <summary>Where the app looks for a model. Same path the hints name.</summary>
-        internal static string Root => SpeechService.ModelRoot;
+        /// <summary>Where the app looks for a model first. Same path the hints name.</summary>
+        internal static string Root => SpeechEngine.DefaultModelRoots[0];
 
         /// <summary>
         /// Make sure <paramref name="root"/> exists and hand it back, or null when it could not be
@@ -39,20 +40,9 @@ namespace ConditioningControlPanel.Services.Speech
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "SpeechModelFolder: could not create {Root}", root);
+                Log.Warning(ex, "SpeechModelFolder: could not create {Root}", root);
                 return null;
             }
-        }
-
-        /// <summary>
-        /// Open the models folder in Explorer, creating it first. False means neither happened,
-        /// and the caller says so rather than looking like it did nothing.
-        /// </summary>
-        internal static bool Open()
-        {
-            var dir = Ensure(Root);
-            if (dir == null) return false;
-            return ExplorerLauncher.OpenFolder(dir);
         }
     }
 }

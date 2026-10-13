@@ -1,9 +1,10 @@
 using System;
 using System.IO;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Speech;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Finding the offline speech model on disk, and the folder it goes in.
@@ -48,14 +49,14 @@ public class SpeechModelFolderTests : IDisposable
     public void FilesDroppedStraightIn()
     {
         Model(_root);
-        Assert.Equal(_root, SpeechService.ResolveModelDir(_root));
+        Assert.Equal(_root, SpeechEngine.ResolveModelDir(_root));
     }
 
     [Fact]
     public void OneNestedFolderTheWayTheOfficialZipUnpacks()
     {
         var dir = Model(Under("vosk-model-small-en-us-0.15"));
-        Assert.Equal(dir, SpeechService.ResolveModelDir(_root));
+        Assert.Equal(dir, SpeechEngine.ResolveModelDir(_root));
     }
 
     /// <summary>The regression this exists for. Extract All, twice the folder, no model found.</summary>
@@ -63,7 +64,7 @@ public class SpeechModelFolderTests : IDisposable
     public void TheSameFolderTwiceWhichIsWhatExtractAllProduces()
     {
         var dir = Model(Under("vosk-model-en-us-0.22-lgraph", "vosk-model-en-us-0.22-lgraph"));
-        Assert.Equal(dir, SpeechService.ResolveModelDir(_root));
+        Assert.Equal(dir, SpeechEngine.ResolveModelDir(_root));
     }
 
     [Fact]
@@ -71,15 +72,15 @@ public class SpeechModelFolderTests : IDisposable
     {
         // Deliberate: a bounded search, not a tree walk. The README says to move it up.
         Model(Under("a", "b", "c"));
-        Assert.Null(SpeechService.ResolveModelDir(_root));
+        Assert.Null(SpeechEngine.ResolveModelDir(_root));
     }
 
     [Fact]
     public void AnEmptyFolderIsTheSameAsNoFolder()
     {
         Directory.CreateDirectory(_root);
-        Assert.Null(SpeechService.ResolveModelDir(_root));
-        Assert.Null(SpeechService.ResolveModelDir(Path.Combine(_root, "not-there")));
+        Assert.Null(SpeechEngine.ResolveModelDir(_root));
+        Assert.Null(SpeechEngine.ResolveModelDir(Path.Combine(_root, "not-there")));
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public class SpeechModelFolderTests : IDisposable
     {
         // am/ with no conf/ is a half-finished unpack, which Vosk would refuse anyway.
         Directory.CreateDirectory(Under("vosk-model-small-en-us-0.15", "am"));
-        Assert.Null(SpeechService.ResolveModelDir(_root));
+        Assert.Null(SpeechEngine.ResolveModelDir(_root));
     }
 
     // ---- ranking ------------------------------------------------------------------------
@@ -101,7 +102,7 @@ public class SpeechModelFolderTests : IDisposable
     {
         Model(Under("vosk-model-en-us-0.42-gigaspeech"));
         var lgraph = Model(Under("outer", "vosk-model-en-us-0.22-lgraph"));
-        Assert.Equal(lgraph, SpeechService.ResolveModelDir(_root));
+        Assert.Equal(lgraph, SpeechEngine.ResolveModelDir(_root));
     }
 
     [Fact]
@@ -109,7 +110,7 @@ public class SpeechModelFolderTests : IDisposable
     {
         Model(Under("vosk-model-en-us-0.42-gigaspeech"));
         var small = Model(Under("vosk-model-small-en-us-0.15"));
-        Assert.Equal(small, SpeechService.ResolveModelDir(_root));
+        Assert.Equal(small, SpeechEngine.ResolveModelDir(_root));
     }
 
     // ---- the folder itself ----------------------------------------------------------------
@@ -129,7 +130,7 @@ public class SpeechModelFolderTests : IDisposable
         // Idempotent, and it does not disturb a model already sitting there.
         Model(_root);
         Assert.Equal(_root, SpeechModelFolder.Ensure(_root));
-        Assert.Equal(_root, SpeechService.ResolveModelDir(_root));
+        Assert.Equal(_root, SpeechEngine.ResolveModelDir(_root));
     }
 
     [Fact]
@@ -142,5 +143,30 @@ public class SpeechModelFolderTests : IDisposable
     /// <summary>The button and the hints must name the same folder.</summary>
     [Fact]
     public void TheFolderTheButtonOpensIsTheFolderTheAppSearches()
-        => Assert.Equal(SpeechService.ModelRoot, SpeechModelFolder.Root);
+        => Assert.Equal(SpeechEngine.DefaultModelRoots[0], SpeechModelFolder.Root);
+
+    // ---- which microphone ----------------------------------------------------------------
+
+    private static readonly SpeechInputDevice[] Mics =
+    {
+        new(-1, "System default"), new(0, "Headset"), new(1, "Webcam Mic"), new(2, "Blue Yeti"),
+    };
+
+    /// <summary>#441b: a virtual device appearing reshuffles ordinals, so the name wins.</summary>
+    [Fact]
+    public void TheSavedNameBeatsAStaleIndex()
+        => Assert.Equal(2, SpeechEngine.ResolveInputDevice(Mics, savedIndex: 0, savedName: "blue yeti")?.Index);
+
+    [Fact]
+    public void AGoneNameFallsBackToTheSavedIndex()
+        => Assert.Equal(1, SpeechEngine.ResolveInputDevice(Mics, savedIndex: 1, savedName: "Unplugged")?.Index);
+
+    [Fact]
+    public void NothingSavedOrNothingLeftMeansTheOsDefault()
+    {
+        Assert.Null(SpeechEngine.ResolveInputDevice(Mics, savedIndex: -1, savedName: null));
+        Assert.Null(SpeechEngine.ResolveInputDevice(Mics, savedIndex: 7, savedName: "Unplugged"));
+        // The "System default" row is a picker entry, not a device to match by name.
+        Assert.Null(SpeechEngine.ResolveInputDevice(Mics, savedIndex: -1, savedName: "System default"));
+    }
 }
