@@ -2125,3 +2125,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/companion-core-head: +820
 - Core BarkEngine (TimeProvider clock) + CompanionCore; WPF CompanionService XP modifier/level loop delegate to Core. Cloud session, local review fix + gate.
+
+## avalonia-port/companion-heads: +289
+- Avalonia BarkHead/CompanionHead seeded at startup, ladder panic bark, head tests with full teardown; feat-companion-barks missing -> stub.
