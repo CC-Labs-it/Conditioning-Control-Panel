@@ -2168,3 +2168,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/tracking-core-a: +230
 - Gaze target scoring + refine ambiguity/choice rules moved to Core GazeTargetScoring; WPF GazeFocusService routes to it (one copy). Core tests fail-proven per reachable clause; rgate GATE-OK.
+
+## avalonia-port/subliminal-core-a: +123
+- Cloud session (Opus), local review + gate.
