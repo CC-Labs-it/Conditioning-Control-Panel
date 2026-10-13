@@ -228,6 +228,7 @@
   "preset_tag_default": "STD",
   "preset_tag_custom": "EIGEN",
   "sd_zone_presets": "PRESETS",
+  "sd_presets_scope": "Ein Preset speichert, welche Effekte an sind, ihre Regler, die Lautstärken und die Auswahl der Phrasen. Schriften, Farben, Medien und alles andere bleiben für alle Presets gleich.",
   "sd_zone_sessions": "SITZUNGEN",
   "sd_zone_sessions_hint": "Integriert · Deine · Katalog",
   "rack_source_all": "Alle",
