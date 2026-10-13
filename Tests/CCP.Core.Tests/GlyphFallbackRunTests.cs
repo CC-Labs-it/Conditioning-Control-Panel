@@ -3,7 +3,7 @@ using ConditioningControlPanel.Services.Compositor;
 using SkiaSharp;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// #717 — the compositor's Skia text layers must draw EVERY codepoint of a phrase, not just the
@@ -17,9 +17,14 @@ namespace ConditioningControlPanel.Tests;
 ///
 /// They read the machine's real font table (that is the thing under test — coverage, not a
 /// codepoint-range guess), so they assert the invariant "whatever face a run got, it can draw that
-/// run" rather than naming families that differ across Windows builds.
+/// run" rather than naming families that differ across Windows builds and Linux fontconfig sets.
 /// </summary>
-[Collection(CompanionWpfRenderCollection.Name)]
+// Two tests switch LocalizationManager's language, which every Loc lookup in Core reads; keep them
+// from running beside tests that assert English strings.
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class GlyphFallbackLanguageCollection { public const string Name = "GlyphFallbackLanguage"; }
+
+[Collection(GlyphFallbackLanguageCollection.Name)]
 public class GlyphFallbackRunTests
 {
     private static readonly SKTypeface Arial =

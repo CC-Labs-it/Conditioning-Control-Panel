@@ -25,6 +25,8 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <!-- Copies libvosk next to the tests; Core's copy does not flow through the ProjectReference. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
+    <!-- libSkiaSharp for GlyphFallbackRunTests on the Linux job; Core references the managed side only. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.8" />
   </ItemGroup>
 
   <ItemGroup>
