@@ -2050,3 +2050,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/win-panic-b: +602
 - #919b panic watchdog, Pause key capture (all platforms) and press (Windows), and Escape claim for the friends drawer, all ported from trunk c072be180/face473bd.
 - The windows CI job now runs `--win-panic-check` (F24 passes, F23 must fail); green in run 38195413447.
+
+## avalonia-port/first-show-b: +997
+- EMI's welcome show runs on Avalonia: a click-through stage (overlay set up before Show) with partial effects and cues, and the real desk EMI presenting. It opens once after the first-run wizard; panic, Esc and closing the shell stop it. Downloads are capped and the temp dir is swept.
+- The fail-proven FirstShowStageTests pass (7 cases), the gate passed, and Keincheck evidence is in evidence/first-show-b{,/fix1}. Sparks, subliminal, drain, spiral and words are carried to first-show-c along with the Guide.
