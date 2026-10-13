@@ -39,6 +39,7 @@ import {
   clamp01, smoothstep, lerp, bandIndex, hash01,
   AiWant,
 } from './contracts.js';
+import { isMeltSkip } from './melt.js';
 import {
   COLOR_TAG, MAX_COLOR_BEATS,
   beginHarvest, harvestWantsMore, noteColorServed, closeHarvest,
@@ -909,6 +910,10 @@ export function createEngine({ bank, reward, ai, config, stats } = {}) {
 
   function recordAnswer(beat, ev) {
     if (!beat) return;
+    // CARD MELT (core/melt.js): the card melted away under a stray click. That is
+    // not an answer, so it scores NOTHING: no miss, no pass, no streak, no
+    // velocity, no route vote, no reward, no trajectory record.
+    if (isMeltSkip(ev)) return;
     const isInterlude = beat.mechanic === Mechanic.Interlude || (ev && ev.mechanic === Mechanic.Interlude);
     const isTrick = !!(beat.prompt && beat.prompt.trick);
     const { correct, score, beatMax } = gradeBeat(beat, ev);

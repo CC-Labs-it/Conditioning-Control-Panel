@@ -63,6 +63,7 @@
 import {
   Mechanic, MECHANICS, Band, makeAnswerEvent, clamp01,
 } from '../core/contracts.js';
+import { meltAllowed } from '../core/melt.js';
 import { spiralPalette } from '../core/palette.js';
 import { recordSpiral } from '../core/spiralLog.js';
 import { noteMedia } from '../core/mediaLog.js';
@@ -836,6 +837,21 @@ export function createBeats({ root, effects, audio, steering, reward, caps, back
         if (warpSet) { warpSet = false; bgCall('setSteerWarp', 0); }
         try { if (steerHandle && steerHandle.release) steerHandle.release(); } catch (_e) {}
         for (const c of cleanups) { try { c(); } catch (_e) {} }
+      }
+
+      // A CARD MELT is not an answer: it resolves the beat with `melted: true`
+      // and touches nothing else. No score delta, no streak change, no reward,
+      // no answer pulse. The engine drops it from every tally (core/melt.js).
+      function finalizeMelt() {
+        if (committed) return;
+        committed = true;
+        teardown();
+        const ev = makeAnswerEvent({ latencyMs: now() - t0, mechanic: beat.mechanic, melted: true });
+        ev.streak = streakCount;       // unchanged: a melt neither extends nor breaks it
+        resolve(ev);
+        try {
+          if (card) card.classList.add(BAND_EXIT[beat.band] || 'ib-exit-fade');
+        } catch (_e) {}
       }
 
       function finalize(chosenIndex, value, timedOut) {
@@ -1736,11 +1752,12 @@ export function createBeats({ root, effects, audio, steering, reward, caps, back
       // MELT_CHANCE (1 in 45, ONCE per beat) to melt the whole card away. The card does
       // NOT re-form: once the melt animation settles the beat RESOLVES and the
       // run advances. The melt is a WHIMSY event, not an answer — it resolves
-      // through the gentlest existing skip path (finalize(undefined, undefined,
-      // true) — the same "no value, timedOut" resolution the mantra skip and an
-      // expired timer use), so it scores nothing, never counts correct/incorrect,
-      // and CANNOT arm the "are you sure?" jumpscare (that only fires from
-      // attempt(), which this path never touches). Fullscreen interludes and the
+      // through finalizeMelt() (an AnswerEvent with `melted: true`), so it scores
+      // nothing: no miss, no pass, no streak change, no reward, and the engine
+      // keeps it out of every tally. It CANNOT arm the "are you sure?" jumpscare
+      // (that only fires from attempt(), which this path never touches).
+      // A TIMED question never melts (owner, 2026-10-13): the rules live in
+      // core/melt.js meltAllowed(). Fullscreen interludes and the
       // 4th-wall BubblePop field are excluded. The CARD element itself animates,
       // so it composes INSIDE any tilt/sway wrapper without touching them.
       // Reduced motion swaps the long melt for a quick fade. The melt timer
@@ -1753,7 +1770,8 @@ export function createBeats({ root, effects, audio, steering, reward, caps, back
         const onCardClick = (e) => {
           // no melt while the freeze gate holds, and never on a corrupted beat
           // (one set-piece per beat — corruption already owns the card).
-          if (committed || meltUsed || gateFrozen || corruptLive) return;
+          // Never on a timed question either: meltAllowed() refuses it.
+          if (!meltAllowed(beat, { committed, meltUsed, gateFrozen, corruptLive })) return;
           try {
             if (e.target && e.target.closest
               && e.target.closest('button,input,textarea,select,a,[contenteditable]')) return;
@@ -1777,8 +1795,8 @@ export function createBeats({ root, effects, audio, steering, reward, caps, back
           meltVoice(meltMs + holdMs);   // the VOICE sags and dissolves with the card
           melt1 = setTimeout(() => {
             melt1 = 0;
-            // no re-form: resolve as a gentle skip and advance to the next beat
-            finalize(undefined, undefined, true);
+            // no re-form: the question is gone, nothing is scored, on to the next beat
+            finalizeMelt();
           }, meltMs + holdMs);
         };
         card.addEventListener('click', onCardClick);
