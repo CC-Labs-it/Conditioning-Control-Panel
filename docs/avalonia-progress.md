@@ -2098,3 +2098,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/ci-parallel: +145
 - CI: CCP.Avalonia.Tests shards now run as parallel matrix jobs (avalonia-linux/avalonia-windows x5) with a per-OS avalonia-coverage sum check; build.yml wall time went from 50m47s to ~17.5-24 min (runs 38306259237/38312941874).
 - Gate-branch-only concurrency cancel. avalonia-tests-sharded.sh gains --shard N / --expected; with no argument it behaves as before.
+
+## avalonia-port/emi-line-engine: +215
+- EmiLineEngine (1360, verbatim plus ask probes) and the EmiKnock machine moved to Core with git mv. WPF seeds the probes and keeps EmiKnockWorld; the rotation and knock tests now run on Linux in Core.
+- Next: EmiVox/EmiOffers/EmiChains seams, then the Avalonia moment bus and desk chains UI.
