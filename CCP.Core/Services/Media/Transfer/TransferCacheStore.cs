@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Transfer
 {
@@ -95,7 +96,7 @@ namespace ConditioningControlPanel.Services.Transfer
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning("TransferCacheStore.EnsureRoot failed: {E}", ex.Message);
+                Log.Warning("TransferCacheStore.EnsureRoot failed: {E}", ex.Message);
             }
         }
 
@@ -136,7 +137,7 @@ namespace ConditioningControlPanel.Services.Transfer
                         if (loaded?.Entries != null && loaded.Version == TransferCacheIndex.CurrentVersion)
                             _index = loaded;
                         else if (loaded != null)
-                            App.Logger?.Information(
+                            Log.Information(
                                 "TransferCacheStore: index version {V} != {C}, starting fresh",
                                 loaded.Version, TransferCacheIndex.CurrentVersion);
                     }
@@ -144,11 +145,11 @@ namespace ConditioningControlPanel.Services.Transfer
                 catch (Exception ex)
                 {
                     // A dead index is survivable: everything gets re-planned, nothing is lost but time.
-                    App.Logger?.Warning("TransferCacheStore: index load failed ({E}) - starting fresh", ex.Message);
+                    Log.Warning("TransferCacheStore: index load failed ({E}) - starting fresh", ex.Message);
                     _index = new TransferCacheIndex();
                 }
                 Reindex();
-                App.Logger?.Information("TransferCacheStore: {N} entries, {MB:F1} MB used",
+                Log.Information("TransferCacheStore: {N} entries, {MB:F1} MB used",
                     _index.Entries.Count, _index.TotalBytes / 1048576.0);
             }
         }
@@ -204,7 +205,7 @@ namespace ConditioningControlPanel.Services.Transfer
                     _saveTimer = new Timer(_ =>
                     {
                         try { Save(); }
-                        catch (Exception ex) { App.Logger?.Debug("TransferCacheStore: deferred save failed: {E}", ex.Message); }
+                        catch (Exception ex) { Log.Debug("TransferCacheStore: deferred save failed: {E}", ex.Message); }
                     }, null, SaveDebounceMs, Timeout.Infinite);
                 }
                 else
@@ -235,7 +236,7 @@ namespace ConditioningControlPanel.Services.Transfer
             catch (Exception ex)
             {
                 lock (_lock) { _dirty = true; }
-                App.Logger?.Warning("TransferCacheStore: index save failed: {E}", ex.Message);
+                Log.Warning("TransferCacheStore: index save failed: {E}", ex.Message);
             }
         }
 
@@ -247,7 +248,7 @@ namespace ConditioningControlPanel.Services.Transfer
             get
             {
                 long v;
-                try { v = App.Settings?.Current?.TransferCacheCapBytes ?? DefaultCapBytes; }
+                try { v = CoreSettings.Current.TransferCacheCapBytes; }
                 catch { v = DefaultCapBytes; }
                 if (v <= 0) v = DefaultCapBytes;
                 return Math.Clamp(v, MinCapBytes, MaxCapBytes);
@@ -457,12 +458,12 @@ namespace ConditioningControlPanel.Services.Transfer
                     foreach (var f in Directory.EnumerateFiles(dir))
                         try { File.Delete(f); } catch { /* a locked file just survives to the next sweep */ }
                 }
-                catch (Exception ex) { App.Logger?.Debug("TransferCacheStore.DeleteAll({Dir}): {E}", dir, ex.Message); }
+                catch (Exception ex) { Log.Debug("TransferCacheStore.DeleteAll({Dir}): {E}", dir, ex.Message); }
             }
             OverCapProtected = false;
             Save();
             RaiseChanged();
-            App.Logger?.Information("TransferCacheStore: deleted {N} cached artifacts", n);
+            Log.Information("TransferCacheStore: deleted {N} cached artifacts", n);
             return n;
         }
 
@@ -490,7 +491,7 @@ namespace ConditioningControlPanel.Services.Transfer
                     catch { }
                 }
             }
-            catch (Exception ex) { App.Logger?.Debug("TransferCacheStore.SweepTmp: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("TransferCacheStore.SweepTmp: {E}", ex.Message); }
         }
 
         // ---- LRU ------------------------------------------------------------------
@@ -592,12 +593,12 @@ namespace ConditioningControlPanel.Services.Transfer
 
             OverCapProtected = over;
             if (over)
-                App.Logger?.Warning(
+                Log.Warning(
                     "TransferCacheStore: cap {CapMB:F0} MB is smaller than the active pool - evicted {N} entries " +
                     "including some from a recently-used preset ({FreedMB:F1} MB freed)",
                     cap / 1048576.0, drop.Count, freed / 1048576.0);
             else
-                App.Logger?.Information("TransferCacheStore: LRU evicted {N} entries ({FreedMB:F1} MB)",
+                Log.Information("TransferCacheStore: LRU evicted {N} entries ({FreedMB:F1} MB)",
                     drop.Count, freed / 1048576.0);
 
             ScheduleSave();
@@ -614,7 +615,7 @@ namespace ConditioningControlPanel.Services.Transfer
         {
             try
             {
-                var presets = App.Settings?.Current?.AssetPresets;
+                var presets = CoreSettings.Current.AssetPresets;
                 if (presets == null || presets.Count == 0) return null;
 
                 // A preset stores what's OFF, so "protected" = every indexed rel MINUS the union of
@@ -642,7 +643,7 @@ namespace ConditioningControlPanel.Services.Transfer
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("TransferCacheStore.BuildProtectedRelSet: {E}", ex.Message);
+                Log.Debug("TransferCacheStore.BuildProtectedRelSet: {E}", ex.Message);
                 return null;   // fail safe: protect everything rather than evict the user's active pool
             }
         }
@@ -650,7 +651,7 @@ namespace ConditioningControlPanel.Services.Transfer
         private void RaiseChanged()
         {
             try { Changed?.Invoke(); }
-            catch (Exception ex) { App.Logger?.Debug("TransferCacheStore.Changed subscriber threw: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("TransferCacheStore.Changed subscriber threw: {E}", ex.Message); }
         }
     }
 }
