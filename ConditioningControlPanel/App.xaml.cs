@@ -1233,7 +1233,7 @@ namespace ConditioningControlPanel
             // player's own files are the loudest thing a panic can leave running.
             StopAudioPlaylist();
             // A Goon toy cue is a sound-alike: a panic or stop-all never leaves it running (ccp-bugs #1429).
-            try { Services.GoonGame.GoonToyDirector.Close(); } catch { }
+            try { Services.GoonGame.GoonToyDirector.Stop(); } catch { }
             // The one-shot clip (the companion's Audio effect, a Deeper play-audio action). Only a
             // session pause stopped it before, so a panic with the engine off let it play out.
             try { Audio?.StopSound(); } catch { }
