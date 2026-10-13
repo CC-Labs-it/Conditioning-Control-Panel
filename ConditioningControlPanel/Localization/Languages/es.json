@@ -7560,5 +7560,17 @@
   "conv_member_hello_title": "Miembro gratuito. Gracias por seguirnos.",
   "conv_member_hello_body": "Los miembros gratuitos reciben dos regalos diarios.",
   "conv_member_second": "El segundo de hoy: {0}.",
-  "conv_ok": "Entendido"
+  "conv_ok": "Entendido",
+  "conv_postcode_title": "La publicación de esta semana trae un código.",
+  "conv_postcode_body": "Abre {0} durante un tiempo.",
+  "conv_postcode_enter": "Introducir código",
+  "conv_postcode_dialog_title": "Código de la publicación de la semana",
+  "conv_postcode_hint": "El código está en la publicación de Patreon de esta semana.",
+  "conv_postcode_redeem": "Abrir",
+  "conv_postcode_ok": "{0} está abierto hasta el {1}.",
+  "conv_postcode_unknown": "Ese código no coincide con la publicación de esta semana.",
+  "conv_postcode_used": "Esta cuenta ya usó ese código.",
+  "conv_postcode_expired": "Ese código ya caducó.",
+  "conv_postcode_offline": "No se pudo contactar con el servidor. Prueba en un minuto.",
+  "conv_postcode_empty": "Escribe primero el código."
 }

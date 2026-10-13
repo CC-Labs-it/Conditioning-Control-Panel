@@ -8315,5 +8315,17 @@
   "conv_member_hello_title": "Free member. Thanks for following.",
   "conv_member_hello_body": "Free members get two Daily Gifts.",
   "conv_member_second": "Today's second one: {0}.",
-  "conv_ok": "Got it"
+  "conv_ok": "Got it",
+  "conv_postcode_title": "This week's post has a code.",
+  "conv_postcode_body": "It opens {0} for a while.",
+  "conv_postcode_enter": "Enter code",
+  "conv_postcode_dialog_title": "This week's post code",
+  "conv_postcode_hint": "The code is in this week's Patreon post.",
+  "conv_postcode_redeem": "Open it",
+  "conv_postcode_ok": "{0} is open until {1}.",
+  "conv_postcode_unknown": "That code does not match this week's post.",
+  "conv_postcode_used": "This account already used that code.",
+  "conv_postcode_expired": "That code has run out.",
+  "conv_postcode_offline": "Could not reach the server. Try again in a minute.",
+  "conv_postcode_empty": "Type the code first."
 }
