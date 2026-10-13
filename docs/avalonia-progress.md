@@ -2151,3 +2151,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/notifications-core-a: +70
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/deeper-core-a: +274
+- Cloud session (Opus), local review + gate.

@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Windows.Threading;
+using System.Threading;
 using ConditioningControlPanel.Models.Deeper;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
@@ -25,14 +26,18 @@ namespace ConditioningControlPanel.Services.Deeper
         public event EventHandler? LibraryChanged;
 
         private FileSystemWatcher? _watcher;
-        private DispatcherTimer? _debounceTimer;
+        private readonly TimeProvider _time;
+        private ITimer? _debounceTimer;
         private bool _disposed;
 
-        public EnhancementLibrary()
+        public EnhancementLibrary() : this(TimeProvider.System) { }
+
+        internal EnhancementLibrary(TimeProvider time)
         {
-            LibraryFolder = Path.Combine(App.UserDataPath, "enhancements");
+            _time = time;
+            LibraryFolder = Path.Combine(CorePaths.UserData, "enhancements");
             try { Directory.CreateDirectory(LibraryFolder); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "EnhancementLibrary: could not create library folder"); }
+            catch (Exception ex) { Log.Warning(ex, "EnhancementLibrary: could not create library folder"); }
             SeedBundledDemos();
             StartWatching();
         }
@@ -46,12 +51,12 @@ namespace ConditioningControlPanel.Services.Deeper
         {
             try
             {
-                if (App.Settings?.Current?.HasSeededDeeperDemos == true) return;
+                if (CoreSettings.Current.HasSeededDeeperDemos) return;
 
                 var demoSource = Path.Combine(AppContext.BaseDirectory, "Resources", "DeeperDemos");
                 if (!Directory.Exists(demoSource))
                 {
-                    App.Logger?.Debug("EnhancementLibrary: no bundled demos folder at {Path}", demoSource);
+                    Log.Debug("EnhancementLibrary: no bundled demos folder at {Path}", demoSource);
                     return;
                 }
 
@@ -63,20 +68,17 @@ namespace ConditioningControlPanel.Services.Deeper
                     var dst = Path.Combine(LibraryFolder, name);
                     if (File.Exists(dst)) continue; // respect user-edited copy
                     try { File.Copy(src, dst, overwrite: false); copied++; }
-                    catch (Exception ex) { App.Logger?.Debug("EnhancementLibrary: failed to copy demo {Name}: {Error}", name, ex.Message); }
+                    catch (Exception ex) { Log.Debug("EnhancementLibrary: failed to copy demo {Name}: {Error}", name, ex.Message); }
                 }
 
-                if (App.Settings?.Current is { } s)
-                {
-                    s.HasSeededDeeperDemos = true;
-                    App.Settings?.Save();
-                }
+                CoreSettings.Current.HasSeededDeeperDemos = true;
+                CoreSettings.Save();
                 if (copied > 0)
-                    App.Logger?.Information("EnhancementLibrary: seeded {Count} demo enhancement(s)", copied);
+                    Log.Information("EnhancementLibrary: seeded {Count} demo enhancement(s)", copied);
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementLibrary: SeedBundledDemos failed");
+                Log.Warning(ex, "EnhancementLibrary: SeedBundledDemos failed");
             }
         }
 
@@ -101,11 +103,11 @@ namespace ConditioningControlPanel.Services.Deeper
                 _watcher.Changed += OnFsEvent;
                 _watcher.Renamed += OnFsRenamed;
                 _watcher.Error += OnFsError;
-                App.Logger?.Information("EnhancementLibrary: watching the library folder");
+                Log.Information("EnhancementLibrary: watching the library folder");
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementLibrary: could not start watcher");
+                Log.Warning(ex, "EnhancementLibrary: could not start watcher");
                 _watcher = null;
             }
         }
@@ -114,7 +116,7 @@ namespace ConditioningControlPanel.Services.Deeper
         private void OnFsRenamed(object sender, RenamedEventArgs e) => ScheduleChangeNotification();
         private void OnFsError(object sender, ErrorEventArgs e)
         {
-            App.Logger?.Warning(e.GetException(), "EnhancementLibrary: watcher error");
+            Log.Warning(e.GetException(), "EnhancementLibrary: watcher error");
             // Tear down + try to restart so a transient FS error (e.g. drive
             // disconnect on a network share) doesn't permanently kill hot-reload.
             try
@@ -126,36 +128,26 @@ namespace ConditioningControlPanel.Services.Deeper
             catch { }
         }
 
-        private void ScheduleChangeNotification()
+        internal void ScheduleChangeNotification()
         {
-            // Debounce on the WPF dispatcher so subscribers receive the
-            // event on the UI thread (UI code can rebuild lists directly).
+            // Debounce on a threadpool timer, then raise on the UI thread through
+            // CoreDispatch so subscribers can rebuild lists directly. With no UI
+            // thread (tests, shutdown) CoreDispatch runs the raise in place.
             try
             {
-                var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                if (dispatcher == null || dispatcher.HasShutdownStarted)
-                {
-                    LibraryChanged?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
-                dispatcher.BeginInvoke(() =>
-                {
-                    if (_disposed) return;
-                    if (_debounceTimer == null)
-                    {
-                        _debounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DebounceMs) };
-                        _debounceTimer.Tick += (_, _) =>
-                        {
-                            _debounceTimer?.Stop();
-                            try { LibraryChanged?.Invoke(this, EventArgs.Empty); }
-                            catch (Exception ex) { App.Logger?.Debug("LibraryChanged subscriber error: {Error}", ex.Message); }
-                        };
-                    }
-                    _debounceTimer.Stop();
-                    _debounceTimer.Start();
-                });
+                if (_disposed) return;
+                _debounceTimer ??= _time.CreateTimer(_ => CoreDispatch.Post(RaiseLibraryChanged), null,
+                    Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _debounceTimer.Change(TimeSpan.FromMilliseconds(DebounceMs), Timeout.InfiniteTimeSpan);
             }
             catch { }
+        }
+
+        private void RaiseLibraryChanged()
+        {
+            if (_disposed) return;
+            try { LibraryChanged?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { Log.Debug("LibraryChanged subscriber error: {Error}", ex.Message); }
         }
 
         public void Dispose()
@@ -176,24 +168,23 @@ namespace ConditioningControlPanel.Services.Deeper
                 }
             }
             catch { }
-            try { _debounceTimer?.Stop(); } catch { }
+            try { _debounceTimer?.Dispose(); } catch { }
             _watcher = null;
             _debounceTimer = null;
         }
 
         public List<string> RecentFiles
         {
-            get => App.Settings?.Current?.DeeperRecentFiles
+            get => CoreSettings.Current.DeeperRecentFiles
                        .Where(File.Exists)
-                       .ToList()
-                   ?? new List<string>();
+                       .ToList();
         }
 
         public string LastDirectory
         {
             get
             {
-                var d = App.Settings?.Current?.DeeperLastDirectory;
+                var d = CoreSettings.Current.DeeperLastDirectory;
                 if (!string.IsNullOrEmpty(d) && Directory.Exists(d)) return d;
                 return LibraryFolder;
             }
@@ -249,7 +240,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementLibrary.FindMatch error: {Error}", ex.Message);
+                Log.Debug("EnhancementLibrary.FindMatch error: {Error}", ex.Message);
                 return null;
             }
         }
@@ -299,7 +290,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementLibrary.FindByJsonPath error: {Error}", ex.Message);
+                Log.Debug("EnhancementLibrary.FindByJsonPath error: {Error}", ex.Message);
             }
             return null;
         }
@@ -329,12 +320,12 @@ namespace ConditioningControlPanel.Services.Deeper
                     if (n > 999) return null; // sanity cap
                 }
                 Save(enhancement, target);
-                App.Logger?.Information("EnhancementLibrary: promoted to library (from {Tag})", sourceTag);
+                Log.Information("EnhancementLibrary: promoted to library (from {Tag})", sourceTag);
                 return target;
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementLibrary: PromoteToLibrary failed (tag={Tag})", sourceTag);
+                Log.Warning(ex, "EnhancementLibrary: PromoteToLibrary failed (tag={Tag})", sourceTag);
                 return null;
             }
         }
@@ -366,7 +357,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementLibrary.FindDuplicateOf error: {Error}", ex.Message);
+                Log.Debug("EnhancementLibrary.FindDuplicateOf error: {Error}", ex.Message);
             }
             return null;
         }
@@ -386,7 +377,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementLibrary: scan failed");
+                Log.Warning(ex, "EnhancementLibrary: scan failed");
             }
             return results
                 .OrderByDescending(e => e.LastModified)
@@ -437,7 +428,7 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private void TouchRecent(string path)
         {
-            if (App.Settings?.Current is not { } settings) return;
+            var settings = CoreSettings.Current;
             try
             {
                 var canonical = Path.GetFullPath(path);
@@ -446,22 +437,21 @@ namespace ConditioningControlPanel.Services.Deeper
                 list.Insert(0, canonical);
                 if (list.Count > MaxRecentFiles) list = list.Take(MaxRecentFiles).ToList();
                 settings.DeeperRecentFiles = list;
-                App.Settings?.Save();
+                CoreSettings.Save();
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementLibrary: TouchRecent failed");
+                Log.Warning(ex, "EnhancementLibrary: TouchRecent failed");
             }
         }
 
         private void RememberDirectory(string? dir)
         {
             if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
-            if (App.Settings?.Current is not { } settings) return;
             try
             {
-                settings.DeeperLastDirectory = dir;
-                App.Settings?.Save();
+                CoreSettings.Current.DeeperLastDirectory = dir;
+                CoreSettings.Save();
             }
             catch { /* best-effort */ }
         }
@@ -475,7 +465,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementLibrary: skipping unreadable file: {Error}", ex.Message);
+                Log.Debug("EnhancementLibrary: skipping unreadable file: {Error}", ex.Message);
                 return null;
             }
         }
