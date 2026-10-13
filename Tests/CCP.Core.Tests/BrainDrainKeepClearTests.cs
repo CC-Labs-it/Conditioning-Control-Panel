@@ -18,6 +18,14 @@ public class BrainDrainKeepClearTests
     public void DefaultsOff() => Assert.False(new AppSettings().BrainDrainKeepPicturesClear);
 
     [Fact]
+    public void SettingRoundTripsThroughSettingsJson()
+    {
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(new AppSettings { BrainDrainKeepPicturesClear = true });
+        Assert.Contains("\"BrainDrainKeepPicturesClear\":true", json);
+        Assert.True(Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(json)!.BrainDrainKeepPicturesClear);
+    }
+
+    [Fact]
     public void BlurAboveOurWindows_SinksUnderTheLowestOfThem()
     {
         var band = new[] { new E(Drain, true, true), new E(Flash, true, false), new E(Other, false, false), new E(Video, true, false) };

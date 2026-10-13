@@ -43,6 +43,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             // (Empty) and BtnRefreshAudio are inert until the service lands, and WithheldNotice
             // stays hidden (OverlayService.BrainDrainWithheld is false anyway).
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
+
+            // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
+            // OverlayService re-sorts on the settings hook), so unlike the rows above it shows no
+            // false "running" state and is wired now. This head has no Brain Drain blur overlay
+            // yet, so the z-order rule (Core BrainDrainKeepClear) has nothing to act on here.
+            var keepClear = this.FindControl<CheckBox>("ChkKeepClear")!;
+            keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
+            keepClear.IsCheckedChanged += (_, _) =>
+            {
+                var on = keepClear.IsChecked ?? false;
+                if (CoreSettings.Current.BrainDrainKeepPicturesClear == on) return;
+                CoreSettings.Current.BrainDrainKeepPicturesClear = on;
+                CoreSettings.Save();
+            };
         }
 
         /// <summary>
