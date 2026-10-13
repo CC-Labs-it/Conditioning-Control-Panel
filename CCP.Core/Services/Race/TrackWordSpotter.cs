@@ -22,7 +22,7 @@ public static class TrackWordSpotter
 
     private static bool _noModelLogged;
 
-    /// <summary>True when a Vosk model is unpacked under SpeechService.ModelRoot.</summary>
+    /// <summary>True when a Vosk model is unpacked under one of SpeechEngine.DefaultModelRoots.</summary>
     public static bool ModelAvailable => ResolveModelDir() != null;
 
     /// <summary>

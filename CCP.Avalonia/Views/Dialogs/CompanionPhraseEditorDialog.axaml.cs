@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Models;
@@ -93,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             { "BrainDrain", "Brain Drain" },
             { "VoiceLine", "Voice Line" },
             { "Custom", "Custom (General)" },
-            { BarkCategory, "🐰 Bark Lines" },
+            { BarkCategory, "Bark Lines" },   // WPF "🐰 Bark Lines": the rabbit is drawn by the combo item
         };
 
         /// <summary>Categories carrying a mod-supplied phrase pool - CompanionPhraseService's
@@ -162,7 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 items.Add(new ComboBoxItem { Content = GetDisplayName(cat), Tag = cat });
             items.Add(new ComboBoxItem { Content = GetDisplayName("Custom"), Tag = "Custom" });
             // One entry for the ~1,200 bark lines; the list still groups them per rule via GroupLabel.
-            items.Add(new ComboBoxItem { Content = GetDisplayName(BarkCategory), Tag = BarkCategory });
+            items.Add(new ComboBoxItem { Content = new IconLabel { Kind = IconKind.AnimalRabbit, Text = GetDisplayName(BarkCategory) }, Tag = BarkCategory });
 
             _cmbCategoryFilter.ItemsSource = items;
             _cmbCategoryFilter.SelectedIndex = 0;

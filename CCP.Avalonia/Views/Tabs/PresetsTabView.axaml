@@ -471,6 +471,20 @@
         </ControlTheme>
 
         <!-- ============================ detail chrome ============================ -->
+        <!-- IconLabel twins of SdDetailLabel / SdMedLabel: a loc label that leads with an icon (fluent-icons 2026-10-10). -->
+        <ControlTheme x:Key="SdDetailIconLabel" TargetType="fx:IconLabel">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextLightBrush}"/>
+            <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
+            <Setter Property="TextElement.FontSize" Value="12.5"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </ControlTheme>
+        <ControlTheme x:Key="SdMedIconLabel" TargetType="fx:IconLabel">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextDimBrush}"/>
+            <Setter Property="TextElement.FontFamily" Value="Consolas, Courier New"/>
+            <Setter Property="TextElement.FontSize" Value="9.5"/>
+            <Setter Property="Spacing" Value="3"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </ControlTheme>
         <ControlTheme x:Key="SdDetailLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -523,7 +537,7 @@
                             ToolTip.Tip="{loc:Str tooltip_recent_sessions}"
                             Theme="{StaticResource OutlineButton}"
                             Padding="12,7" Margin="0,0,7,0" FontSize="11.5" Cursor="Hand">
-                        <TextBlock Text="{loc:Str btn_recent_sessions}" FontWeight="SemiBold"/>
+                        <fx:IconLabel Key="btn_recent_sessions" TextElement.FontWeight="SemiBold"/>
                     </Button>
                     <!-- Was the right-hand "Session Editor" placeholder box. -->
                     <Button x:Name="BtnCreateSession"
@@ -712,8 +726,8 @@
                                     Focusable="True" IsTabStop="True"
                                     ToolTip.Tip="{loc:Str tooltip_open_catalogue}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock x:Name="DropZoneIcon"
-                                               Text="🌐" FontSize="13" VerticalAlignment="Center"
+                                    <fx:IconGlyph x:Name="DropZoneIcon"
+                                               Kind="Globe" Size="14" VerticalAlignment="Center"
                                                Margin="0,0,7,0"
                                                Foreground="{DynamicResource SessionSrcImportedBrush}"/>
                                     <TextBlock Text="{loc:Str label_catalogue_card_title}"
@@ -821,30 +835,30 @@
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="16,14,16,0"
                                   x:Name="PresetDetailScroller">
                         <StackPanel x:Name="DetailContentPanel">
-                            <TextBlock x:Name="TxtDetailFlashLabel"
-                                       Theme="{StaticResource SdDetailLabel}" Text="{loc:Str section_flash_images}"/>
+                            <fx:IconLabel x:Name="TxtDetailFlashLabel"
+                                       Theme="{StaticResource SdDetailIconLabel}" Key="section_flash_images"/>
                             <TextBlock x:Name="TxtDetailFlash"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <TextBlock x:Name="TxtDetailVideoLabel"
-                                       Theme="{StaticResource SdDetailLabel}" Text="{loc:Str label_mandatory_videos}"/>
+                            <fx:IconLabel x:Name="TxtDetailVideoLabel"
+                                       Theme="{StaticResource SdDetailIconLabel}" Key="label_mandatory_videos"/>
                             <TextBlock x:Name="TxtDetailVideo"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <TextBlock x:Name="TxtDetailSubLabel"
-                                       Theme="{StaticResource SdDetailLabel}" Text="{loc:Str section_subliminals_2}"/>
+                            <fx:IconLabel x:Name="TxtDetailSubLabel"
+                                       Theme="{StaticResource SdDetailIconLabel}" Key="section_subliminals_2"/>
                             <TextBlock x:Name="TxtDetailSubliminal"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <TextBlock Theme="{StaticResource SdDetailLabel}" Text="{loc:Str section_audio}"/>
+                            <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="section_audio"/>
                             <TextBlock x:Name="TxtDetailAudio"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <TextBlock Theme="{StaticResource SdDetailLabel}" Text="{loc:Str label_overlays}"/>
+                            <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_overlays"/>
                             <TextBlock x:Name="TxtDetailOverlays"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <TextBlock Theme="{StaticResource SdDetailLabel}" Text="{loc:Str label_advanced}"/>
+                            <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_advanced"/>
                             <TextBlock x:Name="TxtDetailAdvanced"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
                         </StackPanel>
@@ -862,7 +876,7 @@
 
                                 <Border Grid.Column="0" Theme="{StaticResource SdMedallion}">
                                     <StackPanel>
-                                        <TextBlock Theme="{StaticResource SdMedLabel}" Text="{loc:Str label_duration}"/>
+                                        <fx:IconLabel Theme="{StaticResource SdMedIconLabel}" Key="label_duration"/>
                                         <TextBlock x:Name="TxtSessionDuration"
                                                    Theme="{StaticResource SdMedValue}" Text=""/>
                                     </StackPanel>
@@ -870,7 +884,7 @@
 
                                 <Border Grid.Column="2" Theme="{StaticResource SdMedallion}">
                                     <StackPanel>
-                                        <TextBlock Theme="{StaticResource SdMedLabel}" Text="{loc:Str label_reward}"/>
+                                        <fx:IconLabel Theme="{StaticResource SdMedIconLabel}" Key="label_reward"/>
                                         <TextBlock x:Name="TxtSessionXP"
                                                    Theme="{StaticResource SdMedValue}" Text=""
                                                    Foreground="#90EE90"/>
@@ -901,9 +915,7 @@
                                     CornerRadius="10" Padding="12" Margin="0,0,0,13" IsVisible="False">
                                 <StackPanel>
                                     <Grid>
-                                        <TextBlock x:Name="TxtFeatureCornerGif"
-                                                   Text="{loc:Str label_corner_gif}" Foreground="{DynamicResource PinkBrush}"
-                                                   FontWeight="Bold" FontSize="11.5"/>
+                                        <fx:IconLabel Key="label_corner_gif" x:Name="TxtFeatureCornerGif" TextElement.Foreground="{DynamicResource PinkBrush}" TextElement.FontWeight="Bold" TextElement.FontSize="11.5"/>
                                         <CheckBox x:Name="ChkCornerGifEnabled"
                                                   Theme="{StaticResource ToggleStyle}"
                                                   HorizontalAlignment="Right"/>
@@ -918,7 +930,7 @@
                                         <Button x:Name="BtnSelectCornerGif"
                                                 Theme="{StaticResource OutlineButton}" Padding="10,6" FontSize="10.5"
                                                 Margin="0,0,0,10">
-                                            <TextBlock Text="{loc:Str btn_select_gif}"/>
+                                            <fx:IconLabel Key="btn_select_gif"/>
                                         </Button>
                                         <TextBlock Text="{loc:Str label_position}" Foreground="{DynamicResource TextMutedBrush}"
                                                    FontSize="11" Margin="0,0,0,5"/>
@@ -926,22 +938,22 @@
                                             <RadioButton x:Name="RbCornerTL"
                                                          Foreground="{DynamicResource TextLightBrush}"
                                                          GroupName="CornerPos" Margin="0,2" FontSize="10.5">
-                                                <TextBlock Text="{loc:Str btn_top_left}"/>
+                                                <fx:IconLabel Key="btn_top_left"/>
                                             </RadioButton>
                                             <RadioButton x:Name="RbCornerTR" Grid.Column="1"
                                                          Foreground="{DynamicResource TextLightBrush}"
                                                          GroupName="CornerPos" Margin="0,2" FontSize="10.5">
-                                                <TextBlock Text="{loc:Str btn_top_right}"/>
+                                                <fx:IconLabel Key="btn_top_right"/>
                                             </RadioButton>
                                             <RadioButton x:Name="RbCornerBL" Grid.Row="1"
                                                          Foreground="{DynamicResource TextLightBrush}"
                                                          GroupName="CornerPos" Margin="0,2" FontSize="10.5" IsChecked="True">
-                                                <TextBlock Text="{loc:Str btn_bottom_left}"/>
+                                                <fx:IconLabel Key="btn_bottom_left"/>
                                             </RadioButton>
                                             <RadioButton x:Name="RbCornerBR" Grid.Row="1" Grid.Column="1"
                                                          Foreground="{DynamicResource TextLightBrush}"
                                                          GroupName="CornerPos" Margin="0,2" FontSize="10.5">
-                                                <TextBlock Text="{loc:Str btn_bottom_right}"/>
+                                                <fx:IconLabel Key="btn_bottom_right"/>
                                             </RadioButton>
                                         </Grid>
 
@@ -987,8 +999,7 @@
                                         </Border.Background>
                                     </Border>
                                     <StackPanel>
-                                        <TextBlock Text="{loc:Str label_mystery_experience}" Foreground="{DynamicResource TextLightBrush}"
-                                                   FontWeight="Bold" FontSize="12.5" HorizontalAlignment="Center"/>
+                                        <fx:IconLabel Key="label_mystery_experience" TextElement.Foreground="{DynamicResource TextLightBrush}" TextElement.FontWeight="Bold" TextElement.FontSize="12.5" HorizontalAlignment="Center"/>
                                         <TextBlock Text="{loc:Str label_the_magic_works_best_when_you_don_t_know_what}"
                                                    Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" TextAlignment="Center"
                                                    TextWrapping="Wrap" Margin="0,6,0,0" FontStyle="Italic"/>
@@ -999,7 +1010,7 @@
                             <Button x:Name="BtnRevealSpoilers"
                                     Theme="{StaticResource OutlineButton}" Padding="12,8" FontSize="12"
                                     Margin="0,0,0,13"
-                                    ToolTip.Tip="{loc:Str tooltip_this_will_show_all_session_settings_spoils_th}">
+                                    ToolTip.Tip="{loc:StrBare tooltip_this_will_show_all_session_settings_spoils_th}">
                                 <TextBlock x:Name="TxtRevealSpoilers" Text="{loc:Str btn_reveal_details}"/>
                             </Button>
 
@@ -1008,34 +1019,32 @@
                                 <Border CornerRadius="8" Padding="10" Margin="0,0,0,13"
                                         Background="{DynamicResource SurfaceBgBrush}"
                                         BorderThickness="1" BorderBrush="{DynamicResource DangerBrush}">
-                                    <TextBlock Text="{loc:Str label_spoilers_below}" Foreground="{DynamicResource DangerBrush}"
-                                               FontFamily="Consolas, Courier New" FontSize="11.5"
-                                               FontWeight="Bold" HorizontalAlignment="Center"/>
+                                    <fx:IconLabel Key="label_spoilers_below" TextElement.Foreground="{DynamicResource DangerBrush}" TextElement.FontFamily="Consolas, Courier New" TextElement.FontSize="11.5" TextElement.FontWeight="Bold" HorizontalAlignment="Center"/>
                                 </Border>
 
-                                <TextBlock x:Name="TxtSessionFlashLabel"
-                                           Theme="{StaticResource SdDetailLabel}" Text="{loc:Str section_flash_images}"/>
+                                <fx:IconLabel x:Name="TxtSessionFlashLabel"
+                                           Theme="{StaticResource SdDetailIconLabel}" Key="section_flash_images"/>
                                 <TextBlock x:Name="TxtSessionFlash"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <TextBlock x:Name="TxtSessionSubLabel"
-                                           Theme="{StaticResource SdDetailLabel}" Text="{loc:Str section_subliminals_2}"/>
+                                <fx:IconLabel x:Name="TxtSessionSubLabel"
+                                           Theme="{StaticResource SdDetailIconLabel}" Key="section_subliminals_2"/>
                                 <TextBlock x:Name="TxtSessionSubliminal"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <TextBlock Theme="{StaticResource SdDetailLabel}" Text="{loc:Str section_audio}"/>
+                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="section_audio"/>
                                 <TextBlock x:Name="TxtSessionAudio"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <TextBlock Theme="{StaticResource SdDetailLabel}" Text="{loc:Str label_overlays}"/>
+                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_overlays"/>
                                 <TextBlock x:Name="TxtSessionOverlays"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <TextBlock Theme="{StaticResource SdDetailLabel}" Text="{loc:Str label_extras}"/>
+                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_extras"/>
                                 <TextBlock x:Name="TxtSessionExtras"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <TextBlock Theme="{StaticResource SdDetailLabel}" Text="{loc:Str label_timeline}"/>
+                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_timeline"/>
                                 <TextBlock x:Name="TxtSessionTimeline"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
                             </StackPanel>
@@ -1050,20 +1059,20 @@
                                 Theme="{StaticResource PinkButton}"
                                 Margin="0,0,0,7" Padding="12,11" FontSize="13" IsEnabled="False"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
-                            <TextBlock Text="{loc:Str btn_load_preset}"/>
+                            <fx:IconLabel Key="btn_load_preset"/>
                         </Button>
                         <Grid ColumnDefinitions="*,*">
                             <Button x:Name="BtnSaveOverPreset" Grid.Column="0"
                                     Theme="{StaticResource OutlineButton}" Margin="0,0,3,0" Padding="10,8"
                                     IsEnabled="False" FontSize="12"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
-                                <TextBlock Text="{loc:Str btn_save_2}"/>
+                                <fx:IconLabel Key="btn_save_2"/>
                             </Button>
                             <Button x:Name="BtnDeletePreset" Grid.Column="1"
                                     Theme="{StaticResource OutlineButton}" Margin="3,0,0,0" Padding="10,8"
                                     IsEnabled="False" FontSize="12"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
-                                <TextBlock Text="{loc:Str btn_delete_2}"/>
+                                <fx:IconLabel Key="btn_delete_2"/>
                             </Button>
                         </Grid>
                         <Grid ColumnDefinitions="*,*" Margin="0,6,0,0">
