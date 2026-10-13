@@ -107,5 +107,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             LastShown = window;
             _ = window.ShowDialogSafe(owner);
         }
+
+        /// <summary>Panic closes the open History window (P06; WPF left the modal up). Idempotent.</summary>
+        internal static void CloseForPanic()
+        {
+            if (LastShown is { IsVisible: true } w) w.Close();
+        }
     }
 }
