@@ -29,6 +29,23 @@ const soon = (fn, ms) => {
   return t;
 };
 
+/** The host plays a sustained bed as one 60 s segment, so a bed that outlives it is re-sent. */
+export const BED_KEEPALIVE_MS = 45000;
+
+/**
+ * THE CONSENT SHEET'S TOY CAP, put on the cue itself. A toy cue never asks for more than the
+ * cap both players signed, and it carries the cap so the host can clamp again (the page is
+ * untrusted input there). `sheet` is match.consentSheet; a missing cap leaves the cue alone
+ * and the host falls back to its own default.
+ */
+export function capToyMessage(msg, sheet) {
+  if (!msg || msg.type !== 'toy-pattern') return msg;
+  const cap = sheet && typeof sheet.toy_cap === 'number' && sheet.toy_cap === sheet.toy_cap
+    ? clamp01(sheet.toy_cap) : null;
+  if (cap === null) return msg;
+  return Object.assign({}, msg, { intensity: Math.min(clamp01(msg.intensity), cap), cap });
+}
+
 export function createToys({ logger, toyBridge } = {}) {
   const log = logger || null;
   const info = (m) => { if (log && log.info) log.info(`[gg:toys] ${m}`); };
@@ -42,6 +59,23 @@ export function createToys({ logger, toyBridge } = {}) {
 
   let element = null;        // {intensity, durationMs, pattern}
   const payloads = new Set();
+  let keepalive = 0;
+
+  function dropKeepalive() {
+    if (!keepalive) return;
+    try { clearInterval(keepalive); } catch (_e) { /* ignore */ }
+    keepalive = 0;
+  }
+  /* A sustained bed (durationMs 0) is re-sent while it lasts; a payload keeps the floor. */
+  function armKeepalive() {
+    dropKeepalive();
+    if (!element || element.durationMs !== 0) return;
+    keepalive = setInterval(() => {
+      if (!element) { dropKeepalive(); return; }
+      if (payloads.size === 0) pushElement();
+    }, BED_KEEPALIVE_MS);
+    if (keepalive && typeof keepalive.unref === 'function') keepalive.unref();
+  }
 
   function pushElement() {
     if (!element) return;
@@ -71,6 +105,7 @@ export function createToys({ logger, toyBridge } = {}) {
         pattern: c.pattern || null,
       };
       if (payloads.size === 0) pushElement();          // a live payload keeps the floor
+      armKeepalive();
     },
 
     setIntensity(v) {
@@ -81,6 +116,7 @@ export function createToys({ logger, toyBridge } = {}) {
 
     stop() {
       element = null;
+      dropKeepalive();
       if (payloads.size === 0) send({ type: 'toy-stop' });
     },
 

@@ -455,6 +455,23 @@ async function main() {
     ex.detach();
   }
 
+  // ------------------------------------------------ toy cap on the cue (ccp-bugs #1429)
+  {
+    const { capToyMessage } = await import('../exec/toys.js');
+    const cue = { type: 'toy-pattern', intensity: 0.9, durationMs: 0, pattern: null, source: 'element' };
+    const capped = capToyMessage(cue, { toy_cap: 0.4 });
+    ok(capped.intensity === 0.4 && capped.cap === 0.4, 'toy cue is clamped to the signed cap and carries it',
+      JSON.stringify(capped));
+    ok(cue.intensity === 0.9, 'capping never mutates the cue the renderer holds');
+    ok(capToyMessage({ type: 'toy-pattern', intensity: 0.2 }, { toy_cap: 0.4 }).intensity === 0.2,
+      'a cue under the cap passes as it is');
+    ok(capToyMessage({ type: 'toy-pattern', intensity: 0.9 }, { toy_cap: 0 }).intensity === 0,
+      'a cap of zero silences the toy');
+    ok(capToyMessage(cue, null) === cue, 'no sheet leaves the cue to the host default');
+    const stop = { type: 'toy-stop' };
+    ok(capToyMessage(stop, { toy_cap: 0.4 }) === stop, 'toy-stop passes untouched');
+  }
+
   // ------------------------------------------------------- spiral registration
   {
     const ex = createExecutor({ media: fakeMedia(), layers, logger: quiet, toyBridge: null });
