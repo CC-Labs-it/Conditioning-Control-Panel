@@ -110,19 +110,20 @@ public class AudioPlaylistCardModelTests
     }
 
     [Fact]
-    public void Adding_keeps_only_the_five_audio_types()
+    public void Adding_keeps_only_the_four_audio_types()
     {
         var (model, fake) = Loaded();
 
+        // .ogg is refused: the audio stack (MediaFoundation) cannot decode it.
         var added = model.AddFiles(new[]
         {
             @"C:\a\one.mp3", @"C:\a\two.WAV", @"C:\a\three.ogg", @"C:\a\four.flac", @"C:\a\five.m4a",
             @"C:\a\clip.mp4", @"C:\a\notes.txt", "", @"C:\a\noext",
         });
 
-        Assert.Equal(5, added);
-        Assert.Equal(5, fake.Tracks.Count);
-        Assert.Equal(new[] { "one", "two", "three", "four", "five" }, model.Rows.Select(r => r.Name));
+        Assert.Equal(4, added);
+        Assert.Equal(4, fake.Tracks.Count);
+        Assert.Equal(new[] { "one", "two", "four", "five" }, model.Rows.Select(r => r.Name));
         Assert.True(model.HasTracks);
         Assert.Contains("*.mp3;*.wav;*.flac;*.m4a", AudioPlaylistCardModel.DialogFilter("Audio files"));
     }
