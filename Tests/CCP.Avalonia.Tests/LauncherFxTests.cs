@@ -71,7 +71,8 @@ public sealed class LauncherFxTests
         });
     }
 
-    private static Border Tile(LauncherWindow w) => (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[0];
+    /// <summary>The intake tile: the last card (LauncherCards order); game cards sit before it.</summary>
+    private static Border Tile(LauncherWindow w) => (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
 
     private static void Step(LauncherWindow w, double seconds)
     {
