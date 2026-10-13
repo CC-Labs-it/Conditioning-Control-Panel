@@ -34,6 +34,7 @@ import { buildShareData, cardKey, FLAVOUR_TINTS } from '../shareWords.js';
 import { renderCard, copyCard, saveCard, canvasBlob, cardFileName } from '../shareCard.js';
 import { THUD_EASE, staggerDelays } from '../juice.js';
 import { resultLine } from '../stake.js';
+import { recapPlanWanted, planOf, postFunnel, hostSend, RECAP_PLAN_LINE, RECAP_PLAN_FEATURE } from './recapPlan.js';
 
 const COLLAPSE_AT = 6;
 const GRACEFUL_MS = 8 * 60 * 1000;
@@ -608,6 +609,43 @@ export function mount(container, ctx) {
     ]);
   }
 
+  /* ----------------------------------------------------------- plan row
+   * Brief C10 (ui/screens/recapPlan.js has the rules): "Host the next one."
+   * (Basic), only when the host said this account cannot host. A neutral row
+   * BELOW the actions, never between the player and "Back to menu". */
+  let planShownCounted = false;
+  function planCard() {
+    if (!recapPlanWanted(session)) return null;
+    const hosted = !!(session && session.hosted);
+    const plan = planOf(session && session.plans, 'basic');
+    const send = hostSend();
+    const btn = el('a', {
+      class: 'gg-btn gg-btn--ghost gg-recap-plan-btn',
+      href: plan.url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      text: 'Get ' + plan.name,
+    });
+    ledger.listen(btn, 'click', (e) => {
+      postFunnel('cta_clicked', RECAP_PLAN_FEATURE, 'patreon', { hosted, send });
+      try { audio?.sfx?.('ui-select'); } catch (_e) { /* stub bus */ }
+      // Hosted, the app's own upgrade path answers (open-prime); a WebView2 popup is never the road.
+      if (hosted && actions && typeof actions.seePrime === 'function') {
+        try { e?.preventDefault?.(); } catch (_e) { /* ignore */ }
+        try { actions.seePrime(); } catch (_e) { /* ignore */ }
+      }
+    });
+    if (!planShownCounted) {
+      planShownCounted = true;
+      postFunnel('gate_shown', RECAP_PLAN_FEATURE, 'basic', { hosted, send });
+    }
+    return el('section', { class: 'gg-recap-plan', role: 'group', 'aria-label': plan.name }, [
+      el('p', { class: 'gg-recap-plan-line', text: RECAP_PLAN_LINE }),
+      btn,
+      plan.price ? el('span', { class: 'gg-recap-plan-price', text: plan.price }) : null,
+    ]);
+  }
+
   /* ------------------------------------------------------------- rivalry
    * Booked ONCE per match (settleOnce latches on the match object), on the
    * first paint that has a result. Practice never books. The line reads the
@@ -902,6 +940,15 @@ export function mount(container, ctx) {
     }));
     const back = button(ledger, S.recap.back, () => actions.leave('recap'), { variant: 'primary', audio, sfx: 'ui-back' });
     column.appendChild(el('div', { class: 'gg-recap-actions' }, [rematch, back]));
+
+    /* --- the plan row (brief C10): below the actions, never above them --- */
+    try {
+      const plan = planCard();
+      if (plan) column.appendChild(plan);
+    } catch (e) {
+      try { ctx?.logger?.warn?.('recap: plan row failed to build: ' + ((e && e.message) || e)); }
+      catch (_e2) { /* logger is optional */ }
+    }
 
     /* --- discover the app (standalone only, and last) --- */
     try {
