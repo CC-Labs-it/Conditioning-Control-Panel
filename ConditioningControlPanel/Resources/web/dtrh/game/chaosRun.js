@@ -4658,7 +4658,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       if (m.rankUp && RANK[m.rankUp] != null) {
         bridge.send({ type: 'meta-command', op: 'set-num', key: 'lastRankSeen', value: RANK[m.rankUp] });
       }
-      overlays?.showPayout(m);
+      // THE PLAN ROW (brief C10): the payout card may close with a Daily Gift line; the init payload's
+      // C1 `plans` (when the host sent one) is the only source of a price.
+      overlays?.showPayout(m, { plans: (m && m.plans) || (hostState && hostState.plans) || null });
     },
 
     isRunning: () => state === 'running',
