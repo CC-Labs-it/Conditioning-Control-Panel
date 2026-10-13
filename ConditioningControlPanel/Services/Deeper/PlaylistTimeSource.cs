@@ -61,9 +61,13 @@ namespace ConditioningControlPanel.Services.Deeper
         public double GetDurationSeconds() => OnMyTrack ? _playlist.DurationSeconds : 0;
         public bool IsPlaying => OnMyTrack && _playlist.IsPlaying;
 
-        public void Seek(double seconds) { if (OnMyTrack) _playlist.Seek(seconds); }
-        public void Pause() { if (OnMyTrack) _playlist.Pause(); }
-        public void Play() { if (OnMyTrack) _playlist.Play(); }
+        // Transport is dead once the player is stopped or this source is detached: an engine
+        // tearing down (a speak prompt releasing its hold) must never start the track again.
+        private bool CanDrive => _attached && OnMyTrack && (_playlist.IsPlaying || _playlist.IsPaused);
+
+        public void Seek(double seconds) { if (CanDrive) _playlist.Seek(seconds); }
+        public void Pause() { if (CanDrive) _playlist.Pause(); }
+        public void Play() { if (CanDrive) _playlist.Play(); }
 
         public Rect GetVideoRect() => Rect.Empty;
 

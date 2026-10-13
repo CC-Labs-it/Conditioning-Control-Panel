@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Services.AudioPlayer
             }
             _player.PlaybackTimeMsChanged += OnPlayerTick;
             _player.Ended += OnPlayerEnded;
+            _player.StoppedUnexpectedly += Stop;   // a device error is a stop the card must hear
             ApplyVolume();
         }
 
@@ -329,6 +330,7 @@ namespace ConditioningControlPanel.Services.AudioPlayer
             HookMaster(null);
             _player.PlaybackTimeMsChanged -= OnPlayerTick;
             _player.Ended -= OnPlayerEnded;
+            _player.StoppedUnexpectedly -= Stop;
             _player.Dispose();
         }
     }

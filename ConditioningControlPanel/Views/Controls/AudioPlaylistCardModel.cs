@@ -34,6 +34,8 @@ namespace ConditioningControlPanel.Views.Controls
         private readonly Action<bool> _writeEnhancements;
         private bool _attached;
         private bool _scrubbing;
+        /// <summary>True while a seek drag is live; a track change ends it.</summary>
+        public bool IsScrubbing => _scrubbing;
         private double _position;
 
         /// <param name="readEnhancements">The "enhancements run with tracks" switch; the app's setting when null.</param>

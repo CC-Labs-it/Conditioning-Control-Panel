@@ -713,6 +713,8 @@ namespace ConditioningControlPanel
         {
             try { App.Haptics?.PanicStop(); }
             catch (Exception ex) { App.Logger?.Warning(ex, "Haptics panic stop failed"); }
+            // "Everything off" also ends Goon toy cues until the Goon window is opened again.
+            try { Services.GoonGame.GoonToyDirector.Close(); } catch { }
 
             if (HapticsTab?.TxtHapticActivity != null)
                 HapticsTab.TxtHapticActivity.Text = Loc.Get("haptics_panic_done");

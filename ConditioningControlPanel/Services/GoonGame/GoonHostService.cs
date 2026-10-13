@@ -347,6 +347,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// <summary>Graceful close: ask the page to wind down, watchdog-force after 1200 ms. Idempotent.</summary>
         public static void CloseActive()
         {
+            // The toy first, and refused until the window opens again: the page winding down may
+            // still send a cue after a panic (review, ccp-bugs #1429).
+            try { GoonToyDirector.Close(); } catch { }
             try
             {
                 if (_host == null) return;

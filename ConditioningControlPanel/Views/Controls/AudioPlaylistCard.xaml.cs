@@ -114,8 +114,9 @@ namespace ConditioningControlPanel.Views.Controls
 
         private void SliderSeek_DragCompleted(object sender, DragCompletedEventArgs e)
         {
+            bool live = _dragging && _model.IsScrubbing;   // the track changed mid-drag: no seek
             _dragging = false;
-            _model.Seek(SliderSeek.Value);
+            if (live) _model.Seek(SliderSeek.Value);
         }
 
         private void SliderSeek_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

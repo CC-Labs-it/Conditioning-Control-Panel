@@ -68,6 +68,9 @@ namespace ConditioningControlPanel.Services.Deeper
         /// <summary>Fires (UI thread) when playback reaches the end naturally.</summary>
         public event Action? Ended;
 
+        /// <summary>Fires (UI thread) when a device error stops playback (headphones pulled): not Stop, not the end of the file.</summary>
+        public event Action? StoppedUnexpectedly;
+
         /// <summary>Fires (UI thread) when a new file is loaded successfully.</summary>
         public event Action<string>? Loaded;
 
@@ -189,7 +192,13 @@ namespace ConditioningControlPanel.Services.Deeper
                         try { Ended?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
                     }
                     if (ex != null)
+                    {
                         App.Logger?.Warning(ex, "EnhancementAudioPlayer playback stopped with error");
+                        if (!naturalEnd)
+                        {
+                            try { StoppedUnexpectedly?.Invoke(); } catch (Exception ex3) { Diag.Swallowed(ex3); }
+                        }
+                    }
                 }
                 catch (Exception ex2) { Diag.Swallowed(ex2); }
             }
