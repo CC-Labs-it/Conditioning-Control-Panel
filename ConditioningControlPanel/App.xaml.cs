@@ -894,29 +894,8 @@ namespace ConditioningControlPanel
 
         #endregion
 
-        /// <summary>
-        /// Returns a temp directory for media files (decrypted packs, video downloads, etc.)
-        /// located inside the effective assets path so it lives on the same drive as assets.
-        /// Falls back to system temp if the assets path isn't available yet.
-        /// </summary>
-        public static string GetMediaTempPath()
-        {
-            try
-            {
-                var assetsPath = EffectiveAssetsPath;
-                if (!string.IsNullOrEmpty(assetsPath))
-                {
-                    var tempDir = Path.Combine(assetsPath, ".temp");
-                    Directory.CreateDirectory(tempDir);
-                    return tempDir;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger?.Debug("GetMediaTempPath: Could not use assets temp dir, falling back to system temp: {Error}", ex.Message);
-            }
-            return Path.GetTempPath();
-        }
+        /// <summary>Media temp directory (assets/.temp, else system temp); the rule lives in <see cref="CorePaths.MediaTemp"/>.</summary>
+        public static string GetMediaTempPath() => CorePaths.MediaTemp();
 
         /// <summary>
         /// Cleans up stale temp files from previous sessions (crash recovery).

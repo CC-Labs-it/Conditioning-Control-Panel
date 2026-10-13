@@ -2177,3 +2177,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/session-core-a: +82
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/audio-core-a: +291
+- Cloud session (Opus), local review + gate.
+- Review P3 fixes: loopback listener claims its own port with retry; all 12 cases fail-proven.
