@@ -24,7 +24,7 @@ public class SpiralLayer : BaseLayer
     // only help minification - so Low is the same visual result as Medium here for less per-frame cost.
     private readonly SKPaint _paint = new() { FilterQuality = SKFilterQuality.Low };
 
-    public SpiralLayer(CompositorEngine engine) : base(engine) { }
+    public SpiralLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.Spiral;
 
