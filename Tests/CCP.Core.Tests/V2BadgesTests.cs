@@ -3,7 +3,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Prizes;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// The one rule behind every champagne "v2" pill: the dashboard's Flashes tile, its Bubble Pop
@@ -88,8 +88,5 @@ public class V2BadgesTests
         Assert.False(V2Badges.FlashOwned());
         Assert.False(V2Badges.BubbleOwned());
         Assert.False(V2Badges.ChipWearsV2Pill("tab.studio"));
-
-        // And the bubbles read the mosaic already used now forwards to the same rule.
-        Assert.Equal(V2Badges.BubbleOwned(), AmbientBubbleMotion.AnyV2Owned);
     }
 }

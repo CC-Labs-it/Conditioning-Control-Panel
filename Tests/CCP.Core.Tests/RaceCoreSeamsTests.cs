@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
+using ConditioningControlPanel.Services.Prizes;
 using ConditioningControlPanel.Services.Race;
 using Xunit;
 
@@ -34,12 +36,21 @@ public class RaceCoreSeamsTests
     }
 
     [Fact]
-    public void RacingTrackIdsMatchPrizeGrants()
+    public void RacingDoorAsksForPrizeGrantsTrackIds()
     {
-        // WPF PrizeGrants.RacingTrack(n): "rt.original." + two digits, 0..10.
-        Assert.Equal("rt.original.00", RacingAccess.RacingTrack(0));
-        Assert.Equal("rt.original.10", RacingAccess.RacingTrack(RacingAccess.RacingTrackMax));
-        Assert.Equal(10, RacingAccess.RacingTrackMax);
+        // One spelling: the door asks for PrizeGrants.RacingTrack(n), "rt.original." + two digits, 0..10.
+        var asked = new System.Collections.Generic.List<string>();
+        var saved = RacingAccess.IsGrantedProvider;
+        try
+        {
+            RacingAccess.IsGrantedProvider = id => { asked.Add(id); return false; };
+            _ = RacingAccess.OwnedTracks;
+        }
+        finally { RacingAccess.IsGrantedProvider = saved; }
+        Assert.Equal(Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).Select(PrizeGrants.RacingTrack), asked);
+        Assert.Equal("rt.original.00", asked[0]);
+        Assert.Equal("rt.original.10", asked[^1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => PrizeGrants.RacingTrack(PrizeGrants.RacingTrackMax + 1));
     }
 
     [Fact]

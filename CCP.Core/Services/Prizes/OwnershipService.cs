@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Prizes
 {
@@ -36,9 +36,9 @@ namespace ConditioningControlPanel.Services.Prizes
     /// Compiled only under DEBUG; a Release build never reads the variable.</para>
     ///
     /// <para><b>Threading.</b> Every member is safe from any thread. <see cref="OwnershipChanged"/>
-    /// fires on the WPF UI thread (inline when the caller is already on it, BeginInvoke otherwise)
-    /// and is skipped once the dispatcher is shutting down. With no WPF Application at all it fires
-    /// synchronously on the calling thread.</para>
+    /// fires through the marshal the head hands the constructor (WPF: its UI thread, inline when
+    /// already on it, BeginInvoke otherwise, skipped once the dispatcher is shutting down, and
+    /// synchronous with no WPF Application at all).</para>
     /// </summary>
     public sealed class OwnershipService
     {
@@ -56,7 +56,8 @@ namespace ConditioningControlPanel.Services.Prizes
         /// <summary>Raised when the held set changes. See the class notes for the thread.</summary>
         public event EventHandler<OwnershipChangedEventArgs>? OwnershipChanged;
 
-        public OwnershipService() : this(() => App.UnifiedUserId, ReadDebugOverride(), RaiseOnUiThread) { }
+        /// <param name="raise">How the head runs <see cref="OwnershipChanged"/> on its UI thread.</param>
+        public OwnershipService(Action<Action> raise) : this(() => CoreAccount.UnifiedUserId, ReadDebugOverride(), raise) { }
 
         /// <summary>Test seam: the account source, override spec and event marshal are injected.</summary>
         internal OwnershipService(Func<string?> currentAccountId, string? overrideSpec, Action<Action> raise)
@@ -68,7 +69,7 @@ namespace ConditioningControlPanel.Services.Prizes
             if (_overridePatterns.Count > 0)
             {
                 var matched = PrizeGrants.All.Where(id => MatchesOverride(_overridePatterns, id)).ToList();
-                App.Logger?.Information("[Prizes] {EnvVar} override active: patterns [{Patterns}] match {Count} known grants [{Matched}]",
+                Log.Information("[Prizes] {EnvVar} override active: patterns [{Patterns}] match {Count} known grants [{Matched}]",
                     OverrideEnvVar, string.Join(", ", _overridePatterns), matched.Count, string.Join(", ", matched));
             }
         }
@@ -105,14 +106,14 @@ namespace ConditioningControlPanel.Services.Prizes
                 var current = _currentAccountId();
                 if (string.IsNullOrEmpty(current) || !string.Equals(current, accountId, StringComparison.Ordinal))
                 {
-                    App.Logger?.Debug("[Prizes] snapshot for another account ignored (rev {Revision})", revision);
+                    Log.Debug("[Prizes] snapshot for another account ignored (rev {Revision})", revision);
                     return;
                 }
 
                 var sameAccount = string.Equals(_heldAccountId, accountId, StringComparison.Ordinal);
                 if (sameAccount && revision < _revision)
                 {
-                    App.Logger?.Debug("[Prizes] stale snapshot ignored (rev {Revision} < held {Held})", revision, _revision);
+                    Log.Debug("[Prizes] stale snapshot ignored (rev {Revision} < held {Held})", revision, _revision);
                     return;
                 }
 
@@ -160,27 +161,11 @@ namespace ConditioningControlPanel.Services.Prizes
             _raise(() =>
             {
                 try { OwnershipChanged?.Invoke(this, args); }
-                catch (Exception ex) { App.Logger?.Debug("[Prizes] OwnershipChanged handler threw: {Error}", ex.Message); }
+                catch (Exception ex) { Log.Debug("[Prizes] OwnershipChanged handler threw: {Error}", ex.Message); }
             });
         }
 
-        private static void RaiseOnUiThread(Action invoke)
-        {
-            try
-            {
-                var dispatcher = Application.Current?.Dispatcher;
-                if (dispatcher is null) { invoke(); return; }
-                if (dispatcher.HasShutdownStarted) return;
-                if (dispatcher.CheckAccess()) invoke();
-                else dispatcher.BeginInvoke(invoke);
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("[Prizes] could not raise OwnershipChanged: {Error}", ex.Message);
-            }
-        }
-
-        private static string? ReadDebugOverride()
+        internal static string? ReadDebugOverride()
         {
 #if DEBUG
             try { return Environment.GetEnvironmentVariable(OverrideEnvVar); }

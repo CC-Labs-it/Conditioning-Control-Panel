@@ -8,7 +8,7 @@ using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Buying a v2 prize from the options panel: the counter is read once and lazily, a buy is one

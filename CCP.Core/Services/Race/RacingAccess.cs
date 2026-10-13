@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Race;
@@ -40,19 +41,13 @@ public static class RacingAccess
     /// </summary>
     private const bool PurchaseDoorArmed = true;
 
-    /// <summary>WPF PrizeGrants.RacingTrackMax: the original tracks are rt.original.00..10.</summary>
-    public const int RacingTrackMax = 10;
-
-    /// <summary>WPF PrizeGrants.RacingTrack(n).</summary>
-    public static string RacingTrack(int n) => "rt.original." + n.ToString("00", System.Globalization.CultureInfo.InvariantCulture);
-
-    /// <summary>WPF PrizeGrants.IsGranted. The ownership store lives in the head (Platform/PrizeOwnership), which seeds this; unseeded owns nothing, so the door stays shut.</summary>
+    /// <summary>PrizeGrants.IsGranted on WPF. The ownership store lives in the head (Platform/PrizeOwnership), which seeds this; unseeded owns nothing, so the door stays shut.</summary>
     public static volatile Func<string, bool>? IsGrantedProvider;
 
     private static bool Owns(string id) { try { return IsGrantedProvider?.Invoke(id) ?? false; } catch { return false; } }
 
     /// <summary>Every original track, which is what an open door hands the page.</summary>
-    private static int[] AllTracks => Enumerable.Range(0, RacingTrackMax + 1).ToArray();
+    private static int[] AllTracks => Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).ToArray();
 
     public static bool CanLaunch => !PurchaseDoorArmed || AllowsLaunch(Owns);
 
@@ -62,12 +57,12 @@ public static class RacingAccess
     /// gate the game's content even though its door is unlocked, which is the same refusal one
     /// screen later.</summary>
     public static int[] OwnedTracks => PurchaseDoorArmed
-        ? Enumerable.Range(0, RacingTrackMax + 1)
-            .Where(n => Owns(RacingTrack(n))).ToArray()
+        ? Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1)
+            .Where(n => Owns(PrizeGrants.RacingTrack(n))).ToArray()
         : AllTracks;
 
     internal static bool AllowsLaunch(Func<string, bool> owns)
-        => Enumerable.Range(0, RacingTrackMax + 1).Any(n => owns(RacingTrack(n)));
+        => Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).Any(n => owns(PrizeGrants.RacingTrack(n)));
 
     internal static Dictionary<string, int> ParseCatalog(JToken json)
     {
@@ -77,7 +72,7 @@ public static class RacingAccess
             var id = (string?)row["id"];
             if (row["trackNum"]?.Type != JTokenType.Integer || string.IsNullOrWhiteSpace(id)) continue;
             var n = (int)row["trackNum"]!;
-            if (n is >= 0 and <= RacingTrackMax) result[id] = n;
+            if (n is >= 0 and <= PrizeGrants.RacingTrackMax) result[id] = n;
         }
         return result;
     }
@@ -86,7 +81,7 @@ public static class RacingAccess
     {
         if (!AllowsLaunch(owns) || catalog == null) return false;
         var id = AuthoredCharts.CloudIdFrom(url);
-        return !catalog.TryGetValue(id, out var n) || owns(RacingTrack(n));
+        return !catalog.TryGetValue(id, out var n) || owns(PrizeGrants.RacingTrack(n));
     }
 
     private static readonly Lazy<IReadOnlyDictionary<string, int>?> Catalog = new(() =>
@@ -95,7 +90,7 @@ public static class RacingAccess
         {
             var path = Path.Combine(AppContext.BaseDirectory, "Resources", "web", "dtrh", "race", "levels.json");
             var rows = ParseCatalog(JToken.Parse(File.ReadAllText(path)));
-            return rows.Count == RacingTrackMax + 1 ? rows : null;
+            return rows.Count == PrizeGrants.RacingTrackMax + 1 ? rows : null;
         }
         catch (Exception ex) { Diag.Swallowed(ex, "race catalogue unavailable; cloud gate closed"); return null; }
     });
