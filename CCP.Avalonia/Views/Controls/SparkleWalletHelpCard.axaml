@@ -1,0 +1,55 @@
+<!-- PORTED from ConditioningControlPanel/Controls/SparkleWallet.xaml:94 to 113 (HelpPopup's card, "What are
+     sparkles for?"). Same widths, colours, sizes and order; text from SparkleWallet.xaml.cs:132-141. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.SparkleWalletHelpCard">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.head">
+            <Setter Property="Foreground" Value="#FFD580"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="TextBlock.body">
+            <Setter Property="Foreground" Value="#E9D5E6"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,2,0,9"/>
+        </Style>
+        <Style Selector="Button.wallet">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
+    <Border Width="360" VerticalAlignment="Top" Background="#24182E" BorderBrush="#C996C3" BorderThickness="1" CornerRadius="14" Padding="17">
+        <StackPanel>
+            <TextBlock Text="{loc:Str sparkle_help_title}" Foreground="#FF9BCD" FontWeight="Bold" FontSize="15" TextWrapping="Wrap"/>
+            <TextBlock Text="{loc:Str sparkle_help_intro}" TextWrapping="Wrap" Foreground="#F7E5F3" FontSize="13" Margin="0,8,0,10"/>
+            <TextBlock Classes="head" Text="{loc:Str sparkle_help_backroom_title}"/>
+            <TextBlock Classes="body" Text="{loc:Str sparkle_help_backroom_body}"/>
+            <TextBlock Classes="head" Text="{loc:Str sparkle_help_win_title}"/>
+            <TextBlock Classes="body" Text="{loc:Str sparkle_help_win_body}"/>
+            <TextBlock Classes="head" Text="{loc:Str sparkle_help_pictures_title}"/>
+            <TextBlock Classes="body" Text="{loc:Str sparkle_help_pictures_body}"/>
+            <TextBlock Classes="head" Text="{loc:Str sparkle_help_honest_title}"/>
+            <TextBlock Classes="body" Text="{loc:Str sparkle_help_honest_body}" Margin="0,2,0,12"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="HelpLaterButton" Classes="wallet" Background="Transparent" BorderBrush="#C996C3"
+                        BorderThickness="1" Margin="0,0,8,0">
+                    <TextBlock Text="{loc:Str sparkle_help_later}" Foreground="#E9CCE9"/>
+                </Button>
+                <Button x:Name="HelpVisitButton" Classes="wallet" Background="#E493C3" BorderThickness="0">
+                    <TextBlock Text="{loc:Str sparkle_help_visit}" Foreground="#261329" FontWeight="SemiBold"/>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -28,7 +28,7 @@ public static class SparklePointRewards
             catch (Exception ex)
             {
                 // A broken decoration cannot block another subscriber or unwind a settled credit.
-                App.Logger?.Debug("Sparkle point award subscriber failed: {Error}", ex.Message);
+                Serilog.Log.Debug("Sparkle point award subscriber failed: {Error}", ex.Message);
             }
         }
     }

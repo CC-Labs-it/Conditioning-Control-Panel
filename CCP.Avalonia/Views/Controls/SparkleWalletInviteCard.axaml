@@ -1,0 +1,40 @@
+<!-- PORTED from ConditioningControlPanel/Controls/SparkleWallet.xaml:73 to 87 (InvitePopup's card).
+     Its own control so render-all draws the card (a Popup is a separate top level). The "x"
+     glyph is a Fluent Dismiss icon; button labels are TextBlocks (no '_' access keys). -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.SparkleWalletInviteCard">
+    <UserControl.Styles>
+        <Style Selector="Button.wallet">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
+    <Border Width="310" VerticalAlignment="Top" Background="#24182E" BorderBrush="#C996C3" BorderThickness="1" CornerRadius="14" Padding="17">
+        <StackPanel>
+            <Grid>
+                <TextBlock Text="EMI" Foreground="#FF9BCD" FontWeight="Bold" VerticalAlignment="Center"/>
+                <Button x:Name="CloseButton" Classes="wallet" HorizontalAlignment="Right" Width="26" Height="26"
+                        Background="Transparent" BorderThickness="0" Foreground="#E9CCE9"
+                        ToolTip.Tip="{loc:Str sparkle_wallet_close}" AutomationProperties.Name="{loc:Str sparkle_wallet_close}">
+                    <fx:IconGlyph Kind="Dismiss" Size="14" Foreground="#E9CCE9"/>
+                </Button>
+            </Grid>
+            <TextBlock x:Name="InviteText" Text="{loc:Str sparkle_wallet_invite}" TextWrapping="Wrap"
+                       Foreground="#F7E5F3" FontSize="14" Margin="0,8,0,15"/>
+            <Button x:Name="VisitButton" Classes="wallet" Padding="12,8" Background="#E493C3" BorderThickness="0"
+                    HorizontalAlignment="Stretch">
+                <TextBlock Text="{loc:Str sparkle_wallet_visit}" Foreground="#261329" FontWeight="SemiBold"/>
+            </Button>
+        </StackPanel>
+    </Border>
+</UserControl>
