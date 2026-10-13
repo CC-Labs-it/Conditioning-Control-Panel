@@ -90,12 +90,17 @@ public sealed class WebHostProbeTests
     }, isLinux: true, headless: false, linuxOptIn: "wpe"));
 
     [Fact]
-    public void LinuxWithoutTheOptInKeepsTheFallbackEvenWithBothEngines() => Assert.Equal(WebHost.NoEngineReason, WebHost.DecideUnavailableReason(new[]
+    public void LinuxWithoutTheOptInKeepsTheFallbackEvenWithBothEngines() => Assert.Equal(WebHost.LinuxOffReason, WebHost.DecideUnavailableReason(new[]
     {
         Info(WebViewAdapterType.WebKitGtk, true, WebViewEmbeddingScenario.NativeDialog),
         Info(WebViewAdapterType.WpeWebKit, true, WebViewEmbeddingScenario.OffscreenRenderer),
         HeadlessAdapter,
     }, isLinux: true, headless: false));
+
+    [Fact]
+    public void LinuxWithOnlyWpeAndNoOptInNamesTheOptInNotTheGtkInstall() => Assert.Equal(WebHost.LinuxOffReason,
+        WebHost.DecideUnavailableReason(new[] { GtkMissing, Info(WebViewAdapterType.WpeWebKit, true, WebViewEmbeddingScenario.OffscreenRenderer) },
+            isLinux: true, headless: false));
 
     [Fact]
     public void TheEnvVarOptsInOnlyWithAKnownEngineName()

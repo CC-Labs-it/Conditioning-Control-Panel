@@ -317,6 +317,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         internal const string NoEngineReason = "No native web view on this platform.";
 
+        internal const string LinuxOffReason =
+            "Web views are off on Linux by default (they stall here). Set CCP_LINUX_WEBVIEW=wpe or gtk to try one.";
+
         /// <summary>
         /// The availability decision. Without a Linux opt-in: an installed adapter offering NativeControlHost
         /// (WebView2 on Windows, WKWebView on macOS); 12.1 reports none on Linux, so Linux draws the fallback.
@@ -326,6 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal static string? DecideUnavailableReason(IEnumerable<DetailedWebViewAdapterInfo> adapters, bool isLinux, bool headless, string? linuxOptIn = null)
         {
             string? firstReason = null;
+            var linuxOff = false;
             foreach (var info in adapters)
             {
                 if (!info.IsSupported || info.Type is WebViewAdapterType.Unknown or WebViewAdapterType.Headless) continue;
@@ -337,12 +341,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 };
                 if (info.IsInstalled && hostable && !headless)
                     return null;
+                // An engine is installed but off by default: say so and name the opt-in, not "no web view".
+                if (isLinux && linuxOptIn is null && !headless && info.IsInstalled
+                    && info.Type is WebViewAdapterType.WpeWebKit or WebViewAdapterType.WebKitGtk)
+                    linuxOff = true;
                 // Prefer the first supported-but-missing engine's message: on Linux that is the
                 // actionable "Install webkit2gtk 4.0+ package", not "not supported on this platform".
                 if (firstReason is null && !string.IsNullOrWhiteSpace(info.UnavailableReason))
                     firstReason = info.UnavailableReason;
             }
-            return firstReason ?? NoEngineReason;
+            return linuxOff ? LinuxOffReason : firstReason ?? NoEngineReason;
         }
     }
 }
