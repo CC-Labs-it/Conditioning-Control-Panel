@@ -6,15 +6,19 @@
 // claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
 // every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
 // stay in GameWindow.HandleMessage.
-// ponytail: slice game-dtrh-host-b, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
-// meta snapshot, meta-command, the Warren shelves), online media copies + re-posted manifest + loops lane
-// (DtrhAssetManifest remote half), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
+// Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
+// copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
+// ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
+// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
 // loom-*, favorites + asset-stats, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray, and SeasonRecap TrackFeature.
 using System;
+using System.IO;
 using System.Linq;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -111,13 +115,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { Web.Focus(); }   // Escape (pause / hold-to-exit) works from the first frame
             catch (Exception ex) { Log.Debug("DtrhHost: focus: {E}", ex.Message); }
             Post(DtrhInitMessage());
-            try
-            {
-                var server = _server;
-                Post(GameMediaManifest.Frame(server == null ? new() : GameMediaManifest.BuildActive(server.AssetUrl)));
-            }
+            try { PostDtrhManifest(); }
             catch (Exception ex) { Log.Warning("DtrhHostService.OnPageReady: {E}", ex.Message); }
+            // WPF :303: online media copied to this machine after this frame reaches the page as a fresh manifest
+            // (the page replaces its pools), so the tube fills without a relaunch. Unsubscribed in DisposeDtrh (P68).
+            DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
+            DtrhRemoteMedia.CopiesReady += OnDtrhCopiesReady;
         }
+
+        /// <summary>WPF PostManifest (:83): the library, then the online half on top (Core DtrhRemoteMedia). Urls are
+        /// root-relative (WebAssetServer.AssetPath), the shape hostMedia.js counts as local and lets WebGL draw.</summary>
+        private void PostDtrhManifest()
+        {
+            var m = _server == null ? new GameMediaManifest.Manifest() : GameMediaManifest.BuildActive(WebAssetServer.AssetPath);
+            if (_server != null)
+            {
+                var root = CorePaths.EffectiveAssets;
+                DtrhRemoteMedia.AppendTo(m, CoreSettings.Current, copy => WebAssetServer.AssetPath(Path.GetRelativePath(root, copy)),
+                    DtrhCopier);
+            }
+            Post(GameMediaManifest.Frame(m));
+        }
+
+        /// <summary>Where online copies come from; tests swap it (no network in a test).</summary>
+        internal static DtrhRemoteMedia.Copier DtrhCopier = DtrhRemoteMedia.AssetsTempCopier;
+
+        /// <summary>WPF OnRemoteCopiesReady (:97): off the UI thread; re-post while the page is up and not leaving.</summary>
+        private void OnDtrhCopiesReady() => Dispatcher.UIThread.Post(() =>
+        {
+            try { if (DtrhReady) PostDtrhManifest(); }
+            catch (Exception ex) { Log.Debug("DtrhHost: manifest re-post failed: {E}", ex.Message); }
+        });
 
         internal object DtrhInitMessage() => new
         {
@@ -186,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void DisposeDtrh()
         {
             if (!IsDtrh) return;
+            DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             if (DtrhRunCloseRule.ShouldBookOnClose(_dtrhRunActive, _dtrhLastProgress != null))
             {
                 Log.Information("DtrhHost: the window closed mid-run - banking the last run snapshot");
