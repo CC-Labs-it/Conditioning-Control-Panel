@@ -44,6 +44,9 @@ html[data-motion="reduced"] {
   pointer-events: none;
 }
 
+/* a material bubble's picture reaches past the bubble: its motes drift around it (1.7x, bubbleLife.js HALO) */
+.cf-bubble-life--halo { inset: -35%; width: 170%; height: 170%; }
+
 /* ---- idle breath: each bubble on its own period and phase (set at spawn) ---- */
 .cf-bubble-body {
   animation: cfFeelBreath var(--breath-dur, 4s) ease-in-out var(--breath-delay, 0s) infinite;

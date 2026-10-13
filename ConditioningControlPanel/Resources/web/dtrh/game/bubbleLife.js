@@ -16,6 +16,18 @@ const S = 256, C = 128, TAU = Math.PI * 2;
 export const LIFE_CAP = 28;          // canvases alive at once; past it a bubble stays still
 const FRAME_MS = 33, SLOW_FRAME_MS = 50;
 
+// A material bubble's canvas reaches past the bubble so its motes can drift AROUND it.
+const HALO = 1.7;
+const HALO_PAD = (S * (HALO - 1)) / 2;
+const MOTE_TINT = {
+  silicone: '255,214,222', makeup: '255,96,160', pills: '255,148,196',
+  lace: '244,226,255', lube: '168,230,255', chrome: '206,214,228',
+};
+/** The mote colour for a material bubble's id ("material_chrome"), white for one unknown. Pure. */
+export function moteTintFor(variantId) {
+  return MOTE_TINT[String(variantId || '').replace(/^material_/, '')] || '255,255,255';
+}
+
 const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 
 /** Which effect a spec wears, or null for a bubble that stays still. Pure. */
@@ -251,8 +263,26 @@ const FX = {
     film(ctx, t);
   },
   // A crafting ingredient: its own cutout, with a few glints on it.
-  material(ctx, img, t, m) {
+  // and a slow ring of motes in its own colour, drifting round and a little outward.
+  material(ctx, img, t, m, e) {
     twinkles(ctx, t, 4, 70, 'rgba(255,255,255,1)', 79, 9);
+    const tint = (e && e.tint) || '255,255,255';
+    const n = 10;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < n; i++) {
+      const life = (t * (0.11 + rnd(i * 3.1) * 0.07) + rnd(i * 5.7)) % 1;     // 0..1, then it starts over
+      const a = (i / n) * TAU + rnd(i) * 0.9 + t * (i % 2 ? 0.22 : -0.16);
+      const r = 104 + life * 62 + 6 * Math.sin(t * 0.9 + i);
+      const x = C + Math.cos(a) * r, y = C + Math.sin(a) * r - life * 14;
+      const alpha = Math.sin(life * Math.PI) ** 1.5 * (0.5 + 0.3 * rnd(i * 9.3));
+      if (alpha <= 0.02) continue;
+      const size = 5 + 5 * rnd(i * 2.3);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, size);
+      g.addColorStop(0, `rgba(${tint},${alpha})`); g.addColorStop(1, `rgba(${tint},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, size, 0, TAU); ctx.fill();
+      if (i % 3 === 0) glint(ctx, x, y, size * 1.5, alpha * 0.8, 'rgba(255,255,255,1)');
+    }
+    ctx.restore();
   },
   bubble(ctx, img, t, m) {
     film(ctx, t, 0.36, 88); film(ctx, -t * 0.7 + 2, 0.2, 78);
@@ -308,14 +338,15 @@ function tick(ms) {
     if (!sp.ready) continue;
     if (m <= 0 && e.still) continue;
     const ctx = e.ctx;
-    ctx.setTransform(e.k, 0, 0, e.k, 0, 0);
+    const pad = e.halo ? HALO_PAD : 0;
+    ctx.setTransform(e.k, 0, 0, e.k, pad * e.k, pad * e.k);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
-    ctx.clearRect(0, 0, S, S);
+    ctx.clearRect(-pad, -pad, S + pad * 2, S + pad * 2);
     ctx.drawImage(sp.canvas, 0, 0);
     if (!e.shown) { e.shown = true; e.body.style.backgroundImage = 'none'; }
     e.still = m <= 0;
     if (e.still) continue;
-    try { FX[e.kind](ctx, sp.canvas, (t0 + e.phase) * (m < 1 ? 0.5 : 1), m < 1 ? 0.4 : 1); }
+    try { FX[e.kind](ctx, sp.canvas, (t0 + e.phase) * (m < 1 ? 0.5 : 1), m < 1 ? 0.4 : 1, e); }
     catch (_) { /* this frame keeps the still sprite */ }
   }
   cost += (performance.now() - began - cost) * 0.1;
@@ -330,12 +361,13 @@ export function attachLife(body, spec) {
     scratch();
     const canvas = document.createElement('canvas');
     const res = (spec.sizePx || 0) * (window.devicePixelRatio || 1) > 150 ? S : 128;
-    canvas.width = canvas.height = res;
-    canvas.className = 'cf-bubble-life';
+    const halo = kind === 'material';
+    canvas.width = canvas.height = halo ? Math.round(res * HALO) : res;
+    canvas.className = halo ? 'cf-bubble-life cf-bubble-life--halo' : 'cf-bubble-life';
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     body.insertBefore(canvas, body.firstChild);
-    lives.add({ canvas, ctx, body, kind, k: res / S, sprite: spriteFor(spec.sprite), phase: rnd(++seq * 13) * 20, shown: false, still: false });
+    lives.add({ canvas, ctx, body, kind, halo, tint: halo ? moteTintFor(spec.variantId) : null, k: res / S, sprite: spriteFor(spec.sprite), phase: rnd(++seq * 13) * 20, shown: false, still: false });
     if (!raf) raf = requestAnimationFrame(tick);
   } catch (_) { /* the still sprite stays */ }
 }
