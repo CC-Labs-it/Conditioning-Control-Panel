@@ -288,11 +288,15 @@ function drop(e) {
   try { e.canvas.remove(); } catch (_) {}
 }
 
+let heldByPause = false;
+/** A held pause holds the pictures where they are. */
+export function setLifePaused(v) { heldByPause = !!v; }
+
 function tick(ms) {
   raf = lives.size ? requestAnimationFrame(tick) : 0;
   if (ms - last < (cost > 9 ? SLOW_FRAME_MS : FRAME_MS)) return;
   last = ms;
-  if (document.hidden) return;
+  if (document.hidden || heldByPause) return;
   const m = motionScale();
   const t0 = ms / 1000;
   const began = performance.now();

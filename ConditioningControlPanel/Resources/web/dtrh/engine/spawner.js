@@ -2169,7 +2169,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     for (let i = ready.length - 1; i >= 0; i--) {
       if (ready[i].kind !== 'video') continue;
       const v = ready.splice(i, 1)[0];
-      try { if (v.release) v.release(); } catch (e) { /* ignore */ }
+      try { if (v.dispose) v.dispose(); else if (v.release) v.release(); } catch (e) { /* ignore */ }
     }
   }
 

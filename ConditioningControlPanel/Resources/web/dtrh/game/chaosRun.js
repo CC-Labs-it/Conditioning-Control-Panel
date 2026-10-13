@@ -53,6 +53,7 @@ import { createChaosField } from './chaosField.js';
 import { createFieldFx } from './fieldFx.js';
 import { createPayloadFx } from './payloadFx.js';
 import { listensFor, rollProc, restFor } from './toyProcs.js';
+import { setLifePaused } from './bubbleLife.js';
 import { setLoomBook } from '../engine/loomSpirals.js';
 import { createLoomBook } from '../race/loomBook.js';
 import { createLoomSpiralFx } from '../race/loomSpiralFx.js';
@@ -908,7 +909,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
 
     // Snap Chain: inside the post-snap window a trigger can't take anything.
     // Rubber Up (crafted) rides the same gate on its own dt-based window.
-    wakeToys('detonate-pre', { x, y });   // Rubber Up (crafted) takes the first one
+    if (!(st.rubberSec > 0 || performance.now() < st.invulnUntil)) wakeToys('detonate-pre', { x, y });   // Rubber Up (crafted) takes the first one nothing else holds
     if (st.rubberSec > 0 || performance.now() < st.invulnUntil) {
       hudUi.toast(st.rubberSec > 0
         ? `🛡 the rubber holds (${NAME_OF[spec.variantId] || spec.variantId})`
@@ -1473,8 +1474,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       power: t.power ?? 0,
       level: t.level ?? 1,
       maxed: !!t.maxed,
-      chargesLeft: (t.cooldownSec ?? 0) <= 0 ? Math.max(3, Math.round(t.power ?? 0)) : -1,
-      chargesMax: (t.cooldownSec ?? 0) <= 0 ? Math.max(3, Math.round(t.power ?? 0)) : -1,
+      chargesLeft: -1,   // toys wake on their own: nothing to count down
+      chargesMax: -1,
       cooldownLeft: 0,
       effectActive: false,
     }));
@@ -4574,7 +4575,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     /** DtRH intensity feeds the director (demoted to a presentation adapter). */
     moodIntensity() { return state === 'running' ? intensity() : 0; },
 
-    setPaused(v) { paused = !!v; syncHeld(); },
+    setPaused(v) { paused = !!v; setLifePaused(paused); syncHeld(); },
     /** THE HOURGLASS (crafted): may Esc truly FREEZE the fall right now? Outside
      *  a live descent there's nothing to hold, so the pause always freezes. */
     canHoldPause() { return state !== 'running' || craftedCount('the_hourglass') >= 1; },
