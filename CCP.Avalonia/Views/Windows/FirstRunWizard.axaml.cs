@@ -199,9 +199,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// shell claims the gate in its constructor and opens this window once it is on screen. Both
     /// of the wizard's outgoing actions land on this head - the content-folder picker is
     /// <c>MainShellWindow.PickAssetsFolder</c>, opened at once from the button, and the short walk is
-    /// <c>CoreTutorial.Start("ShortWalk")</c>, a seam this head has not seeded, so that button
-    /// reaches the tour service and no tour appears (the same state AwarenessTabView and
-    /// ModCreatorWindow are in).</para>
+    /// <c>CoreTutorial.Start("ShortWalk")</c>, seeded by <c>Tours.TutorialHead.Seed</c>, so that
+    /// button starts the real tour on the shell.</para>
     ///
     /// <para>Step 2 commits for real: <see cref="PrepareModStep"/> spends (or, offline, latches)
     /// the picker's one-shot offer and <see cref="CommitModChoice"/> switches through the shell's
@@ -482,9 +481,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         ///
         /// <para><c>StartTutorial(TutorialType.ShortWalk)</c> becomes
         /// <c>CoreTutorial.Start("ShortWalk")</c> - the seam takes the head's tutorial-type name as
-        /// a string. This head seeds no <c>StartAction</c>, so that call is a silent no-op today
-        /// and the button starts no tour; it reaches the real seam, which is the same state every
-        /// other tour button on this head is in.</para>
+        /// a string, and <c>Tours.TutorialHead.Seed</c> backs it with the imported TutorialService,
+        /// so the button starts the real tour.</para>
         /// </summary>
         public static async Task Run(MainShellWindow owner)
         {
