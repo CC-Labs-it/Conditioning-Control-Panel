@@ -29,6 +29,7 @@ const CARD_W = 2.1, CARD_H = 2.55;       // station card content size (portrait)
 const PORTAL_R = 2.1;                    // FALL IN portal disc radius
 const ANCHOR_LERP = 3.2;                 // per-frame re-anchor smoothing
 const FOCUS_SCALE = 1.15;                // focused station lift
+const HOVER_EASE_RATE = 5;               // 1/s: feel wave 2, the hover lift and glow ease in and out (was a snap)
 const DIM_SIBLING = 0.35;                // unfocused siblings dim to this
 const FLASH_DUR = 3.0;                   // reveal-flash seconds
 const FOCUS_GLIDE = 0.9;                 // seconds: eased camera pan onto a focused station
@@ -183,6 +184,7 @@ export function createHubStations({ scene, camera, layout, nav, fx, hud }) {
   // ---- one station -----------------------------------------------------------
   function buildStation(def) {
     let disposed = false;
+    let aimK = 0;   // eased hover, 0..1
     const accent = def.accent != null ? def.accent : 0xff69b4;
     const glowCol = def.glowCol != null ? def.glowCol : accent;
     const group = new THREE.Group();
@@ -317,7 +319,8 @@ export function createHubStations({ scene, camera, layout, nav, fx, hud }) {
         const isFocused = focused === def.id;
         const dimmed = focused && !isFocused ? DIM_SIBLING : 1;
         const hazy = def.hazy ? 0.4 : 1;
-        const lift = (isFocused ? 1 : 0) + (aimedId === def.id && !focused ? 0.45 : 0);
+        aimK += ((aimedId === def.id && !focused ? 1 : 0) - aimK) * Math.min(1, dt * HOVER_EASE_RATE);
+        const lift = (isFocused ? 1 : 0) + 0.45 * aimK;
         const vis = appear * (1 - fk) * dimmed * hazy;
 
         glowMat.opacity = 0.9 * vis * (0.65 + 0.35 * lift + 0.16 * Math.sin(sway * 2.2) + 0.6 * flash);

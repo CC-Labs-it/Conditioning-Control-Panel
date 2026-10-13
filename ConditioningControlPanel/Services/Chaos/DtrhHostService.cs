@@ -80,6 +80,52 @@ internal static class DtrhHostService
 
     public static bool IsActive => _host != null;
 
+    private static void PostManifest()
+    {
+        var m = DtrhAssetManifest.Build();
+        DtrhModContent.MergeMedia(m);   // creator mods: mix/replace descent media
+        _host?.Post(new
+        {
+            type = "manifest",
+            images = m.Images.Select(e => new { name = e.Name, url = e.Url }),
+            videos = m.Videos.Select(e => new { name = e.Name, url = e.Url }),
+            skipped = m.Skipped,
+            truncated = m.Truncated,
+        });
+    }
+
+    private static void OnRemoteCopiesReady()
+    {
+        try
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { if (_host != null && _host.IsReady && !_exiting) PostManifest(); }
+                catch (Exception ex) { App.Logger?.Debug("DtrhHost: manifest re-post failed: {E}", ex.Message); }
+            }));
+        }
+        catch (Exception ex) { App.Logger?.Debug("DtrhHost: copies-ready dispatch failed: {E}", ex.Message); }
+    }
+
+    /// <summary>The game window is up AND in front: the panic key's Escape is the game's pause then
+    /// (PanicPolicy.GameClaimsEscapeAsPause), as it is for the race and the chess board.</summary>
+    public static bool IsInFront => _host?.IsForeground == true;
+
+    /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+    public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+    /// <summary>Hand the page an Escape the panel kept as its pause (engine/scene.js plays it once
+    /// unless the real key reached it too), and give it the keyboard back.</summary>
+    public static void PostKeptEscape()
+    {
+        try
+        {
+            _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+            _host?.FocusWeb();
+        }
+        catch (Exception ex) { App.Logger?.Debug("DtrhHost: kept Escape post failed: {E}", ex.Message); }
+    }
+
     /// <summary>A DtRH descent is currently running (between run-started and run-ended). Used to
     /// cheaply gate optional per-run telemetry off the global bark/audio paths.</summary>
     public static bool IsRunActive => _runActive;
@@ -235,6 +281,8 @@ internal static class DtrhHostService
                 type = "init",
                 protocol = Protocol,
                 settings = new { masterVolume = SafeMasterVolume() },
+                // The player's Motion setting (full / reduced / off) for shared/motion.js.
+                motionLevel = DtrhMotionWire.Current(),
                 // Active persona (builtin-bambisleep / builtin-sissyhypno / builtin-locked):
                 // the page's VN portrait picks the matching portrait set + tint.
                 modId = SafeActiveModId(),
@@ -249,16 +297,11 @@ internal static class DtrhHostService
                 m2Test = _testMode,
             });
             if (_meta != null) _host?.Post(_meta.SnapshotMessage());
-            var m = DtrhAssetManifest.Build();
-            DtrhModContent.MergeMedia(m);   // creator mods: mix/replace descent media
-            _host?.Post(new
-            {
-                type = "manifest",
-                images = m.Images.Select(e => new { name = e.Name, url = e.Url }),
-                videos = m.Videos.Select(e => new { name = e.Name, url = e.Url }),
-                skipped = m.Skipped,
-                truncated = m.Truncated,
-            });
+            PostManifest();
+            // Online media copied to this machine after this frame reaches the page as a fresh
+            // manifest (the page replaces its pools), so the tube fills without a relaunch.
+            DtrhAssetManifest.RemoteCopiesReady -= OnRemoteCopiesReady;
+            DtrhAssetManifest.RemoteCopiesReady += OnRemoteCopiesReady;
             PostLoomList();   // THE LOOM: seed the page's saved-spiral pool
             // THE BIOMES (S3 read-back): the cumulative engagement ranking, so the
             // page can bias toward the media the user actually likes (the exact

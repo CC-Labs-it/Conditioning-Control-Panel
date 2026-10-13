@@ -387,7 +387,7 @@ export function createRace({ root, bridge, media, settings = {}, seed = 1, onExi
     u.uRings.value = Math.round(layout.totalDepth / 12);        // a ring every 12 m (the descent's 8 m tangles at the far end)
     u.uSpiralTurns.value = Math.round(layout.totalDepth / 36);  // and a lazier spiral, so the tube ends in a point, not a knot
     scene.add(tunnel.mesh);
-    const fx = createFx({ scene, layout, tunnelMat: tunnel.material, particleFog: false });
+    const fx = createFx({ scene, layout, tunnelMat: tunnel.material, particleFog: false, threads: false });
     const dresser = createRoomDresser({ scene, layout });
     // the online feed cannot be a texture, so it rides a DOM layer over the canvas instead
     // (race/wallDom.js); the painted fill placards stand down as soon as its pictures are in

@@ -1,0 +1,94 @@
+/* ============================================================================
+ * feel-hub.css - feel pass, wave 2, hub lane: the Warren's panes, the bank's
+ * give and take, the draft labels. Loaded after styles.css and feel-field.css.
+ *
+ * A trance game: everything here settles, nothing snaps. Each animation returns
+ * to rest on its own (an IN and an OUT in one curve). The lengths below match
+ * REFUSE_MS / BLOOM_MS / DRAIN_MS in game/warren.js.
+ *
+ * Motion levels: styles.css already swaps .wr-win to a plain fade under
+ * html[data-motion="off"] (its rule outranks ours on purpose). The reduced and
+ * off rules for the NEW classes live at the bottom of this file.
+ * ==========================================================================*/
+
+:root {
+  --hub-unfold-dur: 0.44s;     /* a station pane unfolding from the station */
+  --hub-unfold-squeeze: 0.8;   /* how folded the pane starts (scaleX) */
+  --hub-refuse-dur: 0.38s;     /* the sideways no */
+  --hub-refuse-px: 5px;        /* how far the no travels */
+  --hub-bloom-dur: 1.5s;       /* the bought row's bloom */
+  --hub-drain-dur: 0.95s;      /* the wallet chip draining */
+}
+
+/* ---- 1. station panes unfold from the station (the centre), not slide in from the edge ---- */
+.wr-wins .wr-wins-col--right .wr-win {
+  transform-origin: 0% 30%;
+  animation: hubUnfoldR var(--hub-unfold-dur) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+.wr-wins .wr-wins-col--left .wr-win {
+  transform-origin: 100% 30%;
+  animation: hubUnfoldL var(--hub-unfold-dur) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes hubUnfoldR {
+  from { opacity: 0; transform: translateX(-14px) scale(var(--hub-unfold-squeeze), 0.9); }
+  60%  { opacity: 1; }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hubUnfoldL {
+  from { opacity: 0; transform: translateX(14px) scale(var(--hub-unfold-squeeze), 0.9); }
+  60%  { opacity: 1; }
+  to   { opacity: 1; transform: none; }
+}
+@media (max-width: 900px) {
+  /* the stacked layout has no "centre side": unfold downward from the head bar */
+  .wr-wins .wr-wins-col--right .wr-win,
+  .wr-wins .wr-wins-col--left .wr-win { transform-origin: 50% 0%; }
+}
+
+/* ---- 2. the bank takes visibly: the chip sinks, its colour drains, then it comes back ---- */
+.wr-chip.is-drain { animation: hubDrain var(--hub-drain-dur) ease-in-out both; }
+@keyframes hubDrain {
+  0%   { transform: none; filter: none; }
+  28%  { transform: translateY(3px) scale(0.955); filter: saturate(0.35) brightness(0.78); }
+  100% { transform: none; filter: none; }
+}
+
+/* ...and the bought row blooms toward its own hue, slowly, and lets go */
+.wr-row.is-bought { animation: hubBloom var(--hub-bloom-dur) ease-in-out both; }
+@keyframes hubBloom {
+  0%   { box-shadow: 0 0 0 rgba(var(--acc, 255,215,0), 0); }
+  35%  { box-shadow: 0 0 26px rgba(var(--acc, 255,215,0), 0.42), inset 0 0 22px rgba(var(--acc, 255,215,0), 0.16); }
+  100% { box-shadow: 0 0 0 rgba(var(--acc, 255,215,0), 0); }
+}
+
+/* ---- a refused purchase: a small sideways no. No red, no flash. ---- */
+.wr-buy.is-refused { animation: hubNo var(--hub-refuse-dur) ease-in-out both; }
+@keyframes hubNo {
+  0%   { transform: translateX(0); }
+  22%  { transform: translateX(calc(var(--hub-refuse-px) * -1)); }
+  50%  { transform: translateX(calc(var(--hub-refuse-px) * 0.8)); }
+  76%  { transform: translateX(calc(var(--hub-refuse-px) * -0.4)); }
+  100% { transform: translateX(0); }
+}
+@keyframes hubNoFade { 0%, 100% { opacity: 1; } 45% { opacity: 0.55; } }
+
+/* ---- 3. draft labels: the aimed glow eases in and out with the card's lift ---- */
+.cf-boonpick-label { transition: border-color 0.28s ease, box-shadow 0.28s ease, opacity 0.22s ease; }
+.cf-boonpick-reroll, .cf-boonpick-resist { transition: opacity 0.25s ease, filter 0.25s ease; }
+
+/* ============================ motion levels ============================ */
+html[data-motion="reduced"] { --hub-unfold-squeeze: 0.9; --hub-refuse-px: 2.5px; }
+html[data-motion="reduced"] .wr-chip.is-drain { animation-name: hubDrainSoft; }
+@keyframes hubDrainSoft {
+  0%, 100% { transform: none; filter: none; }
+  28% { transform: translateY(1.5px); filter: saturate(0.6) brightness(0.88); }
+}
+/* off: fades only (dmIn is the plain fade from styles.css; restated here because the
+   three-class unfold selectors above outrank its two-class off rule) */
+html[data-motion="off"] .wr-wins .wr-wins-col--right .wr-win,
+html[data-motion="off"] .wr-wins .wr-wins-col--left .wr-win { animation-name: dmIn; animation-timing-function: ease-out; }
+html[data-motion="off"] .wr-chip.is-drain { animation-name: hubNoFade; }
+html[data-motion="off"] .wr-buy.is-refused { animation-name: hubNoFade; }
+html[data-motion="off"] .cf-boonpick-label { transition: opacity 0.22s ease; }
