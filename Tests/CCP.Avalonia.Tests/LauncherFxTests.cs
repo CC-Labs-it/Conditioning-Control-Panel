@@ -335,19 +335,26 @@ public sealed class LauncherFxTests
     [Fact]
     public void Edge_FocusBack_GlintsAtMostEveryFourSeconds() => Run(MotionLevel.Full, (_, launcher, cues) =>
     {
-        var (_, glint) = Reopen(launcher);
-        Frames(launcher, 80);                             // the open glint is done
-        cues.Clear();
-        launcher.OnFxActivated(true);                     // the open itself activates the window: no second cue
-        launcher.StepFx(0.1);
-        Assert.DoesNotContain("launcher-edge", cues);
-        Assert.Equal(0, glint.Opacity);
+        var clock = new SteppedUtc();
+        LauncherWindow.LauncherSfx.Clock = clock;
+        try
+        {
+            var (_, glint) = Reopen(launcher);
+            Frames(launcher, 80);                         // the open glint is done
+            cues.Clear();
+            clock.Now += TimeSpan.FromSeconds(3.9);
+            launcher.OnFxActivated(true);                 // inside the 4 s gap: no second cue
+            launcher.StepFx(0.1);
+            Assert.DoesNotContain("launcher-edge", cues);
+            Assert.Equal(0, glint.Opacity);
 
-        launcher._lastEdgeCue = DateTime.UtcNow.AddSeconds(-4.1);
-        launcher.OnFxActivated(true);
-        launcher.StepFx(0.1);
-        Assert.Contains("launcher-edge", cues);
-        Assert.True(glint.Opacity > 0, "focus back runs the glint");
+            clock.Now += TimeSpan.FromSeconds(0.2);       // 4.1 s since the open's cue
+            launcher.OnFxActivated(true);
+            launcher.StepFx(0.1);
+            Assert.Contains("launcher-edge", cues);
+            Assert.True(glint.Opacity > 0, "focus back runs the glint");
+        }
+        finally { LauncherWindow.LauncherSfx.Clock = TimeProvider.System; }
     });
 
     [Fact]

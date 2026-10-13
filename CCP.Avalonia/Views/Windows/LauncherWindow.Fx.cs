@@ -95,7 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _fxFirstShow = true, _beatArmed, _spiralBuilt;
         private double _spiral, _spiralSmall, _spiralApplyIn;
         private double _edgeFlareT = -1, _edgeBreathT, _glintT = -1, _glintIdleIn = EdgeIdleGlint;
-        internal DateTime _lastEdgeCue = DateTime.MinValue;
+        private DateTime _lastEdgeCue = DateTime.MinValue;
         private Tween _glow, _fade;
         private IBrush? _glowRest;
         private double _shakeT = -1, _shakeA, _ringT = -1;
@@ -188,7 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 else { _fade.On = false; RootGrid.Opacity = 1; }
 
                 LauncherSfx.Open();
-                var now = DateTime.UtcNow;
+                var now = LauncherSfx.Clock.GetUtcNow().UtcDateTime;
                 if (now - _lastEdgeCue > TimeSpan.FromSeconds(1)) LauncherSfx.Edge();
                 _lastEdgeCue = now;
                 if (Env.AllowTransitions) { _edgeFlareT = 0; _glintT = 0; _glintIdleIn = EdgeIdleGlint; }
@@ -325,7 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnEdgeActivated()
         {
             if (!IsVisible || _fxFirstShow) return;
-            var now = DateTime.UtcNow;
+            var now = LauncherSfx.Clock.GetUtcNow().UtcDateTime;
             if (now - _lastEdgeCue < FocusCueGap) return;
             _lastEdgeCue = now;
             LauncherSfx.Edge();
@@ -647,7 +647,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// three-voice hover cap and the IsOutputSuppressed probe have nothing to call here.</summary>
         internal static class LauncherSfx
         {
-            /// <summary>The hover throttle's clock (P08: tests step it).</summary>
+            /// <summary>The hover throttle's and edge cue gate's clock (P08: tests step it).</summary>
             internal static TimeProvider Clock = TimeProvider.System;
             private static readonly LauncherMelody Melody = new();
             private static DateTime _lastHover = DateTime.MinValue;
