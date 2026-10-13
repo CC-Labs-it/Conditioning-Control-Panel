@@ -78,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void Subscribe(bool on)
         {
+            if (!on) HeroTitle.Stop(); // WPF Fx.cs:262 on hide, linked or not
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {
                 _subscribed = c;
@@ -93,7 +94,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 s.LockChanged -= OnLockChanged;
                 s.Booked -= OnBooked;
                 _subscribed = null;
-                HeroTitle.Stop(); // WPF Fx.cs:262 on hide
                 _tick.Stop();
                 SlowTick.Stop();
             }

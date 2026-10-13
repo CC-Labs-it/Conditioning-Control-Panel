@@ -174,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 Stop();
                 _row.Children.Clear();
                 _glyphs.Clear();
-                _entryUntil = TimeSpan.MinValue;
+                // _entryUntil survives a rebuild, as WPF's did: a resize mid-drop does not re-arm the entry or the rattle
                 var text = Text ?? "";
                 var size = Math.Max(8, FontSize);
                 var fit = FitWidth;

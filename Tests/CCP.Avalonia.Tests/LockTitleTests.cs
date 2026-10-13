@@ -5,6 +5,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
 using Xunit;
@@ -85,6 +87,11 @@ public sealed class LockTitleTests
             title.PlayEntry();
             title.Apply(now);
             Assert.Equal(1, first.Opacity);
+            // a resize mid-entry rebuilds the glyphs but keeps the entry window (WPF): no rattle yet
+            title.FitWidth = 900;
+            title.Rattle();
+            title.Apply(now + TimeSpan.FromMilliseconds(40));
+            Assert.Equal(-10, Angle(title.Padlocks.First()), 3);
 
             // after the entry the jolt tugs the padlocks: 10 deg at a sixth of 600 ms, against a -10 lean
             now += TimeSpan.FromSeconds(5);
@@ -134,6 +141,38 @@ public sealed class LockTitleTests
         Assert.InRange(LockTitle.NaturalWidth(title.Text, title.EffectiveFontSize), 590, 610);
         return Task.CompletedTask;
     });
+
+    /// <summary>The Chaster hero's hooks (WPF ChasterTabView :102, Fx.cs:159/160/262/676): shown starts the
+    /// idle, the card's width feeds FitWidth, a booking tugs the padlocks, hidden parks the idle.</summary>
+    [Fact]
+    public Task TheChasterHeroDrivesTheTitle() => AvaloniaTestDispatcher.RunAsync(() => ChasterBillTests.Run(async (chaster, shell) =>
+    {
+        var tab = shell.Named<ChasterTabView>("ChasterTab")!;
+        var title = tab.FindControl<LockTitle>("HeroTitle")!;
+        title.MotionOverride = true;
+        if (string.IsNullOrEmpty(title.Text)) title.Text = "Locktober";
+        shell.ShowTab("chaster");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(title.IsRunning);
+
+        var card = tab.FindControl<Border>("HeroCard")!;
+        Assert.True(card.Bounds.Width > 52);
+        Assert.Equal(card.Bounds.Width - 52, title.FitWidth, 3);
+
+        title.Stop();
+        var t = TimeSpan.FromSeconds(500);
+        title.Now = () => t;
+        Assert.True(chaster.Note("attention").Booked);
+        Dispatcher.UIThread.RunJobs();
+        title.Apply(t + TimeSpan.FromMilliseconds(100));
+        Assert.Equal(0, Angle(title.Padlocks.First()), 3);   // -10 lean + the 10 deg jolt
+
+        title.Start();
+        Assert.True(title.IsRunning);
+        tab.IsVisible = false;
+        Assert.False(title.IsRunning);
+        await Task.CompletedTask;
+    }));
 
     private static double Angle(Control c)
     {
