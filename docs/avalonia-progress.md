@@ -2231,3 +2231,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/ui-core-a: +36
 - Cloud session (Opus), local review + gate.
 - Review fix: LayoutDrift move made a pure 100% rename; rgate GATE-OK (windows + core-linux + core-guards).
+
+## avalonia-port/update-core-a: +429
+- Cloud session (Opus), local review + gate.
+- Review fix: MainModule read back inside a try (pre-move swallow); read-only elevation test fail-proven.
