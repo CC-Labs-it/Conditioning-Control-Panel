@@ -838,7 +838,7 @@ namespace ConditioningControlPanel
                     foreach (var source in pending)
                     {
                         _deeperDurationProbeTried.Add(source);
-                        var seconds = await MediaDurationCache.ProbeAsync(source);
+                        var seconds = await MediaDurationProbe.ProbeAsync(source);
                         if (seconds is not > 0) continue;
                         MediaDurationCache.Remember(source, seconds.Value);
                         foreach (var entry in _deeperAllEntries)
