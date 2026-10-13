@@ -3265,6 +3265,33 @@ namespace ConditioningControlPanel.Models
         [System.Text.Json.Serialization.JsonIgnore]
         public bool HasInviteGrant => _inviteGrantUntil.HasValue && DateTime.UtcNow < _inviteGrantUntil.Value;
 
+        private int? _serverTierSeen = null;
+        /// <summary>
+        /// The last server <c>effective_tier</c> that read LOWER than <see cref="PatreonTier"/>
+        /// (EntitlementTierSync). Null when the server agrees or rose. The grace stamps above still
+        /// decide access; this only tells the lapse rows that the window is really closing
+        /// (Services/Startup/Conversion/ConversionRules). Machine-local.
+        /// </summary>
+        [JsonProperty("server_tier_seen")]
+        public int? ServerTierSeen
+        {
+            get => _serverTierSeen;
+            set { _serverTierSeen = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, string> _inboxStamps = new(StringComparer.Ordinal);
+        /// <summary>
+        /// One stamp per conversion Inbox row key (lapse_warn_7, companion_cap, ...): the value that
+        /// row was last posted for (a local date, or the grace end it warned about). Keeps each row
+        /// to once a day, or once per lapse. Machine-local, never a sync field.
+        /// </summary>
+        [JsonProperty("inbox_stamps", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, string> InboxStamps
+        {
+            get => _inboxStamps;
+            set { _inboxStamps = value ?? new(StringComparer.Ordinal); OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Scheduler
