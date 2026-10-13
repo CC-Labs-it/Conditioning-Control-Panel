@@ -71,6 +71,21 @@ public sealed class ChaosFxWindowTests
     }
 
     [Fact]
+    public async Task The_run_ending_normally_closes_the_fx_window_before_the_recap()
+    {
+        await Run(_ =>
+        {
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            var fx = ChaosRunHost.Fx!;
+            ChaosRunHost.RequestStop();                   // EndRun, not panic: the overlay stays for the recap
+            Assert.NotNull(ChaosRunHost.Overlay);
+            Assert.Null(ChaosRunHost.Fx);
+            Assert.False(fx.IsVisible);
+        });
+    }
+
+    [Fact]
     public async Task Colour_flashes_off_means_no_heat_tint()
     {
         await Run(clock =>
