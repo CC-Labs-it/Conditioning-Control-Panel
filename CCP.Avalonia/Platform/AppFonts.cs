@@ -22,11 +22,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
         // Emoji blocks only, so text symbols Inter lacks (arrows, CJK, ...) still go to the system.
         private static readonly UnicodeRange EmojiRange = UnicodeRange.Parse("2300-23FF, 2600-27BF, 2B00-2BFF, 1F000-1FAFF");
 
+        /// <summary>Registers the system emoji collection the default <see cref="Options"/> falls back to.</summary>
+        public static void Register(FontManager fonts) =>
+            fonts.AddFontCollection(new SystemEmojiFontCollection(SystemEmojiFontCollection.OpenSystemEmoji()));
+
         /// <param name="systemEmoji">false pins the bundled emoji ahead of the system (render locks).</param>
         public static FontManagerOptions Options(bool systemEmoji = true)
         {
             var fallbacks = new List<FontFallback>();
-            if (systemEmoji) fallbacks.Add(new FontFallback { FontFamily = new FontFamily("emoji"), UnicodeRange = EmojiRange });
+            // Not the bare system "emoji" family: bold/italic emoji there go through Avalonia's synthetic-typeface
+            // copy that can SIGSEGV under GC (SystemEmojiFontCollection). Same font, loaded by our own collection.
+            if (systemEmoji && SystemEmojiFontCollection.SystemFamilyName() is { } emoji)
+                fallbacks.Add(new FontFallback { FontFamily = new FontFamily(SystemEmojiFontCollection.CollectionKey + "#" + emoji), UnicodeRange = EmojiRange });
             fallbacks.Add(new FontFallback { FontFamily = new FontFamily(NotoEmoji), UnicodeRange = EmojiRange });
             var mappings = new Dictionary<string, FontFamily> { ["Fredoka"] = new FontFamily(Fredoka) };
             // WPF's "Consolas, Courier New" (66 sites) has neither face off Windows, and Avalonia never

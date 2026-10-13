@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly IBrush FuseNeutralDigits = new SolidColorBrush(Color.FromRgb(0xC9, 0xC4, 0xD6));
 
         private TextBlock? _fuseTooltipDigits;
-        private System.Threading.CancellationTokenSource? _fuseBreath;
+        private global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _fuseBreath;
 
         /// <summary>WPF InitializeDescentFuse: two subscriptions and one catch-up paint.</summary>
         internal void InitializeDescentFuse()
@@ -60,24 +60,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var glyph = Named<Control>("FuseSparkGlyph");
                 if (show && _fuseBreath is null && glyph != null)
                 {
-                    // WPF MotionFx.GlowBreath(glyph, 0.45, 1.0, 3.8): reduced motion parks it lit.
-                    _fuseBreath = new System.Threading.CancellationTokenSource();
-                    if (ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops)
-                        _ = new Animation
-                        {
-                            Duration = TimeSpan.FromSeconds(3.8),
-                            IterationCount = IterationCount.Infinite,
-                            PlaybackDirection = PlaybackDirection.Alternate,
-                            Children =
-                            {
-                                new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(OpacityProperty, 0.45) } },
-                                new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(OpacityProperty, 1.0) } },
-                            },
-                        }.RunAsync(glyph, _fuseBreath.Token);
+                    // WPF MotionFx.GlowBreath(glyph, 0.45, 1.0, 3.8) (MotionFx.cs:230-246: AutoReverse,
+                    // SineEase InOut, 30 fps) on the beat (P82); reduced motion parks it lit.
+                    _fuseBreath = new global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop(glyph, t =>
+                        glyph.Opacity = 0.45 + 0.55 * global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Breath(t, 3.8));
+                    if (ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops) _fuseBreath.Start();
                 }
                 else if (!show && _fuseBreath != null)
                 {
-                    _fuseBreath.Cancel();
+                    _fuseBreath.Stop();
                     _fuseBreath = null;
                     if (glyph != null) glyph.Opacity = 1.0;
                 }

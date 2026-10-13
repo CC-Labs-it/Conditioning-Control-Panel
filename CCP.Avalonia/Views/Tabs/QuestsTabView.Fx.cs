@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// StartSeasonTitleShimmer, started by ShowTab("quests"), gated on MotionFx.AllowAmbientLoops), the floating
     /// particles of AnimatedGradientPanel(Wide) (Resources/Theme/MainWindow.xaml:833/954, a Forever storyboard on
     /// IsVisible) and the quest-complete spark burst (MainWindow.EventFx.cs:362 CelebrateQuestComplete).
-    /// One 24 fps clock (WPF AmbientFrameRate) runs only while the tab is shown and attached (P01); tests step
+    /// One 30 fps BeatLoop (WPF AmbientFrameRate) runs only while the tab is shown and attached (P01); tests step
     /// <see cref="Time"/> and call <see cref="StepAmbient"/>.
     /// </summary>
     public partial class QuestsTabView
@@ -37,13 +37,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private readonly EventBurstLayer _burst = new();
         private readonly List<Canvas> _particleCanvases = new();
-        private DispatcherTimer? _ambient;
+        private ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _ambient;
         private long _ambientStart;
         private bool _shimmering;
         private bool _rescanParticles = true;
 
         /// <summary>Test hooks: the ambient clock is live; quest bursts fired.</summary>
-        internal bool AmbientRunning => _ambient?.IsEnabled == true;
+        internal bool AmbientRunning => _ambient?.IsRunning == true;
         internal int Bursts => _burst.Count;
         internal int ParticleScans { get; private set; }
 
@@ -57,7 +57,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 _rescanParticles = true;
                 _ambientStart = Time.GetTimestamp();
-                _ambient ??= new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / 24), DispatcherPriority.Render, (_, _) => StepAmbient());
+                // The window's 30 fps beat (WPF MainWindow.AmbientFx.cs:15 AmbientFrameRate = 30, set on the shimmer
+                // storyboard at MainWindow.Animations.cs:64); it parks while the window is minimised.
+                _ambient ??= new ConditioningControlPanel.Avalonia.Helpers.BeatLoop(this, t => { if (t > 0) StepAmbient(); });   // not on Start: the tree is not laid out yet
                 _ambient.Start();
                 return;
             }
