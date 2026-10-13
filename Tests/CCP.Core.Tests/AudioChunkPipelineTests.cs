@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -16,8 +15,8 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class AudioChunkPipelineTests : IDisposable
 {
-    private readonly HttpListener _listener = new();
-    private readonly string _baseUrl;
+    private HttpListener _listener = new();
+    private readonly string _baseUrl = "";
     private readonly byte[] _video = new byte[5000];
     private readonly string _assets = Path.Combine(Path.GetTempPath(), "ccp-audio-chunk-" + Guid.NewGuid().ToString("N"));
     private readonly Func<string>? _oldProvider = CorePaths.EffectiveAssetsProvider;
@@ -25,13 +24,19 @@ public sealed class AudioChunkPipelineTests : IDisposable
     public AudioChunkPipelineTests()
     {
         new Random(7).NextBytes(_video);
-        var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        _baseUrl = $"http://127.0.0.1:{port}";
-        _listener.Prefixes.Add(_baseUrl + "/");
-        _listener.Start();
+        // HttpListener cannot bind port 0, so it claims a random port itself and retries on a clash
+        // (no reserve-then-close window another process could steal).
+        var rng = new Random();
+        for (var attempt = 0; ; attempt++)
+        {
+            _baseUrl = $"http://127.0.0.1:{rng.Next(20000, 60000)}";
+            _listener.Prefixes.Add(_baseUrl + "/");
+            try { _listener.Start(); break; }
+            catch (HttpListenerException) when (attempt < 50)
+            {
+                _listener = new HttpListener();
+            }
+        }
         _ = ServeAsync();
         Directory.CreateDirectory(_assets);
         CorePaths.EffectiveAssetsProvider = () => _assets;
