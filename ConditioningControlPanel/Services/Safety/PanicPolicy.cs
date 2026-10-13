@@ -83,7 +83,7 @@ namespace ConditioningControlPanel.Services.Safety
         }
 
         /// <summary>Which game page an Escape the panel kept as its pause is handed to.</summary>
-        internal enum KeptEscapePage { None, Race, Board, Breakout }
+        internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh }
 
         /// <summary>
         /// Where an Escape a game kept as its pause is handed as well. Each of these games pauses on
@@ -98,12 +98,14 @@ namespace ConditioningControlPanel.Services.Safety
         internal static KeptEscapePage KeptEscapeGoesTo(bool claimed,
             bool raceInFront, bool raceReady,
             bool boardInFront, bool boardReady,
-            bool breakoutInFront, bool breakoutReady)
+            bool breakoutInFront, bool breakoutReady,
+            bool dtrhInFront = false, bool dtrhReady = false)
         {
             if (!claimed) return KeptEscapePage.None;
             if (raceInFront) return raceReady ? KeptEscapePage.Race : KeptEscapePage.None;
             if (boardInFront) return boardReady ? KeptEscapePage.Board : KeptEscapePage.None;
             if (breakoutInFront) return breakoutReady ? KeptEscapePage.Breakout : KeptEscapePage.None;
+            if (dtrhInFront) return dtrhReady ? KeptEscapePage.Dtrh : KeptEscapePage.None;
             return KeptEscapePage.None;
         }
 

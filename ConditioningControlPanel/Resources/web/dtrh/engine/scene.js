@@ -25,6 +25,7 @@ import { createPowerupDrops } from './powerupDrops.js';
 import { createHubStations } from './hubStations.js';
 import { createBubbles } from './bubbles.js';
 import { createDirector } from './director.js';
+import { createHostEscape, HOST_ESCAPE } from '../race/hostEscape.js';
 import { createFx } from './fx.js';
 import { createPanel } from './panel.js';
 import { createDriftChain } from './driftChain.js';
@@ -499,19 +500,22 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
     // closes its modals) - the engine pause card belongs to live descents.
     if (game && game.onEsc && game.onEsc()) return;
 
-    // Hosted (WPF): the browser no longer eats Esc for fullscreen, so we own the
-    // whole ladder - 1) pause (stay fullscreen)  2) drop fullscreen (stay paused)
-    // 3) leave the game gracefully. The panic-key double-tap is suppressed C#-side
-    // while the DtRH window is up, so these presses never kill the app.
+    // Hosted (WPF): Escape only pauses (owner, 2026-10-12). A press pauses, the next
+    // one resumes; it never drops fullscreen (F11 does) and never closes the window
+    // (the pause card's own buttons leave). The panel keeps the press as the pause
+    // (PanicPolicy.GameClaimsEscapeAsPause); a second one inside 2 s is a full panic.
     if (FS.hosted) {
-      if (!director.isOver() && !gamePaused) { setGamePaused(true); return; }   // 1) pause
-      if (FS.isActive()) { toggleFullscreen(); return; }                        // 2) exit fullscreen
-      bridge.send({ type: 'exit' });                                            // 3) graceful close
+      if (director.isOver()) return;
+      setGamePaused(!gamePaused);
       return;
     }
     setGamePaused(!gamePaused);
   }
   window.addEventListener('keydown', onKeyDown);
+  // The Escape the panel kept as the pause while this page was out of keyboard focus
+  // (the title bar clicked): played once as the page's own, unless the real key came too.
+  const hostEscape = createHostEscape();
+  bridge.on(HOST_ESCAPE, () => hostEscape.kept());
 
   // ---- grab: hold an image/gif card in front of the POV ------------------------
   // pointerdown on a card seizes it (spawner pins it ahead of the camera and the

@@ -552,7 +552,7 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
     // monster combo can't dump hundreds of spans at once.
     const earned = Math.max(0, count | 0);
     if (earned === 0) return;
-    // The HUD flies the earned emotes from here into the wallet (chaosHud.js).
+    // Told to the page; the HUD no longer flies emotes into the wallet (owner, 2026-10-12).
     try { window.dispatchEvent(new CustomEvent('dtrh:field', { detail: { kind: 'emotes', x, y, count: earned } })); } catch (err) { /* ignore */ }
     if (motionOff()) return;   // still: the wallet just updates, nothing rains
     const n = shardCount(Math.min(30, Math.ceil(earned * motionScale())), liveRain, RAIN_CAP);

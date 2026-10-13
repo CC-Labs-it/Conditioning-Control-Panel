@@ -1537,23 +1537,26 @@ namespace ConditioningControlPanel
                 bool raceInFront = Services.Chaos.CaucusHostService.IsInFront;
                 bool boardInFront = Services.PieceByPiece.PieceByPieceHostService.IsInFront;
                 bool breakoutInFront = Services.BackRoom.BackRoomHostService.IsBreakoutInFront;
+                // Down the Rabbit Hole rides it too (owner, 2026-10-12: Escape only pauses the game).
+                bool dtrhInFront = Services.Chaos.DtrhHostService.IsInFront;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
-                    gameInFront: raceInFront || boardInFront || breakoutInFront,
+                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront,
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
                     nowUtc: now);
                 if (!claim) { _lastRaceEscapeClaimUtc = null; return false; }
                 _lastRaceEscapeClaimUtc = now;
-                VideoDiag.Log("PANIC", $"Escape kept by {(raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece" : "Breakout")} as its pause (again within 2 s = full panic)");
+                VideoDiag.Log("PANIC", $"Escape kept by {(raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece" : breakoutInFront ? "Breakout" : "Down the Rabbit Hole")} as its pause (again within 2 s = full panic)");
                 // Each game pauses on its own keydown, which never comes while its WebView2 is out of
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
                 // when the real key reached it as well (host-escape.js).
                 switch (Services.Safety.PanicPolicy.KeptEscapeGoesTo(claim,
                             raceInFront, raceReady: Services.Chaos.CaucusHostService.IsReady,
                             boardInFront, boardReady: Services.PieceByPiece.PieceByPieceHostService.IsReady,
-                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady))
+                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady,
+                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
@@ -1561,6 +1564,8 @@ namespace ConditioningControlPanel
                         Services.PieceByPiece.PieceByPieceHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Breakout:
                         Services.BackRoom.BackRoomHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Dtrh:
+                        Services.Chaos.DtrhHostService.PostKeptEscape(); break;
                 }
                 return true;
             }
