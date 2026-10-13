@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// <c>ready</c>, the host answers <c>init</c> (language + identity + Breakout access), a station's
     /// <c>media-request</c> gets a library deal (<see cref="GameMediaManifest.Deal"/>), <c>fx</c> gets its
     /// <c>fx-ack</c>, and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
-    /// Ported from trunk's Views/Games/GameWindow.cs with only the Breakout demo registered; every other
+    /// Ported from trunk's Views/Games/GameWindow.cs with the Breakout demo and Piece by Piece (GameWindow.Pbp.cs) and Racing Thoughts (GameWindow.Race.cs) registered; every other
     /// game lands with its own frames.</para>
     /// </summary>
     internal sealed partial class GameWindow : Window
@@ -40,6 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
             ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
+            [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
             // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
         };
@@ -89,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); };
+            if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
         }
 
         private WebAssetServer? _server;
@@ -117,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
             switch ((string?)o["type"])
             {

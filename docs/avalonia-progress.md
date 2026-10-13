@@ -2082,3 +2082,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/game-race-c: +507
 - Racing Thoughts own tracks: track-pick/play/pause/stop/cancel, Core charting worker (authored/cache/generated, partial then full), 250 ms track-clock, teardown on panic (GameWindow.RaceTracks.cs).
 - Player behind IRaceTrackPlayer (none yet -> track-error); next: LibVLC player + decoder seed, then BambiCloud.
+
+## avalonia-port/game-pbp: +888
+- Piece by Piece opens from the launcher in GameWindow: Core PbpHostRules, net lane, settings/identity, own-library media, watchdogs, panic; page bridge on the WebKitGTK string carrier.
+- Online pictures, whispers, stakes and friend intents are queued as game-pbp-b.
+- Review fixes: loopback override, a cached library walk off the UI thread, a signal-based test wait; WPF routing filed as a follow-up.

@@ -35,6 +35,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                               panel => panel.ShowTab("gradedintake")),
                 // WPF BreakoutHostService.LaunchDemo: free, no account; Play opens it via LaunchGameWindow.
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
+                // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
+                [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
                 ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
             };
