@@ -2235,3 +2235,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/update-core-a: +429
 - Cloud session (Opus), local review + gate.
 - Review fix: MainModule read back inside a try (pre-move swallow); read-only elevation test fail-proven.
+
+## avalonia-port/chaster-core-a: +54
+- Cloud session (Opus), local review + gate.
+- Review follow-up: zero-size monitor test; BookedPopLayout/CapNotice fail-proven; rgate GATE-OK (run 38335803915).
