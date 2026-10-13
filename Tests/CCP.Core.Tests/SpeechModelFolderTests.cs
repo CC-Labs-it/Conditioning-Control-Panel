@@ -140,10 +140,14 @@ public class SpeechModelFolderTests : IDisposable
         Assert.Null(SpeechModelFolder.Ensure("   "));
     }
 
-    /// <summary>The button and the hints must name the same folder.</summary>
+    /// <summary>The button opens the install-side folder WPF always used, and the app searches it.</summary>
     [Fact]
     public void TheFolderTheButtonOpensIsTheFolderTheAppSearches()
-        => Assert.Equal(SpeechEngine.DefaultModelRoots[0], SpeechModelFolder.Root);
+    {
+        var expected = Path.Combine(AppContext.BaseDirectory, "Resources", "Models", "vosk");
+        Assert.Equal(expected, SpeechModelFolder.Root);
+        Assert.Contains(expected, SpeechEngine.DefaultModelRoots);
+    }
 
     // ---- which microphone ----------------------------------------------------------------
 
