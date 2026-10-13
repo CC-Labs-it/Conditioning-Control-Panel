@@ -2227,3 +2227,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/chaos-core-a: +98
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/ui-core-a: +36
+- Cloud session (Opus), local review + gate.
+- Review fix: LayoutDrift move made a pure 100% rename; rgate GATE-OK (windows + core-linux + core-guards).
