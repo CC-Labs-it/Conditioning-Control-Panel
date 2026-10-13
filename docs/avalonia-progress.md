@@ -2102,3 +2102,66 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/emi-line-engine: +215
 - EmiLineEngine (1360, verbatim plus ask probes) and the EmiKnock machine moved to Core with git mv. WPF seeds the probes and keeps EmiKnockWorld; the rotation and knock tests now run on Linux in Core.
 - Next: EmiVox/EmiOffers/EmiChains seams, then the Avalonia moment bus and desk chains UI.
+
+## avalonia-port/tutorials-import: +3779
+- Trunk TutorialService.cs imported verbatim (Stack rule 4, 557d9aac3), with 554 lines of wiring: seam seeded, `tour` stop in the PanicSurfaces list, a refused start keeps the running tour's name, Fluent step icons. Tours now start, step and close, and panic ends them.
+- Follow-ups: tutorials-icons, tutorials-live-overlay (Live.cs triggers/stage), EmiTourNarrator, KeywordTriggerHead, ? panel StartGuide, Mod Creator nav.
+
+## avalonia-port/game-justdrop: +603
+- Just Drop door: Core JustDropService/CreditedOrders (git mv) + JustDropHandoff; ShowTab(justdrop) opens the live shop in a GameWindow (signed-in handoff header, shared chrome.webview carrier, panic closes).
+- Row shell-just-drop stays stub: replay/fullscreen strip/orders shelf/EMI door missing; not live-checked against the real site.
+
+## avalonia-port/mine-launcher-links: +995
+- Launcher Media pill + dialog (preset via the panel), shortcut link + tile shortcut button writing .desktop entries (Linux) / .lnk (Windows, compile-only); Core LauncherShortcuts rules, LauncherMediaSettings moved to Core.
+- Rest: launcher friends chip and What's New link; WPF cyan chip styling.
+
+## avalonia-port/possession-core-b: +742
+- PossessionDirector + PossessionRemember git-mv'd to CCP.Core behind PossessionDirectorHead/static seams; WPF-free contracts in Core, WPF keeps typed reads via IWpfPossessionHost + C# 14 extension properties.
+- Core tests: director bookkeeping (moved), tripwire/TargetFor seams, Remember arm rule + once/20 s flow, each fail-proven.
+- Review fixes: WPF head hook-mapping source pin, scene files renamed to their contents, doc/comment fixes.
+
+## avalonia-port/goon-core-a: +104
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/companion-core-head: +820
+- Core BarkEngine (TimeProvider clock) + CompanionCore; WPF CompanionService XP modifier/level loop delegate to Core. Cloud session, local review fix + gate.
+
+## avalonia-port/companion-heads: +289
+- Avalonia BarkHead/CompanionHead seeded at startup, ladder panic bark, head tests with full teardown; feat-companion-barks missing -> stub.
+
+## avalonia-port/mine-dnd-tube: +589
+- Tube right-click menu acts through the shell (engine #479, takeover #514/#978, mutes, trigger); Shrink/Grow/Dismiss with saved scale; panic stops what it starts.
+- Chat box closes on outside press; closing the tube stops her voice and unhooks ask cards. DND was already ported.
+
+## avalonia-port/ci-hybrid-gate: +21
+- build.yml `scope=windows` dispatch input: GitHub runs only Windows jobs, Linux half runs locally (bin/rgate hybrid). Hybrid rgate GATE-OK (run 38397970327).
+
+## avalonia-port/platform-heads: +440
+- Discord Rich Presence: the service moved to Core, one copy for both heads (PostToUi seam). Armed only when enabled, a Discord is linked and the app is online, on both switches and at startup. Bubbles and Mind Wipe now set the presence text. A sandboxed run never connects.
+- MPRIS/SMTC media watcher deferred to platform-heads-b (needs the AwarenessObserver Core move first).
+
+## avalonia-port/mine-tube-speech: +404
+- Tube speech queue as in WPF: presets queue in order with the earned gap. Priority lines, panic and the listening bubble drop the queue, and each new line cuts the previous clip. 4 tests, each fail-proven.
+- Talk clips and CompanionPhraseAudio are deferred: this tip has no emote system and nothing that speaks lines by phrase category.
+
+## avalonia-port/chaster-leash-minutes: +146
+- Chaster idle-day row now reads the day log (WPF MinutesFromDayLog), fed by the conditioning-time tracker; end-to-end test engine run -> day log -> idle charge 0 today / charged otherwise.
+- Upgrade edge guarded: a day before the day log's first conditioning day reads null (no charge), so a pre-tracker day is never billed (FeatureDayLogService.FirstConditioningDay).
+- Follow-up: LeashHead day minutes once leash-wire is in the base.
+
+## avalonia-port/notifications-core-a: +70
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/deeper-core-a: +274
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/descent-core-a: +119
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/home-marquee: +982
+- Cloud session (Opus), local review + remote gate.
+- Server update banner, URL-first pill, scrolling marquee (parks while Home is hidden, tested), Home actions, browser card.
+- Next PR: home-marquee-b, the update pill Tag skins (urgent red / available pink / hover), split out for the size cap.
+
+## avalonia-port/home-marquee-b: +37
+- Update pill Tag skins (urgent red, available pink, hover; WPF MainWindow.xaml:1353-1373) + UrgentUpdatePillIsRed, split from home-marquee for the size cap.

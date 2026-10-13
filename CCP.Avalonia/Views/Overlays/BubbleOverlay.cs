@@ -96,11 +96,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _spawnTimer.Start();
             Spawn();   // WPF: first bubble immediately (and wakes the frame loop)
             if (Stats) StatClock.Restart();
+            App.DiscordRpc?.SetBubbleActivity();   // WPF BubbleService.cs:244
             Log.Information("BubbleService started - {Freq} bubbles/min", frequency ?? s.BubblesFrequency);
         }
 
         public static void Stop()
         {
+            var wasRunning = _running;
             _running = false;
             _pending = false;
             _spawnTimer?.Stop();
@@ -109,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Close();
             Windows.Clear();
             Targets.Clear();
+            if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:827 (WPF Stop returns early when idle)
         }
 
         public static void RefreshFrequency()

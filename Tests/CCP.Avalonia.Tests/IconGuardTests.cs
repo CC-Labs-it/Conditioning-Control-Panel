@@ -45,7 +45,7 @@ public sealed class IconGuardTests
         foreach (var (rel, lines) in Sources())
         {
             // Controls/Icons is the mapping itself (IconMap keys are the emoji it replaces).
-            if (rel.StartsWith("Controls/Icons/", StringComparison.Ordinal)) continue;
+            if (rel.StartsWith("Controls/Icons/", StringComparison.Ordinal) || Verbatim(rel)) continue;
             var code = StripComments(rel, string.Join("\n", lines)).Split('\n');
             for (int i = 0; i < code.Length; i++)
                 foreach (var c in IconClusters(Decode(Allowed(rel, code[i], "emoji"))))
@@ -68,6 +68,7 @@ public sealed class IconGuardTests
         var perFile = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var (rel, lines) in Sources())
         {
+            if (Verbatim(rel)) continue;
             var code = StripComments(rel, string.Join("\n", lines)).Split('\n');
             for (int i = 0; i < code.Length; i++)
                 foreach (Match m in refs.Matches(code[i]))
@@ -116,12 +117,13 @@ public sealed class IconGuardTests
         var bad = new List<string>();
         foreach (var a in Allow)
         {
-            int hits = a.Literal == "*"
+            int hits = a.Literal == "*" && Kind(a) == "verbatim" ? (code.ContainsKey(a.Path) ? 1 : 0)
+                : a.Literal == "*"
                 ? code.Count(kv => kv.Key.StartsWith(a.Path, StringComparison.Ordinal) && kv.Value.Any(PathRegex(kv.Key).IsMatch))
                 : code.TryGetValue(a.Path, out var src) ? src.Count(l => l.Contains(a.Literal, StringComparison.Ordinal)) : 0;
             int listed = Allow.Count(b => b.Path == a.Path && b.Literal == a.Literal);
             bool wrongCount = a.Literal != "*" && Kind(a) == "path" && hits != listed;
-            if (a.Reason.Length < 8 || (a.Literal == "*" && Kind(a) != "path") || hits == 0 || wrongCount)
+            if (a.Reason.Length < 8 || (a.Literal == "*" && Kind(a) is not ("path" or "verbatim")) || (Kind(a) == "verbatim" && a.Literal != "*") || hits == 0 || wrongCount)
                 bad.Add($"{a.Path} :: {a.Literal} (covers {hits} line(s), listed {listed}x)");
         }
         Assert.True(bad.Count == 0, "stale, broad or unreasoned IconGuard.allow.txt entries:\n" + string.Join("\n", bad.Distinct()));
@@ -133,7 +135,12 @@ public sealed class IconGuardTests
     private static Regex PathRegex(string rel) => rel.EndsWith(".cs", StringComparison.Ordinal) ? CsPath : XamlPath;
 
     private static string Kind(AllowEntry a) =>
-        a.Reason.StartsWith("font:", StringComparison.Ordinal) ? "font" : a.Reason.StartsWith("path:", StringComparison.Ordinal) ? "path" : "emoji";
+        a.Reason.StartsWith("font:", StringComparison.Ordinal) ? "font" : a.Reason.StartsWith("path:", StringComparison.Ordinal) ? "path"
+        : a.Reason.StartsWith("verbatim:", StringComparison.Ordinal) ? "verbatim" : "emoji";
+
+    /// <summary>A "verbatim:" `*` entry names ONE file (exact path) imported unchanged under Stack rule 4: it is out of
+    /// the emoji and prefixed-loc ratchets until its follow-up converts it and deletes the entry.</summary>
+    private static bool Verbatim(string rel) => Allow.Any(a => a.Literal == "*" && Kind(a) == "verbatim" && a.Path == rel);
 
     private static void Ratchet(string baselineFile, SortedDictionary<string, List<string>> perFile)
     {
