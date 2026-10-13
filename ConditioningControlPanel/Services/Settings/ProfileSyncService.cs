@@ -4767,6 +4767,13 @@ namespace ConditioningControlPanel.Services
             restored.DiscordWebhookUrl = current.DiscordWebhookUrl;
             restored.LastSeenUtc = current.LastSeenUtc;
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
+            // Conversion state lives on this PC only (it is left out of the backup): a restore must
+            // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
+            restored.InboxStamps = current.InboxStamps;
+            restored.ServerTierSeen = current.ServerTierSeen;
+            restored.PatreonMember = current.PatreonMember;
+            restored.PostGrants = current.PostGrants;
+            restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.

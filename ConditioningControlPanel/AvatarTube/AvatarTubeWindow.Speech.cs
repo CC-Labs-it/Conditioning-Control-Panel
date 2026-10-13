@@ -2907,6 +2907,7 @@ namespace ConditioningControlPanel
             {
                 var s = App.Settings?.Current;
                 if (s == null || App.Patreon?.GrantLooksDead == true) return null;
+                if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return null;   // never from memory alone
                 var reading = Services.Startup.Conversion.ConversionRules.DecideLapse(s.PatreonTier, s.ServerTierSeen,
                     s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
                 if (reading.Row != Services.Startup.Conversion.LapseRow.Closed || MainWindow.LiveCovers(reading.Tier)) return null;

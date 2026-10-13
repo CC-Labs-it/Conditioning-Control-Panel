@@ -24,6 +24,14 @@ namespace ConditioningControlPanel.Services
         /// (a Lower verdict stored, or cleared again).</summary>
         public static event Action? ReadingApplied;
 
+        /// <summary>
+        /// True once the server has answered with a tier THIS run. The lapse row and the lapse
+        /// greeting wait for it: a remembered lower reading from days ago says nothing about
+        /// someone who renewed on the web since, and telling a paying subscriber their plan
+        /// closed is the one mistake this feature must not make (review 2026-10-13).
+        /// </summary>
+        public static bool ServerAnsweredThisRun { get; internal set; }
+
         private static DateTime _lastFocusCheckUtc = DateTime.MinValue;
         private static int _focusInFlight;
         private static int? _lastLowerLogged;
@@ -55,6 +63,7 @@ namespace ConditioningControlPanel.Services
             {
                 var settings = App.Settings?.Current;
                 if (!SignedInWithV2(settings)) return;
+                if (serverTier.HasValue) ServerAnsweredThisRun = true;
 
                 var verdict = EntitlementTierRule.Decide(settings!.PatreonTier, serverTier);
 
