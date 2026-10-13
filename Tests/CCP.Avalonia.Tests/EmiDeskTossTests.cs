@@ -84,6 +84,13 @@ public sealed class EmiDeskTossTests
             Assert.Equal(flings + 1, st.FlingsTotal);
             Assert.Equal("emi-sfx-toss:shield_thunk.mp3", played[^1]);
             Assert.NotSame(squash, typeof(EmiDeskWindow).GetField("_squashAnim", Priv)!.GetValue(desk));
+
+            // WPF's LandChain: ^_^, then her rest face, not the startled pickup face forever.
+            Assert.Equal("^_^", desk.Face);
+            Assert.Equal(TimeSpan.FromMilliseconds(EmiDeskWindow.LandFaceMs), clock.Due);
+            clock.Fire();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("0_0", desk.Face);
         }
         finally
         {
@@ -104,5 +111,23 @@ public sealed class EmiDeskTossTests
         public override long GetTimestamp() => Now;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public override DateTimeOffset GetUtcNow() => new DateTimeOffset(Now, TimeSpan.Zero);
+
+        // One pending one-shot timer, fired by the test instead of waiting for it.
+        private TimerCallback? _cb;
+        private object? _state;
+        public TimeSpan Due;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            (_cb, _state, Due) = (callback, state, dueTime);
+            return new NoTimer();
+        }
+        public void Fire() => _cb?.Invoke(_state);
+
+        private sealed class NoTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }
