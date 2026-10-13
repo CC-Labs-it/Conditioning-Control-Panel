@@ -2091,3 +2091,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/lag-fixes-c: +237
 - Programs ignition (8 loops) and the dashboard Today banner (fog/sheen/sparkles/breath) now run on the 30 fps BeatLoop with WPF curves; the rail and boss glows are BoxShadows; the banner width is read every frame; the hover nudge works and no longer leaks a CTS; NavGlow uses the shared FrameClock.
 - Programs idle went from 141 to 44 renders/s (CPU 45% to 23%); the ratchet lists went down by 4 entries.
+
+## avalonia-port/showcase-renderer: +123
+- Cloud session (Opus), local review + gate.
