@@ -87,7 +87,7 @@ public static class ToastLines
     public static string Pick(Random rng, string? avoid = null)
     {
         string? modId = null;
-        try { modId = App.Mods?.ActiveModId; } catch { }
+        try { modId = CoreMods.ActiveModId; } catch { }
 
         var pool = PoolFor(modId);
         if (pool.Count == 0) return "setting reverted by: your companion";

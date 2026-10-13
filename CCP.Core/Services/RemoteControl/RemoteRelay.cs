@@ -162,6 +162,22 @@ namespace ConditioningControlPanel.Services
             Cleanup();
         }
 
+        /// <summary>WPF RemoteControlService.EndSessionNow: end HERE first and tell the relay after, without
+        /// waiting on it (the leash cut needs the controller gone at once, not after a network timeout).</summary>
+        public void EndSessionNow()
+        {
+            if (!IsActive) return;
+            var uid = _unifiedId();
+            Cleanup();
+            Log.Information("[RemoteControl] Session ended locally (leash cut)");
+            if (string.IsNullOrEmpty(uid)) return;
+            _ = Task.Run(async () =>
+            {
+                try { using var _ = await PostAsync("/v2/remote/stop", new { unified_id = uid }).ConfigureAwait(false); }
+                catch (Exception ex) { Log.Warning(ex, "[RemoteControl] Stop request after a local end failed"); }
+            });
+        }
+
         /// <summary>WPF CleanupSession: everything the controller started stops; the subject's own run stays.</summary>
         private void Cleanup()
         {

@@ -123,7 +123,7 @@ public static class RewritePools
     {
         get
         {
-            try { return App.Mods?.ActiveModId ?? BuiltInMods.CCPDefaultId; }
+            try { return CoreMods.ActiveModId ?? BuiltInMods.CCPDefaultId; }
             catch { return BuiltInMods.CCPDefaultId; }
         }
     }
