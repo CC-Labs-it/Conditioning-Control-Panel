@@ -2553,6 +2553,8 @@
   "audio_player_loop_all": "リピート: 全曲",
   "audio_player_loop_one": "リピート: 1曲",
   "audio_player_clear": "リストを空にする",
+  "audio_player_enhancements": "Deeper エンハンスメントをトラックと一緒に実行",
+  "audio_player_enhancements_tip": "Deeper エンハンスメントのあるトラックは、再生と同時にそれを実行します。オフにすると実行中のものはすぐに止まります。",
   "audio_player_picker_title": "音声ファイルを追加",
   "audio_player_picker_filter": "音声ファイル",
   "modmgr_in_use": "使用中",

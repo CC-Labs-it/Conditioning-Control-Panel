@@ -3312,6 +3312,8 @@
   "audio_player_loop_all": "循环: 全部",
   "audio_player_loop_one": "循环: 单曲",
   "audio_player_clear": "清空列表",
+  "audio_player_enhancements": "Deeper 增强随曲目运行",
+  "audio_player_enhancements_tip": "带有 Deeper 增强的曲目会在播放时一并运行。关闭后，正在运行的增强会立即停止。",
   "audio_player_picker_title": "添加音频文件",
   "audio_player_picker_filter": "音频文件",
   "modmgr_in_use": "使用中",

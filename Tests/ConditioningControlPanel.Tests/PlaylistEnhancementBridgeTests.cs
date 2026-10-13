@@ -112,13 +112,14 @@ public class PlaylistEnhancementBridgeTests
         public FakeBinding Binding { get; } = new();
         public HashSet<string> Enhanced { get; } = new(StringComparer.OrdinalIgnoreCase);
         public bool DeeperBusy;
+        public bool Enabled = true;   // the card's "enhancements run with tracks" switch
         public int Lookups;
         public PlaylistEnhancementBridge Bridge { get; }
 
         public Rig(params string[] enhanced)
         {
             foreach (var p in enhanced) Enhanced.Add(p);
-            Bridge = new PlaylistEnhancementBridge(Playlist, Binding, Resolve, () => DeeperBusy);
+            Bridge = new PlaylistEnhancementBridge(Playlist, Binding, Resolve, () => DeeperBusy, () => Enabled);
         }
 
         private ResolvedEnhancement Resolve(string path)
@@ -320,5 +321,92 @@ public class PlaylistEnhancementBridgeTests
         Assert.Equal(0, rig.Playlist.PositionSubscribers);
         rig.Playlist.Start(B);            // a disposed bridge reacts to nothing
         Assert.False(rig.Binding.IsBound);
+    }
+
+    // -- The switch (owner, 7.1.8 round two) -------------------------------------
+
+    [Fact]
+    public void Bridge_SwitchOff_NeverBinds_AndNeverLooksUp()
+    {
+        var rig = new Rig(A, B) { Enabled = false };
+
+        rig.Playlist.Start(A);
+        rig.Playlist.Tick(1);
+        rig.Playlist.SetPaused(true);
+        rig.Playlist.SetPaused(false);
+        rig.Playlist.Start(B);
+        rig.Playlist.Tick(2);
+
+        Assert.Equal(0, rig.Binding.Binds);
+        Assert.Equal(0, rig.Lookups);
+        Assert.Null(rig.Bridge.BoundPath);
+        Assert.Equal(1, rig.Playlist.PositionSubscribers);   // only the bridge, no time source
+    }
+
+    [Fact]
+    public void Bridge_SwitchOffMidTrack_UnbindsAtOnce_AndOnBindsAgain()
+    {
+        var rig = new Rig(A);
+        rig.Playlist.Start(A);
+        Assert.True(rig.Binding.IsBound);
+
+        rig.Enabled = false;
+        rig.Bridge.Refresh();             // what the card calls: no tick, no state change needed
+        Assert.False(rig.Binding.IsBound);
+        Assert.Equal(1, rig.Binding.Unbinds);
+        Assert.Null(rig.Bridge.BoundPath);
+        Assert.True(rig.Playlist.IsPlaying);                 // the track itself plays on
+        Assert.Equal(1, rig.Playlist.PositionSubscribers);
+
+        rig.Playlist.Tick(3);             // and it stays off
+        Assert.Equal(1, rig.Binding.Binds);
+
+        rig.Enabled = true;
+        rig.Bridge.Refresh();
+        Assert.True(rig.Binding.IsBound);
+        Assert.Equal(2, rig.Binding.Binds);
+        Assert.Equal(A, rig.Bridge.BoundPath);
+    }
+
+    [Fact]
+    public void Bridge_SwitchOff_LetsGoOfAPausedTrack_AndOnTheNextTickWithoutRefresh()
+    {
+        var paused = new Rig(A);
+        paused.Playlist.Start(A);
+        paused.Playlist.SetPaused(true);
+        Assert.True(paused.Binding.IsBound);
+        paused.Enabled = false;
+        paused.Bridge.Refresh();
+        Assert.False(paused.Binding.IsBound);
+
+        // A setting changed behind the card's back (no Refresh) is caught by the tick.
+        var silent = new Rig(A);
+        silent.Playlist.Start(A);
+        silent.Enabled = false;
+        silent.Playlist.Tick(1);
+        Assert.False(silent.Binding.IsBound);
+        Assert.Null(silent.Bridge.BoundPath);
+    }
+
+    [Fact]
+    public void Bridge_AppWiring_ReadsTheSetting_AndTheCardTellsTheBridge()
+    {
+        string root = RepoRoot();
+        string bridge = System.IO.File.ReadAllText(System.IO.Path.Combine(root, "ConditioningControlPanel",
+            "Services", "Deeper", "PlaylistEnhancementBridge.cs"));
+        string model = System.IO.File.ReadAllText(System.IO.Path.Combine(root, "ConditioningControlPanel",
+            "Views", "Controls", "AudioPlaylistCardModel.cs"));
+
+        Assert.Contains("App.Settings?.Current?.AudioPlaylistEnhancements != false", bridge);
+        Assert.Contains("PlaylistEnhancementBridge.Installed?.Refresh();", model);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(
+                   System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "MainWindow")))
+            dir = dir.Parent;
+        return dir?.FullName ?? throw new Xunit.Sdk.XunitException("repo root not found");
     }
 }

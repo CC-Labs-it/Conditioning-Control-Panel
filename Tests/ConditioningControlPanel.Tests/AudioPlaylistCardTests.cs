@@ -268,6 +268,35 @@ public class AudioPlaylistCardModelTests
     }
 
     [Fact]
+    public void Enhancements_switch_is_on_by_default_writes_once_and_opens_the_fold_when_off()
+    {
+        bool stored = true;
+        var writes = new List<bool>();
+        var model = new AudioPlaylistCardModel(new FakePlaylist(), () => stored, v => { stored = v; writes.Add(v); });
+        var raised = new List<string?>();
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        Assert.True(model.Enhancements);
+        Assert.False(model.HasChangedOptions);
+
+        model.Enhancements = true;                  // no change, no write
+        Assert.Empty(writes);
+
+        model.Enhancements = false;
+        Assert.Equal(new[] { false }, writes);
+        Assert.False(model.Enhancements);
+        Assert.True(model.HasChangedOptions);       // the fold never hides a changed setting
+        Assert.Contains(nameof(AudioPlaylistCardModel.Enhancements), raised);
+
+        // No service: the switch is inert. No setting: it reads as on (the default).
+        var none = new AudioPlaylistCardModel(null, () => stored, v => writes.Add(v));
+        none.Enhancements = true;
+        Assert.Single(writes);
+        Assert.False(none.HasChangedOptions);
+        Assert.True(new AudioPlaylistCardModel(new FakePlaylist()).Enhancements);
+    }
+
+    [Fact]
     public void Clear_empties_the_card_and_detach_stops_listening()
     {
         var (model, fake) = Loaded(@"C:\a\one.mp3", @"C:\a\two.mp3");
@@ -335,6 +364,13 @@ public class AudioPlaylistCardRenderTests
         Assert.Equal(Visibility.Visible, Named<StackPanel>(card, "PlayerBody").Visibility);
         Assert.True(Named<Button>(card, "BtnAdd").IsEnabled);
         Assert.Equal(2, Named<ItemsControl>(card, "TrackList").Items.Count);
+        // The Deeper switch lives in the fold, beside loop and shuffle, and starts on.
+        var enhancements = Named<CheckBox>(card, "ChkEnhancements");
+        Assert.True(enhancements.IsChecked);
+        DependencyObject? parent = enhancements;
+        while (parent != null && parent is not ConditioningControlPanel.Features.MoreFold)
+            parent = LogicalTreeHelper.GetParent(parent);
+        Assert.NotNull(parent);
         Assert.Equal("▶", Named<Button>(card, "BtnPlayPause").Content);
 
         card.Model.PlayRow(1);

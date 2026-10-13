@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Services.Deeper
         private readonly IPlaylistEnhancementBinding _binding;
         private readonly Func<string, ResolvedEnhancement> _resolve;
         private readonly Func<bool> _deeperPlayerBusy;
+        private readonly Func<bool>? _enabled;
 
         private PlaylistTimeSource? _source;
         private string? _boundPath;
@@ -52,8 +53,10 @@ namespace ConditioningControlPanel.Services.Deeper
             IAudioPlaylistService playlist,
             IPlaylistEnhancementBinding binding,
             Func<string, ResolvedEnhancement> resolve,
-            Func<bool> deeperPlayerBusy)
+            Func<bool> deeperPlayerBusy,
+            Func<bool>? enabled = null)
         {
+            _enabled = enabled;
             _playlist = playlist ?? throw new ArgumentNullException(nameof(playlist));
             _binding = binding ?? throw new ArgumentNullException(nameof(binding));
             _resolve = resolve ?? throw new ArgumentNullException(nameof(resolve));
@@ -79,13 +82,21 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private void OnStateChanged() => Sync();
 
+        /// <summary>
+        /// The player's switch (AppSettings.AudioPlaylistEnhancements) moved. Off unbinds
+        /// at once, mid-track too; on binds the playing track without waiting for a tick.
+        /// </summary>
+        public void Refresh() => Sync();
+
         private void OnPosition(double seconds)
         {
             // The Deeper player has no "bound" event, so the yield is checked on the
             // playlist's own tick (about 10 a second, one bool read).
             if (_boundPath != null)
             {
-                if (IsDeeperPlayerBusy()) Unbind();
+                // The switch is read here too, so a setting changed behind the card's
+                // back (a restore, another window) still lets go within one tick.
+                if (!IsEnabled() || IsDeeperPlayerBusy()) Unbind();
             }
             else
             {
@@ -102,6 +113,9 @@ namespace ConditioningControlPanel.Services.Deeper
             if (_disposed) return;
             try
             {
+                // Switched off: nothing binds, nothing is looked up, and a running one stops.
+                if (!IsEnabled()) { Unbind(); return; }
+
                 bool playing = _playlist.IsPlaying;
                 bool loaded = playing || _playlist.IsPaused;
                 var path = loaded ? _playlist.CurrentPath : null;
@@ -155,6 +169,13 @@ namespace ConditioningControlPanel.Services.Deeper
             try { _source?.Dispose(); } catch { }
             _source = null;
             _boundPath = null;
+        }
+
+        /// <summary>No switch handed in = always on. A switch that throws reads as off.</summary>
+        private bool IsEnabled()
+        {
+            if (_enabled == null) return true;
+            try { return _enabled(); } catch { return false; }
         }
 
         private bool IsDeeperPlayerBusy()
@@ -223,7 +244,8 @@ namespace ConditioningControlPanel.Services.Deeper
                     playlist,
                     new HostPlaylistEnhancementBinding(),
                     EnhancementResolver.ResolveForLocalMedia,
-                    () => App.DeeperHost?.IsRunning == true);
+                    () => App.DeeperHost?.IsRunning == true,
+                    () => App.Settings?.Current?.AudioPlaylistEnhancements != false);
             }
             catch (Exception ex)
             {

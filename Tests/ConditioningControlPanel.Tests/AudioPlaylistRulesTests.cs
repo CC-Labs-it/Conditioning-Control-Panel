@@ -249,7 +249,8 @@ public class AudioPlaylistRulesTests
     public void The_playlist_is_machine_local_never_in_a_backup_and_kept_across_a_restore()
     {
         foreach (var name in new[] { nameof(AppSettings.AudioPlaylistPaths), nameof(AppSettings.AudioPlaylistVolume),
-                                     nameof(AppSettings.AudioPlaylistLoop), nameof(AppSettings.AudioPlaylistShuffle) })
+                                     nameof(AppSettings.AudioPlaylistLoop), nameof(AppSettings.AudioPlaylistShuffle),
+                                     nameof(AppSettings.AudioPlaylistEnhancements) })
             Assert.True(ProfileSyncService.IsExcludedFromBackup(name), name);
 
         var current = new AppSettings
@@ -258,8 +259,10 @@ public class AudioPlaylistRulesTests
             AudioPlaylistVolume = 35,
             AudioPlaylistLoop = 2,
             AudioPlaylistShuffle = true,
+            AudioPlaylistEnhancements = false,
         };
         var restored = new AppSettings();
+        Assert.True(restored.AudioPlaylistEnhancements);   // on by default (owner, 7.1.8)
 
         ProfileSyncService.PreserveLocalOnlyFields(current, restored);
 
@@ -268,6 +271,43 @@ public class AudioPlaylistRulesTests
         Assert.Equal(35, restored.AudioPlaylistVolume);
         Assert.Equal(2, restored.AudioPlaylistLoop);
         Assert.True(restored.AudioPlaylistShuffle);
+        Assert.False(restored.AudioPlaylistEnhancements);
+    }
+
+    [Fact]
+    public void The_engines_stop_stops_the_player_and_its_start_never_touches_it()
+    {
+        string root = FindRepoRoot();
+        string src = System.IO.File.ReadAllText(System.IO.Path.Combine(root, "ConditioningControlPanel",
+            "MainWindow", "MainWindow.StartStop.cs"));
+
+        // Every ordinary stop (button, tray, session end, scheduler, remote) is StopEngine,
+        // and StopEngine is only a re-entrancy guard around StopEngineCore.
+        string stop = Body(src, "public void StopEngine()");
+        Assert.Contains("StopEngineCore();", stop);
+        string core = Body(src, "private void StopEngineCore()");
+        Assert.Contains("App.StopAudioPlaylist();", core);
+        // Early in the pass: before the video teardown, which pumps the dispatcher for a while.
+        Assert.True(core.IndexOf("App.StopAudioPlaylist();", StringComparison.Ordinal)
+                    < core.IndexOf("App.Video.Stop();", StringComparison.Ordinal));
+
+        string start = Body(src, "public void StartEngine(bool systemInitiated = false)");
+        Assert.DoesNotContain("AudioPlaylist", start);
+    }
+
+    /// <summary>The text of one method: from its signature to the brace that closes it.</summary>
+    private static string Body(string source, string signature)
+    {
+        int at = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(at >= 0, signature);
+        int open = source.IndexOf('{', at);
+        int depth = 0;
+        for (int i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0) return source.Substring(at, i - at + 1);
+        }
+        throw new Xunit.Sdk.XunitException("unclosed method: " + signature);
     }
 
     [Fact]

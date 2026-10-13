@@ -30,14 +30,34 @@ namespace ConditioningControlPanel.Views.Controls
         public static readonly string[] Extensions = { ".mp3", ".wav", ".flac", ".m4a" };
 
         private readonly IAudioPlaylistService? _service;
+        private readonly Func<bool> _readEnhancements;
+        private readonly Action<bool> _writeEnhancements;
         private bool _attached;
         private bool _scrubbing;
         private double _position;
 
-        public AudioPlaylistCardModel(IAudioPlaylistService? service)
+        /// <param name="readEnhancements">The "enhancements run with tracks" switch; the app's setting when null.</param>
+        /// <param name="writeEnhancements">Stores the switch and tells the bridge; the app's setting when null.</param>
+        public AudioPlaylistCardModel(IAudioPlaylistService? service,
+            Func<bool>? readEnhancements = null, Action<bool>? writeEnhancements = null)
         {
             _service = service;
+            _readEnhancements = readEnhancements ?? ReadEnhancementsSetting;
+            _writeEnhancements = writeEnhancements ?? WriteEnhancementsSetting;
             Refresh();
+        }
+
+        private static bool ReadEnhancementsSetting() => App.Settings?.Current?.AudioPlaylistEnhancements != false;
+
+        private static void WriteEnhancementsSetting(bool on)
+        {
+            var settings = App.Settings;
+            if (settings?.Current == null) return;
+            settings.Current.AudioPlaylistEnhancements = on;
+            // The bridge first: off must stop a running enhancement before anything else happens.
+            Services.Deeper.PlaylistEnhancementBridge.Installed?.Refresh();
+            try { settings.Save(); }
+            catch (Exception ex) { App.Logger?.Debug("AudioPlaylistCardModel save error: {Error}", ex.Message); }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -87,7 +107,19 @@ namespace ConditioningControlPanel.Views.Controls
         public AudioPlaylistLoop Loop => _service?.Loop ?? AudioPlaylistLoop.Off;
 
         /// <summary>True when loop or shuffle is off its default, so the fold never hides a changed setting.</summary>
-        public bool HasChangedOptions => Loop != AudioPlaylistLoop.Off || Shuffle;
+        public bool HasChangedOptions => Loop != AudioPlaylistLoop.Off || Shuffle || (IsAvailable && !Enhancements);
+
+        /// <summary>A track's Deeper enhancement runs with it. On by default; off stops a running one at once.</summary>
+        public bool Enhancements
+        {
+            get => _readEnhancements();
+            set
+            {
+                if (_service == null) return;
+                if (_readEnhancements() != value) _writeEnhancements(value);
+                Raise(nameof(Enhancements));
+            }
+        }
 
         /// <summary>The picker's filter line; <paramref name="label"/> is the localised "Audio files".</summary>
         public static string DialogFilter(string label)
@@ -227,7 +259,7 @@ namespace ConditioningControlPanel.Views.Controls
             Raise(nameof(IsAvailable), nameof(IsPlaying), nameof(HasCurrent), nameof(CurrentName),
                 nameof(DurationSeconds), nameof(CanSeek), nameof(SeekMaximum), nameof(PositionSeconds),
                 nameof(ElapsedText), nameof(TotalText), nameof(Volume), nameof(VolumeText),
-                nameof(Shuffle), nameof(Loop));
+                nameof(Shuffle), nameof(Loop), nameof(Enhancements));
         }
 
         private bool InRange(int index) => _service != null && index >= 0 && index < _service.Tracks.Count;

@@ -2553,6 +2553,8 @@
   "audio_player_loop_all": "Repetir: todo",
   "audio_player_loop_one": "Repetir: una pista",
   "audio_player_clear": "Vaciar lista",
+  "audio_player_enhancements": "Las mejoras de Deeper acompañan a las pistas",
+  "audio_player_enhancements_tip": "Si una pista tiene una mejora de Deeper, se reproduce con ella. Al apagarlo, la que esté en marcha se detiene al instante.",
   "audio_player_picker_title": "Añadir archivos de audio",
   "audio_player_picker_filter": "Archivos de audio",
   "modmgr_in_use": "EN USO",

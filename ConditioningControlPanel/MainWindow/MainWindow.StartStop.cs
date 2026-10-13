@@ -466,6 +466,10 @@ namespace ConditioningControlPanel
             // Stop flash first (safe, no complex cleanup)
             App.Flash.Stop();
 
+            // Stop stops everything (owner, 7.1.8): the audio player with a playlist goes quiet
+            // with the engine. The list stays. StartEngine never touches the player.
+            App.StopAudioPlaylist();
+
             // Tear down any Deeper enhancement engine bound to the playing video.
             // App.Video.Stop() below closes windows via CloseAll, which does NOT
             // raise VideoEnded, so the bridge's normal unbind never fires and its
