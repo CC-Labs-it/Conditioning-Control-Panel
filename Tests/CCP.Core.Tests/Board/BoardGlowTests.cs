@@ -1,9 +1,9 @@
 using System;
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using ConditioningControlPanel.Services.Billboard;
 using ConditioningControlPanel.Services.Billboard.Board;
 using Xunit;
@@ -100,14 +100,42 @@ public class BoardGlowTests
         return BoardPicture.FromPixels(px, 64, 36, Post());
     }
 
+    /// <summary>The desk check's PNG writer. Core has no codec (WPF wrote these with its encoder):
+    /// one IDAT, filter 0, RGBA. ponytail: only the off-by-default desk check calls it.</summary>
     private static void SavePng(BoardRaster r, string path)
     {
-        var src = BitmapSource.Create(r.Width, r.Height, 96, 96, PixelFormats.Bgra32, null, r.Pixels, r.Width * 4);
-        var enc = new PngBitmapEncoder();
-        enc.Frames.Add(BitmapFrame.Create(src));
+        var raw = new MemoryStream();
+        for (int y = 0; y < r.Height; y++)
+        {
+            raw.WriteByte(0);
+            for (int x = 0; x < r.Width; x++)
+            {
+                int p = r.Pixels[y * r.Width + x];
+                raw.Write(new[] { (byte)(p >> 16), (byte)(p >> 8), (byte)p, (byte)(p >>> 24) });
+            }
+        }
+        var z = new MemoryStream();
+        using (var zs = new ZLibStream(z, CompressionLevel.Fastest, leaveOpen: true)) raw.WriteTo(zs);
+        var ihdr = new byte[13];
+        BinaryPrimitives.WriteInt32BigEndian(ihdr, r.Width);
+        BinaryPrimitives.WriteInt32BigEndian(ihdr.AsSpan(4), r.Height);
+        ihdr[8] = 8; ihdr[9] = 6; // 8-bit RGBA
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var fs = File.Create(path);
-        enc.Save(fs);
+        fs.Write(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
+        void Chunk(string type, byte[] data)
+        {
+            var body = System.Text.Encoding.ASCII.GetBytes(type).Concat(data).ToArray();
+            var n = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(n, data.Length); fs.Write(n);
+            fs.Write(body);
+            uint crc = 0xFFFFFFFF;
+            foreach (byte bt in body) { crc ^= bt; for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xEDB88320 & (0 - (crc & 1))); }
+            BinaryPrimitives.WriteUInt32BigEndian(n, ~crc); fs.Write(n);
+        }
+        Chunk("IHDR", ihdr);
+        Chunk("IDAT", z.ToArray());
+        Chunk("IEND", Array.Empty<byte>());
     }
 
     private static int Ch(int rgb, int shift) => (rgb >> shift) & 0xFF;

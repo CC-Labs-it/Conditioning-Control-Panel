@@ -386,6 +386,8 @@ namespace ConditioningControlPanel
             CoreAudio.UnduckProvider = generation => Audio?.Unduck(generation);
             CoreAudio.DuckGenerationProvider = () => Audio?.DuckGeneration ?? 0;
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
+            // The board's picture rules moved to Core; the PNG codec stays WPF imaging.
+            Services.Billboard.Board.BoardPng.Install();
             // Mind wipe's playing half. The schedule (tick interval, per-tick probability, the
             // session escalation and the clip folders) is MindWipeSchedule in Core; what cannot
             // cross is NAudio's crossfading loop, so the card asks for it through this seam. Lazy
