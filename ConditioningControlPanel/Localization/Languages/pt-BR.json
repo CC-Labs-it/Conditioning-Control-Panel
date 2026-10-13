@@ -7530,5 +7530,21 @@
   "vaultgate_yearly_note": "Por enquanto a cobrança anual é só pelo Patreon. Os outros meios de pagamento são mensais.",
   "vaultgate_sale_first": "/ primeiro mês",
   "vaultgate_sale_line": "{0}% de desconto no primeiro mês, depois {1} por mês.",
-  "vaultgate_sale_ends": "Promoção até {0}."
+  "vaultgate_sale_ends": "Promoção até {0}.",
+  "conv_lapse_warn_prime": "O Prime termina em {0} dias.",
+  "conv_lapse_warn_prime_one": "O Prime termina em 1 dia.",
+  "conv_lapse_warn_basic": "O Basic termina em {0} dias.",
+  "conv_lapse_warn_basic_one": "O Basic termina em 1 dia.",
+  "conv_lapse_warn_body": "Suas configurações ficam; as portas fecham.",
+  "conv_lapse_closed_prime_today": "O Prime fechou hoje.",
+  "conv_lapse_closed_basic_today": "O Basic fechou hoje.",
+  "conv_lapse_closed_prime": "O Prime fechou em {0}.",
+  "conv_lapse_closed_basic": "O Basic fechou em {0}.",
+  "conv_lapse_closed_body": "Tudo o que você configurou fica guardado.",
+  "conv_keep_prime": "Manter o Prime",
+  "conv_keep_basic": "Manter o Basic",
+  "conv_let_close": "Deixar fechar",
+  "conv_reopen_prime": "Abrir o Prime de novo",
+  "conv_reopen_basic": "Abrir o Basic de novo",
+  "conv_leave_closed": "Deixar fechado"
 }

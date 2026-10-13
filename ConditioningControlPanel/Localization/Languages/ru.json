@@ -7530,5 +7530,21 @@
   "vaultgate_yearly_note": "Годовая оплата пока доступна только через Patreon. Остальные способы оплаты помесячные.",
   "vaultgate_sale_first": "/ первый месяц",
   "vaultgate_sale_line": "Скидка {0}% на первый месяц, затем {1} в месяц.",
-  "vaultgate_sale_ends": "Акция до {0}."
+  "vaultgate_sale_ends": "Акция до {0}.",
+  "conv_lapse_warn_prime": "Prime закончится через {0} дн.",
+  "conv_lapse_warn_prime_one": "Prime закончится через 1 день.",
+  "conv_lapse_warn_basic": "Basic закончится через {0} дн.",
+  "conv_lapse_warn_basic_one": "Basic закончится через 1 день.",
+  "conv_lapse_warn_body": "Настройки останутся, двери закроются.",
+  "conv_lapse_closed_prime_today": "Prime закрылся сегодня.",
+  "conv_lapse_closed_basic_today": "Basic закрылся сегодня.",
+  "conv_lapse_closed_prime": "Prime закрылся {0}.",
+  "conv_lapse_closed_basic": "Basic закрылся {0}.",
+  "conv_lapse_closed_body": "Всё, что вы настроили, сохранено.",
+  "conv_keep_prime": "Оставить Prime",
+  "conv_keep_basic": "Оставить Basic",
+  "conv_let_close": "Пусть закроется",
+  "conv_reopen_prime": "Снова открыть Prime",
+  "conv_reopen_basic": "Снова открыть Basic",
+  "conv_leave_closed": "Оставить закрытым"
 }

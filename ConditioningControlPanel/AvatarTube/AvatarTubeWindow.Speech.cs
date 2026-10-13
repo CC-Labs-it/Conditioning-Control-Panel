@@ -2799,6 +2799,11 @@ namespace ConditioningControlPanel
             var elapsed = DateTime.UtcNow - lastSeen.Value;
             if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
 
+            // A long absence across a closed tier names it once, warm and without guilt (proposal
+            // 4d). The bubble frames it; the only button for it is the neutral Inbox row.
+            if (elapsed >= TimeSpan.FromDays(3) && TakeLapseGreeting() is string lapseLine)
+                return FormatGreetingName(lapseLine, App.UserDisplayName);
+
             string[] templates;
             if (elapsed < TimeSpan.FromHours(6))
             {
@@ -2857,6 +2862,47 @@ namespace ConditioningControlPanel
 
             var template = templates[_random.Next(templates.Length)];
             return FormatGreetingName(template, App.UserDisplayName);
+        }
+
+        /// <summary>
+        /// The lapse welcome-back line, once per closed tier, or null. Only for a close the server
+        /// confirmed (ConversionRules.DecideLapse) and never for a dead Patreon grant, which is a
+        /// Reconnect, not a lapse. The stamp is written on the main dispatcher (settings live there).
+        /// </summary>
+        private string? TakeLapseGreeting()
+        {
+            try
+            {
+                var s = App.Settings?.Current;
+                if (s == null || App.Patreon?.GrantLooksDead == true) return null;
+                var reading = Services.Startup.Conversion.ConversionRules.DecideLapse(s.PatreonTier, s.ServerTierSeen,
+                    s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
+                if (reading.Row != Services.Startup.Conversion.LapseRow.Closed || MainWindow.LiveCovers(reading.Tier)) return null;
+                const string key = Services.Startup.Conversion.ConversionRules.KeyLapseGreeting;
+                if (!Services.Startup.Conversion.ConversionRules.Owed(s.InboxStamps, key, reading.Stamp)) return null;
+
+                var stamp = reading.Stamp;
+                Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var cur = App.Settings?.Current;
+                    if (cur != null && Services.Startup.Conversion.ConversionRules.Stamp(cur.InboxStamps, key, stamp))
+                        App.Settings?.Save();
+                }), System.Windows.Threading.DispatcherPriority.Normal);
+
+                var tier = reading.Tier >= 2 ? "Prime" : "Basic";
+                var lines = new[]
+                {
+                    "Welcome back, {name}. Your " + tier + " closed while you were away; everything you set is still here. 💕",
+                    "There you are~ " + tier + " closed while you were gone, and I kept all your settings warm. ✨",
+                    "Hi again, {name}! Your " + tier + " ended, nothing is lost, it is all right where you left it. 💖",
+                };
+                return lines[_random.Next(lines.Length)];
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Lapse greeting skipped: {Error}", ex.Message);
+                return null;
+            }
         }
 
         /// <summary>
