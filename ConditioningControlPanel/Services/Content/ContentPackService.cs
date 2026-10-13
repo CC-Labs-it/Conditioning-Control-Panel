@@ -1121,8 +1121,8 @@ namespace ConditioningControlPanel.Services
 
                 // Create temp file with correct extension (for codec detection)
                 var tempPath = Path.Combine(App.GetMediaTempPath(), $"ccp_temp_{Guid.NewGuid():N}{file.Extension}");
-                var decrypted = PackEncryptionService.DecryptFile(encryptedPath);
-                File.WriteAllBytes(tempPath, decrypted);
+                // Streamed: a pack video must never sit in memory whole (#1441 / #1442).
+                PackEncryptionService.DecryptFileToFile(encryptedPath, tempPath);
 
                 return tempPath;
             }

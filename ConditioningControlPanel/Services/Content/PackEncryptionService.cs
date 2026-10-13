@@ -25,7 +25,13 @@ public static class PackEncryptionService
     /// Derives a machine-bound encryption key.
     /// This makes copied pack folders useless on other machines.
     /// </summary>
-    private static byte[] DeriveKey()
+    // Derived ONCE per process. It used to be re-derived (100,000 PBKDF2 rounds) for every
+    // file: every pack flash picture paid for it on the way to the screen.
+    private static readonly Lazy<byte[]> CachedKey = new(DeriveKeyCore);
+
+    private static byte[] DeriveKey() => CachedKey.Value;
+
+    private static byte[] DeriveKeyCore()
     {
         // Combine app secret with machine-specific data
         var machineId = Environment.MachineName + Environment.UserName;
@@ -85,29 +91,90 @@ public static class PackEncryptionService
     /// <summary>
     /// Encrypts a file and saves with .enc extension
     /// </summary>
+    /// STREAMED, same bytes on disk as <see cref="Encrypt"/> (IV, then AES-256-CBC). The old
+    /// version held the file three times over in memory (plain, cipher, IV + cipher).
     public static void EncryptFile(string sourcePath, string destPath)
     {
-        var plainData = File.ReadAllBytes(sourcePath);
-        var encrypted = Encrypt(plainData);
-        File.WriteAllBytes(destPath, encrypted);
+        using var aes = Aes.Create();
+        aes.Key = DeriveKey();
+        aes.GenerateIV();
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
+
+        using var input = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
+        using var output = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferBytes);
+        output.Write(aes.IV, 0, aes.IV.Length);
+        using var encryptor = aes.CreateEncryptor();
+        using var crypto = new CryptoStream(output, encryptor, CryptoStreamMode.Write);
+        input.CopyTo(crypto, CopyBufferBytes);
+        crypto.FlushFinalBlock();
+    }
+
+    private const int CopyBufferBytes = 1 << 20;
+
+    /// <summary>
+    /// Decrypts a pack file into <paramref name="destination"/> a megabyte at a time.
+    ///
+    /// NEVER read a pack file whole. Until 7.1.8 every decrypt was File.ReadAllBytes plus a
+    /// second full-size array from TransformFinalBlock, so a pack VIDEO cost twice its size in
+    /// managed memory on every play (ccp-bugs #1441 / #1442: private bytes 1.4 GB to 4.0 GB and a
+    /// 1.8 GB managed heap a minute after a pack video started; the whole PC crawled), and a
+    /// video past 1 GB could not be decrypted at all.
+    /// </summary>
+    public static void DecryptFileTo(string encryptedPath, Stream destination)
+    {
+        using var input = new FileStream(encryptedPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
+        var iv = new byte[16];
+        input.ReadExactly(iv);
+
+        using var aes = Aes.Create();
+        aes.Key = DeriveKey();
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
+        aes.IV = iv;
+
+        using var decryptor = aes.CreateDecryptor();
+        using var crypto = new CryptoStream(input, decryptor, CryptoStreamMode.Read);
+        crypto.CopyTo(destination, CopyBufferBytes);
+    }
+
+    /// <summary>Decrypts a pack file straight to a file on disk (what a video needs). A failed
+    /// decrypt leaves no half-written file behind.</summary>
+    public static void DecryptFileToFile(string encryptedPath, string destPath)
+    {
+        try
+        {
+            using var output = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferBytes);
+            DecryptFileTo(encryptedPath, output);
+        }
+        catch
+        {
+            try { File.Delete(destPath); } catch { /* best effort */ }
+            throw;
+        }
     }
 
     /// <summary>
-    /// Decrypts a file to memory (never writes plaintext to disk)
+    /// Decrypts a file to memory (never writes plaintext to disk). For SMALL files (a manifest,
+    /// a picture): a video goes through <see cref="DecryptFileToFile"/>.
     /// </summary>
     public static byte[] DecryptFile(string encryptedPath)
     {
-        var encrypted = File.ReadAllBytes(encryptedPath);
-        return Decrypt(encrypted);
+        using var stream = DecryptFileToStream(encryptedPath);
+        return stream.ToArray();
     }
 
     /// <summary>
-    /// Decrypts a file and returns as a memory stream (for image loading)
+    /// Decrypts a file and returns as a memory stream (for image loading). One buffer, sized up
+    /// front from the file length.
     /// </summary>
     public static MemoryStream DecryptFileToStream(string encryptedPath)
     {
-        var decrypted = DecryptFile(encryptedPath);
-        return new MemoryStream(decrypted);
+        long length = new FileInfo(encryptedPath).Length;
+        var stream = new MemoryStream((int)Math.Clamp(length - 16, 0, int.MaxValue / 2));
+        DecryptFileTo(encryptedPath, stream);
+        stream.Position = 0;
+        return stream;
     }
 
     /// <summary>
