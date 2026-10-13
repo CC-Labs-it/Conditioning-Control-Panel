@@ -149,6 +149,15 @@ public class BookedPopLayoutTests
     }
 
     [Fact]
+    public void AZeroSizeMonitor_CountsAsUnknown_AndDoesNotClamp()
+    {
+        // Core Box.IsEmpty is W<=0||H<=0; WPF matched only Rect.Empty. Pin the Core rule.
+        var origin = new ScreenPoint(5000, -300);
+        Assert.Equal(BookedPopLayout.TopLeftPx(origin, 0, 1.0, null),
+                     BookedPopLayout.TopLeftPx(origin, 0, 1.0, new Box(0, 0, 0, 0)));
+    }
+
+    [Fact]
     public void ASecondMonitorOrigin_StaysOnThatMonitor()
     {
         var monitor = new Box(1920, 0, 2560, 1440);
