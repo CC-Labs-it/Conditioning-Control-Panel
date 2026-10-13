@@ -432,6 +432,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[Launcher] tile refresh on {Trigger} failed", trigger); }
         }
 
+        /// <summary>WPF BtnGear_Click: "Media and sound", applied on change; if it cannot open, the panel's
+        /// settings tab is the next best door. "Open asset browser" brings the panel up on Assets.</summary>
+        private async void BtnGear_Click(object? sender, RoutedEventArgs e)
+        {
+            // ponytail: no LockdownVeil on this head yet; this refusal stands in for it.
+            if (MainShellWindow.LockdownActive) return;
+            LauncherSfx.Click();
+            try
+            {
+                var dlg = new LauncherMediaDialog { OpenAssetBrowser = () => OpenPanel(p => p.ShowTab("assets")) };
+                await dlg.ShowDialogSafe(this);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Launcher] Game media dialog failed; falling back to the settings tab");
+                OpenPanel(p => p.ShowTab("appsettings"));
+            }
+        }
+
         /// <summary>WPF ModPill_Click: installed mods in stock order, the active one ticked, then Manage mods.</summary>
         private void ModPill_Click(object? sender, RoutedEventArgs e)
         {

@@ -174,6 +174,24 @@ public sealed class LauncherWindowTests
     private static void Raise(LauncherWindow w, string name) =>
         w.FindControl<Button>(name)!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
+    /// <summary>WPF BtnGear_Click: the Media pill opens "Media and sound" over the launcher.</summary>
+    [Fact]
+    public void MediaPill_OpensTheMediaDialog() => Run(shell =>
+    {
+        Assert.True(LauncherWindow.BackToLauncher(shell));
+        Dispatcher.UIThread.RunJobs();
+        var launcher = LauncherWindow.Instance!;
+        LauncherMediaDialog? opened = null;
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is LauncherMediaDialog d) opened = d; });
+
+        Raise(launcher, "BtnGear");
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.NotNull(opened);
+        Assert.Same(launcher, opened!.Owner);
+        opened.Close();
+    });
+
     [Fact]
     public void Lockdown_SignedOutCardPress_AndSignInPillOpenNoLogin() => Run(shell =>
     {

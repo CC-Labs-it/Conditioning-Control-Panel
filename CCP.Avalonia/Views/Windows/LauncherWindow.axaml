@@ -269,6 +269,15 @@
                                   StrokeLineCap="Round" IsVisible="False"/>
                         </Grid>
                     </Button>
+                    <!-- WPF LauncherWindow.xaml:465 BtnGear: source, niches, asset preset and the master volume for every room -->
+                    <Button x:Name="BtnGear" Theme="{StaticResource LauncherBarPill}" Margin="0,0,8,0"
+                            ToolTip.Tip="{loc:Str launcher_media_tooltip}" Click="BtnGear_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <fx:IconGlyph Kind="Image" Size="13" Margin="0,0,7,0" VerticalAlignment="Center"
+                                          Foreground="{DynamicResource PanelAccentBrush}"/>
+                            <TextBlock Text="{loc:Str launcher_media_button}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="BtnMinimize" Content="─" Width="46" Height="36"
                             Click="BtnMinimize_Click" Theme="{StaticResource WindowControlButton}"/>
                     <Button x:Name="BtnClose" Content="✕" Width="46" Height="36"
