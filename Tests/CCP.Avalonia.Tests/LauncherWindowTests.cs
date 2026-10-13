@@ -75,9 +75,9 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // Only the destinations this head has: no game host exists here yet.
-        Assert.Equal(new[] { "intake" }, Tiles(launcher));
-        var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[0];
+        // Only the destinations this head has: the Breakout demo and Piece by Piece game hosts, then the intake tab.
+        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "intake" }, Tiles(launcher));
+        var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
 
@@ -98,7 +98,7 @@ public sealed class LauncherWindowTests
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
         var w = LauncherWindow.Instance!;
-        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children[0];
+        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         var art = tile.TranslatePoint(new Point(tile.Bounds.Width / 2, tile.Bounds.Height / 4), w)!.Value;
         var off = tile.TranslatePoint(new Point(-40, tile.Bounds.Height / 4), w)!.Value;
@@ -145,7 +145,7 @@ public sealed class LauncherWindowTests
     });
 
     private static void ClickPlay(Control tile) =>
-        tile.GetVisualDescendants().OfType<Button>().Single()
+        tile.GetVisualDescendants().OfType<Button>().Single(b => !Equals(b.Tag, "tile-shortcut"))
             .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class LauncherWindowTests
         try
         {
             ld.Activate(TimeSpan.FromMinutes(30));
-            ClickPlay(launcher.FindControl<UniformGrid>("GamesGrid")!.Children[0]);
+            ClickPlay(launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1]);
             Dispatcher.UIThread.RunJobs();
             Assert.True(launcher.IsVisible);
             Assert.False(shell.IsVisible);
@@ -181,7 +181,7 @@ public sealed class LauncherWindowTests
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
         var w = LauncherWindow.Instance!;
-        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children[0];
+        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         // A real press/release on the art plate (not the Play button), as a user taps the card.
         void Press()
         {
@@ -240,7 +240,7 @@ public sealed class LauncherWindowTests
         CoreAccount.IsLoggedInProvider = () => false;
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
-        var tile = LauncherWindow.Instance!.FindControl<UniformGrid>("GamesGrid")!.Children[0];
+        var tile = LauncherWindow.Instance!.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_sign_in"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_pill_sign_in"), Texts(tile));
         Assert.False(shell.IsVisible);
@@ -538,13 +538,13 @@ public sealed class LauncherWindowTests
             var w = LauncherWindow.Instance!;
             string Label() => LauncherModMenu.Label(Loc.Get("launcher_mod_label"), mods.ActiveMod.Name, "-");
             Assert.Equal(Label(), Text(w, "ModPillText"));
-            var tileBefore = w.FindControl<UniformGrid>("GamesGrid")!.Children[0];
+            var tileBefore = w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
 
             w.SwitchMod(BuiltInMods.DronificationId);
             Dispatcher.UIThread.RunJobs();   // the tile redraw is posted, as WPF's
             Assert.Equal(BuiltInMods.DronificationId, mods.ActiveModId);
             Assert.Equal(Label(), Text(w, "ModPillText"));
-            Assert.NotSame(tileBefore, w.FindControl<UniformGrid>("GamesGrid")!.Children[0]);
+            Assert.NotSame(tileBefore, w.FindControl<UniformGrid>("GamesGrid")!.Children[^1]);
         }
         finally
         {
