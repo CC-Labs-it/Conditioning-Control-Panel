@@ -549,11 +549,14 @@ namespace ConditioningControlPanel.Avalonia
                         if (amount > 0 && Sessions?.IsRunning != true) sync.Nudge($"xp:{source}");
                     };
                     Platform.AccountSeed.RestoreSession();
+                    // WPF CheckCloudSettingsRestoreAsync: a fresh settings file arms the welcome-back sheet.
+                    Platform.WelcomeBackOffer.Arm(CoreSettings.Service?.WasSettingsFileMissing == true, CorePaths.UserData);
                     Dispatcher.UIThread.Post(async () =>
                     {
                         await Platform.AccountSeed.InitializeAsync();
                         await Platform.AccountSeed.ValidateRestoredSessionAsync();
                         (desktop.MainWindow as Views.Windows.MainShellWindow)?.UpdateQuickLoginUI();
+                        await Platform.WelcomeBackOffer.TryOfferAsync("startup");
                     });
                 }
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
