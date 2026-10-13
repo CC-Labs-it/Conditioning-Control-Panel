@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Descent
 
         /// <summary>
         /// No account or no auth token yet. The want is remembered and the service fires it
-        /// from <see cref="DescentService.OnSignedIn"/> once a login path declares the account
+        /// from <c>DescentService.OnSignedIn</c> once a login path declares the account
         /// usable.
         /// </summary>
         WaitForSignIn,

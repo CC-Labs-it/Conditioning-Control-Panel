@@ -88,7 +88,7 @@ namespace ConditioningControlPanel.Services.Descent
         /// account on the machine - acceptable here, unlike the XP watermark, because
         /// the worst case is a wrongly-sized wobble rather than a rewritten ledger.
         /// </summary>
-        private static string Account => App.Settings?.Current?.UnifiedId ?? string.Empty;
+        private static string Account => CoreSettings.Current.UnifiedId ?? string.Empty;
 
         public int PouredTodayXp
         {
@@ -96,7 +96,7 @@ namespace ConditioningControlPanel.Services.Descent
             {
                 try
                 {
-                    var s = App.Settings?.Current;
+                    var s = CoreSettings.Service?.Current;
                     if (s == null) return 0;
                     if (!string.Equals(s.VatPouredAccount ?? string.Empty, Account, StringComparison.Ordinal)) return 0;
                     if (!string.Equals(s.VatPouredDayUtc ?? string.Empty, DayKey(UtcNow()), StringComparison.Ordinal)) return 0;
@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Services.Descent
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Debug("VatPourLedger read: {E}", ex.Message);
+                    Serilog.Log.Debug("VatPourLedger read: {E}", ex.Message);
                     return 0;
                 }
             }
@@ -114,14 +114,14 @@ namespace ConditioningControlPanel.Services.Descent
         {
             try
             {
-                var s = App.Settings?.Current;
+                var s = CoreSettings.Service?.Current;
                 if (s == null) return;
                 s.VatPouredTodayXp = Math.Max(0, todayXp);
                 s.VatPouredDayUtc = DayKey(UtcNow());
                 s.VatPouredAccount = Account;
-                App.Settings?.Save();
+                CoreSettings.Save();
             }
-            catch (Exception ex) { App.Logger?.Debug("VatPourLedger write: {E}", ex.Message); }
+            catch (Exception ex) { Serilog.Log.Debug("VatPourLedger write: {E}", ex.Message); }
         }
     }
 }
