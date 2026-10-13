@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Services.Vault;
 /// <summary>
 /// The pure half of the vault gate card (Dialogs/VaultGateDialog): which feature a padlock
 /// belongs to, what the tiers cost, the supporter-count line, and when the last-day card for an
-/// invite week is owed. Prices live here (<see cref="PriceFor"/>) and nowhere else in the client.
+/// invite week is owed. Prices come from the plan list (<see cref="PlanCatalog"/>) through <see cref="PriceFor"/>.
 /// </summary>
 public enum PriceCurrency { Usd, Eur }
 
@@ -19,31 +19,27 @@ public sealed record TierPrice(PriceCurrency Currency, int MonthlyCents, int Yea
 public static class VaultOffer
 {
     /// <summary>
-    /// The Patreon price list. Two currencies, because Patreon bills supporters in euros or in
-    /// dollars; the card picks one from the machine's region (<see cref="CurrencyFor"/>). Yearly is
-    /// ten months' price ("2 months free") and exists on Patreon only: the other payment systems
-    /// have no yearly plan, so the card always says so next to it.
-    /// <para>These numbers must match the live Patreon tiers. This table is the one copy in the
-    /// client; change it here and nowhere else.</para>
+    /// One tier's price in one currency, from the plan list (<see cref="PlanCatalog"/>, server
+    /// <c>/config/plans</c> with a compiled fallback). Dollars are the headline; euros are the
+    /// secondary line (PayPal charges in euros). Yearly exists on Patreon only and is quoted in
+    /// the headline currency; a euro yearly figure keeps the same discount.
+    /// <para>Prices live in the plan list and nowhere else in the client.</para>
     /// </summary>
-    public static TierPrice PriceFor(int tier, PriceCurrency currency) => (tier >= 2, currency) switch
+    public static TierPrice PriceFor(int tier, PriceCurrency currency, PlanSet? plans = null)
     {
-        (false, PriceCurrency.Eur) => new TierPrice(currency, 600, 6000),
-        (true, PriceCurrency.Eur) => new TierPrice(currency, 1000, 10000),
-        (false, _) => new TierPrice(currency, 750, 7500),
-        (true, _) => new TierPrice(currency, 1250, 12500),
-    };
+        var plan = (plans ?? PlanCatalog.Current).For(tier);
+        if (currency == PriceCurrency.Usd) return new TierPrice(currency, plan.MonthlyCents, plan.YearlyCents);
+        var ratio = plan.MonthlyCents > 0 ? plan.YearlyCents / (decimal)plan.MonthlyCents : 12m;
+        return new TierPrice(currency, plan.MonthlyEurCents,
+            (int)Math.Round(plan.MonthlyEurCents * ratio, MidpointRounding.AwayFromZero));
+    }
 
-    /// <summary>Euros for a region that pays in euros, dollars for everyone else.</summary>
+    /// <summary>The plan list's headline currency (C1 says USD).</summary>
+    public static PriceCurrency HeadlineCurrency(PlanSet? plans = null) => CurrencyFor((plans ?? PlanCatalog.Current).Currency);
+
+    /// <summary>"EUR" is euros, anything else dollars.</summary>
     public static PriceCurrency CurrencyFor(string? isoCurrencySymbol)
         => string.Equals(isoCurrencySymbol, "EUR", StringComparison.OrdinalIgnoreCase) ? PriceCurrency.Eur : PriceCurrency.Usd;
-
-    /// <summary>The machine's currency, from its Windows region. Dollars if the region cannot be read.</summary>
-    public static PriceCurrency LocalCurrency()
-    {
-        try { return CurrencyFor(RegionInfo.CurrentRegion.ISOCurrencySymbol); }
-        catch (Exception ex) { Diag.Swallowed(ex, "no region"); return PriceCurrency.Usd; }
-    }
 
     /// <summary>"€6", "$7.50", "€0.20": whole amounts without decimals, anything else with two.</summary>
     public static string Money(int cents, PriceCurrency currency)
