@@ -96,6 +96,13 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- One icon per launcher tile beside the exe: a desktop shortcut cannot read an embedded resource
+         (WPF csproj :614, Core LauncherShortcuts.IconFolder). -->
+    <Content Include="..\Assets\launcher-icons\*.ico" Link="Resources\launcher-icons\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
     <!-- The shipped spiral (WPF Resources\spiral.gif): SpiralOverlay's default and the card's Default thumbnail. -->
     <Content Include="..\Assets\spiral.gif" Link="Resources\spiral.gif">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
