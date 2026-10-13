@@ -8303,5 +8303,15 @@
   "conv_let_close": "Let it close",
   "conv_reopen_prime": "Open Prime again",
   "conv_reopen_basic": "Open Basic again",
-  "conv_leave_closed": "Leave it closed"
+  "conv_leave_closed": "Leave it closed",
+  "conv_get_basic": "Get Basic",
+  "conv_get_prime": "Get Prime",
+  "conv_cap_free": "{0} today. Basic: {1}. Prime: {2}.",
+  "conv_cap_basic": "{0} today. Prime: {1}.",
+  "conv_cap_body": "The companion's count starts again tomorrow.",
+  "conv_relock_basic": "Yesterday's door is shut. Basic keeps it open.",
+  "conv_relock_prime": "Yesterday's door is shut. Prime keeps it open.",
+  "conv_session_taste": "Basic opens the doors.",
+  "conv_gallery_title": "The patron gallery has {0} more.",
+  "conv_gallery_body": "Basic opens it."
 }

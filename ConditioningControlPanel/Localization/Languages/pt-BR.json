@@ -7548,5 +7548,15 @@
   "conv_let_close": "Deixar fechar",
   "conv_reopen_prime": "Abrir o Prime de novo",
   "conv_reopen_basic": "Abrir o Basic de novo",
-  "conv_leave_closed": "Deixar fechado"
+  "conv_leave_closed": "Deixar fechado",
+  "conv_get_basic": "Assinar o Basic",
+  "conv_get_prime": "Assinar o Prime",
+  "conv_cap_free": "{0} hoje. Basic: {1}. Prime: {2}.",
+  "conv_cap_basic": "{0} hoje. Prime: {1}.",
+  "conv_cap_body": "A contagem do companheiro recomeça amanhã.",
+  "conv_relock_basic": "A porta de ontem fechou. O Basic a mantém aberta.",
+  "conv_relock_prime": "A porta de ontem fechou. O Prime a mantém aberta.",
+  "conv_session_taste": "O Basic abre as portas.",
+  "conv_gallery_title": "A galeria de patronos tem mais {0}.",
+  "conv_gallery_body": "O Basic abre ela."
 }

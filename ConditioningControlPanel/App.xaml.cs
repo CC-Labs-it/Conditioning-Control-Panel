@@ -3554,6 +3554,11 @@ namespace ConditioningControlPanel
             // reads as a consequence of the achievement popup rather than a second competing toast.
             ShowWardrobeRewardToasts(achievement);
 
+            // Never on the toast itself: a free account gets one quiet Inbox row about the patron
+            // gallery, at most once a day (MainWindow.Inbox.cs, proposal 7).
+            try { MainWindowRef?.PostPatronGalleryRow(achievement); }
+            catch (Exception ex) { Logger?.Debug("Patron gallery row skipped: {Error}", ex.Message); }
+
             // Play achievement sound
             PlayAchievementSound();
 

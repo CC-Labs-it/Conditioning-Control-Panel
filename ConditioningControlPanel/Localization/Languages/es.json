@@ -7548,5 +7548,15 @@
   "conv_let_close": "Dejar que se cierre",
   "conv_reopen_prime": "Volver a abrir Prime",
   "conv_reopen_basic": "Volver a abrir Basic",
-  "conv_leave_closed": "Dejarlo cerrado"
+  "conv_leave_closed": "Dejarlo cerrado",
+  "conv_get_basic": "Conseguir Basic",
+  "conv_get_prime": "Conseguir Prime",
+  "conv_cap_free": "{0} hoy. Basic: {1}. Prime: {2}.",
+  "conv_cap_basic": "{0} hoy. Prime: {1}.",
+  "conv_cap_body": "El contador del acompañante vuelve a empezar mañana.",
+  "conv_relock_basic": "La puerta de ayer está cerrada. Basic la mantiene abierta.",
+  "conv_relock_prime": "La puerta de ayer está cerrada. Prime la mantiene abierta.",
+  "conv_session_taste": "Basic abre las puertas.",
+  "conv_gallery_title": "La galería de patrons tiene {0} más.",
+  "conv_gallery_body": "Basic la abre."
 }

@@ -7548,5 +7548,15 @@
   "conv_let_close": "Пусть закроется",
   "conv_reopen_prime": "Снова открыть Prime",
   "conv_reopen_basic": "Снова открыть Basic",
-  "conv_leave_closed": "Оставить закрытым"
+  "conv_leave_closed": "Оставить закрытым",
+  "conv_get_basic": "Взять Basic",
+  "conv_get_prime": "Взять Prime",
+  "conv_cap_free": "{0} сегодня. Basic: {1}. Prime: {2}.",
+  "conv_cap_basic": "{0} сегодня. Prime: {1}.",
+  "conv_cap_body": "Счётчик компаньона обнулится завтра.",
+  "conv_relock_basic": "Вчерашняя дверь закрыта. С Basic она остаётся открытой.",
+  "conv_relock_prime": "Вчерашняя дверь закрыта. С Prime она остаётся открытой.",
+  "conv_session_taste": "Basic открывает двери.",
+  "conv_gallery_title": "В галерее патронов ещё {0}.",
+  "conv_gallery_body": "Basic открывает её."
 }

@@ -7548,5 +7548,15 @@
   "conv_let_close": "닫히게 두기",
   "conv_reopen_prime": "Prime 다시 열기",
   "conv_reopen_basic": "Basic 다시 열기",
-  "conv_leave_closed": "닫힌 채로 두기"
+  "conv_leave_closed": "닫힌 채로 두기",
+  "conv_get_basic": "Basic 받기",
+  "conv_get_prime": "Prime 받기",
+  "conv_cap_free": "오늘 {0}개. Basic: {1}. Prime: {2}.",
+  "conv_cap_basic": "오늘 {0}개. Prime: {1}.",
+  "conv_cap_body": "컴패니언 횟수는 내일 다시 시작됩니다.",
+  "conv_relock_basic": "어제의 문은 닫혔습니다. Basic이면 계속 열려 있습니다.",
+  "conv_relock_prime": "어제의 문은 닫혔습니다. Prime이면 계속 열려 있습니다.",
+  "conv_session_taste": "Basic이면 문이 열립니다.",
+  "conv_gallery_title": "후원자 갤러리에 {0}개가 더 있습니다.",
+  "conv_gallery_body": "Basic이면 열립니다."
 }

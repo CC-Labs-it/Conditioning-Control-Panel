@@ -84,6 +84,52 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
             return row == LapseRow.None ? LapseReading.Nothing : new LapseReading(row, tier, end, days);
         }
 
+        // ------------------------------------------------------------------ outside the moment (proposal 7)
+
+        public const string KeyCompanionCap = "companion_cap";
+        public const string KeyGiftRelock = "daily_gift_relock";
+        public const string KeyPatronGallery = "patron_gallery";
+
+        /// <summary>The InboxStamps slot that remembers the last Daily Gift seen in use:
+        /// <c>yyyy-MM-dd|key</c> (a local date).</summary>
+        public const string KeyGiftUsed = "gift_used";
+
+        /// <summary>The companion's daily message caps per tier (brief owner decisions).</summary>
+        public const int CompanionCapFree = 100, CompanionCapBasic = 1000, CompanionCapPrime = 2000;
+
+        /// <summary>The tier the companion cap row offers after <paramref name="tierNow"/> (0 free,
+        /// 1 Basic, 2 Prime), or null when there is nothing above it: Prime gets no row.</summary>
+        public static int? CapRowOffers(int tierNow) => tierNow >= 2 ? null : tierNow == 1 ? 2 : 1;
+
+        /// <summary>A "this Daily Gift was in use on this day" stamp value.</summary>
+        public static string GiftUse(DateTime localDay, string key) => DayStamp(localDay) + "|" + key;
+
+        /// <summary>The Daily Gift key a <see cref="GiftUse"/> stamp names when it was in use on the
+        /// day before <paramref name="today"/>, or null.</summary>
+        public static string? UsedYesterday(string? stamp, DateTime today)
+        {
+            if (string.IsNullOrEmpty(stamp)) return null;
+            var bar = stamp.IndexOf('|');
+            if (bar <= 0 || bar == stamp.Length - 1) return null;
+            return stamp.Substring(0, bar) == DayStamp(today.Date.AddDays(-1)) ? stamp.Substring(bar + 1) : null;
+        }
+
+        /// <summary>
+        /// "Yesterday's door is shut" is owed when yesterday's gift was in use, today it is shut
+        /// again (not today's gift, no tier holds it), and it has not been posted today.
+        /// </summary>
+        public static bool RelockOwed(string? usedStamp, DateTime today, bool premium, Func<string, bool> openToday, out string key)
+        {
+            key = UsedYesterday(usedStamp, today) ?? "";
+            if (key.Length == 0 || premium) return false;
+            try { return !openToday(key); }
+            catch { return false; }
+        }
+
+        /// <summary>The session recap's one taste line: only at the live end of a completed session
+        /// (not a recap reopened from history) for an account with no tier.</summary>
+        public static bool SessionTasteLine(bool completed, bool liveEnd, bool premium) => completed && liveEnd && !premium;
+
         // ------------------------------------------------------------------ stamps
 
         /// <summary>A local date as a stamp value.</summary>

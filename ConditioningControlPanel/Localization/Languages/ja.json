@@ -7548,5 +7548,15 @@
   "conv_let_close": "そのまま終える",
   "conv_reopen_prime": "Primeをもう一度開く",
   "conv_reopen_basic": "Basicをもう一度開く",
-  "conv_leave_closed": "閉じたままにする"
+  "conv_leave_closed": "閉じたままにする",
+  "conv_get_basic": "Basicにする",
+  "conv_get_prime": "Primeにする",
+  "conv_cap_free": "今日は{0}通。Basic: {1}。Prime: {2}。",
+  "conv_cap_basic": "今日は{0}通。Prime: {1}。",
+  "conv_cap_body": "コンパニオンの回数は明日リセットされます。",
+  "conv_relock_basic": "昨日の扉は閉まりました。Basicなら開いたままです。",
+  "conv_relock_prime": "昨日の扉は閉まりました。Primeなら開いたままです。",
+  "conv_session_taste": "Basicなら扉が開きます。",
+  "conv_gallery_title": "パトロンギャラリーにはあと{0}個あります。",
+  "conv_gallery_body": "Basicで開きます。"
 }
