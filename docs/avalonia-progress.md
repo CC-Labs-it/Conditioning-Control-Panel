@@ -2188,3 +2188,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/media-core-a: +173
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/video-core-a: +345
+- Cloud session (Opus), local review + gate. Review P3 fix: unsafe-video cache save/reload test on a stepped clock (TimeProvider seam).
