@@ -14,6 +14,7 @@ public sealed class ChaosFlashWashTests
         Assert.Equal(10000, ChaosFlashWash.DefaultDurationMs);
         Assert.Equal(0.10, ChaosFlashWash.DefaultOpacity);
         Assert.Equal(1280, ChaosFlashWash.MaxDecodeDim);
+        Assert.Equal(40, ChaosFlashWash.MaxFrames);
     }
 
     [Theory]

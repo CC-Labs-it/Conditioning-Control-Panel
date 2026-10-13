@@ -90,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var (frames, delay) = await Task.Run(() =>
             {
-                try { return pick() is { } p ? SpiralOverlay.Decode(p, fit) : (new List<Bitmap>(), TimeSpan.Zero); }
+                try { return pick() is { } p ? SpiralOverlay.Decode(p, fit, ChaosFlashWash.MaxFrames) : (new List<Bitmap>(), TimeSpan.Zero); }
                 catch (Exception ex) { Log.Debug("ChaosFlash: pick/decode failed: {E}", ex.Message); return (new List<Bitmap>(), TimeSpan.Zero); }
             });
             if (gen != _gen || frames.Count == 0)
