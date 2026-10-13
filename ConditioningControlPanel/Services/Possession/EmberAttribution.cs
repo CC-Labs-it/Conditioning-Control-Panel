@@ -79,10 +79,10 @@ public sealed class EmberAttribution : IPossessionAttribution
     //  The charge
     // ---------------------------------------------------------------------------------------------
 
-    public Task ChargeAsync(FrameworkElement target, CancellationToken ct, int durationMs = 400)
+    public Task ChargeAsync(object control, CancellationToken ct, int durationMs = 400)
     {
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (target == null) { tcs.TrySetResult(false); return tcs.Task; }
+        if (control is not FrameworkElement target) { tcs.TrySetResult(false); return tcs.Task; }
 
         DispatcherHelper.RunOnUI(() =>
         {
@@ -171,9 +171,9 @@ public sealed class EmberAttribution : IPossessionAttribution
     //  The possessed outline (+ the cursor ring it refcounts)
     // ---------------------------------------------------------------------------------------------
 
-    public IDisposable Possess(FrameworkElement target)
+    public IDisposable Possess(object control)
     {
-        var handle = new OutlineHandle(this, target);
+        var handle = new OutlineHandle(this, (FrameworkElement)control);
         DispatcherHelper.RunOnUI(handle.Start);
         return handle;
     }

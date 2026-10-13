@@ -575,7 +575,7 @@ namespace ConditioningControlPanel
         internal void OpenSpeechModelFolder()
         {
             var root = Services.Speech.SpeechModelFolder.Root;
-            if (Services.Speech.SpeechModelFolder.Open()) return;
+            if (Services.Speech.SpeechModelFolder.Ensure(root) is { } dir && ExplorerLauncher.OpenFolder(dir)) return;
 
             App.Logger?.Warning("Could not open the speech model folder at {Root}", root);
             try
