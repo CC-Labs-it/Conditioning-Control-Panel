@@ -89,6 +89,10 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- Awareness v2 angle cards: the fail-closed floor AwarenessAngleCards reads with
+         typeof(AwarenessAngleCards).Assembly, so it lives in the same assembly as that class.
+         Each head still ships the on-disk override copy as Content. -->
+    <EmbeddedResource Include="..\Assets\sounds\companion_audio\awareness_angles.json" Link="Resources\sounds\companion_audio\awareness_angles.json" />
   </ItemGroup>
 
 </Project>
