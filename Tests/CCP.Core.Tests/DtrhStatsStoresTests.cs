@@ -21,6 +21,8 @@ public class DtrhStatsStoresTests
             """));
 
         var top = DtrhAssetStatsStore.TopAssets(1000);
+        Assert.Contains("zz_grabbed.png", top);
+        Assert.Contains("zz_watched.png", top);
         Assert.True(top.IndexOf("zz_grabbed.png") < top.IndexOf("zz_watched.png"),
             "3 grabs (24) must outrank 20 weighted seconds");
     }
@@ -33,6 +35,8 @@ public class DtrhStatsStoresTests
         DtrhAssetStatsStore.Merge(JObject.Parse("""{"stats":[{"name":"zz_neg_a.png","weighted":-100}]}"""));
 
         var top = DtrhAssetStatsStore.TopAssets(1000);
+        Assert.Contains("zz_neg_a.png", top);
+        Assert.Contains("zz_neg_b.png", top);
         Assert.True(top.IndexOf("zz_neg_a.png") < top.IndexOf("zz_neg_b.png"));
     }
 
