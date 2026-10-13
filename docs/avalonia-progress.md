@@ -2122,3 +2122,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/goon-core-a: +104
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/companion-core-head: +820
+- Core BarkEngine (TimeProvider clock) + CompanionCore; WPF CompanionService XP modifier/level loop delegate to Core. Cloud session, local review fix + gate.
