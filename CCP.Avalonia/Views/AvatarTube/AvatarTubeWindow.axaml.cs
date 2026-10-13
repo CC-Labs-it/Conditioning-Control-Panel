@@ -1178,13 +1178,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth.
         /// ponytail: WPF queues a preset behind a line still speaking; this tube has no speech
         /// queue, so the preset replaces it.</summary>
-        public void Giggle(string text)
+        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true);
             });
         }
 

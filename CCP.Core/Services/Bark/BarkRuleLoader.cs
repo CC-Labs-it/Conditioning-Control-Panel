@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Services.Bark
 {
     /// <summary>
     /// Loads bark rule manifests from disk. Two-tier, mirroring how
-    /// <see cref="CompanionPhraseService.VoiceLineFolder"/> resolves audio: the embedded
+    /// the WPF head's <c>CompanionPhraseService.VoiceLineFolder</c> resolves audio: the embedded
     /// base manifest ships with the app; the active mod may ship its own
     /// <c>bark_rules.json</c> alongside its companion audio, which overrides/extends the
     /// base.

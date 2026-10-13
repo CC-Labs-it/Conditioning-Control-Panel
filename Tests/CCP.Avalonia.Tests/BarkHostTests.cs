@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Headless;
 using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel;
@@ -106,4 +108,33 @@ public sealed class BarkHostTests
         }
         finally { CoreMods.ActiveModIdProvider = provider; }
     }
+
+    /// <summary>WPF Speak (BarkService.cs:1984-1990): an ordinary bark goes through Giggle and is kept out
+    /// of chat history; a preempting (safety) bark goes through GigglePriority and is logged.</summary>
+    [Fact]
+    public System.Threading.Tasks.Task OrdinaryBarksStayOutOfChatHistory() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (global::Avalonia.Application.Current is null)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            var history = tube.ChatHistory.Count;
+            var normal = Rule("plain", "UiAction");
+            BarkHost.SpeakOn(tube, new BarkPick(normal, normal.VariantPool![0], new BarkContext("UiAction")));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(history, tube.ChatHistory.Count);
+
+            var safety = Rule("safe", "Panic");
+            safety.ClassRaw = "safety";
+            BarkHost.SpeakOn(tube, new BarkPick(safety, safety.VariantPool![0], new BarkContext("Panic")));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(history + 1, tube.ChatHistory.Count);
+        }
+        finally { tube.Close(); }
+        return System.Threading.Tasks.Task.CompletedTask;
+    });
 }

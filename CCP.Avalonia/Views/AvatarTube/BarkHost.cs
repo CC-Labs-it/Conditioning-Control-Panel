@@ -116,24 +116,32 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             return pick.Found ? pick.Path : null;
         }
 
-        /// <summary>WPF Speak (:1943). ponytail: this tube has no speech queue, so an ordinary (Giggle)
-        /// bark is shown at once like a priority one; the engine already drops it while she is speaking.</summary>
+        /// <summary>WPF Speak (:1943): priority barks preempt (GigglePriority, logged to chat); ordinary
+        /// barks and the mute egg go through Giggle (never logged, giggle sound one in five).</summary>
         private static void SpeakOnTube(BarkPick pick)
         {
             var tube = AvatarTubeWindow.Live;
             if (tube == null) { Serilog.Log.Debug("[BARK] no avatar window - dropping rule={Rule}", pick.Rule.Id); return; }
+            SpeakOn(tube, pick);
+        }
+
+        internal static void SpeakOn(AvatarTubeWindow tube, BarkPick pick)
+        {
             var line = BarkEngine.ApplySubstitutions(pick.Variant.Text, pick.Context);
             if (string.IsNullOrWhiteSpace(line)) return;
 
             // Mute egg: an easter_egg bark while master volume is 0 shows text only.
             if (pick.Rule.Class == BarkClass.EasterEgg && CoreSettings.Current.MasterVolume == 0)
             {
-                tube.GigglePriority(line, playSound: false, aiGenerated: false, mood: pick.Rule.Mood);
+                tube.Giggle(line);   // PlaySpeechAudio's master==0 guard keeps it silent
                 return;
             }
             var audio = ResolveAudio(pick.Variant.Audio);
-            tube.GigglePriority(line, playSound: audio == null, aiGenerated: false,
-                phraseAudioPath: audio, barkVoice: audio != null, mood: pick.Rule.Mood);
+            if (pick.Preempts)
+                tube.GigglePriority(line, playSound: audio == null, aiGenerated: false,
+                    phraseAudioPath: audio, barkVoice: audio != null, mood: pick.Rule.Mood);
+            else
+                tube.Giggle(line, phraseAudioPath: audio, barkVoice: audio != null);
         }
 
         private static System.Collections.Generic.IReadOnlyList<BarkLineInfo> AllLines()
