@@ -208,7 +208,9 @@ namespace ConditioningControlPanel.Services.Commands
             try
             {
                 var folder = MediaCommand.AudioFolderUnder(App.EffectiveAssetsPath);
-                return FormatFailedAudio(folder, MediaCommand.AudioFilesIn(folder).Length > 0);
+                // "Had something to play" covers the recorded mod clips that stand in for an
+                // empty folder, so a clip that did not start never blames the folder.
+                return FormatFailedAudio(folder, MediaCommand.CurrentAudioPool().Pool != MediaCommand.AudioPool.None);
             }
             catch
             {
@@ -217,7 +219,8 @@ namespace ConditioningControlPanel.Services.Commands
         }
 
         /// <summary>
-        /// The Audio effect plays LOCAL files from one folder and nothing else: no online source
+        /// The Audio effect plays the player's LOCAL files from one folder, else a recorded clip
+        /// from the active mod (<see cref="MediaCommand.ChooseAudioPool"/>); no online source
         /// feeds it, whatever the media source is set to. The old line said "check your assets
         /// audio folder", which no page in the app names, so a player with online media (whose
         /// folder is the empty one the app creates) could not act on it (ccp-bugs #1428).
