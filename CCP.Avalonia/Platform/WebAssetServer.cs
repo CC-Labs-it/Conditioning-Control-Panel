@@ -172,8 +172,8 @@ public sealed class WebAssetServer : IDisposable
         string a = spec[..dash].Trim(), b = spec[(dash + 1)..].Trim();
         if (a.Length == 0)
         {
-            if (!long.TryParse(b, out var tail) || tail <= 0) return null;
-            return length == 0 ? (-1, -1) : (Math.Max(0, length - tail), length - 1);
+            if (!long.TryParse(b, out var tail) || tail < 0) return null;
+            return length == 0 || tail == 0 ? (-1, -1) : (Math.Max(0, length - tail), length - 1);
         }
         if (!long.TryParse(a, out var from) || from < 0) return null;
         long to = length - 1;
