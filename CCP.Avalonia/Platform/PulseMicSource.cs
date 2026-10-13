@@ -89,14 +89,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return list;
         }
 
-        /// <summary>WPF's ResolveDeviceNumber: saved name, then saved index, else the default (null).</summary>
+        /// <summary>Core ResolveInputDevice (WPF ResolveDeviceNumber): saved name, then saved index, else the default (null).</summary>
         private string? ResolveSource()
         {
             if (!string.IsNullOrWhiteSpace(_sourceOverride)) return _sourceOverride;
             var s = CoreSettings.Current;
-            var devices = ListDevices().Where(d => d.Index >= 0).ToList();
-            return devices.FirstOrDefault(d => string.Equals(d.Name, s.SpeechInputDeviceName, StringComparison.OrdinalIgnoreCase)).Name
-                ?? devices.FirstOrDefault(d => d.Index == s.SpeechInputDeviceIndex).Name;
+            return SpeechEngine.ResolveInputDevice(ListDevices(), s.SpeechInputDeviceIndex, s.SpeechInputDeviceName)?.Name;
         }
 
         public IDisposable Start(Action<byte[], int> onPcm)
