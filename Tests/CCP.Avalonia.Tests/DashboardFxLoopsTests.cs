@@ -64,6 +64,11 @@ public sealed class DashboardFxLoopsTests
             time.Advance(TimeSpan.FromSeconds(1.1));
             global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.Equal(1.035, scale.ScaleX, 3);
+            // The tile glow + ring breathe on the same beat (no infinite Animation, no Effect on the tile, P82):
+            // WPF FeatureCard.xaml.cs:679-688, 0.50->0.90 / 0.55->1.0 over 3.5 s SineEase AutoReverse.
+            Assert.Null(card.FindControl<Border>("RootBorder")!.Effect);
+            Assert.Equal(0.590, card.FindControl<Border>("GlowLayer")!.Opacity, 3);
+            Assert.Equal(0.651, card.FindControl<Border>("ActiveBorder")!.Opacity, 3);
             time.Advance(TimeSpan.FromSeconds(1.1));
             global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.Equal(1.07, scale.ScaleY, 3);
@@ -88,7 +93,7 @@ public sealed class DashboardFxLoopsTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(MotionLevel.Reduced, s.MotionLevel);
             AllBreathing(false);
-            var glow = (DropShadowEffect)card.FindControl<Border>("RootBorder")!.Effect!;
+            var glow = card.FindControl<Border>("GlowLayer")!;
             Assert.Equal(0.90, glow.Opacity, 3);                       // parked at PEAK, WPF :660
             Assert.Equal(1.0, card.FindControl<Border>("ActiveBorder")!.Opacity, 3);
 

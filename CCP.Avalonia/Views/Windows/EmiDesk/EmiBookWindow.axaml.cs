@@ -1055,12 +1055,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         ///
         /// <para>ponytail: the OWNER is here now, so this is one member away. What is missing is
         /// <c>EmiDeskWindow.SpeakLine</c> and the <c>LineDraw</c> record, and those are blocked on
-        /// <c>EmiLineEngine</c> + <c>EmiChains.Player</c>
-        /// (ConditioningControlPanel/Services/EmiDesk/). Of those two, AUDITED 2026-09-04, only
-        /// EmiChains is close: its whole head coupling is Player's DispatcherTimer, one seam swap.
-        /// EmiLineEngine reads App.Settings and calls App.EmiDesk.AskSituationOk(), which its own
-        /// header says do not exist without the shell - so the margin line is behind the shell, not
-        /// behind a move. Meanwhile the widget's <c>Say</c> and
+        /// <c>EmiLineEngine</c> + <c>EmiChains.Player</c>.
+        /// EmiLineEngine is in Core now (CCP.Core/Services/EmiDesk, WPF seeds its ask probes;
+        /// unset here means no offers);
+        /// EmiChains is still WPF-only, its whole head coupling is Player's DispatcherTimer, one
+        /// seam swap. Meanwhile the widget's <c>Say</c> and
         /// <c>PlayChain</c> are still no-ops on this head, so a line handed over would be swallowed
         /// rather than spoken. Priority 2, keyed "book.margin.&lt;id&gt;", face from the card - all
         /// of that is data this stub already carries, so only the delivery is missing.</para>
