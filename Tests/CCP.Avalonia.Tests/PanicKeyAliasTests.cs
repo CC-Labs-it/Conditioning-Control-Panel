@@ -54,8 +54,10 @@ public sealed class PanicKeyAliasTests
     {
         var w = new BubbleCountWindow("none.mp4", BubbleCountScheduler.Difficulty.Medium, strictMode: false, _ => { });
         Assert.Contains(w, BubbleCountWindow.OpenWindows);
-        var e = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Return };
-        w.OnKeyDown(w, e);
+        // Routed through the window's own KeyDown subscription (handler stays private). Not KeyPress: Show()
+        // without a playable video ends the game, so a headless real press would hit a closed window.
+        var e = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Return, Source = w };
+        w.RaiseEvent(e);
         Assert.True(e.Handled, "Enter is the panic key");
         Assert.Empty(BubbleCountWindow.OpenWindows);
     });

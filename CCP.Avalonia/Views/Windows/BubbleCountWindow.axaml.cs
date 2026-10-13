@@ -676,7 +676,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF: Esc skips a non-strict game. Strict swallows the panic key and Alt+F4 while
         /// the global panic listener can stop the game, and falls open without one (panic key or Esc
         /// force-stops, LockCardWindow #875) - the rules MandatoryVideoScheduler.KeyAction owns.</summary>
-        internal void OnKeyDown(object? sender, KeyEventArgs e)
+        private void OnKeyDown(object? sender, KeyEventArgs e)
         {
             if (_gameCompleted || _isCleaningUp) return;
             var s = CoreSettings.Current;
