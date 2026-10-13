@@ -89,6 +89,7 @@ public sealed class LeashPunishTests
         try
         {
             StartFromTheGate(shell, launcher, host, runner);
+            LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);   // the press dismisses a real card
             (PanicSurfaces.All, s.PanicKeyEnabled) = (Array.Empty<PanicSurfaces.Surface>(), true);   // the key route's own call only
             shell.HandlePanicKeyPress(DateTime.Now);
             Now += LeashTaskRunner.LockCardRetry + TimeSpan.FromSeconds(1);
@@ -99,7 +100,7 @@ public sealed class LeashPunishTests
             shell.CheckLeashGate();
             Assert.False(shell.LeashGate!.IsUp);        // standing back ten minutes
         }
-        finally { (PanicSurfaces.All, s.PanicKeyEnabled) = (oldSurfaces, oldKey); }
+        finally { LockCardWindow.ForceCloseAll(); (PanicSurfaces.All, s.PanicKeyEnabled) = (oldSurfaces, oldKey); }
     });
 
     /// <summary>The real LeashTaskHost: a pending video punishment opens LOCKED (refuses a close), a task watch does not;
