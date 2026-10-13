@@ -111,6 +111,13 @@ public sealed class GstAudioSinkDependencyTests
         Assert.DoesNotContain("WPE", msg.Text);
     }
 
+    // Probed once per process (startup toast and WebHost panel share this text): an install needs a restart (oracle-deep nit).
+    [Theory]
+    [InlineData("ID=cachyos\nID_LIKE=arch\n")]
+    [InlineData("ID=opensuse-tumbleweed\n")]
+    public void TheMessageSaysToRestartAfterInstalling(string osRelease) =>
+        Assert.Contains(LinuxDependencies.RestartHint, LinuxDependencies.Message(LinuxDependencies.Missing(NoSink, LinuxDependencies.WebViews), osRelease)!.Value.Text);
+
     [Fact]
     public void WebViewsAreWebKitGtkPlusTheSinkAndNeverWpe()
     {

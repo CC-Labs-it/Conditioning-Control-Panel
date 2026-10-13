@@ -189,8 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // Linux: name the distro's install command (docs/avalonia-linux-install.md) instead of
                 // the adapter's generic "Install webkit2gtk 4.0+ package.", which stays the fallback.
                 var hint = _linuxHint.Value;
-                // Probed once per process: an install only takes effect after a restart.
-                _txtReason.Text = hint is { } h ? h.Text + "\nRestart CCP after installing." : UnavailableReason!;
+                _txtReason.Text = hint?.Text ?? UnavailableReason!;   // the hint ends with LinuxDependencies.RestartHint
                 if (hint?.Command is { } command)
                 {
                     var copy = this.FindControl<Button>("BtnCopyCommand")!;

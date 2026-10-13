@@ -46,6 +46,9 @@ namespace ConditioningControlPanel.Services
 
         public const string WebViewSound = "web views (sound)";
 
+        /// <summary>Appended to every install message: dependencies are probed once per process.</summary>
+        public const string RestartHint = "Restart CCP after installing.";
+
         /// <summary>Marks a <see cref="Dependency.Libraries"/> entry as a GStreamer plugin file, found by
         /// <see cref="GstPluginPresent(string, Func{string, string?}, Func{string, bool})"/> rather than dlopen.</summary>
         public const string GstPluginPrefix = "gstreamer-1.0/";
@@ -128,10 +131,11 @@ namespace ConditioningControlPanel.Services
             if (packaged.Count == 0) return (unavailable!, null);
             var needs = string.Join(", ", packaged.Select(d => d.Need));
             var command = InstallCommand(family, packaged);
-            var text = command != null
+            var text = (command != null
                 ? $"Missing system packages for {needs}. Install them with:\n{command}"
                 : $"Missing system packages for {needs}. Install these libraries with your package manager: "
-                  + string.Join(", ", packaged.SelectMany(d => d.Libraries).Select(l => l.Replace("|", " or ")));
+                  + string.Join(", ", packaged.SelectMany(d => d.Libraries).Select(l => l.Replace("|", " or "))))
+                + "\n" + RestartHint;
             return (unavailable is null ? text : text + "\n" + unavailable, command);
         }
 

@@ -1108,8 +1108,8 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Override and probe rules (oracle-deep): an explicit `CCP_LINUX_WEBVIEW=gtk` skips the sink check (one warning logged), so a
   probe false negative (NixOS/Guix store paths, other Debian arches) cannot block every page for good; the unset default stays
   gated. The probe follows GStreamer: GST_PLUGIN_PATH(_1_0), the user dir ($XDG_DATA_HOME/gstreamer-1.0/plugins), then
-  GST_PLUGIN_SYSTEM_PATH(_1_0), which REPLACES the distro dirs when set (AppImage/Flatpak wrappers). The panel says to restart
-  CCP after installing (probed once per process); `=wpe` falling back to GTK on 2.54 logs one warning.
+  GST_PLUGIN_SYSTEM_PATH(_1_0), which REPLACES the distro dirs when set (AppImage/Snap/Nix wrappers; the user dir stays, as in
+  GStreamer's registry scan). The panel and the startup toast say to restart CCP after installing (probed once per process); `=wpe` falling back to GTK on 2.54 logs one warning.
 - Not chosen: GTK `ExperimentalOffscreen` survives intake without the sink but pushes ~16 fps and hides the missing dependency.
 - Not chosen: a null/fake audio sink. WebKit asks GStreamer for `autoaudiosink` by name and no WebKit or GStreamer setting maps it
   to another element; bundling libgstautodetect ties us to the host's GStreamer; turning off WebAudio/media in WebKit settings
