@@ -35,6 +35,10 @@ namespace ConditioningControlPanel.Avalonia
         /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
         internal static AchievementEngine? Achievements { get; private set; }
 
+        /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
+        /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
+        internal static FeatureDayLogService? FeatureDayLog { get; private set; }
+
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
         /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.md).</summary>
         internal static WindowAwarenessService WindowAwareness { get; } =
@@ -46,6 +50,38 @@ namespace ConditioningControlPanel.Avalonia
         internal static MediaHistoryService? MediaHistory { get; set; }
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
+        /// <summary>WPF App.DiscordRpc. Null until startup built it (and in headless tests).</summary>
+        internal static Services.DiscordRichPresenceService? DiscordRpc { get; set; }
+
+        /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
+        internal static event Action? RichPresenceChanged;
+
+        /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
+        /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
+        internal static void StartRichPresence()
+        {
+            Services.DiscordRichPresenceService.PostToUi = a => Dispatcher.UIThread.Post(a);
+            DiscordRpc = new Services.DiscordRichPresenceService();
+            ApplyRichPresence();
+        }
+
+        /// <summary>
+        /// WPF ChkDiscordRichPresence_Changed's tail (MainWindow.AccountShell.cs:300-316) and the startup arm
+        /// (App.xaml.cs:3126-3130): the setting is already written; this arms or drops the client and tells
+        /// the other surface. Never arms without a linked Discord, nor in offline mode
+        /// (WPF DisconnectNetworkServices, MainWindow.UiUpdates.cs:2818).
+        /// </summary>
+        internal static void ApplyRichPresence()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (DiscordRpc is { } rpc) rpc.IsEnabled = s.DiscordRichPresenceEnabled && s.HasLinkedDiscord && !s.OfflineMode;
+            }
+            catch (Exception ex) { Serilog.Log.Debug("ApplyRichPresence: {E}", ex.Message); }
+            try { RichPresenceChanged?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Debug("RichPresenceChanged: {E}", ex.Message); }
+        }
 
         /// <summary>The Core quest board (WPF App.Quests), built by StartQuests before the shell.</summary>
         internal static QuestService? Quests { get; set; }
@@ -410,6 +446,8 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
+                global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
@@ -520,6 +558,9 @@ namespace ConditioningControlPanel.Avalonia
                 // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
+                StartRichPresence();
+                // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
+                ProgressionBank.LevelUp += level => { if (!Settings.Current.OfflineMode) DiscordRpc?.UpdateLevel(level); };
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
@@ -529,7 +570,11 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
+                {
                     Views.Windows.MainShellWindow.AnnouncementClient = () => new V2AuthService();
+                    // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
+                    Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
+                }
                 if (Platform.AccountSeed.Seed())
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
@@ -586,6 +631,7 @@ namespace ConditioningControlPanel.Avalonia
                     }
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
+                Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
                 // WPF App.xaml.cs:2940-2968. EnsureBaselineAsync keeps WPF's rules: no-op on a full
                 // install, under a debugger, in offline mode, or when nothing is missing. A Linux dev
                 // build never reads as a full install (flashes_audio is not shipped here), so an
@@ -661,7 +707,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
-                // echo stays unseeded (no bark engine here: CoreBark is a doorbell); command executor and
+                // echo is attached by Platform.BarkHead.Start below; command executor and
                 // activities are CompanionEffects (seeded below). SeedMemorySignals seeds UserMessageSent for the memory
                 // chat counter only; no companion-chat achievement listens to it on this head yet.
                 SeedMemorySignals();
@@ -687,11 +733,9 @@ namespace ConditioningControlPanel.Avalonia
                 // CCBill record file into a second tree. That is a fix to the class, in a later
                 // layer, not a seeding decision here.
 
-                // CoreTutorial stays unseeded, and that is the honest state rather than a gap:
-                // TutorialService and its twenty-two step lists are still in the WPF head, so this
-                // head has no tour to describe. Unseeded answers "not active, no step, 0 of 0", so
-                // TutorialOverlay draws nothing and every "bail while a tour is running" gate stays
-                // open. Seeding it with anything would put a tour on screen that nothing drives.
+                // Guided tours (WPF App.Tutorial): the head's TutorialService behind the CoreTutorial
+                // seam every page already calls; PanicSurfaces "tour" ends a tour at once.
+                Tours.TutorialHead.Seed();
 
                 await step(0.75, "Loading achievements...");
                 // Achievements: the Core engine over the same achievements.json WPF uses, seeded the
@@ -700,6 +744,10 @@ namespace ConditioningControlPanel.Avalonia
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
+                // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
+                // Its loss must not cost the launch.
+                try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
+                catch (Exception exDayLog) { Serilog.Log.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
                 CoreProgram.UnlockAchievementProvider = id => Achievements?.TryUnlock(id);
                 // WPF App.xaml.cs: the invite ladder's badges and the invites wire (friends' proxy and
                 // door; a sandbox reaches only a loopback CCP_FRIENDS_API_URL, else nothing is sent).
@@ -732,8 +780,12 @@ namespace ConditioningControlPanel.Avalonia
                 };
                 SeedLevelAchievements(Achievements);
                 StartQuests();
+                Platform.CompanionHead.Start();   // WPF App.Companion: switch seams, companion XP, drain, level-up
+                Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
                 // WPF App.xaml.cs:290: a game.* palette row is listed only when this head can start it.
                 SettingsPaletteIndex.GameAvailableProvider = Views.Windows.LauncherWindow.CanStartGame;
+                // WPF App.xaml.cs:312: the race's door asks this head's prize store (P31).
+                ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 // WPF App.xaml.cs:513 (main 03af6e8bb): a preset that switches the online selection re-deals every channel.
                 ConditioningControlPanel.Services.AssetPresetService.OnlineChannelsReset = ConditioningControlPanel.Services.Fyp.Online.FypOnlineCoordinator.ResetAllChannels;
                 // programs-3a decision: refuse programs whose required tasks this head never raises
@@ -801,6 +853,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.ShowDeniedHandler = verdict => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     shell.ShowTierDenied(verdict, Notifications));
                 // WPF App.xaml.cs:509-511 (main 2e9080399). No Arcademy host here: unseeded, so its card stays hidden.
+                // WPF App.xaml.cs:289: the palette row and the Premium card read the server door flag.
+                SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
                 Models.ExclusiveFeature.JustDropDoorProvider = SettingsPaletteIndex.JustDropDoorAvailable;
                 Models.ExclusiveFeature.BreakoutFullProvider = () => TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
                 // WPF MainWindow.xaml.cs:484 (the ? box rolled over or its override landed) and
@@ -1113,9 +1167,11 @@ namespace ConditioningControlPanel.Avalonia
             // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
             try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
+            try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
+            try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
