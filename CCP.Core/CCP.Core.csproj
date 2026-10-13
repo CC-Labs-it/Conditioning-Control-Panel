@@ -58,6 +58,10 @@
          own OpenCV + ONNX Runtime natives, so nothing native ships from here. -->
     <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.20.1" />
+    <!-- SkiaSharp (managed types only): the compositor layer contract (Services/Compositor/ILayer.cs)
+         draws onto an SKCanvas. 2.88.8 = what SkiaSharp.Views.WPF resolves in the WPF head, so WPF ships
+         unchanged; Avalonia.Skia brings a newer SkiaSharp and that wins there. -->
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
   </ItemGroup>
 
   <!--

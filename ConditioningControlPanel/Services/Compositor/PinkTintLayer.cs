@@ -14,7 +14,7 @@ public class PinkTintLayer : BaseLayer
     private bool _dirty = true;   // #550: a steady tint is static - only repaint when it changes
     private readonly SKPaint _paint = new();
 
-    public PinkTintLayer(CompositorEngine engine) : base(engine) { }
+    public PinkTintLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.PinkTint;
 

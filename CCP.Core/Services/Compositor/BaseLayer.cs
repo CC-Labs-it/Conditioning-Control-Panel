@@ -8,12 +8,13 @@ namespace ConditioningControlPanel.Services.Compositor;
 /// </summary>
 public abstract class BaseLayer : IWpfLayer
 {
-    private readonly CompositorEngine _engine;
+    private readonly Action _wake;
     private volatile bool _isActive;
 
-    protected BaseLayer(CompositorEngine engine)
+    /// <param name="wake">Wakes the head's parked engine (WPF passes <c>CompositorEngine.Wake</c>).</param>
+    protected BaseLayer(Action wake)
     {
-        _engine = engine;
+        _wake = wake;
     }
 
     public abstract int ZIndex { get; }
@@ -26,22 +27,6 @@ public abstract class BaseLayer : IWpfLayer
 
     public virtual bool ShouldRenderOnScreen(System.Drawing.Rectangle screenBoundsPx) => true;
 
-    /// <summary>Shared gate for fullscreen FILL layers (pink/spiral): when the user has multi-monitor
-    /// overlays off, paint only the primary monitor. Compared by origin so a mixed-DPI width/height
-    /// rounding difference can't misidentify the screen. Errs toward showing the effect on any
-    /// enumeration hiccup rather than blanking it.</summary>
-    protected static bool PrimaryOnlyUnlessDualMonitor(System.Drawing.Rectangle screenBoundsPx)
-    {
-        try
-        {
-            // Follows the app-wide "Show content on" picker: all screens, the Windows primary,
-            // or the single monitor the user pinned content to. Errs toward showing when the
-            // display set cannot be enumerated (display transition).
-            return App.ShouldRenderTargetOnScreen(App.MonitorTargetFollowGlobal, screenBoundsPx);
-        }
-        catch { return true; }
-    }
-
     /// <summary>
     /// Flip layer activity. Safe from any thread; wakes the parked engine so the first frame
     /// renders promptly. The engine invokes OnActivated/OnDeactivated on the UI thread.
@@ -50,7 +35,7 @@ public abstract class BaseLayer : IWpfLayer
     {
         if (_isActive == value) return;
         _isActive = value;
-        _engine.Wake();
+        _wake();
     }
 
     public virtual void OnActivated() { }
