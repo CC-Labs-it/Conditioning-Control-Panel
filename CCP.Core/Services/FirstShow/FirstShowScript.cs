@@ -21,6 +21,16 @@ internal static class FirstShowScript
     /// <summary>The logo reveal.</summary>
     internal const double RevealAt = 32;
 
+    // The in-between timings WPF wrote as literals (FirstShowDesktopWindow.cs Frame, FirstShowEffects.cs
+    // Tick/Spawn); named here so the Avalonia stage reads them instead of restating them.
+    internal static double FlashAt => Beats[1]; internal static double PinkAt => Beats[2]; internal static double DrainAt => Beats[3];
+    internal static double WordsAt => Beats[4]; internal static double BubblesAt => Beats[5]; internal const double DrainDeepAt = 13;
+    internal const double FastFlashUntil = 4.5, FastFlashEvery = .39, FlashEvery = .71, BubbleEvery = .71;
+    internal const double SubliminalEvery = 3.1, SubliminalUntil = 27;
+    internal const double StepAsideAt = 31.6, StepAsideSeconds = .7, RevealSeconds = .85;
+    /// <summary>EMI greets once she has arrived and the stage has been up this long.</summary>
+    internal const double GreetAfter = .9;
+
     /// <summary>The text key of a beat's line (beat 8 is the ta-da).</summary>
     internal static string LineKey(int beat) => beat == 8 ? "first_show_tada" : "first_show_beat" + beat;
 

@@ -215,8 +215,9 @@ public sealed partial class FriendsDrawer : Border
     internal void TogglePresence()
     {
         if (_svc?.Available != true) return;
-        try { _svc.PresenceShared = !_svc.PresenceShared; } catch (Exception ex) { Serilog.Log.Debug("[Friends] presence write failed: {E}", ex.Message); }
-        PresenceAsk.MarkAsked(); // WPF FriendsPresenceSetting.Write: answering here counts as answering the ask
+        // WPF FriendsDrawer.Presence.cs:76-81, same Core rule; answering here counts as answering the ask
+        var next = !FriendsPresenceSetting.Read(_svc, () => false);
+        FriendsPresenceSetting.Write(next, _svc, _ => { }, () => PresenceAsk.MarkAsked());
         Render();
     }
     private void RenderList(FriendsSnapshot snap)
