@@ -2054,3 +2054,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/first-show-b: +997
 - EMI's welcome show runs on Avalonia: a click-through stage (overlay set up before Show) with partial effects and cues, and the real desk EMI presenting. It opens once after the first-run wizard; panic, Esc and closing the shell stop it. Downloads are capped and the temp dir is swept.
 - The fail-proven FirstShowStageTests pass (7 cases), the gate passed, and Keincheck evidence is in evidence/first-show-b{,/fix1}. Sparks, subliminal, drain, spiral and words are carried to first-show-c along with the Guide.
+
+## avalonia-port/conditioning-time-tracker: +300
+- Conditioning-time tracker ported: Core ConditioningTimeTracker, driven by shell engine start, session start and engine stop; the Pink Hours pill counts live.
+- Not ported: server sync and the season mirror.
