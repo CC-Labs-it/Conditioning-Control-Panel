@@ -70,16 +70,19 @@ public sealed class ChaosBoonBarOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
+            bool pin = global::ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
             try
             {
+                global::ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = false;   // WPF BornTopmost follows the pin
                 ChaosRunHost.StartRun(Cfg());
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var bar = ChaosRunHost.BoonBar!;
+                Assert.False(bar.Topmost);
                 ChaosRunHost.RequestStop();   // WPF EndRun :3235
                 Assert.Null(ChaosRunHost.BoonBar);
                 Assert.False(bar.IsVisible);
             }
-            finally { ChaosRunHost.ForceShutdown(); }
+            finally { ChaosRunHost.ForceShutdown(); global::ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = pin; }
             return Task.CompletedTask;
         });
     }
