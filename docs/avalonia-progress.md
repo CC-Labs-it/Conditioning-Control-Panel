@@ -2046,3 +2046,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaster-minutes: +61
 - Chaster MinutesOn stays null on purpose until the conditioning-time tracker feeds the day log; WPF wiring would charge every day as idle. Decision, ledger note and guard test added.
 - SeasonRecap TrackFeature and BackRoom NoteEvent have no Avalonia counterpart yet, so nothing was routed.
+
+## avalonia-port/win-panic-b: +602
+- #919b panic watchdog, Pause key capture (all platforms) and press (Windows), and Escape claim for the friends drawer, all ported from trunk c072be180/face473bd.
+- The windows CI job now runs `--win-panic-check` (F24 passes, F23 must fail); green in run 38195413447.
