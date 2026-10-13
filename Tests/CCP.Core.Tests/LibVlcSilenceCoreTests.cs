@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -32,10 +33,19 @@ public sealed class LibVlcSilenceCoreTests
             .ToList();
         Assert.NotEmpty(files);
 
-        var literals = files.Where(f => File.ReadAllText(f).Contains("\":no-audio\""))
+        // PLAYBOOK P23: comments never count; string literals count only for the literal check.
+        var literals = files.Where(f => Code(File.ReadAllText(f), keepStrings: true).Contains("\":no-audio\""))
                             .Select(Path.GetFileName).ToList();
         Assert.True(literals.Count == 0,
             "Use LibVlcSilence.NoAudioOption instead of a \":no-audio\" literal: " + string.Join(", ", literals));
-        Assert.Contains(files, f => File.ReadAllText(f).Contains("LibVlcSilence.NoAudioOption"));
+        Assert.Contains(files, f => Code(File.ReadAllText(f), keepStrings: false).Contains("LibVlcSilence.NoAudioOption"));
     }
+
+    private static readonly Regex Tokens = new(
+        @"//[^\n]*|/\*.*?\*/|@""(?:[^""]|"""")*""|""(?:\\.|[^""\\\n])*""|'(?:\\.|[^'\\\n])'",
+        RegexOptions.Singleline);
+
+    /// <summary>Source with comments removed and, unless kept, string/char literals blanked.</summary>
+    private static string Code(string src, bool keepStrings) =>
+        Tokens.Replace(src, m => m.Value[0] == '/' ? " " : keepStrings ? m.Value : "\"\"");
 }
