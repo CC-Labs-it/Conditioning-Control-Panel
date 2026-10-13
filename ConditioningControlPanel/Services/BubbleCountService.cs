@@ -986,21 +986,8 @@ public class BubbleCountService : IDisposable
     /// </summary>
     private void CleanupTempPackFiles()
     {
-        foreach (var tempFile in _tempPackFiles)
-        {
-            try
-            {
-                if (File.Exists(tempFile))
-                {
-                    File.Delete(tempFile);
-                }
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("BubbleCountService: Failed to delete temp pack file: {Error}", ex.Message);
-            }
-        }
-        _tempPackFiles.Clear();
+        // A refused delete (the player has not let go yet) stays listed and is retried next time.
+        _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
     }
 
     public void Dispose()

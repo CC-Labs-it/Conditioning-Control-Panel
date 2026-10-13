@@ -4541,21 +4541,8 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private void CleanupTempPackFiles()
         {
-            foreach (var tempFile in _tempPackFiles)
-            {
-                try
-                {
-                    if (File.Exists(tempFile))
-                    {
-                        File.Delete(tempFile);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Debug("Failed to delete temp pack file: {Error}", ex.Message);
-                }
-            }
-            _tempPackFiles.Clear();
+            // A refused delete (the file is still open) stays listed and is retried next time.
+            _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
         }
 
         private string? GetNextSound()
