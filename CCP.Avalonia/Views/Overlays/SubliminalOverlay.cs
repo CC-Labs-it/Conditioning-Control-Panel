@@ -57,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var hold = TimeSpan.FromMilliseconds(HoldMs(s.SubliminalDuration));
             var alpha = Math.Clamp((opacity ?? s.SubliminalOpacity) / 100.0, 0, 1);
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
+            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var w = new SubliminalOverlayWindow(text);
                 if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
