@@ -47,7 +47,7 @@ import { REGIONS, REGION_COUNT, regionForWave, profileForWave, PROFILE_NEUTRAL, 
 import { rollBiomeIds, biomeForWave, biomeById, BIOMES_ALL, setBiomeCycle } from './biomes.js';
 import { createBiomeMech } from './biomeMech.js';
 import { setAudioColor, setDepthTone, failureDip, getAudioCtx, getMasterOut } from '../engine/audioBus.js';
-import { createFeelAudio } from './feelAudio.js';
+import { createFeelAudio, attachFeelEvents } from './feelAudio.js';
 import { getVoice, setVoiceDefault, onVoice, getLevel } from '../engine/audioLevels.js';
 import { createChaosField } from './chaosField.js';
 import { createFieldFx } from './fieldFx.js';
@@ -600,7 +600,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     surfPhaseStep = step;
     feelEvent({ kind: 'phase', state: 'surfacing', progress: +melt.toFixed(2) });
   };
-  const FEEL_GOLD_KINDS =new Set(['golden', 'droplet', 'material', 'heart']);
+  const FEEL_GOLD_KINDS = new Set(['golden', 'droplet', 'material', 'heart']);
   /** Wrap a field pop callback: after the game has counted it, voice the rung the streak reached. */
   const withPopFeel = (handler, xyAt) => (...args) => {
     const before = st ? st.combo : 0;
@@ -614,6 +614,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   };
   const onFeelEvent = (e) => { if (e && e.detail && e.detail.kind === 'arrive') feel.arrive(); };
   window.addEventListener('dtrh:feel', onFeelEvent);
+  let detachFeelAudio = attachFeelEvents(feel);   // moments, phases, holds, ticks, the countdown
   const presentDraft = (o) => {
     feel.resolve();   // a landing: the ladder comes home to its root
     if (ctx && ctx.boonPick) ctx.boonPick.open({ ...o, sfx });
@@ -4126,6 +4127,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     attach(sceneCtx) {
       ctx = sceneCtx;
       window.addEventListener('dtrh:feel', onFeelEvent);   // same fn: a re-attach never doubles it
+      try { detachFeelAudio(); } catch (e) { /* ignore */ }
+      detachFeelAudio = attachFeelEvents(feel);
       preloadRecipeArt();   // warm the ingredient photos so a deep-run recipe plaster draws them, not glyphs
       ffx = createFieldFx(ctx.hud);
       payloadFx = createPayloadFx({ hud: ctx.hud, fx: ctx.fx, media: ctx.media, flashBurst: ctx.flashBurst });
@@ -4585,6 +4588,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('keydown', onToyKey);
       window.removeEventListener('dtrh:feel', onFeelEvent);
+      try { detachFeelAudio(); } catch (e) { /* ignore */ }
       setDepthTone(0);
       hideDraftRoomChrome();
       if (draftDom && draftDom.root.parentNode) draftDom.root.parentNode.removeChild(draftDom.root);

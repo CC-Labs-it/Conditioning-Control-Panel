@@ -238,8 +238,10 @@ export function createFeelAudio(io) {
       const notes = momentNotes(event, data);
       if (!notes.length) return false;
       const t = now();
-      if (t - (lastMoment.get(event) || -1e9) < MOMENT_GAP_MS) return false;
-      lastMoment.set(event, t);
+      // a big streak and its milestone land on the same pop: one figure (the big one fires first)
+      const key = event === 'combo-big' || event === 'combo-milestone' ? 'combo' : event;
+      if (t - (lastMoment.get(key) || -1e9) < MOMENT_GAP_MS) return false;
+      lastMoment.set(key, t);
       let any = false;
       for (const n of notes) any = bell(n.hz, n.gain, n.dur, n.at) || any;
       return any;
@@ -354,7 +356,7 @@ export function attachFeelEvents(feel, target = (typeof window !== 'undefined' ?
         case 'hold':
           if (d.phase === 'start') feel.holdStart(d.t);
           else if (d.phase === 'progress') { if (!feel.holdProgress(d.t) && !feel.holdActive()) feel.holdStart(d.t); }
-          else if (d.phase === 'end') feel.holdEnd(!!(d.ok || d.defused));
+          else if (d.phase === 'end') feel.holdEnd(!!(d.ok || d.defused || d.how === 'defused'));
           break;
         case 'tick': feel.tick(d.t); break;
         case 'count':
@@ -362,6 +364,7 @@ export function attachFeelEvents(feel, target = (typeof window !== 'undefined' ?
           feel.count(d.n);
           break;
         case 'phase':
+          if (d.state === 'surfacing') break;   // progress pings of the melt, not a change of phase
           feel.holdEnd(false);   // no hold outlives its phase
           if (d.state === 'countdown') goOwed = true;
           else if (d.state === 'running' && goOwed) { goOwed = false; feel.count(0); }

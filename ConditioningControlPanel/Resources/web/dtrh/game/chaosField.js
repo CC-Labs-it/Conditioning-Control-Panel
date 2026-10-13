@@ -414,12 +414,10 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
   // No pointer capture: the cursor straying off the bubble must fire pointerleave
   // (capture would swallow it) - that stray IS the "you let go" break, like C#.
   function beginChannel(b) {
-    b.channel = { elapsed: 0 };
+    b.channel = { elapsed: 0, felt: false };   // felt: the press outlived a click, so the hold has a tone and a ring
     b.chan.style.display = '';
     b.wrap.style.setProperty('--hold', '0');
     b.wrap.classList.add('is-channeling');
-    holdFeel('start', 0);
-    holdSentAt = performance.now();
   }
 
   // ---- hold feel: the seam the audio lane hears, and the ring that breathes out ----
@@ -432,7 +430,8 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
   }
   /** A hold is over. Defused = a soft inward sigh; let go = the ring exhales outward. */
   function holdEnd(b, how) {
-    const t = b.channel ? Math.min(1, b.channel.elapsed / DEFUSE_HOLD_MS) : 0;
+    if (!b.channel || !b.channel.felt) return;   // a click is not a hold: no event, no ring
+    const t = Math.min(1, b.channel.elapsed / DEFUSE_HOLD_MS);
     holdFeel('end', t, how);
     if (holdRings >= HOLD_RING_CAP) return;
     const el = document.createElement('div');
@@ -1159,7 +1158,9 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
         b.chan.style.setProperty('--cdeg', `${p * 360}`);
         b.wrap.style.setProperty('--hold', p.toFixed(3));
         const nowMs = performance.now();
-        if (p < 1 && nowMs - holdSentAt >= HOLD_PROGRESS_MS) { holdSentAt = nowMs; holdFeel('progress', p); }
+        if (!b.channel.felt) {
+          if (b.channel.elapsed >= CLICK_THRESHOLD_MS) { b.channel.felt = true; holdSentAt = nowMs; holdFeel('start', p); }
+        } else if (p < 1 && nowMs - holdSentAt >= HOLD_PROGRESS_MS) { holdSentAt = nowMs; holdFeel('progress', p); }
         b.body.style.transform = `scale(${1 - (1 - CHANNEL_MIN_SCALE) * p})`;
         if (p >= 1) { defuse(b, true); }
         continue;   // the grip holds it still: no motion, no fuse, no rot

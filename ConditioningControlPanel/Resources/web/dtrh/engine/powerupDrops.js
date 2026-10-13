@@ -17,6 +17,14 @@
 
 import * as THREE from 'three';
 import { LIFETIME_BOONS, boonDefById, RANKS } from '../game/catalog.js';
+import { motionScale } from '../shared/motion.js';
+
+/* ---- feel pass, wave 2 (hub lane): the grab gathers in instead of vanishing ---- */
+const GATHER_SEC = 0.3;       // a grabbed card folds in on itself over this long
+const GATHER_SHRINK = 0.72;   // how far it shrinks toward its centre (full motion; off = fade only)
+const GATHER_GLOW = 0.6;      // extra glow at the middle of the gather (light gathering, then gone)
+const GATHER_MAX_LIVE = 3;    // cap on cards still gathering at once
+const GATHER_EASE = (t) => t * t * (3 - 2 * t);
 
 const ART = 'https://ccp.art/';          // matches boonPick.js / overlays.js
 const CARD_W = 2.4, CARD_H = 3.05;       // portrait, like the boon cards
@@ -167,7 +175,7 @@ export function createPowerupDrops({ scene, camera, layout, getMeta, canOffer, s
     }, undefined, () => { /* keep the name panel */ });
 
     scene.add(group);
-    let appear = 0, sway = Math.random() * 6, fade = 0;
+    let appear = 0, sway = Math.random() * 6, fade = 0, gather = 0;
 
     return {
       def, kind, group, cardDepth: depth,
@@ -179,14 +187,17 @@ export function createPowerupDrops({ scene, camera, layout, getMeta, canOffer, s
         group.quaternion.copy(camQuat).multiply(_q);
         if (fade > 0) fade += dt;
         const fk = fade > 0 ? Math.min(1, fade / 0.3) : 0;
-        const vis = appear * (1 - fk);
-        glowMat.opacity = 0.9 * vis * (0.7 + 0.22 * Math.sin(sway * 2.4));
+        if (gather > 0) gather += dt;
+        const gk = gather > 0 ? GATHER_EASE(Math.min(1, gather / GATHER_SEC)) : 0;
+        const vis = appear * (1 - fk) * (1 - gk);
+        glowMat.opacity = Math.min(1, 0.9 * appear * (1 - fk) * (1 - gk * gk) * (0.7 + 0.22 * Math.sin(sway * 2.4) + GATHER_GLOW * Math.sin(Math.PI * gk)));
         frameMat.opacity = vis;
         contentMat.opacity = vis;
-        group.scale.setScalar(1 - 0.14 * fk);
-        return fk >= 1;   // fully faded -> disposable
+        group.scale.setScalar((1 - 0.14 * fk) * (1 - GATHER_SHRINK * gk * motionScale()));
+        return fk >= 1 || gather >= GATHER_SEC;   // fully faded or gathered -> disposable
       },
       startFade() { if (fade <= 0) fade = 0.001; },
+      startGather() { if (gather <= 0) gather = 0.001; },
       isFading: () => fade > 0,
       screenPos() {
         group.getWorldPosition(_wp); _wp.project(camera);
@@ -201,6 +212,7 @@ export function createPowerupDrops({ scene, camera, layout, getMeta, canOffer, s
   }
 
   let _camDepth = 0;
+  const gathering = [];   // grabbed cards folding in (capped, disposed when done or on dispose)
   let blocked = null;   // junction chamber span (scene.setBlockedSpan): keep drops out of it
   function spawnDepth() { return _camDepth + AHEAD; }
 
@@ -228,6 +240,9 @@ export function createPowerupDrops({ scene, camera, layout, getMeta, canOffer, s
 
     update(dt, camDepth, camQuat) {
       _camDepth = camDepth;
+      for (let i = gathering.length - 1; i >= 0; i--) {
+        if (gathering[i].update(dt, camDepth, camQuat || camera.quaternion)) { gathering[i].dispose(); gathering.splice(i, 1); }
+      }
       if (card) {
         const done = card.update(dt, camDepth, camQuat || camera.quaternion);
         // cull: start the fade when the fall carries us past it, dispose only once faded
@@ -258,7 +273,10 @@ export function createPowerupDrops({ scene, camera, layout, getMeta, canOffer, s
       try { if (onGrab) taken = onGrab(card.def.id, card.kind, pos) !== false; } catch (e) { /* ignore */ }
       if (!taken) return false;   // the game declined (draft room / recap): the card stays live
       const g = card; card = null;
-      g.dispose();
+      g.group.userData = {};   // no longer a grab target
+      g.startGather();
+      gathering.push(g);
+      while (gathering.length > GATHER_MAX_LIVE) gathering.shift().dispose();
       return true;
     },
 
@@ -266,6 +284,8 @@ export function createPowerupDrops({ scene, camera, layout, getMeta, canOffer, s
 
     dispose() {
       if (card) { card.dispose(); card = null; }
+      for (const g of gathering) g.dispose();
+      gathering.length = 0;
       unitPlane.dispose(); glowTex.dispose(); frameTex.dispose();
     },
   };
