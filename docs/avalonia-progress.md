@@ -2217,3 +2217,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Cloud session (Opus), local review + gate.
 ## avalonia-port/friends-core-a: +57
 - Cloud session (Opus), local review + gate; review fix routes Avalonia drawer presence toggle through Core.
+
+## avalonia-port/friends-core-a: +57
+- Cloud session (Opus), local review + gate; review fix routes Avalonia drawer presence toggle through Core.
