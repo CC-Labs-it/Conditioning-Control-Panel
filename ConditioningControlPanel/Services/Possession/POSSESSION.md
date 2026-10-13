@@ -1,7 +1,7 @@
 # Possession - the haunted-UI layer of Lockdown
 
 > Read this before touching anything under `Services/Possession/`, the Lockdown card, or the
-> tripwire hooks. Contracts live in `PossessionHostContracts.cs` (enums in CCP.Core `PossessionContracts.cs`); this file is the WHY and the rules.
+> tripwire hooks. Contracts live in CCP.Core `PossessionContracts.cs` (WPF typed reads in `PossessionHostContracts.cs`); this file is the WHY and the rules.
 
 ## What it is
 
@@ -236,11 +236,11 @@ effect is big: use the `target` context value.
 
 ```
 Services/Possession/
-  PossessionHostContracts.cs  contracts (stable - change only with a reason written here); the
-                              rung/intensity/role enums and bark triggers are in CCP.Core's
-                              Services/Possession/PossessionContracts.cs
+  PossessionHostContracts.cs  WPF half of the contracts (IWpfPossessionHost, typed Element/Window
+                              reads); the contracts themselves (stable - change only with a reason
+                              written here) are in CCP.Core's Services/Possession/PossessionContracts.cs
   POSSESSION.md               this file
-  PossessionDirector.cs       state machine: rung from elapsed fraction, weighted deck, cooldowns,
+  PossessionDirector.cs       (CCP.Core; head hooks in PossessionWpfHead.cs) state machine: rung from elapsed fraction, weighted deck, cooldowns,
                               concurrency caps, tick loop, tripwire reactions, reassembly exit
   PossessionDeck.cs           (CCP.Core) pure logic: rung math, weighting, cooldown picks; so are
                               PossessionOffLimits (name rule) and Effects/ToastLines + RewritePools

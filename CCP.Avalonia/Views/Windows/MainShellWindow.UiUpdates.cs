@@ -39,8 +39,9 @@
 //     chip and the pills read App.Account / App.Patreon tier state on top of it, and a chip that
 //     paints the logged-out tier unconditionally is the same failure recorded for
 //     UpdateSubscribeStarUI in MainShellWindow.SubscribeStar.cs.
-//   The conditioning-time tracker - StartConditioningTimeTracker, StopConditioningTimeTracker,
-//     SyncConditioningTimeToServerAsync. A server round trip with no seam.
+//   (StartConditioningTimeTracker / StopConditioningTimeTracker are live below, on Core's ConditioningTimeTracker.)
+//   SyncConditioningTimeToServerAsync - the 15-minute and on-stop ProfileSync push. Core's SyncPush does not
+//     send total_conditioning_minutes yet, so there is nothing for the timer to call.
 //   UpdateUI / QueueModAwareSurfaceSweep / RefreshModAwareSurfaces / SweepStep /
 //     EnsureModSweepWatchers / ApplyModFeatureNames / ApplyBimboJournalModVisibility - the sweep
 //     walks named controls across every tab, most of which are unported; it is a pass over the
@@ -98,11 +99,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _statPillTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(30) };
             _statPillTimer.Tick += (_, _) => UpdateStatPills();
             _statPillTimer.Start();
-            Closed += (_, _) => _statPillTimer?.Stop();
+            // The tracker too: App's Closed handler drops the engine-stopped hook before it stops the engine.
+            Closed += (_, _) => { _statPillTimer?.Stop(); StopConditioningTimeTracker(); };
+        }
+
+        // ---- conditioning-time tracker (WPF MainWindow.UiUpdates.cs:746-842) ----
+        internal ConditioningControlPanel.Services.ConditioningTimeTracker ConditioningTime = new();   // tests swap the clock
+        private global::Avalonia.Threading.DispatcherTimer? _conditioningTimeTimer;
+        internal bool ConditioningTimerRunning => _conditioningTimeTimer?.IsEnabled == true;
+
+        /// <summary>WPF StartConditioningTimeTracker: called where WPF's StartEngine is (engine start, session
+        /// start). A 1 s tick repaints the pill live and writes a minute every 60th tick.</summary>
+        internal void StartConditioningTimeTracker()
+        {
+            if (_conditioningTimeTimer != null) return;   // already started
+            ConditioningTime.Start(CoreSettings.Current);
+            _conditioningTimeTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(1) };
+            _conditioningTimeTimer.Tick += (_, _) => ConditioningTimeTick();
+            _conditioningTimeTimer.Start();
+        }
+
+        internal void ConditioningTimeTick()
+        {
+            try
+            {
+                UpdateStatPills();
+                ConditioningTime.Tick(CoreSettings.Current);
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Error tracking conditioning time"); }
+        }
+
+        /// <summary>WPF StopConditioningTimeTracker: every engine stop (button, panic, tray, shell close) adds
+        /// the partial minute the ticks have not written yet.</summary>
+        internal void StopConditioningTimeTracker()
+        {
+            if (_conditioningTimeTimer == null) return;
+            _conditioningTimeTimer.Stop();
+            _conditioningTimeTimer = null;
+            try
+            {
+                ConditioningTime.Stop(CoreSettings.Current);
+                UpdateStatPills();
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Error finalizing conditioning time"); }
         }
 
         /// <summary>WPF UpdateStatPills: each pill shows only with the skill that buys it. The conditioning
-        /// figure is the stored total (no live session tracker on this head); the mic pill and the XP bonus
+        /// figure is live while the tracker runs (baseline + elapsed); the mic pill and the XP bonus
         /// chips WPF also refreshes here are not on this head.</summary>
         internal void UpdateStatPills()
         {
@@ -111,7 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Border>("PillConditioningTime") is { } time && (time.IsVisible = Has("pink_hours"))
                 && Named<TextBlock>("TxtPillConditioningTime") is { } tt)
             {
-                double secs = s.TotalConditioningMinutes * 60;
+                double secs = ConditioningTime.LiveMinutes(s) * 60;
                 tt.Text = $"{(int)(secs / 3600)}h {(int)(secs % 3600 / 60)}m {(int)(secs % 60)}s";
             }
             if (Named<Border>("PillOnlineUsers") is { } online && (online.IsVisible = Has("hive_mind"))
