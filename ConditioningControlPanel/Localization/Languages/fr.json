@@ -2553,6 +2553,8 @@
   "audio_player_loop_all": "Boucle : tout",
   "audio_player_loop_one": "Boucle : une piste",
   "audio_player_clear": "Vider la liste",
+  "audio_player_enhancements": "Les améliorations Deeper suivent les pistes",
+  "audio_player_enhancements_tip": "Une piste qui a une amélioration Deeper la joue avec elle. Désactivé, celle en cours s'arrête aussitôt.",
   "audio_player_picker_title": "Ajouter des fichiers audio",
   "audio_player_picker_filter": "Fichiers audio",
   "modmgr_in_use": "ACTIF",

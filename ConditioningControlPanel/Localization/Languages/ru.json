@@ -2553,6 +2553,8 @@
   "audio_player_loop_all": "Повтор: все",
   "audio_player_loop_one": "Повтор: один трек",
   "audio_player_clear": "Очистить список",
+  "audio_player_enhancements": "Улучшения Deeper идут вместе с треками",
+  "audio_player_enhancements_tip": "Если у трека есть улучшение Deeper, оно запускается вместе с ним. Выключение сразу останавливает запущенное.",
   "audio_player_picker_title": "Добавить аудиофайлы",
   "audio_player_picker_filter": "Аудиофайлы",
   "modmgr_in_use": "АКТИВЕН",

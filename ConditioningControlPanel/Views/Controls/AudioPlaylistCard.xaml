@@ -218,6 +218,16 @@
                                     Foreground="{DynamicResource TextMutedBrush}"
                                     Content="{loc:Str audio_player_clear}" Click="BtnClear_Click"/>
                         </Grid>
+                        <!-- A track with a Deeper enhancement runs it. On by default (owner, 7.1.8). -->
+                        <DockPanel MinHeight="34" LastChildFill="True"
+                                   ToolTip="{loc:Str audio_player_enhancements_tip}">
+                            <CheckBox x:Name="ChkEnhancements" DockPanel.Dock="Right"
+                                      Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      IsChecked="{Binding Enhancements, Mode=TwoWay}"/>
+                            <TextBlock Text="{loc:Str audio_player_enhancements}" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                        </DockPanel>
                     </feat:MoreFold>
                 </StackPanel>
             </StackPanel>

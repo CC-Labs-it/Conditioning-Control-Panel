@@ -2553,6 +2553,8 @@
   "audio_player_loop_all": "Wiederholen: alle",
   "audio_player_loop_one": "Wiederholen: ein Titel",
   "audio_player_clear": "Liste leeren",
+  "audio_player_enhancements": "Deeper-Enhancements laufen mit den Titeln",
+  "audio_player_enhancements_tip": "Hat ein Titel ein Deeper-Enhancement, läuft es mit. Aus stoppt ein laufendes sofort.",
   "audio_player_picker_title": "Audiodateien hinzufügen",
   "audio_player_picker_filter": "Audiodateien",
   "modmgr_in_use": "AKTIV",

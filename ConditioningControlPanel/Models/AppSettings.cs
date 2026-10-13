@@ -9692,6 +9692,15 @@ namespace ConditioningControlPanel.Models
             set { _audioPlaylistShuffle = value; OnPropertyChanged(); }
         }
 
+        private bool _audioPlaylistEnhancements = true;
+        /// <summary>A track's Deeper enhancement runs with it (Services.Deeper.PlaylistEnhancementBridge). On by default.</summary>
+        [JsonProperty]
+        public bool AudioPlaylistEnhancements
+        {
+            get => _audioPlaylistEnhancements;
+            set { _audioPlaylistEnhancements = value; OnPropertyChanged(); }
+        }
+
         private bool _companionAsksEnabled = true;
         /// <summary>The companion now and then asks a question with a few answer buttons.</summary>
         [JsonProperty]

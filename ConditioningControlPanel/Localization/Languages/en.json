@@ -3682,6 +3682,8 @@
   "audio_player_loop_all": "Loop: all",
   "audio_player_loop_one": "Loop: one track",
   "audio_player_clear": "Clear list",
+  "audio_player_enhancements": "Deeper enhancements run with tracks",
+  "audio_player_enhancements_tip": "A track that has a Deeper enhancement plays it. Off stops a running one at once.",
   "audio_player_picker_title": "Add audio files",
   "audio_player_picker_filter": "Audio files",
   "modmgr_in_use": "IN USE",

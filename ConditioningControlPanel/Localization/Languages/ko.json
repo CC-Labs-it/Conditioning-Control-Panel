@@ -2553,6 +2553,8 @@
   "audio_player_loop_all": "반복: 전체",
   "audio_player_loop_one": "반복: 한 트랙",
   "audio_player_clear": "목록 비우기",
+  "audio_player_enhancements": "Deeper 인핸스먼트를 트랙과 함께 실행",
+  "audio_player_enhancements_tip": "Deeper 인핸스먼트가 있는 트랙은 재생과 함께 실행됩니다. 끄면 실행 중인 것이 바로 멈춥니다.",
   "audio_player_picker_title": "오디오 파일 추가",
   "audio_player_picker_filter": "오디오 파일",
   "modmgr_in_use": "사용 중",
