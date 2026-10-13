@@ -2204,3 +2204,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/flake-loc-order: +21
 - Test-only fix for the order-dependent BillboardShowcase flake (strings loaded in the module initializer; Assert.NotNull instead of `!`). rgate GATE-OK.
+## avalonia-port/remote-core-a: +25
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/remote-core-a: +25
+- Cloud session (Opus), local review + gate.
