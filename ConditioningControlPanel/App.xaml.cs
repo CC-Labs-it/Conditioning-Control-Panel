@@ -308,6 +308,9 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // Race rules live in Core; the prize store and the NAudio decoder stay here.
+            Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
+            Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
             // The mod service's side effects on a switch, and what it asks the head.
             CoreModsHooks.ModSwitched = newCompanionName => Brain?.OnModSwitched(newCompanionName);
             CoreModsHooks.ReloadBarkRules = () => Bark?.ReloadRules();
@@ -361,6 +364,9 @@ namespace ConditioningControlPanel
             // stamps) that need a version string or the installed build's notes and nothing else.
             CoreReleaseContent.AppVersionProvider = () => Services.UpdateService.AppVersion;
             CoreReleaseContent.PatchNotesProvider = () => Services.UpdateService.CurrentPatchNotes;
+            // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
+            Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
+            Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
@@ -444,6 +450,8 @@ namespace ConditioningControlPanel
             Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
             Services.Invites.InviteApi.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
+            Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
             CoreProgram.ActivePackVideoCountProvider = () => ContentPacks?.GetAllActivePackVideos().Count ?? 0;
             CoreProgram.RoadmapProvider = () => Roadmap;
@@ -3123,6 +3131,8 @@ namespace ConditioningControlPanel
 
             // Initialize Discord Rich Presence (only if Discord is linked — prevents
             // accidental exposure for users who chose anonymous invite-code accounts)
+            // The service lives in Core; its 15 s refresh ticks hop back to this UI thread (was a DispatcherTimer).
+            DiscordRichPresenceService.PostToUi = a => Dispatcher.BeginInvoke(a);
             DiscordRpc = new DiscordRichPresenceService();
             if (Settings.Current.DiscordRichPresenceEnabled && Settings.Current.HasLinkedDiscord)
             {
@@ -3280,13 +3290,14 @@ namespace ConditioningControlPanel
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
             // and LockdownPossessionEnabled is on, so constructing it here costs nothing.
-            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll());
+            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll(),
+                Services.Possession.PossessionWpfHead.CreateDirectorHead());
             Possession.Warden = new Services.Possession.Warden();
             // Companion wave (POSSESSION.md): the ember tick / dip cues, and the one remembered charge a
             // Full Doki lockdown leaves for the next launch. Both only subscribe; neither costs anything
             // until a lockdown runs (or, for the charge, until the flag from the last one is spent).
             Services.Possession.PossessionAudio.Install();
-            Services.Possession.PossessionRemember.Install();
+            Services.Possession.PossessionWpfHead.InstallRemember();
             // The Dose: a lockdown refuses to run empty (engine off -> started; nothing on -> the warden
             // picks). Recovery first, so a killed lockdown's conscripted toggles go back off before the
             // engine can ever read them.
