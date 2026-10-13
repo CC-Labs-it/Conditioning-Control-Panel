@@ -394,7 +394,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 ## 2026-10-01: Awareness reaches the AI only on the legacy consent (avalonia-port/companion-awareness-brain)
 - Question: App.Ai (Core AiService) now exists on this head. WPF's legacy tube handlers send the app name and page title to the AI (AvatarTubeWindow.Reactions.cs:93-150, 214-235) only when v2 is inactive; with v2 on (default) its arbiter speaks and the consent the user accepted (`awareness_consent_leaves_body`) promises page titles stay local. This head has no v2 observer.
 - Choice: the Avalonia tube takes WPF's AI-first legacy path only when UseAwarenessV2 is off (the consent showed `awareness_consent_leaves_body_legacy`, which says titles are sent), awareness is on and consented, AiChatEnabled and the AI is available (`AvatarTubeWindow.MaySendToAi`). Otherwise the preset line and nothing leaves. The deny list and incognito drop still run in the poll before any event (decision 2026-09-30). The consent re-check in the handler is tighter than WPF (WPF relies on the observer being stopped).
-- Not moved: `AwarenessV2Routing`/`AwarenessSpeech`/`ReactionArbiter` stay in the WPF head. Dry-run into Core needs AwarenessReactionService, AwarenessPromptBuilder (AwarenessAngleCards, AwarenessProjection, CompanionPhraseService), WorthinessScorer -> ActivityLedger and ~25 App.* sites, and they only consume v2 observer frames, so on this head they would be dead code. Bark echo stays a gap (no Core bark hosted).
+- Not moved: `AwarenessV2Routing`/`AwarenessSpeech`/`ReactionArbiter` stay in the WPF head. Dry-run into Core needs AwarenessReactionService, AwarenessPromptBuilder (AwarenessAngleCards, AwarenessProjection, CompanionPhraseService), WorthinessScorer -> ActivityLedger and ~25 App.* sites, and they only consume v2 observer frames, so on this head they would be dead code. (Update 2026-10-12, avalonia-port/awareness-core-a: AwarenessPromptBuilder, AwarenessAngleCards, AwarenessProjection and WorthinessScorer are now in Core; AwarenessReactionService, ActivityLedger and the App.* sites still block the router/arbiter.) Bark echo stays a gap (no Core bark hosted).
 - Tests: `Tests/CCP.Avalonia.Tests/AwarenessAiRoutingTests.cs` (denied/incognito never reach the fake AI; v2 on sends nothing; revoked consent sends nothing; fail-proven).
 - Advisor: supervisor.
 ## 2026-10-01: Graded Intake page served and wired (avalonia-port/intake-page)
@@ -1057,3 +1057,78 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   NOACTIVATE); a press pops it with its FlashExit leave. Panic/Stop (FlashOverlay.CloseAll) closes flashes mid-leave too.
   Native Wayland is unchanged: no X11 overlay, so no flashes at all (logged once).
 - Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.
+
+## 2026-10-12: A verbatim import is exempt from the icon ratchets as one whole file (avalonia-port/tutorials-import)
+- Question: the trunk `CCP.Avalonia/Tours/TutorialService.cs`, imported verbatim under Stack rule 4, carries ~113 emoji
+  step `Icon` strings and icon-prefixed loc keys. Editing it breaks "verbatim"; raising the shared baselines loosens every
+  other file. What clears IconGuard?
+- Answer (advised by: supervisor): neither. What the user sees is Fluent: `TutorialOverlay.IconFor` maps a step's Icon
+  through `IconMap` onto its `fx:IconGlyph`, and anything unmapped falls back to Sparkle, never the emoji text. The file
+  itself gets one `verbatim:` `*` entry in `IconGuard.allow.txt` (exact path only, emoji + prefixed-loc ratchets only);
+  the baselines stay put. Follow-up `tutorials-icons` converts the data and deletes the entry.
+- Tests: `TutorialTourTests.ATourStartsStepsClosesAndPanicEndsIt` (IconGlyph, no emoji text), `StepIconsMapThroughIconMap`,
+  `IconGuardTests.AllowListEntriesAreLiveAndReasoned`.
+
+## 2026-10-12: Colour emoji never get a synthetic bold/italic (avalonia-port/render-all-segv)
+- Problem: `--render-all` died with SIGSEGV (exit 139) on CI runs 38186452139, 38187923096, 38190459151, 38203253619 and
+  38206867189 (pass 1 of 8 in a diagnostic loop; 16 more passes in 38206861559/38206872442 were clean). CI crash dump (run 38206867189): main thread in
+  libc memcpy <- libSkiaSharp `sk_stream_read` <- Avalonia.Skia `SkiaTypeface.TryGetStream` <- `FontCollectionBase.
+  TryCreateSyntheticGlyphTypeface("emoji", Bold)` <- `TextBlock.Measure`. TryGetStream (Avalonia 12.1.2-12.1.4 and master)
+  copies from an `SKStreamAsset` it never disposes or keeps alive; in optimised code a GC on another thread finalizes it
+  mid-copy. The 10.8 MB colour emoji font on a cold CI disk makes the copy long enough to hit.
+- Decision (advised by: supervisor, option C2): the system emoji font is loaded by our own `SystemEmojiFontCollection`
+  (`fonts:SystemEmoji`, `Platform/AppFonts.cs`) whose `TryCreateSyntheticGlyphTypeface` refuses, so bold/italic emoji use the
+  regular face and never reach TryGetStream. Building the variant safely would need Avalonia private API
+  (`IFontManagerImpl.TryCreateGlyphTypeface(Stream, FontSimulations, ...)` is stripped from the reference assembly); no
+  reflection, no runtime patching.
+- Visual delta (measured, ~/ccp-port/evidence/render-all-segv/emoji-delta/compare.png): bold text: none (0 pixels differ;
+  Skia's synthetic bold already drew Noto Color Emoji unchanged); italic text: emoji upright instead of skewed. WPF's EmojiTextBlock draws colour emoji as inline Twemoji
+  Images (`ConditioningControlPanel/Helpers/EmojiTextBlock.cs:11-14`), which do not slant either; plain WPF TextBlocks draw
+  Segoe UI Emoji silhouettes, whose slant is not measured. The emoji font now lives in memory (~11 MB)
+  instead of a file mapping.
+- Residual: Inter, Fredoka, the bundled Noto Emoji, Noto Sans Mono and system fallback fonts still go through Avalonia's
+  synthesis (copies of 0.06-2 MB, from memory or a mapping); any TryGetStream call stays unsafe until Avalonia fixes it
+  (report draft: ~/ccp-port/evidence/render-all-segv/upstream-issue.md, not posted).
+- Test: `SystemEmojiFontCollectionTests`; proof: base 10/10 SIGSEGV vs fix 10/10 clean under a GC-stress startup hook with the
+  emoji font kept out of the page cache (~/ccp-port/evidence/render-all-segv/). CI keeps a crash dump + report artifact on
+  a render-all failure (`render-all-crash`).
+
+## 2026-10-12: Chaster idle-day charge stays off until the conditioning-time tracker is ported (avalonia-port/chaster-minutes)
+## 2026-10-12: Chaster idle-day charge reads the day log, as on WPF (avalonia-port/chaster-minutes, then chaster-leash-minutes)
+- Question: with `FeatureDayLogService` now in Core and running on this head, should `ChasterHead` give the Chaster
+  service its `MinutesOn` (the idle-day row's eyes)? Wiring it arms WPF's idle-day charge here, which users will see.
+- Options: (A) keep it off: `MinutesOn` stays null, the day-end check reads "nobody can tell" and never books an idle day;
+  (B) parity: `MinutesOn = App.FeatureDayLog?.ConditioningMinutesOn(dayKey)`, exactly WPF `ChasterServiceApp.MinutesFromDayLog`
+  (ConditioningControlPanel/Services/Chaster/ChasterServiceApp.cs:49).
+- Choice: A for now. The supervisor first advised B, but review found that the input WPF relies on is missing here. The
+  day log's minutes come from `TotalConditioningMinutes` (`FeatureDayLogService.cs:73`), which WPF grows through
+  `SkillTreeService.AddConditioningTime`. Nothing on this head adds to it: the tracker is "STILL OUT" in
+  `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
+  user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
+- Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
+## 2026-10-13: Hybrid remote gate: Windows jobs on GitHub, Linux half local (avalonia-port/ci-hybrid-gate)
+- Question: every rgate run took ~15 GitHub jobs (5 Linux + 5 Windows Avalonia shards, core-linux, core-guards, coverage),
+  so two lanes gating at once exhausted the Free plan's 20-job pool. How do lane gates free that pool?
+- Options: (A) keep every gate fully remote; (B) gate fully locally again; (C) hybrid: GitHub runs only what Linux cannot
+  (the Windows jobs) and the Linux half runs locally (`bin/gate`, already the CI-equivalent Linux gate) in parallel.
+- Choice: C (advised by: user + main session). `build.yml` gains a `workflow_dispatch` input `scope` (all | windows, default
+  all). With `scope=windows` every ubuntu job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is skipped;
+  `windows`, `avalonia-windows` and the Windows coverage entry always run (coverage keeps `!cancelled()`, so a skipped
+  avalonia-linux does not skip it). Push and pull_request runs have no inputs, so they stay full. `bin/rgate` dispatches
+  `scope=windows` when it sees the input; `RGATE_FULL=1` forces the old all-remote run.
+- Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
+  `TotalConditioningMinutes` (`FeatureDayLogService.cs:73`), and nothing on this head grew it, so B would have charged
+  every day CCP was open as idle on the user's real lock.
+- Choice now (chaster-leash-minutes): B, exactly WPF `ChasterServiceApp.cs:40,49`. The input exists: the
+  conditioning-time tracker lane (avalonia-port/conditioning-time-tracker, Core `ConditioningTimeTracker`, wired in
+  `MainShellWindow.UiUpdates.cs`/`StartStop.cs`) accrues `TotalConditioningMinutes` while the engine runs. Null when no
+  log (construction failed / headless render path), 0 for a day with no entry, as WPF.
+- Test: `ChasterMinutesTests.ConditionedDayIsNotIdle_ADayWithoutConditioningIsCharged` (engine run 12 min on a stepped
+  clock -> day log -> today's idle charge 0, a day after the first log day 1200 s; fail-proven: no MinutesOn -> red, `?? 0` -> red).
+  It asserts the head's minutes and `TabDayEnd.IdleCharge`, not JudgeEndedDay's linked/priced gates or BookSeconds.
+- Upgrade edge, guarded: a day before the tracker existed reads 0 minutes, so the first day-end after upgrading would
+  charge a linked user with `idle` priced one idle day (1200 s) for a day they may well have conditioned. The head's
+  `MinutesOn` returns null (unknown, no charge, as before this lane) for any day before the day log's first day with
+  conditioning minutes (`FeatureDayLogService.FirstConditioningDay`), and null while no such day exists. No new state:
+  the earliest `cm > 0` entry is the tracker's first run. Same test: a day before the first log day is null and not
+  charged (fail-first: red with `Expected null, Actual 0` before the guard).

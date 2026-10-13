@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             BtnMicRefresh.Click += BtnMicRefresh_Click;
             BtnChatShortcutDevices.Click += BtnChatShortcut_Click;
             BtnPanicKey.Click += BtnPanicKey_Click;
+            BtnPauseKey.Click += BtnPauseKey_Click;
             BtnWebcamRevokeConsent.Click += BtnWebcamRevokeConsent_Click;
             BtnWebcamReviewPrivacy.Click += BtnWebcamReviewPrivacy_Click;
             BtnWebcamDebugStart.Click += BtnWebcamDebugStart_Click;
@@ -139,8 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 ChkNoPanic.IsChecked = !s.PanicKeyEnabled;
                 ChkPanicOverridesAll.IsChecked = s.PanicOverridesAll;
                 SetButtonLabel(BtnPanicKey, IconKind.Key, s.PanicKey);
-                if (string.IsNullOrEmpty(s.PauseKey)) SetButtonLabel(BtnPauseKey, Loc.Get("btn_pause_key_unbound"));
-                else SetButtonLabel(BtnPauseKey, IconKind.Pause, s.PauseKey);
+                PaintPauseKey();
 
                 RefreshChatShortcutLabel();
             }
@@ -687,8 +687,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
         }
 
-        // ponytail: BtnPauseKey still only shows its binding - the pause key parks a video (the #735
-        // grace pause), and this head has no grace pause for it to reach yet.
+        /// <summary>True while the Pause key button waits for its key (WPF _isCapturingPauseKey); the
+        /// pause press path (Win32Input.OnPauseKeyDown) stays quiet meanwhile, as WPF's early return.</summary>
+        internal static bool CapturingPauseKey { get; set; }
+        private bool _capturingPauseKey;
+
+        private void PaintPauseKey()
+        {
+            if (string.IsNullOrEmpty(CoreSettings.Current.PauseKey)) SetButtonLabel(BtnPauseKey, Loc.Get("btn_pause_key_unbound"));
+            else SetButtonLabel(BtnPauseKey, IconKind.Pause, CoreSettings.Current.PauseKey);
+        }
+
+        /// <summary>
+        /// WPF BtnPauseKey_Click (MainWindow.UiUpdates.cs:2429) + the capture branch of
+        /// OnGlobalKeyPressed (MainWindow.xaml.cs:914): "Press any key...", the next key becomes the
+        /// Pause key and Escape CLEARS it. Taken in-window like the panic capture; losing the window
+        /// cancels. As WPF, the panic handler refuses while
+        /// capturing (MainShellWindow.HandlePanicKeyPress), so the unbinding Escape never panics. ponytail: WPF also re-evaluates the Quick Recal chord clash.
+        /// </summary>
+        private void BtnPauseKey_Click(object? sender, RoutedEventArgs e)
+        {
+            // A second click while waiting would attach a second handler (same guard as the panic key).
+            if (_capturingPauseKey || TopLevel.GetTopLevel(this) is not { } top) return;
+            _capturingPauseKey = true;
+            CapturingPauseKey = true;
+            SetButtonLabel(BtnPauseKey, "Press any key...");
+            top.AddHandler(KeyDownEvent, OnCaptureKey, RoutingStrategies.Tunnel);
+            if (top is Window window) window.Deactivated += OnCancel;
+
+            void Detach()
+            {
+                _capturingPauseKey = false;
+                top.RemoveHandler(KeyDownEvent, OnCaptureKey);
+                if (top is Window w) w.Deactivated -= OnCancel;
+            }
+
+            void OnCancel(object? s, EventArgs a)
+            {
+                Detach();
+                CapturingPauseKey = false;
+                PaintPauseKey();
+            }
+
+            void OnCaptureKey(object? s, KeyEventArgs k)
+            {
+                Detach();
+                k.Handled = true;
+                CoreSettings.Current.PauseKey = k.Key == Key.Escape ? "" : k.Key.ToString();
+                CoreSettings.Save();
+                PaintPauseKey();
+                Log.Information("Pause key changed to: {Key}",
+                    string.IsNullOrEmpty(CoreSettings.Current.PauseKey) ? "(unbound)" : CoreSettings.Current.PauseKey);
+                // The hook's copy of this same press must not pause a video: clear a beat later.
+                DispatcherTimer.RunOnce(() => CapturingPauseKey = false, TimeSpan.FromMilliseconds(300));
+            }
+        }
 
         // =====================================================================================
         //  the chat shortcut (MainWindow.SessionIO.cs BtnChatShortcut_Click / RefreshChatShortcutLabel)
