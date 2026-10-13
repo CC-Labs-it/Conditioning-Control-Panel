@@ -374,6 +374,8 @@ namespace ConditioningControlPanel
             // BugReportService stays head-side in this layer, but its report assembly is portable.
             // The diagnostic writer/heartbeat remains WPF; only its bounded tail crosses the seam.
             BugReportService.DiagnosticTailProvider = VideoDiag.Tail;
+            // VideoSurfaceHealth moved to Core; its per-surface line still lands in video-diag.log.
+            VideoSurfaceHealth.DiagSink = VideoDiag.Log;
             // The freeze-report trio main added: the ring dump, the newest dump on disk and this
             // session's log file. All three sinks are WPF-bound, so the head hands them over.
             BugReportService.FlightRecorderDump = reason => Services.Logging.FlightRecorderSink.DumpIfActive(reason);

@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Video.Browser
 {
     /// <summary>
     /// The set of video files the browser engine has proven it cannot play. A file lands here when
     /// the player page reports a media error for it, or never reports <c>playing</c> within the
-    /// no-playing window; from then on <see cref="BrowserVideoGate"/> routes it to LibVLC forever,
+    /// no-playing window; from then on <c>BrowserVideoGate</c> (WPF head) routes it to LibVLC forever,
     /// so the user never pays the fallback cost twice for the same clip.
     ///
     /// NOT populated by <c>ProcessFailed</c>: a dead browser process says nothing about the file.
@@ -39,7 +40,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
         private static readonly HashSet<string> _keys = new(StringComparer.OrdinalIgnoreCase);
         private static readonly List<string> _order = new();   // insertion order, for the cap
         private static bool _loaded;
-        private static Timer? _saveTimer;
+        private static ITimer? _saveTimer;
+
+        /// <summary>Clock for the debounced save; tests step it instead of waiting.</summary>
+        internal static TimeProvider Clock { get; set; } = TimeProvider.System;
 
         // path (usually a ccp_temp_<GUID> decrypt) -> stable identity of the underlying content.
         private static readonly Dictionary<string, string> _stableKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -70,7 +74,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     }
                 }
             }
-            catch (Exception ex) { App.Logger?.Debug("BrowserVideo: stable-key register failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("BrowserVideo: stable-key register failed: {E}", ex.Message); }
         }
 
         /// <summary>The registered identity for a path, or null when it is just a file on disk.</summary>
@@ -118,7 +122,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                 }
                 ScheduleSave();
             }
-            App.Logger?.Information("BrowserVideo: {File} marked browser-unsafe ({Reason}) - it will use LibVLC from now on",
+            Log.Information("BrowserVideo: {File} marked browser-unsafe ({Reason}) - it will use LibVLC from now on",
                 Path.GetFileName(path), reason);
         }
 
@@ -159,15 +163,28 @@ namespace ConditioningControlPanel.Services.Video.Browser
                 // Corrupt file = empty cache. Everything simply gets one more browser attempt.
                 _keys.Clear();
                 _order.Clear();
-                App.Logger?.Warning("BrowserVideo: unsafe-video cache load failed ({E}) - starting empty", ex.Message);
+                Log.Warning("BrowserVideo: unsafe-video cache load failed ({E}) - starting empty", ex.Message);
             }
         }
 
         private static void ScheduleSave()
         {
-            _saveTimer ??= new Timer(_ => Save(), null, Timeout.Infinite, Timeout.Infinite);
-            try { _saveTimer.Change(SaveDebounceMs, Timeout.Infinite); }
-            catch (Exception ex) { App.Logger?.Debug("BrowserVideo: unsafe-cache save schedule failed: {E}", ex.Message); }
+            _saveTimer ??= Clock.CreateTimer(_ => Save(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            try { _saveTimer.Change(TimeSpan.FromMilliseconds(SaveDebounceMs), Timeout.InfiniteTimeSpan); }
+            catch (Exception ex) { Log.Debug("BrowserVideo: unsafe-cache save schedule failed: {E}", ex.Message); }
+        }
+
+        /// <summary>Tests: drop the pending save and the in-memory list so the next call reloads from disk.</summary>
+        internal static void ResetForTests()
+        {
+            lock (_lock)
+            {
+                _saveTimer?.Dispose();
+                _saveTimer = null;
+                _keys.Clear();
+                _order.Clear();
+                _loaded = false;
+            }
         }
 
         private static void Save()
@@ -181,7 +198,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning("BrowserVideo: unsafe-video cache save failed: {E}", ex.Message);
+                Log.Warning("BrowserVideo: unsafe-video cache save failed: {E}", ex.Message);
             }
         }
     }
