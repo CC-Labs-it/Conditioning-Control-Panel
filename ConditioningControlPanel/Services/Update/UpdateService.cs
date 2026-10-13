@@ -37,6 +37,7 @@ NEW IN 7.1.8
 - favourites drawer on every page, and Ctrl+K leads with your pinned favourites.
 - Mandatory Video: the ""Video length"" row now cuts web videos and floating videos at your max too. a video you asked for in chat plays whole.
 - plans: locked features show Basic and Prime with their price, and the button opens the right checkout.
+- invites: the app tells you when someone uses your invite code, and when a friend you invited subscribes.
 
 DOWN THE RABBIT HOLE
 - dock toys wake on their own as you play. no key, no button. grabbing a toy again takes it a level deeper for the fall, and Overload works again.
