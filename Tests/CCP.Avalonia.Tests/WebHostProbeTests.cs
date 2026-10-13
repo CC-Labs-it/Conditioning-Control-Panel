@@ -101,8 +101,12 @@ public sealed class WebHostProbeTests
     public void LinuxDefaultsToWebKitGtk() => Assert.Null(WebHost.DecideUnavailableReason(BothEngines, isLinux: true, headless: false));
 
     [Fact]
-    public void LinuxOffKeepsTheFallbackEvenWithBothEngines() =>
+    public void LinuxOffKeepsTheFallbackEvenWithBothEngines()
+    {
         Assert.Equal(WebHost.LinuxOffReason, WebHost.DecideUnavailableReason(BothEngines, isLinux: true, headless: false, linuxEngine: "off"));
+        // 3cb80f05a's intent, on the WebKitGTK default: an installed engine that is off names the switch, not "no web view".
+        Assert.Contains("CCP_LINUX_WEBVIEW", WebHost.LinuxOffReason);
+    }
 
     [Fact]
     public void AMissingAudioSinkDrawsThePanelNotACrashingPage()
