@@ -2078,3 +2078,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/game-race-b: +333
 - Racing Thoughts host shell on GameWindow: the purchase door, a launcher tile behind the leash gate, init + manifest, one payout per run, the heartbeat watchdog; panic closes it.
 - Next: BambiCloud levels, own tracks, the track player, smaller host frames.
+
+## avalonia-port/game-race-c: +507
+- Racing Thoughts own tracks: track-pick/play/pause/stop/cancel, Core charting worker (authored/cache/generated, partial then full), 250 ms track-clock, teardown on panic (GameWindow.RaceTracks.cs).
+- Player behind IRaceTrackPlayer (none yet -> track-error); next: LibVLC player + decoder seed, then BambiCloud.
