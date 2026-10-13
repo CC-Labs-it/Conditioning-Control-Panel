@@ -33,123 +33,37 @@ public sealed class ChaosUnlockCardData
 /// </summary>
 public static class ChaosUnlockCards
 {
-    // Accents follow the announcer palette: toys mint, accessories warm gold, charms cyan.
-    private static readonly Color ToyAccent      = Color.FromRgb(0x7A, 0xFF, 0xD2);
-    private static readonly Color AccessoryAccent = Color.FromRgb(0xFF, 0xD2, 0x7A);
-    private static readonly Color CharmAccent    = Color.FromRgb(0x7A, 0xE0, 0xFF);
-    private static readonly Color HabitAccent    = Color.FromRgb(0x9C, 0xE8, 0xA0);
-    private static readonly Color PocketAccent   = Color.FromRgb(0xE8, 0x43, 0x93);
-    private static readonly Color CapstoneAccent = Color.FromRgb(0xFF, 0xC8, 0x3C);
-
-    private static (string ribbon, Color accent) ByCategory(ChaosBoonCategory cat) => cat switch
+    // The decisions (ribbon, accent, context line, art source, cue) live in Core
+    // (ChaosUnlockCardRules) so every head announces a purchase the same way.
+    private static ChaosUnlockCardData? From(ChaosUnlockCardInfo? i) => i == null ? null : new ChaosUnlockCardData
     {
-        ChaosBoonCategory.Skill     => ("NEW TOY UNLOCKED", ToyAccent),
-        ChaosBoonCategory.Accessory => ("NEW ACCESSORY UNLOCKED", AccessoryAccent),
-        _                           => ("NEW CHARM UNLOCKED", CharmAccent),
+        Ribbon = i.Ribbon,
+        Accent = Color.FromRgb((byte)(i.AccentRgb >> 16), (byte)(i.AccentRgb >> 8), (byte)i.AccentRgb),
+        Title = i.Title, Desc = i.Desc, Flavor = i.Flavor, Context = i.Context, Glyph = i.Glyph,
+        Icon = i.IconPath != null ? ChaosArt.TryLoad(i.IconPath)
+             : i.IconFolder != null ? ChaosArt.Resolve(i.IconFolder, i.IconId!) : null,
     };
 
     /// <summary>A lifetime boon's level 1 just bought (call AFTER the unlock so the
     /// auto-equip state reads true). Null when the id is unknown.</summary>
-    public static ChaosUnlockCardData? ForBoonUnlock(string id)
-    {
-        var b = ChaosLifetimeBoons.ById(id);
-        if (b == null) return null;
-        var (ribbon, accent) = ByCategory(b.Category);
-        string context =
-            b.Category == ChaosBoonCategory.Utility ? "switched on — it works every descent."
-            : ChaosMeta.IsBoonActive(id)            ? "slipped straight into a pocket — it rides with you next descent."
-            : ChaosMeta.SlotsFor(b.Category) == 0   ? "no pocket to carry it yet — she sells one at her bench."
-            :                                         "your pockets are full — swap it in from the BAG.";
-        return new ChaosUnlockCardData
-        {
-            Ribbon = ribbon, Accent = accent, Title = b.Name, Desc = b.Desc,
-            Flavor = b.Flavor, Context = context, Glyph = b.Glyph,
-            Icon = ChaosArt.Resolve("boons", id),
-        };
-    }
+    public static ChaosUnlockCardData? ForBoonUnlock(string id) => From(ChaosUnlockCardRules.ForBoonUnlock(id));
 
-    /// <summary>A boon just deepened to its final level — the card shows what the capstone adds.
-    /// Null when there's no capstone text (nothing new to explain).</summary>
-    public static ChaosUnlockCardData? ForCapstone(string id)
-    {
-        var b = ChaosLifetimeBoons.ById(id);
-        if (b == null || string.IsNullOrWhiteSpace(b.CapstoneDesc)) return null;
-        return new ChaosUnlockCardData
-        {
-            Ribbon = "CAPSTONE REACHED", Accent = CapstoneAccent, Title = b.Name,
-            Desc = b.CapstoneDesc, Flavor = b.Flavor,
-            Context = "fully deepened — its final gift is yours.",
-            Glyph = b.Glyph, Icon = ChaosArt.Resolve("boons", id),
-        };
-    }
+    /// <summary>A boon just deepened to its final level. Null when there's no capstone text.</summary>
+    public static ChaosUnlockCardData? ForCapstone(string id) => From(ChaosUnlockCardRules.ForCapstone(id));
 
     /// <summary>A trained habit just bought.</summary>
-    public static ChaosUnlockCardData? ForHabit(string id)
-    {
-        var u = ChaosUpgrades.ById(id);
-        if (u == null) return null;
-        return new ChaosUnlockCardData
-        {
-            Ribbon = "HABIT TRAINED", Accent = HabitAccent, Title = u.Name, Desc = u.Desc,
-            Flavor = u.Flavor,
-            Context = "always on from your next descent — switch it off in the toybox anytime.",
-            Glyph = u.Glyph,
-            Icon = u.IconPath != null ? ChaosArt.TryLoad(u.IconPath) : ChaosArt.Resolve("upgrades", id),
-        };
-    }
+    public static ChaosUnlockCardData? ForHabit(string id) => From(ChaosUnlockCardRules.ForHabit(id));
 
     /// <summary>A pocket just sewn at her bench — the card explains what the slot does.</summary>
     public static ChaosUnlockCardData ForPocket(bool isToy, string label, string line)
-    {
-        int n = isToy ? ChaosMeta.State.ToyPockets : ChaosMeta.State.AccessoryPockets;
-        string kind = isToy ? "toy" : "accessory";
-        string desc = n == 1
-            ? $"you can now carry one {kind} into the descent. unlocked {kind}s equip from the BAG."
-            : $"you can now carry {n} {kind}s into the descent at once. pick yours from the BAG.";
-        return new ChaosUnlockCardData
-        {
-            Ribbon = "POCKET SEWN", Accent = PocketAccent, Title = label, Desc = desc,
-            Flavor = line, Glyph = "👝",
-        };
-    }
+        => From(ChaosUnlockCardRules.ForPocket(isToy, label, line))!;
 
-    /// <summary>A lesson just completed mid-run: the gated item is now buyable. The id is the
-    /// purchasable's id — a lifetime boon or a trained habit. Null when neither resolves.</summary>
-    public static ChaosUnlockCardData? ForLesson(string id)
-    {
-        const string context = "now for sale in the toybox — emotes will do the rest.";
-        var b = ChaosLifetimeBoons.ById(id);
-        if (b != null)
-        {
-            var (_, accent) = ByCategory(b.Category);
-            return new ChaosUnlockCardData
-            {
-                Ribbon = "LESSON LEARNED", Accent = accent, Title = b.Name, Desc = b.Desc,
-                Flavor = b.Flavor, Context = context, Glyph = b.Glyph,
-                Icon = ChaosArt.Resolve("boons", id),
-            };
-        }
-        var u = ChaosUpgrades.ById(id);
-        if (u != null)
-        {
-            return new ChaosUnlockCardData
-            {
-                Ribbon = "LESSON LEARNED", Accent = HabitAccent, Title = u.Name, Desc = u.Desc,
-                Flavor = u.Flavor, Context = context, Glyph = u.Glyph,
-                Icon = u.IconPath != null ? ChaosArt.TryLoad(u.IconPath) : ChaosArt.Resolve("upgrades", id),
-            };
-        }
-        return null;
-    }
+    /// <summary>A lesson just completed mid-run. Null when neither a boon nor a habit resolves.</summary>
+    public static ChaosUnlockCardData? ForLesson(string id) => From(ChaosUnlockCardRules.ForLesson(id));
 
-    /// <summary>The reward cue for a card, by ribbon: pockets stitch, capstones bloom
-    /// deeper, everything else gets the soft unlock shimmer.</summary>
-    private static (string cue, float vol) CueFor(ChaosUnlockCardData d) => d.Ribbon switch
-    {
-        "CAPSTONE REACHED" => ("capstone_reached", 0.7f),
-        "POCKET SEWN"      => ("pocket_sewn", 0.7f),
-        _                  => ("unlock_card", 0.65f),
-    };
+    /// <summary>The reward cue for a card, by ribbon (Core rule).</summary>
+    private static (string cue, float vol) CueFor(ChaosUnlockCardData d)
+        => ChaosUnlockCardRules.CueFor(d.Ribbon);
 
     /// <summary>The card itself — shared by the Hub layer and the mid-run overlay.</summary>
     public static Border BuildCardVisual(ChaosUnlockCardData d, double width = 400)
