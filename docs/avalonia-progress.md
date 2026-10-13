@@ -2018,3 +2018,176 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/feature-day-log-core: +210
 - FeatureDayLogService + model moved to Core (same feature_day_log.json); seeded/disposed on the Avalonia head; `ConditioningMinutesOn` accessor for the leash day report.
 - Follow-ups: LeashHead.DayInputs minutes (leash-wire), Chaster MinutesOn, Note/sync hooks on Avalonia.
+
+## avalonia-port/first-show: +380
+- FirstShow rules (deck, presets, media loader, layout, script) are now in Core and WPF reads them; Core tests moved or ported and fail-proven.
+- The Avalonia stage, EMI presentation, panic and trigger are left to first-show-b; the Guide to first-show-c.
+
+## avalonia-port/lang-italian: +8864 (39 non-data)
+- Italian selectable in both heads: verbatim trunk it.json + one AvailableLanguages entry; missing keys fall back to English.
+- Language test: every file parses strictly and is offered; WPF count asserts 9→10.
+
+## avalonia-port/lang-italian: +8864 (39 non-data)
+- Italian selectable in both heads: verbatim trunk it.json + one AvailableLanguages entry; missing keys fall back to English.
+- Language test: every file parses strictly and is offered; WPF count asserts 9→10.
+
+## avalonia-port/render-all-segv: +188
+- Root-caused the intermittent `--render-all` exit 139 on CI. Avalonia's `SkiaTypeface.TryGetStream` reads an SKStreamAsset it doesn't keep alive, so a GC during the copy finalizes it and the read hits freed memory (use-after-free). It was hit through synthetic bold of the 10.8 MB system emoji font.
+- The system emoji font now loads through `SystemEmojiFontCollection`, which refuses synthetic bold/italic. CI keeps a crash dump and report as an artifact when render-all fails.
+
+## avalonia-port/possession-core-a: +253
+- Pure Possession rules (deck, off-limits name rule, toast/rewrite pools, enums, bark triggers) moved from WPF to CCP.Core via git mv; WPF keeps the FrameworkElement contracts and the tree walk.
+- Deck tests moved to CCP.Core.Tests; new CoreMods mod-routing test (fail-proven).
+
+## avalonia-port/games-host: +710
+- Launcher opens games: shared GameWindow host (init, media-request deal from the library, exit, panic surface "games"), backroom bridge.js on the WebKitGTK string carrier; Breakout demo wired (demo=1, leash check first).
+- Tests: GameWindowTests (fail-proven via WebHost carrier, origin guard, demo=1, media deal, leash, panic), node bridge-carrier.test.js (string carrier = hosted for in-window fx, pause Exit and the F2 dev-panel gate; red run saved); GameWindow acks fx (WPF BackRoomBridge.OnFx), media deal walks images/ once per window, single-flight; live: tile Play opened the GameWindow (page boot not visible in capture).
+
+## avalonia-port/chaster-minutes: +61
+- Chaster MinutesOn stays null on purpose until the conditioning-time tracker feeds the day log; WPF wiring would charge every day as idle. Decision, ledger note and guard test added.
+- SeasonRecap TrackFeature and BackRoom NoteEvent have no Avalonia counterpart yet, so nothing was routed.
+
+## avalonia-port/win-panic-b: +602
+- #919b panic watchdog, Pause key capture (all platforms) and press (Windows), and Escape claim for the friends drawer, all ported from trunk c072be180/face473bd.
+- The windows CI job now runs `--win-panic-check` (F24 passes, F23 must fail); green in run 38195413447.
+
+## avalonia-port/first-show-b: +997
+- EMI's welcome show runs on Avalonia: a click-through stage (overlay set up before Show) with partial effects and cues, and the real desk EMI presenting. It opens once after the first-run wizard; panic, Esc and closing the shell stop it. Downloads are capped and the temp dir is swept.
+- The fail-proven FirstShowStageTests pass (7 cases), the gate passed, and Keincheck evidence is in evidence/first-show-b{,/fix1}. Sparks, subliminal, drain, spiral and words are carried to first-show-c along with the Guide.
+
+## avalonia-port/conditioning-time-tracker: +300
+- Conditioning-time tracker ported: Core ConditioningTimeTracker, driven by shell engine start, session start and engine stop; the Pink Hours pill counts live.
+- Not ported: server sync and the season mirror.
+
+## avalonia-port/leash-gate-card: +645
+- Leash gate card on the panel (WPF LeashGateCard + MainWindow.Leash.cs): PresentLeashGateProvider seeded, pending punishment holds tiles, Panic and Cut leash (LeashCutSafety) always work; 4 fail-proven headless tests + live sandbox evidence.
+- Punish window + task runner left for leash-punish.
+
+## avalonia-port/first-show-c: +514
+- Welcome guide ported (WelcomeSteps on the real shell, highlight, FeatureCard tutorial preview, follows the app's monitor); live run reaches Presets.
+- Show effects carried from first-show-b (sparks, subliminal, spiral, floating words, drain veil); feat-first-show stays stub (bleepese, replay doors, bubble pops).
+
+## avalonia-port/game-race-a: +263
+- Race rules (10 services + TrackChart) git-mv to CCP.Core; WPF seeds PrizeGrants + NAudio decode seams.
+- Race tests move to Core tests, plus fail-proven seam tests; ledger row game-race (missing).
+
+## avalonia-port/awareness-core-a: +26
+- Moved 10 awareness files (frame, policy, scorer, projection, angle cards, prompt builder, tally, cooldown ledger, interfaces) to CCP.Core, together with the angle-deck embedded resource; 5 pure test classes moved to CCP.Core.Tests.
+- ActivityLedger and AwarenessObserver (each over 1000 lines) are left for their own units; see evidence/awareness-core-a/map.md.
+
+## avalonia-port/game-race-b: +333
+- Racing Thoughts host shell on GameWindow: the purchase door, a launcher tile behind the leash gate, init + manifest, one payout per run, the heartbeat watchdog; panic closes it.
+- Next: BambiCloud levels, own tracks, the track player, smaller host frames.
+
+## avalonia-port/game-race-c: +507
+- Racing Thoughts own tracks: track-pick/play/pause/stop/cancel, Core charting worker (authored/cache/generated, partial then full), 250 ms track-clock, teardown on panic (GameWindow.RaceTracks.cs).
+- Player behind IRaceTrackPlayer (none yet -> track-error); next: LibVLC player + decoder seed, then BambiCloud.
+
+## avalonia-port/game-pbp: +888
+- Piece by Piece opens from the launcher in GameWindow: Core PbpHostRules, net lane, settings/identity, own-library media, watchdogs, panic; page bridge on the WebKitGTK string carrier.
+- Online pictures, whispers, stakes and friend intents are queued as game-pbp-b.
+- Review fixes: loopback override, a cached library walk off the UI thread, a signal-based test wait; WPF routing filed as a follow-up.
+
+## avalonia-port/lag-fixes-c: +237
+- Programs ignition (8 loops) and the dashboard Today banner (fog/sheen/sparkles/breath) now run on the 30 fps BeatLoop with WPF curves; the rail and boss glows are BoxShadows; the banner width is read every frame; the hover nudge works and no longer leaks a CTS; NavGlow uses the shared FrameClock.
+- Programs idle went from 141 to 44 renders/s (CPU 45% to 23%); the ratchet lists went down by 4 entries.
+
+## avalonia-port/showcase-renderer: +123
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/ci-parallel: +145
+- CI: CCP.Avalonia.Tests shards now run as parallel matrix jobs (avalonia-linux/avalonia-windows x5) with a per-OS avalonia-coverage sum check; build.yml wall time went from 50m47s to ~17.5-24 min (runs 38306259237/38312941874).
+- Gate-branch-only concurrency cancel. avalonia-tests-sharded.sh gains --shard N / --expected; with no argument it behaves as before.
+
+## avalonia-port/emi-line-engine: +215
+- EmiLineEngine (1360, verbatim plus ask probes) and the EmiKnock machine moved to Core with git mv. WPF seeds the probes and keeps EmiKnockWorld; the rotation and knock tests now run on Linux in Core.
+- Next: EmiVox/EmiOffers/EmiChains seams, then the Avalonia moment bus and desk chains UI.
+
+## avalonia-port/tutorials-import: +3779
+- Trunk TutorialService.cs imported verbatim (Stack rule 4, 557d9aac3), with 554 lines of wiring: seam seeded, `tour` stop in the PanicSurfaces list, a refused start keeps the running tour's name, Fluent step icons. Tours now start, step and close, and panic ends them.
+- Follow-ups: tutorials-icons, tutorials-live-overlay (Live.cs triggers/stage), EmiTourNarrator, KeywordTriggerHead, ? panel StartGuide, Mod Creator nav.
+
+## avalonia-port/game-justdrop: +603
+- Just Drop door: Core JustDropService/CreditedOrders (git mv) + JustDropHandoff; ShowTab(justdrop) opens the live shop in a GameWindow (signed-in handoff header, shared chrome.webview carrier, panic closes).
+- Row shell-just-drop stays stub: replay/fullscreen strip/orders shelf/EMI door missing; not live-checked against the real site.
+
+## avalonia-port/mine-launcher-links: +995
+- Launcher Media pill + dialog (preset via the panel), shortcut link + tile shortcut button writing .desktop entries (Linux) / .lnk (Windows, compile-only); Core LauncherShortcuts rules, LauncherMediaSettings moved to Core.
+- Rest: launcher friends chip and What's New link; WPF cyan chip styling.
+
+## avalonia-port/possession-core-b: +742
+- PossessionDirector + PossessionRemember git-mv'd to CCP.Core behind PossessionDirectorHead/static seams; WPF-free contracts in Core, WPF keeps typed reads via IWpfPossessionHost + C# 14 extension properties.
+- Core tests: director bookkeeping (moved), tripwire/TargetFor seams, Remember arm rule + once/20 s flow, each fail-proven.
+- Review fixes: WPF head hook-mapping source pin, scene files renamed to their contents, doc/comment fixes.
+
+## avalonia-port/goon-core-a: +104
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/companion-core-head: +820
+- Core BarkEngine (TimeProvider clock) + CompanionCore; WPF CompanionService XP modifier/level loop delegate to Core. Cloud session, local review fix + gate.
+
+## avalonia-port/companion-heads: +289
+- Avalonia BarkHead/CompanionHead seeded at startup, ladder panic bark, head tests with full teardown; feat-companion-barks missing -> stub.
+
+## avalonia-port/mine-dnd-tube: +589
+- Tube right-click menu acts through the shell (engine #479, takeover #514/#978, mutes, trigger); Shrink/Grow/Dismiss with saved scale; panic stops what it starts.
+- Chat box closes on outside press; closing the tube stops her voice and unhooks ask cards. DND was already ported.
+
+## avalonia-port/ci-hybrid-gate: +21
+- build.yml `scope=windows` dispatch input: GitHub runs only Windows jobs, Linux half runs locally (bin/rgate hybrid). Hybrid rgate GATE-OK (run 38397970327).
+
+## avalonia-port/platform-heads: +440
+- Discord Rich Presence: the service moved to Core, one copy for both heads (PostToUi seam). Armed only when enabled, a Discord is linked and the app is online, on both switches and at startup. Bubbles and Mind Wipe now set the presence text. A sandboxed run never connects.
+- MPRIS/SMTC media watcher deferred to platform-heads-b (needs the AwarenessObserver Core move first).
+
+## avalonia-port/mine-tube-speech: +404
+- Tube speech queue as in WPF: presets queue in order with the earned gap. Priority lines, panic and the listening bubble drop the queue, and each new line cuts the previous clip. 4 tests, each fail-proven.
+- Talk clips and CompanionPhraseAudio are deferred: this tip has no emote system and nothing that speaks lines by phrase category.
+
+## avalonia-port/chaster-leash-minutes: +146
+- Chaster idle-day row now reads the day log (WPF MinutesFromDayLog), fed by the conditioning-time tracker; end-to-end test engine run -> day log -> idle charge 0 today / charged otherwise.
+- Upgrade edge guarded: a day before the day log's first conditioning day reads null (no charge), so a pre-tracker day is never billed (FeatureDayLogService.FirstConditioningDay).
+- Follow-up: LeashHead day minutes once leash-wire is in the base.
+
+## avalonia-port/notifications-core-a: +70
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/deeper-core-a: +274
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/descent-core-a: +119
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/home-marquee: +982
+- Cloud session (Opus), local review + remote gate.
+- Server update banner, URL-first pill, scrolling marquee (parks while Home is hidden, tested), Home actions, browser card.
+- Next PR: home-marquee-b, the update pill Tag skins (urgent red / available pink / hover), split out for the size cap.
+
+## avalonia-port/home-marquee-b: +37
+- Update pill Tag skins (urgent red, available pink, hover; WPF MainWindow.xaml:1353-1373) + UrgentUpdatePillIsRed, split from home-marquee for the size cap.
+
+## avalonia-port/tracking-core-a: +230
+- Gaze target scoring + refine ambiguity/choice rules moved to Core GazeTargetScoring; WPF GazeFocusService routes to it (one copy). Core tests fail-proven per reachable clause; rgate GATE-OK.
+
+## avalonia-port/subliminal-core-a: +123
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/billboard-core-a: +428
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/session-core-a: +82
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/audio-core-a: +291
+- Cloud session (Opus), local review + gate.
+- Review P3 fixes: loopback listener claims its own port with retry; all 12 cases fail-proven.
+
+## avalonia-port/webcam-core-a: +304
+- Cloud session (Opus), local review + gate.
+- Review fix: LongStareDetectorTests split out, all 8 tests fail-proven, tracker ponytail note refreshed; rgate GATE-OK incl. WPF suite on windows.
+
+## avalonia-port/media-core-a: +173
+- Cloud session (Opus), local review + gate.
+
+## avalonia-port/video-core-a: +345
+- Cloud session (Opus), local review + gate. Review P3 fix: unsafe-video cache save/reload test on a stepped clock (TimeProvider seam).

@@ -18,20 +18,12 @@ namespace ConditioningControlPanel.Services.Compositor;
 /// </summary>
 public sealed class SubliminalLayer : BaseLayer
 {
-    /// <summary>WPF AnimateSubliminal fade-in/out duration (50ms each side of the hold), the default a Flash
-    /// with no fades of its own gets.</summary>
-    private const double FadeMs = 50;
-    /// <summary>Arial Bold 120 DIP (CreateTextBlock parity); multiplied by per-screen scale.</summary>
-    private const float FontDip = 120f;
+    // Fade default, font size and outline offsets are Core's SubliminalCard (shared with the
+    // legacy windows and the Avalonia overlay).
+    private const double FadeMs = SubliminalCard.DefaultFadeMs;
+    private const float FontDip = (float)SubliminalCard.FontDip;
     /// <summary>Legacy OCR-rect padding (GetActiveTextScreenRects), in DIP.</summary>
     private const float OcrPadDip = 40f;
-
-    /// <summary>WPF outline offsets in DIP (BuildSubliminalContent parity).</summary>
-    private static readonly (float X, float Y)[] Offsets =
-    {
-        (-3, -3), (3, -3), (-3, 3), (3, 3),
-        (0, -4), (0, 4), (-4, 0), (4, 0)
-    };
 
     /// <summary>The WPF card's font (CreateTextBlock parity). Only ever the ACTUAL draw face for
     /// text Arial can render - see <see cref="Item.Runs"/> and bugs #615 / #717.</summary>
@@ -289,9 +281,9 @@ public sealed class SubliminalLayer : BaseLayer
                 // slight thickening behind the glyph, so it is left as-is for parity; monochrome
                 // text (everything else, including CJK) outlines exactly as before.
                 _textPaint.Color = item.Border.WithAlpha(alpha);
-                foreach (var (ox, oy) in Offsets)
-                    GlyphFallback.DrawCentered(canvas, item.Runs, cx + ox * p.Scale,
-                        baseline + oy * p.Scale, _textPaint, widths, total);
+                foreach (var (ox, oy) in SubliminalCard.OutlineOffsets)
+                    GlyphFallback.DrawCentered(canvas, item.Runs, cx + (float)ox * p.Scale,
+                        baseline + (float)oy * p.Scale, _textPaint, widths, total);
 
                 _textPaint.Color = item.TextColor.WithAlpha(alpha);
                 GlyphFallback.DrawCentered(canvas, item.Runs, cx, baseline, _textPaint, widths, total);

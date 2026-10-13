@@ -207,6 +207,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The one-time ask before anything remote is fetched (WPF AskRemoteMediaConsent :2380).</summary>
         private Task<bool> AskRemoteMediaConsentAsync()
         {
+            var (title, message) = RemoteMediaConsentText();
+            if (ConsentOverride is { } o) return o(title, message);
+            if (TopLevel.GetTopLevel(this) is not Window owner) return Task.FromResult(false);
+            // WPF YesNo; there is no "No" key in the language files, so the second button keeps the
+            // dialog's localized Cancel. Close/Cancel both answer false, as No does.
+            return Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: Loc.Get("label_yes"));
+        }
+
+        /// <summary>The ask's title and text, shared with the launcher's media dialog (WPF asks the same, word for word).</summary>
+        internal static (string Title, string Message) RemoteMediaConsentText()
+        {
             var title = LocOr("title_remote_media_consent", "Use Reddit media?");
             var message = LocOr("msg_remote_media_consent",
                 "Pull media from Reddit?\n\n" +
@@ -214,11 +225,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
                 "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
                 "Turn it on?");
-            if (ConsentOverride is { } o) return o(title, message);
-            if (TopLevel.GetTopLevel(this) is not Window owner) return Task.FromResult(false);
-            // WPF YesNo; there is no "No" key in the language files, so the second button keeps the
-            // dialog's localized Cancel. Close/Cancel both answer false, as No does.
-            return Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: Loc.Get("label_yes"));
+            return (title, message);
         }
 
         private void RemoteNicheChip_Changed()

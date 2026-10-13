@@ -45,6 +45,9 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog" Version="3.1.1" />
+    <!-- Discord Rich Presence (Services/Account/DiscordRichPresenceService.cs): the client WPF ships, managed only
+         (named pipe on Windows, discord-ipc-N unix socket on Linux). Same version as the WPF head's reference. -->
+    <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
     <PackageReference Include="Buttplug" Version="5.0.1" />
     <!-- LibVLCSharp (managed only): VideoMetadataCache parses clip lengths for the video length filter.
          3.8.5 = what LibVLCSharp.WPF resolves in the WPF head, so WPF ships unchanged; the Avalonia head
@@ -94,6 +97,10 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- Awareness v2 angle cards: the fail-closed floor AwarenessAngleCards reads with
+         typeof(AwarenessAngleCards).Assembly, so it lives in the same assembly as that class.
+         Each head still ships the on-disk override copy as Content. -->
+    <EmbeddedResource Include="..\Assets\sounds\companion_audio\awareness_angles.json" Link="Resources\sounds\companion_audio\awareness_angles.json" />
   </ItemGroup>
 
 </Project>

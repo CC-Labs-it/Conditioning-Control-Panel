@@ -1,0 +1,266 @@
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Descent;
+using Xunit;
+
+namespace ConditioningControlPanel.Tests;
+
+/// <summary>
+/// THE TWO DOORS, as arithmetic (CONTRACTS-0812 §2.5, design doc §6).
+///
+/// <see cref="DescentMigration.Resolve"/> is deliberately pure — no App, no settings, no clock —
+/// because the crash-before-ack ordering the handshake depends on is only safe if re-running a
+/// choice against an unchanged offer produces an unchanged answer. These tests are that claim,
+/// written down.
+/// </summary>
+public class DescentMigrationChoiceTests
+{
+    private static DescentMigrationOffer Offer(double lifetimeXp, int devotionDays = 120) =>
+        new() { TotalXpEarned = lifetimeXp, DevotionDays = devotionDays };
+
+    // ------------------------------------------------------ "Take it all back"
+
+    /// <summary>
+    /// A v1 Level 150 veteran, re-measured. The drop is real and large, which is precisely why it
+    /// happens inside a ceremony that states it rather than in a silent patch.
+    /// </summary>
+    [Fact]
+    public void Restore_RederivesLevelFromTheServersLifetimeFigure()
+    {
+        var lifetime = XpCurve.CumulativeXpToReachLevel(150, XpCurve.CurveEpochLegacy);
+
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, Offer(lifetime));
+
+        Assert.Equal(117, result.Level);
+        Assert.Equal(lifetime, result.LifetimeXp);
+        Assert.Equal(lifetime, result.LedgerXp);   // lifetime is what rides the wire's xp field
+    }
+
+    /// <summary>
+    /// The relevel is exact, not approximate: level plus progress-into-level must add back up to
+    /// the lifetime figure the server handed us. If it did not, the ledger we submit would
+    /// disagree with the ledger the server derives and the clamp would bite.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(799)]
+    [InlineData(47_147)]
+    [InlineData(193_750)]
+    [InlineData(515_750)]
+    [InlineData(8_135_340)]
+    public void Restore_LevelPlusProgressReconstructsLifetimeXp(double lifetime)
+    {
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, Offer(lifetime));
+
+        var floor = XpCurve.CumulativeXpToReachLevel(result.Level, XpCurve.CurveEpochDescent);
+        Assert.Equal(lifetime, floor + result.XpIntoLevel);
+    }
+
+    /// <summary>Nobody in the honeymoon moves. A Level 30 subject walks out a Level 30 subject.</summary>
+    [Fact]
+    public void Restore_LeavesTheHoneymoonUntouched()
+    {
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, Offer(lifetime));
+
+        Assert.Equal(30, result.Level);
+    }
+
+    // --------------------------------------------------------- "Descend again"
+
+    /// <summary>
+    /// Cycle is Level 1 / 0 XP — and lifetime XP survives it intact. §2.5 exempts
+    /// total_xp_earned from the one sanctioned downward write, and §6 says a Cycle "wipes nothing
+    /// else". A Cycle that ate lifetime XP would also quietly eat the user's Chapter standing.
+    /// </summary>
+    [Fact]
+    public void Cycle_IsLevelOneAndKeepsLifetimeXp()
+    {
+        var lifetime = XpCurve.CumulativeXpToReachLevel(150, XpCurve.CurveEpochLegacy);
+
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Cycle, Offer(lifetime));
+
+        Assert.Equal(1, result.Level);
+        Assert.Equal(0, result.XpIntoLevel);
+        Assert.Equal(lifetime, result.LifetimeXp);
+    }
+
+    // ------------------------------------------------------------- idempotence
+
+    /// <summary>
+    /// THE ORDERING GUARANTEE. Crash after applying a choice but before the server acks, and the
+    /// ceremony re-offers against the same untouched lifetime figure. Re-running must land in the
+    /// same place, or the "nothing is lost in any ordering" claim in the handshake is false.
+    /// </summary>
+    [Theory]
+    [InlineData(DescentMigrationChoices.Restore)]
+    [InlineData(DescentMigrationChoices.Cycle)]
+    public void Resolve_IsIdempotent(string choice)
+    {
+        var offer = Offer(515_750);
+
+        var first = DescentMigration.Resolve(choice, offer);
+        var second = DescentMigration.Resolve(choice, offer);
+
+        Assert.Equal(first, second);
+    }
+
+    /// <summary>
+    /// And switching horses mid-crash is safe too: a user who applied Cycle, crashed, and picks
+    /// Restore on the re-offer still gets the level their untouched lifetime XP buys. The anchor
+    /// is the server's lifetime figure, which no client action moves.
+    /// </summary>
+    [Fact]
+    public void Resolve_ARestoreAfterAnUnackedCycleStillRestoresFully()
+    {
+        var offer = Offer(XpCurve.CumulativeXpToReachLevel(150, XpCurve.CurveEpochLegacy));
+
+        DescentMigration.Resolve(DescentMigrationChoices.Cycle, offer);
+        var restore = DescentMigration.Resolve(DescentMigrationChoices.Restore, offer);
+
+        Assert.Equal(117, restore.Level);
+    }
+
+    // -------------------------------------------------- the veteran credit basis
+
+    /// <summary>
+    /// THE VETERAN CREDIT (owner ruling 2026-08-16). The server prices Option A on
+    /// <c>restore_basis_xp</c> — lifetime plus 300 XP per witnessed devotion day — and the offer
+    /// carries the computed figure so this client never re-derives the credit with a constant
+    /// that could go stale. When the basis is present, it is the relevel's ONLY input.
+    /// </summary>
+    [Fact]
+    public void Restore_PricesTheServersBasisWhenItIsPresent()
+    {
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
+        var basis = XpCurve.CumulativeXpToReachLevel(50, XpCurve.CurveEpochDescent);
+        var offer = new DescentMigrationOffer
+            { TotalXpEarned = lifetime, DevotionDays = 180, RestoreBasisXp = basis };
+
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, offer);
+
+        Assert.Equal(50, result.Level);
+    }
+
+    /// <summary>
+    /// The ledger xp written home is the BASIS, not the raw lifetime. The next sync's level/XP
+    /// consistency check re-derives level from xp under curve v2 — a level bought by the credit
+    /// but an xp without it would be demoted right back one sync later.
+    /// </summary>
+    [Fact]
+    public void Restore_TheLedgerCarriesTheBasisSoTheNextSyncAgreesWithIt()
+    {
+        var offer = new DescentMigrationOffer
+            { TotalXpEarned = 16_343, DevotionDays = 180, RestoreBasisXp = 70_343 };
+
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, offer);
+
+        Assert.Equal(70_343, result.LedgerXp);
+        var floor = XpCurve.CumulativeXpToReachLevel(result.Level, XpCurve.CurveEpochDescent);
+        Assert.Equal(70_343, floor + result.XpIntoLevel);
+    }
+
+    /// <summary>An older server sends no basis (0), and the relevel is the pre-credit arithmetic
+    /// exactly — derived from the lifetime figure alone.</summary>
+    [Fact]
+    public void Restore_FallsBackToLifetimeWhenTheServerSentNoBasis()
+    {
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
+
+        var withBasisZero = DescentMigration.Resolve(DescentMigrationChoices.Restore,
+            new DescentMigrationOffer { TotalXpEarned = lifetime, RestoreBasisXp = 0 });
+
+        Assert.Equal(30, withBasisZero.Level);
+        Assert.Equal(lifetime, withBasisZero.LedgerXp);
+    }
+
+    /// <summary>The credit never rides the Cycle door: level 1, xp 0, lifetime carried through
+    /// RAW — a Cycle's keepsake records what was witnessed, not what a restore would have paid.</summary>
+    [Fact]
+    public void Cycle_IgnoresTheBasisEntirely()
+    {
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Cycle,
+            new DescentMigrationOffer { TotalXpEarned = 16_343, RestoreBasisXp = 70_343 });
+
+        Assert.Equal(1, result.Level);
+        Assert.Equal(16_343, result.LifetimeXp);
+    }
+
+    /// <summary>A junk basis (NaN, negative) degrades to the lifetime fallback, never to a throw
+    /// and never to level 0.</summary>
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(-500)]
+    public void Restore_TreatsAJunkBasisAsAbsent(double basis)
+    {
+        var lifetime = XpCurve.CumulativeXpToReachLevel(30, XpCurve.CurveEpochLegacy);
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Restore,
+            new DescentMigrationOffer { TotalXpEarned = lifetime, RestoreBasisXp = basis });
+
+        Assert.Equal(30, result.Level);
+    }
+
+    // ------------------------------------------------------------ hostile input
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    public void Resolve_TreatsImpossibleLifetimeFiguresAsZero(double lifetime)
+    {
+        var result = DescentMigration.Resolve(DescentMigrationChoices.Restore, Offer(lifetime));
+
+        Assert.Equal(1, result.Level);
+        Assert.Equal(0, result.LifetimeXp);
+    }
+
+    /// <summary>
+    /// Anything that is not one of the two exact wire strings must resolve as a restore, never as
+    /// a cycle. Restore is the conservative branch — it keeps the standing — so an unknown choice
+    /// falling through it cannot cost anybody a level. (The submit path rejects invalid choices
+    /// outright; this is the second line.)
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("CYCLE")]
+    [InlineData("Cycle")]
+    [InlineData("reset")]
+    public void Resolve_UnknownChoicesFallToTheConservativeBranch(string choice)
+    {
+        Assert.False(DescentMigrationChoices.IsValid(choice));
+
+        var lifetime = XpCurve.CumulativeXpToReachLevel(100, XpCurve.CurveEpochLegacy);
+        var result = DescentMigration.Resolve(choice, Offer(lifetime));
+
+        Assert.Equal(86, result.Level);   // the restore answer, not level 1
+    }
+
+    [Fact]
+    public void Choices_AreExactLowercaseWireStrings()
+    {
+        Assert.Equal("restore", DescentMigrationChoices.Restore);
+        Assert.Equal("cycle", DescentMigrationChoices.Cycle);
+        Assert.True(DescentMigrationChoices.IsValid("restore"));
+        Assert.True(DescentMigrationChoices.IsValid("cycle"));
+        Assert.False(DescentMigrationChoices.IsValid(null));
+    }
+
+    // ------------------------------------------------------------- the tunable
+
+    /// <summary>The XP bonus is a bonus, above 1.0 and sane. The number is the owner's to tune.</summary>
+    [Fact]
+    public void CycleXpBonus_IsABonus()
+    {
+        Assert.True(DescentMigration.CycleXpBonus > 1.0);
+        Assert.True(DescentMigration.CycleXpBonus <= 1.5);
+    }
+
+    [Theory]
+    [InlineData(0, "0")]
+    [InlineData(1, "I")]
+    [InlineData(7, "VII")]
+    [InlineData(9, "IX")]
+    [InlineData(42, "42")]
+    public void RomanNumeral_CoversTheLadderAndFallsBackPastIt(int n, string expected)
+    {
+        Assert.Equal(expected, DescentStageCopy.RomanNumeral(n));
+    }
+}

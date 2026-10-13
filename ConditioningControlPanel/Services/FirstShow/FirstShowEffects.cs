@@ -113,7 +113,7 @@ internal sealed class FirstShowEffects : IDisposable
         _time = seconds;
         var dt = TimeSpan.FromSeconds(Math.Clamp(delta, 0, .1));
         bool moving = MotionFx.Level != MotionLevel.Off;
-        double fade = Math.Clamp((seconds - 7) / .8, 0, 1) * Math.Clamp((32 - seconds) / 3, 0, 1);
+        double fade = Math.Clamp((seconds - 7) / .8, 0, 1) * Math.Clamp((FirstShowScript.RevealAt - seconds) / 3, 0, 1);
         _pink.Set(255, 65, 165, .13 * fade);
         _spiral.SetOpacity(.16 * fade);
         if (moving) _spiral.Update(dt);
@@ -126,11 +126,11 @@ internal sealed class FirstShowEffects : IDisposable
             if (drain != 0)
                 _capture = new BrainDrainCapturePump(4, TimeSpan.FromMilliseconds(40), drain == 2 && moving, new[] { _screen }, 70 * .14f / 4 / 3, (1 + 70 * .045f));
         }
-        if (seconds >= _nextBubble && seconds < 28 && _media.Count > 0)
+        if (seconds >= _nextBubble && seconds < FirstShowScript.GatherAt && _media.Count > 0)
         {
             Spawn(true, seconds); _nextBubble = seconds + .71;
         }
-        if (seconds >= _nextFlash && seconds < 28 && _media.Count > 0)
+        if (seconds >= _nextFlash && seconds < FirstShowScript.GatherAt && _media.Count > 0)
         {
             Spawn(false, seconds);
             _nextFlash = seconds + (seconds < 4.5 ? .39 : .71);
@@ -156,7 +156,7 @@ internal sealed class FirstShowEffects : IDisposable
         {
             actor.Flash?.Clear(); actor.Bubbles?.Clear(); _actors.Remove(actor);
         }
-        if (seconds >= 32 && !_revealed)
+        if (seconds >= FirstShowScript.RevealAt && !_revealed)
         {
             _revealed = true; _subliminal.Clear();
             if (MotionFx.AllowParticles)
@@ -225,7 +225,7 @@ internal sealed class FirstShowEffects : IDisposable
         a.Angle = Math.Sin(age * (2.1 + a.Id % 4 * .27) + a.Id) * 5 * motion;
         a.Alpha = Math.Clamp(age / .3, 0, 1);
         a.Scale = moving ? 1 + Math.Sin(Math.Min(1, age / .45) * Math.PI) * .12 : 1;
-        if (time < 28)
+        if (time < FirstShowScript.GatherAt)
         {
             a.Alpha *= Math.Clamp((a.Life - age) / .7, 0, 1);
             if (age >= a.Life) a.Gone = true;
@@ -235,7 +235,7 @@ internal sealed class FirstShowEffects : IDisposable
             if (!a.Gathering) { a.Gathering = true; a.GatherX = a.X; a.GatherY = a.Y; }
             double delay = Fraction(a.Id * .618034) * 1.05;
             double duration = 1.7 + Fraction(a.Id * .414214) * .9;
-            double p = Math.Clamp((time - 28 - delay) / duration, 0, 1);
+            double p = Math.Clamp((time - FirstShowScript.GatherAt - delay) / duration, 0, 1);
             double remain = Math.Pow(1 - p, 1.22);
             double dx = a.GatherX - Width * .5, dy = a.GatherY - Height * .56;
             double turn = p * (4.8 + Fraction(a.Id * .732051) * 5.2) * motion;
@@ -248,10 +248,10 @@ internal sealed class FirstShowEffects : IDisposable
             if (!moving) { a.X = a.GatherX; a.Y = a.GatherY; }
             if (p >= 1) { a.Gone = true; if (MotionFx.AllowParticles) _particles.EmitBurst(new Point(a.X, a.Y), SKColors.Gold, .45f); }
         }
-        if (MotionFx.AllowParticles && time >= a.NextTrail && !a.Gone && (time >= 28 || a.Bubble != null))
+        if (MotionFx.AllowParticles && time >= a.NextTrail && !a.Gone && (time >= FirstShowScript.GatherAt || a.Bubble != null))
         {
             _particles.EmitTrail(new Point(a.X, a.Y), time >= 28 ? .52 : .32, a.Id % 3 == 0, Width * .5 - a.X, Height * .56 - a.Y);
-            a.NextTrail = time + (time >= 28 ? .045 : .16);
+            a.NextTrail = time + (time >= FirstShowScript.GatherAt ? .045 : .16);
         }
         int frame = a.Media == null || !moving ? 0 : (int)(age / a.Media.Delay) % a.Media.Frames.Count;
         if (a.Picture != null)
@@ -282,7 +282,7 @@ internal sealed class FirstShowEffects : IDisposable
                 canvas.DrawImage(_blurFrame, new SKRect(0, 0, Width, Height), _paint);
             }
         }
-        if (_time >= 7 && _time < 32) { _pink.Render(canvas, bounds, 1, elapsed); _spiral.Render(canvas, bounds, 1, elapsed); }
+        if (_time >= 7 && _time < FirstShowScript.RevealAt) { _pink.Render(canvas, bounds, 1, elapsed); _spiral.Render(canvas, bounds, 1, elapsed); }
         foreach (var a in _actors)
         {
             if (a.Gone || a.Alpha < .002) continue;
@@ -306,7 +306,7 @@ internal sealed class FirstShowEffects : IDisposable
 
     public void Pop(double x, double y)
     {
-        if (_disposed || _time >= 28) return;
+        if (_disposed || _time >= FirstShowScript.GatherAt) return;
         var a = _actors.LastOrDefault(a => a.Bubble != null && !a.Gone && Math.Pow(a.X - x, 2) + Math.Pow(a.Y - y, 2) < Math.Pow(a.Width * .52, 2));
         if (a == null) return;
         a.Gone = true;
