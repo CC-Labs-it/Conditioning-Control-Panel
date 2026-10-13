@@ -107,7 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_disposed || p == null) return;
             // A Brake right after Play lands while libvlc is still opening/buffering, where SetPause is
             // ignored: remember it and pause as soon as the track is Playing (WPF WaveOutEvent.Pause holds).
-            try { if (p.IsPlaying) p.SetPause(true); else if (_started && p.State != VLCState.Paused) _pausePending = true; }
+            try { lock (_gate) { if (p.IsPlaying) p.SetPause(true); else if (_started && p.State != VLCState.Paused) _pausePending = true; } }
             catch (Exception ex) { Log.Warning("RaceTrackPlayer.Pause: {E}", ex.Message); }
         }
 
@@ -117,8 +117,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_disposed || p == null) return;
             try
             {
-                if (_pausePending) _pausePending = false;
-                else if (p.State == VLCState.Paused) { p.SetPause(false); ApplyVolume(); }
+                // SetPause is async in libvlc: a Pause just sent can still read as Playing, so un-pause then too.
+                lock (_gate)
+                {
+                    _pausePending = false;
+                    if (p.State is VLCState.Paused or VLCState.Playing) p.SetPause(false);
+                }
+                ApplyVolume();
             }
             catch (Exception ex) { Log.Warning("RaceTrackPlayer.Resume: {E}", ex.Message); }
         }
@@ -254,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!player.Play()) throw new InvalidDataException("the track would not open");
             try
             {
-                // A sout chain has no clock: an hour decodes in well under a minute; ten is a wedged decoder.
+                // A sout chain has no clock, so it runs faster than real time; ten minutes means a wedged decoder.
                 var limit = DateTime.UtcNow.AddMinutes(10);
                 while (!done.Wait(100))
                 {

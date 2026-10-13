@@ -148,6 +148,14 @@ public sealed class RaceTrackPlayerTests
             player.Pause();
             player.Resume();
             Assert.True(SpinWait.SpinUntil(() => player.IsPlaying, 10_000), "a Resume before Playing cancels the pause");
+
+            // Pause then Resume at once, while libvlc's async SetPause(true) is still in flight: it plays on.
+            Assert.True(SpinWait.SpinUntil(() => player.State == LibVLCSharp.Shared.VLCState.Playing, 10_000));
+            player.Pause();
+            player.Resume();
+            double from = player.PositionSec;
+            Assert.True(SpinWait.SpinUntil(() => player.PositionSec > from + 0.5, 10_000),
+                "a Resume right after a Pause keeps playing, not " + player.State);
             player.Stop();
         }
         finally { Directory.Delete(dir, true); }
