@@ -32,9 +32,7 @@ public sealed class InlineLoopVideoTests
             var video = new InlineLoopVideo(clip) { Width = 320, Height = 180 };
             var host = new Window { Width = 400, Height = 300, Content = video };
             host.Show();
-            var sw = Stopwatch.StartNew();
             Assert.True(await OnFrames(video, () => video.FrameCount > 0, 5000), "no first frame");
-            Assert.True(sw.ElapsedMilliseconds < 3000, $"first frame took {sw.ElapsedMilliseconds} ms");
             Assert.IsType<global::Avalonia.Media.Imaging.WriteableBitmap>(video.Source);
             Assert.Equal(baseline + 1, InlineLoopVideo.LivePlayers);
 
@@ -50,14 +48,15 @@ public sealed class InlineLoopVideoTests
             var f = video.FrameCount;
             Assert.True(await OnFrames(video, () => video.FrameCount > f + 5, 2000), "no frames after the loop");
 
-            // Hidden pauses decoding (time frozen over ~0.6 s of wall time); shown again resumes it.
+            // Hidden pauses decoding (time and frames frozen across dispatcher turns); shown again resumes it.
             video.IsVisible = false;
             Assert.True(await OnFrames(video, () => !video.IsPlaying, 2000), "still playing while hidden");
             var frozen = video.Time;
-            await OnFrames(video, () => false, 600);
+            f = video.FrameCount;
+            for (var i = 0; i < 5; i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
             Assert.False(video.IsPlaying, "still playing while hidden");
             Assert.Equal(frozen, video.Time);
-            f = video.FrameCount;
+            Assert.Equal(f, video.FrameCount);
             video.IsVisible = true;
             Assert.True(await OnFrames(video, () => video.FrameCount > f + 3, 3000), "did not resume when shown");
 

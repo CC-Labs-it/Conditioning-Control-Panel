@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// IsVisible=false pauses, detach stops and frees the player, buffer and bitmap. An Avalonia
     /// popup detaches its content on close, so a re-open starts the clip again from the top where
     /// WPF resumed a paused player. Fail-soft like WPF: no clip or no LibVLC leaves it blank.</para>
+    ///
+    /// <para>Only this control's own IsVisible pauses it: a hidden ANCESTOR leaves it decoding (P01).
+    /// Today it only lives in the HelpPopover, which detaches on close, so that cannot happen yet; a
+    /// host that hides a parent instead must call <see cref="Pause"/>/<see cref="Resume"/> itself.</para>
     /// </summary>
     public sealed class InlineLoopVideo : Image
     {
