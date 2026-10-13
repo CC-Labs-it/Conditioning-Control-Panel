@@ -113,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
             if (!_active && _hud == null && _overlay == null) return;
             _spawning = false;
             _runTimer?.Stop();
@@ -132,6 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null) return;
             _spawning = false;
             _runTimer?.Stop();
+            ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
 
             double durMin = Math.Max(1, _state.RunDurationSec) / 60.0;
             double capBase = 250.0 * durMin * _state.Config.DifficultyMult;
@@ -163,6 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static void CleanupAfterRun()
         {
+            ChaosCursorGlowOverlay.CloseActive();   // WPF CleanupAfterRun :3323
             _runTimer = null;
             _hud = null;
             _overlay = null;
