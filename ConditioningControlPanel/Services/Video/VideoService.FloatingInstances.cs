@@ -497,6 +497,13 @@ namespace ConditioningControlPanel.Services
                     break;
                 case "time":
                     c.PositionMs = Math.Max(c.PositionMs, (long?)o["ms"] ?? 0);
+                    // The player's longest-video limit, per window: the run's own cap timer is
+                    // off here (it watches one player), so each clip is cut on what it has played.
+                    if (VideoLengthCap.Reached(App.Settings?.Current?.VideoMaxDurationSeconds ?? 0, c.PositionMs))
+                    {
+                        PostAfterPageMessage(() => CloseInstance(c, "longest-video limit reached"));
+                        break;
+                    }
                     // No run left to belong to: the window goes.
                     if (!_videoPlaying)
                         PostAfterPageMessage(() => { if (!_videoPlaying) CloseFloatingInstances("no run left"); });
