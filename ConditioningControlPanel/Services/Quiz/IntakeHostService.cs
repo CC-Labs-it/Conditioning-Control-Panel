@@ -175,6 +175,9 @@ namespace ConditioningControlPanel.Services.Quiz
             try
             {
                 if (_host == null) return;
+                // Panic and every other host close: the mic closes and the wake word comes back NOW,
+                // not after the page's goodbye.
+                ReleaseSpeechMic("closing");
                 if (_host.IsReady && !_exiting)
                 {
                     _exiting = true;
@@ -1368,7 +1371,8 @@ namespace ConditioningControlPanel.Services.Quiz
             {
                 CancelExitWatchdog();
                 StopHeartbeatWatch();
-                StopSpeechBridge("closed", notifyPage: false);   // never leave the mic open behind a closed window
+                // Never leave the mic open behind a closed window, never keep the wake word's mic.
+                ReleaseSpeechMic("closed");
                 try { _host?.Dispose(); } catch { }
                 _host = null;
                 _exiting = false;
