@@ -2626,6 +2626,7 @@ namespace ConditioningControlPanel
             // first Play / first Bind.
             DeeperPlayer = new Services.Deeper.EnhancementAudioPlayer();
             DeeperHost = new Services.Deeper.EnhancementHostService();
+            Services.Deeper.PlaylistEnhancementBridge.Install(); // waits for AudioPlaylist; a Deeper enhancement rides the playlist track
 
             // Phase 9: HT description auto-discovery. Fetcher caches in-memory
             // per session; browser discovery wires onto the WebView2 once
