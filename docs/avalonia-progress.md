@@ -2139,3 +2139,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/platform-heads: +440
 - Discord Rich Presence: the service moved to Core, one copy for both heads (PostToUi seam). Armed only when enabled, a Discord is linked and the app is online, on both switches and at startup. Bubbles and Mind Wipe now set the presence text. A sandboxed run never connects.
 - MPRIS/SMTC media watcher deferred to platform-heads-b (needs the AwarenessObserver Core move first).
+
+## avalonia-port/mine-tube-speech: +404
+- Tube speech queue as in WPF: presets queue in order with the earned gap. Priority lines, panic and the listening bubble drop the queue, and each new line cuts the previous clip. 4 tests, each fail-proven.
+- Talk clips and CompanionPhraseAudio are deferred: this tip has no emote system and nothing that speaks lines by phrase category.
