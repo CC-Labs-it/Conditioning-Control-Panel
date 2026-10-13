@@ -76,9 +76,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 && System.Reflection.Assembly.GetEntryAssembly()?.Location is { Length: > 0 } dll)
                 line += " " + Quote(dll);
             return line;
-
-            static string Quote(string s) =>
-                "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("`", "\\`").Replace("$", "\\$").Replace("%", "%%") + "\"";
         }
+
+        /// <summary>Desktop Entry spec, two levels: the argument is quoted (\ " ` $ backslashed inside
+        /// the quotes), then the whole value is escaped as a string (each \ doubled), and % becomes %%.</summary>
+        internal static string Quote(string s) =>
+            ("\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("`", "\\`").Replace("$", "\\$") + "\"")
+                .Replace("\\", "\\\\").Replace("%", "%%");
     }
 }
