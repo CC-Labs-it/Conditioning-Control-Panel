@@ -7558,5 +7558,9 @@
   "conv_relock_prime": "A porta de ontem fechou. O Prime a mantém aberta.",
   "conv_session_taste": "O Basic abre as portas.",
   "conv_gallery_title": "A galeria de patronos tem mais {0}.",
-  "conv_gallery_body": "O Basic abre ela."
+  "conv_gallery_body": "O Basic abre ela.",
+  "conv_member_hello_title": "Membro gratuito. Obrigado por acompanhar.",
+  "conv_member_hello_body": "Membros gratuitos ganham dois presentes diários.",
+  "conv_member_second": "O segundo de hoje: {0}.",
+  "conv_ok": "Entendi"
 }

@@ -7558,5 +7558,9 @@
   "conv_relock_prime": "Вчерашняя дверь закрыта. С Prime она остаётся открытой.",
   "conv_session_taste": "Basic открывает двери.",
   "conv_gallery_title": "В галерее патронов ещё {0}.",
-  "conv_gallery_body": "Basic открывает её."
+  "conv_gallery_body": "Basic открывает её.",
+  "conv_member_hello_title": "Бесплатный участник. Спасибо, что следите.",
+  "conv_member_hello_body": "Бесплатные участники получают два ежедневных подарка.",
+  "conv_member_second": "Второй на сегодня: {0}.",
+  "conv_ok": "Понятно"
 }

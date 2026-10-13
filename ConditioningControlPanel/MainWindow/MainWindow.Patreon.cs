@@ -1299,6 +1299,7 @@ namespace ConditioningControlPanel
             // after any server tier reading that moved the stored lapse signal.
             Activated += (_, __) => MaybePostConversionRows();
             EntitlementTierSync.ReadingApplied += MaybePostConversionRows;
+            EntitlementTierSync.ExtrasApplied += MaybePostConversionRows;
             Services.Startup.Conversion.ConversionSignals.CompanionCapHit += OnCompanionCapHit;
             Services.Invites.InviteGrantSync.ArmExpiry();
             EntitlementTierSync.TierRaised += OnEntitlementTierRaised;

@@ -164,6 +164,16 @@ namespace ConditioningControlPanel.Services
             || (App.SubscribeStar?.HasPremiumAccess == true) || (App.Settings?.Current?.HasInviteGrant == true);
 
         /// <summary>
+        /// The server's <c>patreon_member</c> (brief C2, mirrored in AppSettings.PatreonMember by
+        /// EntitlementTierSync): a Patreon free member or an active patron. Not an access grant.
+        /// </summary>
+        public bool IsPatreonMember => App.Settings?.Current?.PatreonMember == true;
+
+        /// <summary>A Patreon member with no tier: the free-member hello, the second Daily Gift and
+        /// the post code row are for them.</summary>
+        public bool IsFreeMember => IsPatreonMember && !HasPremiumAccess;
+
+        /// <summary>
         /// Premium that comes ONLY from an invite week (Services/Invites): a free trial, not a
         /// purchase. The celebration card and anything else that means "they paid" checks this.
         /// </summary>

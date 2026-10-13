@@ -3292,6 +3292,41 @@ namespace ConditioningControlPanel.Models
             set { _inboxStamps = value ?? new(StringComparer.Ordinal); OnPropertyChanged(); }
         }
 
+        private bool _patreonMember;
+        /// <summary>
+        /// The server's <c>patreon_member</c> off <c>/v2/user/profile</c> (brief C2): a Patreon free
+        /// member or an active patron. With no tier it buys the second Daily Gift and the post code
+        /// row; it never opens a tier door by itself. Machine-local mirror of a server field.
+        /// </summary>
+        [JsonProperty("patreon_member")]
+        public bool PatreonMember
+        {
+            get => _patreonMember;
+            set { _patreonMember = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, string> _postGrants = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Post code grants (brief C6): Daily Gift key -> ISO end time, from a redeem reply or the
+        /// profile's <c>post_grants</c>. DailyFreeService ORs an unexpired one into IsFreeToday.
+        /// </summary>
+        [JsonProperty("post_grants", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, string> PostGrants
+        {
+            get => _postGrants;
+            set { _postGrants = value ?? new(StringComparer.OrdinalIgnoreCase); OnPropertyChanged(); }
+        }
+
+        private DateTime? _serverPaidUntil;
+        /// <summary>The server's <c>paid_until</c> (brief C2): a PayPal / Stripe period end, null for
+        /// Patreon until its webhook stores one. Shown, never a gate.</summary>
+        [JsonProperty("server_paid_until")]
+        public DateTime? ServerPaidUntil
+        {
+            get => _serverPaidUntil;
+            set { _serverPaidUntil = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Scheduler
