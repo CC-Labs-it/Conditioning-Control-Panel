@@ -86,12 +86,10 @@ public static class V2PurchaseRule
             _ => false,
         };
 
-    /// <summary>The live read, off <see cref="PrizeGrants"/> and never a setting.</summary>
-    public static bool OwnsPrize(string? prizeId) => OwnsPrize(prizeId,
-        PrizeGrants.IsGranted(PrizeGrants.FlashDriftBounce),
-        PrizeGrants.IsGranted(PrizeGrants.FlashPendulum),
-        PrizeGrants.IsGranted(PrizeGrants.BubbleRain),
-        PrizeGrants.IsGranted(PrizeGrants.BubbleSpiralIn));
+    /// <summary>The live read over a head's grant check (WPF: PrizeGrants.IsGranted), never a setting.</summary>
+    public static bool OwnsPrize(string? prizeId, Func<string, bool> isGranted) => OwnsPrize(prizeId,
+        isGranted("fx.flash.drift_bounce"), isGranted("fx.flash.pendulum"),
+        isGranted("fx.bubble.rain"), isGranted("fx.bubble.spiral_in"));
 
     /// <summary>
     /// The row for one prize.
