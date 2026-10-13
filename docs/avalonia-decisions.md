@@ -1094,6 +1094,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   a render-all failure (`render-all-crash`).
 
 ## 2026-10-12: Chaster idle-day charge stays off until the conditioning-time tracker is ported (avalonia-port/chaster-minutes)
+## 2026-10-12: Chaster idle-day charge reads the day log, as on WPF (avalonia-port/chaster-minutes, then chaster-leash-minutes)
 - Question: with `FeatureDayLogService` now in Core and running on this head, should `ChasterHead` give the Chaster
   service its `MinutesOn` (the idle-day row's eyes)? Wiring it arms WPF's idle-day charge here, which users will see.
 - Options: (A) keep it off: `MinutesOn` stays null, the day-end check reads "nobody can tell" and never books an idle day;
@@ -1115,3 +1116,19 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `windows`, `avalonia-windows` and the Windows coverage entry always run (coverage keeps `!cancelled()`, so a skipped
   avalonia-linux does not skip it). Push and pull_request runs have no inputs, so they stay full. `bin/rgate` dispatches
   `scope=windows` when it sees the input; `RGATE_FULL=1` forces the old all-remote run.
+- Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
+  `TotalConditioningMinutes` (`FeatureDayLogService.cs:73`), and nothing on this head grew it, so B would have charged
+  every day CCP was open as idle on the user's real lock.
+- Choice now (chaster-leash-minutes): B, exactly WPF `ChasterServiceApp.cs:40,49`. The input exists: the
+  conditioning-time tracker lane (avalonia-port/conditioning-time-tracker, Core `ConditioningTimeTracker`, wired in
+  `MainShellWindow.UiUpdates.cs`/`StartStop.cs`) accrues `TotalConditioningMinutes` while the engine runs. Null when no
+  log (construction failed / headless render path), 0 for a day with no entry, as WPF.
+- Test: `ChasterMinutesTests.ConditionedDayIsNotIdle_ADayWithoutConditioningIsCharged` (engine run 12 min on a stepped
+  clock -> day log -> today's idle charge 0, a day after the first log day 1200 s; fail-proven: no MinutesOn -> red, `?? 0` -> red).
+  It asserts the head's minutes and `TabDayEnd.IdleCharge`, not JudgeEndedDay's linked/priced gates or BookSeconds.
+- Upgrade edge, guarded: a day before the tracker existed reads 0 minutes, so the first day-end after upgrading would
+  charge a linked user with `idle` priced one idle day (1200 s) for a day they may well have conditioned. The head's
+  `MinutesOn` returns null (unknown, no charge, as before this lane) for any day before the day log's first day with
+  conditioning minutes (`FeatureDayLogService.FirstConditioningDay`), and null while no such day exists. No new state:
+  the earliest `cm > 0` entry is the tracker's first run. Same test: a day before the first log day is null and not
+  charged (fail-first: red with `Expected null, Actual 0` before the guard).
