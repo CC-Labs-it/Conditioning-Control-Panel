@@ -2364,20 +2364,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // File ops
         //
         // The library's file conventions are inlined below rather than taken from
-        // ConditioningControlPanel/Services/Deeper/EnhancementLibrary.cs, which is head-only
-        // (App.UserDataPath, App.Settings, App.Logger, FileSystemWatcher, DispatcherTimer). Only
+        // CCP.Core/Services/Deeper/EnhancementLibrary.cs. It reached Core in deeper-core-a, but
+        // this head does not construct one yet (it owns a FileSystemWatcher and seeds demos, so it
+        // wants one app-level instance, not one per window). Only
         // five of its members matter to this window - FileSuffix, LibraryFolder, LastDirectory,
         // SuggestedFileName and Save - and every one of them reduces to CorePaths, CoreSettings and
         // Core's EnhancementSerializer.
         //
         // ponytail: five inlined members beats blocking the whole file-ops group on a service move
-        // this layer does not own. When EnhancementLibrary reaches Core, delete this region and
-        // call it. Deliberately NOT inlined: LibraryChanged (nothing on this head listens - the
+        // this layer does not own. Once the head holds an EnhancementLibrary instance (listed
+        // as the next deeper-core unit), delete this region and call it. Deliberately NOT inlined: LibraryChanged (nothing on this head listens - the
         // catalogue browser is not ported), the demo seeding, and ScanLibrary/FindMatch, whose
         // absence is visible in exactly one place and noted there.
         // ---------------------------------------------------------------------------------
 
-        private const string EnhancementFileSuffix = ".ccpenh.json";
+        private const string EnhancementFileSuffix = ConditioningControlPanel.Services.Deeper.EnhancementLibrary.FileSuffix;
         private const int MaxRecentFiles = 10;
 
         private static readonly string[] AudioPatterns = { "*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg" };
