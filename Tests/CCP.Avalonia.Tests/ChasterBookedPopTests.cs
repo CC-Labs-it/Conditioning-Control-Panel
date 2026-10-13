@@ -122,6 +122,7 @@ public sealed class ChasterBookedPopTests
         Assert.True(ChasterBookedPop.At(full, full.ScaleInMs * 0.6, null).Scale > 1);   // overshoot
         Assert.Equal(1, ChasterBookedPop.At(full, full.ScaleInMs, null).Scale, 3);
         Assert.Equal(1.18, ChasterBookedPop.At(full, 800, 0).Scale, 3);          // Retitle re-punch
+        Assert.Equal(1, ChasterBookedPop.At(full, 50, 200).Scale, 3);            // a punch inside the scale-in holds 1.0 after it ends
         Assert.Equal(-full.RiseDip, ChasterBookedPop.At(full, full.TotalMs, null).Rise, 3);
         Assert.Equal(1, ChasterBookedPop.At(full, full.TotalMs - full.FadeMs, null).Opacity, 3);
         Assert.Equal(0.5, ChasterBookedPop.At(full, full.TotalMs - full.FadeMs / 2.0, null).Opacity, 3);

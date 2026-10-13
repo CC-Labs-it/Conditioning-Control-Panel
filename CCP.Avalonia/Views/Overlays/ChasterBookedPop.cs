@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Seam: make the unshown window click-through and topmost at <c>bounds</c> (physical px). False = this platform cannot.</summary>
         internal static Func<Window, PixelRect, bool> Place = (w, b) =>
-            X11Overlay.IsAvailable && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, b);
+            X11Overlay.IsAvailable && X11Overlay.IsCompositing && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, b);
         /// <summary>Seam: the cursor in physical desktop px (WPF GetCursorPos; X11 only here).</summary>
         internal static Func<ScreenPoint?> Cursor = () => X11Pointer.Read() is { } r ? new ScreenPoint(r.At.X, r.At.Y) : null;
         internal static TimeProvider Time = TimeProvider.System;
@@ -171,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (ms < p.ScaleInMs) scale = 0.2 + 0.8 * BackOut(ms / p.ScaleInMs, p.Overshoot);
                 if (ms < p.ScaleInMs * 2) glow = 60 - 38 * (ms / (p.ScaleInMs * 2));   // the glow flares at birth and settles
-                if (punchMs is { } q && q < 180) scale = 1.18 - 0.18 * BackOut(q / 180, 0.4);
+                if (punchMs is { } q) scale = q < 180 ? 1.18 - 0.18 * BackOut(q / 180, 0.4) : 1.0;   // WPF holds 1.0 after the punch
             }
             var rise = p.RiseDip > 0 ? -p.RiseDip * (1 - Math.Pow(1 - Math.Min(1, ms / life), 3)) : 0;
             var opacity = 1.0;
