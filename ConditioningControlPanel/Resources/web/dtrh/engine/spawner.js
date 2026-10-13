@@ -452,6 +452,12 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   let nextVeilDepth = 70;
   let videoWatch = 0;
   let liveVideos = 0;
+  // Moving pictures (hostMedia.drawLoop): silent looping clips worn by a PICTURE card.
+  // Each one holds a decoder while it is on screen, so they are capped; past the cap the
+  // tube falls back to stills.
+  const MAX_LIVE_LOOPS = Q.tier === 'mobile' ? 2 : 6;
+  const LOOP_SHARE = 0.9;      // of picture cards, when a moving one is to be had
+  let liveLoops = 0;
   let liveVeils = 0;
   let paused = false;         // ESC pause (scene stops calling update too)
   let spotlight = null;       // the promoted video card, if any
@@ -844,6 +850,18 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   async function prefetchOne() {
     const vidsAhead = ready.filter((r) => r.kind === 'video').length;
     const wantImage = vidsAhead >= PREFETCH_VIDEO_MAX || liveVideos >= MAX_LIVE_VIDEOS || !videoOk();
+    const loopsAhead = ready.filter((r) => r.kind === 'loop').length;
+    const loopEntry = (media.drawLoop && loopsAhead < 2 && liveLoops + loopsAhead < MAX_LIVE_LOOPS
+      && Math.random() < LOOP_SHARE) ? media.drawLoop() : null;
+    if (loopEntry) {
+      DIAG.draws += 1;
+      const got = await loopEntry.acquire();
+      const loopItem = got ? await prefetchVideo(got) : null;
+      if (loopItem) {
+        loopItem.kind = 'loop'; loopItem.assetName = loopEntry.name; loopItem.assetKind = 'video';
+        return loopItem;
+      }
+    }
     const entry = (wantImage && media.drawKind('image')) || media.draw();
     if (!entry) return null;
     DIAG.draws += 1;
@@ -883,6 +901,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   function takeReady(allowVideo) {
     for (let i = 0; i < ready.length; i++) {
       if (ready[i].kind === 'video' && !allowVideo) continue;
+      if (ready[i].kind === 'loop' && liveLoops >= MAX_LIVE_LOOPS) continue;
       return ready.splice(i, 1)[0];
     }
     return null;
@@ -1028,6 +1047,50 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
       },
     };
     applyGifItem(rec, shell, item);
+    return rec;
+  }
+
+  // A moving picture: the picture card's shell wearing a silent looping clip. It is a
+  // PICTURE to the rest of the game (kind 'image': grabbable, never the spotlight, no
+  // sound), which is why the element is `loopEl` and not `videoEl`.
+  function buildLoopCard(depth, item) {
+    const shell = makeUserCardShell(depth);
+    const video = item.videoEl;
+    let vtex = item.vtex, ownTex = false;
+    if (!vtex) {
+      vtex = new THREE.VideoTexture(video);
+      vtex.colorSpace = THREE.SRGBColorSpace;
+      vtex.minFilter = THREE.LinearFilter;
+      vtex.generateMipmaps = false;
+      vtex.autoUpdate = false;
+      ownTex = true;
+    }
+    const rec = {
+      group: shell.group, depth, kind: 'image', billboard: true, tex: null,
+      loopEl: video, loopTex: vtex, texAcc: 0,
+      dispose() {
+        rec.dead = true;
+        if (ownTex) vtex.dispose();
+        try { item.dispose(); } catch (e) { /* ignore */ }
+        shell.mat.dispose();
+        for (const m of shell.dressed) m.dispose();
+      },
+    };
+    rec.contentMat = shell.mat;
+    rec.dressedMats = shell.dressed;
+    shell.mat.map = vtex;
+    shell.mat.needsUpdate = true;
+    const show = () => {
+      if (rec.dead) return;
+      sizeShell(shell, (video.videoWidth || 4) / (video.videoHeight || 3));
+      vtex.needsUpdate = true;
+      shell.group.visible = true;
+      if (mirror) applyMirror(rec);
+    };
+    if (video.readyState >= 2) show();
+    else video.addEventListener('loadeddata', show, { once: true });
+    video.muted = true; video.loop = true;
+    const p = video.play(); if (p && p.catch) p.catch(() => {});
     return rec;
   }
 
@@ -1308,6 +1371,8 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
         rec = buildVideoCard(depth, null, { withAudio: true, release: item.release, videoEl: item.videoEl, vtex: item.vtex });
       } else if (item.kind === 'gif') {
         rec = buildGifCard(depth, item);
+      } else if (item.kind === 'loop') {
+        rec = buildLoopCard(depth, item);
       } else {
         rec = buildImageCard(depth, item);
       }
@@ -1352,6 +1417,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     if (!rec) return;
     DIAG.added += 1;
     if (rec.videoEl) liveVideos += 1;
+    if (rec.loopEl) liveLoops += 1;
     if (rec.kind === 'veil') liveVeils += 1;
     rec.group.userData.rec = rec; // so a raycast hit can climb back to its card
     live.push(rec);
@@ -1362,6 +1428,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     const rec = live[i];
     live.splice(i, 1);
     if (rec.videoEl) liveVideos = Math.max(0, liveVideos - 1);
+    if (rec.loopEl) liveLoops = Math.max(0, liveLoops - 1);
     if (rec.kind === 'veil') liveVeils = Math.max(0, liveVeils - 1);
     scene.remove(rec.group);
     try { rec.dispose(); } catch (e) { /* ignore */ }
@@ -1775,6 +1842,11 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
         }
         if (rec.texAcc >= iv) { rec.texAcc = 0; rec.vtex.needsUpdate = true; }
       }
+      // a moving picture: same throttled upload, no distance tiers (it is small and near)
+      if (rec.loopTex && !rec.loopEl.paused && !paused && !document.hidden) {
+        rec.texAcc += dt;
+        if (rec.texAcc >= VIDEO_TEX_INTERVAL * 1.5) { rec.texAcc = 0; rec.loopTex.needsUpdate = true; }
+      }
 
       // the spotlight rides with the POV instead of scrolling past
       if (rec.isSpotlight) {
@@ -2105,6 +2177,9 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   function setPaused(v) {
     paused = !!v;
     for (const rec of live) {
+      if (rec.loopEl) {
+        try { if (paused) rec.loopEl.pause(); else { const q = rec.loopEl.play(); if (q && q.catch) q.catch(() => {}); } } catch (e) { /* ignore */ }
+      }
       if (!rec.videoEl) continue;
       if (paused) { try { rec.videoEl.pause(); } catch (e) { /* ignore */ } }
       else if (rec.isSpotlight) { const p = rec.videoEl.play(); if (p && p.catch) p.catch(() => {}); }
