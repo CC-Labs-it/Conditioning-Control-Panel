@@ -17,7 +17,7 @@ public static class ChaosHappyPath
     // ============================ tunables (one block) ============================
 
     /// <summary>Run 1 spawn-rate scale: gentler air so the teach beats land in quiet.</summary>
-    private const double R1_SPAWN_RATE_MULT = 0.6;
+    private const double R1_SPAWN_RATE_MULT = DtrhRunWire.FirstRunSpawnRateMult;
     /// <summary>Run-progress (0..1) beats for the scripted run 1.</summary>
     private const double R1_THREAT_AT_PROGRESS = 0.30;
     private const double R1_DRAFT_AT_PROGRESS  = 0.55;
@@ -74,19 +74,7 @@ public static class ChaosHappyPath
     /// <summary>The forced naked config for the very first descent (RunsCompleted == 0):
     /// treats only, Gentle, no drafts UI, no darters, no sins, gentler spawn air.
     /// Built raw — owned upgrades and saved settings stay out of the classroom.</summary>
-    public static ChaosRunConfig BuildFirstRunConfig() => new()
-    {
-        ScriptedFirstRun = true,
-        Difficulty = ChaosDifficulty.Easy,
-        DurationSec = 180,
-        WaveCount = 5,
-        EnabledVariants = new List<string> { "flash", "subliminal" },
-        BoonDraftEnabled = false,    // one scripted draft fires anyway (TriggerScriptedDraft)
-        AllowCurses = false,
-        DartersEnabled = false,      // one scripted darter anyway
-        SpawnRateMult = R1_SPAWN_RATE_MULT,
-        SinChance = 0.0,
-    };
+    public static ChaosRunConfig BuildFirstRunConfig() => DtrhRunWire.FirstRunConfig();
 
     /// <summary>BeginRun calls this once the state exists. Resets every beat tracker.</summary>
     public static void OnRunStarted(ChaosRunState state, ChaosModeService svc)

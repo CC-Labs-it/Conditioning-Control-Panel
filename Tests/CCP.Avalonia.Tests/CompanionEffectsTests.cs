@@ -41,15 +41,16 @@ public sealed class CompanionEffectsTests
             CoreEntitlement.HasLabProvider = () => true;
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
-            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
+            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
                 all.Select(a => a.Id));
-            Assert.True(all[2].Allowed);
+            Assert.True(all[3].Allowed);
             CoreAccount.IsLoggedInProvider = () => false;          // the tile would ask to sign in
-            Assert.False(all[2].Allowed);
+            Assert.False(all[3].Allowed);
             Assert.True(all[0].Allowed && all[1].Allowed);          // the free demo and the free board need no account
+            Assert.False(all[2].Allowed);                            // Down the Rabbit Hole asks to sign in too
             CoreAccount.IsLoggedInProvider = () => true;
             service.Current.AudioOnlySession = true;
-            Assert.False(all[2].Allowed);
+            Assert.False(all[3].Allowed);
         }
         finally
         {
