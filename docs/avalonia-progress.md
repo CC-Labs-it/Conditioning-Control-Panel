@@ -2042,3 +2042,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/games-host: +710
 - Launcher opens games: shared GameWindow host (init, media-request deal from the library, exit, panic surface "games"), backroom bridge.js on the WebKitGTK string carrier; Breakout demo wired (demo=1, leash check first).
 - Tests: GameWindowTests (fail-proven via WebHost carrier, origin guard, demo=1, media deal, leash, panic), node bridge-carrier.test.js (string carrier = hosted for in-window fx, pause Exit and the F2 dev-panel gate; red run saved); GameWindow acks fx (WPF BackRoomBridge.OnFx), media deal walks images/ once per window, single-flight; live: tile Play opened the GameWindow (page boot not visible in capture).
+
+## avalonia-port/chaster-minutes: +61
+- Chaster MinutesOn stays null on purpose until the conditioning-time tracker feeds the day log; WPF wiring would charge every day as idle. Decision, ledger note and guard test added.
+- SeasonRecap TrackFeature and BackRoom NoteEvent have no Avalonia counterpart yet, so nothing was routed.
