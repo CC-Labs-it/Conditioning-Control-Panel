@@ -104,10 +104,13 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             Live.Remove(this);
         }
 
+        /// <summary>Called when a hide or minimise parks a running loop (a one-shot act cancels itself here).</summary>
+        internal Action? OnParked { get; set; }
+
         private void Sync()
         {
             if (!_running) return;
-            if (Parked) _clock.Stop();
+            if (Parked) { _clock.Stop(); OnParked?.Invoke(); }
             else _clock.Start();
         }
 

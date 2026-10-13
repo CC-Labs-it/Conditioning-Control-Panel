@@ -3,7 +3,7 @@
 // mod's banner -> the neutral default), upper-cased, doubled with 10 spaces into one segment, repeated to fill the
 // canvas, scrolled 0 -> -segment at 80 px/s and looped; under the ambient gate one segment parks at X = 0. Differs: X
 // is written from elapsed time on a BeatLoop (the window's shared 30 fps beat, parked while hidden), not a Storyboard.
-// ponytail: the interlude acts (WPF MainWindow.MarqueeReads.cs) are not ported; nothing on this head arms them.
+// The Barnum interludes (WPF MainWindow.MarqueeReads.cs) ride on this strip: SettingsTabView.MarqueeReads.cs.
 
 using System;
 using System.Linq;
@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void InitializeMarqueeStrip()
         {
             var strip = Marquee;
+            var reads = strip.Reads = new MarqueeInterlude(strip, MarqueeCanvas, MarqueeRead);
             EventHandler onLanguage = (_, _) => strip.Start();
             Action onGate = strip.Start;
             MarqueeText.AttachedToVisualTree += (_, _) =>
@@ -42,7 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 LocalizationManager.Instance.LanguageChanged -= onLanguage;
                 AmbientFxCanvas.Env.MotionGateChanged -= onGate;
+                reads.Cancel();
                 strip.Stop();
+                reads.Disarm();
             };
             MarqueeCanvas.SizeChanged += (_, e) => { if (e.WidthChanged) strip.Start(); };
         }
@@ -60,12 +63,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Canvas _canvas;
         private readonly TextBlock _text;
         private readonly BeatLoop _loop;
+        private double _phase, _t;   // seconds of scroll banked by a Pause, and the beat's last t
+        private bool _paused;
+
+        /// <summary>The interludes this strip arms (WPF ArmMarqueeReadClock / CancelMarqueeInterlude).</summary>
+        internal MarqueeInterlude? Reads { get; set; }
 
         public MarqueeScroller(Canvas canvas, TextBlock text)
         {
             _canvas = canvas;
             _text = text;
-            _loop = new BeatLoop(text, t => { if (SegmentWidth > 0) Transform.X = -(t * PixelsPerSecond % SegmentWidth); });
+            _loop = new BeatLoop(text, t => { _t = t; if (SegmentWidth > 0) Transform.X = -((_phase + t) * PixelsPerSecond % SegmentWidth); });
         }
 
         /// <summary>Started and not parked by the ambient gate.</summary>
@@ -96,11 +104,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         public void Stop() => _loop.Stop();
 
+        /// <summary>WPF Storyboard.Pause: an interlude holds the strip where it is.</summary>
+        internal void Pause()
+        {
+            if (!_loop.IsRunning) return;
+            _paused = true;
+            _phase += _t;
+            _loop.Stop();
+        }
+
+        /// <summary>WPF Storyboard.Resume: carry on from the held frame, not from zero.</summary>
+        internal void Resume()
+        {
+            if (!_paused) return;
+            _paused = false;
+            _loop.Start();
+        }
+
         public void Start()
         {
             try
             {
+                Reads?.Cancel();   // WPF: the rebuild takes the stage back from any act
                 Stop();
+                _phase = _t = 0;
+                _paused = false;
                 var canvasWidth = _canvas.Bounds.Width;
                 if (canvasWidth <= 0) return;
 
@@ -118,10 +146,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops)
                 {
                     _text.Text = segment;   // parked: one segment at the origin
+                    Reads?.Arm(0);
                     return;
                 }
                 _text.Text = string.Concat(Enumerable.Repeat(segment, (int)Math.Ceiling(canvasWidth / SegmentWidth) + 2));
                 _loop.Start();
+                Reads?.Arm(SegmentWidth / PixelsPerSecond);
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to start marquee animation"); }
         }

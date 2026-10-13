@@ -246,11 +246,11 @@ namespace ConditioningControlPanel.Services.Banner
     /// </summary>
     public static class MarqueeReadEffects
     {
-        public const string GlitchHeal = "glitch-heal";
-        public const string NumberFirst = "number-first";
-        public const string Teletype = "teletype";
-        public const string NeonWarmUp = "neon-warmup";
-        public const string Redaction = "redaction";
+        public const string GlitchHeal = MarqueeReadActs.GlitchHeal;
+        public const string NumberFirst = MarqueeReadActs.NumberFirst;
+        public const string Teletype = MarqueeReadActs.Teletype;
+        public const string NeonWarmUp = MarqueeReadActs.NeonWarmUp;
+        public const string Redaction = MarqueeReadActs.Redaction;
 
         /// <summary>A fresh act table. One instance per interlude; the acts hold no state.</summary>
         public static IReadOnlyList<IMarqueeReadEffect> Build() => new IMarqueeReadEffect[]
@@ -262,30 +262,10 @@ namespace ConditioningControlPanel.Services.Banner
             new RedactionEffect(),
         };
 
-        /// <summary>
-        /// Pick an act. Never the one that just played, never one that says it cannot carry the
-        /// line, and null only when nothing at all is eligible.
-        ///
-        /// <para>The roll is a plain index into whatever survived the filter, so a table that
-        /// shrinks to one entry still plays that entry rather than falling over - the
-        /// no-repeat rule yields to actually having something to show only when the table is down
-        /// to a single usable act.</para>
-        /// </summary>
+        /// <summary>The shared picker, now in Core (<see cref="MarqueeReadActs.PickId"/>).</summary>
         public static string? PickId(IReadOnlyList<string> ids, string? lastId,
                                      Func<string, bool> canPlay, Func<int, int> roll)
-        {
-            if (ids == null || ids.Count == 0) return null;
-
-            var usable = new List<string>();
-            foreach (var id in ids) if (canPlay(id)) usable.Add(id);
-            if (usable.Count == 0) return null;
-
-            var fresh = new List<string>();
-            foreach (var id in usable) if (!string.Equals(id, lastId, StringComparison.Ordinal)) fresh.Add(id);
-
-            var from = fresh.Count > 0 ? fresh : usable;
-            return from[Math.Abs(roll(from.Count)) % from.Count];
-        }
+            => MarqueeReadActs.PickId(ids, lastId, canPlay, roll);
     }
 
     // ============================================================================= 1. glitch heal
