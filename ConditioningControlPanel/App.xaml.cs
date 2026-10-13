@@ -450,6 +450,8 @@ namespace ConditioningControlPanel
             Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
             Services.Invites.InviteApi.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
+            Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
             CoreProgram.ActivePackVideoCountProvider = () => ContentPacks?.GetAllActivePackVideos().Count ?? 0;
             CoreProgram.RoadmapProvider = () => Roadmap;
