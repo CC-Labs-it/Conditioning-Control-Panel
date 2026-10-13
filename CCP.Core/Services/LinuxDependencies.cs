@@ -58,14 +58,20 @@ namespace ConditioningControlPanel.Services
         /// stopped being true when WebKitGTK became the Linux engine (webview-render).</summary>
         public static readonly IReadOnlyList<Dependency> Required = All.Where(d => d.Need != "web views (WPE)").ToList();
 
-        /// <summary>True when <paramref name="file"/> sits in a GStreamer plugin dir: every entry of GST_PLUGIN_SYSTEM_PATH(_1_0)
-        /// and GST_PLUGIN_PATH(_1_0), then the distro dirs (Arch, Fedora, Debian/Ubuntu x64 and arm64).</summary>
-        public static bool GstPluginPresent(string file, Func<string, string?> env, Func<string, bool> exists) =>
-            new[] { "GST_PLUGIN_SYSTEM_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_PATH" }
-                .SelectMany(v => (env(v) ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries))
-                .Concat(new[] { "/usr/lib/gstreamer-1.0", "/usr/lib64/gstreamer-1.0",
+        /// <summary>True when <paramref name="file"/> sits where GStreamer itself looks (gst_plugin_registry rules): every entry of
+        /// GST_PLUGIN_PATH(_1_0), the user dir ($XDG_DATA_HOME or ~/.local/share, /gstreamer-1.0/plugins), then GST_PLUGIN_SYSTEM_PATH(_1_0)
+        /// if set - which REPLACES the distro dirs (Arch, Fedora, Debian/Ubuntu x64 and arm64), as AppImage/Flatpak wrappers rely on.</summary>
+        public static bool GstPluginPresent(string file, Func<string, string?> env, Func<string, bool> exists)
+        {
+            string[] Dirs(params string[] vars) => vars.SelectMany(v => (env(v) ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries)).ToArray();
+            var system = Dirs("GST_PLUGIN_SYSTEM_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH");
+            var dataHome = env("XDG_DATA_HOME") is { Length: > 0 } x ? x : (env("HOME") is { Length: > 0 } h ? h + "/.local/share" : null);
+            return Dirs("GST_PLUGIN_PATH_1_0", "GST_PLUGIN_PATH")
+                .Concat(dataHome is null ? Array.Empty<string>() : new[] { dataHome + "/gstreamer-1.0/plugins" })
+                .Concat(system.Length > 0 ? system : new[] { "/usr/lib/gstreamer-1.0", "/usr/lib64/gstreamer-1.0",
                                 "/usr/lib/x86_64-linux-gnu/gstreamer-1.0", "/usr/lib/aarch64-linux-gnu/gstreamer-1.0" })
                 .Any(dir => exists(dir.TrimEnd('/') + "/" + file));   // Linux paths, not Path.Combine: the tests also run on Windows
+        }
 
         /// <summary>This machine's answer for <paramref name="file"/>.</summary>
         public static bool GstPluginPresent(string file) => GstPluginPresent(file, Environment.GetEnvironmentVariable, File.Exists);

@@ -1059,6 +1059,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.
 
 ## 2026-10-12: Linux web views stay off by default; CCP_LINUX_WEBVIEW opts in (webview-probe-fix)
+- Superseded by the 2026-10-13 entry (webview-render): WebKitGTK is the Linux default; the "stall" was a web-process crash.
 - Question: on Arch/CachyOS with webkit2gtk-4.1 and wpewebkit installed every web surface said "No native web view on
   this platform." `WebHost.ProbeUnavailableReason` accepted only adapters advertising `NativeControlHost`; in
   Avalonia.Controls.WebView 12.1.0 `GetAdapterInfo` reports WebKitGtk as `NativeDialog` and WpeWebKit/Headless as
@@ -1095,7 +1096,8 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Second finding: Arch wpewebkit 2.54.1-2 is built without the legacy libwpe API (`webkit_web_view_backend_new` gone,
   upstream AvaloniaUI/Avalonia.Controls.WebView#88). 12.1's WPE adapter then throws from an async void and kills the app,
   and WPE is the package's default Linux pick.
-- Answer (advised by: supervisor): on Linux, WebHost always sets `PreferWebKitGtkInstead` (WebKitGTK default).
+- Answer (advised by: supervisor; advised: oracle-deep - keep the gate, no fake sink, add a CCP_LINUX_WEBVIEW=gtk override and
+  follow GStreamer's own plugin-path rules): on Linux, WebHost always sets `PreferWebKitGtkInstead` (WebKitGTK default).
   `CCP_LINUX_WEBVIEW=wpe` is honoured only when libWPEWebKit exports `webkit_web_view_backend_new` (`NativeLibrary.TryGetExport`),
   otherwise GTK is used. `=off` gives the fallback panel. A Linux engine without the audio sink gives the panel with the per-distro
   command (Core `LinuxDependencies`, "web views (sound)": gst-plugins-good / gstreamer1.0-plugins-good / gstreamer1-plugins-good;
@@ -1103,7 +1105,20 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   aborts on its first sound is worse than an honest panel. WPE is opt-in only, so the startup toast (`LinuxDependencies.Required`)
   and the panel (`WebViews`) no longer name it. PKGBUILD: gst-plugins-good in depends, the WPE trio in optdepends. Headless, `--smoke`,
   `--render-all` and tests are unchanged (never an engine). Windows/macOS are untouched.
+- Override and probe rules (oracle-deep): an explicit `CCP_LINUX_WEBVIEW=gtk` skips the sink check (one warning logged), so a
+  probe false negative (NixOS/Guix store paths, other Debian arches) cannot block every page for good; the unset default stays
+  gated. The probe follows GStreamer: GST_PLUGIN_PATH(_1_0), the user dir ($XDG_DATA_HOME/gstreamer-1.0/plugins), then
+  GST_PLUGIN_SYSTEM_PATH(_1_0), which REPLACES the distro dirs when set (AppImage/Flatpak wrappers). The panel says to restart
+  CCP after installing (probed once per process); `=wpe` falling back to GTK on 2.54 logs one warning.
 - Not chosen: GTK `ExperimentalOffscreen` survives intake without the sink but pushes ~16 fps and hides the missing dependency.
+- Not chosen: a null/fake audio sink. WebKit asks GStreamer for `autoaudiosink` by name and no WebKit or GStreamer setting maps it
+  to another element; bundling libgstautodetect ties us to the host's GStreamer; turning off WebAudio/media in WebKit settings
+  would make `new AudioContext()` throw in our pages and stop video.
+- Wayland: Avalonia is pinned to X11 (XWayland), and the GTK adapter's `ForceX11GdkBackend` (default true) forces GDK_BACKEND=x11
+  around GTK init. Untested: NVIDIA's proprietary driver is widely reported to give blank WebKitGTK views; `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  is the user-side switch. Fractional/HiDPI scale between GTK and Avalonia is not measured.
+- Residuals: airspace (Avalonia popups under the X11 child), a shutdown-only SIGABRT seen once, and Avalonia 12.1 surfaces no
+  web-process-terminated event, so a future web-process crash would again freeze a page silently.
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.

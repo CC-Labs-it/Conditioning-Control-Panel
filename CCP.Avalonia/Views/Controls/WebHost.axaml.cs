@@ -189,7 +189,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // Linux: name the distro's install command (docs/avalonia-linux-install.md) instead of
                 // the adapter's generic "Install webkit2gtk 4.0+ package.", which stays the fallback.
                 var hint = _linuxHint.Value;
-                _txtReason.Text = hint?.Text ?? UnavailableReason!;
+                // Probed once per process: an install only takes effect after a restart.
+                _txtReason.Text = hint is { } h ? h.Text + "\nRestart CCP after installing." : UnavailableReason!;
                 if (hint?.Command is { } command)
                 {
                     var copy = this.FindControl<Button>("BtnCopyCommand")!;
@@ -305,15 +306,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // always draw the fallback, even on a box with WPE/WebKitGTK installed.
             var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
             var linux = OperatingSystem.IsLinux();
-            return DecideUnavailableReason(adapters, linux, headless, LinuxChoice,
-                audioSink: !linux || headless || ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"));
+            var sink = !linux || headless || ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so");
+            if (!sink && SkipsAudioSinkCheck(Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW")))
+            {
+                Log.Warning("WebHost: GStreamer autoaudiosink not found, CCP_LINUX_WEBVIEW=gtk overrides the check (a page's first sound may freeze it)");
+                sink = true;
+            }
+            return DecideUnavailableReason(adapters, linux, headless, LinuxChoice, audioSink: sink);
         }
+
+        /// <summary>An explicit CCP_LINUX_WEBVIEW=gtk overrides the audio-sink probe, so a false negative (a plugin dir the probe
+        /// does not know) cannot block every web page for good. The unset default stays gated.</summary>
+        internal static bool SkipsAudioSinkCheck(string? env) => env?.Trim().ToLowerInvariant() == "gtk";
 
         /// <summary>The Linux engine for this process: <see cref="LinuxEngine"/> over CCP_LINUX_WEBVIEW.</summary>
         internal static string LinuxChoice => _linuxChoice.Value;
 
         private static readonly Lazy<string> _linuxChoice = new(() =>
-            LinuxEngine(Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW"), WpeHasLegacyApi));
+        {
+            var env = Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW");
+            var choice = LinuxEngine(env, WpeHasLegacyApi);
+            if (env?.Trim().ToLowerInvariant() == "wpe" && choice != "wpe")
+                Log.Warning("WebHost: CCP_LINUX_WEBVIEW=wpe ignored, libWPEWebKit lacks webkit_web_view_backend_new (wpewebkit 2.54+); using WebKitGTK");
+            return choice;
+        });
 
         /// <summary>
         /// CCP_LINUX_WEBVIEW = <c>off</c> -> "off" (fallback panel), <c>wpe</c> -> "wpe" when <paramref name="wpeLegacyApi"/>

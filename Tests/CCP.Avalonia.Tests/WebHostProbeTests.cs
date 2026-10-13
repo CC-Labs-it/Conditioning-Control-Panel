@@ -114,6 +114,18 @@ public sealed class WebHostProbeTests
             isLinux: false, headless: false, audioSink: false));
     }
 
+    // oracle-deep fix A: an explicit CCP_LINUX_WEBVIEW=gtk overrides the sink probe (a false negative must not block every page
+    // for good); the unset default stays gated.
+    [Theory]
+    [InlineData("gtk", true)]
+    [InlineData(" GTK ", true)]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("wpe", false)]
+    [InlineData("off", false)]
+    public void OnlyAnExplicitGtkSkipsTheAudioSinkCheck(string? value, bool skips) =>
+        Assert.Equal(skips, WebHost.SkipsAudioSinkCheck(value));
+
     [Theory]
     [InlineData(null, true, "gtk")]
     [InlineData(null, false, "gtk")]

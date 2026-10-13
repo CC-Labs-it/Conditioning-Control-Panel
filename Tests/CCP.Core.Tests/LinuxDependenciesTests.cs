@@ -140,6 +140,22 @@ public sealed class GstAudioSinkDependencyTests
         Assert.True(LinuxDependencies.GstPluginPresent("libgstautodetect.so", Env((variable, "/nope::/opt/gst/plugins")),
             p => p == "/opt/gst/plugins/libgstautodetect.so"));
 
+    // GStreamer's rule: GST_PLUGIN_SYSTEM_PATH(_1_0) REPLACES the built-in dirs (AppImage/Flatpak/Nix wrappers), so a plugin only
+    // in /usr/lib is invisible to WebKit there; counting it would bring the crash back (oracle-deep fix B).
+    [Theory]
+    [InlineData("GST_PLUGIN_SYSTEM_PATH_1_0")]
+    [InlineData("GST_PLUGIN_SYSTEM_PATH")]
+    public void ASystemPathOverrideHidesTheDistroDirs(string variable) =>
+        Assert.False(LinuxDependencies.GstPluginPresent("libgstautodetect.so", Env((variable, "/app/lib/gstreamer-1.0")),
+            p => p == "/usr/lib/gstreamer-1.0/libgstautodetect.so"));
+
+    [Theory]
+    [InlineData(null, "/home/u/.local/share/gstreamer-1.0/plugins/libgstautodetect.so")]
+    [InlineData("/xdg", "/xdg/gstreamer-1.0/plugins/libgstautodetect.so")]
+    public void TheUserPluginDirCounts(string? xdgDataHome, string file) =>
+        Assert.True(LinuxDependencies.GstPluginPresent("libgstautodetect.so",
+            k => k switch { "XDG_DATA_HOME" => xdgDataHome, "HOME" => "/home/u", _ => null }, p => p == file));
+
     [Fact]
     public void NoSinkAnywhereIsMissing() =>
         Assert.False(LinuxDependencies.GstPluginPresent("libgstautodetect.so", Env(("GST_PLUGIN_PATH", "/opt/x")), _ => false));
