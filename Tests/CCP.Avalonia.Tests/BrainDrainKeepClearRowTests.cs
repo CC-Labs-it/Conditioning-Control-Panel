@@ -1,3 +1,4 @@
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -5,6 +6,8 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Controls.Studio;
 using Xunit;
 
@@ -44,6 +47,44 @@ public sealed class BrainDrainKeepClearRowTests
         {
             host?.Close();
             s.BrainDrainKeepPicturesClear = was;
+        }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>The Studio tab keeps the card alive, so a Reset / cloud restore (CurrentReplaced)
+    /// must repaint the toggle, as WPF's settings rebind hook does (.xaml.cs:47,69-73).</summary>
+    [Fact]
+    public Task RowRepaintsWhenSettingsAreReplaced() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+
+        var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+        var saved = File.Exists(settingsPath) ? File.ReadAllBytes(settingsPath) : null;
+        Window? host = null;
+        try
+        {
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.BrainDrainKeepPicturesClear = false;
+            var card = new BrainDrainFeatureControl();
+            host = new Window { Content = card };
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            var chk = card.FindControl<CheckBox>("ChkKeepClear")!;
+            Assert.False(chk.IsChecked);
+
+            service.RestoreFrom(new AppSettings { BrainDrainKeepPicturesClear = true });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(chk.IsChecked);
+        }
+        finally
+        {
+            host?.Close();
+            CoreSettings.ServiceProvider = null;
+            if (saved is null) File.Delete(settingsPath); else File.WriteAllBytes(settingsPath, saved);
         }
         return Task.CompletedTask;
     });
