@@ -171,16 +171,16 @@ namespace ConditioningControlPanel
                     else
                     {
                         // Free and already ran this week - the upsell is the honest answer, but SAY
-                        // it: ShowAppInfoPopup() is a tab switch now, so on its own it just moves
-                        // the user to Settings · Account with no explanation. Same copy the gate
-                        // card carries, same "See tiers" destination, now with a reason attached.
+                        // it. The button opens the priced vault card (not Settings · Account): it
+                        // names the tier, the price and the checkout. Tier 2 because unlimited runs
+                        // are HasLabAccess today (IntakePassService.IsPremium); keep the two equal.
                         var days = Services.IntakePassService.DaysUntilNextPass;
                         var body = days == 1
                             ? Loc.Get("intake_gate_spent_body_one_day")
                             : Loc.GetF("intake_gate_spent_body", days);
                         App.Notifications?.Show(body, Services.NotificationType.Warning,
                             TimeSpan.FromSeconds(8), Loc.Get("intake_gate_spent_cta"),
-                            () => ShowAppInfoPopup());
+                            () => OpenPricedCard("gradedintake", 2));
                     }
                     return;
                 }

@@ -588,6 +588,9 @@ internal static class BackRoomHostService
             // No door endpoint exists yet: null = unknown, and the page learns `closed` from its
             // first station-request (CONTRACT section 3, 403 closed).
             open = (bool?)null,
+            // The plan list (contract C1 via PlanCatalog) for the end cards (C10): Breakout demo
+            // end, bank cash-out. A page shows a price only when this is present.
+            plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
         };
     }
 

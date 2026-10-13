@@ -98,9 +98,9 @@ public class VaultSaleTests
     [Fact]
     public void First_month_reads_in_card_money()
     {
-        var basic = VaultOffer.PriceFor(1, PriceCurrency.Usd);
+        var basic = VaultOffer.PriceFor(1, PriceCurrency.Usd, PlanCatalog.Fallback);
         Assert.Equal("$3.75", VaultOffer.Money(VaultSale.FirstMonthCents(basic.MonthlyCents, 50), PriceCurrency.Usd));
-        var prime = VaultOffer.PriceFor(2, PriceCurrency.Eur);
+        var prime = VaultOffer.PriceFor(2, PriceCurrency.Eur, PlanCatalog.Fallback);
         Assert.Equal("€5", VaultOffer.Money(VaultSale.FirstMonthCents(prime.MonthlyCents, 50), PriceCurrency.Eur));
     }
 

@@ -482,6 +482,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                         payloadMinGapMs = consent.PayloadMinGapMs,
                     },
                     fullscreen = _host?.IsFullscreen == true,
+                    // The plan list (contract C1 via PlanCatalog) for the recap's "Host the next
+                    // one" card (C10). A page shows a price only when this is present.
+                    plans = Services.Vault.PlanCatalog.ToWire(Services.Vault.PlanCatalog.Current),
                     // Discord sharing state (contract §4). Built from the CACHE only — init is
                     // posted synchronously and an avatar may never sit on a boot path. If the
                     // cached own-avatar is stale/absent, KickOwnAvatarRefresh below fetches it and
@@ -795,6 +798,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                     break;
                 case "open-prime":       // page's patron sheet "See the tiers": the app's own refusal and upgrade path
                     TierGate.DemandPremium("Goon Game");
+                    break;
+                case Services.Funnel.FunnelPageMessage.Type:   // recap end card (contract C10): count + open the plan checkout
+                    Services.Funnel.FunnelPageMessage.Handle(o, mayOpen: !_exiting);
                     break;
                 case "peer-niches":      // the opponent's hello named their niches; fill a pool from them
                     OnPeerNiches(o);

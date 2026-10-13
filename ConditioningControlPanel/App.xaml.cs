@@ -3034,14 +3034,18 @@ namespace ConditioningControlPanel
             // bypassing the Lab UI and the ChaosWebGameEnabled flag — but NOT the tier gate, which
             // it now answers to like the Lab card does. `--dtrh-m2test` additionally runs the M2
             // bridge exercise against a CLONED meta state (real save untouched) and stays
-            // unrestricted: it is the capture rig's entry point.
+            // unrestricted: it is the capture rig's entry point, so it exists in DEBUG builds only
+            // (in a shipped build it was a tier-free door into DtRH; Release ignores it).
             //
             // Entitlement is read from the cached state loaded in PatreonService's constructor —
             // online validation may still be in flight this early, so an unvalidated launch fails
             // closed. Denials only log: a dialog here would fire before the user has done anything.
+#if DEBUG
             if (e.Args.Contains("--dtrh-m2test"))
                 Services.Chaos.DtrhHostService.Launch(testMode: true);
-            else if (e.Args.Contains("--dtrh"))
+            else
+#endif
+            if (e.Args.Contains("--dtrh"))
             {
                 var dtrhGate = Services.TierGate.RequiresLab("Down the Rabbit Hole", "dtrh");
                 if (dtrhGate.Allowed) Services.Chaos.DtrhHostService.Launch();

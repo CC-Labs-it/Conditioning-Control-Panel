@@ -238,6 +238,12 @@ public sealed class BackRoomBridge
                 if (!IsClosing && ReadRoomOption(m) is { } option) Guard(() => _d.SetOption?.Invoke(option));
                 else _d.Log?.Invoke("room-option dropped");
                 break;
+            case Funnel.FunnelPageMessage.Type:
+                // Contract C10 end cards (Breakout demo end, bank cash-out): counted, and a
+                // cta_clicked naming a plan opens that plan's checkout - never while closing or
+                // suspended. The page never supplies the url.
+                Funnel.FunnelPageMessage.Handle(m, mayOpen: !Quiet);
+                break;
             default:
                 _d.Log?.Invoke("unhandled message '" + type + "'");
                 break;
