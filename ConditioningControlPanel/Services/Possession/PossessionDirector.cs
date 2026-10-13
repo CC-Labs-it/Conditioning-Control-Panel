@@ -91,7 +91,7 @@ public sealed class PossessionDirector : IDisposable
     }
 
     // ---------------------------------------------------------------------------------------------
-    //  Public surface (see the bottom of PossessionContracts.cs)
+    //  Public surface (see the bottom of CCP.Core PossessionContracts.cs)
     // ---------------------------------------------------------------------------------------------
 
     public PossessionRung CurrentRung { get; private set; } = PossessionRung.Settle;
@@ -317,7 +317,7 @@ public sealed class PossessionDirector : IDisposable
             }
 
             var targets = SnapshotTargets(host, now, out var targetMetas);
-            var effectMetas = _effects.Select(PossessionDeck.MetaOf).ToList();
+            var effectMetas = _effects.Select(PossessionDeckMeta.MetaOf).ToList();
 
             // A5: half the picks look where the user is looking first. A ghost on a control at the far
             // end of the window is a tree falling in an empty forest.

@@ -44,9 +44,6 @@ public sealed class AmbientBeatLoopsTests
         "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml.cs",
         "Views/Tabs/BlinkTrainerTabView.axaml",
-        "Views/Tabs/ProgramsTabView.Ignition.cs",        // from the tip: programs-ignition-fx (Pulse/Spin factories, 8 sites)
-        "Views/Tabs/SettingsTabView.ProgramToday.cs",     // from the tip: programs-today-card (Loop factory, 5 sites)
-        "Views/Tabs/SpiralTabView.axaml.cs",
         "Views/Windows/QuizWindow.axaml",
         "Views/Windows/SplashScreen.axaml",
         "Views/Windows/TeaseRevealPopup.axaml.cs",
@@ -60,23 +57,114 @@ public sealed class AmbientBeatLoopsTests
     private static readonly Regex XmlComments = new(@"<!--.*?-->", RegexOptions.Singleline);
 
     [Fact]
-    public void NoNewInfiniteAnimationInTheHead()
+    public void NoNewInfiniteAnimationInTheHead() =>
+        Ratchet(Scan(code => Infinite.IsMatch(code), axaml: true), NotYetMoved,
+            "An infinite Animation composes its whole window at render rate; use BeatLoop");
+
+    /// <summary>Files whose code-behind still sets or reads a visual's Effect (lag-fixes-b, P82 rules 2-3). An
+    /// Effect makes its visual an offscreen layer re-blurred on every frame anything under it moves; a glow is a
+    /// sibling BoxShadow layer, a fixed blur is baked once. Shrink only.</summary>
+    private static readonly string[] CodeBehindEffects =
+    {
+        "Controls/HoverBubbleBar.cs", "Controls/PremiumGateFx.cs", "Views/Chaos/ChaosHudWindow.axaml.cs",
+        "Views/Chaos/ChaosOverlayWindow.axaml.cs", "Views/Chaos/ChaosSlotPickerWindow.axaml.cs",
+        "Views/Controls/DailyQuestCard.axaml.cs", "Views/Controls/EmiDock.axaml.cs",
+        "Views/Dialogs/AwarenessPresetDetailDialog.axaml.cs", "Views/Dialogs/ColorEditorDialog.axaml.cs",
+        "Views/Dialogs/TubeFitDialog.axaml.cs", "Views/Dialogs/WardrobeEditorDialog.axaml.cs",
+        "Views/Features/FeatureCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
+        "Views/Tabs/AchievementsTabView.axaml.cs", "Views/Tabs/AchievementsTabView.Fx.cs",
+        "Views/Tabs/LockdownTabView.axaml.cs", "Views/Tabs/QuestsTabView.Fx.cs", "Views/Tabs/StudioTabView.axaml.cs",
+        "Views/Windows/AnnouncementPopup.axaml.cs", "Views/Windows/FeatureIntroPopup.axaml.cs",
+        "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
+        "Views/Windows/LockCardWindow.axaml.cs", "Views/Windows/MainShellWindow.Animations.cs",
+        "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MainShellWindow.NavRail.cs",
+        "Views/Windows/MainShellWindow.TabFxTakeoverLabStatus.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Windows/SettingsPaletteWindow.axaml.cs", "Views/Windows/TeaseRevealPopup.axaml.cs",
+    };
+
+    /// <summary>The same rule for markup: .axaml files that still declare an Effect. Shrink only.</summary>
+    private static readonly string[] XamlEffects =
+    {
+        "Views/AvatarTube/AvatarTubeWindow.axaml", "Views/Chaos/ChaosHubWindow.axaml", "Views/Chaos/ChaosOverlayWindow.axaml",
+        "Views/Chaos/ChaosSlotPickerWindow.axaml", "Views/Controls/AttentionCheckControl.axaml",
+        "Views/Controls/Companion/ChatThresholdView.axaml", "Views/Controls/Companion/CompanionHeroCard.axaml",
+        "Views/Controls/Companion/MakeHerYoursView.axaml", "Views/Controls/Companion/RelationshipConstellation.axaml",
+        "Views/Controls/Companion/Themes/CompanionTheme.axaml", "Views/Controls/DailyQuestCard.axaml", "Views/Controls/EmiDock.axaml",
+        "Views/Controls/SeasonRecapCard.axaml", "Views/Dialogs/AttentionTargetEditorDialog.axaml",
+        "Views/Dialogs/ProfilePrivacyDialog.axaml", "Views/Dialogs/RoadmapStepPopup.axaml",
+        "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml", "Views/Tabs/AchievementsTabView.axaml", "Views/Tabs/ChasterTabView.axaml",
+        "Views/Tabs/DiscordTabView.axaml", "Views/Tabs/ExclusivesTabView.axaml", "Views/Tabs/LeaderboardTabView.axaml",
+        "Views/Tabs/LockdownTabView.axaml", "Views/Tabs/PlayTabView.axaml", "Views/Tabs/QuestsTabView.axaml",
+        "Views/Tabs/SettingsTabView.axaml", "Views/Windows/AchievementPopup.axaml", "Views/Windows/AnnouncementPopup.axaml",
+        "Views/Windows/BubbleCountResultWindow.axaml", "Views/Windows/BubbleCountWindow.axaml", "Views/Windows/FeatureIntroPopup.axaml",
+        "Views/Windows/LauncherWindow.axaml", "Views/Windows/LockCardWindow.axaml", "Views/Windows/MainShellWindow.axaml",
+        "Views/Windows/MantraWindow.axaml", "Views/Windows/PinkRushPopup.axaml", "Views/Windows/PopQuizWindow.axaml",
+        "Views/Windows/ProgramsIntroPopup.axaml", "Views/Windows/QuestCompletePopup.axaml", "Views/Windows/QuizCategoryEditorWindow.axaml",
+        "Views/Windows/QuizReportWindow.axaml", "Views/Windows/QuizWindow.axaml", "Views/Windows/SettingsPaletteWindow.axaml",
+        "Views/Windows/SplashScreen.axaml", "Views/Windows/TeaseRevealPopup.axaml", "Views/Windows/TutorialOverlay.axaml",
+        "Views/Windows/WebcamCalibrationWindow.axaml", "Views/Windows/WebcamGazeTrackerWindow.axaml",
+        "Views/Windows/WebcamQuickRecalWindow.axaml", "Views/Windows/WhatMovedCard.axaml",
+    };
+
+    internal static readonly Regex EffectInXaml = new(@"\.Effect>|\sEffect\s*=\s*""");
+
+    [Fact]
+    public void NoNewEffectInXaml() =>
+        Ratchet(Scan(code => EffectInXaml.IsMatch(code), axaml: true, cs: false), XamlEffects,
+            "An Effect in markup is re-blurred on every frame anything under it moves; bake it (GlowBake) or use a sibling BoxShadow (P82)");
+
+    internal static readonly Regex EffectInCode = new(@"\.Effect\s*=(?!=)|Effect\s+is\s+\w*Effect|\.Effect\s+as\s+");
+
+    [Fact]
+    public void NoNewEffectInCodeBehind() =>
+        Ratchet(Scan(code => EffectInCode.IsMatch(code), axaml: false), CodeBehindEffects,
+            "An Effect is re-blurred on every frame anything under it moves; use a sibling BoxShadow layer (P82)");
+
+    /// <summary>Files that still drive frames from their own DispatcherTimer (renderers and loops not yet on the
+    /// shared beat). A new ambient loop rides BeatLoop: one 30 fps beat per window, parked while hidden. Shrink only.</summary>
+    private static readonly string[] OwnFrameTimers =
+    {
+        "Controls/DescentFuseRailChip.cs", "Controls/Fx/FrameClock.cs",   // FrameClock: its own off-window fallback
+        "Controls/HoverPop.cs", "Controls/PremiumSpark.cs", "Controls/TakeoverOrb.cs", "Controls/VatGlassCanvas.cs",
+        "Views/Overlays/FlashOverlayWindow.cs",   // its own overlay window: no beat to share, and the exit must close it even unrendered
+        "Views/AvatarTube/AvatarTubeWindow.Chat.cs", "Views/Chaos/ChaosHudWindow.axaml.cs", "Views/Chaos/ChaosOverlayWindow.axaml.cs",
+        "Views/Controls/SeasonRecapCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
+        "Views/Overlays/AttentionTestTarget.cs", "Views/Overlays/FlashOverlay.cs", "Views/Overlays/SpiralOverlay.cs",
+        "Views/Tabs/AchievementsTabView.Fx.cs", "Views/Tabs/ChasterTabView.Ladder.cs", "Views/Tabs/LockdownTabView.axaml.cs",
+        "Views/Tabs/StudioTabView.Fx.cs", "Views/Windows/EmiDesk/EmiBookWindow.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
+        "Views/Windows/LauncherWindow.Veil.cs", "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Windows/QuizWindow.axaml.cs", "Views/Windows/WebcamCalibrationWindow.axaml.cs",
+    };
+
+    internal static readonly Regex FrameRate = new(@"1000(\.0)?\s*/\s*[A-Za-z0-9_(]|FromMilliseconds\(\s*(16|33|40|41|42|50)\s*\)");
+
+    [Fact]
+    public void NoNewFrameTimerLoop() =>
+        Ratchet(Scan(code => code.Contains("DispatcherTimer") && FrameRate.IsMatch(code), axaml: false), OwnFrameTimers,
+            "A per-view frame timer composes off the shared beat; use BeatLoop");
+
+    private static List<string> Scan(Func<string, bool> hit, bool axaml, bool cs = true)
     {
         var head = System.IO.Path.Combine(RepoRoot(), "CCP.Avalonia");
         var hits = new List<string>();
         foreach (var path in Directory.EnumerateFiles(head, "*.*", SearchOption.AllDirectories))
         {
-            bool cs = path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
-            if (!cs && !path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase)) continue;
+            bool isCs = path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+            if (isCs ? !cs : !(axaml && path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase))) continue;
             var sep = System.IO.Path.DirectorySeparatorChar;
             if (path.Contains($"{sep}obj{sep}") || path.Contains($"{sep}bin{sep}")) continue;
-            var code = (cs ? CsComments : XmlComments).Replace(File.ReadAllText(path), "");
-            if (Infinite.IsMatch(code)) hits.Add(System.IO.Path.GetRelativePath(head, path).Replace('\\', '/'));
+            var code = (isCs ? CsComments : XmlComments).Replace(File.ReadAllText(path), "");
+            if (hit(code)) hits.Add(System.IO.Path.GetRelativePath(head, path).Replace('\\', '/'));
         }
-        var added = hits.Except(NotYetMoved).ToList();
-        Assert.True(added.Count == 0, "An infinite Animation composes its whole window at render rate; use BeatLoop: " + string.Join(", ", added));
-        var gone = NotYetMoved.Except(hits).ToList();
-        Assert.True(gone.Count == 0, "Moved off the infinite Animation - remove from NotYetMoved: " + string.Join(", ", gone));
+        return hits;
+    }
+
+    private static void Ratchet(List<string> hits, string[] known, string why)
+    {
+        var added = hits.Except(known).ToList();
+        Assert.True(added.Count == 0, why + ": " + string.Join(", ", added));
+        var gone = known.Except(hits).ToList();
+        Assert.True(gone.Count == 0, "Moved off - remove from the ratchet list: " + string.Join(", ", gone));
     }
 
     [Fact]
@@ -87,6 +175,14 @@ public sealed class AmbientBeatLoopsTests
         Assert.Matches(Infinite, "new IterationCount(0, IterationType.Infinite)");
         Assert.Matches(Infinite, "breath.IterationBehavior = AnimationIterationBehavior.Forever;");
         Assert.DoesNotMatch(Infinite, "IterationCount = new IterationCount(3),");
+        Assert.Matches(EffectInCode, "part.Effect = new DropShadowEffect();");
+        Assert.Matches(EffectInCode, "if (TxtSeasonTitle.Effect is DropShadowEffect glow)");
+        Assert.DoesNotMatch(EffectInCode, "if (part.Effect == null)");
+        Assert.Matches(FrameRate, "TimeSpan.FromMilliseconds(1000.0 / 24)");
+        Assert.Matches(FrameRate, "Interval = TimeSpan.FromMilliseconds(16)");
+        Assert.Matches(EffectInXaml, "<TextBlock.Effect>");
+        Assert.Matches(EffectInXaml, "<Border Effect=\"{StaticResource Glow}\"/>");
+        Assert.DoesNotMatch(FrameRate, "TimeSpan.FromMilliseconds(160)");
     }
 
     private static string RepoRoot([CallerFilePath] string here = "") =>
@@ -302,5 +398,74 @@ public sealed class AmbientBeatLoopsTests
             Dispatcher.UIThread.RunJobs();
             BeatLoop.Time = TimeProvider.System;
         }
+    });
+
+    [Fact]
+    public Task SpiralTabLoopsRideTheBeat() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        var (motion, perf) = (s.MotionLevel, s.PerformanceMode);
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        Window? w = null;
+        try
+        {
+            s.MotionLevel = MotionLevel.Full;
+            s.PerformanceMode = false;
+            var tab = new SpiralTabView();
+            w = new Window { Content = tab, Width = 900, Height = 700 };
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            void Call(string name, params object[] args) =>
+                typeof(SpiralTabView).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(tab, args);
+
+            // The splash (WPF SpiralTabView.xaml.cs:1151-1184): a 4.6 s turn, halo 0.08 <-> 0.30 over 2.2 s
+            // (MotionFx.GlowBreath), dots 0.15 -> 0.95 at 34% of 1.45 s, the second 0.42 s late.
+            Call("ShowSplash");
+            var glyph = F<global::Avalonia.Controls.Shapes.Path>(tab, "_splashGlyph");
+            var spin = Assert.IsType<RotateTransform>(glyph.RenderTransform);
+            var dot2 = F<TextBlock>(tab, "_splashDot2");
+            double dot2Before = dot2.Opacity;
+            Step(time, 0.4);
+            Assert.Equal(dot2Before, dot2.Opacity, 3);           // still inside its BeginTime
+            Step(time, 1.45 * 0.34 - 0.4);
+            Assert.Equal(0.95, F<TextBlock>(tab, "_splashDot1").Opacity, 3);
+            Step(time, 2.3 - 1.45 * 0.34);
+            Assert.Equal(180, spin.Angle, 3);
+            Step(time, 2.2 - 2.3 + 2.2);                          // t = 4.4: halo back at its floor
+            Assert.Equal(0.08, F<global::Avalonia.Controls.Shapes.Ellipse>(tab, "_splashHalo").Opacity, 3);
+            Call("HideSplash", false);
+            Step(time, 1.0);
+            Assert.Null(glyph.RenderTransform);                   // cancelled: the loop is gone, not parked
+
+            // The waiting room: glow 0.18 <-> 0.70 over 3.1 s, motes rise linearly and fade in to 42% (WPF :1407-1438).
+            Call("StartWaitingAmbience");
+            var glow = F<Image>(tab, "_waitingGlow");
+            // Both glows are baked bitmaps; no live Effect is left anywhere under the tab's loops (P82 rule 3).
+            Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(glow.Source);
+            F<TextBlock>(tab, "_fogDigits").Text = "12:34";                 // the digits' glow is re-baked per text
+            Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(F<Image>(tab, "_fogDigitsGlow").Source);
+            Assert.DoesNotContain(global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab), v => v.Effect != null);
+            Assert.Equal(0.18, glow.Opacity, 3);
+            Step(time, 5.6 * 0.42);
+            var mote = F<global::Avalonia.Controls.Canvas>(tab, "_waitingMotes").Children.OfType<Ellipse>().First();
+            Assert.Equal(0.5, mote.Opacity, 3);
+            Assert.Equal(-190 * 0.42, Assert.IsType<TranslateTransform>(mote.RenderTransform).Y, 3);
+            Step(time, 3.1 - 5.6 * 0.42);
+            Assert.Equal(0.70, glow.Opacity, 3);
+            Call("StopWaitingAmbience");
+            Step(time, 1.0);
+            Assert.Equal(0, mote.Opacity, 3);
+            Assert.Equal(0.5, glow.Opacity, 3);
+        }
+        finally
+        {
+            w?.Close();
+            (s.MotionLevel, s.PerformanceMode) = (motion, perf);
+            Dispatcher.UIThread.RunJobs();
+            BeatLoop.Time = TimeProvider.System;
+        }
+        return Task.CompletedTask;
     });
 }

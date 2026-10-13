@@ -14,8 +14,11 @@ export const PROTOCOL = 1;
 
 const win = (typeof window !== 'undefined') ? window : null;
 const webview = win && win.chrome && win.chrome.webview;
+// The Avalonia head (WebKitGTK) injects window.invokeCSharpAction (string only) instead of
+// chrome.webview; host->page frames come back through window.__ccpRnPush(json), as in intake/web-shim.js.
+const strHost = (!webview && win && typeof win.invokeCSharpAction === 'function') ? win : null;
 
-export const isHosted = !!webview;
+export const isHosted = !!(webview || strHost);
 
 const handlers = new Map();   // type -> Set(fn)
 const preBuffer = [];
@@ -38,6 +41,14 @@ function dispatch(m) {
 
 if (webview) {
   webview.addEventListener('message', (e) => { try { dispatch(e.data); } catch (err) { /* keep listening */ } });
+} else if (strHost) {
+  try {
+    win.__ccpRnPush = function (json) {
+      let m;
+      try { m = typeof json === 'string' ? JSON.parse(json) : json; } catch (_e) { return; }
+      try { dispatch(m); } catch (err) { /* keep listening */ }
+    };
+  } catch (_e) { /* frozen window: never throw at import */ }
 }
 
 /** Subscribe to a host frame type; replays pre-buffered frames of that type. */
@@ -66,7 +77,10 @@ export function once(type, fn) {
 }
 
 function post(msg) {
-  try { if (webview) webview.postMessage(msg); } catch (e) { /* host gone */ }
+  try {
+    if (webview) webview.postMessage(msg);
+    else if (strHost) strHost.invokeCSharpAction(JSON.stringify(msg));
+  } catch (e) { /* host gone */ }
 }
 
 /** Post a frame. Held until init unless it is on the boot lane. */

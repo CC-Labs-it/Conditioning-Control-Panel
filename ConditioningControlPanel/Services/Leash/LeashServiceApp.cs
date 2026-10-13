@@ -33,9 +33,7 @@ public static class LeashServiceApp
         var minutes = 0;
         try
         {
-            var key = local.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-            var day = App.FeatureDayLog?.Log?.Days?.FirstOrDefault(d => d.D == key);
-            minutes = day?.Cm ?? 0;
+            minutes = App.FeatureDayLog?.ConditioningMinutesOn(local) ?? 0;
         }
         catch (Exception ex) { Serilog.Log.Debug("Leash minutes read failed: {E}", ex.Message); }
 

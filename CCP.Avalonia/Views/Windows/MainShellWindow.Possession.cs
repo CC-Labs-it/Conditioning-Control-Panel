@@ -3,7 +3,7 @@
 // poss:Possession.Role, and the walk that turns the visual tree into possession targets.
 //
 // Head-side, and not for want of a seam: the CONTRACTS THEMSELVES ARE WPF TYPES.
-// ConditioningControlPanel/Services/Possession/PossessionContracts.cs declares IPossessionHost,
+// ConditioningControlPanel/Services/Possession/PossessionHostContracts.cs declares IPossessionHost,
 // PossessionTarget and PossessionRole against FrameworkElement, and this partial implements
 // IPossessionHost - a Core-side twin would have to be re-declared against Avalonia's Control
 // before any of this walk could be ported. Also missing: App.Possession (the director),
