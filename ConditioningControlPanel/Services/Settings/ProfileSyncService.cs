@@ -4730,7 +4730,17 @@ namespace ConditioningControlPanel.Services
         /// <summary>True when a backup must not carry this property.</summary>
         internal static bool IsExcludedFromBackup(string name) =>
             ExcludedBackupProperties.Contains(name)
-            || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase));
+            || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase))
+            // The audio player's playlist is file paths on this machine: never uploaded.
+            || (name != null && name.StartsWith("AudioPlaylist", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The audio player's settings (playlist paths, volume, loop, shuffle), found by name.</summary>
+        internal static readonly System.Reflection.PropertyInfo[] AudioPlaylistLocalProperties =
+            typeof(AppSettings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.Name.StartsWith("AudioPlaylist", StringComparison.Ordinal)
+                            && p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0
+                            && !Attribute.IsDefined(p, typeof(JsonIgnoreAttribute)))
+                .ToArray();
 
         /// <summary>
         /// The other half of <see cref="ExcludedBackupProperties"/>. A backup never carries these,
@@ -4758,7 +4768,7 @@ namespace ConditioningControlPanel.Services
                 restored.ActiveAssetPaths = new HashSet<string>(current.ActiveAssetPaths);
             if (restored.AssetPresets.Count == 0 && current.AssetPresets.Count > 0)
                 restored.AssetPresets = new List<AssetPreset>(current.AssetPresets);
-            foreach (var p in ChasterLocalProperties)
+            foreach (var p in ChasterLocalProperties.Concat(AudioPlaylistLocalProperties))
             {
                 var v = p.GetValue(current);
                 if (v is List<string> list) v = new List<string>(list);
