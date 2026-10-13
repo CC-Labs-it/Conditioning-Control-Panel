@@ -20,13 +20,45 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.7";
+        public const string AppVersion = "7.1.8";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.7 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.8 - Stay Tuned
+
+NEW IN 7.1.8
+- audio player: a playlist card on the Deeper page. add your own files, play, skip, seek. it has its own volume, Deeper enhancements can ride the current track, and panic or engine Stop silences it. .ogg files are not supported.
+- Goon: toys now react during matches. a cue never goes above your own slider, and the other player can only lower it. no toy cues in practice.
+- companion: a Voice Level slider.
+- CCP Default: 44 more companion lines have a recorded voice.
+- Intake: spoken answers work while the wake word is on. the card melt never lands on a timed question and scores nothing.
+- favourites drawer on every page, and Ctrl+K leads with your pinned favourites.
+- Mandatory Video: the ""Video length"" row now cuts web videos and floating videos at your max too. a video you asked for in chat plays whole.
+- plans: locked features show Basic and Prime with their price, and the button opens the right checkout.
+
+DOWN THE RABBIT HOLE
+- dock toys wake on their own as you play. no key, no button. grabbing a toy again takes it a level deeper for the fall, and Overload works again.
+- a calmer feel: a detonation dips the sound and the colour instead of flashing, and pops climb a little scale.
+- bubbles move, every spiral is woven live in the chamber's colours, and online gifs play instead of sitting still.
+- tube cards show pictures first, clips later. a popped flash card leaves in style.
+- Escape pauses the run.
+
+BREAKOUT
+- Endless: the board name fades once you have arrived.
+- story level 8 keeps your launch held while the finale ring forms.
+- the pendulum hint no longer sits on the ""move to play"" line.
+
+FIXES IN 7.1.8
+- content packs: a pack video is no longer loaded whole into memory. with packs active this could eat several GB and make the whole PC crawl.
+- a web video started by the companion could run past your max video length. it stops there now.
+- Mind Wipe, one-shot sounds and the Mantra drone follow the master volume.
+- Deeper and Mantra volume no longer move the app's volume in the Windows mixer.
+- subliminals show above a playing video.
+- the Audio action names the right folder, and falls back to your mod's recorded clips.
+- Presets says what a preset covers.
+- temp files that could not be deleted are retried instead of piling up.
 
 NEW IN 7.1.7
 - lines with no recorded voice on your current mod wear a small muted-speaker mark in the phrase editor, and Audio Whispers says so when some of your lines will stay silent. nothing changed in what plays: a line with no recording was always silent.
