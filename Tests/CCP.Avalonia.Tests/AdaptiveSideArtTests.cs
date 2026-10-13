@@ -1,4 +1,7 @@
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -63,4 +66,38 @@ public sealed class AdaptiveSideArtTests
             return Task.CompletedTask;
         });
     }
+
+    // Haptics and RemoteControl: their Avalonia ports dropped the art column (parity views-tab-haptics).
+    private static readonly string[] NoArtColumn = { "HapticsTabView", "RemoteControlTabView" };
+
+    /// <summary>Every WPF view with CollapseBelow has an Avalonia twin carrying the same threshold(s).</summary>
+    [Fact]
+    public void EveryWpfCollapseBelowThresholdIsCarriedByItsAvaloniaTwin()
+    {
+        var root = RepoRoot();
+        var attr = new Regex(@"AdaptiveSideArt\.CollapseBelow=""(\d+)""");
+        var comment = new Regex(@"<!--.*?-->", RegexOptions.Singleline);
+        string Values(string file) => string.Join(",", attr.Matches(comment.Replace(File.ReadAllText(file), ""))
+            .Select(m => m.Groups[1].Value).Distinct().OrderBy(v => v));
+
+        var avalonia = Directory.GetFiles(Path.Combine(root, "CCP.Avalonia", "Views"), "*.axaml", SearchOption.AllDirectories)
+            .ToDictionary(f => Path.GetFileNameWithoutExtension(f));
+        var wpf = Directory.GetFiles(Path.Combine(root, "ConditioningControlPanel"), "*.xaml", SearchOption.AllDirectories)
+            .Where(f => Values(f).Length > 0).ToArray();
+
+        Assert.Equal(23, wpf.Length);
+        var checkedViews = 0;
+        foreach (var w in wpf)
+        {
+            var name = Path.GetFileNameWithoutExtension(w);
+            if (NoArtColumn.Contains(name)) continue;
+            Assert.True(avalonia.TryGetValue(name, out var a), $"{name}: no Avalonia twin");
+            Assert.Equal((name, Values(w)), (name, Values(a!)));
+            checkedViews++;
+        }
+        Assert.Equal(21, checkedViews);
+    }
+
+    private static string RepoRoot([CallerFilePath] string here = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }
