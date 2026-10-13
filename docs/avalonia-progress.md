@@ -2106,3 +2106,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/tutorials-import: +3779
 - Trunk TutorialService.cs imported verbatim (Stack rule 4, 557d9aac3), with 554 lines of wiring: seam seeded, `tour` stop in the PanicSurfaces list, a refused start keeps the running tour's name, Fluent step icons. Tours now start, step and close, and panic ends them.
 - Follow-ups: tutorials-icons, tutorials-live-overlay (Live.cs triggers/stage), EmiTourNarrator, KeywordTriggerHead, ? panel StartGuide, Mod Creator nav.
+
+## avalonia-port/game-justdrop: +603
+- Just Drop door: Core JustDropService/CreditedOrders (git mv) + JustDropHandoff; ShowTab(justdrop) opens the live shop in a GameWindow (signed-in handoff header, shared chrome.webview carrier, panic closes).
+- Row shell-just-drop stays stub: replay/fullscreen strip/orders shelf/EMI door missing; not live-checked against the real site.
