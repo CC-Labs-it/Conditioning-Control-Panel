@@ -27,12 +27,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosRunState? _state;
         private static ChaosHudWindow? _hud;
         private static ChaosOverlayWindow? _overlay;
+        private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer;
         private static bool _active, _spawning, _manualPaused;
 
         internal static ChaosRunState? State => _state;
         internal static ChaosOverlayWindow? Overlay => _overlay;
         internal static ChaosHudWindow? Hud => _hud;
+        internal static ChaosBoonBarOverlay? BoonBar => _boonBar;
         internal static bool IsActive => _active;
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
@@ -69,6 +71,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
+            // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
+            var picks = _state.RunPickTiles;
+            _boonBar = ChaosBoonBarOverlay.ForRun();
+            _boonBar.SetPicks(picks);
+            _boonBar.Show();
+            picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
             _state.StartShields = _state.Shields;
             _spawning = true;
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
@@ -142,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
+            CloseBoonBar();   // WPF EndRun :3235
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
             Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
                 baseXp, skillMult, finalXp);
@@ -161,8 +170,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CleanupAfterRun();
         }
 
+        private static void CloseBoonBar()
+        {
+            try { _boonBar?.Close(); } catch (Exception ex) { Log.Debug("Chaos boon bar close: {E}", ex.Message); }
+            _boonBar = null;
+        }
+
+        /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            CloseBoonBar();
             _runTimer = null;
             _hud = null;
             _overlay = null;
