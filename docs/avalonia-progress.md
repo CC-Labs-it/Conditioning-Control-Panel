@@ -2058,3 +2058,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/conditioning-time-tracker: +300
 - Conditioning-time tracker ported: Core ConditioningTimeTracker, driven by shell engine start, session start and engine stop; the Pink Hours pill counts live.
 - Not ported: server sync and the season mirror.
+
+## avalonia-port/leash-gate-card: +645
+- Leash gate card on the panel (WPF LeashGateCard + MainWindow.Leash.cs): PresentLeashGateProvider seeded, pending punishment holds tiles, Panic and Cut leash (LeashCutSafety) always work; 4 fail-proven headless tests + live sandbox evidence.
+- Punish window + task runner left for leash-punish.
