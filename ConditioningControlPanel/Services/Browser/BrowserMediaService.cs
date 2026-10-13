@@ -59,6 +59,9 @@ public sealed class BrowserMediaService
     /// <summary>Whether the CURRENT session has ever reported playback. Distinguishes "still
     /// loading" from "was playing and stopped", which the navigated/heartbeat paths both need.</summary>
     private bool _hasEverPlayed;
+    /// <summary>The player asked for this takeover (a video requested in chat), so their
+    /// longest-video limit does not cut it. Set per session by BeginTakeover.</summary>
+    private bool _playerAskedFor;
 
     private DispatcherTimer? _heartbeatTimer;
 
@@ -151,7 +154,7 @@ public sealed class BrowserMediaService
     /// the atomic guard that closes the race against VideoService's ~2s pre-roll window where a
     /// committed mandatory video still reads as not playing.
     /// </summary>
-    public bool BeginTakeover(MediaOwner owner)
+    public bool BeginTakeover(MediaOwner owner, bool playerAskedFor = false)
     {
         if (App.InteractionQueue != null && !App.InteractionQueue.TryStart(
                 InteractionQueueService.InteractionType.WebVideo, () => { }, queue: false))
@@ -166,6 +169,7 @@ public sealed class BrowserMediaService
             _sessionGeneration++;
             _owner = owner;
             _isTakeover = true;
+            _playerAskedFor = playerAskedFor;
             _holdsQueueSlot = App.InteractionQueue != null;
             _durationSeconds = 0;
             _hasEverPlayed = false;
@@ -229,7 +233,7 @@ public sealed class BrowserMediaService
             _isPlaying = true;
             // The player's longest-video limit, armed once at a takeover's first playback and
             // whatever length the page reports, a missing one included (#1438).
-            if (!_hasEverPlayed && _isTakeover)
+            if (!_hasEverPlayed && _isTakeover && !_playerAskedFor)
                 userCapSeconds = Video.VideoLengthCap.BrowserTakeoverSeconds(
                     App.Settings?.Current?.VideoMaxDurationSeconds ?? 0, _owner);
             _hasEverPlayed = true;
