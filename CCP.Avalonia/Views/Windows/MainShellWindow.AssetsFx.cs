@@ -4,7 +4,7 @@
 // App.MediaHistory grew since the log was last opened; stopped on hide and on click).
 //
 // ponytail: the pack-card sheen (CardSheenAdorner over a hovered pack card) waits for real pack
-// cards - the packs section is hidden and has no ContentPackService on this head.
+// cards - the packs section is hidden and builds no cards from the seeded ContentPackService.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
