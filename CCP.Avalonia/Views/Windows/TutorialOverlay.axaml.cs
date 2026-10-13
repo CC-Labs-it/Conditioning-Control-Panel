@@ -8,6 +8,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 
 // The step model now comes from the tutorial seam. Aliased to the names the WPF original uses so
@@ -81,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Canvas _spotlightCanvas;
         private readonly Border _textPanel;
         private readonly TextBlock _txtStepCounter;
-        private readonly TextBlock _txtIcon;
+        private readonly IconGlyph _txtIcon;
         private readonly TextBlock _txtTitle;
         private readonly TextBlock _txtDescription;
         private readonly Button _btnSupport;
@@ -174,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _spotlightCanvas = this.FindControl<Canvas>("SpotlightCanvas")!;
             _textPanel = this.FindControl<Border>("TextPanel")!;
             _txtStepCounter = this.FindControl<TextBlock>("TxtStepCounter")!;
-            _txtIcon = this.FindControl<TextBlock>("TxtIcon")!;
+            _txtIcon = this.FindControl<IconGlyph>("TxtIcon")!;
             _txtTitle = this.FindControl<TextBlock>("TxtTitle")!;
             _txtDescription = this.FindControl<TextBlock>("TxtDescription")!;
             _btnSupport = this.FindControl<Button>("BtnSupport")!;
@@ -258,6 +259,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             base.OnClosed(e);
         }
 
+        /// <summary>A step's Icon string is data (WPF drew the emoji): mapped through IconMap to a Fluent
+        /// icon, and anything unmapped (">", "~", "<3") falls back to Sparkle, never the emoji text.</summary>
+        internal static (IconKind Kind, IconVariant Variant) IconFor(string? icon) =>
+            IconMap.TryGet(icon, out var e) ? (e.Kind, e.Variant) : (IconKind.Sparkle, IconVariant.Regular);
+
         private void OnKeyDown(object? sender, KeyEventArgs e)
         {
             if (e.Key == Key.Escape)
@@ -322,7 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _advanceFiredThisStep = false;
 
             _txtStepCounter.Text = StepCounterText();
-            _txtIcon.Text = step.Icon;
+            (_txtIcon.Kind, _txtIcon.Variant) = IconFor(step.Icon);
             _txtTitle.Text = step.Title;
             _txtDescription.Text = step.Description;
 

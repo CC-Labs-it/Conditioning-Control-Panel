@@ -2102,3 +2102,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/emi-line-engine: +215
 - EmiLineEngine (1360, verbatim plus ask probes) and the EmiKnock machine moved to Core with git mv. WPF seeds the probes and keeps EmiKnockWorld; the rotation and knock tests now run on Linux in Core.
 - Next: EmiVox/EmiOffers/EmiChains seams, then the Avalonia moment bus and desk chains UI.
+
+## avalonia-port/tutorials-import: +3779
+- Trunk TutorialService.cs imported verbatim (Stack rule 4, 557d9aac3), with 554 lines of wiring: seam seeded, `tour` stop in the PanicSurfaces list, a refused start keeps the running tour's name, Fluent step icons. Tours now start, step and close, and panic ends them.
+- Follow-ups: tutorials-icons, tutorials-live-overlay (Live.cs triggers/stage), EmiTourNarrator, KeywordTriggerHead, ? panel StartGuide, Mod Creator nav.

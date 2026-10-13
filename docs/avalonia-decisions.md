@@ -1058,6 +1058,17 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   Native Wayland is unchanged: no X11 overlay, so no flashes at all (logged once).
 - Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.
 
+## 2026-10-12: A verbatim import is exempt from the icon ratchets as one whole file (avalonia-port/tutorials-import)
+- Question: the trunk `CCP.Avalonia/Tours/TutorialService.cs`, imported verbatim under Stack rule 4, carries ~113 emoji
+  step `Icon` strings and icon-prefixed loc keys. Editing it breaks "verbatim"; raising the shared baselines loosens every
+  other file. What clears IconGuard?
+- Answer (advised by: supervisor): neither. What the user sees is Fluent: `TutorialOverlay.IconFor` maps a step's Icon
+  through `IconMap` onto its `fx:IconGlyph`, and anything unmapped falls back to Sparkle, never the emoji text. The file
+  itself gets one `verbatim:` `*` entry in `IconGuard.allow.txt` (exact path only, emoji + prefixed-loc ratchets only);
+  the baselines stay put. Follow-up `tutorials-icons` converts the data and deletes the entry.
+- Tests: `TutorialTourTests.ATourStartsStepsClosesAndPanicEndsIt` (IconGlyph, no emoji text), `StepIconsMapThroughIconMap`,
+  `IconGuardTests.AllowListEntriesAreLiveAndReasoned`.
+
 ## 2026-10-12: Colour emoji never get a synthetic bold/italic (avalonia-port/render-all-segv)
 - Problem: `--render-all` died with SIGSEGV (exit 139) on CI runs 38186452139, 38187923096, 38190459151, 38203253619 and
   38206867189 (pass 1 of 8 in a diagnostic loop; 16 more passes in 38206861559/38206872442 were clean). CI crash dump (run 38206867189): main thread in

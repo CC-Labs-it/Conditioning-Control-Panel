@@ -26,6 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The intake's say-it loops end before the capture abort below reads as silence; WPF GameSurfaces
             // 'intake' -> CloseActive. A game surface: closing it never arms the exit ladder.
             new("intake", _ => IntakeHostWindow.CloseAllForPanic(), IntakeHostWindow.IsAnyOpen),
+            new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
