@@ -232,18 +232,21 @@ public sealed class TakeoverTests
         var (clock, require) = (TakeoverAnnouncerOverlay.Clock, TakeoverAnnouncerOverlay.UsePlatform);
         TakeoverAnnouncerOverlay.Clock = () => now;
         TakeoverAnnouncerOverlay.UsePlatform = false;
+        var (flash, sub) = (CoreFlash.ShowProvider, CoreSubliminal.ShowProvider);
+        CoreFlash.ShowProvider = () => { };   // performable actions the scheduler can pick (P04), drawn by nothing
+        CoreSubliminal.ShowProvider = _ => { };
         try
         {
-            shell.PerformAutonomy(AutonomyActionType.WebVideo, announced: false);
+            shell.PerformAutonomy(AutonomyActionType.Flash, announced: false);
             Assert.Null(TakeoverAnnouncerOverlay.Queue.Current);
 
-            shell.Autonomy.Perform!(AutonomyActionType.WebVideo, true);   // the scheduler's announced run
+            shell.Autonomy.Perform!(AutonomyActionType.Flash, true);   // the scheduler's announced run
             Dispatcher.UIThread.RunJobs();
-            shell.PerformAutonomy(AutonomyActionType.WallpaperShuffle, announced: true);
+            shell.PerformAutonomy(AutonomyActionType.Subliminal, announced: true);
             var w = TakeoverAnnouncerOverlay.Window!;
             Assert.True(w.IsVisible);
             Assert.Equal("TAKEOVER", w.Eyebrow!.Text);
-            Assert.Equal("WEB VIDEO", w.Effect!.Text);
+            Assert.Equal("FLASH", w.Effect!.Text);
             Assert.Equal(0, w.Opacity);
             Assert.True(w.SparkCount >= 22);
 
@@ -255,7 +258,7 @@ public sealed class TakeoverTests
 
             now += TimeSpan.FromMilliseconds(1950);   // fade-out done: the queued cue starts
             TakeoverAnnouncerOverlay.Frame();
-            Assert.Equal("WALLPAPER", w.Effect!.Text);
+            Assert.Equal("SUBLIMINAL", w.Effect!.Text);
             Assert.Equal(0, w.Opacity);
 
             now += TimeSpan.FromMilliseconds(2100);   // queue empty: hidden, window kept alive
@@ -263,8 +266,8 @@ public sealed class TakeoverTests
             Assert.False(w.IsVisible);
             Assert.Same(w, TakeoverAnnouncerOverlay.Window);
 
-            shell.PerformAutonomy(AutonomyActionType.WebVideo, announced: true);
-            shell.PerformAutonomy(AutonomyActionType.WallpaperShuffle, announced: true);
+            shell.PerformAutonomy(AutonomyActionType.Flash, announced: true);
+            shell.PerformAutonomy(AutonomyActionType.Subliminal, announced: true);
             PanicSurfaces.StopAll("test", shell);
             Assert.Null(TakeoverAnnouncerOverlay.Queue.Current);
             Assert.Equal(0, TakeoverAnnouncerOverlay.Queue.Pending);
@@ -275,7 +278,34 @@ public sealed class TakeoverTests
         {
             TakeoverAnnouncerOverlay.CloseActive();
             (TakeoverAnnouncerOverlay.Clock, TakeoverAnnouncerOverlay.UsePlatform) = (clock, require);
+            (CoreFlash.ShowProvider, CoreSubliminal.ShowProvider) = (flash, sub);
         }
+    });
+
+    /// <summary>P40: the 0.2 s topmost re-raise reads real elapsed time (one slow 0.25 s frame still
+    /// raises, though spark dt is capped at 0.1 s), and the alpha is written only when it changes.</summary>
+    [Fact]
+    public Task CueReRaisesOnRealTimeAndWritesAlphaOnlyOnChange() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var w = new TakeoverAnnouncerWindow(live: true);
+        try
+        {
+            w.Display("FLASH");
+            w.Advance(TimeSpan.Zero, TimeSpan.Zero);
+            w.Advance(TimeSpan.FromSeconds(0.25), TimeSpan.FromSeconds(0.25));   // one slow frame
+            Assert.Equal(1, w.Raises);
+
+            var writes = w.AlphaWrites;
+            w.Advance(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(0.5));   // hold: alpha stays 1
+            w.Advance(TimeSpan.FromSeconds(0.6), TimeSpan.FromSeconds(0.6));
+            Assert.Equal(writes, w.AlphaWrites);
+        }
+        finally { w.Close(); }
+        return Task.CompletedTask;
     });
 
     /// <summary>WPF PulsePinkFilter's own restore after 30 s, and #441a: a slider moved during the

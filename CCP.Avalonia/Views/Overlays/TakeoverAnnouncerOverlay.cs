@@ -126,8 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly Random _rng = new();
         private float _bloom;                 // current bloom envelope 0..1
         private float _centerX, _centerY;     // burst origin, window DIPs
-        private TimeSpan? _last;
-        private double _topmostAccum;
+        private TimeSpan? _last, _lastRaise;
+        private double _alpha = double.NaN;
         private bool _fxDone;
 
         private readonly StackPanel _panel = new() { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top };
@@ -139,6 +139,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal double ShakeX => _shake.X;
         internal float Bloom => _bloom;
         internal int SparkCount => _sparkN;
+        internal int Raises { get; private set; }
+        internal int AlphaWrites { get; private set; }
 
         /// <summary>--render-all only: a FLASH cue at the bloom peak over grey.</summary>
         internal TakeoverAnnouncerWindow() : this(live: false)
@@ -189,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _panel.Children.Add(Eyebrow);
             _panel.Children.Add(Effect);
             SeedBurst();
-            _last = null;
+            _last = _lastRaise = null;
             _fxDone = false;
             SetAlpha(0);
         }
@@ -215,8 +217,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _last = now;
 
             // WPF re-asserts topmost every 0.2 s while the FX run, so effect overlays never cover the cue.
-            _topmostAccum += dt;
-            if (_topmostAccum >= 0.2) { _topmostAccum = 0; X11Overlay.Raise(this); }
+            // Real elapsed time, not the capped dt (P40).
+            _lastRaise ??= now;
+            if ((now - _lastRaise.Value).TotalSeconds >= 0.2) { _lastRaise = now; Raises++; X11Overlay.Raise(this); }
 
             if (dt > 0)
             {
@@ -241,7 +244,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _fxDone = _sparkN == 0 && sec > TakeoverCueQueue.BloomTotal && amp == 0;   // idle: text stays, FX stop
         }
 
-        private void SetAlpha(double a) { if (!X11Overlay.SetOpacity(this, a)) Opacity = a; }
+        /// <summary>Only on change: the 1.7 s hold writes nothing (one X11 property write per change).</summary>
+        private void SetAlpha(double a)
+        {
+            if (a == _alpha) return;
+            _alpha = a;
+            AlphaWrites++;
+            if (!X11Overlay.SetOpacity(this, a)) Opacity = a;
+        }
 
         private void SeedBurst()
         {
