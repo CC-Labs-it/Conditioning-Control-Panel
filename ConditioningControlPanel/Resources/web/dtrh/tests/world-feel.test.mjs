@@ -81,6 +81,22 @@ test('reduced halves the ring and off holds it still', () => {
   assert.ok(a.amp > 0 && a.amp < full.amp);
 });
 
+test('thread layers: a base everywhere, warmth adds, motion off stills the moving ones', async () => {
+  const { threadTarget, THREAD_BASE, THREAD_WARM } = await import('../engine/worldFeel.js');
+  assert.equal(threadTarget('breath', 0.4, 1, 1), 0.4, 'other knobs pass through');
+  assert.equal(threadTarget('thHalo', 0, 0, 1), THREAD_BASE.thHalo);
+  assert.equal(threadTarget('thBeads', 0, 1, 1), 0, 'a biome layer stays off outside its biome');
+  assert.equal(threadTarget('thBeads', 0.6, 0, 1), 0.6);
+  assert.equal(threadTarget('thHalo', 0.9, 0, 1), 0.9, 'a biome may ask for more than the base');
+  assert.ok(Math.abs(threadTarget('thSparkle', 0, 1, 1) - (THREAD_BASE.thSparkle + THREAD_WARM.thSparkle)) < 1e-9);
+  assert.equal(threadTarget('thSheen', 0, 0, 1), 0);
+  assert.ok(threadTarget('thSheen', 0, 1, 1) > 0, 'a full streak brings sheen');
+  assert.equal(threadTarget('thWeave', 0, 0, 0), 0, 'no sway at motion off');
+  assert.equal(threadTarget('thStatic', 0.8, 0, 0), 0, 'no grain at motion off');
+  assert.ok(threadTarget('thHalo', 0, 0, 0) > 0, 'the halo is not motion');
+  assert.ok(threadTarget('thSparkle', 1, 1, 1) <= 1);
+});
+
 test('the live instance follows the seam: pop warms, detonate drains, moments ring', () => {
   const before = motionLevel();
   setMotionLevel('full');

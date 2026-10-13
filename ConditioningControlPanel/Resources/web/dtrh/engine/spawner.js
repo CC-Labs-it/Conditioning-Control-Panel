@@ -21,6 +21,7 @@
  * ==========================================================================*/
 
 import * as THREE from 'three';
+import { videoAllowed, newCardMix, noteCard } from './cardMix.js';
 import { Q } from '../shared/quality.js';
 import { isMuted } from '../shared/audioMute.js';
 import { getLevel } from './audioLevels.js';
@@ -827,9 +828,22 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   const ready = [];      // decoded items waiting for a card
   let prefetching = 0;   // decodes in flight
 
+  // Pictures first, clips sparse later (cardMix.js). The library is asked now and then
+  // whether it holds a picture at all; one with none is never held back.
+  let mix = newCardMix();
+  let mixHasImages = true, mixCheckedAt = -1e9;
+  function videoOk() {
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (now - mixCheckedAt > 2000) {
+      mixCheckedAt = now;
+      try { mixHasImages = !!(media.drawKind && media.drawKind('image')); } catch (e) { mixHasImages = true; }
+    }
+    return videoAllowed(mix.cards, mix.sinceVideo, mixHasImages);
+  }
+
   async function prefetchOne() {
     const vidsAhead = ready.filter((r) => r.kind === 'video').length;
-    const wantImage = vidsAhead >= PREFETCH_VIDEO_MAX || liveVideos >= MAX_LIVE_VIDEOS;
+    const wantImage = vidsAhead >= PREFETCH_VIDEO_MAX || liveVideos >= MAX_LIVE_VIDEOS || !videoOk();
     const entry = (wantImage && media.drawKind('image')) || media.draw();
     if (!entry) return null;
     DIAG.draws += 1;
@@ -1285,7 +1299,8 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     if (!media.hasUserMedia()) return spawnSpiceCard(depth);
 
     // decoded-ahead pool first: these mount with real pixels already in hand
-    const item = takeReady(liveVideos < MAX_LIVE_VIDEOS);
+    const clipOk = videoOk();
+    const item = takeReady(clipOk && liveVideos < MAX_LIVE_VIDEOS);
     if (item) {
       DIAG.poolHits += 1;
       let rec;
@@ -1297,13 +1312,14 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
         rec = buildImageCard(depth, item);
       }
       tagAsset(rec, item.assetName, item.assetKind || item.kind);
+      noteCard(mix, item.kind);
       return rec;
     }
 
     // pool ran dry (giant files / run just started): late path - the card
     // spawns invisible and appears once its content decodes
     let entry = media.draw();
-    if (entry && entry.kind === 'video' && liveVideos >= MAX_LIVE_VIDEOS) {
+    if (entry && entry.kind === 'video' && (!clipOk || liveVideos >= MAX_LIVE_VIDEOS)) {
       entry = media.drawKind('image') || entry;
     }
     if (!entry) return null;
@@ -1314,6 +1330,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     if (entry.kind === 'video') {
       const rec = buildVideoCard(depth, acquired.url, { withAudio: true, release: acquired.release });
       tagAsset(rec, entry.name, entry.kind);
+      noteCard(mix, 'video');
       return rec;
     }
     DIAG.lateBuilds += 1;
@@ -1321,6 +1338,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
       ? buildGifCardLate(depth, acquired)
       : buildImageCardLate(depth, acquired);
     tagAsset(rec, entry.name, entry.kind);
+    noteCard(mix, 'image');
     return rec;
   }
 
@@ -2069,6 +2087,18 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     nextCardDepth = camDepth + 30;
     nextVeilDepth = camDepth + 70;
     camDepthNow = camDepth;
+    picturesFirst();
+  }
+  /** A new fall opens on pictures again (the descent calls this as a run starts). */
+  function picturesFirst() {
+    mix = newCardMix();
+    mixCheckedAt = -1e9;
+    // a clip decoded ahead of this would be the first card: hand its decoder back
+    for (let i = ready.length - 1; i >= 0; i--) {
+      if (ready[i].kind !== 'video') continue;
+      const v = ready.splice(i, 1)[0];
+      try { if (v.release) v.release(); } catch (e) { /* ignore */ }
+    }
   }
 
   // ESC pause: park every live video; the scene stops calling update() too.
@@ -2129,6 +2159,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     setThrowOnRelease: (cb) => { throwOnRelease = cb || null; },
     forceSpotlight,
     setAutoSpotlight: (on) => { autoSpotlightOk = !!on; },
+    picturesFirst,
     isGrabbing: () => !!grabbed,
     liveCount: () => live.length,
     liveKinds: () => live.map((r) => r.kind),

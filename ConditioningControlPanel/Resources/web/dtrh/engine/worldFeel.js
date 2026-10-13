@@ -50,6 +50,23 @@ export const RING_STILL_AMP = 0.4;      // motion off: a still glow at this shar
 export const RING_EVENTS = { 'rabbit-caught': RING, 'combo-big': RING, 'act-changed': SWEEP };
 
 // ---- pure helpers ------------------------------------------------------------
+// ---- thread layers (tunnel.js uTh*) ---------------------------------------------
+// What every tube wears on its threads, whatever the biome: a soft halo, a few glints,
+// a light sway. A biome can ask for more of these or add its own (game/biomes.js knobs).
+export const THREAD_BASE = { thHalo: 0.55, thSparkle: 0.5, thWeave: 0.3 };
+// what a full streak adds on top (at warmth = 1)
+export const THREAD_WARM = { thSparkle: 0.45, thSheen: 0.35 };
+// layers that are motion: they shrink with the motion level and are gone at off
+export const THREAD_MOVING = { thWeave: true, thStatic: true };
+
+/** Where a knob should settle. Only thread keys change; every other knob passes through. */
+export function threadTarget(key, biome, warmth, ms) {
+  if (typeof key !== 'string' || key.slice(0, 2) !== 'th') return biome;
+  let v = Math.max(biome || 0, THREAD_BASE[key] || 0) + (THREAD_WARM[key] || 0) * clamp01(warmth || 0);
+  if (THREAD_MOVING[key]) v *= ms;
+  return clamp01(v);
+}
+
 export function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 function smooth(a, b, x) { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
 
