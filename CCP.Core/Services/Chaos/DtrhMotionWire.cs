@@ -28,7 +28,7 @@ public static class DtrhMotionWire
     /// <summary>The word for the current settings; "full" when settings are not loaded yet.</summary>
     public static string Current()
     {
-        try { return For(App.Settings?.Current?.MotionLevel ?? MotionLevel.Full); }
+        try { return For(CoreSettings.Current?.MotionLevel ?? MotionLevel.Full); }
         catch { return Full; }
     }
 }
