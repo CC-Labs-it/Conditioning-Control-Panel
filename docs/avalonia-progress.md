@@ -2162,3 +2162,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Cloud session (Opus), local review + remote gate.
 - Server update banner, URL-first pill, scrolling marquee (parks while Home is hidden, tested), Home actions, browser card.
 - Next PR: home-marquee-b, the update pill Tag skins (urgent red / available pink / hover), split out for the size cap.
+
+## avalonia-port/home-marquee-b: +37
+- Update pill Tag skins (urgent red, available pink, hover; WPF MainWindow.xaml:1353-1373) + UrgentUpdatePillIsRed, split from home-marquee for the size cap.
