@@ -5,7 +5,7 @@ namespace ConditioningControlPanel.Services.Chaos;
 
 /// <summary>
 /// The kinds of one-shot effect a Chaos bubble can carry. Each maps to a
-/// concrete <see cref="EffectPayload"/> that wraps an existing App.* trigger.
+/// concrete <see cref="EffectPayload"/> that a head fires through an existing one-shot trigger.
 /// </summary>
 public enum EffectBubblePayloadKind
 {
@@ -28,10 +28,10 @@ public enum EffectBubblePayloadKind
 /// (0..100, derived from bubble size at spawn) scales the effect: bigger bubble
 /// ⇒ stronger payload.
 ///
-/// <see cref="Fire"/> is invoked on the UI thread (from a DispatcherTimer tick or a click
-/// handler) and must be self-contained — the underlying App.* services own their own
-/// dispatching/threading. The payloads are data here; what firing DOES is head-side, through
-/// <see cref="Firer"/>, which each head seeds at startup (WPF: EffectPayloadFiring).
+/// <see cref="Fire"/> is invoked on the UI thread (from a timer tick or a click handler).
+/// The payloads are data here; what firing DOES is head-side, through <see cref="Firer"/>,
+/// which each head seeds at startup (WPF: EffectPayloadFiring; Avalonia: a logging no-op
+/// until its effect runner lands). The head's services own their own dispatching/threading.
 /// </summary>
 public abstract class EffectPayload
 {
