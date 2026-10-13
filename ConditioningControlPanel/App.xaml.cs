@@ -308,6 +308,9 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // Race rules live in Core; the prize store and the NAudio decoder stay here.
+            Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
+            Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
             // The mod service's side effects on a switch, and what it asks the head.
             CoreModsHooks.ModSwitched = newCompanionName => Brain?.OnModSwitched(newCompanionName);
             CoreModsHooks.ReloadBarkRules = () => Bark?.ReloadRules();

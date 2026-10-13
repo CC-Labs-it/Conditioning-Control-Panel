@@ -2066,3 +2066,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/first-show-c: +514
 - Welcome guide ported (WelcomeSteps on the real shell, highlight, FeatureCard tutorial preview, follows the app's monitor); live run reaches Presets.
 - Show effects carried from first-show-b (sparks, subliminal, spiral, floating words, drain veil); feat-first-show stays stub (bleepese, replay doors, bubble pops).
+
+## avalonia-port/game-race-a: +263
+- Race rules (10 services + TrackChart) git-mv to CCP.Core; WPF seeds PrizeGrants + NAudio decode seams.
+- Race tests move to Core tests, plus fail-proven seam tests; ledger row game-race (missing).

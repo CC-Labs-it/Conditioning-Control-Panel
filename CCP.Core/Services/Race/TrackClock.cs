@@ -33,14 +33,29 @@ public interface ITrackClock
     void Stop();
 }
 
+/// <summary>What the picked-file clock needs from the player. WPF binds LocalTrackClock to its NAudio
+/// TrackPlayer directly; here the player is the head's LibVLC one (Views/Games/RaceTrackPlayer), so the
+/// clock sees it through this face.</summary>
+public interface ITrackTransport
+{
+    double PositionSec { get; }
+    double DurationSec { get; }
+    bool IsPlaying { get; }
+    void RefreshVolume();
+    void Play();
+    void Pause();
+    void Resume();
+    void Stop();
+}
+
 /// <summary>The picked-file clock: a thin face over <see cref="TrackPlayer"/>, which stays the
 /// owner of the device and the reader. Nothing about the local path changed when the cloud
 /// source arrived.</summary>
 public sealed class LocalTrackClock : ITrackClock
 {
-    private readonly TrackPlayer _player;
+    private readonly ITrackTransport _player;
 
-    public LocalTrackClock(TrackPlayer player) => _player = player ?? throw new ArgumentNullException(nameof(player));
+    public LocalTrackClock(ITrackTransport player) => _player = player ?? throw new ArgumentNullException(nameof(player));
 
     public double PositionSec => _player.PositionSec;
     public double DurationSec => _player.DurationSec;
@@ -101,7 +116,7 @@ public sealed class CloudTrackClock : ITrackClock
         // watcher's own play / pause echo confirms it a moment later.
         _playing = !on;
         try { _setPaused(on); }
-        catch (Exception ex) { App.Logger?.Debug("CloudTrackClock.SetPaused: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("CloudTrackClock.SetPaused: {E}", ex.Message); }
     }
 
     public void Stop() => _playing = false;
