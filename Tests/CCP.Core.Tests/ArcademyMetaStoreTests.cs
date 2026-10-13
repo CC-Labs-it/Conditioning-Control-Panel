@@ -23,7 +23,8 @@ public sealed class ArcademyMetaStoreTests : System.IDisposable
     private string TempPath() => Path.Combine(_dir, System.Guid.NewGuid().ToString("N"), "arcademy_meta.json");
 
     private static ArcademyMetaStore Store(string path, List<object>? sent = null, System.TimeProvider? time = null) =>
-        new(m => sent?.Add(m), path, time);
+        // Never the system clock: a real armed debounce would fire after Dispose and recreate _dir.
+        new(m => sent?.Add(m), path, time ?? new PopQuizSchedulerTests.FakeClock());
 
     private static void GiveSlips(ArcademyMetaStore store, int n) =>
         store.Set(ArcademyMetaStore.WalletKey, new JObject
