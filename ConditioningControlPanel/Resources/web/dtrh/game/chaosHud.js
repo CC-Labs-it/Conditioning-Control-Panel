@@ -17,6 +17,9 @@ import { FLIGHT, flightCount, splitAmount, flightPoint } from './fieldFeel.js';
 
 const DEFUSE_COST = 30; // FOCUS bar low-threshold (ChaosTuning.DEFUSE_COST)
 const RIPPLE_COST = 30; // the ripple spends this much focus per cast (chaosRun RIPPLE_FOCUS_COST)
+// ---- multiplier readout feel (wave 2) ----
+const HEAT_GLOW_MAX = 0.45;     // the warm glow behind the multiplier at full heat (opacity)
+const TIER_BLOOM_MS = 900;      // a tier change blooms behind the number for this long
 const ART = 'https://ccp.art/';
 
 // The emotes currency mark: three *different* feeling-faces fanned like a hand
@@ -320,7 +323,21 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
   const streakVal = document.createElement('span');
   streakVal.className = 'cf-mult-streak';
   badgeCore.append(multVal, streakVal);
-  badge.append(badgeFx, badgeCore);
+  // Wave 2: one warm glow behind the number. Its strength tracks heat; a tier
+  // change lets it bloom once and settle (feel-field.css).
+  const badgeGlow = document.createElement('span');
+  badgeGlow.className = 'cf-mult-heatglow';
+  badgeGlow.style.setProperty('--tier-bloom-ms', `${TIER_BLOOM_MS}ms`);
+  badge.append(badgeGlow, badgeFx, badgeCore);
+  let bloomTimer = 0;
+  let glowShown = -1;
+  function tierBloom() {
+    badgeGlow.classList.remove('is-bloom');
+    void badgeGlow.offsetWidth;
+    badgeGlow.classList.add('is-bloom');
+    clearTimeout(bloomTimer);
+    bloomTimer = window.setTimeout(() => badgeGlow.classList.remove('is-bloom'), TIER_BLOOM_MS + 40);
+  }
 
   // Fire tiers ride the raw streak count (the tunnel itself fully warps at 25);
   // prevCombo=null means "baseline unset" so a fresh run never reads as a break.
@@ -353,6 +370,7 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     if (t === curTier) return;
     badge.classList.remove(`tier-${curTier}`);
     badge.classList.add(`tier-${t}`);
+    if (t > curTier) tierBloom();
     curTier = t;
     syncEmbers();
   }
@@ -741,6 +759,8 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
       focusFill.style.width = `${Math.round(st.focus)}%`;
       focusRow.classList.toggle('is-low', st.focus < DEFUSE_COST);
       heatFill.style.width = `${Math.round(st.heat * 100)}%`;
+      const glow = Math.round(Math.max(0, Math.min(1, st.heat || 0)) * 20) / 20;   // 5% steps: few style writes
+      if (glow !== glowShown) { glowShown = glow; badgeGlow.style.setProperty('--cf-heat-glow', (glow * HEAT_GLOW_MAX).toFixed(3)); }
       heatTint.style.opacity = st.heat > 0.3 ? String(((st.heat - 0.3) / 0.7) * 0.30) : '0';
       clockTime.textContent = `${fmtClock(st.elapsedSec)} / ${fmtClock(st.runDurationSec)} · `;
       clockLoop.textContent = `LOOP ${st.waveIndex}/${st.waveCount}`;
