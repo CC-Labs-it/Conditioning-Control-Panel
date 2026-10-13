@@ -2201,3 +2201,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/remote-core-a: +25
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/speech-core-a: +78
+- Cloud session (Opus), local review + gate.
