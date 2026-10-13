@@ -52,7 +52,7 @@
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
 
-                    <!-- WPF NotificationsSettingsSection.xaml:99-115: the header banner's pool beat. -->
+                    <!-- WPF NotificationsSettingsSection.xaml:100-115: the header banner's pool beat. -->
                     <Grid MinHeight="34" Margin="0,10,0,0" ColumnDefinitions="*,Auto"
                           ToolTip.Tip="{loc:Str tooltip_banner_pool_enabled}">
                         <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
