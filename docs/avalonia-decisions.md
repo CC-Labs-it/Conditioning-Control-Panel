@@ -1081,3 +1081,16 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Test: `SystemEmojiFontCollectionTests`; proof: base 10/10 SIGSEGV vs fix 10/10 clean under a GC-stress startup hook with the
   emoji font kept out of the page cache (~/ccp-port/evidence/render-all-segv/). CI keeps a crash dump + report artifact on
   a render-all failure (`render-all-crash`).
+
+## 2026-10-12: Chaster idle-day charge stays off until the conditioning-time tracker is ported (avalonia-port/chaster-minutes)
+- Question: with `FeatureDayLogService` now in Core and running on this head, should `ChasterHead` give the Chaster
+  service its `MinutesOn` (the idle-day row's eyes)? Wiring it arms WPF's idle-day charge here, which users will see.
+- Options: (A) keep it off: `MinutesOn` stays null, the day-end check reads "nobody can tell" and never books an idle day;
+  (B) parity: `MinutesOn = App.FeatureDayLog?.ConditioningMinutesOn(dayKey)`, exactly WPF `ChasterServiceApp.MinutesFromDayLog`
+  (ConditioningControlPanel/Services/Chaster/ChasterServiceApp.cs:49).
+- Choice: A for now. The supervisor first advised B, but review found that the input WPF relies on is missing here. The
+  day log's minutes come from `TotalConditioningMinutes` (`FeatureDayLogService.cs:73`), which WPF grows through
+  `SkillTreeService.AddConditioningTime`. Nothing on this head adds to it: the tracker is "STILL OUT" in
+  `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
+  user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
+- Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
