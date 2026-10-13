@@ -33,8 +33,21 @@ public class GlyphFallbackRunTests
     /// <summary>The exact phrase from BUG-29VA4QQQPU / BUG-VNGUWSPH7E.</summary>
     private const string ReportedPhrase = "♤雌畜人妖♤";
 
+    /// <summary>
+    /// These tests read the machine's font table, so a runner without a CJK or emoji font cannot
+    /// answer them. Skip (visibly) rather than fail on a missing font package, or pass silently.
+    /// </summary>
+    private static void RequireFallbackFonts(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+            if (!Arial.ContainsGlyph(rune.Value)
+                && SKFontManager.Default.MatchCharacter(null, SKFontStyle.Bold, null, rune.Value) is null)
+                Assert.Skip($"no installed font covers U+{rune.Value:X4}");
+    }
+
     private static void AssertEveryGlyphDrawable(string text)
     {
+        RequireFallbackFonts(text);
         var runs = GlyphFallback.Split(text, Arial, SKFontStyle.Bold);
 
         Assert.NotEmpty(runs);
@@ -73,6 +86,7 @@ public class GlyphFallbackRunTests
     {
         // The fallback must not swallow the rest of the line: Arial text on both sides of a Han
         // island keeps Arial, or every localized phrase with a stray ideograph would restyle.
+        RequireFallbackFonts("雌");
         var runs = GlyphFallback.Split("GOOD 雌 GIRL", Arial, SKFontStyle.Bold);
         Assert.Equal(3, runs.Length);
         Assert.Same(Arial, runs[0].Face);
@@ -133,7 +147,7 @@ public class GlyphFallbackRunTests
             var direct = SKFontManager.Default.MatchCharacter(
                 null, SKFontStyle.Bold, new[] { "zh", "zh-CN" }, '雌');
 
-            Assert.NotNull(direct);
+            Assert.SkipWhen(direct is null, "no installed font covers U+96CC");
             Assert.Equal(direct!.FamilyName, hanRun.Face.FamilyName);
         }
         finally { loc.SetLanguage(previous); }
@@ -157,7 +171,7 @@ public class GlyphFallbackRunTests
             var direct = SKFontManager.Default.MatchCharacter(
                 null, SKFontStyle.Bold, new[] { "ko" }, '雌');
 
-            Assert.NotNull(direct);
+            Assert.SkipWhen(direct is null, "no installed font covers U+96CC");
             Assert.Equal(direct!.FamilyName, after[0].Face.FamilyName);
         }
         finally { loc.SetLanguage(previous); }
@@ -166,6 +180,7 @@ public class GlyphFallbackRunTests
     [Fact]
     public void MeasureSumsTheRunsAndTakesTheWidestVerticalExtents()
     {
+        RequireFallbackFonts(ReportedPhrase);
         var runs = GlyphFallback.Split(ReportedPhrase, Arial, SKFontStyle.Bold);
         using var paint = new SKPaint { TextSize = 120f, Typeface = Arial };
 
