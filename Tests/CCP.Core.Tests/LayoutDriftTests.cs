@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.UI;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Owner report on 6.11.5 (2026-09-29): after the panel moved between a 100% and a 125% monitor,
