@@ -164,6 +164,7 @@ namespace ConditioningControlPanel
                 dirty |= MaybePostRelockRow(settings);
                 dirty |= MaybePostMemberHello(settings);
                 if (dirty) App.Settings?.Save();
+                MaybeCheckPostCode(settings);
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "[Inbox] conversion rows failed"); }
         }
@@ -324,6 +325,65 @@ namespace ConditioningControlPanel
                 },
             });
             return true;
+        }
+
+        // ---- this week's post code (brief C6, proposal 6c)
+
+        private static readonly TimeSpan PostCodeCheckGap = TimeSpan.FromMinutes(30);
+        private DateTime _postCodeCheckedUtc = DateTime.MinValue;
+        private int _postCodeInFlight;
+
+        /// <summary>For a Patreon member, at most every 30 minutes: ask whether a post code is live and
+        /// unredeemed for a feature this account does not already hold; if so, one row a day whose
+        /// button opens the redeem box.</summary>
+        private void MaybeCheckPostCode(Models.AppSettings settings)
+        {
+            if (!settings.PatreonMember || settings.OfflineMode || string.IsNullOrEmpty(settings.AuthToken)) return;
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyPostCodeLive;
+            if (!Services.Startup.Conversion.ConversionRules.Owed(settings.InboxStamps, rowKey,
+                    Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now))) return;
+            var now = DateTime.UtcNow;
+            if (now - _postCodeCheckedUtc < PostCodeCheckGap) return;
+            if (System.Threading.Interlocked.Exchange(ref _postCodeInFlight, 1) == 1) return;
+            _postCodeCheckedUtc = now;
+
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var live = await Services.Startup.Conversion.PostCodeApi.LiveAsync().ConfigureAwait(false);
+                    if (live is not { Live: true, Redeemed: false, Feature: string feature }) return;
+                    await Dispatcher.BeginInvoke(new Action(() => PostPostCodeRow(feature)),
+                        System.Windows.Threading.DispatcherPriority.Normal);
+                }
+                catch (Exception ex) { App.Logger?.Debug("[Inbox] post code check: {E}", ex.Message); }
+                finally { System.Threading.Interlocked.Exchange(ref _postCodeInFlight, 0); }
+            });
+        }
+
+        private void PostPostCodeRow(string feature)
+        {
+            var settings = App.Settings?.Current;
+            if (settings == null) return;
+            var info = Models.ExclusiveFeature.All.FirstOrDefault(f => f.DailyFreeKey == feature);
+            // A door this account already holds is no reason to post anything.
+            var held = (info?.Tier >= 2 ? App.Patreon?.HasLabAccess : App.Patreon?.HasPremiumAccess) == true;
+            if (held) return;
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyPostCodeLive;
+            if (!Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey,
+                    Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now))) return;
+            App.Settings?.Save();
+
+            var title = Loc.Get("conv_postcode_title");
+            var body = Loc.GetF("conv_postcode_body", info == null ? feature : Loc.Get(info.TitleLocKey));
+            PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "conv:" + rowKey,
+                Glyph = "🔖",
+                Title = title,
+                Summary = body,
+                Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get("conv_postcode_enter"), () => PostCodeDialog.Present(this)),
+            });
         }
 
         // ---- companion cap: filed after the conversation surface is gone

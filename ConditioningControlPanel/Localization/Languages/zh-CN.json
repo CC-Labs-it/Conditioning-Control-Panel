@@ -8074,5 +8074,17 @@
   "conv_member_hello_title": "免费会员。感谢关注。",
   "conv_member_hello_body": "免费会员每天有两份每日礼物。",
   "conv_member_second": "今天的第二份:{0}。",
-  "conv_ok": "知道了"
+  "conv_ok": "知道了",
+  "conv_postcode_title": "本周的帖子里有一个代码。",
+  "conv_postcode_body": "它会让 {0} 开放一段时间。",
+  "conv_postcode_enter": "输入代码",
+  "conv_postcode_dialog_title": "本周帖子代码",
+  "conv_postcode_hint": "代码在本周的 Patreon 帖子里。",
+  "conv_postcode_redeem": "打开",
+  "conv_postcode_ok": "{0} 开放至 {1}。",
+  "conv_postcode_unknown": "这个代码与本周的帖子不符。",
+  "conv_postcode_used": "此账号已经用过这个代码。",
+  "conv_postcode_expired": "这个代码已过期。",
+  "conv_postcode_offline": "无法连接服务器。请一分钟后再试。",
+  "conv_postcode_empty": "请先输入代码。"
 }

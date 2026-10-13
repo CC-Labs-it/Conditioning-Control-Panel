@@ -7562,5 +7562,17 @@
   "conv_member_hello_title": "Бесплатный участник. Спасибо, что следите.",
   "conv_member_hello_body": "Бесплатные участники получают два ежедневных подарка.",
   "conv_member_second": "Второй на сегодня: {0}.",
-  "conv_ok": "Понятно"
+  "conv_ok": "Понятно",
+  "conv_postcode_title": "В посте этой недели есть код.",
+  "conv_postcode_body": "Он ненадолго открывает {0}.",
+  "conv_postcode_enter": "Ввести код",
+  "conv_postcode_dialog_title": "Код из поста недели",
+  "conv_postcode_hint": "Код есть в посте этой недели на Patreon.",
+  "conv_postcode_redeem": "Открыть",
+  "conv_postcode_ok": "{0} открыт до {1}.",
+  "conv_postcode_unknown": "Этот код не совпадает с постом этой недели.",
+  "conv_postcode_used": "Этот аккаунт уже использовал код.",
+  "conv_postcode_expired": "Срок действия кода истёк.",
+  "conv_postcode_offline": "Сервер недоступен. Попробуйте через минуту.",
+  "conv_postcode_empty": "Сначала введите код."
 }

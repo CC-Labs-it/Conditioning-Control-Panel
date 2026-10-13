@@ -7562,5 +7562,17 @@
   "conv_member_hello_title": "Membre gratuit. Merci de suivre.",
   "conv_member_hello_body": "Les membres gratuits ont deux cadeaux du jour.",
   "conv_member_second": "Le deuxième du jour : {0}.",
-  "conv_ok": "Compris"
+  "conv_ok": "Compris",
+  "conv_postcode_title": "Le post de la semaine a un code.",
+  "conv_postcode_body": "Il ouvre {0} pour un moment.",
+  "conv_postcode_enter": "Entrer le code",
+  "conv_postcode_dialog_title": "Code du post de la semaine",
+  "conv_postcode_hint": "Le code est dans le post Patreon de la semaine.",
+  "conv_postcode_redeem": "Ouvrir",
+  "conv_postcode_ok": "{0} est ouvert jusqu'au {1}.",
+  "conv_postcode_unknown": "Ce code ne correspond pas au post de la semaine.",
+  "conv_postcode_used": "Ce compte a déjà utilisé ce code.",
+  "conv_postcode_expired": "Ce code a expiré.",
+  "conv_postcode_offline": "Serveur injoignable. Réessaie dans une minute.",
+  "conv_postcode_empty": "Tape d'abord le code."
 }

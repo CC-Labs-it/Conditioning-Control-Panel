@@ -7562,5 +7562,17 @@
   "conv_member_hello_title": "無料メンバーです。フォローありがとう。",
   "conv_member_hello_body": "無料メンバーはデイリーギフトが2つ。",
   "conv_member_second": "今日の2つ目: {0}。",
-  "conv_ok": "了解"
+  "conv_ok": "了解",
+  "conv_postcode_title": "今週の投稿にはコードがあります。",
+  "conv_postcode_body": "しばらく{0}が開きます。",
+  "conv_postcode_enter": "コードを入力",
+  "conv_postcode_dialog_title": "今週の投稿コード",
+  "conv_postcode_hint": "コードは今週のPatreon投稿にあります。",
+  "conv_postcode_redeem": "開く",
+  "conv_postcode_ok": "{0}は{1}まで開いています。",
+  "conv_postcode_unknown": "そのコードは今週の投稿と一致しません。",
+  "conv_postcode_used": "このアカウントはそのコードを使用済みです。",
+  "conv_postcode_expired": "そのコードは期限切れです。",
+  "conv_postcode_offline": "サーバーに接続できません。少し待ってから試してください。",
+  "conv_postcode_empty": "先にコードを入力してください。"
 }
