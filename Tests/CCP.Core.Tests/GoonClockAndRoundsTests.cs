@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services.GoonGame;
+using Serilog;
+using Serilog.Events;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -116,8 +119,20 @@ public sealed class GoonClockAndRoundsTests : IDisposable
         // A wedged UI thread: the hop gives up and the round carries on.
         ran = false;
         CoreDispatch.InvokeProvider = (_, _) => (false, null);
-        GoonUi.Invoke(() => ran = true, "wedged");
+        var sink = new ListSink();
+        var previous = Log.Logger;
+        Log.Logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        try { GoonUi.Invoke(() => ran = true, "wedged"); }
+        finally { Log.Logger = previous; }
         Assert.False(ran);
+        // The bug-report marker rescue keys on [WATCHDOG], as DispatcherHelper.LogSyncTimeout did.
+        Assert.Contains(sink.Events, e => e.MessageTemplate.Text.StartsWith("[WATCHDOG] "));
+    }
+
+    private sealed class ListSink : Serilog.Core.ILogEventSink
+    {
+        public List<LogEvent> Events { get; } = new();
+        public void Emit(LogEvent logEvent) { lock (Events) Events.Add(logEvent); }
     }
 
     [Theory]

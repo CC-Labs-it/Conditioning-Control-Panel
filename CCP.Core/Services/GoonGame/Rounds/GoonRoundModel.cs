@@ -384,7 +384,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                 catch (Exception ex) { Log.Warning("GoonSuddenDeath: presenter call {What} failed: {Error}", what, ex.Message); }
                 return null;
             }, HopTimeout);
-            if (!completed) Log.Warning("GoonSuddenDeath: presenter call {What} timed out on the UI thread", what);
+            // [WATCHDOG]-tagged like the WPF DispatcherHelper.LogSyncTimeout it replaces, so the
+            // bug-report marker rescue keeps it after the log tail has scrolled past the hang.
+            if (!completed) Log.Warning("[WATCHDOG] GoonSuddenDeath: presenter call {What} timed out on the UI thread", what);
         }
     }
 
