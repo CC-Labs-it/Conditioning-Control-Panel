@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         Child = new TextBlock
                         {
                             Text = verb, Foreground = new SolidColorBrush(color), FontWeight = FontWeight.Bold,
-                            FontSize = 11, FontFamily = new FontFamily("Consolas, Courier New"),
+                            FontSize = 11, FontFamily = new FontFamily(Platform.AppFonts.Mono),   // WPF Consolas
                         },
                     });
                 }
@@ -199,7 +199,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             AddHandler(KeyDownEvent, (_, e) =>
             {
                 var s = CoreSettings.Current;
-                if (!s.PanicKeyEnabled || e.Key.ToString() != s.PanicKey) return;
+                // Parse, never compare names: Enter and Return are one Key value and ToString() says "Return".
+                if (!s.PanicKeyEnabled || !Enum.TryParse<Key>(s.PanicKey, true, out var panic) || e.Key != panic) return;
                 e.Handled = true;
                 if (Platform.PanicListeners.Live) return;
                 if (MainShellWindow.Current is { } shell) shell.HandlePanicKeyPress(DateTime.Now);

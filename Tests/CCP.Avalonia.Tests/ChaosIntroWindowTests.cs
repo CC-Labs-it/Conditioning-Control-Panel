@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -100,6 +101,40 @@ public sealed class ChaosIntroWindowTests
                 Assert.Null(ChaosIntroWindow.Current);
             }
             finally { w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>P51: the panic key wins over a focused button. Bound to Enter, it closes the card
+    /// through the tunnel handler and the button never sees a click.</summary>
+    [Fact]
+    public async Task Panic_key_bound_to_Enter_closes_the_card_without_clicking_the_focused_button()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var s = CoreSettings.Current;
+            var (oldKey, oldOn) = (s.PanicKey, s.PanicKeyEnabled);
+            var w = new ChaosIntroWindow();
+            try
+            {
+                s.PanicKey = "Enter";
+                s.PanicKeyEnabled = true;
+                w.Show();
+                var btn = w.GetLogicalDescendants().OfType<Button>().Single();
+                int clicks = 0;
+                btn.Click += (_, _) => clicks++;
+                Assert.True(btn.Focus());
+                w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, clicks);
+                Assert.Null(ChaosIntroWindow.Current);
+            }
+            finally
+            {
+                w.Close();
+                (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldOn);
+            }
             return Task.CompletedTask;
         });
     }
