@@ -1,5 +1,4 @@
 using System;
-using System.Windows;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
@@ -40,6 +39,6 @@ namespace ConditioningControlPanel.Services.Deeper
         /// Rect.Empty for audio-only sources or when no window is visible —
         /// the engine then skips gaze evaluation silently.
         /// </summary>
-        Rect GetVideoRect();
+        PlaybackRect GetVideoRect();
     }
 }

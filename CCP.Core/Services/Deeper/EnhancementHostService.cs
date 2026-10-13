@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Serilog;
 using ConditioningControlPanel.Models.Deeper;
 
 namespace ConditioningControlPanel.Services.Deeper
@@ -15,6 +16,13 @@ namespace ConditioningControlPanel.Services.Deeper
     /// </summary>
     public sealed class EnhancementHostService : IDisposable
     {
+        /// <summary>WPF built a RealActionDispatcher here; the effects are the head's, so the head
+        /// seeds the factory. Unseeded = the dry-run logger (nothing reaches a screen or a device).</summary>
+        public static volatile Func<IActionDispatcher>? DispatcherFactory;
+
+        /// <summary>WPF App.Webcam. Null = webcam rules never fire (the engine says so once).</summary>
+        public static volatile Func<IEnhancementWebcam?>? WebcamProvider;
+
         public Enhancement? LoadedEnhancement { get; private set; }
         public string? LoadedFilePath { get; private set; }
 
@@ -84,7 +92,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 LoadedEnhancement = enh;
                 LoadedFilePath = path;
                 Loaded?.Invoke(enh, path);
-                App.Logger?.Information("Deeper host loaded: {Name} ({Path})",
+                Log.Information("Deeper host loaded: {Name} ({Path})",
                     enh.Metadata?.Name ?? "(untitled)", path);
                 return true;
             }
@@ -95,7 +103,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementHostService.LoadFromFile failed");
+                Log.Warning(ex, "EnhancementHostService.LoadFromFile failed");
                 LoadFailed?.Invoke(ex.Message);
                 return false;
             }
@@ -127,7 +135,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementHostService.LoadFromMemory validation failed");
+                Log.Warning(ex, "EnhancementHostService.LoadFromMemory validation failed");
                 LoadFailed?.Invoke(ex.Message);
                 return false;
             }
@@ -136,7 +144,7 @@ namespace ConditioningControlPanel.Services.Deeper
             LoadedEnhancement = enhancement;
             LoadedFilePath = sourceTag;
             try { Loaded?.Invoke(enhancement, sourceTag); } catch { }
-            App.Logger?.Information("Deeper host loaded from memory: {Name} ({Tag})",
+            Log.Information("Deeper host loaded from memory: {Name} ({Tag})",
                 enhancement.Metadata?.Name ?? "(untitled)", sourceTag);
             return true;
         }
@@ -149,7 +157,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 LoadedEnhancement = null;
                 LoadedFilePath = null;
                 try { Loaded?.Invoke(null, null); } catch { }
-                App.Logger?.Information("Deeper host unloaded");
+                Log.Information("Deeper host unloaded");
             }
         }
 
@@ -177,7 +185,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 // Wrap the real dispatcher in a recorder so subscribers (like the
                 // Player's event log) can show a live feed of what the engine
                 // fired without us touching every effect path.
-                _activeRecorder = new RecordingActionDispatcher(new RealActionDispatcher());
+                _activeRecorder = new RecordingActionDispatcher(DispatcherFactory?.Invoke() ?? new LoggingActionDispatcher());
                 _activeRecorder.ActionLogged += OnRecorderActionLogged;
 
                 // Pass the webcam reference unconditionally — the engine subscribes to
@@ -186,16 +194,16 @@ namespace ConditioningControlPanel.Services.Deeper
                 // BlinkDetected/GazeTarget/etc. rules silently when playback started
                 // before the webcam did, even though the user later started tracking
                 // mid-session and saw the events register everywhere else.
-                var webcam = App.Webcam;
+                var webcam = WebcamProvider?.Invoke();
                 _engine = new EnhancementEngine(LoadedEnhancement, source, _activeRecorder, webcam, EmitDiagnostic);
                 _engine.PlaybackCompleted += OnEnginePlaybackCompleted;
                 _engine.Start();
-                App.Logger?.Information("Deeper engine bound and started");
+                Log.Information("Deeper engine bound and started");
                 return true;
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "EnhancementHostService.Bind failed");
+                Log.Warning(ex, "EnhancementHostService.Bind failed");
                 UnbindEngine();
                 return false;
             }
@@ -220,7 +228,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementHostService.OnEnginePlaybackCompleted error: {Error}", ex.Message);
+                Log.Debug("EnhancementHostService.OnEnginePlaybackCompleted error: {Error}", ex.Message);
             }
         }
 
@@ -236,7 +244,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementHostService.UnbindEngine error: {Error}", ex.Message);
+                Log.Debug("EnhancementHostService.UnbindEngine error: {Error}", ex.Message);
             }
             _engine = null;
             if (_activeRecorder != null)
@@ -252,13 +260,13 @@ namespace ConditioningControlPanel.Services.Deeper
         private void OnRecorderActionLogged(string line)
         {
             try { ActionLogged?.Invoke(line); }
-            catch (Exception ex) { App.Logger?.Debug("EnhancementHostService.ActionLogged subscriber error: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("EnhancementHostService.ActionLogged subscriber error: {Error}", ex.Message); }
         }
 
         private void EmitDiagnostic(string line)
         {
             try { Diagnostic?.Invoke(line); }
-            catch (Exception ex) { App.Logger?.Debug("EnhancementHostService.Diagnostic subscriber error: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("EnhancementHostService.Diagnostic subscriber error: {Error}", ex.Message); }
         }
 
         public void Dispose()
