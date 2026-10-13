@@ -3289,7 +3289,8 @@ namespace ConditioningControlPanel
             // Full Doki lockdown leaves for the next launch. Both only subscribe; neither costs anything
             // until a lockdown runs (or, for the charge, until the flag from the last one is spent).
             Services.Possession.PossessionAudio.Install();
-            Services.Possession.PossessionRemember.Install();
+            Services.Possession.PossessionRemember.Install(Lockdown,
+                Services.Possession.PossessionRememberCharge.IsWindowReady, Services.Possession.PossessionRememberCharge.Fire);
             // The Dose: a lockdown refuses to run empty (engine off -> started; nothing on -> the warden
             // picks). Recovery first, so a killed lockdown's conscripted toggles go back off before the
             // engine can ever read them.

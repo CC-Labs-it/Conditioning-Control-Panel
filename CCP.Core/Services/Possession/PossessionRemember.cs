@@ -1,9 +1,6 @@
 using System;
-using System.Reflection;
 using System.Threading;
-using System.Windows;
-using System.Windows.Threading;
-using ConditioningControlPanel.Helpers;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Possession;
 
@@ -30,14 +27,15 @@ namespace ConditioningControlPanel.Services.Possession;
 //  private field and publishes the total only on the EscapeAttempted argument. The companion's chat prompt
 //  (PromptAssembler, wave-2 item B12) reads it from here so the warden knows how many times they pulled at
 //  the door.
+//
+//  Head-neutral since possession-core-c: the head says when its main window is on screen and spends the
+//  charge (WPF: PossessionRememberCharge - the ember ripple on the Lockdown door, the tube check, the
+//  line). The rules, the flag and the clock live here.
 // =====================================================================================================
 
 /// <summary>The "it remembers" charge and the per-lockdown escape counter. See the file header.</summary>
 public static class PossessionRemember
 {
-    /// <summary>Bark trigger for the remembered line. One text-only variant per mod pack.</summary>
-    public const string RememberTrigger = "PossessionRemember";
-
     /// <summary>How long after the main window is up the charge lands.</summary>
     private static readonly TimeSpan Delay = TimeSpan.FromSeconds(20);
 
@@ -46,10 +44,18 @@ public static class PossessionRemember
 
     private static bool _installed;
     private static bool _spent;
+    private static bool _waiting;
     private static int _escapeAttempts;
-    private static DispatcherTimer? _timer;
+    private static Timer? _timer;
+    private static Func<bool> _isWindowReady = () => false;
+    private static Action _fire = () => { };
+
+    /// <summary>Test seams: the clock, and whether a real one-second timer is started.</summary>
+    internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+    internal static bool TimerEnabled = true;
     private static DateTime _startedAt;
     private static DateTime _windowReadyAt = DateTime.MinValue;
+    private static LockdownService? _lockdown;
 
     /// <summary>
     /// How many escape attempts the CURRENT lockdown has seen, all kinds combined. Zero when no lockdown
@@ -60,15 +66,18 @@ public static class PossessionRemember
     /// <summary>
     /// Wire up the lockdown lifecycle and, if the last Full Doki run armed it, schedule this launch's one
     /// charge. Called once from App.OnStartup next to the director. Safe to call twice.
+    /// <paramref name="isWindowReady"/>: the main window is loaded and visible. <paramref name="fire"/>:
+    /// the head's charge, run on its UI thread, never while a lockdown runs.
     /// </summary>
-    public static void Install()
+    public static void Install(LockdownService? lockdown, Func<bool> isWindowReady, Action fire)
     {
         if (_installed) return;
         _installed = true;
+        _isWindowReady = isWindowReady;
+        _fire = fire;
 
         try
         {
-            var lockdown = App.Lockdown;
             if (lockdown != null)
             {
                 lockdown.LockdownActivated += OnLockdownActivated;
@@ -76,10 +85,11 @@ public static class PossessionRemember
                 lockdown.EscapeAttempted += OnEscapeAttempted;
             }
         }
-        catch (Exception ex) { App.Logger?.Warning("PossessionRemember install failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionRemember install failed: {Error}", ex.Message); }
+        _lockdown = lockdown;
 
         try { SchedulePendingCharge(); }
-        catch (Exception ex) { App.Logger?.Warning("PossessionRemember schedule failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionRemember schedule failed: {Error}", ex.Message); }
     }
 
     // -------------------------------------------------------------------------------------------
@@ -100,8 +110,7 @@ public static class PossessionRemember
         {
             Interlocked.Exchange(ref _escapeAttempts, 0);
 
-            var settings = App.Settings?.Current;
-            if (settings == null) return;
+            var settings = CoreSettings.Current;
 
             // Read the intensity HERE, at the end of the run that earned it. Reading it next launch
             // instead would let a user who dialled back to Eerie in the meantime get a memory of a
@@ -110,19 +119,18 @@ public static class PossessionRemember
             if (settings.LockdownPossessionEnabled != true) return;
 
             settings.LockdownPossessionRememberPending = true;
-            App.Logger?.Debug("PossessionRemember armed (Full Doki lockdown ended)");
+            Log.Debug("PossessionRemember armed (Full Doki lockdown ended)");
         }
-        catch (Exception ex) { App.Logger?.Warning("PossessionRemember arm failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionRemember arm failed: {Error}", ex.Message); }
     }
 
     // -------------------------------------------------------------------------------------------
     //  The one charge
     // -------------------------------------------------------------------------------------------
 
-    private static void SchedulePendingCharge()
+    internal static void SchedulePendingCharge()
     {
-        var settings = App.Settings?.Current;
-        if (settings == null) return;
+        var settings = CoreSettings.Current;
         if (!settings.LockdownPossessionRememberPending) return;
 
         // FAILSAFE, and the reason it is the very first thing that happens: the flag is spent the moment
@@ -132,32 +140,31 @@ public static class PossessionRemember
 
         if (settings.LockdownPossessionEnabled != true) return;
 
-        _startedAt = DateTime.UtcNow;
-        DispatcherHelper.RunOnUI(() =>
+        _startedAt = UtcNow();
+        _windowReadyAt = DateTime.MinValue;
+        _waiting = true;
+        try
         {
-            try
-            {
-                _timer?.Stop();
-                _timer = new DispatcherTimer(DispatcherPriority.Background)
-                {
-                    Interval = TimeSpan.FromSeconds(1)
-                };
-                _timer.Tick += (_, __) => Tick();
-                _timer.Start();
-            }
-            catch (Exception ex) { App.Logger?.Warning("PossessionRemember timer failed: {Error}", ex.Message); }
-        });
+            _timer?.Dispose();
+            // Ticks on the head's UI thread, as LockdownService's countdown does.
+            if (TimerEnabled)
+                _timer = new Timer(_ => CoreDispatch.Post(Tick), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
+        catch (Exception ex) { Log.Warning("PossessionRemember timer failed: {Error}", ex.Message); }
     }
 
-    private static void Tick()
+    /// <summary>True while a remembered charge waits for the window.</summary>
+    internal static bool IsWaiting => _waiting;
+
+    internal static void Tick()
     {
+        if (!_waiting) return;
         try
         {
             if (_spent) { Stop(); return; }
-            if (DateTime.UtcNow - _startedAt > WaitForWindowTimeout) { Stop(); return; }
+            if (UtcNow() - _startedAt > WaitForWindowTimeout) { Stop(); return; }
 
-            var window = App.MainWindowRef;
-            if (window == null || !window.IsLoaded || !window.IsVisible)
+            if (!_isWindowReady())
             {
                 // The clock only starts once the room is actually on screen: twenty seconds of a
                 // splash screen is not twenty seconds of someone sitting there.
@@ -165,97 +172,56 @@ public static class PossessionRemember
                 return;
             }
 
-            if (_windowReadyAt == DateTime.MinValue) _windowReadyAt = DateTime.UtcNow;
-            if (DateTime.UtcNow - _windowReadyAt < Delay) return;
+            if (_windowReadyAt == DateTime.MinValue) _windowReadyAt = UtcNow();
+            if (UtcNow() - _windowReadyAt < Delay) return;
 
             Stop();
             if (_spent) return;
             _spent = true;
-            Fire(window);
+            Fire();
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("PossessionRemember tick failed: {Error}", ex.Message);
+            Log.Warning("PossessionRemember tick failed: {Error}", ex.Message);
             Stop();
         }
     }
 
     private static void Stop()
     {
-        try { _timer?.Stop(); } catch { }
+        _waiting = false;
+        try { _timer?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _timer = null;
     }
 
-    private static void Fire(MainWindow window)
+    private static void Fire()
     {
         try
         {
             // A lockdown that started while we were counting owns the room now; a memory of the LAST one
             // on top of a live haunt is just noise.
-            if (App.Lockdown?.IsActive == true) return;
+            if (_lockdown?.IsActive == true) return;
 
-            // No tube, no line, no point: the charge alone reads as a glitch rather than a message.
-            if (App.AvatarWindow == null) return;
-
-            var door = ResolveDoor(window);
-            if (door == null) return;
-
-            App.Logger?.Information("Possession: spending the remembered charge on {Door}", door.Name);
-
-            // The attribution layer, borrowed for one ripple. The director owns an EmberAttribution per
-            // attached host, but it only builds them while it is haunting and it never exposes them, so
-            // this makes its own over the same host and drops it. ChargeAsync tears its own overlay down
-            // (see EmberAttribution.StartCharge / Finish), so there is nothing to release afterwards.
-            if (window is IPossessionHost host)
-            {
-                var attribution = new EmberAttribution(host, () => App.Settings?.Current?.LockdownPhotosafe == true);
-                _ = attribution.ChargeAsync(door, CancellationToken.None, 600);
-            }
-
-            SayRemembered();
+            _fire();
         }
-        catch (Exception ex) { App.Logger?.Warning("PossessionRemember fire failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionRemember fire failed: {Error}", ex.Message); }
     }
 
-    /// <summary>
-    /// The most Lockdown-ish thing currently on screen. The nav rail's Lockdown entry when its door is
-    /// open, otherwise the Play door that contains it - charging a control inside a collapsed accordion
-    /// (Height 0, IsHitTestVisible false) would produce an ember ripple nobody can see.
-    /// </summary>
-    private static FrameworkElement? ResolveDoor(MainWindow window)
+    /// <summary>Tests only: unhook and forget everything so the next Install starts clean.</summary>
+    internal static void ResetForTests()
     {
-        foreach (var name in new[] { "BtnNavLockdown", "DoorPlay" })
+        Stop();
+        if (_lockdown != null)
         {
-            try
-            {
-                if (window.FindName(name) is FrameworkElement fe
-                    && fe.IsVisible && fe.ActualWidth > 1 && fe.ActualHeight > 1)
-                {
-                    return fe;
-                }
-            }
-            catch { }
+            _lockdown.LockdownActivated -= OnLockdownActivated;
+            _lockdown.LockdownDeactivated -= OnLockdownDeactivated;
+            _lockdown.EscapeAttempted -= OnEscapeAttempted;
         }
-        return null;
-    }
-
-    /// <summary>
-    /// One line, in the mod's own voice. The packs own the words (trigger
-    /// <see cref="RememberTrigger"/>, text-only variants); the hardcoded line below exists only for the
-    /// case where there is no bark service at all, exactly like Warden.Say's fallback.
-    ///
-    /// <para>Goes through BarkService.NotifyPossessionRemember (rule poss_remember in every pack);
-    /// the bubble fallback only covers a mod pack without that rule.</para>
-    /// </summary>
-    private static void SayRemembered()
-    {
-        try
-        {
-            if (App.Bark != null && App.Bark.NotifyPossessionRemember()) return;
-
-            App.AvatarWindow?.GigglePriority("i remember.", playSound: false,
-                aiGenerated: false, mood: "possessive");
-        }
-        catch (Exception ex) { App.Logger?.Debug("PossessionRemember line failed: {Error}", ex.Message); }
+        _lockdown = null;
+        _installed = _spent = false;
+        _escapeAttempts = 0;
+        _windowReadyAt = DateTime.MinValue;
+        _isWindowReady = () => false;
+        _fire = () => { };
     }
 }
