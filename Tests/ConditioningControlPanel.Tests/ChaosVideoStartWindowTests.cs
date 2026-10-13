@@ -18,8 +18,9 @@ namespace ConditioningControlPanel.Tests;
 /// symptom, on a window of at least 800ms that anyone quitting right after a pop lands in.
 ///
 /// The request now carries a token taken at detonation. A run exit cancels through it, and every
-/// step between the request and the first frame abandons a cancelled one. These tests pin the two
-/// pure rules that decide it, plus the queue-parked case end to end on the real queue.
+/// step between the request and the first frame abandons a cancelled one. The pure cancel rule is
+/// pinned in CCP.Core.Tests (VideoRequestCancelTests); these pin the queue-parked case end to end
+/// on the real queue and the tape-on-screen rule.
 /// </summary>
 [Collection(InteractionQueueSchedulerCollection.Name)]
 public class ChaosVideoStartWindowTests : IDisposable
@@ -34,49 +35,6 @@ public class ChaosVideoStartWindowTests : IDisposable
     }
 
     public void Dispose() => InteractionQueueService.TriggerScheduler = _originalScheduler;
-
-    /// <summary>
-    /// Armed but not yet playing, and the run ends: the request is cancelled, so no video opens
-    /// over the lobby. This is the case the old teardown missed entirely.
-    /// </summary>
-    [Fact]
-    public void ArmedButNotPlayingYet_TheRequestIsCancelled()
-    {
-        int token = 1;                 // the detonation took a token
-        int cancelledThrough = token;  // the run ended and swept through it
-
-        Assert.True(VideoService.ShouldAbandonVideoRequest(token, cancelledThrough));
-    }
-
-    /// <summary>
-    /// The ownership half, restated on the new seam: a video nobody in the descent asked for
-    /// carries no token, so a run exit cannot cancel a user's own mandatory or session video -
-    /// however many chaos requests have been cancelled around it.
-    /// </summary>
-    [Fact]
-    public void AVideoTheUserAskedFor_IsNeverCancelled()
-    {
-        Assert.False(VideoService.ShouldAbandonVideoRequest(requestToken: 0, cancelledThrough: 0));
-        Assert.False(VideoService.ShouldAbandonVideoRequest(requestToken: 0, cancelledThrough: 47));
-    }
-
-    /// <summary>A video the NEXT run asks for is newer than the cancel and must still play, or one
-    /// quit would poison every descent after it.</summary>
-    [Fact]
-    public void ARequestMadeAfterTheCancel_StillPlays()
-    {
-        Assert.False(VideoService.ShouldAbandonVideoRequest(requestToken: 2, cancelledThrough: 1));
-    }
-
-    /// <summary>Several bubbles can have popped in one run; ending it takes them all, not just the
-    /// last one.</summary>
-    [Fact]
-    public void EveryOutstandingRequestOfTheRun_GoesTogether()
-    {
-        Assert.True(VideoService.ShouldAbandonVideoRequest(requestToken: 1, cancelledThrough: 3));
-        Assert.True(VideoService.ShouldAbandonVideoRequest(requestToken: 2, cancelledThrough: 3));
-        Assert.True(VideoService.ShouldAbandonVideoRequest(requestToken: 3, cancelledThrough: 3));
-    }
 
     /// <summary>
     /// The queue path, end to end on the real InteractionQueueService. A chaos video that arrives
@@ -97,7 +55,7 @@ public class ChaosVideoStartWindowTests : IDisposable
         // What VideoService parks: the same TriggerVideo call, carrying the token.
         q.TryStart(IType.Video, () =>
         {
-            if (VideoService.ShouldAbandonVideoRequest(token, cancelledThrough))
+            if (VideoTriggerRules.ShouldAbandonVideoRequest(token, cancelledThrough))
             {
                 q.CompleteIfCurrent(IType.Video);
                 return;
@@ -127,7 +85,7 @@ public class ChaosVideoStartWindowTests : IDisposable
 
         q.TryStart(IType.Video, () =>
         {
-            if (VideoService.ShouldAbandonVideoRequest(0, cancelledThrough)) return;
+            if (VideoTriggerRules.ShouldAbandonVideoRequest(0, cancelledThrough)) return;
             played++;
         }, queue: true);
 

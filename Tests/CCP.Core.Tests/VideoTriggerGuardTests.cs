@@ -1,9 +1,9 @@
 using System;
 using ConditioningControlPanel.Services;
 using Xunit;
-using static ConditioningControlPanel.Services.VideoService;
+using static ConditioningControlPanel.Services.VideoTriggerRules;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// #1135 "popping a video bubble does nothing about 75% of the time".
@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// was logged anywhere, which is exactly the shape of the report.
 ///
 /// The dispatcher call is now fire-and-forget with its own catch, and the guard no longer trusts the
-/// flag indefinitely. <see cref="VideoService.EvaluateTriggerGuard"/> is that escape hatch, pulled out
+/// flag indefinitely. <see cref="VideoTriggerRules.EvaluateTriggerGuard"/> is that escape hatch, pulled out
 /// as pure logic so it can be tested without LibVLC (the same seam EvaluateGraceRequest uses).
 /// </summary>
 public class VideoTriggerGuardTests
