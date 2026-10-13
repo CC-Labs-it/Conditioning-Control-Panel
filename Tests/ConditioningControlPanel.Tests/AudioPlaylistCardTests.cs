@@ -124,7 +124,7 @@ public class AudioPlaylistCardModelTests
         Assert.Equal(5, fake.Tracks.Count);
         Assert.Equal(new[] { "one", "two", "three", "four", "five" }, model.Rows.Select(r => r.Name));
         Assert.True(model.HasTracks);
-        Assert.Contains("*.mp3;*.wav;*.ogg;*.flac;*.m4a", AudioPlaylistCardModel.DialogFilter("Audio files"));
+        Assert.Contains("*.mp3;*.wav;*.flac;*.m4a", AudioPlaylistCardModel.DialogFilter("Audio files"));
     }
 
     [Fact]

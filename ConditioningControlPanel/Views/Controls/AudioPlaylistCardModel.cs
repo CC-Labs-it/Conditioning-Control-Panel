@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Views.Controls
     /// </summary>
     public sealed class AudioPlaylistCardModel : INotifyPropertyChanged
     {
-        public static readonly string[] Extensions = { ".mp3", ".wav", ".ogg", ".flac", ".m4a" };
+        public static readonly string[] Extensions = { ".mp3", ".wav", ".flac", ".m4a" };
 
         private readonly IAudioPlaylistService? _service;
         private bool _attached;
