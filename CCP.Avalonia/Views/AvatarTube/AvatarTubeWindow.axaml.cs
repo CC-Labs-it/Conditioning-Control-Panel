@@ -551,6 +551,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>Gets the current avatar set number</summary>
         public int CurrentAvatarSet => _currentAvatarSet;
 
+        /// <summary>The title the tube shows for its set (UpdateTitleDisplay); the picker card's look label.</summary>
+        internal string AvatarSetTitle => _txtAvatarTitle.Text ?? string.Empty;
+
         /// <summary>
         /// True while ANY speech bubble (AI or ordinary "Preset" bark/chatter) is currently being
         /// displayed. Unlike <see cref="HasBubbleUp"/> this also covers non-AI bubbles, so the bark

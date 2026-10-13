@@ -24,6 +24,19 @@ namespace ConditioningControlPanel.Services.Companion
 
         public static string NameKey(CompanionBonusType type) => "companion_perk_name_" + (int)type;
 
+        /// <summary>The perk the user's settings resolve to (WPF CompanionService.ActivePerk).</summary>
+        public static CompanionBonusType Active(AppSettings s)
+            => Resolve(s.CompanionPerk, CompanionDefinition.GetById((CompanionId)s.ActiveCompanionId).BonusType, CompanionExperience.IsV2Enabled);
+
+        /// <summary>WPF CompanionService.SetPerk's rule: v2 only, a defined perk the player's level
+        /// has unlocked. Writes the choice; the caller saves.</summary>
+        public static bool TrySelect(AppSettings s, CompanionBonusType perk)
+        {
+            if (!CompanionExperience.IsV2Enabled || !System.Enum.IsDefined(perk) || !CanSelect(perk, s.PlayerLevel)) return false;
+            s.CompanionPerk = perk;
+            return true;
+        }
+
         /// <summary>WPF CompanionService.OnAttentionCheckFailed: with the Trainer's perk (StrictModeBonus)
         /// active, a failed video attention check costs the active companion 25 XP, never below 0.
         /// True when it applied; the caller saves.</summary>

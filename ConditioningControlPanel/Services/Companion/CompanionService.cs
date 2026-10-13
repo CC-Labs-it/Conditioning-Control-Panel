@@ -129,9 +129,7 @@ namespace ConditioningControlPanel.Services
 
         public bool SetPerk(CompanionBonusType perk)
         {
-            if (!CompanionExperience.IsV2Enabled || !Enum.IsDefined(perk) || App.Settings?.Current == null
-                || !CompanionPerks.CanSelect(perk, App.Settings.Current.PlayerLevel)) return false;
-            App.Settings.Current.CompanionPerk = perk;
+            if (App.Settings?.Current == null || !CompanionPerks.TrySelect(App.Settings.Current, perk)) return false;
             App.Settings.Save();
             UpdateDrainTimer();
             return true;
