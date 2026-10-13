@@ -1,11 +1,10 @@
 using System;
-using System.Windows;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
     /// <summary>
     /// Adapts <see cref="EnhancementAudioPlayer"/> to <see cref="IPlaybackTimeSource"/>
-    /// for the engine. Audio-only — GetVideoRect always returns Rect.Empty,
+    /// for the engine. Audio-only — GetVideoRect always returns PlaybackRect.Empty,
     /// which the engine treats as "skip gaze evaluation" silently.
     /// </summary>
     public sealed class EnhancementAudioPlayerTimeSource : IPlaybackTimeSource, IDisposable
@@ -48,7 +47,7 @@ namespace ConditioningControlPanel.Services.Deeper
         public void Pause() => _player.Pause();
         public void Play() => _player.Resume();
 
-        public Rect GetVideoRect() => Rect.Empty;
+        public PlaybackRect GetVideoRect() => PlaybackRect.Empty;
 
         public void Dispose() => Detach();
     }
