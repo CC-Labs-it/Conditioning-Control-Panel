@@ -179,6 +179,10 @@ namespace ConditioningControlPanel
                 var premium = App.Patreon?.HasPremiumAccess == true;
                 var changed = false;
 
+                // Before anything below switches yesterday's Daily Gift off: remember it was in use,
+                // for the next launch's relock row (MainWindow.Inbox.cs).
+                if (NoteDailyGiftUse(settings)) App.Settings?.Save();
+
                 // Awareness (keyword triggers + screen OCR) - keeps its own keyboard hook and OCR
                 // scanner alive. Mirrors ChkAwarenessMaster_Changed's OFF branch.
                 if (settings.KeywordTriggersEnabled && !premium
@@ -318,6 +322,9 @@ namespace ConditioningControlPanel
                 {
                     App.WindowAwareness?.Start();
                 }
+
+                // The day it closes is no longer silent (proposal 4b): the closed row, once.
+                MaybePostConversionRows();
             }
             catch (Exception ex)
             {
@@ -1288,6 +1295,12 @@ namespace ConditioningControlPanel
             // in, and the rise's own fanfare on the profile bubble (EntitlementTierSync).
             Activated += (_, __) => EntitlementTierSync.OnAppFocused();
             Activated += (_, __) => MaybeShowInviteEnding();
+            // Conversion rows (lapse warnings and the rest, MainWindow.Inbox.cs): checked on focus and
+            // after any server tier reading that moved the stored lapse signal.
+            Activated += (_, __) => MaybePostConversionRows();
+            EntitlementTierSync.ReadingApplied += MaybePostConversionRows;
+            EntitlementTierSync.ExtrasApplied += MaybePostConversionRows;
+            Services.Startup.Conversion.ConversionSignals.CompanionCapHit += OnCompanionCapHit;
             Services.Invites.InviteGrantSync.ArmExpiry();
             EntitlementTierSync.TierRaised += OnEntitlementTierRaised;
 

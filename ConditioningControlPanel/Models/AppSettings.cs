@@ -3318,6 +3318,68 @@ namespace ConditioningControlPanel.Models
         [System.Text.Json.Serialization.JsonIgnore]
         public bool HasInviteGrant => _inviteGrantUntil.HasValue && DateTime.UtcNow < _inviteGrantUntil.Value;
 
+        private int? _serverTierSeen = null;
+        /// <summary>
+        /// The last server <c>effective_tier</c> that read LOWER than <see cref="PatreonTier"/>
+        /// (EntitlementTierSync). Null when the server agrees or rose. The grace stamps above still
+        /// decide access; this only tells the lapse rows that the window is really closing
+        /// (Services/Startup/Conversion/ConversionRules). Machine-local.
+        /// </summary>
+        [JsonProperty("server_tier_seen")]
+        public int? ServerTierSeen
+        {
+            get => _serverTierSeen;
+            set { _serverTierSeen = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, string> _inboxStamps = new(StringComparer.Ordinal);
+        /// <summary>
+        /// One stamp per conversion Inbox row key (lapse_warn_7, companion_cap, ...): the value that
+        /// row was last posted for (a local date, or the grace end it warned about). Keeps each row
+        /// to once a day, or once per lapse. Machine-local, never a sync field.
+        /// </summary>
+        [JsonProperty("inbox_stamps", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, string> InboxStamps
+        {
+            get => _inboxStamps;
+            set { _inboxStamps = value ?? new(StringComparer.Ordinal); OnPropertyChanged(); }
+        }
+
+        private bool _patreonMember;
+        /// <summary>
+        /// The server's <c>patreon_member</c> off <c>/v2/user/profile</c> (brief C2): a Patreon free
+        /// member or an active patron. With no tier it buys the second Daily Gift and the post code
+        /// row; it never opens a tier door by itself. Machine-local mirror of a server field.
+        /// </summary>
+        [JsonProperty("patreon_member")]
+        public bool PatreonMember
+        {
+            get => _patreonMember;
+            set { _patreonMember = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, string> _postGrants = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Post code grants (brief C6): Daily Gift key -> ISO end time, from a redeem reply or the
+        /// profile's <c>post_grants</c>. DailyFreeService ORs an unexpired one into IsFreeToday.
+        /// </summary>
+        [JsonProperty("post_grants", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, string> PostGrants
+        {
+            get => _postGrants;
+            set { _postGrants = value ?? new(StringComparer.OrdinalIgnoreCase); OnPropertyChanged(); }
+        }
+
+        private DateTime? _serverPaidUntil;
+        /// <summary>The server's <c>paid_until</c> (brief C2): a PayPal / Stripe period end, null for
+        /// Patreon until its webhook stores one. Shown, never a gate.</summary>
+        [JsonProperty("server_paid_until")]
+        public DateTime? ServerPaidUntil
+        {
+            get => _serverPaidUntil;
+            set { _serverPaidUntil = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Scheduler

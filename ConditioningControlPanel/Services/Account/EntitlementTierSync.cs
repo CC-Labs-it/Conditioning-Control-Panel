@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Services
         /// <summary>Raised on the UI thread, BEFORE TierChanged, with the new tier (1 or 2).</summary>
         public static event Action<int>? TierRaised;
 
+        /// <summary>Raised on the UI thread after a reading the lapse rows care about was applied
+        /// (a Lower verdict stored, or cleared again).</summary>
+        public static event Action? ReadingApplied;
+
         private static DateTime _lastFocusCheckUtc = DateTime.MinValue;
         private static int _focusInFlight;
         private static int? _lastLowerLogged;
@@ -52,7 +56,20 @@ namespace ConditioningControlPanel.Services
                 var settings = App.Settings?.Current;
                 if (!SignedInWithV2(settings)) return;
 
-                switch (EntitlementTierRule.Decide(settings!.PatreonTier, serverTier))
+                var verdict = EntitlementTierRule.Decide(settings!.PatreonTier, serverTier);
+
+                // The lapse rows' only input from here (ConversionRules.DecideLapse): a lower
+                // reading is remembered, an agreeing or higher one forgets it. Never an access input.
+                var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, serverTier, settings.ServerTierSeen);
+                if (seen != settings.ServerTierSeen)
+                {
+                    settings.ServerTierSeen = seen;
+                    if (verdict != EntitlementVerdict.Rise) App.Settings?.Save(); // a rise saves below
+                    try { ReadingApplied?.Invoke(); }
+                    catch (Exception ex) { App.Logger?.Debug("[Entitlement] ReadingApplied handler failed: {Error}", ex.Message); }
+                }
+
+                switch (verdict)
                 {
                     case EntitlementVerdict.Rise:
                         var tier = serverTier!.Value;
@@ -84,6 +101,34 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>Raised on the UI thread after the profile's conversion fields changed
+        /// (patreon_member, paid_until, post_grants).</summary>
+        public static event Action? ExtrasApplied;
+
+        /// <summary>Stores the profile's conversion fields (brief C2) on the UI thread. Never throws.</summary>
+        public static void OfferExtras(Startup.Conversion.ProfileExtrasReading? reading)
+        {
+            try
+            {
+                if (reading == null) return;
+                var dispatcher = Application.Current?.Dispatcher;
+                if (dispatcher == null || dispatcher.HasShutdownStarted) return;
+                dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                {
+                    try
+                    {
+                        var settings = App.Settings?.Current;
+                        if (!SignedInWithV2(settings) || !Startup.Conversion.ProfileExtras.Apply(settings!, reading)) return;
+                        App.Settings?.Save();
+                        App.DailyFree?.NotifyInputsChanged();
+                        ExtrasApplied?.Invoke();
+                    }
+                    catch (Exception ex) { App.Logger?.Debug("[Entitlement] extras apply failed: {Error}", ex.Message); }
+                }));
+            }
+            catch (Exception ex) { App.Logger?.Debug("[Entitlement] extras offer skipped: {Error}", ex.Message); }
+        }
+
         /// <summary>
         /// The main window came to the front. At most once per <see cref="FocusCheckGap"/>, read
         /// the profile off the UI thread and offer its tier. Fire and forget.
@@ -106,6 +151,7 @@ namespace ConditioningControlPanel.Services
                     {
                         var node = await new V2AuthService().GetUserProfileNodeAsync(unifiedId);
                         Offer(EntitlementTierRule.ParseTier(node?["effective_tier"]), "focus");
+                        OfferExtras(Startup.Conversion.ProfileExtras.Parse(node));
                     }
                     catch (Exception ex)
                     {

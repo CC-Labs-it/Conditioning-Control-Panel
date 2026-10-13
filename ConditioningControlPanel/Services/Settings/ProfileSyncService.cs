@@ -4712,6 +4712,14 @@ namespace ConditioningControlPanel.Services
             // Documented local only: a restore on another PC must not switch presence sharing on.
             nameof(AppSettings.FriendsPresenceShared),
             nameof(AppSettings.ModPersonalityPreset),
+            // Conversion rows (C9): machine-local stamps and the last server tier reading.
+            // A restore must not bring back a stale reading or re-open a once-ever row.
+            nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.InboxStamps),
+            // Free member fields mirror the server profile; the next profile read refills them.
+            nameof(AppSettings.PatreonMember),
+            nameof(AppSettings.PostGrants),
+            nameof(AppSettings.ServerPaidUntil),
         };
 
         /// <summary>
