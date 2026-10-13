@@ -2148,3 +2148,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Chaster idle-day row now reads the day log (WPF MinutesFromDayLog), fed by the conditioning-time tracker; end-to-end test engine run -> day log -> idle charge 0 today / charged otherwise.
 - Upgrade edge guarded: a day before the day log's first conditioning day reads null (no charge), so a pre-tracker day is never billed (FeatureDayLogService.FirstConditioningDay).
 - Follow-up: LeashHead day minutes once leash-wire is in the base.
+
+## avalonia-port/notifications-core-a: +70
+- Cloud session (Opus), local review + gate.
