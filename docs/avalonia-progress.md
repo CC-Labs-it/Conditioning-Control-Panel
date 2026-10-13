@@ -2157,3 +2157,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/descent-core-a: +119
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/home-marquee: +982
+- Cloud session (Opus), local review + remote gate.
+- Server update banner, URL-first pill, scrolling marquee (parks while Home is hidden, tested), Home actions, browser card.
+- Next PR: home-marquee-b, the update pill Tag skins (urgent red / available pink / hover), split out for the size cap.
