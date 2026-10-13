@@ -8,13 +8,26 @@ namespace ConditioningControlPanel.Services.Compositor;
 /// </summary>
 public abstract class BaseLayer : IWpfLayer
 {
-    private readonly CompositorEngine _engine;
+    private readonly Action _wake;
     private volatile bool _isActive;
 
-    protected BaseLayer(CompositorEngine engine)
+    /// <summary>The head's monitor-target predicate: true when the monitor at these device-px
+    /// bounds is in the resolved set for a <see cref="ConditioningControlPanel.Services.UI.MonitorTarget"/>
+    /// value. The WPF head seeds it with App.ShouldRenderTargetOnScreen at startup; unset (no head
+    /// that resolves screens) every monitor draws, the same "err toward showing" the predicate
+    /// itself takes on an enumeration hiccup.</summary>
+    public static volatile Func<int, System.Drawing.Rectangle, bool>? ScreenTargetGate;
+
+    /// <param name="wake">Wakes the parked engine (CompositorEngine.Wake on the WPF head).</param>
+    protected BaseLayer(Action wake)
     {
-        _engine = engine;
+        _wake = wake;
     }
+
+    /// <summary>True when the monitor at <paramref name="screenBoundsPx"/> is in <paramref name="target"/>'s
+    /// resolved set (see <see cref="ScreenTargetGate"/>).</summary>
+    protected static bool ShouldRenderTargetOnScreen(int target, System.Drawing.Rectangle screenBoundsPx)
+        => ScreenTargetGate?.Invoke(target, screenBoundsPx) ?? true;
 
     public abstract int ZIndex { get; }
 
@@ -37,7 +50,7 @@ public abstract class BaseLayer : IWpfLayer
             // Follows the app-wide "Show content on" picker: all screens, the Windows primary,
             // or the single monitor the user pinned content to. Errs toward showing when the
             // display set cannot be enumerated (display transition).
-            return App.ShouldRenderTargetOnScreen(App.MonitorTargetFollowGlobal, screenBoundsPx);
+            return ShouldRenderTargetOnScreen(Services.UI.MonitorTarget.FollowGlobal, screenBoundsPx);
         }
         catch { return true; }
     }
@@ -50,7 +63,7 @@ public abstract class BaseLayer : IWpfLayer
     {
         if (_isActive == value) return;
         _isActive = value;
-        _engine.Wake();
+        _wake();
     }
 
     public virtual void OnActivated() { }
