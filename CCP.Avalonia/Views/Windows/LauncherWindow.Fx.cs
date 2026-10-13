@@ -90,11 +90,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Ellipse[] _rings = new Ellipse[2];
         internal readonly RotateTransform SpiralTurn = new(), SpiralSmallTurn = new(), EdgeGlintSpin = new();
         internal readonly TranslateTransform ShakeSlide = new();
+        internal readonly MatrixTransform EdgeGlintRel = new();
         private long _fxLast;
         private bool _fxFirstShow = true, _beatArmed, _spiralBuilt;
         private double _spiral, _spiralSmall, _spiralApplyIn;
         private double _edgeFlareT = -1, _edgeBreathT, _glintT = -1, _glintIdleIn = EdgeIdleGlint;
-        private DateTime _lastEdgeCue = DateTime.MinValue;
+        internal DateTime _lastEdgeCue = DateTime.MinValue;
         private Tween _glow, _fade;
         private IBrush? _glowRest;
         private double _shakeT = -1, _shakeA, _ringT = -1;
@@ -122,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SpiralLayer.RenderTransform = SpiralTurn;
             SpiralSmall.RenderTransform = SpiralSmallTurn;
             ContentRoot.RenderTransform = ShakeSlide;
-            if (EdgeGlint.BorderBrush is LinearGradientBrush glint) glint.Transform = EdgeGlintSpin;
+            if (EdgeGlint.BorderBrush is LinearGradientBrush glint) glint.Transform = EdgeGlintRel;
             _cardFx = new TileFx { Tile = PanelCard };
             PanelCard.RenderTransform = _cardFx.Scale;
             PanelCard.RenderTransformOrigin = RelativePoint.Center;
@@ -143,7 +144,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty) { if (IsVisible) FxOnShown(); else FxPark(); }
-                else if (e.Property == WindowStateProperty) { if (FxLive) EnsureFxClock(); else FxPark(); }
+                else if (e.Property == WindowStateProperty)
+                {
+                    if (FxLive) EnsureFxClock(); else FxPark();
+                    // The DWM squares a maximised window's corners; the frame's clip follows.
+                    WindowFrame.CornerRadius = new CornerRadius(WindowState == WindowState.Normal ? 8 : 0);
+                }
             };
             _fadeGuard.Tick += (_, _) => FinishExit();
             // Fx.cs OnFxActivated/OnFxDeactivated: the backdrop spirals park while the launcher is not active.
@@ -291,9 +297,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _glintT += dt;
                 double u = Math.Min(1, _glintT / GlintSeconds), ms = _glintT * 1000;
                 EdgeGlintSpin.Angle = -90 + 360 * (1 - Math.Cos(Math.PI * u)) / 2;
+                ApplyGlintSpin();
                 EdgeGlint.Opacity = ms < 250 ? 0.9 * ms / 250 : ms < 1150 ? 0.9 : Math.Max(0, 0.9 * (1500 - ms) / 350);
                 if (u >= 1) { _glintT = -1; EdgeGlint.Opacity = 0; }
             }
+        }
+
+        /// <summary>WPF turns the glint with a RelativeTransform (xaml:627, centre 0.5,0.5): the band turns in the
+        /// unit box and is then stretched to the window. Avalonia has only an absolute brush Transform, so the same
+        /// matrix is built here (box -> unit, turn, unit -> box); a plain rotation would skew the band's path.</summary>
+        internal void ApplyGlintSpin()
+        {
+            double w = EdgeGlint.Bounds.Width, h = EdgeGlint.Bounds.Height;
+            if (w <= 0 || h <= 0) return;
+            EdgeGlintRel.Matrix = Matrix.CreateTranslation(-w / 2, -h / 2) * Matrix.CreateScale(1 / w, 1 / h)
+                * Matrix.CreateRotation(EdgeGlintSpin.Angle * Math.PI / 180) * Matrix.CreateScale(w, h)
+                * Matrix.CreateTranslation(w / 2, h / 2);
         }
 
         internal void OnFxActivated(bool active)
