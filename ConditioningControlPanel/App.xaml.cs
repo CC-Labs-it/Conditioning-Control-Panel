@@ -702,6 +702,8 @@ namespace ConditioningControlPanel
         public static Services.Deeper.EnhancementLibrary EnhancementLibrary { get; private set; } = null!;
         public static Services.Deeper.EnhancementAudioPlayer DeeperPlayer { get; private set; } = null!;
         public static Services.Deeper.EnhancementHostService DeeperHost { get; private set; } = null!;
+        /// <summary>The audio player with a playlist. Null until startup builds it; every call site is null-conditional.</summary>
+        public static Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; private set; }
         public static Services.Deeper.EnhancementFetcher DeeperFetcher { get; private set; } = null!;
         public static Services.Deeper.BrowserAutoDiscovery DeeperBrowserDiscovery { get; private set; } = null!;
         // Bridge that ties dashboard browser navigation to the local enhancement
