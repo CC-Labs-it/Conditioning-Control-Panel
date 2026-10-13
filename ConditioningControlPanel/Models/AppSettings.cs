@@ -5916,6 +5916,19 @@ namespace ConditioningControlPanel.Models
             set { _companionVoiceLinesMuted = value; OnPropertyChanged(); }
         }
 
+        private int _companionVoiceLevel = Services.CompanionVoiceGain.DefaultLevel;
+        /// <summary>
+        /// The companion's own voice level (0-100), on top of MasterVolume. The default reproduces
+        /// the loudness from before the slider existed; higher lifts the voice over the engine,
+        /// 0 is silent (the mute flags still work on their own). Math: CompanionVoiceGain.
+        /// </summary>
+        [JsonProperty]
+        public int CompanionVoiceLevel
+        {
+            get => _companionVoiceLevel;
+            set { _companionVoiceLevel = Math.Clamp(value, 0, 100); OnPropertyChanged(); }
+        }
+
         // Persisted avatar-tube (companion window) placement (#669). Restored on startup so a
         // detached, dragged, or rescaled companion comes back where the user left it. Left/Top use
         // NaN as the "unset" sentinel (no saved position yet -> fall back to the default anchor).

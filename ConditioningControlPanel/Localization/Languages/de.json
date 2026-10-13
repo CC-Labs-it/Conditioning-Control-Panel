@@ -1628,6 +1628,8 @@
   "label_mute_subliminal_audio": "Subliminales Audio stummschalten",
   "label_mute_voice_lines": "Sprachzeilen stummschalten",
   "label_mute_voice_lines_hint": "Antworten erscheinen weiter als Text. Nur die gesprochenen Zeilen verstummen.",
+  "label_companion_voice_level": "Lautstärke der Stimme",
+  "label_companion_voice_level_hint": "Wie laut die Stimme neben allem anderen ist. 80 ist der übliche Wert.",
   "label_pause_browser": "Browser pausieren",
   "label_pause_embedded_browser_audio": "Eingebettetes Browser-Audio pausieren",
   "label_click_avatar_for_progress_right_click_for_men": "Klicke auf Avatar für Fortschritt · Rechtsklick für Menü · Doppelklick zum Chatten",

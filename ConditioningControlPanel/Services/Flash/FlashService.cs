@@ -4849,7 +4849,11 @@ namespace ConditioningControlPanel.Services
                 // companion voicelines (see SoundsPath), and at raw master they were the loudest
                 // thing in the app while the duck sweep pushed everything else down under them.
                 var volume = volumePercent / 100.0f;
-                var curvedVolume = volume <= 0f ? 0f : Math.Max(0.05f, (float)Math.Pow(volume, 1.5)) * 0.85f;
+                var curvedVolume = volume <= 0f ? 0f : Math.Max(0.05f, (float)Math.Pow(volume, 1.5)) * CompanionVoiceGain.BarkTrim;
+                // 7.1.8: her Voice level rides on top (1 at the default, so nothing moves unasked).
+                // At level 0 the clip still runs silent: the flash keeps its audio-linked length.
+                curvedVolume = CompanionVoiceGain.ApplyLevel(curvedVolume,
+                    App.Settings?.Current?.CompanionVoiceLevel ?? CompanionVoiceGain.DefaultLevel);
                 audioFile.Volume = curvedVolume;
 
                 sound.Init(audioFile);

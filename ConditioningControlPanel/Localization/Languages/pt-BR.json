@@ -1628,6 +1628,8 @@
   "label_mute_subliminal_audio": "Silenciar áudio subliminar",
   "label_mute_voice_lines": "Silenciar falas em voz",
   "label_mute_voice_lines_hint": "As respostas continuam aparecendo em texto. Só as falas em voz ficam em silêncio.",
+  "label_companion_voice_level": "Nível da voz",
+  "label_companion_voice_level_hint": "O volume da voz em relação a todo o resto. 80 é o nível habitual.",
   "label_pause_browser": "Pausar Navegador",
   "label_pause_embedded_browser_audio": "Pausar áudio do navegador integrado",
   "label_click_avatar_for_progress_right_click_for_men": "Clique no avatar para progresso · Clique direito para menu · Clique duplo para conversar",
