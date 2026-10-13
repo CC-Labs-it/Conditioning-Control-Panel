@@ -85,4 +85,13 @@ public class ConversionFreeMemberTests
         Assert.Equal("2026-10-15T12:00:00.0000000Z", back.PostGrants["dtrh"]);
         Assert.NotNull(back.ServerPaidUntil);
     }
+
+    [Fact]
+    public void Member_fields_never_ride_the_cloud_backup()
+    {
+        // They mirror the server profile; the next profile read refills them on any device.
+        Assert.True(ConditioningControlPanel.Services.ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.PatreonMember)));
+        Assert.True(ConditioningControlPanel.Services.ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.PostGrants)));
+        Assert.True(ConditioningControlPanel.Services.ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.ServerPaidUntil)));
+    }
 }
