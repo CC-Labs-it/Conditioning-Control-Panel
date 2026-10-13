@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Possession;
 
@@ -11,7 +12,7 @@ namespace ConditioningControlPanel.Services.Possession;
 //  NOISE of its own, so a big effect that landed just off the user's gaze went unnoticed. Two cues,
 //  both deliberately small:
 //
-//    the tick  - a ~50 ms ember click on every BIG effect (App.Possession.EffectStarted, isBig), at
+//    the tick  - a ~50 ms ember click on every BIG effect (the director's EffectStarted, isBig), at
 //                -18 dBFS and throttled to one per 1.5 s. It is the audible half of "the warden names
 //                the big ones": you hear that something was done, then you find what.
 //    the dip   - a 300 ms sag at a rung change and at a third repeated escape attempt. The room gets
@@ -29,6 +30,10 @@ namespace ConditioningControlPanel.Services.Possession;
 //  into %LOCALAPPDATA%/ConditioningControlPanel/possession/ and then played through the app's ordinary
 //  one-shot path, so output-device selection, the concurrency cap, the endpoint circuit breaker and
 //  disposal are all AudioService's, exactly as they are for a bubble pop.
+//
+//  CORE (possession-core-b): moved out of the WPF head. The head hands Install its LockdownService and
+//  a wire callback that (un)subscribes On* below to its director's events; playback, ducking and the
+//  suppression probe go through CoreAudio, settings through CoreSettings.
 //
 //  GATES: AppSettings.LockdownAudioTics (default true; NOT LockdownPhotosafe - photosafe is a VISUAL
 //  accommodation, and a user who needs the room to stop flashing may still want to hear it move),
@@ -64,31 +69,41 @@ public static class PossessionAudio
 
     private static bool _installed;
     private static bool _armed;
+    private static Func<bool, bool>? _wireDirector;
     private static DateTime _lastTick = DateTime.MinValue;
     private static DateTime _lastDip = DateTime.MinValue;
     private static string? _tickPath;
     private static string? _stingerPath;
+
+    // Seams (tests): the clock, the settings, the player and the clip folder.
+    internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+    internal static Func<Models.AppSettings?> Settings = () => CoreSettings.Current;
+    internal static Action<string, float, string> Play = (path, volume, tag) => CoreAudio.PlayOneShot(path, volume, tag);
+    internal static Func<string> ClipDir = () => Path.Combine(CorePaths.UserData, "possession");
 
     /// <summary>
     /// Hook the lockdown lifecycle. Cheap: two event subscriptions and nothing else until a lockdown
     /// actually starts, at which point <see cref="Arm"/> subscribes to the director and the two WAV
     /// files are rendered (once, ever). Safe to call twice.
     /// </summary>
-    public static void Install()
+    /// <param name="wireDirector">true subscribes <see cref="OnEffectStarted"/>, <see cref="OnRungChanged"/>
+    /// and <see cref="OnTripwireReacted"/> to the head's director, false unsubscribes them; returns false
+    /// when there is no director. ponytail: a callback until the director itself lives in Core.</param>
+    public static void Install(LockdownService? lockdown, Func<bool, bool> wireDirector)
     {
         lock (Sync)
         {
             if (_installed) return;
             _installed = true;
+            _wireDirector = wireDirector;
         }
         try
         {
-            var lockdown = App.Lockdown;
             if (lockdown == null) return;
             lockdown.LockdownActivated += OnLockdownActivated;
             lockdown.LockdownDeactivated += OnLockdownDeactivated;
         }
-        catch (Exception ex) { App.Logger?.Warning("PossessionAudio install failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionAudio install failed: {Error}", ex.Message); }
     }
 
     // -------------------------------------------------------------------------------------------
@@ -108,26 +123,25 @@ public static class PossessionAudio
     {
         try
         {
-            var director = App.Possession;
-            if (director == null) return;
             lock (Sync)
             {
                 if (_armed) return;
                 _armed = true;
             }
-
-            director.EffectStarted += OnEffectStarted;
-            director.RungChanged += OnRungChanged;
-            director.TripwireReacted += OnTripwireReacted;
+            if (_wireDirector?.Invoke(true) != true)
+            {
+                lock (Sync) _armed = false;
+                return;
+            }
 
             // Render now, off the UI thread, so the FIRST tick is not the one that pays for the file.
             _ = Task.Run(() => { try { EnsureClips(); } catch { } });
-            App.Logger?.Debug("PossessionAudio armed");
+            Log.Debug("PossessionAudio armed");
         }
-        catch (Exception ex) { App.Logger?.Warning("PossessionAudio arm failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionAudio arm failed: {Error}", ex.Message); }
     }
 
-    private static void Disarm()
+    internal static void Disarm()
     {
         try
         {
@@ -138,21 +152,17 @@ public static class PossessionAudio
                 _lastTick = DateTime.MinValue;
                 _lastDip = DateTime.MinValue;
             }
-            var director = App.Possession;
-            if (director == null) return;
-            director.EffectStarted -= OnEffectStarted;
-            director.RungChanged -= OnRungChanged;
-            director.TripwireReacted -= OnTripwireReacted;
-            App.Logger?.Debug("PossessionAudio disarmed");
+            _wireDirector?.Invoke(false);
+            Log.Debug("PossessionAudio disarmed");
         }
-        catch (Exception ex) { App.Logger?.Warning("PossessionAudio disarm failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionAudio disarm failed: {Error}", ex.Message); }
     }
 
     // -------------------------------------------------------------------------------------------
     //  The cues
     // -------------------------------------------------------------------------------------------
 
-    private static void OnEffectStarted(string effectId, string? targetKey, bool isBig)
+    public static void OnEffectStarted(string effectId, string? targetKey, bool isBig)
     {
         // Micro-tics stay silent, exactly as they stay unnamed (POSSESSION.md, "the warden names the
         // big ones"). A tick on every R0 nudge would turn the tell into wallpaper.
@@ -161,14 +171,14 @@ public static class PossessionAudio
         PlayClip(EnsureTick(), 1.0f, "possession-tick");
     }
 
-    private static void OnRungChanged(PossessionRung rung)
+    public static void OnRungChanged(PossessionRung rung)
     {
         // Settle is where every lockdown starts, so it is not a CHANGE anyone can hear as one.
         if (rung == PossessionRung.Settle) return;
         Dip("rung " + rung);
     }
 
-    private static void OnTripwireReacted(EscapeAttempt attempt)
+    public static void OnTripwireReacted(EscapeAttempt attempt)
     {
         // Third pull at the same door and up: the same threshold the visual reaction uses for the
         // warden's stare, so the sound and the look land together instead of drifting apart.
@@ -182,26 +192,24 @@ public static class PossessionAudio
         if (!Throttle(ref _lastDip, DipThrottle)) return;
         if (!CanPlay()) return;
 
-        App.Logger?.Debug("PossessionAudio dip ({Why})", why);
+        Log.Debug("PossessionAudio dip ({Why})", why);
         PlayClip(EnsureStinger(), 1.0f, "possession-dip");
 
-        var audio = App.Audio;
-        if (audio == null) return;
         try
         {
-            audio.Duck(DipDuckStrength);
-            var generation = audio.DuckGeneration;
+            CoreAudio.Duck(DipDuckStrength);
+            var generation = CoreAudio.DuckGeneration;
 
             // Fire-and-forget with its own guard: the un-duck must run even if the UI thread is busy
             // or the app is tearing down, and it must never surface as an unobserved task exception.
             // The generation is what stops this stale callback from cutting a LATER duck short.
             _ = Task.Delay(DipMs).ContinueWith(_ =>
             {
-                try { App.Audio?.Unduck(generation); }
-                catch (Exception ex) { App.Logger?.Debug("PossessionAudio unduck failed: {Error}", ex.Message); }
+                try { CoreAudio.Unduck(generation); }
+                catch (Exception ex) { Log.Debug("PossessionAudio unduck failed: {Error}", ex.Message); }
             }, TaskScheduler.Default);
         }
-        catch (Exception ex) { App.Logger?.Warning("PossessionAudio dip failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Warning("PossessionAudio dip failed: {Error}", ex.Message); }
     }
 
     // -------------------------------------------------------------------------------------------
@@ -213,11 +221,10 @@ public static class PossessionAudio
     {
         try
         {
-            if (App.Settings?.Current?.LockdownAudioTics != true) return false;
-            if ((App.Settings?.Current?.MasterVolume ?? 0) <= 0) return false;
-            var audio = App.Audio;
-            if (audio == null || audio.IsOutputSuppressed) return false;
-            return true;
+            var settings = Settings();
+            if (settings?.LockdownAudioTics != true) return false;
+            if (settings.MasterVolume <= 0) return false;
+            return !CoreAudio.IsOutputSuppressed;
         }
         catch { return false; }
     }
@@ -230,12 +237,12 @@ public static class PossessionAudio
         {
             // Same shape as every other one-shot in the app (ChaosSfx.Volume, BubbleService): the clip
             // is already mixed at its intended level, so master volume is the only multiplier.
-            float master = Math.Clamp((App.Settings?.Current?.MasterVolume ?? 0) / 100f, 0f, 1f);
+            float master = Math.Clamp((Settings()?.MasterVolume ?? 0) / 100f, 0f, 1f);
             float volume = Math.Clamp(master * scale, 0f, 1f);
             if (volume <= 0f) return;
-            App.Audio?.PlayOneShot(path!, volume, tag);
+            Play(path!, volume, tag);
         }
-        catch (Exception ex) { App.Logger?.Debug("PossessionAudio {Tag} failed: {Error}", tag, ex.Message); }
+        catch (Exception ex) { Log.Debug("PossessionAudio {Tag} failed: {Error}", tag, ex.Message); }
     }
 
     /// <summary>Rate limiter. Returns true and stamps the clock when the caller may fire.</summary>
@@ -243,7 +250,7 @@ public static class PossessionAudio
     {
         lock (Sync)
         {
-            var now = DateTime.UtcNow;
+            var now = UtcNow();
             if (now - last < gap) return false;
             last = now;
             return true;
@@ -254,17 +261,13 @@ public static class PossessionAudio
     //  Clip files
     // -------------------------------------------------------------------------------------------
 
-    /// <summary>
-    /// Where the rendered cues live. Under UserDataPath rather than %TEMP%: v6.8.3 taught us that this
-    /// app deletes things out of its own temp tree (the .NET extraction-cache incident), and a cue that
-    /// vanished mid-lockdown would be re-rendered on the audio path.
-    /// </summary>
-    private static string ClipDir => Path.Combine(CorePaths.UserData, "possession");
-
+    // ClipDir: under UserData rather than %TEMP%: v6.8.3 taught us that this app deletes things out of
+    // its own temp tree (the .NET extraction-cache incident), and a cue that vanished mid-lockdown
+    // would be re-rendered on the audio path.
     // The file names carry the synth version. Change the maths, change the name - never leave a user
     // listening to a stale render of a cue we have since retuned.
-    private static string TickFile => Path.Combine(ClipDir, "ember_tick_v1.wav");
-    private static string StingerFile => Path.Combine(ClipDir, "ember_stinger_v1.wav");
+    private static string TickFile => Path.Combine(ClipDir(), "ember_tick_v1.wav");
+    private static string StingerFile => Path.Combine(ClipDir(), "ember_stinger_v1.wav");
 
     private static string? EnsureTick() => _tickPath ?? EnsureClips().Tick;
     private static string? EnsureStinger() => _stingerPath ?? EnsureClips().Stinger;
@@ -274,7 +277,7 @@ public static class PossessionAudio
     {
         try
         {
-            Directory.CreateDirectory(ClipDir);
+            Directory.CreateDirectory(ClipDir());
 
             var tick = TickFile;
             if (!IsUsable(tick)) File.WriteAllBytes(tick, WriteWav(SynthTick()));
@@ -288,10 +291,13 @@ public static class PossessionAudio
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("PossessionAudio could not render its cues: {Error}", ex.Message);
+            Log.Warning("PossessionAudio could not render its cues: {Error}", ex.Message);
             return (_tickPath, _stingerPath);
         }
     }
+
+    /// <summary>Tests: drop the cached paths so the next cue renders into the current <see cref="ClipDir"/>.</summary>
+    internal static void ForgetClips() { _tickPath = null; _stingerPath = null; }
 
     /// <summary>A header-only or truncated file (killed mid-write) counts as absent.</summary>
     private static bool IsUsable(string path)
