@@ -12,8 +12,11 @@ namespace ConditioningControlPanel.Services
         {
             MergedAccountRecovery.StopSync = () =>
             {
-                App.ProfileSync?.StopTimersForAccountSwap();
-                App.ProfileSync?.ResetLoadedProfileState();
+                // Separate trys (as WPF had): a throwing timer stop must not skip the defaults-guard reset.
+                try { App.ProfileSync?.StopTimersForAccountSwap(); }
+                catch (Exception ex) { App.Logger?.Debug("[MergedAccount] stopping timers failed: {Error}", ex.Message); }
+                try { App.ProfileSync?.ResetLoadedProfileState(); }
+                catch (Exception ex) { App.Logger?.Debug("[MergedAccount] sync state reset failed: {Error}", ex.Message); }
             };
             MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
             MergedAccountRecovery.Reauthenticate = App.ReauthenticateAfterMergedSwapAsync;
