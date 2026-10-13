@@ -37,8 +37,12 @@ public class CompositorLayerCoreTests
     public void FillGate_AsksTheHeadWithThePinkTargetAndTheScreen()
     {
         var pink = new PinkTintLayer(() => { });
+        var oldProvider = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = null;   // P02: the shared default instance, set explicitly below
+        int oldTarget = CoreSettings.Current.PinkFilterTargetMonitor;
         try
         {
+            CoreSettings.Current.PinkFilterTargetMonitor = MonitorTarget.FollowGlobal;
             BaseLayer.ScreenTargetGate = null;
             Assert.True(pink.ShouldRenderOnScreen(Secondary));   // no head: every monitor draws
 
@@ -47,9 +51,44 @@ public class CompositorLayerCoreTests
             BaseLayer.ScreenTargetGate = (target, bounds) => { seenTarget = target; seenBounds = bounds; return false; };
 
             Assert.False(pink.ShouldRenderOnScreen(Secondary));
-            Assert.Equal(CoreSettings.Current.PinkFilterTargetMonitor, seenTarget);
-            Assert.Equal(MonitorTarget.FollowGlobal, seenTarget);   // the default follows the global picker
+            Assert.Equal(MonitorTarget.FollowGlobal, seenTarget);
             Assert.Equal(Secondary, seenBounds);
+
+            CoreSettings.Current.PinkFilterTargetMonitor = 2;   // a pinned monitor reaches the head as-is
+            pink.ShouldRenderOnScreen(Secondary);
+            Assert.Equal(2, seenTarget);
+        }
+        finally
+        {
+            BaseLayer.ScreenTargetGate = null;
+            CoreSettings.Current.PinkFilterTargetMonitor = oldTarget;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    }
+
+    private sealed class FillProbe : BaseLayer
+    {
+        public FillProbe() : base(() => { }) { }
+        public override int ZIndex => 0;
+        public override bool ShouldRenderOnScreen(Rectangle b) => PrimaryOnlyUnlessDualMonitor(b);
+        public override void Render(SKCanvas c, SKRectI b, double d, TimeSpan e) { }
+    }
+
+    [Fact]
+    public void PrimaryOnlyUnlessDualMonitor_AsksTheHeadWithFollowGlobal_AndShowsWhenTheGateThrows()
+    {
+        var fill = new FillProbe();
+        try
+        {
+            int seenTarget = int.MinValue;
+            Rectangle seenBounds = default;
+            BaseLayer.ScreenTargetGate = (target, bounds) => { seenTarget = target; seenBounds = bounds; return false; };
+            Assert.False(fill.ShouldRenderOnScreen(Secondary));
+            Assert.Equal(MonitorTarget.FollowGlobal, seenTarget);
+            Assert.Equal(Secondary, seenBounds);
+
+            BaseLayer.ScreenTargetGate = (_, _) => throw new InvalidOperationException("display transition");
+            Assert.True(fill.ShouldRenderOnScreen(Secondary));   // errs toward showing
         }
         finally { BaseLayer.ScreenTargetGate = null; }
     }
