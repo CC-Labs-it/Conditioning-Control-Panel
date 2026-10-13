@@ -69,9 +69,17 @@ const isLocalUrl = (u) => typeof u === 'string' && LOCAL_URL_RE.test(u);
 const SHARE_RE = /^online(\d{1,3}):/i;
 const DEFAULT_REMOTE_SHARE = 0.3;
 
+/** "loop:sub-123.mp4": a MOVING PICTURE, the clip half of an online gif post (the host's
+ *  loops lane, DtrhAssetManifest.cs). It rides the videos list because it is a video file,
+ *  but the game shows it where a picture goes: silent, looping, grabbable. One with a copy
+ *  on this machine gets its own pool behind drawLoop(); one without stays a DOM-only clip. */
+const LOOP_RE = /^loop:/i;
+
 export function createHostMediaSource() {
   let entries = [];   // LOCAL { kind: 'image'|'video', name, url } - safe for WebGL
   let remote = [];    // REMOTE (CDN, tainted) - DOM layer only, never a texture
+  let loops = [];     // LOCAL moving pictures { kind: 'loop', name, url } - their own door
+  const loopRecent = [];
   let remoteShare = DEFAULT_REMOTE_SHARE;
   const remoteRecent = [];   // last few remote urls drawn (echo guard; the pool is small)
   let skipped = 0;    // reported by the host (browser-undecodable formats etc.)
@@ -154,6 +162,8 @@ export function createHostMediaSource() {
     setManifest(m) {
       entries = [];
       remote = [];
+      loops = [];
+      loopRecent.length = 0;
       remoteShare = DEFAULT_REMOTE_SHARE;
       const take = (list, kind) => {
         for (const e of (list || [])) {
@@ -162,6 +172,10 @@ export function createHostMediaSource() {
           const share = SHARE_RE.exec(name);
           if (share) remoteShare = Math.min(1, Math.max(0, Number(share[1]) / 100));
           const item = { kind, name: share ? name.slice(share[0].length) : name, url: e.url };
+          if (LOOP_RE.test(item.name)) {
+            item.name = item.name.replace(LOOP_RE, '');
+            if (isLocalUrl(e.url)) { item.kind = 'loop'; loops.push(item); continue; }
+          }
           (isLocalUrl(e.url) ? entries : remote).push(item);
         }
       };
@@ -214,6 +228,19 @@ export function createHostMediaSource() {
       const e = entries[i];
       return { kind: e.kind, name: e.name, acquire: makeAcquire(e) };
     },
+
+    /** A MOVING PICTURE with a copy on this machine (so the tube may draw it), or null.
+     *  Random with a short echo guard: the pool is a few dozen at most. */
+    drawLoop() {
+      if (!loops.length) return null;
+      const fresh = loops.filter((e) => !loopRecent.includes(e.url));
+      const from = fresh.length ? fresh : loops;
+      const e = from[(Math.random() * from.length) | 0];
+      loopRecent.push(e.url);
+      if (loopRecent.length > Math.min(6, loops.length - 1)) loopRecent.shift();
+      return { kind: 'loop', name: e.name, acquire: makeAcquire(e) };
+    },
+    loopCount: () => loops.length,
 
     // Draw specifically an image/video (used when the live-video cap is hit).
     drawKind(kind) {

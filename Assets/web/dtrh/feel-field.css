@@ -1,0 +1,445 @@
+/* ============================================================================
+ * feel-field.css - the field's feel pass (Wave 1). Loaded after styles.css.
+ *
+ * A trance game: these make the field calmer and rounder, never louder.
+ * Every motion here has an IN and an OUT and reads html[data-motion]
+ * (shared/motion.js): reduced = half amplitude, off = fades only.
+ *
+ * One rule carried through the whole file: the bubble WRAP is placed by an
+ * inline translate3d, so nothing here animates the wrap's transform (a
+ * keyframed transform replaces the inline one and the bubble would jump to
+ * the corner). Shape lives on .cf-bubble-body; the wrap only fades.
+ * ==========================================================================*/
+
+:root {
+  /* idle breath: how far a resting bubble swells */
+  --cf-breath-amp: 0.028;
+  /* squash before the pop: about 80 ms wide and flat, then it lets go */
+  --cf-squash-x: 1.25;
+  --cf-squash-y: 0.78;
+  --cf-pop-grow: 1.45;
+  --cf-pop-ms: 380ms;          /* 80 ms squash + 300 ms release */
+  /* jelly: first overshoot of the ring-back after a hold lets go */
+  --cf-jelly-a: 0.14;
+  /* detonation dim (chaosField.js sets these per motion level) */
+  --cf-dim-sat: 0.35;
+  --cf-dim-bright: 0.72;
+  --cf-dim-ms: 2600ms;
+}
+html[data-motion="reduced"] {
+  --cf-breath-amp: 0.014;
+  --cf-squash-x: 1.125;
+  --cf-squash-y: 0.89;
+  --cf-pop-grow: 1.22;
+  --cf-jelly-a: 0.07;
+}
+
+/* ---- the living picture (game/bubbleLife.js): a canvas over the sprite, under the label ---- */
+.cf-bubble-life {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* a material bubble's picture reaches past the bubble: its motes drift around it (1.7x, bubbleLife.js HALO) */
+.cf-bubble-life--halo { inset: -35%; width: 170%; height: 170%; }
+
+/* ---- idle breath: each bubble on its own period and phase (set at spawn) ---- */
+.cf-bubble-body {
+  animation: cfFeelBreath var(--breath-dur, 4s) ease-in-out var(--breath-delay, 0s) infinite;
+}
+@keyframes cfFeelBreath {
+  0%, 100% { scale: 1; }
+  50% { scale: calc(1 + var(--cf-breath-amp)); }
+}
+/* the `scale` property rides beside `transform`, so the hold-channel squeeze
+   (an inline transform) and the breath do not fight */
+html[data-motion="off"] .cf-bubble-body { animation: none; }
+
+/* ---- pop: squash, then release. The wrap only fades. ---- */
+.cf-bubble.is-pop { animation: cfFeelPopFade var(--cf-pop-ms) ease-out forwards; }
+.cf-bubble.is-pop .cf-bubble-body { animation: cfFeelPop var(--cf-pop-ms) ease-out forwards; }
+@keyframes cfFeelPopFade {
+  0%, 21% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes cfFeelPop {
+  0% { transform: scale(1); animation-timing-function: cubic-bezier(.2, .9, .3, 1); }
+  21% { transform: scale(var(--cf-squash-x), var(--cf-squash-y)); }
+  100% { transform: scale(var(--cf-pop-grow)); }
+}
+/* a completed hold is already squeezed small: it springs out instead */
+.cf-bubble.is-pop.is-pop-jelly .cf-bubble-body { animation-name: cfFeelPopSpring; }
+@keyframes cfFeelPopSpring {
+  0% { transform: scale(0.82); animation-timing-function: cubic-bezier(.2, 1.5, .4, 1); }
+  34% { transform: scale(calc(1 + var(--cf-jelly-a)), calc(1 - var(--cf-jelly-a) * 0.6)); }
+  100% { transform: scale(var(--cf-pop-grow)); }
+}
+
+/* ---- jelly: a hold let go by a pause rings back to round ---- */
+.cf-bubble-body.is-jelly { animation: cfFeelJelly 0.44s ease-out; }
+@keyframes cfFeelJelly {
+  0% { transform: scale(calc(1 - var(--cf-jelly-a)), calc(1 + var(--cf-jelly-a))); }
+  30% { transform: scale(calc(1 + var(--cf-jelly-a) * 0.7), calc(1 - var(--cf-jelly-a) * 0.7)); }
+  58% { transform: scale(calc(1 - var(--cf-jelly-a) * 0.3), calc(1 + var(--cf-jelly-a) * 0.3)); }
+  82% { transform: scale(calc(1 + var(--cf-jelly-a) * 0.1), calc(1 - var(--cf-jelly-a) * 0.1)); }
+  100% { transform: scale(1); }
+}
+
+/* ---- failure subtracts: a detonated bubble drains and sinks, no flare ---- */
+.cf-bubble.is-detonate { animation: cfFeelGoneFade 0.42s ease-out forwards; }
+.cf-bubble.is-detonate .cf-bubble-body { animation: cfFeelDeflate 0.42s ease-in forwards; }
+@keyframes cfFeelGoneFade {
+  0% { opacity: 1; filter: saturate(1); }
+  100% { opacity: 0; filter: saturate(0.15) brightness(0.8); }
+}
+@keyframes cfFeelDeflate {
+  0% { transform: scale(1); }
+  100% { transform: scale(0.72); }
+}
+/* drift-off: same split (the wrap fades, the body eases down) */
+.cf-bubble.is-fade { animation: cfFeelFadeOnly 0.91s ease-out forwards; }
+.cf-bubble.is-fade .cf-bubble-body { animation: cfFeelSettle 0.91s ease-out forwards; }
+@keyframes cfFeelFadeOnly { 100% { opacity: 0; } }
+@keyframes cfFeelSettle { 100% { transform: scale(0.85); } }
+
+/* ---- the field after a detonation: colour and light drain, then ease back ---- */
+html.cf-dimmed #sf-canvas,
+html.cf-dimmed .cf-layer,
+html.cf-dimmed .cf-fx {
+  animation: cfFeelDim var(--cf-dim-ms) linear both;
+}
+@keyframes cfFeelDim {
+  0% { filter: saturate(1) brightness(1); animation-timing-function: ease-out; }
+  8% { filter: saturate(var(--cf-dim-sat)) brightness(var(--cf-dim-bright)); animation-timing-function: linear; }
+  30% { filter: saturate(var(--cf-dim-sat)) brightness(var(--cf-dim-bright)); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+  100% { filter: saturate(1) brightness(1); }
+}
+
+/* ---- reward flights: emotes and gold on their way to the HUD (chaosHud.js) ---- */
+.cf-fly {
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 60;
+  pointer-events: none;
+  line-height: 1;
+  font-size: 1.5rem;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 0 8px rgba(255, 224, 150, 0.7)) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+.cf-fly--gold {
+  font-size: 1.35rem;
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.75)) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+/* ---- motion off: no squash, no spring, no deflate. Fades only. ---- */
+html[data-motion="off"] .cf-bubble.is-pop .cf-bubble-body,
+html[data-motion="off"] .cf-bubble.is-detonate .cf-bubble-body,
+html[data-motion="off"] .cf-bubble.is-fade .cf-bubble-body,
+html[data-motion="off"] .cf-bubble-body.is-jelly { animation: none; }
+html[data-motion="off"] .cf-bubble.is-pop { animation: cfFeelFadeOnly 0.2s ease-out forwards; }
+html[data-motion="off"] .cf-bubble.is-detonate { animation: cfFeelGoneFade 0.3s ease-out forwards; }
+
+/* ============================================================================
+ * WAVE 2 - hold channel, variant signatures, HUD readouts, the ripple tail.
+ * Same law as above: an IN and an OUT, html[data-motion] decides the amplitude,
+ * and nothing keyframes the bubble WRAP transform (pseudo-elements only).
+ * styles.css carries html[data-motion] rules for some of these same selectors;
+ * wherever it does, this file answers with its own rule at every level.
+ * ==========================================================================*/
+:root {
+  /* hold: how far out the gathering halo starts before it tightens onto the bubble */
+  --cf-hold-gather: 0.38;
+  /* hold: how bright the halo is when the hold completes */
+  --cf-hold-glow: 0.75;
+  /* release: how far the ring exhales outward / how far out the sigh starts */
+  --cf-hold-exhale: 1.7;
+  --cf-hold-sigh: 1.45;
+  /* variant halos: resting strength and how far they swell */
+  --cf-var-halo: 0.42;
+  --cf-var-swell: 0.10;
+  /* variant pop ring: how far it opens */
+  --cf-var-ring: 1.75;
+  /* multiplier sag after a streak break: drop in px, and how dim it gets */
+  --cf-sag-px: 5px;
+  --cf-sag-dim: 0.55;
+  /* focus meter: spend / refill ease, and the slow low-focus breath */
+  --cf-focus-ease-ms: 550ms;
+  --cf-focus-breath-ms: 3200ms;
+  --cf-focus-breath-low: 0.55;
+}
+html[data-motion="reduced"] {
+  --cf-hold-gather: 0.19;
+  --cf-hold-exhale: 1.35;
+  --cf-hold-sigh: 1.22;
+  --cf-var-swell: 0.05;
+  --cf-var-ring: 1.38;
+  --cf-sag-px: 2.5px;
+  --cf-focus-breath-low: 0.75;
+}
+html[data-motion="off"] {
+  --cf-hold-gather: 0;
+  --cf-hold-exhale: 1;
+  --cf-hold-sigh: 1;
+  --cf-var-swell: 0;
+  --cf-var-ring: 1;
+  --cf-sag-px: 0px;
+}
+
+/* ---- hold channel: light gathers and tightens onto the held bubble ---- */
+/* chaosField.js writes --hold (0..1) on the wrap each frame of a hold */
+.cf-bubble.is-channeling::before {
+  content: '';
+  position: absolute;
+  inset: -34%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, transparent 56%, rgba(122, 224, 255, 0.55) 70%, rgba(122, 224, 255, 0.12) 86%, transparent 100%);
+  scale: calc(1 + var(--cf-hold-gather) * (1 - var(--hold, 0)));
+  opacity: calc(var(--cf-hold-glow) * var(--hold, 0));
+}
+/* the OUT: one ring left where the hold ended (chaosField.js holdEnd, capped) */
+.cf-hold-ring {
+  position: absolute;
+  width: var(--s, 90px);
+  height: var(--s, 90px);
+  margin: calc(var(--s, 90px) / -2) 0 0 calc(var(--s, 90px) / -2);
+  border-radius: 50%;
+  border: 2px solid rgba(160, 232, 255, 0.85);
+  box-shadow: 0 0 18px rgba(122, 224, 255, 0.45), inset 0 0 14px rgba(122, 224, 255, 0.25);
+  pointer-events: none;
+  opacity: 0;
+}
+.cf-hold-ring--out { animation: cfFeelExhale var(--hold-ring-ms, 620ms) cubic-bezier(.16, .8, .3, 1) forwards; }
+.cf-hold-ring--in { animation: cfFeelSigh var(--hold-ring-ms, 620ms) cubic-bezier(.3, 0, .2, 1) forwards; }
+@keyframes cfFeelExhale {
+  0% { scale: 1; opacity: 0; }
+  14% { opacity: var(--hold-a, 0.5); }
+  100% { scale: var(--cf-hold-exhale); opacity: 0; }
+}
+@keyframes cfFeelSigh {
+  0% { scale: var(--cf-hold-sigh); opacity: 0; }
+  30% { opacity: var(--hold-a, 0.5); }
+  100% { scale: 0.62; opacity: 0; }
+}
+html[data-motion="off"] .cf-hold-ring--in { animation-name: cfFeelRingFadeOnly; }
+@keyframes cfFeelRingFadeOnly {
+  0% { opacity: 0; }
+  25% { opacity: var(--hold-a, 0.5); }
+  100% { opacity: 0; }
+}
+
+/* ---- variant signatures: one in the idle, one in the pop ---- */
+/* idle halos sit on the wrap ::before; pop rings on its ::after. Both are
+   pseudo-elements, so the inline translate on the wrap is never touched. */
+.cf-bubble--golden::before,
+.cf-bubble--heart::before,
+.cf-bubble--darter::before,
+.cf-bubble--tease::before,
+.cf-bubble--prism::before {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: var(--cf-var-halo);
+}
+/* golden: a band of light drifts slowly across the coin */
+.cf-bubble--golden::before {
+  inset: 6%;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 240, 190, 0.55) 50%, transparent 62%);
+  background-size: 260% 100%;
+  mix-blend-mode: screen;
+  animation: cfFeelShimmer 5.5s ease-in-out var(--breath-delay, 0s) infinite;
+}
+@keyframes cfFeelShimmer {
+  0%, 12% { background-position: 120% 0; opacity: 0; }
+  30% { opacity: var(--cf-var-halo); }
+  70% { opacity: var(--cf-var-halo); }
+  88%, 100% { background-position: -20% 0; opacity: 0; }
+}
+/* heart: a slow two-beat halo, well under a resting pulse */
+.cf-bubble--heart::before {
+  background: radial-gradient(closest-side, transparent 62%, rgba(255, 170, 150, 0.5) 78%, transparent 100%);
+  animation: cfFeelHeart 2.8s ease-in-out var(--breath-delay, 0s) infinite;
+}
+@keyframes cfFeelHeart {
+  0%, 44%, 100% { scale: 1; opacity: calc(var(--cf-var-halo) * 0.45); }
+  12% { scale: calc(1 + var(--cf-var-swell)); opacity: var(--cf-var-halo); }
+  22% { scale: 1; opacity: calc(var(--cf-var-halo) * 0.6); }
+  32% { scale: calc(1 + var(--cf-var-swell) * 0.7); opacity: calc(var(--cf-var-halo) * 0.85); }
+}
+/* darter / rabbit: a pale wake that opens and thins behind it */
+.cf-bubble--darter::before {
+  background: radial-gradient(closest-side, transparent 58%, rgba(255, 200, 240, 0.45) 74%, transparent 100%);
+  animation: cfFeelWake 1.6s ease-out infinite;
+}
+@keyframes cfFeelWake {
+  0% { scale: 0.92; opacity: 0; }
+  25% { opacity: var(--cf-var-halo); }
+  100% { scale: calc(1 + var(--cf-var-swell) * 3); opacity: 0; }
+}
+/* tease: the halo leans side to side, a slow come-here */
+.cf-bubble--tease::before {
+  background: radial-gradient(closest-side, transparent 60%, rgba(255, 120, 150, 0.4) 76%, transparent 100%);
+  animation: cfFeelSway 4.6s ease-in-out var(--breath-delay, 0s) infinite;
+}
+@keyframes cfFeelSway {
+  0%, 100% { translate: calc(var(--cf-var-swell) * -60%) 0; opacity: calc(var(--cf-var-halo) * 0.6); }
+  50% { translate: calc(var(--cf-var-swell) * 60%) 0; opacity: var(--cf-var-halo); }
+}
+/* prism: a faint sheen turns around the glass */
+.cf-bubble--prism::before {
+  inset: 2%;
+  background: conic-gradient(from 0deg, transparent 0 20%, rgba(255, 255, 255, 0.35) 30%, transparent 40% 70%, rgba(200, 230, 255, 0.28) 80%, transparent 90%);
+  -webkit-mask: radial-gradient(closest-side, transparent 70%, #000 82%, transparent 100%);
+          mask: radial-gradient(closest-side, transparent 70%, #000 82%, transparent 100%);
+  animation: cfFeelSheen 11s linear infinite;
+}
+@keyframes cfFeelSheen { 100% { rotate: 360deg; } }
+
+/* pop: a ring in the variant light opens as the body lets go. Same length
+   as the pop itself (the wrap is removed on the first animationend). */
+.cf-bubble--golden.is-pop::after,
+.cf-bubble--heart.is-pop::after,
+.cf-bubble--darter.is-pop::after,
+.cf-bubble--tease.is-pop::after,
+.cf-bubble--prism.is-pop::after {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 2px solid var(--cf-var-col, rgba(255, 224, 150, 0.8));
+  box-shadow: 0 0 16px var(--cf-var-col, rgba(255, 224, 150, 0.8));
+  animation: cfFeelVarRing var(--cf-pop-ms) cubic-bezier(.16, .8, .3, 1) forwards;
+}
+.cf-bubble--golden { --cf-var-col: rgba(255, 215, 110, 0.8); }
+.cf-bubble--heart { --cf-var-col: rgba(255, 170, 150, 0.75); }
+.cf-bubble--darter { --cf-var-col: rgba(255, 200, 240, 0.7); }
+.cf-bubble--tease { --cf-var-col: rgba(255, 140, 165, 0.6); }
+.cf-bubble--prism { --cf-var-col: rgba(190, 225, 255, 0.75); }
+@keyframes cfFeelVarRing {
+  0%, 18% { scale: 1; opacity: 0; }
+  36% { opacity: 0.7; }
+  100% { scale: var(--cf-var-ring); opacity: 0; }
+}
+/* darter: the ring stretches sideways, a tail left behind */
+.cf-bubble--darter.is-pop::after { animation-name: cfFeelVarStreak; }
+@keyframes cfFeelVarStreak {
+  0%, 18% { scale: 1; opacity: 0; }
+  36% { opacity: 0.7; }
+  100% { scale: calc(var(--cf-var-ring) * 1.25) calc(2 - var(--cf-var-ring) * 0.55); opacity: 0; }
+}
+/* prism: the ring wears four tints and turns as it opens */
+.cf-bubble--prism.is-pop::after {
+  border-color: rgba(255, 170, 220, 0.7) rgba(150, 220, 255, 0.7) rgba(190, 255, 200, 0.7) rgba(255, 235, 160, 0.7);
+  animation-name: cfFeelVarSplit;
+}
+@keyframes cfFeelVarSplit {
+  0%, 18% { scale: 1; rotate: 0deg; opacity: 0; }
+  36% { opacity: 0.75; }
+  100% { scale: var(--cf-var-ring); rotate: 50deg; opacity: 0; }
+}
+/* the idle halo leaves with the bubble instead of hanging on through the pop */
+.cf-bubble.is-pop::before,
+.cf-bubble.is-detonate::before,
+.cf-bubble.is-fade::before { animation: cfFeelFadeOnly 0.2s ease-out forwards; }
+
+html[data-motion="reduced"] .cf-bubble--golden::before { animation-duration: 11s; }
+html[data-motion="reduced"] .cf-bubble--heart::before { animation-duration: 5.6s; }
+html[data-motion="reduced"] .cf-bubble--darter::before { animation-duration: 3.2s; }
+html[data-motion="reduced"] .cf-bubble--tease::before { animation-duration: 9.2s; }
+html[data-motion="reduced"] .cf-bubble--prism::before { animation-duration: 22s; }
+/* off: the halos rest, the pop rings stay home. Fades only. */
+html[data-motion="off"] .cf-bubble--golden::before { animation: none; opacity: 0; }
+html[data-motion="off"] .cf-bubble--heart::before,
+html[data-motion="off"] .cf-bubble--darter::before,
+html[data-motion="off"] .cf-bubble--tease::before,
+html[data-motion="off"] .cf-bubble--prism::before { animation: none; opacity: calc(var(--cf-var-halo) * 0.6); }
+html[data-motion="off"] .cf-bubble.is-pop::before,
+html[data-motion="off"] .cf-bubble.is-detonate::before,
+html[data-motion="off"] .cf-bubble.is-fade::before { animation: cfFeelFadeOnly 0.2s ease-out forwards; }
+html[data-motion="off"] .cf-bubble.is-pop::after { animation: none; opacity: 0; }
+
+/* ---- multiplier: a warm glow that tracks heat, a bloom on a tier change ---- */
+.cf-mult-heatglow {
+  position: absolute;
+  inset: -18% -12%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255, 190, 110, 0.9), rgba(255, 150, 80, 0.35) 55%, transparent 100%);
+  mix-blend-mode: screen;
+  opacity: var(--cf-heat-glow, 0);
+  transition: opacity 0.9s ease-in-out;
+}
+.cf-mult-heatglow.is-bloom { animation: cfFeelTierBloom var(--tier-bloom-ms, 900ms) ease-out; }
+@keyframes cfFeelTierBloom {
+  0% { scale: 0.85; opacity: var(--cf-heat-glow, 0); }
+  30% { scale: 1.18; opacity: calc(var(--cf-heat-glow, 0) + 0.3); }
+  100% { scale: 1; opacity: var(--cf-heat-glow, 0); }
+}
+html[data-motion="reduced"] .cf-mult-heatglow.is-bloom { animation-name: cfFeelTierBloomHalf; }
+@keyframes cfFeelTierBloomHalf {
+  0% { scale: 0.93; opacity: var(--cf-heat-glow, 0); }
+  30% { scale: 1.09; opacity: calc(var(--cf-heat-glow, 0) + 0.15); }
+  100% { scale: 1; opacity: var(--cf-heat-glow, 0); }
+}
+html[data-motion="off"] .cf-mult-heatglow.is-bloom { animation-name: cfFeelTierGlowOnly; }
+@keyframes cfFeelTierGlowOnly {
+  0%, 100% { opacity: var(--cf-heat-glow, 0); }
+  30% { opacity: calc(var(--cf-heat-glow, 0) + 0.15); }
+}
+/* a streak break: the number sags and comes back. No shake, no red. */
+.cf-mult-core.is-break { animation: cfFeelMultSag 0.95s cubic-bezier(.3, 0, .2, 1); }
+.cf-mult-core.is-crack { animation: cfFeelMultSag 0.55s cubic-bezier(.3, 0, .2, 1); }
+html[data-motion="reduced"] .cf-mult-core.is-break,
+html[data-motion="reduced"] .cf-mult-core.is-crack { animation-name: cfFeelMultSag; }
+html[data-motion="off"] .cf-mult-core.is-break,
+html[data-motion="off"] .cf-mult-core.is-crack { animation-name: cfFeelMultSag; }
+@keyframes cfFeelMultSag {
+  0% { transform: translateY(0); opacity: 1; filter: saturate(1); }
+  28% { transform: translateY(var(--cf-sag-px)); opacity: var(--cf-sag-dim); filter: saturate(0.35); }
+  100% { transform: translateY(0); opacity: 1; filter: saturate(1); }
+}
+
+/* ---- focus meter: spend and refill ease; low focus breathes, it does not blink ---- */
+.cf-focus-fill { transition: width var(--cf-focus-ease-ms) cubic-bezier(.3, .7, .2, 1); }
+.cf-hud-focus.is-low .cf-focus-fill {
+  animation: cfFeelLowBreath var(--cf-focus-breath-ms) ease-in-out infinite;
+}
+html[data-motion="reduced"] .cf-hud-focus.is-low .cf-focus-fill,
+html[data-motion="off"] .cf-hud-focus.is-low .cf-focus-fill {
+  animation-name: cfFeelLowBreath;
+  animation-duration: calc(var(--cf-focus-breath-ms) * 1.5);
+}
+@keyframes cfFeelLowBreath {
+  0%, 100% { opacity: 1; }
+  50% { opacity: var(--cf-focus-breath-low); }
+}
+
+/* ---- the ripple: the ring thins as it travels and leaves an echo behind ---- */
+/* Growth stays cfRippleGrow from styles.css on ease-out: chaosField.js times its
+   hits against that exact curve. This only shapes the fade and adds the tail. */
+.cf-ripple {
+  animation: cfRippleGrow var(--life, 520ms) ease-out forwards,
+             cfFeelRippleTail var(--life, 520ms) linear forwards;
+}
+@keyframes cfFeelRippleTail {
+  0% { opacity: 0; border-width: 3px; }
+  8% { opacity: 1; }
+  45% { opacity: 0.8; animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  100% { opacity: 0; border-width: 1px; }
+}
+.cf-ripple::after {
+  content: '';
+  position: absolute;
+  inset: 9%;
+  border-radius: 50%;
+  border: 1px solid rgba(122, 224, 255, 0.45);
+  opacity: 0.6;
+}
+html[data-motion="off"] .cf-ripple::after { display: none; }

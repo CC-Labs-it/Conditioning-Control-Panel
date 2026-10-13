@@ -1510,23 +1510,26 @@ namespace ConditioningControlPanel
                 bool raceInFront = Services.Chaos.CaucusHostService.IsInFront;
                 bool boardInFront = Services.PieceByPiece.PieceByPieceHostService.IsInFront;
                 bool breakoutInFront = Services.BackRoom.BackRoomHostService.IsBreakoutInFront;
+                // Down the Rabbit Hole rides it too (owner, 2026-10-12: Escape only pauses the game).
+                bool dtrhInFront = Services.Chaos.DtrhHostService.IsInFront;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
-                    gameInFront: raceInFront || boardInFront || breakoutInFront,
+                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront,
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
                     nowUtc: now);
                 if (!claim) { _lastRaceEscapeClaimUtc = null; return false; }
                 _lastRaceEscapeClaimUtc = now;
-                VideoDiag.Log("PANIC", $"Escape kept by {(raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece" : "Breakout")} as its pause (again within 2 s = full panic)");
+                VideoDiag.Log("PANIC", $"Escape kept by {(raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece" : breakoutInFront ? "Breakout" : "Down the Rabbit Hole")} as its pause (again within 2 s = full panic)");
                 // Each game pauses on its own keydown, which never comes while its WebView2 is out of
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
                 // when the real key reached it as well (host-escape.js).
                 switch (Services.Safety.PanicPolicy.KeptEscapeGoesTo(claim,
                             raceInFront, raceReady: Services.Chaos.CaucusHostService.IsReady,
                             boardInFront, boardReady: Services.PieceByPiece.PieceByPieceHostService.IsReady,
-                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady))
+                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady,
+                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
@@ -1534,6 +1537,8 @@ namespace ConditioningControlPanel
                         Services.PieceByPiece.PieceByPieceHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Breakout:
                         Services.BackRoom.BackRoomHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Dtrh:
+                        Services.Chaos.DtrhHostService.PostKeptEscape(); break;
                 }
                 return true;
             }
@@ -1644,11 +1649,17 @@ namespace ConditioningControlPanel
             // fell into the "not running" branch below — where a second press EXITS the app.
             if (App.Chaos?.IsDescending == true) { VideoDiag.Log("PANIC", "handed off to the Rabbit Hole descent (chaos owns the key)"); return; }
 
-            // The web DtRH game (its own WebView2 window) owns Esc while it's up: the page
-            // runs a pause → exit-fullscreen → close ladder. Swallow the panic double-tap so
-            // those presses can't fall into the "not running" branch and exit the whole app.
-            // Reactivates on its own once the game window closes (IsActive flips false).
-            if (Services.Chaos.DtrhHostService.IsActive) { VideoDiag.Log("PANIC", "handed off to the DtRH web game window"); return; }
+            // The web DtRH game (its own WebView2 window). Its page only PAUSES on Escape now, so a
+            // press that reaches this rung is one the pause did not claim (a second press inside
+            // 2 s, or any press with a session running): close the game here. The page's old
+            // ladder ended in a close too, and the panic key must never do less than it did.
+            // Returning keeps the press out of the "not running" branch, which exits the app.
+            if (Services.Chaos.DtrhHostService.IsActive)
+            {
+                VideoDiag.Log("PANIC", "closing the DtRH web game window (unclaimed Escape)");
+                Services.Chaos.DtrhHostService.CloseActive();
+                return;
+            }
 
             // The Arcademy (its own WebView2 window) owns the panic key while it's up, same shape as
             // the DtRH hand-off above and for the same reason: without this rung, two Esc taps with

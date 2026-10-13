@@ -21,6 +21,22 @@
 
 import * as THREE from 'three';
 import { boonTheme } from '../game/boons.js';
+import { softPulse } from '../shared/softPulse.js';
+import { motionScale } from '../shared/motion.js';
+
+/* ---- feel pass, wave 2 (hub lane): every tunable for the draft's hover / pick / reroll ---- */
+const AIM_EASE_RATE = 7;         // 1/s: how fast the hover lift and tilt ease in and out (was a snap)
+const TILT_MAX_RAD = 0.16;       // hover tilt toward the pointer at full motion (about 9 degrees)
+const TILT_REACH = 0.22;         // pointer offset from the card centre (NDC) that reaches full tilt
+const LOSER_FADE_SEC = 0.6;      // unpicked cards sink away over this long (was a 0.35 s linear fade)
+const LOSER_SINK = 1.6;          // world units the unpicked cards drift away from the camera
+const REROLL_OUT_SEC = 0.32;     // old cards turn away over this long on a reroll
+const REROLL_STAGGER_SEC = 0.09; // delay between cards, both turning away and turning in
+const REROLL_TURN_RAD = 1.35;    // how far a card turns edge-on during a reroll (full motion)
+const FEEL_EASE = (t) => t * t * (3 - 2 * t);   // smoothstep: eased in AND out
+function feelMoment(event, data) {
+  try { window.dispatchEvent(new CustomEvent('dtrh:feel', { detail: Object.assign({ kind: 'moment', event }, data || {}) })); } catch (_) { /* ignore */ }
+}
 
 const ART = 'https://ccp.art/';       // boon art lives on the CDN (matches overlays.js)
 
@@ -151,6 +167,15 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
   let autoT = 0, autoLimit = 0;
   let aimIndex = -1;
   let steerHold = 0;          // >0 while the fall is being steered through a just-picked card
+  let outgoing = [];          // rerolled-away cards, still turning out (disposed when faded, or on teardown)
+  const ptr = { x: 0, y: 0, live: false };   // pointer in NDC, written by one passive listener (no layout reads)
+  const _fwd = new THREE.Vector3();
+  function onPtrMove(e) {
+    ptr.x = (e.clientX / (window.innerWidth || 1)) * 2 - 1;
+    ptr.y = -((e.clientY / (window.innerHeight || 1)) * 2 - 1);
+    ptr.live = true;
+  }
+  try { window.addEventListener('pointermove', onPtrMove, { passive: true }); } catch (_) { /* ignore */ }
   const shatters = [];        // shard bursts, ticked even after resolve
   const _q = new THREE.Quaternion();
   const _euler = new THREE.Euler();
@@ -213,8 +238,9 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
     const res = opts.onReroll();
     if (!res || !res.options) { if (dom) dom.reroll.disabled = true; return; }
     opts.rerollsLeft = res.rerollsLeft;
-    rebuildCards(res.options);
+    rebuildCards(res.options, true);
     syncButtons();
+    feelMoment('reroll', { left: res.rerollsLeft || 0 });
   }
 
   function syncButtons() {
@@ -227,7 +253,7 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
   }
 
   // ---- one themed boon card --------------------------------------------------
-  function buildCard(boon, pos, scale) {
+  function buildCard(boon, pos, scale, delay = 0, turnIn = false) {
     let disposed = false;   // the CDN art can land after teardown; guard the async map swap so the texture isn't leaked
     const th = themeOf(boon);
     const group = new THREE.Group();
@@ -318,7 +344,10 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
     const mats = [glowMat, frameMat, contentMat];
     if (crackMat) mats.push(crackMat);
     const baseOp = { glow: 0.9, frame: 1, content: 1, crack: 0.5 };
-    let appear = 0, fade = 0, sway = Math.random() * 6, aimed = 0;
+    let appear = -delay * 3.2, fade = 0, sway = Math.random() * 6, aimed = 0;
+    let aimK = 0, tiltX = 0, tiltY = 0;        // eased hover state
+    let fadeSec = LOSER_FADE_SEC, turnOut = false;
+    const home = pos.clone();
 
     function rebuildBolts(dt) {
       bolts.t -= dt;
@@ -347,20 +376,45 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
       boon, group, content,
       getContent: () => content,
       setAimed(on) { aimed = on ? 1 : 0; },
-      startFade() { if (fade <= 0) fade = 0.001; },
-      isFading: () => fade > 0,
+      // fade < 0 = waiting out a stagger delay, fade > 0 = leaving
+      startFade(o) {
+        if (fade !== 0) return;
+        if (o && o.turn) { turnOut = true; fadeSec = REROLL_OUT_SEC; fade = -(o.delay || 0) || 0.001; }
+        else fade = 0.001;
+      },
+      isFading: () => fade !== 0,
       update(dt, camQuat) {
         appear = Math.min(1, appear + dt * 3.2);
+        const ms = motionScale();
+        const ap = FEEL_EASE(clamp(appear, 0, 1));
+        // eased hover: the lift and the tilt glide in and glide back out
+        const ek = Math.min(1, dt * AIM_EASE_RATE);
+        aimK += (aimed - aimK) * ek;
+        let wantX = 0, wantY = 0;
+        if (aimed && ptr.live && ms > 0 && fade === 0) {
+          group.getWorldPosition(_wp); _wp.project(camera);
+          wantY = clamp((ptr.x - _wp.x) / TILT_REACH, -1, 1) * TILT_MAX_RAD * ms;
+          wantX = -clamp((ptr.y - _wp.y) / TILT_REACH, -1, 1) * TILT_MAX_RAD * ms;
+        }
+        tiltX += (wantX - tiltX) * ek;
+        tiltY += (wantY - tiltY) * ek;
         // billboard to the screen plane (art upright, never mirrored) + sway
         sway += dt;
-        _euler.set(0, 0, Math.sin(sway * 1.1) * 0.045);
+        if (fade !== 0) { const was = fade; fade += dt; if (was < 0 && fade >= 0) fade = 0.001; }
+        const fk = fade > 0 ? FEEL_EASE(clamp(fade / fadeSec, 0, 1)) : 0; // 0 -> 1 as it leaves, eased
+        // reroll: turn edge-on going out, turn face-on coming in (fades only when motion is off)
+        const turn = ((turnIn ? (1 - ap) : 0) - (turnOut ? fk : 0)) * REROLL_TURN_RAD * ms;
+        _euler.set(tiltX, tiltY + turn, Math.sin(sway * 1.1) * 0.045);
         _q.setFromEuler(_euler);
         group.quaternion.copy(camQuat).multiply(_q);
+        // unpicked cards sink away down the bore instead of blinking out
+        if (fk > 0 && !turnOut && ms > 0) {
+          _fwd.set(0, 0, -1).applyQuaternion(camQuat);
+          group.position.copy(home).addScaledVector(_fwd, fk * LOSER_SINK * ms);
+        }
         // aim lift: nudge toward the camera + brighter
-        const lift = aimed ? 1 : 0;
-        const fk = fade > 0 ? clamp(1 - fade / 0.35, 0, 1) : 0; // 0 -> 1 as it fades out
-        if (fade > 0) fade += dt;
-        const vis = appear * (1 - fk);
+        const lift = aimK;
+        const vis = ap * (1 - fk);
         glowMat.opacity = baseOp.glow * vis * (0.7 + 0.5 * lift + 0.18 * Math.sin(sway * 2.4));
         frameMat.opacity = baseOp.frame * vis;
         contentMat.opacity = baseOp.content * vis;
@@ -372,7 +426,7 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
           sparks.pts.rotation.z += dt * 0.6;
           sparks.mat.opacity = vis * (0.5 + 0.4 * Math.sin(sway * 2.0));
         }
-        return fk >= 1; // done fading -> disposable
+        return fade >= fadeSec; // done leaving -> disposable
       },
       dispose() {
         disposed = true;
@@ -462,13 +516,17 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
     cards = [];
   }
 
-  function rebuildCards(options) {
-    clearCards(true);
+  function rebuildCards(options, rerolled = false) {
+    if (rerolled) {
+      // the old hand turns away in a stagger, the new one turns in behind it
+      cards.forEach((c, i) => { c.startFade({ turn: true, delay: i * REROLL_STAGGER_SEC }); outgoing.push(c); });
+      cards = [];
+    } else clearCards(true);
     const depth = nav.getDepth();
     const fr = layout.frameAtDepth(depth + STOP_AHEAD + CARD_AHEAD);
     const slots = layoutPositions(options.length, fr);
     cards = options.map((b, i) => {
-      const card = buildCard(b, slots[i].pos, slots[i].scale);
+      const card = buildCard(b, slots[i].pos, slots[i].scale, rerolled ? REROLL_OUT_SEC + i * REROLL_STAGGER_SEC : 0, rerolled);
       card.group.userData.index = i;
       return card;
     });
@@ -503,7 +561,7 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
     const chosen = cards[index];
     const boon = chosen.boon;
     // the Pow: a bright flash + a dive cue, then shatter the chosen card
-    try { fx && fx.pulseFlash && fx.pulseFlash(0.7); } catch (e) { /* ignore */ }
+    softPulse(fx, 0.7);   // capped under reduced motion, skipped under off
     try { opts && opts.sfx && opts.sfx('dive', 0.6); } catch (e) { /* ignore */ }
     // Dive THROUGH the chosen card, not straight past it: strafe the fall toward
     // the card's lateral offset and aim the camera at it so the Pow drops through
@@ -540,6 +598,8 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
 
   function teardown() {
     clearCards(true);
+    for (const c of outgoing) c.dispose();
+    outgoing = [];
     if (dom) { dom.root.hidden = true; dom.labels.innerHTML = ''; dom.labelEls = []; }
     try { nav.setForwardHold(false); } catch (e) { /* ignore */ }
     opts = null; aimIndex = -1; state = 'idle';
@@ -557,6 +617,9 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
     }
     if (state === 'idle') return;
 
+    for (let i = outgoing.length - 1; i >= 0; i--) {
+      if (outgoing[i].update(dt, camera.quaternion)) { outgoing[i].dispose(); outgoing.splice(i, 1); }
+    }
     // billboard + FX; drop cards that have finished fading out
     for (let i = cards.length - 1; i >= 0; i--) {
       const done = cards[i].update(dt, camera.quaternion);
@@ -565,7 +628,7 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
 
     if (state === 'resolved') {
       // wait for fades + shards to clear, then go fully idle
-      if (cards.length === 0 && shatters.length === 0) teardown();
+      if (cards.length === 0 && shatters.length === 0 && outgoing.length === 0) teardown();
       return;
     }
 
@@ -618,6 +681,7 @@ export function createBoonPick({ scene, camera, layout, nav, fx, hud }) {
     },
     dispose() {
       teardown();
+      try { window.removeEventListener('pointermove', onPtrMove); } catch (_) { /* ignore */ }
       steerHold = 0;
       try { nav.setLane(0); nav.setFaceTarget(null); } catch (e) { /* ignore */ }
       for (let i = shatters.length - 1; i >= 0; i--) {

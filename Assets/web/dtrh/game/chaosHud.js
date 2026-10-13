@@ -12,9 +12,15 @@
 
 import { createHudTips } from './hudTips.js';
 import { HUD_TIPS, upgradeById } from './catalog.js';
+import { motionScale } from '../shared/motion.js';
+import { procLine } from './toyProcs.js';
+import { FLIGHT, flightCount, splitAmount, flightPoint } from './fieldFeel.js';
 
 const DEFUSE_COST = 30; // FOCUS bar low-threshold (ChaosTuning.DEFUSE_COST)
 const RIPPLE_COST = 30; // the ripple spends this much focus per cast (chaosRun RIPPLE_FOCUS_COST)
+// ---- multiplier readout feel (wave 2) ----
+const HEAT_GLOW_MAX = 0.45;     // the warm glow behind the multiplier at full heat (opacity)
+const TIER_BLOOM_MS = 900;      // a tier change blooms behind the number for this long
 const ART = 'https://ccp.art/';
 
 // The emotes currency mark: three *different* feeling-faces fanned like a hand
@@ -123,46 +129,141 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
   let goldTarget = 0, goldShown = 0;
   let goldHideT1 = 0, goldHideT2 = 0;
   let tickerRaf = 0;
+  // Rewards still in the air (see flyReward): the counters wait for them, so the
+  // number climbs when the glyph lands, not when the pop happened.
+  let emoteHeld = 0, goldHeld = 0;
+  const heldGoal = (target, held, shown) => {
+    const g = Math.max(0, target - held);
+    return held > 0 && g < shown ? shown : g;   // never count DOWN because of a flight
+  };
   function runTicker() {
     tickerRaf = 0;
     let busy = false;
-    if (Math.abs(emoteTarget - emoteShown) > 0.5) {
-      emoteShown += (emoteTarget - emoteShown) * 0.18;
-      if (Math.abs(emoteTarget - emoteShown) < 0.5) emoteShown = emoteTarget; else busy = true;
+    const eGoal = heldGoal(emoteTarget, emoteHeld, emoteShown);
+    if (Math.abs(eGoal - emoteShown) > 0.5) {
+      emoteShown += (eGoal - emoteShown) * 0.18;
+      if (Math.abs(eGoal - emoteShown) < 0.5) emoteShown = eGoal; else busy = true;
       emoteNum.textContent = Math.round(emoteShown).toLocaleString();
     }
-    if (Math.abs(goldTarget - goldShown) > 0.5) {
-      goldShown += (goldTarget - goldShown) * 0.22;
-      if (Math.abs(goldTarget - goldShown) < 0.5) goldShown = goldTarget; else busy = true;
+    const gGoal = heldGoal(goldTarget, goldHeld, goldShown);
+    if (Math.abs(gGoal - goldShown) > 0.5) {
+      goldShown += (gGoal - goldShown) * 0.22;
+      if (Math.abs(gGoal - goldShown) < 0.5) goldShown = gGoal; else busy = true;
       goldTotal.textContent = Math.round(goldShown).toLocaleString();
     }
     if (busy) tickerRaf = requestAnimationFrame(runTicker);
   }
   const ensureTicker = () => { if (!tickerRaf) tickerRaf = requestAnimationFrame(runTicker); };
+  const pulseEmotes = () => {
+    emoteVal.classList.remove('is-gain'); void emoteVal.offsetWidth; emoteVal.classList.add('is-gain');
+  };
   function setEmotes(target) {
     const t = Math.max(0, target | 0);
-    if (t > emoteTarget) {   // a gain: pulse the hero number so the climb reads
-      emoteVal.classList.remove('is-gain'); void emoteVal.offsetWidth; emoteVal.classList.add('is-gain');
-    }
+    // a gain: pulse the hero number so the climb reads. A gain that is flying in
+    // pulses when it lands instead.
+    if (t - emoteHeld > emoteTarget) pulseEmotes();
     emoteTarget = t;
     ensureTicker();
   }
+
+  // ---- reward flights: emotes and gold travel from the pop to their HUD slot ----
+  // Same shape as the shield / material flights below. Bounded (FLIGHT.cap in the
+  // air); under reduced motion one glyph on a straight line; under motion off, or
+  // with the HUD hidden, nothing flies and the value just updates.
+  const EMOTE_FACES = ['\u{1F600}', '\u{1F60D}', '\u{1F62E}', '\u{1F634}'];
+  const fliers = new Set();
+  let flightEpoch = 0;          // bumped on reset: late arrivals from an old run do nothing
+  let lastPop = null;           // { x, y, t } of the field's latest pop (gold starts there)
+  let lastArriveAt = 0;
+  const arriveTick = (what) => {
+    // the audio lane voices the arrival; this lane adds no sound. A chain of pops
+    // lands as a few ticks, not a buzz.
+    const now = performance.now();
+    if (now - lastArriveAt < FLIGHT.arriveGapMs) return;
+    lastArriveAt = now;
+    try { window.dispatchEvent(new CustomEvent('dtrh:feel', { detail: { kind: 'arrive', what } })); } catch (e) { /* ignore */ }
+  };
+  /** Fly `amount` of a reward from (x,y) into its slot. Returns false when nothing
+   * flew (the caller lands the value at once). onLand runs at the first arrival. */
+  function flyReward(what, x, y, amount, onLand) {
+    const total = Math.max(0, amount | 0);
+    const destEl = what === 'gold' ? goldIcon : emoteIcon;
+    const shownHud = root.style.display !== 'none' && !hud.classList.contains('dtrh-hud-hidden');
+    const r0 = shownHud ? destEl.getBoundingClientRect() : null;
+    const scale = motionScale();
+    const n = r0 && r0.width > 0 ? flightCount(total, scale, fliers.size) : 0;
+    if (n === 0) return false;
+    const parts = splitAmount(total, n);
+    const epoch = flightEpoch;
+    if (what === 'gold') goldHeld += total; else emoteHeld += total;
+    let landed = false;
+    for (let i = 0; i < n; i++) {
+      const el = document.createElement('div');
+      el.className = `cf-fly cf-fly--${what}`;
+      el.textContent = what === 'gold' ? '\u{1FA99}' : EMOTE_FACES[(Math.random() * EMOTE_FACES.length) | 0];
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      fliers.add(el);
+      const arc = FLIGHT.arcPx * (scale >= 1 ? 1 : 0) * (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.8);
+      const delay = i * FLIGHT.staggerMs;
+      let t0 = null;
+      const step = (ts) => {
+        if (epoch !== flightEpoch) return;            // the run was reset under us
+        if (t0 == null) t0 = ts;
+        const k = Math.min(1, Math.max(0, (ts - t0 - delay) / FLIGHT.ms));
+        const r = destEl.getBoundingClientRect();
+        const p = flightPoint(x, y, r.left + r.width / 2, r.top + r.height / 2, k, arc);
+        // IN: fades up over the first tenth. OUT: shrinks into the slot.
+        el.style.opacity = String(Math.min(1, k * 10) * (1 - 0.25 * p.e));
+        el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) translate(-50%, -50%) scale(${1 - 0.5 * p.e})`;
+        if (k < 1) { requestAnimationFrame(step); return; }
+        el.remove(); fliers.delete(el);
+        if (what === 'gold') goldHeld = Math.max(0, goldHeld - parts[i]);
+        else emoteHeld = Math.max(0, emoteHeld - parts[i]);
+        if (!landed) { landed = true; try { onLand && onLand(); } catch (e) { /* ignore */ } arriveTick(what); }
+        ensureTicker();
+      };
+      requestAnimationFrame(step);
+    }
+    return true;
+  }
+  function onFieldEvent(e) {
+    const d = e && e.detail;
+    if (!d) return;
+    if (d.kind === 'pop') { lastPop = { x: d.x, y: d.y, t: performance.now() }; return; }
+    // Emotes do not fly to the counter (owner, 2026-10-12): they rain from the pop as they
+    // always did and the number pulses on the gain (setEmotes). Gold still flies.
+  }
+  window.addEventListener('dtrh:field', onFieldEvent);
+  function clearFlights() {
+    flightEpoch++;
+    for (const el of fliers) el.remove();
+    fliers.clear();
+    emoteHeld = 0; goldHeld = 0; lastPop = null;
+  }
+
   function bumpGold(delta, total) {
     goldTarget = Math.max(0, total | 0);
     clearTimeout(goldHideT1); clearTimeout(goldHideT2);
     goldRow.style.display = '';
     goldRow.classList.remove('is-fading');
-    if (delta > 0) {
-      goldDelta.textContent = `+${delta | 0}`;
-      goldDelta.classList.remove('is-pop'); void goldDelta.offsetWidth; goldDelta.classList.add('is-pop');
-    }
-    goldRow.classList.remove('is-bump'); void goldRow.offsetWidth; goldRow.classList.add('is-bump');
-    ensureTicker();
+    const land = () => {
+      if (delta > 0) {
+        goldDelta.textContent = `+${delta | 0}`;
+        goldDelta.classList.remove('is-pop'); void goldDelta.offsetWidth; goldDelta.classList.add('is-pop');
+      }
+      goldRow.classList.remove('is-bump'); void goldRow.offsetWidth; goldRow.classList.add('is-bump');
+      ensureTicker();
+    };
+    // Gold tipped by a pop flies from that pop; the chip bumps when the coin lands.
+    const fromPop = delta > 0 && lastPop && performance.now() - lastPop.t <= FLIGHT.goldWindowMs;
+    const flew = fromPop && flyReward('gold', lastPop.x, lastPop.y, delta, land);
+    if (!flew) { land(); if (delta > 0) arriveTick('gold'); }
     // hold ~2.4s past the last coin, then fade the whole chip away
     goldHideT1 = window.setTimeout(() => {
       goldRow.classList.add('is-fading');
       goldHideT2 = window.setTimeout(() => { goldRow.style.display = 'none'; goldRow.classList.remove('is-fading'); }, 480);
-    }, 2400);
+    }, 2400 + (flew ? FLIGHT.ms : 0));
   }
   // the bag chip: show for the grabbed material, pop "+N ×runTotal", fade like gold
   let bagHideT1 = 0, bagHideT2 = 0;
@@ -186,6 +287,7 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     clearTimeout(goldHideT1); clearTimeout(goldHideT2);
     clearTimeout(bagHideT1); clearTimeout(bagHideT2);
     cancelAnimationFrame(tickerRaf); tickerRaf = 0;
+    clearFlights();
     emoteTarget = emoteShown = 0; goldTarget = goldShown = 0;
     emoteNum.textContent = '0'; emoteVal.classList.remove('is-gain');
     goldTotal.textContent = '0';
@@ -221,7 +323,21 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
   const streakVal = document.createElement('span');
   streakVal.className = 'cf-mult-streak';
   badgeCore.append(multVal, streakVal);
-  badge.append(badgeFx, badgeCore);
+  // Wave 2: one warm glow behind the number. Its strength tracks heat; a tier
+  // change lets it bloom once and settle (feel-field.css).
+  const badgeGlow = document.createElement('span');
+  badgeGlow.className = 'cf-mult-heatglow';
+  badgeGlow.style.setProperty('--tier-bloom-ms', `${TIER_BLOOM_MS}ms`);
+  badge.append(badgeGlow, badgeFx, badgeCore);
+  let bloomTimer = 0;
+  let glowShown = -1;
+  function tierBloom() {
+    badgeGlow.classList.remove('is-bloom');
+    void badgeGlow.offsetWidth;
+    badgeGlow.classList.add('is-bloom');
+    clearTimeout(bloomTimer);
+    bloomTimer = window.setTimeout(() => badgeGlow.classList.remove('is-bloom'), TIER_BLOOM_MS + 40);
+  }
 
   // Fire tiers ride the raw streak count (the tunnel itself fully warps at 25);
   // prevCombo=null means "baseline unset" so a fresh run never reads as a break.
@@ -254,6 +370,7 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     if (t === curTier) return;
     badge.classList.remove(`tier-${curTier}`);
     badge.classList.add(`tier-${t}`);
+    if (t > curTier) tierBloom();
     curTier = t;
     syncEmbers();
   }
@@ -483,10 +600,9 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     for (const t of toys) {
       let el = toyEls.get(t.id);
       if (!el) {
-        el = document.createElement('button');
-        el.type = 'button';
+        // a display, not a button: toys wake on their own (toyProcs.js)
+        el = document.createElement('div');
         el.className = 'cf-toy';
-        el.addEventListener('click', () => onToyUse && onToyUse(t.id));
         const g = document.createElement('span');
         g.className = 'cf-toy-glyph';
         g.textContent = t.glyph;
@@ -503,23 +619,26 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
           const cur = lastToys.find((x) => x.id === toyId);
           if (!cur) return null;
           const state = cur.chargesLeft >= 0
-            ? (cur.chargesLeft === 0 ? 'spent' : `${cur.chargesLeft} use${cur.chargesLeft > 1 ? 's' : ''} left`)
-            : (cur.cooldownLeft > 0 ? `${Math.ceil(cur.cooldownLeft)}s cooldown` : 'ready');
+            ? (cur.chargesLeft === 0 ? 'spent' : 'waiting')
+            : (cur.cooldownLeft > 0 ? `resting ${Math.ceil(cur.cooldownLeft)}s` : 'awake');
+          const line = cur.id === 'e_stim' ? 'arcs on a share of the pops you click' : procLine(cur.id, cur.level);
           return {
             glyph: cur.glyph, kicker: cur.crafted ? 'crafted · one use' : 'toy', name: cur.name,
             desc: cur.desc || '',
-            extra: (cur.key ? `press ${cur.key} or click · ` : '') + state,
+            extra: (line ? line + ' · ' : '') + state,
           };
         });
         dock.appendChild(el);
         toyEls.set(t.id, el);
       }
       // refresh the label each frame - a consumable's slot number can shift as the dock drains
-      el._name.textContent = t.name + (t.key ? ` · ${t.key}` : '');
+      el._name.textContent = t.name;
       const ready = t.cooldownLeft <= 0 && t.chargesLeft !== 0;
       el._status.textContent = t.chargesLeft >= 0
-        ? (t.chargesLeft === 0 ? 'spent' : `${t.chargesLeft} left`)
-        : (t.cooldownLeft > 0 ? `${Math.ceil(t.cooldownLeft)}s` : 'ready');
+        ? (t.chargesLeft === 0 ? 'spent' : 'waiting')
+        : (t.cooldownLeft > 0 ? `${Math.ceil(t.cooldownLeft)}s` : 'awake');
+      // a soft swell the moment it wakes (styles.css cfToyWake)
+      el.classList.toggle('is-woke', !!t.wokeAt && performance.now() - t.wokeAt < 1200);
       el.classList.toggle('is-ready', ready);
       el.classList.toggle('is-active', !!t.effectActive);
       el.classList.toggle('is-crafted', !!t.crafted);   // boudoir-pink accent
@@ -585,6 +704,32 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     window.setTimeout(() => { el.classList.add('is-gone'); window.setTimeout(() => el.remove(), 700); }, 4200);
   }
 
+  // ---- a toy wakes on its own: say so where the eye is (owner, 2026-10-12) ----
+  // A named chip low in the middle of the view, and a soft ring from the pop that woke it.
+  const wakeWrap = document.createElement('div');
+  wakeWrap.className = 'cf-wake-wrap';
+  hud.appendChild(wakeWrap);
+  function toyWake({ glyph, name, x, y } = {}) {
+    while (wakeWrap.children.length >= 2) wakeWrap.firstChild.remove();
+    const el = document.createElement('div');
+    el.className = 'cf-wake';
+    const g = document.createElement('span');
+    g.className = 'cf-wake-glyph';
+    g.textContent = glyph || '◈';
+    const n = document.createElement('span');
+    n.textContent = (name || 'a toy') + ' wakes';
+    el.appendChild(g); el.appendChild(n);
+    wakeWrap.appendChild(el);
+    window.setTimeout(() => el.remove(), 2400);
+    if (x != null && y != null) {
+      const ring = document.createElement('div');
+      ring.className = 'cf-wake-ring';
+      ring.style.left = x + 'px'; ring.style.top = y + 'px';
+      hud.appendChild(ring);
+      window.setTimeout(() => ring.remove(), 1200);
+    }
+  }
+
   // ---- full-screen pulse (the WPF ChaosFxWindow color flash, config-gated upstream) ----
   const pulseEl = document.createElement('div');
   pulseEl.className = 'cf-pulse';
@@ -609,6 +754,7 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
   return {
     announce,
     toast,
+    toyWake,
     pulse,
     setPicks,
     setHabits,
@@ -642,6 +788,8 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
       focusFill.style.width = `${Math.round(st.focus)}%`;
       focusRow.classList.toggle('is-low', st.focus < DEFUSE_COST);
       heatFill.style.width = `${Math.round(st.heat * 100)}%`;
+      const glow = Math.round(Math.max(0, Math.min(1, st.heat || 0)) * 20) / 20;   // 5% steps: few style writes
+      if (glow !== glowShown) { glowShown = glow; badgeGlow.style.setProperty('--cf-heat-glow', (glow * HEAT_GLOW_MAX).toFixed(3)); }
       heatTint.style.opacity = st.heat > 0.3 ? String(((st.heat - 0.3) / 0.7) * 0.30) : '0';
       clockTime.textContent = `${fmtClock(st.elapsedSec)} / ${fmtClock(st.runDurationSec)} · `;
       clockLoop.textContent = `LOOP ${st.waveIndex}/${st.waveCount}`;
@@ -838,6 +986,8 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
       clearTimeout(bagHideT1); clearTimeout(bagHideT2);
       cancelAnimationFrame(tickerRaf);
       clearInterval(emberTimer);
+      window.removeEventListener('dtrh:field', onFieldEvent);
+      clearFlights();
       tips.dispose();
       root.remove(); annWrap.remove(); toastWrap.remove(); pulseEl.remove();
       picksWrap.remove(); dock.remove(); eyeBtn.remove(); heatTint.remove();

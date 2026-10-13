@@ -152,7 +152,10 @@ export function mantraOf(word) {
 export function bookParams(rng, o = {}) {
   const r = typeof rng === 'function' ? rng : Math.random;
   const ch = characterFor(o.room);
-  const pal = paletteFor(o.room);
+  // a caller with its own world (the Descent's chambers) hands the colours in; the race's
+  // rooms are looked up as ever
+  const pal = (o.palette && Array.isArray(o.palette.threads) && o.palette.threads.length >= 2)
+    ? o.palette : paletteFor(o.room);
   const d = defaultParams2();
 
   // THE WEAVE. Two threads is the read the owner asked for ("two-colour bands
@@ -248,10 +251,11 @@ function roomSeed(roomId) {
  * THE BOOK for one run. `draw` is what engine/loomSpirals.js calls (through the
  * `setLoomBook` seam) every time a spiral pop needs a picture.
  *
- * @param {Object} o { seed: the run seed, room?: () => roomId, word?: () => phrase }
+ * @param {Object} o { seed: the run seed, room?: () => roomId, word?: () => phrase,
+ *   palette?: () => { threads: ['#rrggbb', ...], ground, outer } | null (the Descent's chamber colours) }
  * @returns {{ draw: Function, reseed: Function, count: () => number, seed: () => number }}
  */
-export function createLoomBook({ seed = 1, room = null, word = null } = {}) {
+export function createLoomBook({ seed = 1, room = null, word = null, palette = null } = {}) {
   let runSeed = seed >>> 0;
   let n = 0;
   /**
@@ -264,7 +268,9 @@ export function createLoomBook({ seed = 1, room = null, word = null } = {}) {
     const phrase = o.word != null ? o.word : (typeof word === 'function' ? word() : '');
     const rng = makeRng((runSeed ^ roomSeed(roomId) ^ Math.imul(n + 1, 0x9e3779b9)) >>> 0);
     n++;
-    const params = bookParams(rng, { room: roomId, word: phrase });
+    let pal = null;
+    if (typeof palette === 'function') { try { pal = palette(); } catch (e) { pal = null; } }
+    const params = bookParams(rng, { room: roomId, word: phrase, palette: pal });
     return { loom: true, params, id: loomId(params), room: String(roomId || ''), word: mantraOf(phrase) };
   }
   function reseed(s) { runSeed = (s >>> 0) || 1; n = 0; }
