@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services
 {
@@ -102,13 +103,14 @@ namespace ConditioningControlPanel.Services
     /// answered with <c>409 merged</c> after the account this desktop was signed into has been
     /// merged into another (the record it keeps writing to is now a tombstone).
     ///
-    /// <para>On a merged refusal: adopt <c>canonical_unified_id</c> as the stored unified id, drop
-    /// the auth token (it belonged to the tombstone and the canonical never issued it), persist,
-    /// stop the sync/heartbeat timers, then re-run the existing provider sign-in
-    /// (<see cref="App.ReauthenticateAfterMergedSwapAsync"/>, the NeedsAuthTokenUpgrade flow
-    /// through /v2/auth/patreon or /v2/auth/discord) so the canonical mints a fresh token. With no
-    /// provider credential the app lands in the ordinary signed-out state and a sign-in prompt is
-    /// offered through the startup presenter.</para>
+    /// <para>On a merged refusal: stop the sync/heartbeat timers, adopt
+    /// <c>canonical_unified_id</c> as the stored unified id, drop the auth token (it belonged to the
+    /// tombstone and the canonical never issued it), persist, then re-run the existing provider
+    /// sign-in so the canonical mints a fresh token. The identity step is Core's; what only a head
+    /// can do (stop its sync, re-run its providers, reload, repaint, offer the sign-in) comes in
+    /// through the seams below (WPF seeds them in App startup). Unseeded seams are skipped, so the
+    /// identity still moves and the app reads as signed out of the tombstone, which is the state a
+    /// lapsed session leaves.</para>
     ///
     /// <para>Single-flight: several timers can receive the same 409 in the same second. The first
     /// caller claims the canonical id in <see cref="MergedSwapPolicy"/> (an atomic add) and the
@@ -125,8 +127,25 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public static class MergedAccountRecovery
     {
-        private static readonly MergedSwapPolicy Policy = new();
+        private static MergedSwapPolicy _policy = new();
         private static readonly SemaphoreSlim SwapGate = new(1, 1);
+
+        /// <summary>Stop anything that writes to the old id (heartbeat, nudge) and forget the loaded profile.</summary>
+        public static volatile Action? StopSync;
+        /// <summary>Re-stamp the local quest file for the canonical id (same person, merged account).</summary>
+        public static volatile Action<string>? StampQuests;
+        /// <summary>Re-run the provider sign-in; true when an auth token for the canonical is in hand.</summary>
+        public static volatile Func<Task<bool>>? Reauthenticate;
+        /// <summary>Read the canonical's profile and restart the heartbeat.</summary>
+        public static volatile Func<Task>? ReloadProfile;
+        /// <summary>The swap ended: (canonical, reauthed). The head repaints, and offers the sign-in when false.</summary>
+        public static volatile Action<string, bool>? Finished;
+
+        /// <summary>Tests: the running swap, a clean claim ledger and a settings instance.</summary>
+        internal static Task LastSwap { get; private set; } = Task.CompletedTask;
+        internal static Func<Models.AppSettings>? SettingsForTest;
+        internal static void ResetForTest() { _policy = new MergedSwapPolicy(); SettingsForTest = null; }
+        private static Models.AppSettings Settings => SettingsForTest?.Invoke() ?? CoreSettings.Current;
 
         /// <summary>
         /// Checks <paramref name="response"/> for a merged refusal and starts the swap if it is one.
@@ -160,19 +179,19 @@ namespace ConditioningControlPanel.Services
         {
             if (!MergedAccountResponse.TryParse(statusCode, body, out var canonical)) return false;
 
-            var current = App.Settings?.Current?.UnifiedId ?? App.UnifiedUserId;
-            var decision = Policy.Decide(current, canonical);
-            if (decision == MergedSwapDecision.Swap && !Policy.MarkSwapped(canonical!))
+            var current = Settings.UnifiedId ?? CoreAccount.UnifiedUserId;
+            var decision = _policy.Decide(current, canonical);
+            if (decision == MergedSwapDecision.Swap && !_policy.MarkSwapped(canonical!))
                 decision = MergedSwapDecision.IgnoreAlreadySwapped;   // lost the claim to a concurrent caller
 
             if (decision != MergedSwapDecision.Swap)
             {
-                App.Logger?.Debug("[MergedAccount] 409 merged for {Current} -> {Canonical} ignored ({Decision})",
+                Log.Debug("[MergedAccount] 409 merged for {Current} -> {Canonical} ignored ({Decision})",
                     current, canonical, decision);
                 return true;
             }
 
-            _ = Task.Run(() => RunSwapAsync(current, canonical!));
+            LastSwap = Task.Run(() => RunSwapAsync(current, canonical!));
             return true;
         }
 
@@ -187,7 +206,7 @@ namespace ConditioningControlPanel.Services
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "[MergedAccount] swap to {Canonical} failed", canonical);
+                Log.Warning(ex, "[MergedAccount] swap to {Canonical} failed", canonical);
             }
             finally
             {
@@ -197,117 +216,53 @@ namespace ConditioningControlPanel.Services
 
         private static async Task SwapAsync(string? fromUnifiedId, string canonical)
         {
-            App.Logger?.Information("[MergedAccount] account {From} was merged into {Canonical}; adopting the canonical id and re-signing in",
+            Log.Information("[MergedAccount] account {From} was merged into {Canonical}; adopting the canonical id and re-signing in",
                 fromUnifiedId ?? "(none)", canonical);
 
-            // 1. Timers first, so nothing else writes to the tombstone while we swap.
-            try { App.ProfileSync?.StopTimersForAccountSwap(); }
-            catch (Exception ex) { App.Logger?.Debug("[MergedAccount] stopping timers failed: {Error}", ex.Message); }
+            // 1. Timers first, so nothing else writes to the tombstone while we swap. The sync must
+            //    also READ the canonical before it PUSHes (same reason as a logout).
+            try { StopSync?.Invoke(); }
+            catch (Exception ex) { Log.Debug("[MergedAccount] stopping sync failed: {Error}", ex.Message); }
 
             // 2. Identity: canonical id in, tombstone's token out. Persisted without a cloud backup
             //    (the backup door is one of the ones that just refused us).
-            App.UnifiedUserId = canonical;
-            var settings = App.Settings?.Current;
-            if (settings != null)
-            {
-                settings.UnifiedId = canonical;
-                settings.AuthToken = null;
-                App.Settings?.Save(suppressCloudBackup: true);
-            }
+            CoreAccount.UnifiedUserId = canonical;
+            var settings = Settings;
+            settings.UnifiedId = canonical;
+            settings.AuthToken = null;
+            if (SettingsForTest == null) CoreSettings.Save(suppressCloudBackup: true);
 
             // The local quest file is stamped with the owning id and is RESET by EnsureOwnedBy on
             // the next profile load when the stamp differs. Same human, merged account: carry it.
-            try { App.Quests?.StampOwner(canonical); }
-            catch (Exception ex) { App.Logger?.Debug("[MergedAccount] quest owner restamp failed: {Error}", ex.Message); }
-
-            // Same reason as a logout: the sync service must READ the canonical before it PUSHes.
-            try { App.ProfileSync?.ResetLoadedProfileState(); }
-            catch (Exception ex) { App.Logger?.Debug("[MergedAccount] sync state reset failed: {Error}", ex.Message); }
+            try { StampQuests?.Invoke(canonical); }
+            catch (Exception ex) { Log.Debug("[MergedAccount] quest owner restamp failed: {Error}", ex.Message); }
 
             // 3. Re-run the provider sign-in. The OAuth doors land on the canonical and mint its token.
             bool reauthed = false;
-            try { reauthed = await App.ReauthenticateAfterMergedSwapAsync(); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[MergedAccount] provider re-auth threw"); }
+            try { if (Reauthenticate is { } reauth) reauthed = await reauth(); }
+            catch (Exception ex) { Log.Warning(ex, "[MergedAccount] provider re-auth threw"); }
 
             if (reauthed)
             {
-                var landed = App.Settings?.Current?.UnifiedId;
+                var landed = Settings.UnifiedId;
                 if (!string.Equals(landed, canonical, StringComparison.Ordinal))
-                    App.Logger?.Warning("[MergedAccount] provider re-auth answered {Landed}, expected canonical {Canonical}; keeping the server's answer",
+                    Log.Warning("[MergedAccount] provider re-auth answered {Landed}, expected canonical {Canonical}; keeping the server's answer",
                         landed, canonical);
                 else
-                    App.Logger?.Information("[MergedAccount] re-signed in on {Canonical}", canonical);
+                    Log.Information("[MergedAccount] re-signed in on {Canonical}", canonical);
 
-                try
-                {
-                    if (App.ProfileSync != null)
-                    {
-                        await App.ProfileSync.LoadProfileAsync();
-                        App.ProfileSync.StartHeartbeat();
-                    }
-                }
-                catch (Exception ex) { App.Logger?.Warning(ex, "[MergedAccount] profile reload after swap failed"); }
-
-                RefreshAccountUi();
-                return;
+                try { if (ReloadProfile is { } reload) await reload(); }
+                catch (Exception ex) { Log.Warning(ex, "[MergedAccount] profile reload after swap failed"); }
+            }
+            else
+            {
+                // 4. No provider credential (device-code / email session, or the provider's own token
+                //    has lapsed): signed out of the tombstone, holding the canonical id with no token.
+                Log.Information("[MergedAccount] no provider credential to re-sign in with; offering the sign-in prompt for {Canonical}", canonical);
             }
 
-            // 4. No provider credential (device-code / email session, or the provider's own token
-            //    has lapsed): the app is now signed out of the tombstone and holds the canonical id
-            //    with no token, exactly the state a lapsed session leaves. Offer the sign-in.
-            App.Logger?.Information("[MergedAccount] no provider credential to re-sign in with; offering the sign-in prompt for {Canonical}", canonical);
-            RefreshAccountUi();
-            OfferSignIn(canonical);
+            try { Finished?.Invoke(canonical, reauthed); }
+            catch (Exception ex) { Log.Debug("[MergedAccount] finish hook failed: {Error}", ex.Message); }
         }
-
-        private static void RefreshAccountUi()
-        {
-            try
-            {
-                var main = App.MainWindowRef;
-                if (main == null) return;
-                main.Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    try { main.RefreshAccountUiAfterMergedSwap(); }
-                    catch (Exception ex) { App.Logger?.Debug("[MergedAccount] UI refresh failed: {Error}", ex.Message); }
-                }), System.Windows.Threading.DispatcherPriority.Normal);
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("[MergedAccount] UI refresh dispatch failed: {Error}", ex.Message);
-            }
-        }
-
-        /// <summary>
-        /// The passive surface for the no-credential case: opens at once when nothing owns the
-        /// user, otherwise becomes an Inbox row. Keyed per canonical so a second refusal in the
-        /// same session cannot post it twice.
-        /// </summary>
-        private static void OfferSignIn(string canonical)
-        {
-            var ladder = App.StartupLadder;
-            var item = new Startup.InboxItem
-            {
-                Key = "merged-account-signin:" + canonical,
-                Glyph = "🔗",
-                Title = Localization.Loc.Get("account_merged_signin_title"),
-                Summary = Localization.Loc.Get("account_merged_signin_summary"),
-                Open = () => App.MainWindowRef?.OpenLoginAfterMergedSwap(),
-            };
-
-            if (ladder != null)
-            {
-                ladder.PresentOrInbox(item);
-                return;
-            }
-
-            // No presenter yet (very early boot): the login button is still there, and the next
-            // launch validates the restored session and lands in the same place.
-            App.Logger?.Debug("[MergedAccount] no startup presenter; leaving the sign-in to the account button");
-        }
-
-        /// <summary>Test seam: the decision the live policy would make right now.</summary>
-        internal static MergedSwapDecision PeekDecision(string? currentUnifiedId, string? canonicalUnifiedId)
-            => Policy.Decide(currentUnifiedId, canonicalUnifiedId);
     }
 }
