@@ -13,6 +13,7 @@
 import { createHudTips } from './hudTips.js';
 import { HUD_TIPS, upgradeById } from './catalog.js';
 import { motionScale } from '../shared/motion.js';
+import { procLine } from './toyProcs.js';
 import { FLIGHT, flightCount, splitAmount, flightPoint } from './fieldFeel.js';
 
 const DEFUSE_COST = 30; // FOCUS bar low-threshold (ChaosTuning.DEFUSE_COST)
@@ -599,10 +600,9 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
     for (const t of toys) {
       let el = toyEls.get(t.id);
       if (!el) {
-        el = document.createElement('button');
-        el.type = 'button';
+        // a display, not a button: toys wake on their own (toyProcs.js)
+        el = document.createElement('div');
         el.className = 'cf-toy';
-        el.addEventListener('click', () => onToyUse && onToyUse(t.id));
         const g = document.createElement('span');
         g.className = 'cf-toy-glyph';
         g.textContent = t.glyph;
@@ -619,23 +619,26 @@ export function createChaosHud(hud, { onToyUse, onWeatherClick, isSuppressed } =
           const cur = lastToys.find((x) => x.id === toyId);
           if (!cur) return null;
           const state = cur.chargesLeft >= 0
-            ? (cur.chargesLeft === 0 ? 'spent' : `${cur.chargesLeft} use${cur.chargesLeft > 1 ? 's' : ''} left`)
-            : (cur.cooldownLeft > 0 ? `${Math.ceil(cur.cooldownLeft)}s cooldown` : 'ready');
+            ? (cur.chargesLeft === 0 ? 'spent' : 'waiting')
+            : (cur.cooldownLeft > 0 ? `resting ${Math.ceil(cur.cooldownLeft)}s` : 'awake');
+          const line = cur.id === 'e_stim' ? 'arcs on a share of the pops you click' : procLine(cur.id, cur.level);
           return {
             glyph: cur.glyph, kicker: cur.crafted ? 'crafted · one use' : 'toy', name: cur.name,
             desc: cur.desc || '',
-            extra: (cur.key ? `press ${cur.key} or click · ` : '') + state,
+            extra: (line ? line + ' · ' : '') + state,
           };
         });
         dock.appendChild(el);
         toyEls.set(t.id, el);
       }
       // refresh the label each frame - a consumable's slot number can shift as the dock drains
-      el._name.textContent = t.name + (t.key ? ` · ${t.key}` : '');
+      el._name.textContent = t.name;
       const ready = t.cooldownLeft <= 0 && t.chargesLeft !== 0;
       el._status.textContent = t.chargesLeft >= 0
-        ? (t.chargesLeft === 0 ? 'spent' : `${t.chargesLeft} left`)
-        : (t.cooldownLeft > 0 ? `${Math.ceil(t.cooldownLeft)}s` : 'ready');
+        ? (t.chargesLeft === 0 ? 'spent' : 'waiting')
+        : (t.cooldownLeft > 0 ? `${Math.ceil(t.cooldownLeft)}s` : 'awake');
+      // a soft swell the moment it wakes (styles.css cfToyWake)
+      el.classList.toggle('is-woke', !!t.wokeAt && performance.now() - t.wokeAt < 1200);
       el.classList.toggle('is-ready', ready);
       el.classList.toggle('is-active', !!t.effectActive);
       el.classList.toggle('is-crafted', !!t.crafted);   // boudoir-pink accent

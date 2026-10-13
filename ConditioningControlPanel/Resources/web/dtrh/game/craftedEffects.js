@@ -32,11 +32,11 @@ export const CRAFTED_PERMANENT_APPLY = {
 export const CRAFTED_TOY_DEFS = {
   slippery_slope: {
     glyph: '💨', name: 'Slippery Slope',
-    desc: '10s: the fall runs ×1.5 faster and heat builds twice as fast.',
+    desc: 'wakes by itself at a streak of 30. 10s: the fall runs ×1.5 faster and heat builds twice as fast.',
   },
   rubber_up: {
     glyph: '🛡', name: 'Rubber Up',
-    desc: '8s: nothing can touch you.',
+    desc: 'wakes by itself on your first detonation and takes it. 8s: nothing can touch you.',
   },
   sugar_cube: {
     glyph: '🍬', name: 'Sugar Cube',

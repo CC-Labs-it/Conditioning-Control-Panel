@@ -52,6 +52,7 @@ import { getVoice, setVoiceDefault, onVoice, getLevel } from '../engine/audioLev
 import { createChaosField } from './chaosField.js';
 import { createFieldFx } from './fieldFx.js';
 import { createPayloadFx } from './payloadFx.js';
+import { listensFor, rollProc, restFor } from './toyProcs.js';
 import { setLoomBook } from '../engine/loomSpirals.js';
 import { createLoomBook } from '../race/loomBook.js';
 import { createLoomSpiralFx } from '../race/loomSpiralFx.js';
@@ -907,6 +908,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
 
     // Snap Chain: inside the post-snap window a trigger can't take anything.
     // Rubber Up (crafted) rides the same gate on its own dt-based window.
+    wakeToys('detonate-pre', { x, y });   // Rubber Up (crafted) takes the first one
     if (st.rubberSec > 0 || performance.now() < st.invulnUntil) {
       hudUi.toast(st.rubberSec > 0
         ? `🛡 the rubber holds (${NAME_OF[spec.variantId] || spec.variantId})`
@@ -915,6 +917,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       bark('detonated-absorbed', { variant: spec.variantId, strength: spec.strength, runDetonations: st.runDetonations, combo: st.combo, difficulty: diff, shields: st.shields });
       return;
     }
+    wakeToys('detonate', { x, y });   // Snap Field: the rest of the live ones may let go
     if (st.shields >= 1) {
       st.shields -= 1;
       st.heat = Math.max(0, st.heat - 0.2);
@@ -975,6 +978,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       sonarCd = 0.9;
       field.sonarAt(x, y, 330);
     }
+    // only a pop from your own hand asks the dock: a toy's own pops would feed themselves
+    if (src === 'pointer') wakeToys('pop', { x, y });
 
     if (spec.kind === 'heart') {
       lessons.onSpecialPopped();
@@ -1214,6 +1219,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     }
     if (st.defuseInvulnMs > 0) st.invulnUntil = performance.now() + st.defuseInvulnMs;
     lessons.onDefuseCompleted(fuseSecLeft, viaChannel);   // last_breath / snap_field / blindfold
+    if (viaChannel) wakeToys('defuse', { x, y });           // a defuse by your own hold
     happy.onDefuseCompleted(hpIo);                        // run 1: the whitelist opens
     countRegenPop();
     // Trust Exercise: a snap pings the dark too.
@@ -1281,6 +1287,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     hudUi.toast(extended ? '🐇 caught in the slow! +0.8s'
       : quick ? '⚡ quick catch! time slows' : '🐇 white rabbit caught! time slows');
     bark('darter-caught', { points: Math.round(pts), combo: st.combo, quick });
+    wakeToys('rabbit', null);
     checkComboMilestone();
   }
 
@@ -1381,6 +1388,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       hudUi.toast(`💨 ${name} faded away`);
     }
     pulse('150,150,175', 0.10);
+    wakeToys('expire', null);   // The Pump answers a treat that slipped away
     hudNow();
   }
 
@@ -1401,6 +1409,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       pulse('255,200,60', 0.4);
       hudUi.toast(`🔥 streak ×${combo}!`);
       bark('combo-milestone', { combo, difficulty: cfg.difficulty });
+      wakeToys('milestone', { streak: combo });
     } else {
       const frac = (combo % 10) / 10;
       pulse('255,170,80', 0.04 + 0.08 * frac);
@@ -1471,14 +1480,41 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     }));
   }
 
+  // ---- the dock toys wake on their own (toyProcs.js; owner, 2026-10-12) ----
+  // No key and no button fires a toy any more. Each run event below asks the dock; a toy
+  // that listens for it, is rested and is not already running rolls its chance and, on a
+  // win, runs exactly what a press used to run (useToy).
+  let procAt = null;   // { x, y } of the event that woke the toy, when it has a place
+  function toyRunning(id) {
+    return id === 'vibe_popping' ? vibeRemainingSec > 0
+      : id === 'freeze_trigger' ? st.freezeRemainingSec > 0
+      : id === 'porn_dvd' ? !!(field && field.dvdActive())
+      : id === 'the_wand' ? wandDrawSec > 0
+      : id === 'the_pump' ? pumpRemainingSec > 0
+      : id === 'rubber_up' ? st.rubberSec > 0
+      : id === 'slippery_slope' ? st.slipperySec > 0
+      : false;
+  }
+  /** A run event happened: let the dock answer. Returns true if anything woke. */
+  function wakeToys(event, info) {
+    if (!st || state !== 'running' || !toys.length || st.activesDisabled || heldNow()) return false;
+    let woke = false;
+    for (const t of toys.slice()) {
+      if (!listensFor(t.id, event, info)) continue;
+      if (t.cooldownLeft > 0 || t.chargesLeft === 0 || toyRunning(t.id)) continue;
+      if (!rollProc(t)) continue;
+      procAt = info && info.x != null ? { x: info.x, y: info.y } : null;
+      useToy(t);
+      procAt = null;
+      woke = true;
+    }
+    return woke;
+  }
+
   function useToy(t) {
     if (!st || state !== 'running' || heldNow()) return;
-    if (st.activesDisabled) {
-      sfx('toy_denied', 0.4);
-      hudUi.toast('🫦 the urge holds your hands — no toys');
-      return;
-    }
-    if (t.cooldownLeft > 0 || t.chargesLeft === 0) { sfx('toy_denied', 0.4); return; }
+    if (st.activesDisabled) return;   // the urge: the toys sleep
+    if (t.cooldownLeft > 0 || t.chargesLeft === 0) return;
 
     switch (t.id) {
       case 'vibe_popping':
@@ -1490,12 +1526,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         hudUi.toast('🔸 it buzzes. sweep');
         break;
       case 'freeze_trigger':
-        if (t.chargesLeft <= 0) { sfx('toy_denied', 0.4); return; }
-        t.chargesLeft--;
         sfx('freeze_trigger', 0.6);
         activateFreeze();
         if (t.maxed) field.snapAll(false);
-        t.cooldownLeft = 3;   // anti-doubletap between charges
         hudUi.toast('❄ everything holds still');
         break;
       case 'porn_dvd': {
@@ -1517,12 +1550,20 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         hudUi.toast(t.maxed ? '✋ snapped. all of it.' : '✋ snapped — every live one let go');
         break;
       case 'rabbit_caller':
-        rabbitCallPending = Math.max(1, Math.round(t.power));
-        rabbitCallMaxed = t.maxed;
-        sfx('toy_ready', 0.5);
-        t.cooldownLeft = t.cooldownSec;
-        hudUi.toast('🐇 the whistle hangs — your next click calls them');
+      {
+        // no armed click any more: they come at once, around where the last one was caught
+        const n = Math.max(1, Math.round(t.power));
+        const cx = procAt ? procAt.x : window.innerWidth * (0.3 + Math.random() * 0.4);
+        const cy = procAt ? procAt.y : window.innerHeight * (0.3 + Math.random() * 0.4);
+        for (let i = 0; i < n; i++) {
+          markDiscovered('bubble:darter');
+          field.spawn(buildDarter(intensity(), { atX: cx + randInt(-90, 90), atY: cy + randInt(-90, 90) }));
+        }
+        if (t.maxed) { rabbitStormSec = 10.0; rabbitStormAccum = 0; }
+        sfx('rabbit_spawn', 0.5);
+        hudUi.toast(t.maxed ? `🐇 ${n} more answered… and the burrow is emptying` : `🐇 ${n} more answered the whistle`);
         break;
+      }
       case 'e_stim':
         estimCharges = Math.max(1, Math.round(t.power)) * Math.max(1, st.estimChargeMult);
         estimMaxed = t.maxed;
@@ -1537,13 +1578,10 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         // Reworked: 2s of DRAWING - the cursor lays a shimmering ink trail that
         // lingers 4 more seconds and pops/defuses whatever touches it. The tube
         // glares while the hand draws. Charge-based like the freeze.
-        if (t.chargesLeft <= 0) { sfx('toy_denied', 0.4); return; }
-        t.chargesLeft--;
         wandDrawSec = 2.0;
         field.wandInkStart(t.maxed);
         ctx.fx.holdFlash(true, 0.5);
         sfx('vibe_buzz', 0.6);
-        t.cooldownLeft = 3;   // anti-doubletap between charges
         pulse('255,180,240', 0.25);
         hudUi.toast('🪄 draw — the line lingers');
         break;
@@ -1586,6 +1624,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         hudUi.toast('🍬 he smelled it — here he comes');
         break;
     }
+    if (!t.crafted) t.cooldownLeft = restFor(t.id);   // asleep until rested (the dock shows it)
+    t.wokeAt = performance.now();
     lessons.onToyFired();   // first_play
     // Grab-in-the-tube: a grabbed toy carries 3 uses. Spend one (freeze/wand already
     // decremented their own charge above); when the last is gone, drop it from the
@@ -1692,12 +1732,13 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
           count: 1, text: cfg.thoughtTexts[(Math.random() * cfg.thoughtTexts.length) | 0] });
       }
     }
+    if (st.waveIndex > 0) wakeToys('chamber', null);   // Sugar Cube: once the next chamber is open
     let changed = false;
     for (const t of toys) {
       if (t.cooldownLeft > 0) {
         t.cooldownLeft = Math.max(0, t.cooldownLeft - dt);
         changed = true;
-        if (t.cooldownLeft <= 0 && t.chargesLeft !== 0) sfx('toy_ready', 0.45);
+        // (no chime when a rest ends: nothing is waiting on the player's hand)
       }
       const on = t.id === 'vibe_popping' ? vibeRemainingSec > 0
         : t.id === 'freeze_trigger' ? st.freezeRemainingSec > 0
@@ -3189,8 +3230,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       key: String(toys.length + 1),                       // slot 1 -> "1", etc.
       cooldownSec: def.cooldownSec ?? 0,
       power, level: lvl, maxed: lvl >= def.levelValues.length,
-      chargesLeft: chargesMax, chargesMax,
-      cooldownLeft: 0, effectActive: false, consumable: true, pickRef: pick,
+      // a grabbed toy lasts the whole fall: no uses to count (-1), it only rests between wakes
+      chargesLeft: -1, chargesMax: -1, misses: 0,
+      cooldownLeft: 0, effectActive: false, consumable: false, pickRef: pick,
     });
     st.runEquipment.add(id);
     st.runPicks.push(pick);
@@ -3830,7 +3872,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         id, name: def.name, glyph: def.glyph, desc: def.desc,
         key: String(toys.length + 1),
         cooldownSec: 0, power: 0, level: 1, maxed: false,
-        chargesLeft: 1, chargesMax: 1,
+        chargesLeft: 1, chargesMax: 1, misses: 0,
         cooldownLeft: 0, effectActive: false,
         consumable: true, crafted: true, pickRef: null,
       });
@@ -4251,7 +4293,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         },
       });
       hudUi = createChaosHud(ctx.hud, {
-      onToyUse: (id) => { const t = toys.find((x) => x.id === id); if (t) useToy(t); },
+      onToyUse: null,   // the dock is a display now: toys wake on their own (toyProcs.js)
       onWeatherClick: () => rerollWeather(),
       // hover tooltips stand down whenever something else holds the world
       // (pause / drafts / lesson cards / VN beats / junction rooms / recap)
@@ -4391,7 +4433,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       window.addEventListener('pointerdown', onPointerDownGlobal, true);
       window.addEventListener('pointerdown', onGlobalPointerDownCapture, true);
       window.addEventListener('contextmenu', onContextMenu);
-      window.addEventListener('keydown', onToyKey);
+      // (no toy keys: the dock toys wake on their own)
       hudUi.setVisible(false);
       ctx.director.setTimeFactor(0.3);   // the tunnel idles at a crawl under the hub
       setState('warren');
