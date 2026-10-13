@@ -7532,5 +7532,21 @@
   "vaultgate_yearly_note": "연간 결제는 현재 Patreon에서만 가능해요. 다른 결제 수단은 월간이에요.",
   "vaultgate_sale_first": "/ 첫 달",
   "vaultgate_sale_line": "첫 달 {0}% 할인, 이후 매월 {1}.",
-  "vaultgate_sale_ends": "세일은 {0}까지."
+  "vaultgate_sale_ends": "세일은 {0}까지.",
+  "conv_lapse_warn_prime": "Prime이 {0}일 후에 끝납니다.",
+  "conv_lapse_warn_prime_one": "Prime이 1일 후에 끝납니다.",
+  "conv_lapse_warn_basic": "Basic이 {0}일 후에 끝납니다.",
+  "conv_lapse_warn_basic_one": "Basic이 1일 후에 끝납니다.",
+  "conv_lapse_warn_body": "설정은 그대로, 문만 닫힙니다.",
+  "conv_lapse_closed_prime_today": "Prime이 오늘 닫혔습니다.",
+  "conv_lapse_closed_basic_today": "Basic이 오늘 닫혔습니다.",
+  "conv_lapse_closed_prime": "Prime이 {0}에 닫혔습니다.",
+  "conv_lapse_closed_basic": "Basic이 {0}에 닫혔습니다.",
+  "conv_lapse_closed_body": "설정한 것은 모두 남아 있습니다.",
+  "conv_keep_prime": "Prime 유지",
+  "conv_keep_basic": "Basic 유지",
+  "conv_let_close": "닫히게 두기",
+  "conv_reopen_prime": "Prime 다시 열기",
+  "conv_reopen_basic": "Basic 다시 열기",
+  "conv_leave_closed": "닫힌 채로 두기"
 }

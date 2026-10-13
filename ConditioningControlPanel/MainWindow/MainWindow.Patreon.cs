@@ -318,6 +318,9 @@ namespace ConditioningControlPanel
                 {
                     App.WindowAwareness?.Start();
                 }
+
+                // The day it closes is no longer silent (proposal 4b): the closed row, once.
+                MaybePostConversionRows();
             }
             catch (Exception ex)
             {
@@ -1288,6 +1291,10 @@ namespace ConditioningControlPanel
             // in, and the rise's own fanfare on the profile bubble (EntitlementTierSync).
             Activated += (_, __) => EntitlementTierSync.OnAppFocused();
             Activated += (_, __) => MaybeShowInviteEnding();
+            // Conversion rows (lapse warnings and the rest, MainWindow.Inbox.cs): checked on focus and
+            // after any server tier reading that moved the stored lapse signal.
+            Activated += (_, __) => MaybePostConversionRows();
+            EntitlementTierSync.ReadingApplied += MaybePostConversionRows;
             Services.Invites.InviteGrantSync.ArmExpiry();
             EntitlementTierSync.TierRaised += OnEntitlementTierRaised;
 

@@ -8044,5 +8044,21 @@
   "vaultgate_yearly_note": "按年付费目前仅支持 Patreon。其他支付方式为按月。",
   "vaultgate_sale_first": "/ 首月",
   "vaultgate_sale_line": "首月减免 {0}%，之后每月 {1}。",
-  "vaultgate_sale_ends": "优惠截止 {0}。"
+  "vaultgate_sale_ends": "优惠截止 {0}。",
+  "conv_lapse_warn_prime": "Prime 将在 {0} 天后结束。",
+  "conv_lapse_warn_prime_one": "Prime 将在 1 天后结束。",
+  "conv_lapse_warn_basic": "Basic 将在 {0} 天后结束。",
+  "conv_lapse_warn_basic_one": "Basic 将在 1 天后结束。",
+  "conv_lapse_warn_body": "你的设置会保留，门会关上。",
+  "conv_lapse_closed_prime_today": "Prime 今天已结束。",
+  "conv_lapse_closed_basic_today": "Basic 今天已结束。",
+  "conv_lapse_closed_prime": "Prime 已于 {0} 结束。",
+  "conv_lapse_closed_basic": "Basic 已于 {0} 结束。",
+  "conv_lapse_closed_body": "你设置的一切都还在。",
+  "conv_keep_prime": "保留 Prime",
+  "conv_keep_basic": "保留 Basic",
+  "conv_let_close": "让它结束",
+  "conv_reopen_prime": "重新开启 Prime",
+  "conv_reopen_basic": "重新开启 Basic",
+  "conv_leave_closed": "保持关闭"
 }

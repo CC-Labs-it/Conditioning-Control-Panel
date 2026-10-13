@@ -7532,5 +7532,21 @@
   "vaultgate_yearly_note": "年額払いは今のところPatreonのみです。他の支払い方法は月額です。",
   "vaultgate_sale_first": "/ 初月",
   "vaultgate_sale_line": "初月{0}%オフ、その後は月{1}。",
-  "vaultgate_sale_ends": "セールは{0}まで。"
+  "vaultgate_sale_ends": "セールは{0}まで。",
+  "conv_lapse_warn_prime": "Primeはあと{0}日で終わります。",
+  "conv_lapse_warn_prime_one": "Primeはあと1日で終わります。",
+  "conv_lapse_warn_basic": "Basicはあと{0}日で終わります。",
+  "conv_lapse_warn_basic_one": "Basicはあと1日で終わります。",
+  "conv_lapse_warn_body": "設定はそのまま。扉だけが閉まります。",
+  "conv_lapse_closed_prime_today": "Primeは今日で終わりました。",
+  "conv_lapse_closed_basic_today": "Basicは今日で終わりました。",
+  "conv_lapse_closed_prime": "Primeは{0}に終わりました。",
+  "conv_lapse_closed_basic": "Basicは{0}に終わりました。",
+  "conv_lapse_closed_body": "設定したものはすべて残っています。",
+  "conv_keep_prime": "Primeを続ける",
+  "conv_keep_basic": "Basicを続ける",
+  "conv_let_close": "そのまま終える",
+  "conv_reopen_prime": "Primeをもう一度開く",
+  "conv_reopen_basic": "Basicをもう一度開く",
+  "conv_leave_closed": "閉じたままにする"
 }
