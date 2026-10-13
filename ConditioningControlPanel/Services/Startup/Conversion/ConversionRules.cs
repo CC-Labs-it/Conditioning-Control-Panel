@@ -89,6 +89,8 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
         public const string KeyCompanionCap = "companion_cap";
         public const string KeyGiftRelock = "daily_gift_relock";
         public const string KeyPatronGallery = "patron_gallery";
+        public const string KeyFreeMemberHello = "free_member_hello";
+        public const string KeyPostCodeLive = "post_code_live";
 
         /// <summary>The InboxStamps slot that remembers the last Daily Gift seen in use:
         /// <c>yyyy-MM-dd|key</c> (a local date).</summary>

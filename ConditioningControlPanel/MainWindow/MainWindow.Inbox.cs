@@ -162,6 +162,7 @@ namespace ConditioningControlPanel
                 var dirty = NoteDailyGiftUse(settings);
                 dirty |= MaybePostLapseRow(settings);
                 dirty |= MaybePostRelockRow(settings);
+                dirty |= MaybePostMemberHello(settings);
                 if (dirty) App.Settings?.Save();
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "[Inbox] conversion rows failed"); }
@@ -292,6 +293,35 @@ namespace ConditioningControlPanel
                 Summary = name,
                 Open = () => InboxNoticeCard.Present(this, title, name, Loc.Get(tier >= 2 ? "conv_get_prime" : "conv_get_basic"),
                     () => OpenPlanFromInbox(tier, rowKey)),
+            });
+            return true;
+        }
+
+        /// <summary>Once ever, for a Patreon free member with no tier (proposal 6b / 6d): thanks, and
+        /// the second Daily Gift they now get. True when a stamp changed.</summary>
+        private bool MaybePostMemberHello(Models.AppSettings settings)
+        {
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyFreeMemberHello;
+            if (App.Patreon?.IsFreeMember != true
+                || !Services.Startup.Conversion.ConversionRules.Owed(settings.InboxStamps, rowKey, "1")) return false;
+            Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey, "1");
+
+            var title = Loc.Get("conv_member_hello_title");
+            var summary = Loc.Get("conv_member_hello_body");
+            PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "conv:" + rowKey,
+                Glyph = "🎁",
+                Title = title,
+                Summary = summary,
+                Open = () =>
+                {
+                    // Named at open time: the second gift moves with the day.
+                    var second = App.DailyFree?.MemberKey;
+                    var feature = second == null ? null : Models.ExclusiveFeature.All.FirstOrDefault(f => f.DailyFreeKey == second);
+                    var body = feature == null ? summary : summary + " " + Loc.GetF("conv_member_second", Loc.Get(feature.TitleLocKey));
+                    InboxNoticeCard.Present(this, title, body, null, null, Loc.Get("conv_ok"));
+                },
             });
             return true;
         }

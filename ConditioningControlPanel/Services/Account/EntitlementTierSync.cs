@@ -101,6 +101,34 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>Raised on the UI thread after the profile's conversion fields changed
+        /// (patreon_member, paid_until, post_grants).</summary>
+        public static event Action? ExtrasApplied;
+
+        /// <summary>Stores the profile's conversion fields (brief C2) on the UI thread. Never throws.</summary>
+        public static void OfferExtras(Startup.Conversion.ProfileExtrasReading? reading)
+        {
+            try
+            {
+                if (reading == null) return;
+                var dispatcher = Application.Current?.Dispatcher;
+                if (dispatcher == null || dispatcher.HasShutdownStarted) return;
+                dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                {
+                    try
+                    {
+                        var settings = App.Settings?.Current;
+                        if (!SignedInWithV2(settings) || !Startup.Conversion.ProfileExtras.Apply(settings!, reading)) return;
+                        App.Settings?.Save();
+                        App.DailyFree?.NotifyInputsChanged();
+                        ExtrasApplied?.Invoke();
+                    }
+                    catch (Exception ex) { App.Logger?.Debug("[Entitlement] extras apply failed: {Error}", ex.Message); }
+                }));
+            }
+            catch (Exception ex) { App.Logger?.Debug("[Entitlement] extras offer skipped: {Error}", ex.Message); }
+        }
+
         /// <summary>
         /// The main window came to the front. At most once per <see cref="FocusCheckGap"/>, read
         /// the profile off the UI thread and offer its tier. Fire and forget.
@@ -123,6 +151,7 @@ namespace ConditioningControlPanel.Services
                     {
                         var node = await new V2AuthService().GetUserProfileNodeAsync(unifiedId);
                         Offer(EntitlementTierRule.ParseTier(node?["effective_tier"]), "focus");
+                        OfferExtras(Startup.Conversion.ProfileExtras.Parse(node));
                     }
                     catch (Exception ex)
                     {
