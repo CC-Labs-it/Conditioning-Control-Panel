@@ -1,4 +1,5 @@
 using System;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
@@ -104,7 +105,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
             var invite = await _signaling.CreateInviteAsync(
-                App.Settings?.Current?.UserDisplayName ?? "", preferRelay: false, _cts.Token).ConfigureAwait(false);
+                CoreSettings.Current.UserDisplayName ?? "", preferRelay: false, _cts.Token).ConfigureAwait(false);
 
             if (invite == null)
             {
@@ -127,7 +128,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
             var join = await _signaling.JoinAsync(
-                inviteCode, App.Settings?.Current?.UserDisplayName ?? "", _cts.Token).ConfigureAwait(false);
+                inviteCode, CoreSettings.Current.UserDisplayName ?? "", _cts.Token).ConfigureAwait(false);
 
             if (join == null)
             {
@@ -171,7 +172,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 {
                     IceFailed = true;
                     LastError = "ice_timeout";
-                    App.Logger?.Warning("[{Tag}] ICE did not complete in {Ms}ms — relay fallback", Tag, GoonConsts.IceTimeoutMs);
+                    Log.Warning("[{Tag}] ICE did not complete in {Ms}ms — relay fallback", Tag, GoonConsts.IceTimeoutMs);
                     SetState(GoonTransportState.Disconnected, "ice_timeout");
                     return false;
                 }
@@ -260,7 +261,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             catch (OperationCanceledException) { /* closing */ }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[{Tag}] Signaling pump died", Tag);
+                Log.Error(ex, "[{Tag}] Signaling pump died", Tag);
                 LastError = "signaling_error";
                 SetState(GoonTransportState.Disconnected, "signaling_error");
             }
@@ -293,7 +294,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     var r = pc.setRemoteDescription(answer);
                     if (r != SetDescriptionResultEnum.OK)
                     {
-                        App.Logger?.Warning("[{Tag}] setRemoteDescription(answer) -> {Result}", Tag, r);
+                        Log.Warning("[{Tag}] setRemoteDescription(answer) -> {Result}", Tag, r);
                         LastError = "sdp_rejected";
                         return;
                     }
@@ -348,7 +349,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             catch (Exception ex)
             {
                 // One unusable candidate is normal (IPv6-only, a stale srflx); the pair still works.
-                App.Logger?.Debug(ex, "[{Tag}] Rejected a remote ICE candidate", Tag);
+                Log.Debug(ex, "[{Tag}] Rejected a remote ICE candidate", Tag);
             }
         }
 
@@ -382,13 +383,13 @@ namespace ConditioningControlPanel.Services.GoonGame
                     // start checking before gathering completes.
                     if (cand == null || IsDisposed) return;
                     try { EnqueueSignal("ice", cand.toJSON()); }
-                    catch (Exception ex) { App.Logger?.Debug(ex, "[{Tag}] Failed to queue local candidate", Tag); }
+                    catch (Exception ex) { Log.Debug(ex, "[{Tag}] Failed to queue local candidate", Tag); }
                 };
 
                 pc.onconnectionstatechange += s => OnPeerStateChanged(s);
 
                 pc.oniceconnectionstatechange += s =>
-                    App.Logger?.Debug("[{Tag}] ICE state {State}", Tag, s);
+                    Log.Debug("[{Tag}] ICE state {State}", Tag, s);
 
                 if (IsHost)
                 {
@@ -409,7 +410,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     var r = pc.setRemoteDescription(remoteOffer!);
                     if (r != SetDescriptionResultEnum.OK)
                     {
-                        App.Logger?.Warning("[{Tag}] setRemoteDescription(offer) -> {Result}", Tag, r);
+                        Log.Warning("[{Tag}] setRemoteDescription(offer) -> {Result}", Tag, r);
                         LastError = "sdp_rejected";
                         SetState(GoonTransportState.Disconnected, "sdp_rejected");
                         return;
@@ -424,7 +425,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[{Tag}] Peer connection setup failed", Tag);
+                Log.Error(ex, "[{Tag}] Peer connection setup failed", Tag);
                 IceFailed = true;
                 LastError = "peer_setup_failed";
                 SetState(GoonTransportState.Disconnected, "peer_setup_failed");
@@ -433,7 +434,7 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         private void OnPeerStateChanged(RTCPeerConnectionState s)
         {
-            App.Logger?.Information("[{Tag}] Peer connection {State}", Tag, s);
+            Log.Information("[{Tag}] Peer connection {State}", Tag, s);
             if (IsDisposed) return;
 
             switch (s)
@@ -470,18 +471,18 @@ namespace ConditioningControlPanel.Services.GoonGame
             {
                 if (IsDisposed || data == null) return;
                 try { HandleIncomingRaw(Encoding.UTF8.GetString(data)); }
-                catch (Exception ex) { App.Logger?.Warning(ex, "[{Tag}] Failed to read inbound frame", Tag); }
+                catch (Exception ex) { Log.Warning(ex, "[{Tag}] Failed to read inbound frame", Tag); }
             };
 
             dc.onclose += () =>
             {
                 if (IsDisposed) return;
-                App.Logger?.Information("[{Tag}] Data channel closed", Tag);
+                Log.Information("[{Tag}] Data channel closed", Tag);
                 if (_everConnected && State != GoonTransportState.Closed)
                     BeginReconnectGrace("data channel closed");
             };
 
-            dc.onerror += err => App.Logger?.Warning("[{Tag}] Data channel error: {Error}", Tag, err);
+            dc.onerror += err => Log.Warning("[{Tag}] Data channel error: {Error}", Tag, err);
 
             // SIPSorcery raises ondatachannel on the ANSWERING side with the channel already in
             // `open` — the SCTP stream is negotiated before the event reaches us. Subscribing to
@@ -536,11 +537,11 @@ namespace ConditioningControlPanel.Services.GoonGame
                     if (State != GoonTransportState.Reconnecting) return;
 
                     LastError = "reconnect_timeout";
-                    App.Logger?.Warning("[{Tag}] Peer did not resume within {Ms}ms", Tag, GoonConsts.ReconnectGraceMs);
+                    Log.Warning("[{Tag}] Peer did not resume within {Ms}ms", Tag, GoonConsts.ReconnectGraceMs);
                     SetState(GoonTransportState.Disconnected, "reconnect_timeout");
                 }
                 catch (OperationCanceledException) { /* resumed */ }
-                catch (Exception ex) { App.Logger?.Warning(ex, "[{Tag}] Reconnect grace failed", Tag); }
+                catch (Exception ex) { Log.Warning(ex, "[{Tag}] Reconnect grace failed", Tag); }
             });
         }
 
@@ -564,11 +565,11 @@ namespace ConditioningControlPanel.Services.GoonGame
                 try { dc.send(json); sent++; }
                 catch (Exception ex)
                 {
-                    App.Logger?.Warning(ex, "[{Tag}] Resume flush failed after {Sent} frames", Tag, sent);
+                    Log.Warning(ex, "[{Tag}] Resume flush failed after {Sent} frames", Tag, sent);
                     break;
                 }
             }
-            if (sent > 0) App.Logger?.Information("[{Tag}] Resumed: flushed {Sent} buffered frames", Tag, sent);
+            if (sent > 0) Log.Information("[{Tag}] Resumed: flushed {Sent} buffered frames", Tag, sent);
         }
 
         // ------------------------------------------------------------------ send
@@ -589,18 +590,18 @@ namespace ConditioningControlPanel.Services.GoonGame
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Warning(ex, "[{Tag}] send failed — buffering for resume", Tag);
+                    Log.Warning(ex, "[{Tag}] send failed — buffering for resume", Tag);
                 }
             }
 
             if (State == GoonTransportState.Reconnecting || State == GoonTransportState.ConnectingP2P)
             {
                 if (_resumeBuffer.Count < ResumeBufferMax) _resumeBuffer.Enqueue(json);
-                else App.Logger?.Warning("[{Tag}] Resume buffer full — dropping a frame", Tag);
+                else Log.Warning("[{Tag}] Resume buffer full — dropping a frame", Tag);
             }
             else
             {
-                App.Logger?.Warning("[{Tag}] Dropping a frame — channel not open (state {State})", Tag, State);
+                Log.Warning("[{Tag}] Dropping a frame — channel not open (state {State})", Tag, State);
             }
 
             return Task.CompletedTask;
@@ -623,7 +624,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                         new[] { new GoonSignalItem { Kind = "bye", Data = "" } }, byeCts.Token).ConfigureAwait(false);
                 }
             }
-            catch (Exception ex) { App.Logger?.Debug(ex, "[{Tag}] bye failed (harmless)", Tag); }
+            catch (Exception ex) { Log.Debug(ex, "[{Tag}] bye failed (harmless)", Tag); }
 
             SetState(GoonTransportState.Closed, "closed by us");
             TearDown();

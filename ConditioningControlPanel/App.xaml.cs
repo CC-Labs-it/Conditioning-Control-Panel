@@ -369,6 +369,8 @@ namespace ConditioningControlPanel
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
+            // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
+            Services.GoonGame.GoonSignalingClient.MergedAccountHook = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
             Services.ProviderSubscription.PrizesSink = Services.ProfileSyncService.ApplyValidatePrizes;
             // BugReportService stays head-side in this layer, but its report assembly is portable.

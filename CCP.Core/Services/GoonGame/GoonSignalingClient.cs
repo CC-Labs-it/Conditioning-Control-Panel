@@ -1,4 +1,5 @@
 using System;
+using Serilog;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -191,6 +192,10 @@ namespace ConditioningControlPanel.Services.GoonGame
         public const string ErrorRateLimited = "rate_limited";
         public const string ErrorNetwork = "network";
 
+        /// <summary>Contract D: every real HTTP status + body (WPF seeds MergedAccountRecovery.TryHandle,
+        /// which is App-bound). Null = no merged-account recovery on this head.</summary>
+        public static Func<int, string?, bool>? MergedAccountHook;
+
         private readonly HttpClient? _httpClient;
         private readonly GoonHttpPost _post;
         private bool _disposed;
@@ -212,8 +217,8 @@ namespace ConditioningControlPanel.Services.GoonGame
                 // Generous: the relay endpoint long-polls for up to ~20 s server-side.
                 Timeout = TimeSpan.FromSeconds(40)
             };
-            _httpClient.DefaultRequestHeaders.Add("X-Client-Version", UpdateService.AppVersion);
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}");
+            _httpClient.DefaultRequestHeaders.Add("X-Client-Version", CoreReleaseContent.AppVersion);
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{CoreReleaseContent.AppVersion}");
             _post = DefaultPostAsync;
         }
 
@@ -232,9 +237,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             var body = JsonConvert.SerializeObject(new
             {
-                unified_id = App.UnifiedUserId ?? "",
+                unified_id = CoreAccount.UnifiedUserId ?? "",
                 display_name = Sanitize(displayName, 32),
-                app_version = UpdateService.AppVersion,
+                app_version = CoreReleaseContent.AppVersion,
                 protocol_version = GoonConsts.ProtocolVersion,
                 prefer_relay = preferRelay,
             });
@@ -247,7 +252,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(token))
             {
                 LastError = "malformed_response";
-                App.Logger?.Warning("[GoonSignal] /invite returned no code/token");
+                Log.Warning("[GoonSignal] /invite returned no code/token");
                 return null;
             }
 
@@ -265,10 +270,10 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             var body = JsonConvert.SerializeObject(new
             {
-                unified_id = App.UnifiedUserId ?? "",
+                unified_id = CoreAccount.UnifiedUserId ?? "",
                 code = NormalizeCode(code),
                 display_name = Sanitize(displayName, 32),
-                app_version = UpdateService.AppVersion,
+                app_version = CoreReleaseContent.AppVersion,
                 protocol_version = GoonConsts.ProtocolVersion,
             });
 
@@ -300,7 +305,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             var body = JsonConvert.SerializeObject(new
             {
-                unified_id = App.UnifiedUserId ?? "",
+                unified_id = CoreAccount.UnifiedUserId ?? "",
                 code = NormalizeCode(code),
                 token,
                 role,
@@ -343,7 +348,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             var body = JsonConvert.SerializeObject(new
             {
-                unified_id = App.UnifiedUserId ?? "",
+                unified_id = CoreAccount.UnifiedUserId ?? "",
                 code = NormalizeCode(code),
                 token,
                 role,
@@ -398,7 +403,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             catch (Exception ex)
             {
                 LastError = ErrorNetwork;
-                App.Logger?.Warning(ex, "[GoonSignal] {Path} transport failure", path);
+                Log.Warning(ex, "[GoonSignal] {Path} transport failure", path);
                 return null;
             }
 
@@ -454,7 +459,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     break;
             }
 
-            App.Logger?.Warning("[GoonSignal] {Path} -> {Status} ({Error})", path, (int)status, LastError);
+            Log.Warning("[GoonSignal] {Path} -> {Status} ({Error})", path, (int)status, LastError);
             return null;
         }
 
@@ -470,13 +475,13 @@ namespace ConditioningControlPanel.Services.GoonGame
                 Content = new StringContent(jsonBody, Encoding.UTF8, "application/json")
             };
 
-            var token = App.Settings?.Current?.AuthToken;
+            var token = CoreSettings.Current.AuthToken;
             if (!string.IsNullOrEmpty(token))
                 request.Headers.Add("X-Auth-Token", token);
 
             using var response = await _httpClient!.SendAsync(request, ct).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, body);   // contract D
+            MergedAccountHook?.Invoke((int)response.StatusCode, body);   // contract D
             return (response.StatusCode, body);
         }
 
@@ -611,7 +616,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                             ["role"] = "guest",
                             ["expires_in_sec"] = 300,
                             ["peer_display_name"] = "host",
-                            ["peer_app_version"] = UpdateService.AppVersion,
+                            ["peer_app_version"] = CoreReleaseContent.AppVersion,
                             ["pass"] = "free",
                             ["relay_allowed"] = true,
                         });
