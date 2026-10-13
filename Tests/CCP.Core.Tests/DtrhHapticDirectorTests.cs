@@ -1,5 +1,12 @@
+using System;
+using System.Reflection;
+using System.Threading;
+using System.Runtime.CompilerServices;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Haptics;
+using ConditioningControlPanel.Services.Haptics.Core;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -63,5 +70,54 @@ public class DtrhHapticDirectorTests
         }
         Assert.False(DtrhHapticDirector.Snapshot.Active);
         DtrhHapticDirector.OnClosed();                                            // twice is fine
+    }
+
+    /// <summary>The safety stops (WPF DtrhHapticDirector OnWorldFreeze / OnClosed / OnSettingsChanged):
+    /// each one zeroes the Dtrh layer on a real HapticService, and only that layer.</summary>
+    [Fact]
+    public void FreezeCloseAndSwitchOffZeroTheDtrhLayer()
+    {
+        var settings = new AppSettings();
+        var service = (SettingsService)RuntimeHelpers.GetUninitializedObject(typeof(SettingsService));
+        typeof(SettingsService).GetField("<Current>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(service, settings);
+        var haptics = new HapticService(new HapticSettings());
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldHaptics = CoreHaptics.Service;
+        CoreSettings.ServiceProvider = () => service;
+        CoreHaptics.Service = haptics;
+        try
+        {
+            // The mixer's first tick sees the gate closed (no premium here) and clears every
+            // layer once; wait it out so a zero below is the director's doing, not the mixer's.
+            haptics.SetLayer(HapticLayer.Manual, 1);
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (haptics.GetLayer(HapticLayer.Manual) > 0 && DateTime.UtcNow < until) Thread.Sleep(20);
+            Assert.Equal(0, haptics.GetLayer(HapticLayer.Manual));
+
+            DtrhHapticDirector.OnLaunch(testMode: false);
+
+            haptics.SetLayer(HapticLayer.Dtrh, 0.5);
+            haptics.SetLayer(HapticLayer.Video, 0.4);
+            DtrhHapticDirector.OnWorldFreeze(true);
+            Assert.Equal(0, haptics.GetLayer(HapticLayer.Dtrh));
+            Assert.Equal(0.4, haptics.GetLayer(HapticLayer.Video), 3);                // ours only
+            DtrhHapticDirector.OnWorldFreeze(false);
+
+            haptics.SetLayer(HapticLayer.Dtrh, 0.5);
+            settings.Haptics.Enabled = false;                                     // switched off mid-run
+            Assert.Equal(0, haptics.GetLayer(HapticLayer.Dtrh));
+
+            haptics.SetLayer(HapticLayer.Dtrh, 0.5);
+            DtrhHapticDirector.OnClosed();
+            Assert.Equal(0, haptics.GetLayer(HapticLayer.Dtrh));
+        }
+        finally
+        {
+            DtrhHapticDirector.OnClosed();
+            CoreHaptics.Service = oldHaptics;
+            CoreSettings.ServiceProvider = oldProvider;
+            haptics.Dispose();
+        }
     }
 }
