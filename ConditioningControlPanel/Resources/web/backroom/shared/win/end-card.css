@@ -1,0 +1,15 @@
+/* end-card.css - THE PLAN ROW (shared/win/end-card.js). Neutral UI under a result: no glow, no motion beyond
+ * a fade, which reduced motion drops. */
+.br-end-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 12px; margin:0; padding:10px 12px; border-top:1px solid #ffffff22; font:13px/1.5 system-ui, sans-serif; color:#e9dcef; text-align:center; }
+.br-end-card-line { flex-basis:100%; margin:0; font-size:13px; color:#e9dcef; }
+.br-end-card-btn, .br-end-card-btn:visited { display:inline-block; padding:7px 18px; border:1px solid #c9a6da; border-radius:9px; color:#f8e8ff; background:transparent; font:600 13px system-ui, sans-serif; text-decoration:none; cursor:pointer; }
+.br-end-card-btn:hover { background:#ffffff14; }
+.br-end-card-btn:focus-visible { outline:3px solid #f8cd83; outline-offset:3px; }
+.br-end-card-price { font-size:12px; color:#bfaac9; font-variant-numeric:tabular-nums; }
+
+/* THE BANK's card: a small fixed row at the foot of the room, over the seat, gone in a few seconds. */
+.br-bank-card { position:fixed; left:50%; bottom:max(18px, env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:60; width:min(360px, calc(100vw - 32px)); box-sizing:border-box; border:1px solid #ffffff2a; border-radius:12px; background:#1b1222ee; box-shadow:0 10px 30px #0007; opacity:0; transition:opacity .4s ease; }
+.br-bank-card.is-in { opacity:1; }
+.br-bank-card-close { position:absolute; top:4px; right:6px; padding:2px 7px; border:0; background:transparent; color:#bfaac9; font:16px/1 system-ui, sans-serif; cursor:pointer; }
+.br-bank-card-close:focus-visible { outline:2px solid #f8cd83; }
+@media (prefers-reduced-motion: reduce) { .br-bank-card { transition:none; } }
