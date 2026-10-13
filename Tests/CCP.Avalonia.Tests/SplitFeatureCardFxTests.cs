@@ -34,6 +34,8 @@ public sealed class SplitFeatureCardFxTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (motion, perf, wipe, drain) = (s.MotionLevel, s.PerformanceMode, s.MindWipeEnabled, s.BrainDrainEnabled);
+        var time = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         var shell = new MainShellWindow();
         shell.Show();
         try
@@ -50,6 +52,16 @@ public sealed class SplitFeatureCardFxTests
 
             Assert.True(card.IsActiveA);
             Assert.NotNull(F<object?>(card, "_breath"));
+            // The breath rides the 30 fps beat (no infinite Animation, P82): WPF 3.5 s SineEase AutoReverse
+            // (SplitFeatureCard.xaml.cs:795) - min at 0, peak at 3.5 s; the glow is a sibling layer, not an Effect.
+            var glowLayer = F<Border>(card, "_activeGlow");
+            Assert.Null(F<Border>(card, "_rootBorder").Effect);
+            Assert.Equal(0.50, glowLayer.Opacity, 3);
+            time.Advance(System.TimeSpan.FromSeconds(3.5));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(0.90, glowLayer.Opacity, 3);
+            Assert.Equal(1.00, F<global::Avalonia.Controls.Shapes.Path>(card, "_activeRingA").Opacity, 3);
+            Assert.NotEqual(default, glowLayer.BoxShadow);
             Assert.Equal(1.0, F<Border>(card, "_halfHostA").Opacity);
             Assert.Equal(0.62, F<Border>(card, "_halfHostB").Opacity);           // the off half rests dim
             Assert.True(F<Button>(card, "_btnHelpA").IsVisible, "MindWipe has help content");
@@ -59,14 +71,14 @@ public sealed class SplitFeatureCardFxTests
             s.MotionLevel = MotionLevel.Reduced;
             Reshow();
             Assert.Null(F<object?>(card, "_breath"));
-            Assert.Equal(0.90, F<DropShadowEffect>(card, "_activeGlow").Opacity, 3);
+            Assert.Equal(0.90, F<Border>(card, "_activeGlow").Opacity, 3);
 
             // Performance tier: no glow at all.
             s.MotionLevel = MotionLevel.Full;
             s.PerformanceMode = true;
             Reshow();
             Assert.Null(F<object?>(card, "_breath"));
-            Assert.Equal(0, F<DropShadowEffect>(card, "_activeGlow").Opacity);
+            Assert.Equal(0, F<Border>(card, "_activeGlow").Opacity);
 
             // Sweep gated off: hovering the OFF half B lands the seam on its end state at once, A's "?" steps aside.
             shell.UpdateLayout();
@@ -96,6 +108,7 @@ public sealed class SplitFeatureCardFxTests
         finally
         {
             shell.Close();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = System.TimeProvider.System;
             (s.MotionLevel, s.PerformanceMode, s.MindWipeEnabled, s.BrainDrainEnabled) = (motion, perf, wipe, drain);
         }
         return Task.CompletedTask;

@@ -19,6 +19,10 @@ internal static class TestUserDataProfile
         ConditioningControlPanel.Avalonia.Platform.X11ActiveWindow.Disabled = true;
         Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", Root);
         _ = ConditioningControlPanel.CorePaths.UserData;   // installs the SandboxNet guard before any test runs
+        // Strings load once, as App.Initialize does, so a test that calls Loc.Get before any test
+        // app exists sees text, not raw keys, whatever the run order. Keeps any language already set.
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        loc.SetLanguage(loc.CurrentLanguage);
         // Every one-shot feature card already spent: a shown shell lands on the Dashboard, whose card
         // would otherwise open (and stay open as a passive surface) in whichever test shows a shell
         // first. FeatureIntroWiringTests un-spends the keys it drives.
