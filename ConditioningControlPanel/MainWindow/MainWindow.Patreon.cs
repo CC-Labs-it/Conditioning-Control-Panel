@@ -179,6 +179,10 @@ namespace ConditioningControlPanel
                 var premium = App.Patreon?.HasPremiumAccess == true;
                 var changed = false;
 
+                // Before anything below switches yesterday's Daily Gift off: remember it was in use,
+                // for the next launch's relock row (MainWindow.Inbox.cs).
+                if (NoteDailyGiftUse(settings)) App.Settings?.Save();
+
                 // Awareness (keyword triggers + screen OCR) - keeps its own keyboard hook and OCR
                 // scanner alive. Mirrors ChkAwarenessMaster_Changed's OFF branch.
                 if (settings.KeywordTriggersEnabled && !premium
@@ -1295,6 +1299,7 @@ namespace ConditioningControlPanel
             // after any server tier reading that moved the stored lapse signal.
             Activated += (_, __) => MaybePostConversionRows();
             EntitlementTierSync.ReadingApplied += MaybePostConversionRows;
+            Services.Startup.Conversion.ConversionSignals.CompanionCapHit += OnCompanionCapHit;
             Services.Invites.InviteGrantSync.ArmExpiry();
             EntitlementTierSync.TierRaised += OnEntitlementTierRaised;
 

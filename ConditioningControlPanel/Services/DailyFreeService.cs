@@ -143,6 +143,10 @@ namespace ConditioningControlPanel.Services
         public bool IsFreeToday(string? featureKey) =>
             featureKey != null && string.Equals(TodayKey, featureKey, StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>The wheel's own pick for a local date, ignoring any server override. For looking
+        /// back a day (the Daily Gift relock row); gates read <see cref="IsFreeToday"/>.</summary>
+        public string SeededKeyFor(DateTime localDate) => SeededPick(localDate);
+
         private static string LocalDateStamp() => DateTime.Now.ToString("yyyy-MM-dd");
 
         /// <summary>

@@ -7546,5 +7546,15 @@
   "conv_let_close": "Laisser fermer",
   "conv_reopen_prime": "Rouvrir Prime",
   "conv_reopen_basic": "Rouvrir Basic",
-  "conv_leave_closed": "Laisser fermé"
+  "conv_leave_closed": "Laisser fermé",
+  "conv_get_basic": "Prendre Basic",
+  "conv_get_prime": "Prendre Prime",
+  "conv_cap_free": "{0} aujourd'hui. Basic : {1}. Prime : {2}.",
+  "conv_cap_basic": "{0} aujourd'hui. Prime : {1}.",
+  "conv_cap_body": "Le compteur du compagnon repart demain.",
+  "conv_relock_basic": "La porte d'hier est fermée. Basic la garde ouverte.",
+  "conv_relock_prime": "La porte d'hier est fermée. Prime la garde ouverte.",
+  "conv_session_taste": "Basic ouvre les portes.",
+  "conv_gallery_title": "La galerie des patrons en a {0} de plus.",
+  "conv_gallery_body": "Basic l'ouvre."
 }

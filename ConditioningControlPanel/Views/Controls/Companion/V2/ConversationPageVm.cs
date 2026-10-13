@@ -287,6 +287,9 @@ internal sealed class ConversationPageVm : CompanionObservable
             {
                 Notice = Loc.Get(FailureNoticeKey(result.Failure));
                 CanRetry = result.Retryable || result.Failure == AiFailureKind.Cancelled;
+                // The cap's offer is never said here (no upsell inside a conversation): the Inbox
+                // files one row once this page is gone (MainWindow.Inbox.cs).
+                if (result.Failure == AiFailureKind.DailyLimit) Services.Startup.Conversion.ConversionSignals.NoteCompanionCap();
             }
         }
         catch (OperationCanceledException) { Notice = Loc.Get("companion_v2_cancelled"); CanRetry = true; }
