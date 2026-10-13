@@ -74,6 +74,38 @@ public class DeeperDispatchContractTests
         Assert.Equal("t=2.00s  pause", Assert.Single(d.RecentActions));
     }
 
+    [Fact]
+    public async Task Logging_DescribesHapticAndEffectLines_WithPhaseSuffix()
+    {
+        var d = new LoggingActionDispatcher();
+        await d.DispatchAsync(new TriggerHapticAction { PatternName = "pulse", Intensity = 0.5, DurationMs = 800, Phase = EffectPhase.Start }, Ctx(1));
+        await d.DispatchAsync(new TriggerHapticAction { Intensity = 1, DurationMs = 200, Phase = EffectPhase.Restart }, Ctx(1));
+        await d.DispatchAsync(new TriggerEffectAction { EffectType = EffectTypes.Flash, DurationMs = 300, Phase = EffectPhase.Stop }, Ctx(1));
+        await d.DispatchAsync(new TriggerEffectAction { EffectType = EffectTypes.Subliminal, Text = "hi", DurationMs = 400 }, Ctx(1));
+
+        Assert.Equal(new[]
+        {
+            "t=1.00s  haptic pulse @ 0.50 for 800ms [start]",
+            "t=1.00s  haptic custom @ 1.00 for 200ms [restart 200ms]",
+            "t=1.00s  effect flash random for 300ms [stop]",
+            "t=1.00s  effect subliminal \"hi\" for 400ms",
+        }, d.RecentActions);
+    }
+
+    [Fact]
+    public async Task Recording_SkipsCancelledDispatch_InnerNotCalled()
+    {
+        var inner = new ThrowingInner();
+        var d = new RecordingActionDispatcher(inner);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await d.DispatchAsync(new PauseAction(), Ctx(1), cts.Token);
+
+        Assert.Empty(inner.Seen);
+        Assert.Empty(d.RecentActions);
+    }
+
     private static EnhancementDispatchContext Ctx(double t) =>
         new(new Enhancement(), new AudioOnlySource(), t, null);
 
