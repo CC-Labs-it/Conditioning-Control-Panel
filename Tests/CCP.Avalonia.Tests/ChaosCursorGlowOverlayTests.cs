@@ -97,9 +97,18 @@ public sealed class ChaosCursorGlowOverlayTests
     });
 
     [Fact]
-    public Task A_platform_without_click_through_never_shows_it() => WithSeams(() => false, (_, _) =>
+    public Task A_platform_without_click_through_never_shows_it_and_is_asked_once_per_run()
     {
-        ChaosCursorGlowOverlay.Arm();
-        Assert.Null(ChaosCursorGlowOverlay.Active);
-    });
+        int asked = 0;
+        return WithSeams(() => { asked++; return false; }, (_, _) =>
+        {
+            ChaosCursorGlowOverlay.Arm();
+            Assert.Null(ChaosCursorGlowOverlay.Active);
+            ChaosCursorGlowOverlay.Arm();          // no second window churn after a refusal
+            Assert.Equal(1, asked);
+            ChaosCursorGlowOverlay.CloseActive();  // run teardown forgets it
+            ChaosCursorGlowOverlay.Arm();
+            Assert.Equal(2, asked);
+        });
+    }
 }

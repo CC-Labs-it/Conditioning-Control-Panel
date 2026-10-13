@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     internal sealed class ChaosCursorGlowOverlay : Window
     {
         private static ChaosCursorGlowOverlay? _active;
+        private static bool _refused;   // platform said no once: don't churn a window per Arm until teardown
         internal static ChaosCursorGlowOverlay? Active => _active;
 
         /// <summary>Desktop-wide pointer in physical pixels. Test seam.</summary>
@@ -57,12 +58,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_active == null)
             {
+                if (_refused) return;
                 var w = new ChaosCursorGlowOverlay();
                 w.Park();
                 w.Show();   // no window handle before Show, so click-through comes after
                 if (!MakeClickThrough(w))
                 {
                     Log.Warning("ChaosCursorGlow: platform cannot make the halo click-through/transparent, so it is not shown");
+                    _refused = true;
                     w.Close();
                     return;
                 }
@@ -77,9 +80,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Centre the halo on a cursor position in physical pixels. UI thread only.</summary>
         public static void MoveToPx(int pxX, int pxY) => _active?.MoveTo(pxX, pxY);
 
-        /// <summary>Instant teardown (run end / panic / shutdown). Idempotent.</summary>
+        /// <summary>Instant teardown (run end / panic / shutdown). Idempotent. Forgets a refusal.</summary>
         public static void CloseActive() => OnUi(() =>
         {
+            _refused = false;
             var w = _active;
             _active = null;
             w?.Close();
@@ -89,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // frame shows the gradient. Arm() parks and hides it before the first Show.
         public ChaosCursorGlowOverlay()
         {
-            SystemDecorations = WindowDecorations.None;
+            WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
             Topmost = true;
