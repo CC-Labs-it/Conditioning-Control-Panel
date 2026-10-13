@@ -4,7 +4,7 @@ using System.Linq;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
-namespace CCP.Core.Tests;
+namespace ConditioningControlPanel.Tests;
 
 /// <summary>
 /// The three rules of EMI's line engine that a human can never test by playing (LINES-SCHEMA 5).

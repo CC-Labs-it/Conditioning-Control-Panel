@@ -60,19 +60,21 @@ public sealed record AskDraw(
 /// </summary>
 public sealed class EmiLineEngine
 {
-    /// <summary>The process-wide engine. Cheap to touch: the file loads on the first draw.</summary>
-    public static EmiLineEngine Instance { get; } = new();
-
     /// <summary>
     /// The half of the ask gate only the app can see (WPF <c>App.EmiDesk.AskSituationOk()</c>): no
-    /// session, no video, not minimised, no offer already on the glass. Unset means "no desk",
-    /// which is "no offer", exactly as the WPF null service read.
+    /// session, no video, not minimised, no offer already on the glass. The head sets it; unset
+    /// means "no service", which is "no offer", exactly as the WPF null service reads.
     /// </summary>
     public static Func<bool>? AskSituationProbe { get; set; }
 
-    /// <summary>WPF <c>EmiOffers.EffectFeasible</c>. Unset refuses every effect, so a head with no
-    /// offers surface never shows an ask whose chip would do nothing.</summary>
+    /// <summary>
+    /// WPF <c>EmiOffers.EffectFeasible</c>: can this effect happen right now. Unset refuses every
+    /// effect, so a head with no offers surface never shows an ask whose chip would do nothing.
+    /// </summary>
     public static Func<string?, bool>? EffectFeasibleProbe { get; set; }
+
+    /// <summary>The process-wide engine. Cheap to touch: the file loads on the first draw.</summary>
+    public static EmiLineEngine Instance { get; } = new();
 
     /// <summary>Milliseconds between any two spontaneous lines (BRIEF 8; priority 3 is exempt).</summary>
     public const int GlobalFloorMs = 45_000;
@@ -952,7 +954,7 @@ public sealed class EmiLineEngine
     {
         try
         {
-            var s = CoreSettings.Current;
+            var s = ConditioningControlPanel.CoreSettings.Current;
             if (s == null) return 2;
             return Math.Max(0, Math.Min(2, s.EmiDeskSpice));
         }
@@ -975,7 +977,7 @@ public sealed class EmiLineEngine
         try
         {
             if (m.AskOdds <= 0) return false;
-            var s = CoreSettings.Current;
+            var s = ConditioningControlPanel.CoreSettings.Current;
             if (s != null && !s.EmiDeskOffers) return false;
             if (BedtimeSet) return false;
             if (_ignoredAsksThisLaunch >= AskIgnoreLimit) return false;
@@ -1018,11 +1020,11 @@ public sealed class EmiLineEngine
     /// <summary>
     /// THE CADENCE GATES, on their own, as arithmetic.
     ///
-    /// <para><see cref="AskGatesPass"/> also reads the live settings, the user's ledger and the
-    /// head's <see cref="AskSituationProbe"/>. This is the half that decides whether
-    /// the SCRIPTED bypass is honoured, lifted out so the one rule that matters - the bypass skips
-    /// the gap and the summon floor, and leaks into nothing else - can be checked in a
-    /// millisecond.</para>
+    /// <para><see cref="AskGatesPass"/> reads <c>CoreSettings.Current</c>, bedtime and the head's
+    /// <see cref="AskSituationProbe"/>; tests drive it through those (EmiLineEngineAskProbeTests).
+    /// This is the half that decides whether the SCRIPTED bypass is honoured, lifted out so the one
+    /// rule that matters - the bypass skips the gap and the summon floor, and leaks into nothing
+    /// else - can be checked as plain arithmetic.</para>
     ///
     /// <para>Returns true when the two cadence gates are satisfied (or bypassed).</para>
     /// </summary>
@@ -1183,7 +1185,7 @@ public sealed class EmiLineEngine
 
     private static string AppVersionString()
     {
-        try { return CoreReleaseContent.AppVersion; }
+        try { return ConditioningControlPanel.CoreReleaseContent.AppVersion; }
         catch { return "0"; }
     }
 

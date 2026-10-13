@@ -5,50 +5,12 @@ using Xunit;
 namespace CCP.Core.Tests;
 
 /// <summary>
-/// The head seams the line engine, names and bark mirror read now that they live in Core. Each
-/// stands in for an <c>App.*</c> read the WPF copy made; unset must read exactly like WPF's
-/// null service (no desk = no offer, no fire).
+/// The head seams EMI's names and bark mirror read now that they live in Core. Each stands in
+/// for an <c>App.*</c> read the WPF copy made; unset must read exactly like WPF's null service
+/// (no ring target = no name, no desk = no fire). The ask probes are EmiLineEngineAskProbeTests.
 /// </summary>
 public sealed class EmiCoreSeamsTests
 {
-    // One scripted ceremony moment (skips the cadence gates, the floor and the odds) with one offer.
-    private const string AskFile =
-        "{\"version\":1,\"moments\":{\"m\":{\"priority\":3,\"askOdds\":1,\"scripted\":true}},\"pools\":{},"
-        + "\"asks\":[{\"id\":\"a1\",\"moment\":\"m\",\"q\":\"q?\",\"chips\":[\"y\",\"n\"],\"effect\":\"none\"}]}";
-
-    private static AskDraw? DrawAsk()
-    {
-        var engine = EmiLineEngine.FromJson(AskFile);
-        engine.Draw("m");
-        return engine.DrawAsk("m");
-    }
-
-    [Fact]
-    public void Ask_NeedsTheDeskSituationAndAFeasibleEffect()
-    {
-        try
-        {
-            EmiLineEngine.AskSituationProbe = null;
-            EmiLineEngine.EffectFeasibleProbe = _ => true;
-            Assert.Null(DrawAsk());   // no desk, no offer
-
-            EmiLineEngine.AskSituationProbe = () => true;
-            EmiLineEngine.EffectFeasibleProbe = null;
-            Assert.Null(DrawAsk());   // no offers surface, no offer
-
-            EmiLineEngine.EffectFeasibleProbe = e => e == "none";
-            Assert.Equal("a1", DrawAsk()?.Id);
-
-            EmiLineEngine.AskSituationProbe = () => false;
-            Assert.Null(DrawAsk());   // a session or video on screen
-        }
-        finally
-        {
-            EmiLineEngine.AskSituationProbe = null;
-            EmiLineEngine.EffectFeasibleProbe = null;
-        }
-    }
-
     [Fact]
     public void Names_ReadRingTargetsThroughTheProbe()
     {
