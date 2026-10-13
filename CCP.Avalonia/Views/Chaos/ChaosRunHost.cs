@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
+            ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
             Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
                 baseXp, skillMult, finalXp);
@@ -163,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static void CleanupAfterRun()
         {
+            ChaosVibeTrailOverlay.CloseActive();   // WPF ForceShutdown :3184
             _runTimer = null;
             _hud = null;
             _overlay = null;
