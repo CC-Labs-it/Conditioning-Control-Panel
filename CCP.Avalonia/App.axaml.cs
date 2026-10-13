@@ -587,6 +587,8 @@ namespace ConditioningControlPanel.Avalonia
                                 Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
                         }
                         catch (Exception exLeash) { Serilog.Log.Warning(exLeash, "[Leash] service could not be built"); }
+                        // WPF App.xaml.cs:3160: what a delivery does when it lands (the knock card).
+                        Platform.FriendsLanding.Start();
                     }
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
@@ -1125,6 +1127,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
+            try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
