@@ -134,4 +134,20 @@ public sealed class CompanionPickerCardTests
             CoreSettings.ServiceProvider = null;
         }
     });
+
+    /// <summary>WPF AvatarSetTitle (AvatarTubeWindow.Avatar.cs:940-941): the Look label is the
+    /// companion's name, not the tube's upper-cased caption.</summary>
+    [Fact]
+    public void LookLabelIsNotUpperCased()
+    {
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        try
+        {
+            var name = CompanionDefinition.GetById(CompanionId.CultBunny).GetDisplayName(CoreSettings.Current.SlutModeEnabled);
+            Assert.NotEqual(name, name.ToUpperInvariant());
+            Assert.Equal(name, global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.AvatarSetTitle(4));
+        }
+        finally { CoreSettings.ServiceProvider = null; }
+    }
 }

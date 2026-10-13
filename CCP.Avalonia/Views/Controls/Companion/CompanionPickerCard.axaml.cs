@@ -198,7 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // tube.SelectAvatarSet(set). This head's tube cannot switch sets yet (its
                 // SelectAvatarSet note: the companion coupling, CoreModsHooks.SwitchCompanion, is
                 // unseeded), so the combo shows the set the tube is showing and stays disabled.
-                var item = new ComboBoxItem { Content = tube.AvatarSetTitle, Tag = set };
+                var item = new ComboBoxItem { Content = AvatarTubeWindow.AvatarSetTitle(set), Tag = set };
                 CmbAvatar.Items.Add(item);
                 CmbAvatar.SelectedItem = item;
                 CmbAvatar.IsEnabled = false;
