@@ -688,6 +688,11 @@ html[data-gg-motion="reduced"] .gg-count-ring { display: none; }
 .gg-recap-cta { text-align: center; }
 .gg-recap-cta-lead { margin: 0 0 0.9rem; color: var(--gg-text-2); font-size: 0.85rem; line-height: 1.55; }
 .gg-recap-cta-link, .gg-recap-cta-link:hover { display: inline-block; text-decoration: none; }
+/* The plan row (brief C10, ui/screens/recapPlan.js): neutral, under the actions, one line + one button. */
+.gg-recap-plan { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.4rem 0.8rem; margin-top: 0.6rem; padding-top: 0.7rem; border-top: 1px solid rgba(255, 255, 255, 0.08); text-align: center; }
+.gg-recap-plan-line { flex-basis: 100%; margin: 0; color: var(--gg-text-2); font-size: 0.85rem; }
+.gg-recap-plan-btn, .gg-recap-plan-btn:hover { display: inline-block; text-decoration: none; }
+.gg-recap-plan-price { color: var(--gg-text-4); font-size: 0.76rem; font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------------------
  * REPORTING WHAT THEY SENT (spec §7.5) — the recap card, plus the ONE override
