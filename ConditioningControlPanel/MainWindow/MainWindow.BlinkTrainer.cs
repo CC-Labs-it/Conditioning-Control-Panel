@@ -177,6 +177,11 @@ namespace ConditioningControlPanel
         /// </summary>
         internal async void BtnBlinkTrainerStartSession_Click(object sender, RoutedEventArgs e)
         {
+            // Hard gate, the Lockdown / Remote pattern: RefreshBlinkTrainerGate only covers the
+            // card and disables the stage actions, so keyboard focus or automation could still
+            // reach this handler. A running session may always be stopped, gate or not.
+            if (App.BlinkTrainer?.IsRunning != true && !TierGate.DemandPremium(Loc.Get("tab_blink_trainer"))) return;
+
             // #743: the prewarm below can take the full 90s camera-open timeout, and nothing used
             // to stop the user clicking again meanwhile. The service now refuses a concurrent
             // start outright, but a dead button is the honest signal that work is in flight.

@@ -54,8 +54,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Floor between two ATTEMPTS on the same day, whatever they returned. The success gate
         /// above cannot carry this on its own: it is keyed on <see cref="_serverKeyForDate"/>,
-        /// which only a 200 ever writes, so while the endpoint 404s (it does not exist yet
-        /// server-side) every dashboard repaint would fire a live HTTPS GET.
+        /// which only a 200 ever writes, so while the endpoint fails (or names no key) every
+        /// dashboard repaint would fire a live HTTPS GET.
         /// </summary>
         private static readonly TimeSpan RetryEvery = TimeSpan.FromMinutes(10);
 
