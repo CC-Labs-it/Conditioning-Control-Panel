@@ -2,6 +2,7 @@ import { readCheckpoint, writeCheckpoint, checkpointFromSnapshot, newEndlessSeed
 import { breakoutAccess } from './access.js';
 import { createOfficeEnding } from './office-ending.js';
 import {currentMusic} from '../../shared/sound/music.js';
+import { buildEndCard, planOf, loadEndCardCss, postFunnel } from '../../shared/win/end-card.js';
 /* ============================================================================
  * stations/breakout/station.js - CONTRACT section 7 module for the Breakout
  * cabinet. mount(ctx) -> { open, close, suspend, destroy }. One 2D canvas in
@@ -254,7 +255,9 @@ export async function mount(ctx) {
     el.append(endingActions);ui.endingActions=endingActions;
     const demoCard = document.createElement('section'); demoCard.className = 'bo-demo-complete'; demoCard.hidden = true;
     demoCard.setAttribute('role','dialog'); demoCard.setAttribute('aria-modal','true'); demoCard.setAttribute('aria-labelledby','bo-demo-title');
-    demoCard.innerHTML = '<div class="bo-pause-card"><p>THREE LEVELS CLEARED</p><h2 id="bo-demo-title">A little colour goes a long way.</h2><p>The full game has all eight Story levels and Endless. Included with Tier 2.</p><button type="button" data-demo="replay">Play again</button><button type="button" data-demo="menu">Menu</button></div>';
+    demoCard.innerHTML = '<div class="bo-pause-card"><p>THREE LEVELS CLEARED</p><h2 id="bo-demo-title">A little colour goes a long way.</h2><p>The full game has all eight Story levels and Endless. Included with Prime.</p><button type="button" data-demo="replay">Play again</button><button type="button" data-demo="menu">Menu</button></div>';
+    // THE PLAN ROW (brief C10): "Included with Prime" gets its button. A link, so the card's first <button> (Play again) keeps the focus.
+    try { loadEndCardCss(); demoCard.querySelector('.bo-pause-card > p:nth-of-type(2)').after(buildEndCard({ plan: planOf(ctx.plans ?? globalThis.__backroom?.state?.plans, 'prime'), feature: 'breakout_demo', cls: 'bo-demo-plan' })); } catch (e) { /* the card stands without it */ }
     el.append(demoCard); ui.demoCard = demoCard;
     officeEnding=createOfficeEnding(el,{reduced,actions:endingActions});
     const perfSlot=document.createElement('div');perfSlot.className='bo-perf-slot';
@@ -420,6 +423,7 @@ export async function mount(ctx) {
         ui.demoCard.hidden = false; ui['ghost-hint'].hidden = true;
         el.classList.add('is-demo-complete'); audio?.stop(); audioOn = false; haptics?.stop();
         ui.demoCard.querySelector('button').focus();
+        postFunnel('gate_shown', 'breakout_demo', 'prime');
         break;
       case 'finaleCoreReached':
         mouseLock?.release();                        // the ending card wants a visible pointer, from this frame on

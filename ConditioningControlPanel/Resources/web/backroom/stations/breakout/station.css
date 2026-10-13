@@ -247,6 +247,8 @@
 .bo-demo-complete[hidden] { display:none; }
 .bo-demo-complete h2 { font-size:28px;letter-spacing:0; }
 .bo-demo-complete p { max-width:360px;font:15px/1.6 system-ui;letter-spacing:0; }
+.bo-demo-complete .bo-demo-plan { margin-top:-8px;padding:0;border-top:0; }
+.bo-demo-complete .bo-demo-plan .br-end-card-price { font-size:12px; }
 .bo-station.is-demo-complete .bo-pause-button,.bo-station.is-demo-complete .bo-hint { display:none; }
 .bo-modes.is-demo { grid-template-columns:1fr; }
 .bo-modes button[hidden] { display:none; }
