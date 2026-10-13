@@ -8,10 +8,10 @@
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%"
        ImageBrush HeroArtBrush/SideArtBrush -> dropped (feature art not an AvaloniaResource here
                                             yet; x:Name on a brush is AVLN2000); wash stands in
-       feat:AdaptiveSideArt.CollapseBelow -> dropped
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        all event handlers                ->  wired in code-behind (porting convention) -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -59,7 +59,7 @@
         </Border>
 
         <!-- VELVET KIT 2 · ROUND 3 · DENSITY: settings column capped, art card takes the rest. -->
-        <Grid>
+        <Grid sideart:AdaptiveSideArt.CollapseBelow="700">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" MaxWidth="780"/>
                 <ColumnDefinition Width="2*"/>
