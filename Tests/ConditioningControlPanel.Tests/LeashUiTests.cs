@@ -362,6 +362,7 @@ public class LeashUiTests
         var keys = new HashSet<string>();
         var sources = Directory.GetFiles(Path.Combine(root, "ConditioningControlPanel", "Controls", "Leash"), "*.cs").ToList();
         sources.Add(Path.Combine(root, "ConditioningControlPanel", "MainWindow", "MainWindow.Leash.cs"));
+        sources.Add(SourceRoots.FindProductFile("Services", "Leash", "LeashUiRules.cs")); // moved to CCP.Core
         foreach (var f in sources)
             foreach (Match m in Regex.Matches(File.ReadAllText(f), "\"(leash_[a-z0-9_]*[a-z0-9])\""))
                 keys.Add(m.Groups[1].Value);
