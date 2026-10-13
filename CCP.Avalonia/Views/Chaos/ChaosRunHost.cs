@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosHudWindow? _hud;
         private static ChaosOverlayWindow? _overlay;
         private static DispatcherTimer? _runTimer;
-        private static bool _active, _spawning, _manualPaused;
+        private static bool _active, _spawning, _manualPaused, _endingSoonFired;
 
         internal static ChaosRunState? State => _state;
         internal static ChaosOverlayWindow? Overlay => _overlay;
@@ -82,9 +82,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null || _manualPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
+            // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
+            if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
+            {
+                _endingSoonFired = true;
+                ChaosAnnouncerOverlay.Announce("the hole is closing…", ChaosAnnounceKind.Depth,
+                    artKey: "ending_soon", subText: "ten seconds");
+                _state.PushEvent("⏳ ten seconds. make them count.");
+            }
             var end = ChaosRunEngine.CheckEnd(_state, elapsed);
             if (end == ChaosRunEngine.EndCheck.RunOver) { EndRun(); return; }
-            if (end == ChaosRunEngine.EndCheck.Relapse) _state.PushEvent("☠ relapse. one more loop — everything drips double");
+            if (end == ChaosRunEngine.EndCheck.Relapse)
+            {
+                ChaosAnnouncerOverlay.Announce("☠ RELAPSE — one more loop", ChaosAnnounceKind.Temptation,
+                    artKey: "relapse", subText: "one more loop");   // WPF :1083
+                _state.PushEvent("☠ relapse. one more loop — everything drips double");
+            }
             var (newWave, _) = ChaosRunEngine.WaveAt(_state, elapsed);
             if (newWave > _state.WaveIndex)
             {
@@ -113,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             if (!_active && _hud == null && _overlay == null) return;
             _spawning = false;
             _runTimer?.Stop();
@@ -142,6 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
+            ChaosAnnouncerOverlay.CloseActive();   // WPF :3230
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
             Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
                 baseXp, skillMult, finalXp);
@@ -170,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _active = false;
             _spawning = false;
             _manualPaused = false;
+            _endingSoonFired = false;
         }
     }
 }

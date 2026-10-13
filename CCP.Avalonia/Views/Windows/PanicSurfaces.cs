@@ -36,6 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
+            // WPF ForceShutdown :3177 ChaosAnnouncerOverlay.CloseActive: queue dropped, window closed, run or not.
+            new("chaos-announcer", _ => Chaos.ChaosAnnouncerOverlay.CloseActive()),
             // WPF PanicStopEverySurface (:1992): the toys go to zero, bypassing throttles and gates.
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
