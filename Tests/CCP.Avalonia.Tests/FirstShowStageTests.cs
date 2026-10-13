@@ -105,6 +105,24 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    /// <summary>P51 + alias: the panic key stored as "Enter" (Avalonia prints the key as "Return") closes the
+    /// show even while a choice button is focused, and that button is not clicked.</summary>
+    [Fact]
+    public Task PanicKeyBoundToEnterBeatsAFocusedChoice() => Run(stage =>
+    {
+        double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+        var yes = stage.ChoiceButtons[0];
+        var clicked = false;
+        yes.Click += (_, _) => clicked = true;
+        yes.Focus();
+        Assert.True(yes.IsFocused);
+        stage.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
+        Assert.False(clicked, "the focused choice was not activated");
+        Assert.False(FirstShowService.IsActive);
+        Assert.False(stage.IsVisible);
+        return Task.CompletedTask;
+    }, panicKey: "Enter");
+
     /// <summary>WPF MainWindow.xaml.cs:546-553: the show follows the first-run wizard once the age gate is
     /// accepted, and only on the launch that claimed the first run.</summary>
     [Fact]
@@ -265,7 +283,7 @@ public sealed class FirstShowStageTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
-    private static Task Run(Func<FirstShowStageWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(Func<FirstShowStageWindow, Task> body, string? panicKey = null) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var service = new SettingsService();
@@ -273,6 +291,7 @@ public sealed class FirstShowStageTests
         CoreSettings.ServiceProvider = () => service;
         try
         {
+            if (panicKey is not null) CoreSettings.Current.PanicKey = panicKey;   // read by the stage's ctor
             CoreSettings.Current.MotionLevel = MotionLevel.Off;   // no entrance summon: she is "arrived" at once
             CoreSettings.Current.MasterVolume = 0;
             FirstShowService.RequireClickThrough = false;
