@@ -62,6 +62,13 @@ internal static class X11PanicKey
     internal static volatile Func<string?>? PushToTalkKey;
     internal static volatile Action? PushToTalk;
 
+    /// <summary>Chaos toy keybinds (WPF ChaosModeService's GlobalKeyboardHook): the bound key names
+    /// (read per press) and what a press of one does (listener thread; post, never work). Raised
+    /// AFTER the panic press so panic always goes first; ChaosToyRules.Match drops the panic key.
+    /// Win32PanicKey reads the same pair.</summary>
+    internal static volatile Func<string[]>? ToyKeys;
+    internal static volatile Action<string>? ToyKey;
+
     /// <summary>Starts the listener once. <paramref name="onPress"/> runs on the listener thread for
     /// every press of <paramref name="currentKey"/>() (read per event, so rebinds apply live).
     /// False when there is no X display or no XInput 2.2 - the caller logs and relies on the tray.</summary>
@@ -143,6 +150,9 @@ internal static class X11PanicKey
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
                 if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
                     && keycode == XKeysymToKeycode(display, ps)) ptt();
+                if (ToyKey is { } toy && ToyKeys?.Invoke() is { } toyKeys)
+                    foreach (var k in toyKeys)
+                        if (KeysymOf(k) is var ts and not 0 && keycode == XKeysymToKeycode(display, ts)) { toy(k); break; }
             }
             catch (Exception ex)
             {

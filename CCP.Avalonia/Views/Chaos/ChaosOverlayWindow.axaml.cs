@@ -1501,7 +1501,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// lands - and exactly what the stub gave. Nothing here can be louder than the user's
         /// master volume, and a missing file is still a silent no-op.</para>
         /// </summary>
-        private static class ChaosSfx
+        internal static class ChaosSfx
         {
             /// <summary>Generic one-shot: <c>Resources/sounds/chaos/{name}.mp3</c>, silent when
             /// the asset is absent.</summary>
@@ -1561,8 +1561,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <para>ponytail: this and <c>ChaosHudWindow.AttachTip</c> are now the same builder in two
         /// files. Collapse them into one <c>Views/Chaos/ChaosTips.cs</c> the moment a third caller
         /// appears - not before, because the head's own class is the source both are copying and a
-        /// third copy is where drift starts.</para></summary>
-        private static class ChaosTips
+        /// third copy is where drift starts. ChaosToyButtonWindow reuses this one (internal) rather
+        /// than copying it; its tooltip has the default chrome, not this window's style.</para></summary>
+        internal static class ChaosTips
         {
             public static void Attach(Control target, string title, string? desc,
                                       string? extra = null, Color? accent = null, string? flavor = null)
