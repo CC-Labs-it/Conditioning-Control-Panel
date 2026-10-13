@@ -11,7 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// candidate that exists under Resources/sounds wins; none is silence.
     ///
     /// <para>ponytail: WPF also stays silent while AudioService.IsOutputSuppressed or an
-    /// EmiLineEngine hold is active; neither exists on this head, so only master volume 0 mutes.
+    /// EmiLineEngine hold is active; EmiLineEngine is in Core but nothing on this head takes a hold
+    /// and AudioService does not exist here, so only master volume 0 mutes.
     /// Files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
     /// mod's replacement cue, the .wav/.mp3 swap) has no Core sounds seam yet, so a mod cannot
     /// re-voice these here; a stock install sounds right.

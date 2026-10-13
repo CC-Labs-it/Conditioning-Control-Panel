@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services.Deeper
     {
         private const string CacheMagic = "DPK2";
 
-        public static string CacheFolder => Path.Combine(App.UserDataPath, "deeper-cache");
+        public static string CacheFolder => MediaDurationCache.CacheFolder;
 
         /// <summary>
         /// Loads peaks for the given audio file, using a disk cache when available.
