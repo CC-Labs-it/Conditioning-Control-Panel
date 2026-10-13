@@ -422,6 +422,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public double FontSize { get; set; } = 60;
         public FontFamily Family { get; set; } = new("Segoe UI");
         public IBrush Fill { get; set; } = Brushes.White;
+        public IBrush Stroke { get; set; } = Brushes.Black;
         public double Pad { get; private set; }
         private Geometry? _geo;
 
@@ -440,7 +441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public override void Render(DrawingContext dc)
         {
             if (_geo == null) return;
-            dc.DrawGeometry(null, new Pen(Brushes.Black, (Pad - 6) * 2, lineJoin: PenLineJoin.Round), _geo);
+            dc.DrawGeometry(null, new Pen(Stroke, (Pad - 6) * 2, lineJoin: PenLineJoin.Round), _geo);
             dc.DrawGeometry(Fill, null, _geo);
         }
     }
