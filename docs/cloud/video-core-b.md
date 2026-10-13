@@ -24,7 +24,7 @@ Base: `avalonia-port/game-pbp`. Branch: `avalonia-port/cloud-video-core-b`.
   - `MultiMonitorVideoSurfaceTests.Report_SendsTheSurfaceLineToTheHeadsTraceSink`: covers the new seam.
 - No embedded resources moved, so there is no core-guards baseline change.
 - Trunk credit: none. `parity/trunk` still has all four files under `ConditioningControlPanel/` and has no Core copy, so nothing was imported.
-- Added lines vs base: 323, within the 1000 cap. The renamed files count only their edited lines.
+- Added lines vs base: 370 (323 code and tests plus this doc), within the 1000 cap. The renamed files count only their edited lines.
 
 ## Next units (Services/Video, not yet in Core)
 
