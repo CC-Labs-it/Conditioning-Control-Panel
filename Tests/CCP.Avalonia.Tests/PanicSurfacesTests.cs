@@ -79,7 +79,7 @@ public sealed class PanicSurfacesTests
     /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "haptics",
+        "intake", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-estim", "haptics",
         "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "attention-test", "deeper-editor-audio", "camera",
     };
 
