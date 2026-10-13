@@ -305,7 +305,7 @@ namespace ConditioningControlPanel.Services.Awareness
             TrendKind.Backslide => 0.80,
             TrendKind.Streak => 0.70,
             TrendKind.GhostTown => 0.60,
-            TrendKind.ReturnVisit => Math.Min(0.90, 0.50 + 0.10 * Math.Max(0, trend.Magnitude - ActivityLedger.ReturnVisitMinimum)),
+            TrendKind.ReturnVisit => Math.Min(0.90, 0.50 + 0.10 * Math.Max(0, trend.Magnitude - TrendEvent.ReturnVisitMinimum)),
             TrendKind.LongHaul => trend.Magnitude >= 180 ? 0.95 : trend.Magnitude >= 120 ? 0.80 : trend.Magnitude >= 60 ? 0.65 : 0.50,
             _ => 0.40
         };

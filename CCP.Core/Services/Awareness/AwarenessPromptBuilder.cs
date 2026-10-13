@@ -166,7 +166,7 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
         private readonly object _cacheGate = new();
         private readonly Dictionary<string, string> _prefixCache = new(StringComparer.Ordinal);
 
-        /// <param name="modId">Active mod id. Defaults to <c>App.Mods.ActiveModId</c>.</param>
+        /// <param name="modId">Active mod id. Defaults to the attached mod service's active id (<c>CoreMods.ActiveModIdProvider</c>), or "" before mods attach.</param>
         /// <param name="deck">Angle deck source. Defaults to the loaded <see cref="AwarenessAngleCards.Deck"/>.</param>
         /// <param name="presetPersonality">
         /// Raw personality text for a mod the deck has no authored digest for, distilled into a
@@ -421,7 +421,7 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
 
         private static string DefaultModId()
         {
-            try { return App.Mods?.ActiveModId ?? ""; }
+            try { return CoreMods.ActiveModIdProvider?.Invoke() ?? ""; }
             catch { return ""; }
         }
 
@@ -434,13 +434,13 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
         {
             try
             {
-                var settings = App.Settings?.Current;
+                var settings = CoreSettings.Service?.Current;
                 if (BambiSprite.UsesCustomPrompt(settings)) return settings?.CompanionPrompt?.Personality;
-                return App.Personality?.GetActivePreset()?.PromptSettings?.Personality;
+                return PersonalityService.Shared.GetActivePreset()?.PromptSettings?.Personality;
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("AwarenessPromptBuilder: personality lookup failed: {Error}", ex.Message);
+                Serilog.Log.Debug("AwarenessPromptBuilder: personality lookup failed: {Error}", ex.Message);
                 return null;
             }
         }
