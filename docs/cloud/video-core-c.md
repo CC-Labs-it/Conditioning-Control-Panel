@@ -52,4 +52,19 @@ filter), `Services/Video/VideoMetadataCache.cs`, `Services/Video/NoVideosReason.
 
 ## Verification limits
 
-- RESULTS_PLACEHOLDER
+- `dotnet test Tests/CCP.Core.Tests`: 1456 passed, 5 skipped, 2 failed. The 2 failures
+  (`ContentPackStoreTests.Uninstall_WhenTheFolderCannotBeDeleted_...` and
+  `LoopbackOAuthTests.GoodState_OnEitherLoopback_...(host: "[::1]")`) fail the same way on the base
+  commit in this container (it runs as root, so the read-only folder can still be deleted, and it
+  has no IPv6 loopback). They are environment failures, not caused by this change. The new and
+  moved classes (`BrowserVideoGateTests`, `VideoTriggerGuardTests`, `VideoRequestCancelTests`):
+  30/30 passed.
+- `dotnet test Tests/CCP.Avalonia.Tests --filter FullyQualifiedName~Video`: 15 passed, 2 skipped.
+- `bash .github/scripts/core-guards.sh`: all Core guards passed.
+- `dotnet build` succeeded for CCP.Core, CCP.Avalonia, CCP.LinuxSmoke, CCP.VR, CCP.Core.Settings.Tests,
+  CCP.Core.Content.Tests, CCP.Avalonia.Tests and the Avalonia Consent, Language, CatalogueStartup,
+  Scheduler, Report, GeneralSettings and Snapshot test projects.
+- The WPF test project (and so the WPF app with the `App.xaml.cs` seam and the `VideoService` edits)
+  builds on Linux with `-p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`.
+  It was compiled but not run: the WPF tests need Windows. That covers `ChaosVideoStartWindowTests`,
+  `BrowserSinkLabelTests` and the WPF browser engine path behind `EngineAccepts`.
