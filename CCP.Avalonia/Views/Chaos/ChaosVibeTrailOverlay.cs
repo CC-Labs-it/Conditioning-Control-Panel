@@ -33,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     internal sealed class ChaosVibeTrailOverlay : Window
     {
         private static ChaosVibeTrailOverlay? _active;
+        private static bool _refused;   // the platform said no once: later vibes don't rebuild and re-warn
         internal static ChaosVibeTrailOverlay? Active => _active;
 
         /// <summary>Create the (hidden) trail window ahead of time at run start (WPF :33).</summary>
@@ -47,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             try
             {
+                if (_refused) return;
                 if (!X11Overlay.IsAvailable) { Log.Debug("ChaosVibeTrail: no X11 display, no trail"); return; }
                 _active ??= new ChaosVibeTrailOverlay();
                 var w = _active;
@@ -57,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (!X11Overlay.SetClickThrough(w, true) || w.ActualTransparencyLevel == WindowTransparencyLevel.None)
                     {
                         Log.Warning("ChaosVibeTrail: no click-through or no per-pixel transparency here, so no trail - it would cover the desktop");
+                        _refused = true;
                         CloseNow();
                         return;
                     }
@@ -98,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private readonly ScaleTransform[] _dotScales = new ScaleTransform[ChaosVibeTrail.Dots];
         private readonly DispatcherTimer _follow;
         private long _pulseStart;
+        private double _stageScale;   // the scaling SizeToStage sized with; Tick maps the pointer with the same one
 
         /// <summary>Desktop-wide pointer in physical pixels; a seam so tests play a sweep.</summary>
         internal Func<PixelPoint?> ReadPointer = () => X11Pointer.Read()?.At;
@@ -194,7 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 long now = NowMs();
                 if (ReadPointer() is PixelPoint px)
                 {
-                    double s = RenderScaling > 0 ? RenderScaling : 1;
+                    double s = _stageScale > 0 ? _stageScale : RenderScaling > 0 ? RenderScaling : 1;
                     _trail.Move((px.X - Position.X) / s, (px.Y - Position.Y) / s, now);
                 }
                 Paint(now, ChaosVibeTrail.GlowScale(now - _pulseStart));
@@ -238,7 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 var b = CoreSettings.Current.DualMonitorEnabled && all is { Count: > 1 }
                     ? all.Select(x => x.Bounds).Aggregate((a, c) => a.Union(c))
                     : primary.Bounds;
-                double scale = primary.Scaling > 0 ? primary.Scaling : 1;
+                double scale = _stageScale = primary.Scaling > 0 ? primary.Scaling : 1;
                 Position = b.Position;
                 Width = b.Width / scale;
                 Height = b.Height / scale;
