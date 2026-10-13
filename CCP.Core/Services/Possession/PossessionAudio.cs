@@ -31,9 +31,9 @@ namespace ConditioningControlPanel.Services.Possession;
 //  one-shot path, so output-device selection, the concurrency cap, the endpoint circuit breaker and
 //  disposal are all AudioService's, exactly as they are for a bubble pop.
 //
-//  CORE (possession-core-b): moved out of the WPF head. The head hands Install its LockdownService and
-//  a wire callback that (un)subscribes On* below to its director's events; playback, ducking and the
-//  suppression probe go through CoreAudio, settings through CoreSettings.
+//  CORE (possession-core-b2): moved out of the WPF head. The head hands Install its LockdownService and
+//  the (Core) PossessionDirector; playback, ducking and the suppression probe go through CoreAudio,
+//  settings through CoreSettings.
 //
 //  GATES: AppSettings.LockdownAudioTics (default true; NOT LockdownPhotosafe - photosafe is a VISUAL
 //  accommodation, and a user who needs the room to stop flashing may still want to hear it move),
@@ -69,7 +69,8 @@ public static class PossessionAudio
 
     private static bool _installed;
     private static bool _armed;
-    private static Func<bool, bool>? _wireDirector;
+    private static LockdownService? _lockdown;
+    private static PossessionDirector? _director;
     private static DateTime _lastTick = DateTime.MinValue;
     private static DateTime _lastDip = DateTime.MinValue;
     private static string? _tickPath;
@@ -86,16 +87,16 @@ public static class PossessionAudio
     /// actually starts, at which point <see cref="Arm"/> subscribes to the director and the two WAV
     /// files are rendered (once, ever). Safe to call twice.
     /// </summary>
-    /// <param name="wireDirector">true subscribes <see cref="OnEffectStarted"/>, <see cref="OnRungChanged"/>
-    /// and <see cref="OnTripwireReacted"/> to the head's director, false unsubscribes them; returns false
-    /// when there is no director. ponytail: a callback until the director itself lives in Core.</param>
-    public static void Install(LockdownService? lockdown, Func<bool, bool> wireDirector)
+    /// <param name="director">The haunt whose EffectStarted / RungChanged / TripwireReacted the cues follow
+    /// while a lockdown runs. Null keeps the cues disarmed, as WPF did with no App.Possession.</param>
+    public static void Install(LockdownService? lockdown, PossessionDirector? director)
     {
         lock (Sync)
         {
             if (_installed) return;
             _installed = true;
-            _wireDirector = wireDirector;
+            _lockdown = lockdown;
+            _director = director;
         }
         try
         {
@@ -128,14 +129,18 @@ public static class PossessionAudio
                 if (_armed) return;
                 _armed = true;
             }
-            if (_wireDirector?.Invoke(true) != true)
+            var director = _director;
+            if (director == null)
             {
                 lock (Sync) _armed = false;
                 return;
             }
+            director.EffectStarted += OnEffectStarted;
+            director.RungChanged += OnRungChanged;
+            director.TripwireReacted += OnTripwireReacted;
 
             // Render now, off the UI thread, so the FIRST tick is not the one that pays for the file.
-            _ = Task.Run(() => { try { EnsureClips(); } catch { } });
+            Rendering = Task.Run(() => { try { EnsureClips(); } catch { } });
             Log.Debug("PossessionAudio armed");
         }
         catch (Exception ex) { Log.Warning("PossessionAudio arm failed: {Error}", ex.Message); }
@@ -152,17 +157,48 @@ public static class PossessionAudio
                 _lastTick = DateTime.MinValue;
                 _lastDip = DateTime.MinValue;
             }
-            _wireDirector?.Invoke(false);
+            var director = _director;
+            if (director != null)
+            {
+                director.EffectStarted -= OnEffectStarted;
+                director.RungChanged -= OnRungChanged;
+                director.TripwireReacted -= OnTripwireReacted;
+            }
             Log.Debug("PossessionAudio disarmed");
         }
         catch (Exception ex) { Log.Warning("PossessionAudio disarm failed: {Error}", ex.Message); }
+    }
+
+    /// <summary>Tests: the arm-time render, awaited so it cannot land in a later test.</summary>
+    internal static Task Rendering { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Tests: true between a lockdown's arm and its disarm.</summary>
+    internal static bool IsArmed { get { lock (Sync) return _armed; } }
+
+    /// <summary>Tests: undo <see cref="Install"/> and the throttles, so each test starts clean.</summary>
+    internal static void Uninstall()
+    {
+        Disarm();
+        lock (Sync)
+        {
+            if (_lockdown != null)
+            {
+                _lockdown.LockdownActivated -= OnLockdownActivated;
+                _lockdown.LockdownDeactivated -= OnLockdownDeactivated;
+            }
+            _lockdown = null;
+            _director = null;
+            _installed = false;
+            _lastTick = DateTime.MinValue;
+            _lastDip = DateTime.MinValue;
+        }
     }
 
     // -------------------------------------------------------------------------------------------
     //  The cues
     // -------------------------------------------------------------------------------------------
 
-    public static void OnEffectStarted(string effectId, string? targetKey, bool isBig)
+    internal static void OnEffectStarted(string effectId, string? targetKey, bool isBig)
     {
         // Micro-tics stay silent, exactly as they stay unnamed (POSSESSION.md, "the warden names the
         // big ones"). A tick on every R0 nudge would turn the tell into wallpaper.
@@ -171,14 +207,14 @@ public static class PossessionAudio
         PlayClip(EnsureTick(), 1.0f, "possession-tick");
     }
 
-    public static void OnRungChanged(PossessionRung rung)
+    internal static void OnRungChanged(PossessionRung rung)
     {
         // Settle is where every lockdown starts, so it is not a CHANGE anyone can hear as one.
         if (rung == PossessionRung.Settle) return;
         Dip("rung " + rung);
     }
 
-    public static void OnTripwireReacted(EscapeAttempt attempt)
+    internal static void OnTripwireReacted(EscapeAttempt attempt)
     {
         // Third pull at the same door and up: the same threshold the visual reaction uses for the
         // warden's stare, so the sound and the look land together instead of drifting apart.

@@ -1209,26 +1209,6 @@ namespace ConditioningControlPanel
         public static LockdownService Lockdown { get; private set; } = null!;
         /// <summary>The haunted-UI layer that rides a running lockdown (Services/Possession/POSSESSION.md).</summary>
         public static Services.Possession.PossessionDirector? Possession { get; private set; }
-
-        /// <summary>PossessionAudio (Core) cue handlers on/off the director's events; false with no director.</summary>
-        private static bool WirePossessionAudio(bool on)
-        {
-            var director = Possession;
-            if (director == null) return false;
-            if (on)
-            {
-                director.EffectStarted += Services.Possession.PossessionAudio.OnEffectStarted;
-                director.RungChanged += Services.Possession.PossessionAudio.OnRungChanged;
-                director.TripwireReacted += Services.Possession.PossessionAudio.OnTripwireReacted;
-            }
-            else
-            {
-                director.EffectStarted -= Services.Possession.PossessionAudio.OnEffectStarted;
-                director.RungChanged -= Services.Possession.PossessionAudio.OnRungChanged;
-                director.TripwireReacted -= Services.Possession.PossessionAudio.OnTripwireReacted;
-            }
-            return true;
-        }
         public static Services.Haptics.LockdownDoseKeeper? LockdownDose { get; private set; }
         public static MantraService Mantra { get; private set; } = null!;
         public static MantraVoiceService MantraVoice { get; private set; } = null!;
@@ -3306,7 +3286,7 @@ namespace ConditioningControlPanel
             // Companion wave (POSSESSION.md): the ember tick / dip cues, and the one remembered charge a
             // Full Doki lockdown leaves for the next launch. Both only subscribe; neither costs anything
             // until a lockdown runs (or, for the charge, until the flag from the last one is spent).
-            Services.Possession.PossessionAudio.Install(Lockdown, WirePossessionAudio);
+            Services.Possession.PossessionAudio.Install(Lockdown, Possession);
             Services.Possession.PossessionWpfHead.InstallRemember();
             // The Dose: a lockdown refuses to run empty (engine off -> started; nothing on -> the warden
             // picks). Recovery first, so a killed lockdown's conscripted toggles go back off before the

@@ -10,7 +10,7 @@ using Xunit;
 
 namespace CCP.Core.Tests;
 
-/// <summary>PossessionAudio moved from the WPF head (possession-core-b; tests adapted from trunk 98cfa9d86):
+/// <summary>PossessionAudio moved from the WPF head (possession-core-b2; tests adapted from trunk 98cfa9d86):
 /// two synthesised tones, quiet, throttled, behind the Lockdown audio-tics switch, the master volume and the
 /// head's output-suppressed probe, armed only while a lockdown runs.</summary>
 [Collection("PossessionAudio")]
@@ -29,7 +29,7 @@ public sealed class PossessionAudioTests : IDisposable
 
     public PossessionAudioTests()
     {
-        PossessionAudio.Disarm();
+        PossessionAudio.Uninstall();
         PossessionAudio.ForgetClips();
         PossessionAudio.UtcNow = () => _now;
         PossessionAudio.Settings = () => _settings;
@@ -43,7 +43,8 @@ public sealed class PossessionAudioTests : IDisposable
 
     public void Dispose()
     {
-        PossessionAudio.Disarm();
+        PossessionAudio.Uninstall();
+        PossessionAudio.Rendering.GetAwaiter().GetResult();
         PossessionAudio.ForgetClips();
         (PossessionAudio.UtcNow, PossessionAudio.Settings, PossessionAudio.Play, PossessionAudio.ClipDir) = _was;
         (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, CoreAudio.IsOutputSuppressedProvider) = _audioWas;
@@ -138,24 +139,49 @@ public sealed class PossessionAudioTests : IDisposable
     }
 
     [Fact]
-    public void ALockdownArmsTheDirectorWiring_AndItsEndUnwiresIt_RetryingWhenNoDirectorWasThere()
+    public void ASilencedCueInOneTest_DoesNotThrottleTheNext()
     {
-        var calls = new List<bool>();
-        var hasDirector = false;
-        var lockdown = new LockdownService();
-        PossessionAudio.Install(lockdown, on => { calls.Add(on); return hasDirector; });
+        // Every test starts at the same clock, so a throttle stamp left by the silent test made the next
+        // one's first cue look "too soon" (CI order, rgate run 38347835986).
+        using (var first = new PossessionAudioTests()) first.TheSwitchOff_TheVolumeAtZero_OrASuppressedOutputIsSilence_AndNoDuck();
+        using (var second = new PossessionAudioTests()) second.OnlyABigEffectTicks_AtMostEvery1500ms_AtTheMasterVolume();
+        using (var third = new PossessionAudioTests()) third.TheDipAnswersARungAboveSettle_AndTheThirdPullAtATripwire_WithADuck();
+    }
+
+    private static int Subscribers(PossessionDirector director, string evt) =>
+        (typeof(PossessionDirector).GetField(evt, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(director) as Delegate)?.GetInvocationList().Length ?? 0;
+
+    [Fact]
+    public void ALockdownSubscribesTheCuesToTheDirector_AndItsEndUnsubscribesThem()
+    {
+        using var lockdown = new LockdownService();
+        using var director = new PossessionDirector(lockdown, Array.Empty<IPossessionEffect>());
+        var events = new[] { "EffectStarted", "RungChanged", "TripwireReacted" };
+        PossessionAudio.Install(lockdown, director);
         try
         {
-            lockdown.Activate(TimeSpan.FromMinutes(5));    // no director yet: not armed
-            lockdown.Deactivate();
-            Assert.Equal(new[] { true }, calls);
-
-            hasDirector = true;
+            Assert.All(events, e => Assert.Equal(0, Subscribers(director, e)));
             lockdown.Activate(TimeSpan.FromMinutes(5));
+            Assert.All(events, e => Assert.Equal(1, Subscribers(director, e)));
             lockdown.Deactivate();
-            Assert.Equal(new[] { true, true, false }, calls);
+            Assert.All(events, e => Assert.Equal(0, Subscribers(director, e)));
         }
-        finally { lockdown.Dispose(); }
+        finally { PossessionAudio.Uninstall(); }
+    }
+
+    [Fact]
+    public void WithNoDirector_ALockdownLeavesTheCuesDisarmed()
+    {
+        using var lockdown = new LockdownService();
+        PossessionAudio.Install(lockdown, null);
+        try
+        {
+            lockdown.Activate(TimeSpan.FromMinutes(5));
+            Assert.False(PossessionAudio.IsArmed);
+            lockdown.Deactivate();
+        }
+        finally { PossessionAudio.Uninstall(); }
     }
 }
 

@@ -348,7 +348,7 @@ Injectable as a ctor `Func<string?>` for tests. Escape count comes from `Possess
 counts `EscapeAttempted.Total` (LockdownService keeps its own total private).
 
 **B13 audio tics** - `CCP.Core/Services/Possession/PossessionAudio.cs` (moved to Core in
-possession-core-b; the head wires it to the director in `App.WirePossessionAudio`), gated by the new
+possession-core-b2; the head passes its Lockdown and director to `PossessionAudio.Install`), gated by the new
 `AppSettings.LockdownAudioTics` (bool, default true). Two synthesized cues, rendered once into
 `%LOCALAPPDATA%/ConditioningControlPanel/possession/` and played through `AudioService.PlayOneShot`
 like any bubble pop, so device selection, the one-shot cap, the endpoint circuit breaker and disposal
