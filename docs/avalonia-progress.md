@@ -2119,3 +2119,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - PossessionDirector + PossessionRemember git-mv'd to CCP.Core behind PossessionDirectorHead/static seams; WPF-free contracts in Core, WPF keeps typed reads via IWpfPossessionHost + C# 14 extension properties.
 - Core tests: director bookkeeping (moved), tripwire/TargetFor seams, Remember arm rule + once/20 s flow, each fail-proven.
 - Review fixes: WPF head hook-mapping source pin, scene files renamed to their contents, doc/comment fixes.
+
+## avalonia-port/goon-core-a: +104
+- Cloud session (Opus), local review + gate.
