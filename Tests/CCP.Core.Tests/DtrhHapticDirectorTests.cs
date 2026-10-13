@@ -88,12 +88,18 @@ public class DtrhHapticDirectorTests
         CoreHaptics.Service = haptics;
         try
         {
-            // The mixer's first tick sees the gate closed (no premium here) and clears every
-            // layer once; wait it out so a zero below is the director's doing, not the mixer's.
+            // The mixer's loop sees the gate closed (no premium here) and clears every layer on
+            // its first tick. Stop the loop and wait for it to end, so it can never tick again and
+            // a zero below is the director's doing, not the mixer's.
+            var mixerType = typeof(HapticMixer);
+            var loopCts = (CancellationTokenSource)mixerType.GetField("_loopCts", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(haptics.Mixer)!;
+            var loopTask = (System.Threading.Tasks.Task)mixerType.GetField("_loopTask", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(haptics.Mixer)!;
+            loopCts.Cancel();
+            Assert.True(((IAsyncResult)loopTask).AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(10)));   // ended (canceled or not)
             haptics.SetLayer(HapticLayer.Manual, 1);
-            var until = DateTime.UtcNow.AddSeconds(10);
-            while (haptics.GetLayer(HapticLayer.Manual) > 0 && DateTime.UtcNow < until) Thread.Sleep(20);
-            Assert.Equal(0, haptics.GetLayer(HapticLayer.Manual));
+            Assert.Equal(1, haptics.GetLayer(HapticLayer.Manual));                // nothing clears it now
 
             DtrhHapticDirector.OnLaunch(testMode: false);
 

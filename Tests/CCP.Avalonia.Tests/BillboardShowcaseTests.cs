@@ -56,7 +56,9 @@ public sealed class BillboardShowcaseTests
         File.WriteAllBytes(video, new byte[] { 0 });
         var clip = new ShowcaseClip("dtrh", ShowcaseTier.Prime, "showcase-dtrh.mp4", 1, "", "showcase-dtrh.jpg", 1, "", 6);
         string? Copy(string key) { var v = Loc.Get(key); return v == key ? null : v; }
-        var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, poster, null), Copy)!;
+        EnsureApp();
+        var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, poster, null), Copy);
+        Assert.NotNull(card);
         var fake = new FakeShowcase(card);
         MainShellWindow.MakeShowcase = () => fake;
 
@@ -100,7 +102,10 @@ public sealed class BillboardShowcaseTests
         ClipArtView.MotionAllowed = () => true;
         string? Copy(string key) { var v = Loc.Get(key); return v == key ? null : v; }
         var clip = new ShowcaseClip("dtrh", ShowcaseTier.Prime, "showcase-dtrh.mp4", 1, "", "showcase-dtrh.jpg", 1, "", 6);
-        var shell = ShowHome(ShowcaseRules.BuildCard(clip, null, Copy)!, out var undo);
+        EnsureApp();
+        var card = ShowcaseRules.BuildCard(clip, null, Copy);
+        Assert.NotNull(card);
+        var shell = ShowHome(card, out var undo);
         try
         {
             var art = Assert.Single(shell.BillboardHost!.GetLogicalDescendants().OfType<ClipArtView>());
@@ -139,7 +144,9 @@ public sealed class BillboardShowcaseTests
                 string? Copy(string key) { var v = Loc.Get(key); return v == key ? null : v; }
                 var clip = new ShowcaseClip("dtrh", ShowcaseTier.Prime, "showcase-dtrh.mp4", 1, "", "showcase-dtrh.jpg", 1, "", 6);
                 var played = new List<string>();
-                var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, null, played.Add), Copy)!;
+                EnsureApp();
+                var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, null, played.Add), Copy);
+                Assert.NotNull(card);
                 var shell = ShowHome(card, out var undo);
                 try
                 {
@@ -168,12 +175,18 @@ public sealed class BillboardShowcaseTests
 
     /// <summary>A shown shell whose deck is the house cards plus this showcase card, turned to it.
     /// Motion Off keeps the deck still; <see cref="ClipArtView.MotionAllowed"/> decides the clip.</summary>
-    private static MainShellWindow ShowHome(BillboardCardSpec card, out Action undo)
+    /// <summary>The test app (whose Initialize loads the strings) exists before a card is built.</summary>
+    private static void EnsureApp()
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+    }
+
+    private static MainShellWindow ShowHome(BillboardCardSpec card, out Action undo)
+    {
+        EnsureApp();
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
