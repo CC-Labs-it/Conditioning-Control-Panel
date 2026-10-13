@@ -1057,3 +1057,28 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   NOACTIVATE); a press pops it with its FlashExit leave. Panic/Stop (FlashOverlay.CloseAll) closes flashes mid-leave too.
   Native Wayland is unchanged: no X11 overlay, so no flashes at all (logged once).
 - Tests: `Tests/CCP.Avalonia.Tests/FlashPopTests.cs`.
+
+## 2026-10-12: Linux web views stay off by default; CCP_LINUX_WEBVIEW opts in (webview-probe-fix)
+- Question: on Arch/CachyOS with webkit2gtk-4.1 and wpewebkit installed every web surface said "No native web view on
+  this platform." `WebHost.ProbeUnavailableReason` accepted only adapters advertising `NativeControlHost`; in
+  Avalonia.Controls.WebView 12.1.0 `GetAdapterInfo` reports WebKitGtk as `NativeDialog` and WpeWebKit/Headless as
+  `OffscreenRenderer`, so no Linux adapter ever passes, although `NativeWebView` does build one there.
+- Live evidence (sandbox, KDE Wayland + XWayland, ~/ccp-port/evidence/webview-probe-fix/): with the probe opened, the
+  engine was built and the intake page loaded and posted `ready`/`log` through `window.invokeCSharpAction` on both
+  engines. But requestAnimationFrame never kept running: WPE froze after its first frame (two captures 5 s apart are
+  identical), and GTK painted nothing. So the rAF heartbeat stayed silent and intake relaunched once, then gave up (~45 s).
+  The same pattern closes GameWindow/PbP. Run 1 was on a locked session and runs 2-3 possibly occluded, so runs 4-5
+  (live-run4-5.md) repeated it with the user at the desk, LockedHint=no and the intake window active: WPE again froze
+  after one frame (captures 5 s apart AE 0, `heartbeat silent` then `giving up`), GTK again drew only the background
+  (AE 0, gave up). A locked or hidden window is ruled out; neither 12.1 engine keeps rendering on KDE Wayland + XWayland.
+- Answer (advised by: supervisor, option B, confirmed by runs 4-5): the Linux default is unchanged (the fallback panel), so
+  nothing regresses. The decision is
+  `WebHost.DecideUnavailableReason`. `CCP_LINUX_WEBVIEW=wpe` mirrors `WebViewAdapter.CreateFactory` (WPE first, else
+  WebKitGTK); `=gtk` requires WebKitGTK and sets `PreferWebKitGtkInstead`. Windows/macOS keep the `NativeControlHost`
+  check. The Headless/Unknown adapters never count, and no engine is built without a classic desktop lifetime (tests,
+  `--smoke`, `--render-all`). The no-engine Linux hint is unchanged. Bridge: both adapters inject
+  `window.invokeCSharpAction`, which the shared web-shim already uses when `chrome.webview` is absent.
+- Next: flip the default only after a newer Avalonia.Controls.WebView keeps rAF running live (next-live-check.md has the
+  steps). WPE suspect: frame_complete is only dispatched when the compositor consumes a buffer (WpeWebViewAdapter.cs:421).
+  The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
