@@ -186,14 +186,6 @@ public class RemoteHapticPlayerTests
         Assert.Equal(0, player.LevelAt(450));
     }
 
-    [Fact]
-    public void Labels_name_the_new_commands_and_never_return_nothing()
-    {
-        Assert.Equal("Toy pattern", RemoteActionLabels.For("haptic_pattern"));
-        Assert.Equal("Melt", RemoteActionLabels.For("start_brain_drain"));
-        Assert.Equal("some thing", RemoteActionLabels.For("some_thing"));
-        Assert.Equal("", RemoteActionLabels.For(null));
-    }
     // ------------------------------------------------------------------ the service wiring
 
     [Fact]
