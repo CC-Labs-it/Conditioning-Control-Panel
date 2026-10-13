@@ -38,13 +38,15 @@ public class FunnelPageMessageTests
     [InlineData("patreon", "basic", "https://www.patreon.com/checkout/CodeBambi?rid=27604786")]
     [InlineData("substar", "basic", "https://subscribestar.adult/cc-labs")]
     [InlineData("web", "basic", "https://app.cclabs.app/subscribe?plan=basic&from=panel")]
+    [InlineData("card", "prime", "https://www.patreon.com/checkout/CodeBambi?rid=27681505")]
     public void ACtaNamingAPlanOpensThatPlansCheckout(string rail, string plan, string url)
     {
         var r = FunnelPageMessage.Read(Msg(
             "{\"type\":\"funnel\",\"event\":\"cta_clicked\",\"a\":\"goon_host\",\"b\":\"" + rail + "\",\"plan\":\"" + plan + "\"}"),
             PlanCatalog.Fallback)!;
         Assert.Equal(url, r.Url);
-        Assert.Equal(rail.Length == 0 ? "patreon" : rail, r.B);
+        // The counted rail is the one actually opened: an unknown rail opens Patreon and counts as patreon.
+        Assert.Equal(rail is "web" or "substar" ? rail : "patreon", r.B);
     }
 
     [Fact]

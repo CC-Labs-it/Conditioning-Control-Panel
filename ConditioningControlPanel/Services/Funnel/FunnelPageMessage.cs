@@ -45,13 +45,14 @@ public static class FunnelPageMessage
         string? url = null;
         if (evt == "cta_clicked" && (plans ?? PlanCatalog.Current).ForKey(Str(m, "plan")) is PlanInfo plan)
         {
+            // Any rail other than web / substar opens Patreon, so it is counted as patreon too.
+            if (b != "web" && b != "substar") b = "patreon";
             url = b switch
             {
                 "web" => PlanCatalog.WebUrlFor(plan, "panel"),
                 "substar" => plan.SubstarUrl,
                 _ => plan.PatreonUrl,
             };
-            if (b.Length == 0) b = "patreon";
         }
         return new FunnelPageRequest(evt!, a, b, url);
     }
