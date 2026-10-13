@@ -117,4 +117,12 @@ public class ConversionLapseRowsTests
         Assert.Equal("2026-10-16", back.InboxStamps["lapse_closed"]);
         Assert.Null(new AppSettings().ServerTierSeen);
     }
+
+    [Fact]
+    public void Conversion_state_never_rides_the_cloud_backup()
+    {
+        // C9: synced = no. A restore must not bring back a stale tier reading or a stamp set.
+        Assert.True(ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.ServerTierSeen)));
+        Assert.True(ProfileSyncService.IsExcludedFromBackup(nameof(AppSettings.InboxStamps)));
+    }
 }
