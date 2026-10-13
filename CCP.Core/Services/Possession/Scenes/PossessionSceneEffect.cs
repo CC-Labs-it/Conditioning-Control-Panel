@@ -7,17 +7,6 @@ using Serilog;
 
 namespace ConditioningControlPanel.Services.Possession.Scenes;
 
-/// <summary>Every scene the director can run, one instance each (like the effect catalog).</summary>
-public static class PossessionSceneCatalog
-{
-    public static List<IPossessionScene> CreateAll() => new()
-    {
-        new RailSweepScene(),
-        new WhereYouAreScene(),
-        new TheCountScene(),
-    };
-}
-
 /// <summary>
 /// A scene dressed as an <see cref="IPossessionEffect"/>.
 ///

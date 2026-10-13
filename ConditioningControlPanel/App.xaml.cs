@@ -3286,13 +3286,14 @@ namespace ConditioningControlPanel
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
             // and LockdownPossessionEnabled is on, so constructing it here costs nothing.
-            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll());
+            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll(),
+                Services.Possession.PossessionWpfHead.CreateDirectorHead());
             Possession.Warden = new Services.Possession.Warden();
             // Companion wave (POSSESSION.md): the ember tick / dip cues, and the one remembered charge a
             // Full Doki lockdown leaves for the next launch. Both only subscribe; neither costs anything
             // until a lockdown runs (or, for the charge, until the flag from the last one is spent).
             Services.Possession.PossessionAudio.Install();
-            Services.Possession.PossessionRemember.Install();
+            Services.Possession.PossessionWpfHead.InstallRemember();
             // The Dose: a lockdown refuses to run empty (engine off -> started; nothing on -> the warden
             // picks). Recovery first, so a killed lockdown's conscripted toggles go back off before the
             // engine can ever read them.

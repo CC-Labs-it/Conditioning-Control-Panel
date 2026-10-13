@@ -2114,3 +2114,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/mine-launcher-links: +995
 - Launcher Media pill + dialog (preset via the panel), shortcut link + tile shortcut button writing .desktop entries (Linux) / .lnk (Windows, compile-only); Core LauncherShortcuts rules, LauncherMediaSettings moved to Core.
 - Rest: launcher friends chip and What's New link; WPF cyan chip styling.
+
+## avalonia-port/possession-core-b: +742
+- PossessionDirector + PossessionRemember git-mv'd to CCP.Core behind PossessionDirectorHead/static seams; WPF-free contracts in Core, WPF keeps typed reads via IWpfPossessionHost + C# 14 extension properties.
+- Core tests: director bookkeeping (moved), tripwire/TargetFor seams, Remember arm rule + once/20 s flow, each fail-proven.
+- Review fixes: WPF head hook-mapping source pin, scene files renamed to their contents, doc/comment fixes.
