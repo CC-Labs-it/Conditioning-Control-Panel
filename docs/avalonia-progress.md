@@ -2062,3 +2062,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/leash-gate-card: +645
 - Leash gate card on the panel (WPF LeashGateCard + MainWindow.Leash.cs): PresentLeashGateProvider seeded, pending punishment holds tiles, Panic and Cut leash (LeashCutSafety) always work; 4 fail-proven headless tests + live sandbox evidence.
 - Punish window + task runner left for leash-punish.
+
+## avalonia-port/first-show-c: +514
+- Welcome guide ported (WelcomeSteps on the real shell, highlight, FeatureCard tutorial preview, follows the app's monitor); live run reaches Presets.
+- Show effects carried from first-show-b (sparks, subliminal, spiral, floating words, drain veil); feat-first-show stays stub (bleepese, replay doors, bubble pops).
