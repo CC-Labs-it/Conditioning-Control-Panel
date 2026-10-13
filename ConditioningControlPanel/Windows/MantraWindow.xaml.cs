@@ -359,6 +359,10 @@ namespace ConditioningControlPanel
                 (byte)(a.B + (b.B - a.B) * t));
         }
 
+        /// <summary>The app's master volume as a 0-1 gain; the drone and tones start at it.</summary>
+        private static float MasterGain() =>
+            (float)Math.Clamp((App.Settings?.Current?.MasterVolume ?? 100) / 100.0, 0.0, 1.0);
+
         private void StartDrone()
         {
             try
@@ -384,6 +388,7 @@ namespace ConditioningControlPanel
                 _droneOutput = new WaveOutEvent();
                 App.Audio?.ApplyPreferredDevice(_droneOutput);
                 _droneOutput.Init(_droneMixer);
+                _droneOutput.Volume = MasterGain();   // obeys the master volume (ccp-bugs #1432)
                 _droneOutput.Play();
             }
             catch (Exception ex)
@@ -425,6 +430,7 @@ namespace ConditioningControlPanel
                 var output = new WaveOutEvent();
                 App.Audio?.ApplyPreferredDevice(output);
                 output.Init(take);
+                output.Volume = MasterGain();
                 output.PlaybackStopped += (_, _) =>
                 {
                     try { output.Dispose(); } catch { }
