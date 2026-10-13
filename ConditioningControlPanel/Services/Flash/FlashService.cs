@@ -1043,7 +1043,12 @@ namespace ConditioningControlPanel.Services
                 () => ActiveWindowCount > 0,
                 () => App.Video?.IsPlaying == true || App.DualMonitorVideo?.IsPlaying == true || App.BrowserMedia?.IsPlaying == true,
                 () => App.Settings?.Current?.JackpotRemixEnabled == true,
-                Path.Combine(App.UserDataPath, "cache", "remix"));
+                Path.Combine(App.UserDataPath, "cache", "remix"),
+                owned: () => PrizeGrants.IsGranted(PrizeGrants.JackpotRemix),
+                motion: () => MotionFx.Level,
+                builderDisabled: () => JackpotRemixBuilder.Default.Disabled,
+                build: async (sources, seed, ct) => (await JackpotRemixBuilder.Default.BuildAsync(sources, seed, ct).ConfigureAwait(false))?.FilePath,
+                availablePhysicalBytes: JackpotRemixBuilder.AvailablePhysicalBytes);
 
         /// <summary>The local flash pool's gifs under the assets root (what the remix page can read).</summary>
         private IReadOnlyList<string> SnapshotGifPool()

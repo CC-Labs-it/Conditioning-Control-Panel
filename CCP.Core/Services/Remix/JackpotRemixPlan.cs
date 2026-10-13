@@ -8,8 +8,8 @@ namespace ConditioningControlPanel.Services.Remix;
 /// <summary>
 /// The pure half of the Jackpot Remix builder: which gifs go to the page, in what order, as
 /// what url, and how many prebuilt files the cache keeps. No WebView2, no App, so every rule
-/// here is unit tested (JackpotRemixPlanTests) and the host in <see cref="JackpotRemixBuilder"/>
-/// is only plumbing.
+/// here is unit tested (JackpotRemixPlanTests) and the head's host (the WPF head's
+/// JackpotRemixBuilder) is only plumbing.
 /// </summary>
 public static class JackpotRemixPlan
 {
