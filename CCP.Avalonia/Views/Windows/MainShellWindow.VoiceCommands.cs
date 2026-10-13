@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow? Tube => _avatarTubeWindow;
 
         // WPF StopLocked (#706): Lockdown, a strict video on screen, or a strict-locked bubble count.
-        private static bool VoiceStopLocked() =>
+        internal static bool VoiceStopLocked() =>
             LockdownActive
             || (CoreEngine.Video is { IsPlaying: true, IsStrict: true })
             || (BubbleCountWindow.IsAnyOpen() && CoreSettings.Current.BubbleCountStrictLock);
