@@ -163,6 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static void CleanupAfterRun()
         {
+            Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175 / EndRun :3228
             _runTimer = null;
             _hud = null;
             _overlay = null;
