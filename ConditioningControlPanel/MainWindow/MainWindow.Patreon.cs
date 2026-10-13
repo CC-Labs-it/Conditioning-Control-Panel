@@ -1310,6 +1310,8 @@ namespace ConditioningControlPanel
             CompanionTab.TxtIdleIntervalCompanion.Text = $"{settings.IdleGiggleIntervalSeconds}s";
             CompanionTab.SliderBubbleDurationCompanion.Value = settings.BubbleDurationSeconds;
             CompanionTab.TxtBubbleDurationCompanion.Text = $"{(int)settings.BubbleDurationSeconds}s";
+            CompanionTab.SliderVoiceLevelCompanion.Value = settings.CompanionVoiceLevel;
+            CompanionTab.TxtVoiceLevelCompanion.Text = settings.CompanionVoiceLevel.ToString();
 
             // Awareness Mode settings. The on/off checkbox became Z5's dial (design §6: "toggle
             // superseded by Z5 dial"), which reads the same two settings; the cooldowns below are the
@@ -1472,6 +1474,18 @@ namespace ConditioningControlPanel
             var value = slider?.Value ?? 2.0;
             CompanionTab.TxtBubbleDurationCompanion.Text = $"{(int)value}s";
             App.Settings.Current.BubbleDurationSeconds = value;
+            App.Settings.Save();
+        }
+
+        // 7.1.8: the companion voice's own level. Read by CompanionVoiceGain when a line starts,
+        // so a change is heard from the next line.
+        internal void SliderVoiceLevel_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_isLoading || CompanionTab.TxtVoiceLevelCompanion == null) return;
+
+            var value = (int)Math.Round((sender as Slider)?.Value ?? Services.CompanionVoiceGain.DefaultLevel);
+            CompanionTab.TxtVoiceLevelCompanion.Text = value.ToString();
+            App.Settings.Current.CompanionVoiceLevel = value;
             App.Settings.Save();
         }
 

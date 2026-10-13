@@ -70,6 +70,11 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
             if (Window.GetWindow(this) is MainWindow mw) mw.SliderBubbleDuration_ValueChanged(sender, e);
         }
 
+        private void SliderVoiceLevel_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw) mw.SliderVoiceLevel_ValueChanged(sender, e);
+        }
+
         private void BtnChatShortcut_Click(object sender, RoutedEventArgs e)
         {
             if (Window.GetWindow(this) is MainWindow mw) mw.BtnChatShortcut_Click(sender, e);

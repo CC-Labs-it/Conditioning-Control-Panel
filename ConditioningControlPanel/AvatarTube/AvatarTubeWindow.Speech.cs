@@ -1922,7 +1922,9 @@ namespace ConditioningControlPanel
             var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
             if (masterVolume <= 0f) return;
             // Idle voicelines were full-volume (×1.0); -20% so today's hotter v3 lines sit under the barks.
-            var volume = (float)Math.Pow(masterVolume, 1.5) * 0.8f;
+            // The player's Voice level rides on top (CompanionVoiceGain; its default changes nothing).
+            var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.IdleTrim);
+            if (volume <= 0f) return; // Voice level 0: the bubble still shows, the line is silent
             PlaySpokenAudio(filePath, volume);
         }
 
@@ -2534,7 +2536,10 @@ namespace ConditioningControlPanel
                 });
 
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.9f; // a touch louder — it's a once-ever moment
+                // a touch louder — it's a once-ever moment. Voice level applies here too; at 0 the
+                // clip still runs (silent), so the latch below unwinds the usual way.
+                var volume = masterVolume <= 0f ? 0f
+                    : Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.NoteTrim);
 
                 // onFinished is guaranteed to fire exactly once — including when playback is
                 // refused outright — so the uninterruptible latch can never stick on (#778).
@@ -2564,7 +2569,8 @@ namespace ConditioningControlPanel
 
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 0) / 100f;
                 if (masterVolume <= 0f) return; // muted
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.85f;
+                var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.BarkTrim);
+                if (volume <= 0f) return; // Voice level 0
                 PlaySpokenAudio(audioPath, volume); // unified channel → no overlap
             }
             catch (Exception ex)
@@ -2584,7 +2590,8 @@ namespace ConditioningControlPanel
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
                 if (masterVolume <= 0f) return;
                 // Event lines were ×0.7; -20% (→ ×0.56) so today's hotter v3 lines sit under the barks.
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.56f;
+                var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.EventTrim);
+                if (volume <= 0f) return; // Voice level 0
                 PlaySpokenAudio(audioPath, volume); // unified channel → no overlap
             }
             catch (Exception ex)
@@ -2669,7 +2676,9 @@ namespace ConditioningControlPanel
                 if (System.IO.File.Exists(audioPath))
                 {
                     var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                    var volume = (float)Math.Pow(masterVolume, 1.5);
+                    // A spoken line, so it follows the Voice level like the rest of the voice.
+                    var volume = masterVolume <= 0f ? 0f
+                        : Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.FullTrim);
 
                     App.Audio?.PlayOneShot(audioPath, volume, "cum-and-collapse");
                 }
