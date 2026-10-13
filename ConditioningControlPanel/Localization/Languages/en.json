@@ -232,6 +232,7 @@
   "preset_tag_default": "DEF",
   "preset_tag_custom": "CUSTOM",
   "sd_zone_presets": "PRESETS",
+  "sd_presets_scope": "A preset saves which effects are on, their dials, the volumes and the phrase picks. Fonts, colours, media and everything else stay the same across presets.",
   "sd_zone_sessions": "SESSIONS",
   "sd_zone_sessions_hint": "Built-in · Yours · Catalogue",
   "rack_source_all": "All",

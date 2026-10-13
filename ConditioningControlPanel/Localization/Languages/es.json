@@ -228,6 +228,7 @@
   "preset_tag_default": "PRED",
   "preset_tag_custom": "TUYO",
   "sd_zone_presets": "PREAJUSTES",
+  "sd_presets_scope": "Un preajuste guarda qué efectos están activos, sus controles, los volúmenes y las frases elegidas. Fuentes, colores, medios y todo lo demás son iguales en todos los preajustes.",
   "sd_zone_sessions": "SESIONES",
   "sd_zone_sessions_hint": "Incluidas · Tuyas · Catálogo",
   "rack_source_all": "Todas",

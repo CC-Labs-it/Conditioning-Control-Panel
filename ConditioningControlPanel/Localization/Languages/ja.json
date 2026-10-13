@@ -228,6 +228,7 @@
   "preset_tag_default": "標準",
   "preset_tag_custom": "カスタム",
   "sd_zone_presets": "プリセット",
+  "sd_presets_scope": "プリセットが保存するのは、オンにした効果とその調整値、音量、選んだフレーズです。フォント、色、メディアなどその他の設定は、どのプリセットでも共通です。",
   "sd_zone_sessions": "セッション",
   "sd_zone_sessions_hint": "標準 · あなたの · カタログ",
   "rack_source_all": "すべて",

@@ -228,6 +228,7 @@
   "preset_tag_default": "기본",
   "preset_tag_custom": "커스텀",
   "sd_zone_presets": "프리셋",
+  "sd_presets_scope": "프리셋은 켜 둔 효과와 그 조절값, 음량, 고른 문구를 저장합니다. 글꼴, 색상, 미디어와 나머지 설정은 모든 프리셋에서 똑같습니다.",
   "sd_zone_sessions": "세션",
   "sd_zone_sessions_hint": "기본 · 내 것 · 카탈로그",
   "rack_source_all": "전체",

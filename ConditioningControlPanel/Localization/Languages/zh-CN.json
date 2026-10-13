@@ -228,6 +228,7 @@
   "preset_tag_default": "默认",
   "preset_tag_custom": "自定义",
   "sd_zone_presets": "预设",
+  "sd_presets_scope": "预设会保存开启了哪些效果、它们的调节值、音量和选中的短语。字体、颜色、媒体和其他设置在所有预设中都相同。",
   "sd_zone_sessions": "会话",
   "sd_zone_sessions_hint": "内置 · 你的 · 目录",
   "rack_source_all": "全部",

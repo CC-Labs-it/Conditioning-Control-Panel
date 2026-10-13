@@ -228,6 +228,7 @@
   "preset_tag_default": "PADRÃO",
   "preset_tag_custom": "SUA",
   "sd_zone_presets": "PREDEFINIÇÕES",
+  "sd_presets_scope": "Uma predefinição salva quais efeitos estão ligados, seus ajustes, os volumes e as frases escolhidas. Fontes, cores, mídia e todo o resto são iguais em todas as predefinições.",
   "sd_zone_sessions": "SESSÕES",
   "sd_zone_sessions_hint": "Nativas · Suas · Catálogo",
   "rack_source_all": "Todas",

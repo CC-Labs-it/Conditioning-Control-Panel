@@ -228,6 +228,7 @@
   "preset_tag_default": "DÉFAUT",
   "preset_tag_custom": "PERSO",
   "sd_zone_presets": "PRÉRÉGLAGES",
+  "sd_presets_scope": "Un préréglage enregistre les effets activés, leurs réglages, les volumes et les phrases choisies. Polices, couleurs, médias et tout le reste sont les mêmes pour tous les préréglages.",
   "sd_zone_sessions": "SESSIONS",
   "sd_zone_sessions_hint": "Intégrées · Les tiennes · Catalogue",
   "rack_source_all": "Toutes",
