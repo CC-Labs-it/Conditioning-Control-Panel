@@ -9,9 +9,13 @@ pkgdesc="A visual conditioning application with gamification features"
 arch=('x86_64')
 url="https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF"
 license=('MIT')
-# Web views (GTK3 WebKit + WPE), LibVLC audio/video, libsecret tokens, X11/XInput2 overlays + panic key,
-# parec mic (libpulse), ICU for .NET globalization. .NET itself is self-contained.
-depends=('webkit2gtk-4.1' 'wpewebkit' 'wpebackend-fdo' 'libwpe' 'vlc' 'libsecret' 'libx11' 'libxi' 'libpulse' 'icu')
+# Web views (GTK3 WebKit; gst-plugins-good's autoaudiosink, without which a page's first sound aborts the web process),
+# LibVLC audio/video, libsecret tokens, X11/XInput2 overlays + panic key, parec mic (libpulse), ICU for .NET globalization.
+# .NET itself is self-contained. WPE is an opt-in engine only (CCP_LINUX_WEBVIEW=wpe; docs/avalonia-decisions.md 2026-10-13).
+depends=('webkit2gtk-4.1' 'gst-plugins-good' 'vlc' 'libsecret' 'libx11' 'libxi' 'libpulse' 'icu')
+optdepends=('wpewebkit: opt-in WPE web view engine (CCP_LINUX_WEBVIEW=wpe; needs a wpewebkit that still has the libwpe API)'
+            'wpebackend-fdo: opt-in WPE web view engine'
+            'libwpe: opt-in WPE web view engine')
 provides=('conditioning-control-panel')
 conflicts=('conditioning-control-panel')
 options=('!strip' '!debug')

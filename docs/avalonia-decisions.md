@@ -1082,3 +1082,28 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   steps). WPE suspect: frame_complete is only dispatched when the compositor consumes a buffer (WpeWebViewAdapter.cs:421).
   The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
+
+## 2026-10-13: WebKitGTK is the Linux web view; the "rAF stall" was a missing GStreamer audio sink (webview-render)
+- Question: no Linux web view kept drawing (2026-10-12 entry above). Is it the engines, Avalonia's frame pump, or the box?
+- Root cause (live, ~/ccp-port/evidence/webview-render/findings.md): the WEB PROCESS crashed. Without GStreamer's
+  `autoaudiosink` (gst-plugins-good) WebKitWebProcess/WPEWebProcess SIGABRT on a page's first WebAudio sound
+  ("autoaudiosink not found", then g_signal_connect_data(NULL)). The host keeps the last frame and rAF dies. Every earlier live
+  run has that coredump about 3 s after intake's `init`. Without audio, WebKitGTK (GtkX11) draws continuously at ~62 fps, WebGL included.
+  With a scratch-extracted autoaudiosink on GST_PLUGIN_PATH, intake animates and heartbeats in the real app.
+  WEBKIT_DISABLE_DMABUF_RENDERER, WEBKIT_DISABLE_COMPOSITING_MODE, GDK_BACKEND=x11 and LIBGL_ALWAYS_SOFTWARE change nothing.
+  The WPE frame pump is push (frame_complete per copied buffer) and needs no render-loop call.
+- Second finding: Arch wpewebkit 2.54.1-2 is built without the legacy libwpe API (`webkit_web_view_backend_new` gone,
+  upstream AvaloniaUI/Avalonia.Controls.WebView#88). 12.1's WPE adapter then throws from an async void and kills the app,
+  and WPE is the package's default Linux pick.
+- Answer (advised by: supervisor): on Linux, WebHost always sets `PreferWebKitGtkInstead` (WebKitGTK default).
+  `CCP_LINUX_WEBVIEW=wpe` is honoured only when libWPEWebKit exports `webkit_web_view_backend_new` (`NativeLibrary.TryGetExport`),
+  otherwise GTK is used. `=off` gives the fallback panel. A Linux engine without the audio sink gives the panel with the per-distro
+  command (Core `LinuxDependencies`, "web views (sound)": gst-plugins-good / gstreamer1.0-plugins-good / gstreamer1-plugins-good;
+  found on GST_PLUGIN_SYSTEM_PATH(_1_0), GST_PLUGIN_PATH(_1_0) and the distro plugin dirs). A gate, not a warning: a page that
+  aborts on its first sound is worse than an honest panel. WPE is opt-in only, so the startup toast (`LinuxDependencies.Required`)
+  and the panel (`WebViews`) no longer name it. PKGBUILD: gst-plugins-good in depends, the WPE trio in optdepends. Headless, `--smoke`,
+  `--render-all` and tests are unchanged (never an engine). Windows/macOS are untouched.
+- Not chosen: GTK `ExperimentalOffscreen` survives intake without the sink but pushes ~16 fps and hides the missing dependency.
+- Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
+  (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
