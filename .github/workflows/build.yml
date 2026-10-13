@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      scope:
+        type: choice
+        options: [all, windows]
+        default: all
+        description: 'windows = only the Windows jobs; the Linux half ran locally (bin/rgate hybrid)'
 
 # rgate dispatches this workflow on throwaway avalonia-port/gate-* branches: a newer run there cancels
 # the older one. Every other ref gets a group of its own run, so PR and main runs never cancel each other.
@@ -19,6 +25,7 @@ jobs:
   # either change makes the job pass on code that cannot run on Linux, which destroys the
   # only signal we have. The Windows build lives in the `windows` job below, on purpose.
   core-linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -222,6 +229,7 @@ jobs:
   # Sharded: one testhost for the whole suite outgrew the 16 GB runner; the shard definitions live in
   # .github/scripts/avalonia-tests-sharded.sh, the last shard is the complement of the others.
   avalonia-linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -294,6 +302,7 @@ jobs:
 
   # The coverage guarantee the sequential script used to give: the shards' Total: counts must add up to
   # the suite's own --list-tests count, so a test can never fall between shards (or a shard go missing).
+  # !cancelled() also keeps this running when avalonia-linux is skipped (scope=windows).
   avalonia-coverage:
     needs: [avalonia-linux, avalonia-windows]
     if: ${{ !cancelled() }}
@@ -301,7 +310,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [linux, windows]
+        # scope=windows (hybrid rgate): the Linux shards ran locally, so only the Windows total is checked here.
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'windows' && '["windows"]' || '["linux", "windows"]') }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -329,6 +339,7 @@ jobs:
   # Greps the compiler cannot do: APIs that compile fine in a net10.0 library and only fail at
   # runtime, plus the XAML clr-namespace tripwire. See the script for what and why.
   core-guards:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
