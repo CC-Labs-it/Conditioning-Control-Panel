@@ -525,7 +525,9 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             // available (ccp-bugs#973, #849, #567, #554). Upgrading whatever copy is running
             // also self-heals an install that already drifted.
             var registryPath = GetInstalledPath();
-            var installPath = ReleaseFeed.InnoInstallDirOf(Process.GetCurrentProcess().MainModule?.FileName);
+            string? installPath;
+            try { installPath = ReleaseFeed.InnoInstallDirOf(Process.GetCurrentProcess().MainModule?.FileName); }
+            catch { installPath = null; } // the pre-move GetRunningInstallDir swallowed this too
 
             if (string.IsNullOrEmpty(installPath))
             {
