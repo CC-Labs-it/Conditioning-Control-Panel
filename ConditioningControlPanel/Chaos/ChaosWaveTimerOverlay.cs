@@ -162,14 +162,13 @@ public sealed class ChaosWaveTimerOverlay : Window
     private void SetText(int wave, int waveCount, double secLeftInWave, double score)
     {
         _pill.Visibility = Visibility.Visible;
-        bool last = wave >= waveCount;
-        _wave.Text = last ? "LAST WAVE" : $"WAVE {wave}/{waveCount}";
-        int s = (int)Math.Max(0, Math.Ceiling(secLeftInWave));
-        _clock.Text = $"{s / 60}:{s % 60:00}";
-        _score.Text = $"{(int)score:N0}";
+        var r = ConditioningControlPanel.Services.Chaos.ChaosWaveTimerReadout.For(wave, waveCount, secLeftInWave, score);
+        _wave.Text = r.Wave;
+        _clock.Text = r.Clock;
+        _score.Text = r.Score;
 
         // The last ten seconds of a wave run hot (red clock); calm white otherwise.
-        bool urgent = secLeftInWave <= 10;
+        bool urgent = r.Urgent;
         if (urgent != _urgent)
         {
             _urgent = urgent;
@@ -180,7 +179,7 @@ public sealed class ChaosWaveTimerOverlay : Window
 
         // The RUN's last ten seconds (urgent on the final wave): the red clock also blinks —
         // the descent gets a finale instead of an interruption.
-        bool finalRush = urgent && last;
+        bool finalRush = r.FinalRush;
         if (finalRush != _finalRush)
         {
             _finalRush = finalRush;

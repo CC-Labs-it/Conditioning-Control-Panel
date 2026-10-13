@@ -69,6 +69,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
+            // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
+            if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             _state.StartShields = _state.Shields;
             _spawning = true;
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
@@ -85,7 +87,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var end = ChaosRunEngine.CheckEnd(_state, elapsed);
             if (end == ChaosRunEngine.EndCheck.RunOver) { EndRun(); return; }
             if (end == ChaosRunEngine.EndCheck.Relapse) _state.PushEvent("☠ relapse. one more loop — everything drips double");
-            var (newWave, _) = ChaosRunEngine.WaveAt(_state, elapsed);
+            var (newWave, waveLen) = ChaosRunEngine.WaveAt(_state, elapsed);
+            // WPF :1094 Pocket Watch: the wave countdown (+ a live score line).
+            if (_state.ShowWaveTimer)
+                ChaosWaveTimerWindow.Update(newWave, _state.WaveCount, waveLen - (elapsed % waveLen), _state.Score);
             if (newWave > _state.WaveIndex)
             {
                 // WPF BeginWaveTransition with drafts off (:1449): roll straight into the next wave.
@@ -116,6 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_active && _hud == null && _overlay == null) return;
             _spawning = false;
             _runTimer?.Stop();
+            ChaosWaveTimerWindow.CloseActive();   // WPF ForceShutdown :3181
             if (_overlay != null)
             {
                 _overlay.OnDismissed = null;   // avoid re-entrant cleanup
@@ -132,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null) return;
             _spawning = false;
             _runTimer?.Stop();
+            ChaosWaveTimerWindow.CloseActive();   // WPF EndRun :3234
 
             double durMin = Math.Max(1, _state.RunDurationSec) / 60.0;
             double capBase = 250.0 * durMin * _state.Config.DifficultyMult;
@@ -157,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _spawning = false;
             _runTimer?.Stop();
+            ChaosWaveTimerWindow.CloseActive();   // WPF CleanupAfterRun :3321
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             CleanupAfterRun();
         }
