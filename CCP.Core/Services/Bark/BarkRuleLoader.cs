@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Services.Bark
 
         /// <summary>Embedded base manifest: Resources/sounds/companion_audio/bark_rules.json.</summary>
         public static string EmbeddedManifestPath =>
-            CompanionPhraseService.ResolveCompanionAudioFile(ManifestFileName);
+            ContentLocator.Resolve(Path.Combine(Services.Companion.CompanionContentResolver.CompanionAudioRelativeDir, ManifestFileName));
 
         /// <summary>
         /// The active mod's overlay manifest, wherever it actually lives: its extracted .ccpmod

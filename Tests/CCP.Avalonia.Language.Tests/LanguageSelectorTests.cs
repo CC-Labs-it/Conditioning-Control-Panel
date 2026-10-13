@@ -476,6 +476,9 @@ public sealed class LanguageSelectorTests
         settings.Current.RailRecent.Add("tab.presets");
         // Opening a section page remembers its last tab (a real save, WPF SyncSectionChrome); already so.
         settings.Current.NavLastTabBySection = "{\"studio\":\"presets\"}";
+        // Opening Presets fires the CCP default's lifetime bark tut_presets, whose latch is a real save
+        // (WPF BarkService.CommitFire MarkBarkFired; companion-barks); already spent here.
+        settings.Current.MarkBarkFired("tut_presets");
         settings.SaveImmediate();
         return File.ReadAllText(settingsPath);
     }

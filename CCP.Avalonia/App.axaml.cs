@@ -668,7 +668,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
-                // echo stays unseeded (no bark engine here: CoreBark is a doorbell); command executor and
+                // echo stays unseeded (BarkHost raises no BarkSpoken yet); command executor and
                 // activities are CompanionEffects (seeded below). SeedMemorySignals seeds UserMessageSent for the memory
                 // chat counter only; no companion-chat achievement listens to it on this head yet.
                 SeedMemorySignals();
@@ -676,6 +676,7 @@ namespace ConditioningControlPanel.Avalonia
                 catch (Exception ex) { Brain = null; Serilog.Log.Error(ex, "CompanionBrain: initialization failed, falling back to the stateless AI path"); }
                 SeedCompanionTubeSeams();
                 CompanionEffects.Seed();
+                Views.AvatarTube.BarkHost.Start();   // WPF App.xaml.cs:3409 Bark?.Start() (mods are up since StartMods)
                 // WPF App.xaml.cs:554 / 2786 / 2816: legacy adapters route through the brain, a brain wipe also
                 // clears the legacy local transcript, and a Local user gets the model warmed up in the background.
                 ConditioningControlPanel.Services.AIService.AiServiceStrategy.BrainProvider = () => Brain;
