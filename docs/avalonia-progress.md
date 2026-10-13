@@ -2224,3 +2224,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/account-core-a: +257
 - Cloud session (Opus), local review + gate.
 - Review fix: separate trys in WPF StopSync seam; stale contract-D comments refreshed. rgate GATE-OK.
+
+## avalonia-port/chaos-core-a: +98
+- Cloud session (Opus), local review + gate.

@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Chaos;
 
@@ -95,7 +96,7 @@ internal static class DtrhSessionStatsStore
             if (File.Exists(FilePath))
                 _root = JsonConvert.DeserializeObject<Root>(File.ReadAllText(FilePath));
         }
-        catch (Exception ex) { App.Logger?.Warning("DtrhSessionStatsStore load failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Warning("DtrhSessionStatsStore load failed: {E}", ex.Message); }
 
         _root ??= new Root();
         _root.Lifetime ??= new SessionTotals();
@@ -172,14 +173,14 @@ internal static class DtrhSessionStatsStore
         // (Record runs on the dispatcher thread via OnRunEnded).
         string json;
         try { json = JsonConvert.SerializeObject(_root, Formatting.Indented); }
-        catch (Exception ex) { App.Logger?.Warning("DtrhSessionStatsStore serialize failed: {E}", ex.Message); return; }
+        catch (Exception ex) { Log.Warning("DtrhSessionStatsStore serialize failed: {E}", ex.Message); return; }
         var path = FilePath;
         Task.Run(() =>
         {
             lock (_writeLock)
             {
                 try { File.WriteAllText(path, json); }
-                catch (Exception ex) { App.Logger?.Warning("DtrhSessionStatsStore save failed: {E}", ex.Message); }
+                catch (Exception ex) { Log.Warning("DtrhSessionStatsStore save failed: {E}", ex.Message); }
             }
         });
     }

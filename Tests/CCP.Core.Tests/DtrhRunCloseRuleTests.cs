@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Banking a DtRH descent when the window dies under it (Beppu, 2026-09-20: "the run counter
