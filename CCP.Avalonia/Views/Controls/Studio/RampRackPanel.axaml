@@ -8,8 +8,7 @@
        Image + EmojiToImageSource       ->  TextBlock with the same glyph, size and opacity -
                                             same trap 3. It was the only {Binding} on this view,
                                             so no x:DataType is needed.
-       feat:AdaptiveSideArt.CollapseBelow -> dropped (WPF-head attached behaviour), same call as
-                                            Views/Features/SpiralFeatureControl.axaml.
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        x:FieldModifier="internal"       ->  dropped; x:Names kept. No host on this head pokes
                                             those fields.
 
@@ -17,7 +16,7 @@
      panel is a frame, exactly as on WPF. Root stays a StackPanel and the direct UserControl
      content: MainWindow.SessionFeatureLock.cs inserts the session-lock banner at index 0 of
      ((Panel)content.Content).Children. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Avalonia.Views.Features"
@@ -47,7 +46,7 @@
         <!-- VELVET KIT 2 · ROUND 3 · DENSITY. The settings column is capped (3*, MaxWidth 780) so
              a slider stops being a ~1200px runway in the wide Studio detail pane, and the width
              that buys back becomes ONE big art card instead of dead margin. -->
-        <Grid>
+        <Grid sideart:AdaptiveSideArt.CollapseBelow="700">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" MaxWidth="780"/>
                 <ColumnDefinition Width="2*"/>

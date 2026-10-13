@@ -22,14 +22,14 @@
        x:Name on those two ImageBrushes  - still AVLN2000; only a StyledElement can be named,
          which is why the BORDER carries the name and the brush is built in code.
        Border.OpacityMask                - kept; Avalonia has OpacityMask on Visual.
-       feat:AdaptiveSideArt.CollapseBelow - attached behaviour lives in the WPF head.
+       feat:AdaptiveSideArt.CollapseBelow - kept (Helpers/AdaptiveSideArt.cs), same threshold as WPF.
        PanningMode, VirtualizingPanel.*, ScrollViewer.CanContentScroll and the ItemsControl's
          inner-ScrollViewer template - the outer ScrollViewer already scrolls the page.
        <Style TargetType="Button" BasedOn="DeeperRoundButton"/> (the implicit style) - an
          Avalonia Style setter OUTRANKS a ControlTheme, so an implicit selector would clobber
          the OutlineButton theme on the six webcam-card buttons. The nine plain buttons that
          WPF rounded implicitly carry Theme="{StaticResource DeeperRoundButton}" instead. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -470,16 +470,12 @@
                  Velvet Kit 2 · round 3 layout. The hub column is capped (3*, MaxWidth 780) so the
                  library rows stop being a 1080px runway, and the width that buys back becomes one
                  art plate instead of dead margin. WPF collapsed the art column below 1000px via
-                 feat:AdaptiveSideArt; that attached behaviour is still in the WPF head, so the
-                 column stays put here. -->
-            <Grid Grid.Row="1" ColumnDefinitions="3*,2*">
-                <Grid.Styles>
-                    <!-- ColumnDefinition MaxWidth is not settable inline on Avalonia's shorthand;
-                         the 780 cap rides on the column's content instead. -->
-                    <Style Selector="StackPanel#DeeperHubColumn">
-                        <Setter Property="MaxWidth" Value="780"/>
-                    </Style>
-                </Grid.Styles>
+                 feat:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs, same threshold). -->
+            <Grid Grid.Row="1" sideart:AdaptiveSideArt.CollapseBelow="1000">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3*" MaxWidth="780"/>
+                    <ColumnDefinition Width="2*"/>
+                </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" x:Name="DeeperHubColumn">
 
@@ -602,9 +598,8 @@
 
                                     <!-- Row B: filter pills + sort dropdown. WPF put the pills in a
                                          horizontal StackPanel because AdaptiveSideArt gave the hub
-                                         the full width below 1000px. Without that behaviour the
-                                         column is ~540px in the shell, so the pills WrapPanel
-                                         instead of running under the sort cluster. -->
+                                         the full width below 1000px. Kept as a WrapPanel here so the
+                                         pills still fit when the art column is shown (~540px hub). -->
                                     <Grid ColumnDefinitions="*,Auto">
                                         <WrapPanel Grid.Column="0" Orientation="Horizontal">
                                             <ToggleButton x:Name="BtnDeeperPillAll" x:FieldModifier="internal"
