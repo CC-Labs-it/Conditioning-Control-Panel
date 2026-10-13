@@ -1144,6 +1144,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         const chance = est.maxed ? 0.30 : [0.10, 0.15, 0.20][Math.min(est.level, 3) - 1] || 0.10;
         if (Math.random() < chance) {
           field.dischargeAt(x, y, { maxTargets: 3, reach: 600, chain: est.maxed });
+          est.wokeAt = performance.now();   // the dock tile swells for it too
+          hudUi.toyWake({ glyph: est.glyph, name: est.name, x, y });
           sfx('estim_zap', 0.5);
           pulse('156,92,255', 0.20);
           ctx.fx.strikeNow();
@@ -1506,6 +1508,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       if (!rollProc(t)) continue;
       procAt = info && info.x != null ? { x: info.x, y: info.y } : null;
       useToy(t);
+      hudUi.toyWake({ glyph: t.glyph, name: t.name, x: procAt && procAt.x, y: procAt && procAt.y });
       procAt = null;
       woke = true;
     }
