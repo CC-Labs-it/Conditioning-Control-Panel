@@ -2087,3 +2087,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Piece by Piece opens from the launcher in GameWindow: Core PbpHostRules, net lane, settings/identity, own-library media, watchdogs, panic; page bridge on the WebKitGTK string carrier.
 - Online pictures, whispers, stakes and friend intents are queued as game-pbp-b.
 - Review fixes: loopback override, a cached library walk off the UI thread, a signal-based test wait; WPF routing filed as a follow-up.
+
+## avalonia-port/lag-fixes-c: +237
+- Programs ignition (8 loops) and the dashboard Today banner (fog/sheen/sparkles/breath) now run on the 30 fps BeatLoop with WPF curves; the rail and boss glows are BoxShadows; the banner width is read every frame; the hover nudge works and no longer leaks a CTS; NavGlow uses the shared FrameClock.
+- Programs idle went from 141 to 44 renders/s (CPU 45% to 23%); the ratchet lists went down by 4 entries.
