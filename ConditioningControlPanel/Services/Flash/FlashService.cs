@@ -4542,7 +4542,7 @@ namespace ConditioningControlPanel.Services
         private void CleanupTempPackFiles()
         {
             // A refused delete (the file is still open) stays listed and is retried next time.
-            _tempPackFiles.RemoveAll(TempFileLedger.TryDeleteFile);
+            _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
         }
 
         private string? GetNextSound()

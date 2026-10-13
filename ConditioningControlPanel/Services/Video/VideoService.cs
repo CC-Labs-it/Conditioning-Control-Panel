@@ -8646,7 +8646,7 @@ namespace ConditioningControlPanel.Services
         private void CleanupTempPackFiles()
         {
             // A refused delete (the player has not let go yet) stays listed and is retried next time.
-            _tempPackFiles.RemoveAll(TempFileLedger.TryDeleteFile);
+            _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
         }
 
         #region LibVLC Child Window Input Blocking

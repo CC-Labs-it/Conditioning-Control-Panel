@@ -82,7 +82,7 @@ internal static class RemoteMediaCache
 
     /// <summary>A refused delete (a clip LibVLC still has open) stays on these books and is
     /// retried on the next sweep; it used to be dropped and left on disk until the next launch.</summary>
-    private static readonly TempFileLedger Temps = new(MaxTrackedTempFiles);
+    private static readonly MediaTempFileLedger Temps = new(MaxTrackedTempFiles);
 
     private static long _bytes;
     private static long _tick;
