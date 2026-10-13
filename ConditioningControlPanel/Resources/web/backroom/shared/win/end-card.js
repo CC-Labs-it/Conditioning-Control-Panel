@@ -116,7 +116,7 @@ export function buildEndCard({ doc = globalThis.document, line = '', plan, featu
   a.textContent = 'Get ' + p.name;
   // Hosted (the desktop app): the host opens the checkout. Letting the link open itself there
   // raised a bare WebView2 popup, signed out and outside the host's throttle (review 2026-10-13).
-  a.addEventListener('click', (e) => { if (postFunnel('cta_clicked', feature, 'patreon', env, p.key) === 'host') e.preventDefault(); });
+  a.addEventListener('click', (e) => { if (postFunnel('cta_clicked', feature, 'patreon', env, p.key) === 'host' && e && e.preventDefault) e.preventDefault(); });
   root.append(a);
   if (p.price) {
     const s = doc.createElement('span'); s.className = 'br-end-card-price'; s.textContent = p.price;

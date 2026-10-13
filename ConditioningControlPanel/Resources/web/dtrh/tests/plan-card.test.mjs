@@ -61,8 +61,15 @@ test('the row: one calm line, one link, the price only with plans', () => {
   assert.equal(a.href, C1.prime.patreon_url);
   assert.equal(a.textContent, 'Get Prime');
   assert.equal(price.textContent, 'USD 12.50 a month');
-  a.listeners.click[0]();
+  let held = 0;
+  a.listeners.click[0]({ preventDefault: () => { held++; } });
   assert.equal(sent[0].event, 'cta_clicked');
+  assert.equal(sent[0].plan, 'prime', 'in the app the host is told which plan to open');
+  assert.equal(held, 1, 'in the app the link does not open itself (it raised a bare popup)');
+  const web = buildPlanRow({ doc: fakeDoc(), row: planRowFor({ daily_gift: true }), plans: C1, env: {} });
+  let webHeld = 0;
+  web.children[1].listeners.click[0]({ preventDefault: () => { webHeld++; } });
+  assert.equal(webHeld, 0, 'with no host the link opens itself');
   assert.equal(buildPlanRow({ doc: fakeDoc(), row: planRowFor({ daily_gift: true }), env: {} }).children.length, 2, 'no plans, no price');
   assert.doesNotMatch(DAILY_GIFT_LINE, /[!\u2013\u2014]/);
 });

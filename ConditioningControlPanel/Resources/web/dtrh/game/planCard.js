@@ -99,7 +99,7 @@ export function buildPlanRow({ doc = globalThis.document, row, plans, env = glob
   a.textContent = 'Get ' + plan.name;
   // Hosted (the desktop app): the host opens the checkout. Letting the link open itself there
   // raised a bare WebView2 popup, signed out and outside the host's throttle (review 2026-10-13).
-  a.addEventListener('click', (e) => { if (postFunnel('cta_clicked', PLAN_FEATURE, 'patreon', env, plan.key) === 'host') e.preventDefault(); });
+  a.addEventListener('click', (e) => { if (postFunnel('cta_clicked', PLAN_FEATURE, 'patreon', env, plan.key) === 'host' && e && e.preventDefault) e.preventDefault(); });
   box.append(a);
   if (plan.price) {
     const s = doc.createElement('span');
