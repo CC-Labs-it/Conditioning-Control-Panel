@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
+                StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
             });
         }
@@ -100,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
+            StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);
             PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
             LockCardWindow.ForceCloseAll();

@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
@@ -29,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// the strings a real caller gets. The box is pre-ticked so the render proves the checked
         /// half of ConfirmCheckBox's template and the enabled Confirm button.</summary>
         internal WarningDialog() : this(
-            Loc.GetF("warning_enable_feature_title", "Lockdown Mode"),
+            IconLabel.ForKey("warning_enable_feature_title", "Lockdown Mode").Source,
             Loc.GetF("warning_enable_feature_body", "Lockdown Mode",
                      "• The app cannot be closed until the timer runs out.\n" +
                      "• Settings are frozen for the whole session.\n" +
@@ -43,7 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             AvaloniaXamlLoader.Load(this);
 
-            this.FindControl<TextBlock>("TxtTitle")!.Text = title;
+            this.FindControl<IconLabel>("TxtTitle")!.Text = title;
             this.FindControl<TextBlock>("TxtMessage")!.Text = message;
             this.FindControl<TextBlock>("TxtConfirmLabel")!.Text = confirmText;
 
@@ -76,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// </summary>
         public static async Task<bool> ShowDoubleWarningAsync(Window owner, string feature, string consequences)
         {
-            var title = Loc.GetF("warning_enable_feature_title", feature);
+            var title = IconLabel.ForKey("warning_enable_feature_title", feature).Source;
             var message = Loc.GetF("warning_enable_feature_body", feature, consequences);
 
             var dialog = new WarningDialog(title, message, Loc.GetF("warning_enable_feature_confirm", feature))

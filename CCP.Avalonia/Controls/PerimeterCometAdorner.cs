@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     public sealed class PerimeterCometAdorner : FxAdorner
     {
         public const double DefaultLapSeconds = 9.0;
-        private const int AmbientFrameRate = 24;
+        private const int AmbientFrameRate = 30;   // WPF Controls/PerimeterCometAdorner.cs:49; the shared beat
 
         private const double HeadThickness = 2.5;
         private const double TailThickness = 2.2;

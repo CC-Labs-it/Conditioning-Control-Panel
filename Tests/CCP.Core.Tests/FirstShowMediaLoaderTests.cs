@@ -57,7 +57,7 @@ public class FirstShowMediaLoaderTests
     {
         int active = 0, peak = 0;
         var batch = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var paths = await FirstShowMediaLoader.LoadAsync(_ => Task.FromResult(Pictures(3)), async (url, _) =>
+        var paths = await FirstShowMediaLoader.LoadAsync(_ => Task.FromResult(Pictures(4)), async (url, _) =>
         {
             int count = Interlocked.Increment(ref active);
             peak = Math.Max(peak,count);
@@ -66,7 +66,7 @@ public class FirstShowMediaLoaderTests
             Interlocked.Decrement(ref active);
             return url;
         }, _ => { }, CancellationToken.None);
-        Assert.Equal(3,peak); Assert.Equal(3,paths.Count);
+        Assert.Equal(3,peak); Assert.Equal(4,paths.Count);
     }
     [Fact]
     public async Task Failed_CDN_batch_fetches_an_alternate_feed_and_reports_real_progress()

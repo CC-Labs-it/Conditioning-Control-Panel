@@ -2659,7 +2659,7 @@ namespace ConditioningControlPanel
             };
             // Spiral rail day log. Needs Achievements and Settings (both up by now); reads them on
             // a 60 s timer and on sync, never hooks a feature. Its loss must not cost the launch.
-            try { FeatureDayLog = new FeatureDayLogService(); }
+            try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
             catch (Exception exDayLog) { Logger?.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
             // Intake onboarding. Both are cheap and synchronous (the pass reads AppSettings; the
             // punch card loads one small json), and both must exist before MainWindow paints the

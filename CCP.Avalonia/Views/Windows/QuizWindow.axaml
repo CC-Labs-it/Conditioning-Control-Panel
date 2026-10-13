@@ -62,6 +62,7 @@
      contains an underscore. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.QuizWindow"
         Title="{loc:Str dialog_quiz}"
@@ -121,12 +122,16 @@
                 <TextBlock Text="{loc:Str dialog_quiz}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="14,0,0,0"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button x:Name="BtnMaximizeTitleBar" Classes="titlebar" Content="&#x2610;" Width="36" Height="36"
+                <Button x:Name="BtnMaximizeTitleBar" Classes="titlebar" Width="36" Height="36"
                         FontSize="14" Cursor="Hand"
-                        ToolTip.Tip="{loc:Str tooltip_maximize_restore}"/>
-                <Button x:Name="BtnCloseTitleBar" Classes="titlebar titlebarclose" Content="&#x2715;" Width="36" Height="36"
+                        ToolTip.Tip="{loc:Str tooltip_maximize_restore}" AutomationProperties.Name="{loc:Str tooltip_maximize_restore}">
+                    <fx:IconGlyph x:Name="MaximizeGlyph" Kind="Maximize" Size="12"/>
+                </Button>
+                <Button x:Name="BtnCloseTitleBar" Classes="titlebar titlebarclose" Width="36" Height="36"
                         FontSize="14" Cursor="Hand"
-                        ToolTip.Tip="{loc:Str tooltip_close_escape}"/>
+                        ToolTip.Tip="{loc:Str tooltip_close_escape}" AutomationProperties.Name="{loc:Str tooltip_close_escape}">
+                    <fx:IconGlyph Kind="Dismiss" Size="12"/>
+                </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -358,8 +363,8 @@
                             Margin="0,0,0,20" IsHitTestVisible="False" Opacity="0.5"
                             Background="#209B59B6" BorderBrush="#409B59B6" BorderThickness="1.5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBlock x:Name="TxtTrySessionIcon" FontSize="22"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <fx:IconGlyph x:Name="TxtTrySessionIcon" Kind="HourglassHalf" Size="22"
+                                          VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <TextBlock x:Name="TxtTrySessionLabel" Foreground="#C0C0D8" FontSize="18" FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
                         </StackPanel>

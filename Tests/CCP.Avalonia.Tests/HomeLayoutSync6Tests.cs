@@ -137,10 +137,14 @@ public sealed class HomeLayoutSync6Tests
                 Assert.Null(dash.FindControl<Border>("CompanionStrip"));
 
                 // Shut: "Show browser", a glow that breathes, in the header's star column.
-                Assert.Equal(2, Grid.GetColumn(btn));
+                Assert.Equal(2, Grid.GetColumn((Control)btn.Parent!));
                 Assert.Equal(Loc.Get("btn_browser_fold_show"), label.Text);
                 Assert.Equal(Loc.Get("btn_browser_fold_show"), AutomationProperties.GetName(btn));
-                var glow = Assert.IsType<DropShadowEffect>(btn.Effect);
+                // The glow is a sibling BoxShadow layer, never an Effect on the button (P82).
+                Assert.Null(btn.Effect);
+                var glow = dash.FindControl<Border>("FoldGlow")!;
+                Assert.True(glow.IsVisible);
+                Assert.Equal(16, glow.BoxShadow[0].Blur);
                 Assert.True(dash.FoldArrowBreathing);
                 dash.StepFoldBreath();
                 Assert.InRange(glow.Opacity, BrowserFoldRule.GlowLow, BrowserFoldRule.GlowHigh);
@@ -158,7 +162,7 @@ public sealed class HomeLayoutSync6Tests
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(s.DashboardBrowserCollapsed);
                 Assert.Equal(Loc.Get("btn_browser_fold_hide"), label.Text);
-                Assert.Null(btn.Effect);
+                Assert.False(glow.IsVisible);
                 Assert.False(dash.FoldArrowBreathing);
             }
             finally
@@ -195,8 +199,11 @@ public sealed class HomeLayoutSync6Tests
                 var handle = dash.FindControl<Button>("FavoritesDrawerHandle")!;
 
                 // e2c475a8a: the handle wears the mod's glow colour and a breathing glow.
-                Assert.IsType<DropShadowEffect>(handle.Effect);
+                Assert.Null(handle.Effect);
+                var glowLayer = dash.FindControl<Border>("FavoritesDrawerGlow")!;
+                Assert.True(glowLayer.IsVisible);
                 var glow = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor;
+                Assert.Equal(glow, glowLayer.BoxShadow[0].Color);
                 var border = Assert.IsType<SolidColorBrush>(dash.FindControl<Grid>("FavoritesDrawer")!.Resources["FavHandleBorder"]);
                 Assert.Equal(Color.FromArgb(0x80, glow.R, glow.G, glow.B), border.Color);
                 Assert.True(dash.FavoritesDrawerBreathing);
@@ -225,7 +232,7 @@ public sealed class HomeLayoutSync6Tests
                 s.MotionLevel = MotionLevel.Off;
                 ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
                 Dispatcher.UIThread.RunJobs();
-                Assert.Null(handle.Effect);
+                Assert.False(glowLayer.IsVisible);
                 Assert.False(dash.FavoritesDrawerBreathing);
             }
             finally

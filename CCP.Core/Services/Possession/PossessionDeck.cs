@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Services.Possession;
 //  Modelled on the Arcademy "pressure ladder" deck (Resources/web/arcademy/games/the-deep-end).
 // =====================================================================================================
 
-/// <summary>Plain-data view of an <see cref="IPossessionEffect"/> for the deck. Build it with
-/// <see cref="PossessionDeck.MetaOf"/> at the call site so the deck never touches a control.</summary>
+/// <summary>Plain-data view of an IPossessionEffect for the deck. Build it with
+/// PossessionDeckMeta.MetaOf (WPF head) at the call site so the deck never touches a control.</summary>
 public readonly record struct PossessionEffectMeta(
     string Id,
     PossessionRung MinRung,
@@ -165,14 +165,8 @@ public static class PossessionDeck
         return e.Weight * multiplier;
     }
 
-    /// <summary>Convenience overload for the director, which holds the real effects.</summary>
-    public static double WeightOf(IPossessionEffect e, PossessionRung rung)
-        => e == null ? 0 : WeightOf(MetaOf(e), rung);
-
-    /// <summary>Snapshot an effect into the deck's plain-data view.</summary>
-    public static PossessionEffectMeta MetaOf(IPossessionEffect e) => new(
-        e.Id, e.MinRung, e.MinIntensity, e.UsesFlicker, e.Weight,
-        e.Roles ?? Array.Empty<PossessionRole>());
+    // MetaOf (snapshot a real IPossessionEffect) lives with the WPF effect contract:
+    // ConditioningControlPanel/Services/Possession/PossessionHostContracts.cs.
 
     // ---------------------------------------------------------------------------------------------
     //  Eligibility + the pick

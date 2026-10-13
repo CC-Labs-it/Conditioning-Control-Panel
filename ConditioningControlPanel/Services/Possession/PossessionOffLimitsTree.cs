@@ -4,44 +4,14 @@ using System.Windows.Media;
 
 namespace ConditioningControlPanel.Services.Possession;
 
-// =====================================================================================================
-//  POSSESSION - the one answer to "may an effect take this away from the user?".
-//  Read Services/Possession/POSSESSION.md ("Hard rules") first.
-//
-//  poss:Possession.Exclude keeps an element and its SUBTREE out of the deck, and that is the whole
-//  story for a victim that is a leaf. It is not the whole story for a CONTAINER: Exclude inherits
-//  DOWN, never UP, so a card is perfectly enrollable while the Emergency Exit button and the secret
-//  exit box sit inside it. An effect that drops that card off-screen, hides it or turns its hit-
-//  testing off takes the exits with it - for 45 s (fall) or two minutes (stealcard) - which is the
-//  one thing POSSESSION.md says may never happen.
-//
-//  So: an element is off limits when it IS excluded, when it CONTAINS anything excluded, or when it
-//  (or any ancestor) is named for a room the user has to be able to leave. StealCardEffect has
-//  carried this rule privately since wave 2; this is the same rule, shared, so the next effect that
-//  hides a victim does not have to rediscover it.
-// =====================================================================================================
-
-public static class PossessionOffLimits
+// The visual-tree half of PossessionOffLimits (the name rule is in CCP.Core/Services/Possession/
+// PossessionOffLimits.cs). Read that file's header for why containers count.
+public static class PossessionOffLimitsTree
 {
     /// <summary>Same ceiling the other visual-tree walks in this folder use: a card is a handful of
     /// levels deep, and an unbounded walk on every CanApply is a per-tick cost nobody notices until
     /// the room is full.</summary>
     public const int MaxDepth = 16;
-
-    /// <summary>The rooms the user must always be able to leave. Matched case-insensitively against
-    /// x:Name, so LockdownCardBorder, BtnEmergencyExit and TxtSecretExit all answer to it.</summary>
-    private static readonly string[] _reservedNameTokens = { "lockdown", "emergency", "secret" };
-
-    /// <summary>The name half of the rule, pure so it can be pinned by a test.</summary>
-    public static bool IsReservedName(string? name)
-    {
-        if (string.IsNullOrEmpty(name)) return false;
-        foreach (var token in _reservedNameTokens)
-        {
-            if (name!.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-        }
-        return false;
-    }
 
     /// <summary>
     /// True when no effect may drop, hide or hit-test-kill this element (or anything it contains).
@@ -60,7 +30,7 @@ public static class PossessionOffLimits
             {
                 if (node is not FrameworkElement fe) continue;
                 if (Possession.GetExclude(fe)) return true;
-                if (IsReservedName(fe.Name)) return true;
+                if (PossessionOffLimits.IsReservedName(fe.Name)) return true;
             }
         }
         catch { return true; }
