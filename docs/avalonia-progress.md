@@ -2220,3 +2220,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/friends-core-a: +57
 - Cloud session (Opus), local review + gate; review fix routes Avalonia drawer presence toggle through Core.
+
+## avalonia-port/account-core-a: +257
+- Cloud session (Opus), local review + gate.
+- Review fix: separate trys in WPF StopSync seam; stale contract-D comments refreshed. rgate GATE-OK.
