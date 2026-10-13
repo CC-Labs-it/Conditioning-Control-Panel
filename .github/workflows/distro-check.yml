@@ -6,7 +6,7 @@ name: distro-check
 on:
   workflow_dispatch:
   push:
-    branches: ['avalonia-port/**']
+    branches: ['avalonia-port/**', '!avalonia-port/cloud-**', '!avalonia-port/gate-**']
     paths:
       - 'packaging/**'
       - 'CCP.Avalonia/**'

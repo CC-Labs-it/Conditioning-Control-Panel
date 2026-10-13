@@ -1094,3 +1094,16 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
   user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
 - Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
+
+## 2026-10-13: push-triggered port workflows skip cloud-* and gate-* branches (avalonia-port/ci-skip-cloud)
+- Question: the GitHub Free plan shares 20 concurrent jobs between rgate (build.yml dispatched on `avalonia-port/gate-*`),
+  PR CI and push-triggered workflows. Each push of a throwaway `avalonia-port/cloud-*` (Claude cloud session) or
+  `gate-*` branch also starts distro-check, reference-render (3 jobs) and snapshot-lock, ~5 jobs nobody reads.
+  Should those workflows keep running on them?
+- Options: (A) keep `branches: ['avalonia-port/**']`; (B) exclude both prefixes with negative patterns in the same list;
+  (C) drop the push trigger and run them only by hand.
+- Choice: B: `['avalonia-port/**', '!avalonia-port/cloud-**', '!avalonia-port/gate-**']` in distro-check.yml,
+  reference-render.yml and snapshot-lock.yml. `workflow_dispatch` stays. Cloud branches are reviewed locally and re-pushed
+  as normal `avalonia-port/<slug>` PR branches, which still get the full push CI. rgate only dispatches build.yml
+  (`gh workflow run build.yml --ref avalonia-port/gate-...`) and never waits on these push runs.
+- Advised: main session.
