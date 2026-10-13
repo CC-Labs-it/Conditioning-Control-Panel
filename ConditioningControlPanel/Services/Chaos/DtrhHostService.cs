@@ -295,7 +295,11 @@ internal static class DtrhHostService
                 // the hub's Descent tab opens on the user's own choices.
                 runSetup = BuildRunSetup(),
                 m2Test = _testMode,
+                // The plan list (contract C1, PlanCatalog) for the run summary's end card. The
+                // page shows a price only when this is present.
+                plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
             });
+            _ = Vault.PlanCatalog.GetAsync();   // warm the cache for the next launch; never awaited here
             if (_meta != null) _host?.Post(_meta.SnapshotMessage());
             PostManifest();
             // Online media copied to this machine after this frame reaches the page as a fresh
@@ -446,6 +450,11 @@ internal static class DtrhHostService
                 break;
             case "pong":
                 _lastHeartbeatUtc = DateTime.UtcNow;
+                break;
+            case Funnel.FunnelPageMessage.Type:   // the run summary's end card (contract C10)
+                // Counted always (aggregate only); a checkout never opens over a running descent
+                // or from the capture rig.
+                if (!_testMode) Funnel.FunnelPageMessage.Handle(o, mayOpen: !_runActive && !_exiting);
                 break;
         }
     }
@@ -642,6 +651,14 @@ internal static class DtrhHostService
         catch (Exception ex) { App.Logger?.Warning("DtrhHost.FirePayload: {E}", ex.Message); }
     }
 
+    /// <summary>
+    /// Whether a finished run was opened by the Daily Gift: today's server-named free key is
+    /// <c>dtrh</c> and the account holds no Prime grant of its own. The capture rig never counts.
+    /// Drives the <c>plan</c> / <c>daily_gift</c> fields of payout-result (contract C10).
+    /// </summary>
+    internal static bool RunCameFromDailyGift(bool testMode, bool hasLabAccess, bool dtrhFreeToday)
+        => !testMode && !hasLabAccess && dtrhFreeToday;
+
     /// <summary>run-ended -> XP payout (C#-owned formula, identical to the WPF EndRun) +
     /// meta banking via the shared AwardRunRewards, answered with payout-result.</summary>
     /// <param name="fromTeardown">The host synthesised this booking from its last progress
@@ -768,6 +785,8 @@ internal static class DtrhHostService
             }
             catch (Exception ex) { App.Logger?.Debug("DtrhHost session-metrics record: {E}", ex.Message); }
 
+            bool dailyGift = RunCameFromDailyGift(_testMode, App.Patreon?.HasLabAccess == true,
+                App.DailyFree?.IsFreeToday("dtrh") == true);
             _host?.Post(new
             {
                 type = "payout-result",
@@ -778,6 +797,10 @@ internal static class DtrhHostService
                 previousBest,
                 rankUp = rankUp?.ToString(),
                 dryRun = _testMode,
+                // End card (contract C10): a run opened by the Daily Gift, not by a Prime grant,
+                // gets "Open today. Prime keeps it open." under the result.
+                plan = dailyGift ? "prime" : null,
+                daily_gift = dailyGift,
             });
             App.Logger?.Information(
                 "DtrhHost: web run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks{T}",
