@@ -222,6 +222,62 @@ public sealed class TakeoverTests
             return Task.CompletedTask;
         });
 
+    /// <summary>overlay-takeover-announcer: an announced action queues the "TAKEOVER" cue (WPF
+    /// AutonomyService.cs:961, #534 silent roll shows none), cues play in turn on the real timings,
+    /// the window hides when idle, and panic drops the queue and closes the window.</summary>
+    [Fact]
+    public Task AnnouncedActionQueuesTheCueAndPanicClearsIt() => WithArmedShell((shell, _) =>
+    {
+        var now = TimeSpan.FromSeconds(100);
+        var (clock, require) = (TakeoverAnnouncerOverlay.Clock, TakeoverAnnouncerOverlay.UsePlatform);
+        TakeoverAnnouncerOverlay.Clock = () => now;
+        TakeoverAnnouncerOverlay.UsePlatform = false;
+        try
+        {
+            shell.PerformAutonomy(AutonomyActionType.WebVideo, announced: false);
+            Assert.Null(TakeoverAnnouncerOverlay.Queue.Current);
+
+            shell.Autonomy.Perform!(AutonomyActionType.WebVideo, true);   // the scheduler's announced run
+            Dispatcher.UIThread.RunJobs();
+            shell.PerformAutonomy(AutonomyActionType.WallpaperShuffle, announced: true);
+            var w = TakeoverAnnouncerOverlay.Window!;
+            Assert.True(w.IsVisible);
+            Assert.Equal("TAKEOVER", w.Eyebrow!.Text);
+            Assert.Equal("WEB VIDEO", w.Effect!.Text);
+            Assert.Equal(0, w.Opacity);
+            Assert.True(w.SparkCount >= 22);
+
+            now += TimeSpan.FromMilliseconds(150);
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // the cue drives itself off the window's frames
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, w.Opacity);
+            Assert.Equal(1f, w.Bloom, 3);
+
+            now += TimeSpan.FromMilliseconds(1950);   // fade-out done: the queued cue starts
+            TakeoverAnnouncerOverlay.Frame();
+            Assert.Equal("WALLPAPER", w.Effect!.Text);
+            Assert.Equal(0, w.Opacity);
+
+            now += TimeSpan.FromMilliseconds(2100);   // queue empty: hidden, window kept alive
+            TakeoverAnnouncerOverlay.Frame();
+            Assert.False(w.IsVisible);
+            Assert.Same(w, TakeoverAnnouncerOverlay.Window);
+
+            shell.PerformAutonomy(AutonomyActionType.WebVideo, announced: true);
+            shell.PerformAutonomy(AutonomyActionType.WallpaperShuffle, announced: true);
+            PanicSurfaces.StopAll("test", shell);
+            Assert.Null(TakeoverAnnouncerOverlay.Queue.Current);
+            Assert.Equal(0, TakeoverAnnouncerOverlay.Queue.Pending);
+            Assert.Null(TakeoverAnnouncerOverlay.Window);
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            TakeoverAnnouncerOverlay.CloseActive();
+            (TakeoverAnnouncerOverlay.Clock, TakeoverAnnouncerOverlay.UsePlatform) = (clock, require);
+        }
+    });
+
     /// <summary>WPF PulsePinkFilter's own restore after 30 s, and #441a: a slider moved during the
     /// pulse is kept rather than snapped back.</summary>
     [Fact]
