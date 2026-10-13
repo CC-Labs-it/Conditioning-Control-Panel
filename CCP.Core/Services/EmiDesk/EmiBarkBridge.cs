@@ -33,6 +33,13 @@ namespace ConditioningControlPanel.Services.EmiDesk;
 /// </summary>
 internal static class EmiBarkBridge
 {
+    /// <summary>The live desk's <c>Fire</c> (WPF <c>App.EmiDesk.Fire</c>), or null with no desk.
+    /// Asked on every mirror: the desk comes and goes.</summary>
+    public static Func<Action<string, object?>?>? DeskFire { get; set; }
+
+    /// <summary>WPF <c>App.Video?.LastVideoTitle ?? App.Video?.LastVideoPath</c>.</summary>
+    public static Func<string?>? VideoTitleProbe { get; set; }
+
     /// <summary>
     /// One row of the table. <paramref name="Moment"/> is the default moment id; <paramref name="Pick"/>,
     /// when present, may choose a different one or return null to drop the fire entirely (a trigger
@@ -75,7 +82,7 @@ internal static class EmiBarkBridge
 
         // ---- video ---------------------------------------------------------------------
         ["VideoStarted"] = new("videoRunning",
-            _ => new { target = EmiNames.VideoName(App.Video?.LastVideoTitle ?? App.Video?.LastVideoPath) }),
+            _ => new { target = EmiNames.VideoName(VideoTitleProbe?.Invoke()) }),
         ["VideoEnded"] = new("videoEnded"),
 
         // ---- attention checks ----------------------------------------------------------
@@ -167,7 +174,8 @@ internal static class EmiBarkBridge
         if (string.IsNullOrEmpty(trigger)) return;
         try
         {
-            if (App.EmiDesk == null) return;
+            var fire = DeskFire?.Invoke();
+            if (fire == null) return;
             if (!_table.TryGetValue(trigger!, out var row) || row == null) return;
 
             // Our own context: reading the bark's would mean sharing a mutable bag with the matcher
@@ -196,7 +204,7 @@ internal static class EmiBarkBridge
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] mirror ctx for {Trigger} threw", trigger); }
             }
 
-            App.EmiDesk.Fire(moment!, payload);
+            fire(moment!, payload);
         }
         catch (Exception ex)
         {

@@ -63,6 +63,17 @@ public sealed class EmiLineEngine
     /// <summary>The process-wide engine. Cheap to touch: the file loads on the first draw.</summary>
     public static EmiLineEngine Instance { get; } = new();
 
+    /// <summary>
+    /// The half of the ask gate only the app can see (WPF <c>App.EmiDesk.AskSituationOk()</c>): no
+    /// session, no video, not minimised, no offer already on the glass. Unset means "no desk",
+    /// which is "no offer", exactly as the WPF null service read.
+    /// </summary>
+    public static Func<bool>? AskSituationProbe { get; set; }
+
+    /// <summary>WPF <c>EmiOffers.EffectFeasible</c>. Unset refuses every effect, so a head with no
+    /// offers surface never shows an ask whose chip would do nothing.</summary>
+    public static Func<string?, bool>? EffectFeasibleProbe { get; set; }
+
     /// <summary>Milliseconds between any two spontaneous lines (BRIEF 8; priority 3 is exempt).</summary>
     public const int GlobalFloorMs = 45_000;
 
@@ -941,7 +952,7 @@ public sealed class EmiLineEngine
     {
         try
         {
-            var s = App.Settings?.Current;
+            var s = CoreSettings.Current;
             if (s == null) return 2;
             return Math.Max(0, Math.Min(2, s.EmiDeskSpice));
         }
@@ -964,7 +975,7 @@ public sealed class EmiLineEngine
         try
         {
             if (m.AskOdds <= 0) return false;
-            var s = App.Settings?.Current;
+            var s = CoreSettings.Current;
             if (s != null && !s.EmiDeskOffers) return false;
             if (BedtimeSet) return false;
             if (_ignoredAsksThisLaunch >= AskIgnoreLimit) return false;
@@ -994,7 +1005,7 @@ public sealed class EmiLineEngine
 
             // The half only the app can see (LINES-SCHEMA 5.6): no session, no video, the avatar is
             // quiet, the app is not minimised, no offer already on the glass. No service, no offer.
-            if (App.EmiDesk?.AskSituationOk() != true) return false;
+            if (AskSituationProbe?.Invoke() != true) return false;
             return true;
         }
         catch (Exception ex)
@@ -1007,9 +1018,8 @@ public sealed class EmiLineEngine
     /// <summary>
     /// THE CADENCE GATES, on their own, as arithmetic.
     ///
-    /// <para><see cref="AskGatesPass"/> cannot be reached from a headless test: it asks
-    /// <c>App.Settings</c> and <c>App.EmiDesk.AskSituationOk()</c>, neither of which exists without
-    /// a running WPF app, a session engine and a live widget. This is the half that decides whether
+    /// <para><see cref="AskGatesPass"/> also reads the live settings, the user's ledger and the
+    /// head's <see cref="AskSituationProbe"/>. This is the half that decides whether
     /// the SCRIPTED bypass is honoured, lifted out so the one rule that matters - the bypass skips
     /// the gap and the summon floor, and leaks into nothing else - can be checked in a
     /// millisecond.</para>
@@ -1045,7 +1055,7 @@ public sealed class EmiLineEngine
 
             var effect = Substitute(a.Effect ?? "none", ctx);
             if (effect == null) continue;
-            if (!EmiOffers.EffectFeasible(effect)) continue;
+            if (EffectFeasibleProbe?.Invoke(effect) != true) continue;
             pool.Add(a);
         }
         if (pool.Count == 0) return null;
@@ -1173,7 +1183,7 @@ public sealed class EmiLineEngine
 
     private static string AppVersionString()
     {
-        try { return ConditioningControlPanel.Services.UpdateService.AppVersion; }
+        try { return CoreReleaseContent.AppVersion; }
         catch { return "0"; }
     }
 
