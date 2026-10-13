@@ -66,7 +66,11 @@ namespace ConditioningControlPanel.Avalonia.Possession
             _time = time ?? TimeProvider.System;
             _rng = rng ?? new Random();
             _onFrame = OnFrame;
-            lock (Live) Live.Add(new WeakReference<PossessionRuntime>(this));
+            lock (Live)
+            {
+                Live.RemoveAll(w => !w.TryGetTarget(out _));   // prune dead runtimes, not only on panic
+                Live.Add(new WeakReference<PossessionRuntime>(this));
+            }
         }
 
         public bool Photosafe { get; set; }
