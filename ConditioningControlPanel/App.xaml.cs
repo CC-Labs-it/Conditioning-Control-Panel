@@ -2645,6 +2645,7 @@ namespace ConditioningControlPanel
             // first Play / first Bind.
             DeeperPlayer = new Services.Deeper.EnhancementAudioPlayer();
             DeeperHost = new Services.Deeper.EnhancementHostService();
+            Services.Deeper.PlaylistEnhancementBridge.Install(); // waits for AudioPlaylist; a Deeper enhancement rides the playlist track
 
             // The audio player with a playlist: its own player instance, list and level from
             // the settings. Cheap like the two above; nothing opens until the first Play.
