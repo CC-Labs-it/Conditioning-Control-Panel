@@ -2094,3 +2094,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/showcase-renderer: +123
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/ci-parallel: +145
+- CI: CCP.Avalonia.Tests shards now run as parallel matrix jobs (avalonia-linux/avalonia-windows x5) with a per-OS avalonia-coverage sum check; build.yml wall time went from 50m47s to ~17.5-24 min (runs 38306259237/38312941874).
+- Gate-branch-only concurrency cancel. avalonia-tests-sharded.sh gains --shard N / --expected; with no argument it behaves as before.
