@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// <c>ready</c>, the host answers <c>init</c> (language + identity + Breakout access), a station's
     /// <c>media-request</c> gets a library deal (<see cref="GameMediaManifest.Deal"/>), <c>fx</c> gets its
     /// <c>fx-ack</c>, and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
-    /// Ported from trunk's Views/Games/GameWindow.cs with the Breakout demo and Piece by Piece (GameWindow.Pbp.cs) registered; every other
+    /// Ported from trunk's Views/Games/GameWindow.cs with the Breakout demo and Piece by Piece (GameWindow.Pbp.cs) and Racing Thoughts (GameWindow.Race.cs) registered; every other
     /// game lands with its own frames.</para>
     /// </summary>
     internal sealed partial class GameWindow : Window
@@ -42,6 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
+            // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
+            ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -86,9 +88,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
-            Opened += (_, _) => { lock (Open) Open.Add(this); };
+            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
         }
 
@@ -119,6 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
             if (Spec.Id == PbpId && HandlePbp(o)) return;
+            if (IsRace && HandleRace(o)) return;
             switch ((string?)o["type"])
             {
                 case "ready":

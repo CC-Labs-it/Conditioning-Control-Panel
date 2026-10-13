@@ -40,6 +40,7 @@
      The buttons also gained x:Names, because the handlers are wired in the constructor. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Windows"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.SessionEditorWindow"
@@ -85,12 +86,18 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
-                        <Button x:Name="BtnMinimize" Content="−" Width="24" Height="24"
+                        <Button x:Name="BtnMinimize" Width="24" Height="24" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="Transparent" Foreground="{DynamicResource TextMutedBrush}" FontSize="14"
-                                BorderThickness="0" Cursor="Hand" Margin="4,0,0,0"/>
-                        <Button x:Name="BtnClose" Content="✕" Width="24" Height="24"
+                                BorderThickness="0" Cursor="Hand" Margin="4,0,0,0" AutomationProperties.Name="{loc:Str titlebar_minimize_tip}">
+                            <fx:IconGlyph Kind="Subtract" Size="12"/>
+                        </Button>
+                        <Button x:Name="BtnClose" Width="24" Height="24" Padding="0"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Background="Transparent" Foreground="{DynamicResource TextMutedBrush}" FontSize="12"
-                                BorderThickness="0" Cursor="Hand"/>
+                                BorderThickness="0" Cursor="Hand" AutomationProperties.Name="{loc:Str btn_close}">
+                            <fx:IconGlyph Kind="Dismiss" Size="12"/>
+                        </Button>
                     </StackPanel>
                 </Grid>
 
@@ -303,13 +310,14 @@
                         <!-- Header -->
                         <Border Grid.Row="0" Background="{DynamicResource PanelBgBrush}" CornerRadius="10,10,0,0" Padding="20,15">
                             <Grid>
-                                <TextBlock Text="{loc:Str label_how_to_use_the_session_editor}"
-                                           Foreground="{DynamicResource PinkBrush}" FontSize="18" FontWeight="Bold"
+                                <fx:IconLabel Key="label_how_to_use_the_session_editor" TextElement.Foreground="{DynamicResource PinkBrush}" TextElement.FontSize="18" TextElement.FontWeight="Bold"
                                            HorizontalAlignment="Center"/>
-                                <Button x:Name="BtnTutorialClose" Content="✕"
+                                <Button x:Name="BtnTutorialClose" AutomationProperties.Name="{loc:Str btn_close}"
                                         HorizontalAlignment="Right" VerticalAlignment="Top"
                                         Background="Transparent" Foreground="{DynamicResource TextMutedBrush}" FontSize="14"
-                                        BorderThickness="0" Cursor="Hand" Margin="0,-5,-5,0"/>
+                                        BorderThickness="0" Cursor="Hand" Margin="0,-5,-5,0">
+                                    <fx:IconGlyph Kind="Dismiss" Size="14"/>
+                                </Button>
                             </Grid>
                         </Border>
 

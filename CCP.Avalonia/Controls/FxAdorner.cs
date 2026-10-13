@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         protected readonly Control Adorned;
         private readonly int _fps;
-        private DispatcherTimer? _timer;
+        private Fx.FrameClock? _timer;
         private IDisposable? _watch;
 
         protected FxAdorner(Control adorned, int fps) => (Adorned, _fps, IsHitTestVisible) = (adorned, fps, false);
@@ -60,8 +60,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
         protected void StartTicking()
         {
             if (!IsVisible) return;
-            _timer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / _fps),
-                                           DispatcherPriority.Background, (_, _) => Tick());
+            // On the window's shared beat (FrameClock): a free-running timer ticks between the beat's frames
+            // and the window composes twice as often (lag-fixes-b). WPF capped these at AmbientFrameRate 30
+            // (CardSheenAdorner.cs:43, PerimeterCometAdorner.cs:49).
+            if (_timer == null)
+            {
+                _timer = new Fx.FrameClock(this) { Interval = TimeSpan.FromSeconds(1.0 / _fps) };
+                _timer.Tick += (_, _) => Tick();
+            }
             _timer.Start();
         }
 
