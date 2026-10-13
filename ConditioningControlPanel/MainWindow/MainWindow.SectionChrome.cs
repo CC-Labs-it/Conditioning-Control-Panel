@@ -113,6 +113,8 @@ namespace ConditioningControlPanel
                 if (section == NavSections.Settings) pageLabel = CurrentSettingsSectionLabel();
                 SectionStrip?.Show(section, tab, pageLabel);
                 PaintSectionWash(section);
+                // The every-page favourites drawer: hidden on Home, put away on every navigation.
+                PageDrawer?.OnNavigated(section);
 
                 UpdateNavTitle(section, tab, pageLabel);
 
