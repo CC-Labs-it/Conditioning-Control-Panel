@@ -31,18 +31,12 @@ internal sealed class FirstShowAudio : IDisposable
     public void Cue(string name)
     {
         if (_disposed || Volume <= 0) return;
-        var asset = name switch
-        {
-            "gather" => "chaos/sink.mp3", "reveal" => "chaos/reveal_chime.mp3",
-            "pop" => "bubbles/Pop3.mp3", "pink" => "chaos/ripple_cast.mp3",
-            "drain" => "chaos/time_slow_in.mp3", "flash" => "chaos/chip_pop.mp3",
-            _ => "chaos/ui_equip.mp3"
-        };
+        var asset = FirstShowScript.CueAsset(name);
         try
         {
             var path = ModResourceResolver.ResolveAudioPath(asset);
             if (!File.Exists(path)) return;
-            _cue.Stop(); _cue.Open(new Uri(path)); _cue.Volume = Volume * .32; _cue.Play();
+            _cue.Stop(); _cue.Open(new Uri(path)); _cue.Volume = Volume * FirstShowScript.CueScale; _cue.Play();
         }
         catch (Exception ex) { App.Logger?.Debug(ex, "First show cue unavailable"); }
     }
