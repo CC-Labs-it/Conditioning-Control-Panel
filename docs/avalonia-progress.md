@@ -2165,3 +2165,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/home-marquee-b: +37
 - Update pill Tag skins (urgent red, available pink, hover; WPF MainWindow.xaml:1353-1373) + UrgentUpdatePillIsRed, split from home-marquee for the size cap.
+
+## avalonia-port/tracking-core-a: +230
+- Gaze target scoring + refine ambiguity/choice rules moved to Core GazeTargetScoring; WPF GazeFocusService routes to it (one copy). Core tests fail-proven per reachable clause; rgate GATE-OK.
