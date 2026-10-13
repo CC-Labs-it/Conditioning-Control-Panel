@@ -172,12 +172,36 @@ public class PlaylistEnhancementBridgeTests
     {
         var pl = new FakePlaylist { CurrentPath = @"c:\MUSIC\A.MP3", IsPlaying = true };
         var src = new PlaylistTimeSource(pl, A);   // paths compare case-insensitively
+        src.Attach();
         src.Seek(12.5);
         src.Pause();
         src.Play();
         Assert.Equal(12.5, pl.SeekedTo);
         Assert.Equal(1, pl.PauseCalls);
         Assert.Equal(1, pl.PlayCalls);
+    }
+
+    [Fact]
+    public void TimeSource_IsDeadOnceThePlayerIsStoppedOrItIsDetached()
+    {
+        // A speak prompt releasing its hold calls Play() while the engine tears down. After a
+        // panic or Stop that must never start the track again (review of ccp-bugs #1432 wave).
+        var stopped = new FakePlaylist { CurrentPath = A, IsPlaying = false, IsPaused = false };
+        var src = new PlaylistTimeSource(stopped, A);
+        src.Attach();
+        src.Play();
+        src.Seek(3);
+        Assert.Equal(0, stopped.PlayCalls);
+
+        var paused = new FakePlaylist { CurrentPath = A, IsPaused = true };
+        var held = new PlaylistTimeSource(paused, A);
+        held.Attach();
+        held.Play();
+        Assert.Equal(1, paused.PlayCalls);   // a held (paused) track still resumes
+
+        held.Detach();
+        held.Play();
+        Assert.Equal(1, paused.PlayCalls);   // detached: dead
     }
 
     // -- Bridge ----------------------------------------------------------------
