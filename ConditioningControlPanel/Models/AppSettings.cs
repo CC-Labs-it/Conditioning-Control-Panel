@@ -9654,6 +9654,44 @@ namespace ConditioningControlPanel.Models
             set { _deeperPlayerWindowHeight = value; OnPropertyChanged(); }
         }
 
+        // The audio player with a playlist. All four are this machine's own (whole file paths):
+        // ProfileSyncService keeps every AudioPlaylist* property out of the cloud backup and
+        // carries it across a restore.
+        private List<string> _audioPlaylistPaths = new();
+        /// <summary>The playlist, whole paths in the player's order.</summary>
+        [JsonProperty]
+        public List<string> AudioPlaylistPaths
+        {
+            get => _audioPlaylistPaths;
+            set { _audioPlaylistPaths = value ?? new List<string>(); OnPropertyChanged(); }
+        }
+
+        private int _audioPlaylistVolume = 80;
+        /// <summary>The playlist player's own level (0..100), scaled by MasterVolume when it plays.</summary>
+        [JsonProperty]
+        public int AudioPlaylistVolume
+        {
+            get => _audioPlaylistVolume;
+            set { _audioPlaylistVolume = Math.Max(0, Math.Min(100, value)); OnPropertyChanged(); }
+        }
+
+        private int _audioPlaylistLoop;
+        /// <summary>0 off, 1 all, 2 one (Services.AudioPlayer.AudioPlaylistLoop).</summary>
+        [JsonProperty]
+        public int AudioPlaylistLoop
+        {
+            get => _audioPlaylistLoop;
+            set { _audioPlaylistLoop = Math.Max(0, Math.Min(2, value)); OnPropertyChanged(); }
+        }
+
+        private bool _audioPlaylistShuffle;
+        [JsonProperty]
+        public bool AudioPlaylistShuffle
+        {
+            get => _audioPlaylistShuffle;
+            set { _audioPlaylistShuffle = value; OnPropertyChanged(); }
+        }
+
         private bool _companionAsksEnabled = true;
         /// <summary>The companion now and then asks a question with a few answer buttons.</summary>
         [JsonProperty]
