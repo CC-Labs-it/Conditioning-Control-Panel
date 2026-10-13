@@ -190,17 +190,45 @@ namespace ConditioningControlPanel.Services.Commands
 
         /// <summary>
         /// Follow-up feed line for a command whose executor reported failure, so the panel
-        /// never leaves a request line standing as if the effect happened. Audio names the
-        /// usual cause: there are no files in the assets audio folder (#1120).
+        /// never leaves a request line standing as if the effect happened. Audio says which of
+        /// its two causes it was, and names the folder by its real path (#1120, #1428).
         /// </summary>
         private static string FormatFailedAction(AiCommandData c)
         {
             return c.Command switch
             {
-                AICommandType.audio => "🔇 Audio didn't play - check your assets audio folder",
+                AICommandType.audio => FormatFailedAudio(),
                 AICommandType.video => "🎬 Video didn't play",
                 _ => $"⚠️ {c.Command} didn't fire"
             };
+        }
+
+        private static string FormatFailedAudio()
+        {
+            try
+            {
+                var folder = MediaCommand.AudioFolderUnder(App.EffectiveAssetsPath);
+                return FormatFailedAudio(folder, MediaCommand.AudioFilesIn(folder).Length > 0);
+            }
+            catch
+            {
+                return FormatFailedAudio("", hasFiles: true);
+            }
+        }
+
+        /// <summary>
+        /// The Audio effect plays LOCAL files from one folder and nothing else: no online source
+        /// feeds it, whatever the media source is set to. The old line said "check your assets
+        /// audio folder", which no page in the app names, so a player with online media (whose
+        /// folder is the empty one the app creates) could not act on it (ccp-bugs #1428).
+        /// An empty folder gets its full path; files that are there but did not start point at
+        /// the output device instead.
+        /// </summary>
+        internal static string FormatFailedAudio(string audioFolder, bool hasFiles)
+        {
+            if (hasFiles || string.IsNullOrWhiteSpace(audioFolder))
+                return "🔇 Audio didn't play - check the output device in Settings, Audio";
+            return $"🔇 No audio to play - this effect only plays your own files. Put .mp3 or .wav files in {audioFolder}";
         }
 
         private static bool IsEffectAllowed(AICommandType cmd, Models.CompanionPromptSettings s)
