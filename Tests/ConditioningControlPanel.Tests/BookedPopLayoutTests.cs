@@ -1,6 +1,7 @@
-using System.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaster;
+using Point = ConditioningControlPanel.Services.Chaster.ScreenPoint;
+using Rect = ConditioningControlPanel.Services.Chaster.BookedPopLayout.MonitorPx;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;

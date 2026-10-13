@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Windows;
 using ConditioningControlPanel.Models;
+using Point = ConditioningControlPanel.Services.Chaster.ScreenPoint;
 
 namespace ConditioningControlPanel.Services.Chaster;
 
@@ -36,6 +36,14 @@ public static class BookedPopLayout
     /// <summary>Never more than this many rungs: a long burst reuses the top rung rather than
     /// climbing off the screen.</summary>
     public const int MaxSlots = 4;
+
+    /// <summary>A monitor in physical desktop px (Core twin of the WPF <c>Rect</c> it took before the move).</summary>
+    public readonly record struct MonitorPx(double Left, double Top, double Width, double Height)
+    {
+        public double Right => Left + Width;
+        public double Bottom => Top + Height;
+        public bool IsEmpty => !(Width > 0) || !(Height > 0);
+    }
 
     /// <summary>How one pop looks and moves at a motion level.</summary>
     /// <param name="FontDip">Figure size.</param>
@@ -92,7 +100,7 @@ public static class BookedPopLayout
     /// (raised by its rung), kept inside <paramref name="monitorPx"/> when one is known.
     /// <paramref name="scale"/> is that monitor's DPI scale (1.0 = 96 dpi).
     /// </summary>
-    public static Point TopLeftPx(Point originPx, int slot, double scale, Rect? monitorPx)
+    public static Point TopLeftPx(Point originPx, int slot, double scale, MonitorPx? monitorPx)
     {
         if (!(scale > 0) || double.IsNaN(scale)) scale = 1.0;
         var w = WindowWidthDip * scale;
