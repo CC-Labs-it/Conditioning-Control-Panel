@@ -2132,3 +2132,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/mine-dnd-tube: +589
 - Tube right-click menu acts through the shell (engine #479, takeover #514/#978, mutes, trigger); Shrink/Grow/Dismiss with saved scale; panic stops what it starts.
 - Chat box closes on outside press; closing the tube stops her voice and unhooks ask cards. DND was already ported.
+
+## avalonia-port/ci-hybrid-gate: +21
+- build.yml `scope=windows` dispatch input: GitHub runs only Windows jobs, Linux half runs locally (bin/rgate hybrid). Hybrid rgate GATE-OK (run 38397970327).
