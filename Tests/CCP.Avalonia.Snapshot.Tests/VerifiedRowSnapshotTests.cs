@@ -97,8 +97,9 @@ public sealed class VerifiedRowSnapshotTests
         Assert.Equal("Noto Sans Mono", mono!.FamilyName);
         Assert.True(fm.TryMatchCharacter(0x1F600, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal, null, null, out var emoji));
         Assert.Equal("Noto Emoji", emoji.FontFamily.Name);
-        // The app (not the render lock) asks the system's colour emoji font first.
-        Assert.Equal("emoji", AppFonts.Options().FontFallbacks![0].FontFamily.Name);
+        // The app (not the render lock) asks the system's colour emoji font first, through its own collection
+        // (SystemEmojiFontCollection: no synthetic bold/italic, render-all-segv); none installed -> the bundled one.
+        Assert.Equal(SystemEmojiFontCollection.SystemFamilyName() ?? "Noto Emoji", AppFonts.Options().FontFallbacks![0].FontFamily.Name);
         return Task.CompletedTask;
     });
 
