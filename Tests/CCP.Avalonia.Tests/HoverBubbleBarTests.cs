@@ -46,6 +46,7 @@ public sealed class HoverBubbleBarTests
             try
             {
                 s.MotionLevel = MotionLevel.Off;   // instant states: widths are assertable
+                s.HasLinkedDiscord = true;         // the RP switch refuses an unlinked account (WPF AccountShell.cs:279)
                 w = new MainShellWindow();
                 w.Show();
                 Dispatcher.UIThread.RunJobs();
