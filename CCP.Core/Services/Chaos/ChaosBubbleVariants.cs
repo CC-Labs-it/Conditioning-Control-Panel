@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Media;
 
 namespace ConditioningControlPanel.Services.Chaos;
 
@@ -16,7 +15,7 @@ public sealed class EffectBubbleSpec
     public string VariantId { get; init; } = "";
     public EffectPayload Payload { get; init; } = new FlashPayload();
     public double SizePx { get; init; } = 200;
-    public Color Tint { get; init; } = Colors.HotPink;
+    public uint Tint { get; init; } = 0xFFFF69B4u;   // 0xAARRGGBB (WPF Colors.HotPink)
     public string Label { get; init; } = "";
     public bool IsLive { get; init; }
     public int FuseMs { get; init; }
@@ -101,7 +100,7 @@ public sealed record ChaosBubbleVariant(
     double MinSize,
     double MaxSize,
     ChaosMotion Motion,
-    Color Tint,
+    uint Tint,
     string Label,
     double Weight,
     double MinIntensity,
@@ -129,7 +128,7 @@ public static class ChaosBubbleVariants
     public const double DARTER_SIZE_MAX       = 96;
     public const int    DARTER_BASE_POINTS    = 120;
     public const int    DARTER_QUICK_BONUS    = 90;
-    private static readonly Color DarterTint  = Color.FromRgb(0xFF, 0x4D, 0xC4); // bright flash-pink
+    private static readonly uint DarterTint  = 0xFFFF4DC4u; // bright flash-pink
 
     private static readonly Random _rng = new();
 
@@ -179,7 +178,7 @@ public static class ChaosBubbleVariants
     public const double GOLDEN_SIZE_MIN   = 110;
     public const double GOLDEN_SIZE_MAX   = 140;
     public const double GOLDEN_SPEED_MULT = 2.8;   // faster than everything else — blink and it's gone
-    private static readonly Color GoldenTint = Color.FromRgb(0xFF, 0xD7, 0x00);
+    private static readonly uint GoldenTint = 0xFFFFD700u;
 
     /// <summary>
     /// Build a lucky golden bubble: benign, small, quick, vertical (rises from the bottom or
@@ -208,7 +207,7 @@ public static class ChaosBubbleVariants
     public const double HEART_SIZE_MIN   = 88;
     public const double HEART_SIZE_MAX   = 110;
     public const double HEART_SPEED_MULT = 0.8;    // a lazy drift — kind, but you still have to notice it
-    private static readonly Color HeartTint = Color.FromRgb(0xFF, 0x4D, 0x6E);
+    private static readonly uint HeartTint = 0xFFFF4D6Eu;
 
     /// <summary>
     /// Build the Pop-up Notification heart: a small benign pickup that drifts down from the
@@ -300,7 +299,7 @@ public static class ChaosBubbleVariants
     public const double PRISM_SIZE_MIN   = 165;
     public const double PRISM_SIZE_MAX   = 215;
     public const double PRISM_SPEED_MULT = 0.7;    // a lazy, mesmerising drift
-    private static readonly Color PrismTint = Color.FromRgb(0xC8, 0xA8, 0xFF);
+    private static readonly uint PrismTint = 0xFFC8A8FFu;
 
     /// <summary>
     /// Build the mimic prism: a swirling iridescent ball wearing another bubble's soul.
@@ -340,7 +339,7 @@ public static class ChaosBubbleVariants
     // ---- The Brittle tuning ----
     public const double BRITTLE_SIZE_MIN = 150;
     public const double BRITTLE_SIZE_MAX = 185;
-    private static readonly Color BrittleTint = Color.FromRgb(0xD9, 0xEF, 0xFF);   // cold thin glass
+    private static readonly uint BrittleTint = 0xFFD9EFFFu;   // cold thin glass
 
     /// <summary>
     /// Build The Brittle: a glass mine wearing a random LIVE bubble's effect (video and gif
@@ -377,7 +376,7 @@ public static class ChaosBubbleVariants
     // ---- The Echo tuning ----
     public const double ECHO_SIZE_MIN = 180;
     public const double ECHO_SIZE_MAX = 240;
-    private static readonly Color EchoTint = Color.FromRgb(0xC9, 0xC4, 0xE8);   // pale ghost-lavender
+    private static readonly uint EchoTint = 0xFFC9C4E8u;   // pale ghost-lavender
 
     /// <summary>
     /// Build The Echo: a live bubble with a doubled, ghosted outline and a stuttering float.
@@ -442,7 +441,7 @@ public static class ChaosBubbleVariants
     // ---- The Tease tuning ----
     public const double TEASE_SIZE_MIN = 170;
     public const double TEASE_SIZE_MAX = 210;
-    private static readonly Color TeaseTint = Color.FromRgb(0xB3, 0x0E, 0x2E);   // glossy wet red on black
+    private static readonly uint TeaseTint = 0xFFB30E2Eu;   // glossy wet red on black
 
     /// <summary>
     /// Build The Tease: a glossy black/red bubble marked with a pulsing ✖ that wiggles toward
@@ -638,27 +637,27 @@ public static class ChaosBubbleVariants
     {
         // benign "treats" — pop fires a small payload, no fuse
         new("flash",      "Flash",       EffectBubblePayloadKind.Flash,      null,
-            false, 150, 210, ChaosMotion.FloatUp,    Color.FromRgb(0xFF,0xD0,0xE8), "",   3.0, 0.00, 0, 0),
+            false, 150, 210, ChaosMotion.FloatUp,    0xFFFFD0E8u, "",   3.0, 0.00, 0, 0),
         new("subliminal", "Subliminal",  EffectBubblePayloadKind.Subliminal, null,
-            false, 170, 220, ChaosMotion.FloatUp,    Color.FromRgb(0xB0,0x80,0xFF), "♥",  3.0, 0.00, 0, 0),
+            false, 170, 220, ChaosMotion.FloatUp,    0xFFB080FFu, "♥",  3.0, 0.00, 0, 0),
 
         // live "threats" — defuse for reward or they detonate the effect
         new("pink",       "Pink Filter", EffectBubblePayloadKind.Overlay,    "pink_filter",
-            true,  180, 240, ChaosMotion.RainDown,   Color.FromRgb(0xFF,0x3D,0xA5), "◑",  2.0, 0.10, 3500, 5000),
+            true,  180, 240, ChaosMotion.RainDown,   0xFFFF3DA5u, "◑",  2.0, 0.10, 3500, 5000),
         new("spiral",     "Spiral",      EffectBubblePayloadKind.Overlay,    "spiral",
-            true,  180, 240, ChaosMotion.RoamBounce, Color.FromRgb(0x40,0xD0,0xC0), "◎",  2.0, 0.15, 3500, 5000),
+            true,  180, 240, ChaosMotion.RoamBounce, 0xFF40D0C0u, "◎",  2.0, 0.15, 3500, 5000),
         new("braindrain", "BrainDrain",  EffectBubblePayloadKind.Overlay,    "braindrain",
-            true,  240, 320, ChaosMotion.RoamBounce, Color.FromRgb(0x40,0x60,0xC0), "☁",  1.4, 0.25, 4500, 6500),
+            true,  240, 320, ChaosMotion.RoamBounce, 0xFF4060C0u, "☁",  1.4, 0.25, 4500, 6500),
         // freeze — a GOOD pickup (no fuse): catch it to freeze the whole field for a few seconds.
         // FloatUp so an uncaught one drifts off-screen harmlessly (benign bubbles have no fuse/despawn).
         new("bambifreeze","Freeze",       EffectBubblePayloadKind.BambiFreeze,null,
-            false, 190, 250, ChaosMotion.FloatUp,    Color.FromRgb(0x8A,0xE6,0xFF), "❄",  0.5, 0.15, 0, 0),  // weight halved 2026-06-12: freezes spawned too thick (also hard-capped at 2 on screen)
+            false, 190, 250, ChaosMotion.FloatUp,    0xFF8AE6FFu, "❄",  0.5, 0.15, 0, 0),  // weight halved 2026-06-12: freezes spawned too thick (also hard-capped at 2 on screen)
         new("video",      "Video",       EffectBubblePayloadKind.Video,      null,
-            true,  240, 300, ChaosMotion.RainDown,   Color.FromRgb(0xE0,0x40,0x4D), "▶",  0.5, 0.50, 5000, 7000),
+            true,  240, 300, ChaosMotion.RainDown,   0xFFE0404Du, "▶",  0.5, 0.50, 5000, 7000),
         // Display renamed HT Link → Gif Rain (2026-06-10): the hypnotube-link payload is long
         // gone — it rains gifs (GifCascadePayload). Id "htlink" is save/discovery-persisted, keep it.
         new("htlink",     "Gif Rain",    EffectBubblePayloadKind.GifCascade, null,
-            true,  200, 280, ChaosMotion.FloatUp,    Color.FromRgb(0xFF,0xC8,0x3D), "▼", 0.45,0.60, 4500, 6500),
+            true,  200, 280, ChaosMotion.FloatUp,    0xFFFFC83Du, "▼", 0.45,0.60, 4500, 6500),
     };
 
     /// <summary>
