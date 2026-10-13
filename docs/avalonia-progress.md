@@ -2110,3 +2110,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/game-justdrop: +603
 - Just Drop door: Core JustDropService/CreditedOrders (git mv) + JustDropHandoff; ShowTab(justdrop) opens the live shop in a GameWindow (signed-in handoff header, shared chrome.webview carrier, panic closes).
 - Row shell-just-drop stays stub: replay/fullscreen strip/orders shelf/EMI door missing; not live-checked against the real site.
+
+## avalonia-port/mine-launcher-links: +995
+- Launcher Media pill + dialog (preset via the panel), shortcut link + tile shortcut button writing .desktop entries (Linux) / .lnk (Windows, compile-only); Core LauncherShortcuts rules, LauncherMediaSettings moved to Core.
+- Rest: launcher friends chip and What's New link; WPF cyan chip styling.
