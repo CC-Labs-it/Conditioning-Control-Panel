@@ -78,6 +78,8 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// <summary>The heartbeat watch's own tick interval. A tick that arrives much later than
         /// this means the UI thread itself was stalled, see <see cref="PaintStallVerdict"/>.</summary>
         internal const double WatchIntervalSeconds = 5;
+        /// <summary>Heartbeat silence after which a running toy cue is stopped.</summary>
+        internal const double ToyCueSilenceSeconds = 6;
 
         /// <summary>Slack on <see cref="WatchIntervalSeconds"/> before a late tick counts as a UI
         /// stall, and the <see cref="VideoDiag.UiStallMs"/> age that counts as one too.</summary>
@@ -1743,6 +1745,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                 // page can't false-trip.
                 if (_host == null || !_host.IsReady || _exiting) return;
                 var silent = (DateTime.UtcNow - _lastHeartbeatUtc).TotalSeconds;
+                // A page that stopped beating cannot send toy-stop: end its cue long before the
+                // 20 s recovery (review, ccp-bugs #1429). The next cue from a live page plays.
+                if (silent > ToyCueSilenceSeconds) { try { GoonToyDirector.Stop(); } catch { } }
                 if (silent > 20)
                 {
                     App.Logger?.Warning("GoonHostService: page heartbeat silent >20s - recovering");

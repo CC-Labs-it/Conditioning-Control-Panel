@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Windows.Threading;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
@@ -23,6 +24,9 @@ namespace ConditioningControlPanel.Services.Deeper
     {
         private MediaFoundationReader? _reader;
         private WaveOutEvent? _output;
+        // The level is a SAMPLE gain. Never WaveOutEvent.Volume: that is waveOutSetVolume, which
+        // moves the whole app in the Windows mixer and is remembered across launches.
+        private VolumeSampleProvider? _gain;
         private DispatcherTimer? _tickTimer;
         private string? _currentPath;
         private bool _disposed;
@@ -55,7 +59,7 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private void ApplyVolume()
         {
-            try { if (_output != null) _output.Volume = _volume / 100f; }
+            try { var gain = _gain; if (gain != null) gain.Volume = _volume / 100f; }
             catch (Exception ex) { App.Logger?.Debug("EnhancementAudioPlayer.Volume apply error: {Error}", ex.Message); }
         }
 
@@ -94,8 +98,8 @@ namespace ConditioningControlPanel.Services.Deeper
                 _reader = new MediaFoundationReader(path);
                 _output = new WaveOutEvent { DesiredLatency = 200 };
                 App.Audio?.ApplyPreferredDevice(_output);
-                _output.Init(_reader);
-                ApplyVolume();
+                _gain = new VolumeSampleProvider(_reader.ToSampleProvider()) { Volume = _volume / 100f };
+                _output.Init(_gain);
                 _output.PlaybackStopped += OnPlaybackStopped;
                 _output.Play();
                 _currentPath = path;
@@ -141,6 +145,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 }
                 _reader?.Dispose();
                 _reader = null;
+                _gain = null;
                 _currentPath = null;
             }
             catch (Exception ex) { App.Logger?.Debug("EnhancementAudioPlayer.Stop error: {Error}", ex.Message); }

@@ -2849,8 +2849,13 @@ function buildApp() {
         // The toy bridge only exists inside the app: a browser cannot reach a
         // toy, and a null bridge is how the executor knows to skip toy cues.
         // Every cue carries the toy cap the two players signed (exec/toys.js capToyMessage).
+        // Never in practice: the bot is not a person who signed anything. And the other
+        // player can only lower the cap: session.ownToyCap is this player's own figure.
         toyBridge: session.hosted
-          ? ((m) => bridge.send(capToyMessage(m, currentMatch && currentMatch.consentSheet)))
+          ? ((m) => {
+            if (soloPair) return;
+            bridge.send(capToyMessage(m, currentMatch && currentMatch.consentSheet, session.ownToyCap));
+          })
           : null,
       });
     } catch (e) {

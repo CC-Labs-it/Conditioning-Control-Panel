@@ -470,6 +470,16 @@ async function main() {
     ok(capToyMessage(cue, null) === cue, 'no sheet leaves the cue to the host default');
     const stop = { type: 'toy-stop' };
     ok(capToyMessage(stop, { toy_cap: 0.4 }) === stop, 'toy-stop passes untouched');
+    // The other player can only LOWER it: a signed sheet above the player's own figure
+    // never lifts the cue past their own.
+    ok(capToyMessage(cue, { toy_cap: 1.0 }).cap === 0.7,
+      'a sheet raised to 100% stays at the own default (70%) until the player moves their own slider');
+    ok(capToyMessage(cue, { toy_cap: 1.0 }, 0.3).intensity === 0.3,
+      'a sheet above the player\'s own figure is held to the own figure');
+    ok(capToyMessage(cue, { toy_cap: 0.2 }, 0.9).intensity === 0.2,
+      'a sheet below the own figure lowers it');
+    ok(capToyMessage(cue, { toy_cap: 1.0 }, 1.0).intensity === 0.9,
+      'the player raising their own figure is honoured');
   }
 
   // ------------------------------------------------------- spiral registration

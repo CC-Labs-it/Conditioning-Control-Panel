@@ -37,12 +37,20 @@ export const BED_KEEPALIVE_MS = 45000;
  * cap both players signed, and it carries the cap so the host can clamp again (the page is
  * untrusted input there). `sheet` is match.consentSheet; a missing cap leaves the cue alone
  * and the host falls back to its own default.
+ *
+ * THE OTHER PLAYER CAN ONLY LOWER IT. `ownCap` is the figure this player last set on their own
+ * toy slider (OWN_TOY_CAP_DEFAULT until they touch it). A sheet the opponent proposed with a
+ * higher number, even one this player then signed, never lifts a cue past the player's own.
  */
-export function capToyMessage(msg, sheet) {
+export const OWN_TOY_CAP_DEFAULT = 0.7;
+
+export function capToyMessage(msg, sheet, ownCap) {
   if (!msg || msg.type !== 'toy-pattern') return msg;
-  const cap = sheet && typeof sheet.toy_cap === 'number' && sheet.toy_cap === sheet.toy_cap
+  const signed = sheet && typeof sheet.toy_cap === 'number' && sheet.toy_cap === sheet.toy_cap
     ? clamp01(sheet.toy_cap) : null;
-  if (cap === null) return msg;
+  if (signed === null) return msg;
+  const own = typeof ownCap === 'number' && ownCap === ownCap ? clamp01(ownCap) : OWN_TOY_CAP_DEFAULT;
+  const cap = Math.min(signed, own);
   return Object.assign({}, msg, { intensity: Math.min(clamp01(msg.intensity), cap), cap });
 }
 

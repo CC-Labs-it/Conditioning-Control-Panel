@@ -604,7 +604,12 @@ export function mount(container, ctx) {
   ledger.listen(toyRow.input, 'input', () => {
     toyRow.value.textContent = clampNum(toyRow.input.value, 0, 100) + '%';
   });
-  ledger.listen(toyRow.input, 'change', propose);
+  /* The player's OWN figure: the only thing that can raise what reaches their toy. A sheet the
+   * opponent proposes can lower it, never lift it past this (exec/toys.js capToyMessage). */
+  ledger.listen(toyRow.input, 'change', () => {
+    if (ctx.session) ctx.session.ownToyCap = clampNum(toyRow.input.value, 0, 100) / 100;
+    propose();
+  });
   ledger.interval(paintToy, 1000);
 
   // One call, and the engine does the rest: it flips the local declaration, clears
