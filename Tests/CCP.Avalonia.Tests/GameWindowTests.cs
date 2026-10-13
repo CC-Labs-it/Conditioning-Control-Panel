@@ -458,7 +458,7 @@ public sealed class GameWindowTests
         finally
         {
             TrackDecoder.DecodeProvider = old;
-            foreach (var f in files) File.Delete(TrackChartCache.PathFor(TrackDecoder.HashFile(f)));
+            foreach (var f in files) { var chart = TrackChartCache.PathFor(TrackDecoder.HashFile(f)); if (File.Exists(chart)) File.Delete(chart); }   // no decoder writes no chart, and maybe no charts dir
             Directory.Delete(dir, true);
         }
     }
