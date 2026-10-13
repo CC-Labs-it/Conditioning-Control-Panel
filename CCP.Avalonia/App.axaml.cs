@@ -672,7 +672,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
-                // echo stays unseeded (no bark engine here: CoreBark is a doorbell); command executor and
+                // echo is attached by Platform.BarkHead.Start below; command executor and
                 // activities are CompanionEffects (seeded below). SeedMemorySignals seeds UserMessageSent for the memory
                 // chat counter only; no companion-chat achievement listens to it on this head yet.
                 SeedMemorySignals();
@@ -745,6 +745,8 @@ namespace ConditioningControlPanel.Avalonia
                 };
                 SeedLevelAchievements(Achievements);
                 StartQuests();
+                Platform.CompanionHead.Start();   // WPF App.Companion: switch seams, companion XP, drain, level-up
+                Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
                 // WPF App.xaml.cs:290: a game.* palette row is listed only when this head can start it.
                 SettingsPaletteIndex.GameAvailableProvider = Views.Windows.LauncherWindow.CanStartGame;
                 // WPF App.xaml.cs:312: the race's door asks this head's prize store (P31).
