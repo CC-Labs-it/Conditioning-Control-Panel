@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
                     else
                         PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
+                    Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
                 });
         }
 
