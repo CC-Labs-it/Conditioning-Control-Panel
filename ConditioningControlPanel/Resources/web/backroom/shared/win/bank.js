@@ -30,6 +30,20 @@
 
 import { CFX, bankCount } from '../../../arcademy/shell/counterfx.js';
 
+/* THE END CARD (conversion lane G1, brief C10). The engine stays pure: only where there is a DOM does it
+ * lazily load shared/win/bank-card.js, and it tells that module two things - a run started, and a PAY
+ * settled on its own. Never on skip(): a Back, a close or the next lever press must never raise a card.
+ * Under node nothing loads, and a card that throws is never the bank's problem. */
+let cardHook = null;
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  import('./bank-card.js').then((m) => { cardHook = m; }).catch(() => { /* no card, same bank */ });
+}
+/** Tests only: stand in for bank-card.js (`{ start(), paid(info) }`), or null. */
+export function setBankCardHook(hook) { cardHook = hook || null; }
+function tellCard(fn, info) {
+  try { if (cardHook && typeof cardHook[fn] === 'function') cardHook[fn](info); } catch (e) { /* never the bank's problem */ }
+}
+
 export const BANK = Object.freeze({
   FLY_MS: CFX.BANK_FLY_MS,          // 560 ms a token, arc from source to counter
   STAGGER_MS: CFX.BANK_STAGGER_MS,  // 70 ms apart
@@ -156,6 +170,10 @@ export function createBankRun(spec) {
   let rolled = false;          // the 'land, still counting' edge has fired
   let tailFrom = fromValue;    // where the rollup's tail picks the count up from
   const fired = Array.from({ length: n }, () => false);   // per token: landed (pay) / left (spend)
+  const rollupMs = Number(o.rollupMs) || 0;
+  tellCard('start');                                      // the next spin, the next hand: any old card leaves
+  /** A PAY that settled on its own (step(), never skip()) may carry THE END CARD. */
+  const paidOut = () => { if (kind === 'pay') tellCard('paid', { fromValue, toValue: settled, rollupMs }); };
 
   const tokenState = ms => Array.from({ length: n }, (_, i) => {
     const q = tokenQ(i, ms);
@@ -190,7 +208,7 @@ export function createBankRun(spec) {
      */
     step(now) {
       if (done) return { shown, tokens: [], events: [], flying: false, done: true };
-      if (reduced) return { shown: settled, tokens: [], events: settleEvents(true), flying: false, done: true };
+      if (reduced) { const events = settleEvents(true); paidOut(); return { shown: settled, tokens: [], events, flying: false, done: true }; }
 
       const ms = (Number(now) || 0) - startMs;
       const events = [];
@@ -217,6 +235,7 @@ export function createBankRun(spec) {
       events.push({ type: 'land', kind, counting: false });
       events.push({ type: 'done', kind });
       done = true;
+      paidOut();
       return { shown, tokens: [], events, flying: false, done: true };
     },
 
