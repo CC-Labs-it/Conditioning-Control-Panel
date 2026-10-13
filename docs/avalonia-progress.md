@@ -2074,3 +2074,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/awareness-core-a: +26
 - Moved 10 awareness files (frame, policy, scorer, projection, angle cards, prompt builder, tally, cooldown ledger, interfaces) to CCP.Core, together with the angle-deck embedded resource; 5 pure test classes moved to CCP.Core.Tests.
 - ActivityLedger and AwarenessObserver (each over 1000 lines) are left for their own units; see evidence/awareness-core-a/map.md.
+
+## avalonia-port/game-race-b: +333
+- Racing Thoughts host shell on GameWindow: the purchase door, a launcher tile behind the leash gate, init + manifest, one payout per run, the heartbeat watchdog; panic closes it.
+- Next: BambiCloud levels, own tracks, the track player, smaller host frames.
