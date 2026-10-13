@@ -1,5 +1,17 @@
+// MOVED from ConditioningControlPanel/Services/Account/DiscordRichPresenceService.cs (WPF 7.1.5): one copy
+// serves both heads. Head-specific bits are two seams: App.Logger -> Serilog's static Log (WPF's App.Logger
+// writes through it), and the WPF DispatcherTimer/Dispatcher.Invoke -> a thread timer whose ticks hop to the
+// head's UI thread through PostToUi (each head sets it at startup, before the service is built).
+// DiscordRichPresence 1.6.1.70 speaks a named pipe discord-ipc-N on Windows, the unix
+// socket under $XDG_RUNTIME_DIR (and the flatpak / snap paths the library probes) on Linux. No Discord
+// running = a logged connection failure, nothing else.
+//
+// PRESENCE IS OPT-IN and only ever describes THIS user: fixed strings, the user's own level when they
+// asked for it, never a friend's or an opponent's name or Discord id. Arming is refused without a linked
+// Discord at every switch (ProfilePrivacyPanel, the Home quick toggle) and at startup (App).
 using System;
-using System.Windows.Threading;
+using System.Threading;
+using Serilog;
 using DiscordRPC;
 using DiscordRPC.Logging;
 
@@ -20,7 +32,12 @@ public class DiscordRichPresenceService : IDisposable
     private DateTime _sessionStartTime;
     private string _currentState = "Idle";
     private string _currentDetails = "In the app";
-    private readonly DispatcherTimer _updateTimer;
+    private readonly Timer _updateTimer;
+    private static readonly TimeSpan UpdateInterval = TimeSpan.FromSeconds(15);
+
+    /// <summary>Runs an action on the head's UI thread (WPF Dispatcher.BeginInvoke, Avalonia Dispatcher.UIThread.Post).
+    /// Default runs inline, which is what a headless test wants.</summary>
+    public static Action<Action> PostToUi { get; set; } = a => a();
     private int _currentLevel = 0;
 
     // ---- Goon Game presence (docs/GOON_DISCORD_CONTRACT.md §5) ----------------------
@@ -35,6 +52,14 @@ public class DiscordRichPresenceService : IDisposable
     private string? _goonPriorDetails;
 
     public bool IsConnected => _client?.IsInitialized == true;
+
+    /// <summary>The activity line the next refresh sends (test seam: which feature owns the presence).</summary>
+    internal string CurrentState => _currentState;
+
+    /// <summary>A CCP_USERDATA_DIR sandbox (like SecretStore.Sandboxed). Test seam: a test swaps it to reach a FAKE
+    /// discord-ipc socket, or to prove the refusal.</summary>
+    internal static Func<bool> Sandboxed = () =>
+        SandboxNet.Active || Environment.GetEnvironmentVariable("CCP_USERDATA_DIR") != null;
     public bool IsEnabled
     {
         get => _isEnabled;
@@ -56,11 +81,7 @@ public class DiscordRichPresenceService : IDisposable
         _sessionStartTime = DateTime.UtcNow;
 
         // Update presence every 15 seconds
-        _updateTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(15)
-        };
-        _updateTimer.Tick += (s, e) => UpdatePresence();
+        _updateTimer = new Timer(_ => PostToUi(UpdatePresence), null, Timeout.Infinite, Timeout.Infinite);
     }
 
     /// <summary>
@@ -69,9 +90,16 @@ public class DiscordRichPresenceService : IDisposable
     public void Connect()
     {
         // Don't connect in offline mode
-        if (App.Settings?.Current?.OfflineMode == true)
+        if (CoreSettings.Current.OfflineMode)
         {
-            App.Logger?.Debug("Offline mode enabled, Discord Rich Presence disabled");
+            Log.Debug("Offline mode enabled, Discord Rich Presence disabled");
+            return;
+        }
+
+        // Not in WPF: a sandboxed run (tests, gate, kc) never shows presence on the user's real Discord.
+        if (Sandboxed())
+        {
+            Log.Debug("Sandboxed run: Discord Rich Presence not connected");
             return;
         }
 
@@ -87,49 +115,49 @@ public class DiscordRichPresenceService : IDisposable
 
             _client.OnReady += (sender, e) =>
             {
-                App.Logger?.Information("Discord RPC connected");
+                Log.Information("Discord RPC connected");
             };
 
             _client.OnError += (sender, e) =>
             {
-                App.Logger?.Warning("Discord RPC error: {Message}", e.Message);
+                Log.Warning("Discord RPC error: {Message}", e.Message);
             };
 
             _client.OnConnectionFailed += (sender, e) =>
             {
-                App.Logger?.Warning("Discord RPC connection failed on pipe {Pipe}. Make sure Discord is running.", e.FailedPipe);
+                Log.Warning("Discord RPC connection failed on pipe {Pipe}. Make sure Discord is running.", e.FailedPipe);
             };
 
             _client.OnConnectionEstablished += (sender, e) =>
             {
-                App.Logger?.Information("Discord RPC connection established on pipe {Pipe}", e.ConnectedPipe);
+                Log.Information("Discord RPC connection established on pipe {Pipe}", e.ConnectedPipe);
             };
 
             _client.Initialize();
             _sessionStartTime = DateTime.UtcNow;
-            _updateTimer.Start();
+            _updateTimer.Change(UpdateInterval, UpdateInterval);
 
             // Initialize with current level
-            _currentLevel = App.Settings?.Current?.PlayerLevel ?? 0;
+            _currentLevel = CoreSettings.Current.PlayerLevel;
 
             // Give Discord a moment to connect, then set initial presence
             System.Threading.Tasks.Task.Delay(1000).ContinueWith(_ =>
             {
-                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                PostToUi(() =>
                 {
                     if (_client?.IsInitialized == true)
                     {
                         UpdatePresence();
-                        App.Logger?.Information("Discord Rich Presence connected and presence set");
+                        Log.Information("Discord Rich Presence connected and presence set");
                     }
                 });
             });
 
-            App.Logger?.Information("Discord Rich Presence initializing...");
+            Log.Information("Discord Rich Presence initializing...");
         }
         catch (Exception ex)
         {
-            App.Logger?.Error(ex, "Failed to initialize Discord RPC");
+            Log.Error(ex, "Failed to initialize Discord RPC");
         }
     }
 
@@ -138,7 +166,7 @@ public class DiscordRichPresenceService : IDisposable
     /// </summary>
     public void Disconnect()
     {
-        _updateTimer.Stop();
+        _updateTimer.Change(Timeout.Infinite, Timeout.Infinite);
 
         if (_client != null)
         {
@@ -151,7 +179,7 @@ public class DiscordRichPresenceService : IDisposable
             _client = null;
         }
 
-        App.Logger?.Information("Discord Rich Presence disabled");
+        Log.Information("Discord Rich Presence disabled");
     }
 
     /// <summary>
@@ -395,7 +423,7 @@ public class DiscordRichPresenceService : IDisposable
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("SetGoonActivity({S}) failed: {E}", s, ex.Message);
+            Log.Debug("SetGoonActivity({S}) failed: {E}", s, ex.Message);
         }
     }
 
@@ -448,7 +476,7 @@ public class DiscordRichPresenceService : IDisposable
             // Build state string, optionally including level. NOT for the duel: contract §5 pins
             // the Goon Game presence to fixed strings, and "| Level 47" is not one of them.
             var state = _currentState;
-            if (!_goonActive && _currentLevel > 0 && App.Settings?.Current?.DiscordShowLevelInPresence == true)
+            if (!_goonActive && _currentLevel > 0 && CoreSettings.Current.DiscordShowLevelInPresence)
             {
                 state = $"{_currentState} | Level {_currentLevel}";
             }
@@ -484,28 +512,17 @@ public class DiscordRichPresenceService : IDisposable
             // {
             //     LargeImageKey = "app_icon",
             //     LargeImageText = "Conditioning Control Panel",
-            //     SmallImageKey = GetSmallImageKey(),
+            //     SmallImageKey = <"session"/"video"/"flash"/"idle" by _currentState>,
             //     SmallImageText = _currentState
             // };
 
             _client.SetPresence(presence);
-            App.Logger?.Debug("Discord presence updated: {Details} - {State}", _currentDetails, state);
+            Log.Debug("Discord presence updated: {Details} - {State}", _currentDetails, state);
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Failed to update Discord presence: {Error}", ex.Message);
+            Log.Debug("Failed to update Discord presence: {Error}", ex.Message);
         }
-    }
-
-    private string GetSmallImageKey()
-    {
-        return _currentState.ToLower() switch
-        {
-            "in session" => "session",
-            "watching" => "video",
-            "conditioning" => "flash",
-            _ => "idle"
-        };
     }
 
     public void Dispose()
@@ -514,6 +531,7 @@ public class DiscordRichPresenceService : IDisposable
         _disposed = true;
 
         Disconnect();
+        _updateTimer.Dispose();
         GC.SuppressFinalize(this);
     }
 }
