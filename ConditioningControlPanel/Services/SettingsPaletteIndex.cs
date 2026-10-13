@@ -342,6 +342,24 @@ namespace ConditioningControlPanel.Services
         public static IReadOnlyList<SettingsPaletteEntry> Recents(string? json) =>
             ReadRecents(json).Select(ById).Where(e => e != null && e.Available).Select(e => e!).ToList();
 
+        /// <summary>
+        /// What the empty box lists (7.1.8, "the favorite drawer on every screen"): the pinned
+        /// favorites in rail order, then the recent rows, then the authored opening list, each
+        /// row once. Ctrl+K opens over every page, so the Home drawer's pins are one keystroke
+        /// away everywhere with no new chrome. A pin the registry no longer knows or the server
+        /// withholds is skipped, the rule the drawer itself follows.
+        /// </summary>
+        public static IReadOnlyList<SettingsPaletteEntry> OpeningRows(IEnumerable<string>? favorites, string? recentsJson)
+        {
+            var rows = new List<SettingsPaletteEntry>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var pinned = (favorites ?? Enumerable.Empty<string>())
+                .Select(ById).Where(e => e != null && e.Available).Select(e => e!);
+            foreach (var e in pinned.Concat(Recents(recentsJson)).Concat(Search(string.Empty)))
+                if (seen.Add(e.Id)) rows.Add(e);
+            return rows;
+        }
+
         /// <summary>The row with this id, or null.</summary>
         public static SettingsPaletteEntry? ById(string? id) =>
             string.IsNullOrEmpty(id) ? null : _all.FirstOrDefault(e => string.Equals(e.Id, id, StringComparison.Ordinal));

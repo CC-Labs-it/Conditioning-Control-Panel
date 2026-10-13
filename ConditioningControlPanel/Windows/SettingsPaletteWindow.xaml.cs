@@ -255,14 +255,12 @@ namespace ConditioningControlPanel
                 }
                 else if (query.Trim().Length == 0)
                 {
-                    // Empty box: the last few places first, then the authored opening list.
-                    var recents = SettingsPaletteIndex.Recents(App.Settings?.Current?.NavSearchRecents);
-                    var seen = new HashSet<string>(recents.Select(e => e.Id), StringComparer.Ordinal);
-                    rows = recents.Select(e => new PaletteRow(e, null))
-                                  .Concat(SettingsPaletteIndex.Search(query)
-                                                              .Where(e => !seen.Contains(e.Id))
-                                                              .Select(e => new PaletteRow(e, null)))
-                                  .ToList();
+                    // Empty box: the pinned favorites (starred), the last few places, then the
+                    // authored opening list. The order is SettingsPaletteIndex.OpeningRows.
+                    var s = App.Settings?.Current;
+                    rows = SettingsPaletteIndex.OpeningRows(s?.RailFavorites, s?.NavSearchRecents)
+                                               .Select(e => new PaletteRow(e, null, FavoritesRailRule.IsPinned(s?.RailFavorites, e.Id)))
+                                               .ToList();
                 }
                 else
                 {
@@ -641,15 +639,21 @@ namespace ConditioningControlPanel
         /// </summary>
         public sealed class PaletteRow
         {
-            public PaletteRow(SettingsPaletteEntry entry, string? query)
+            /// <param name="pinned">True on the empty box's favorite rows: the row wears the
+            /// drawer handle's star after its caption, so the player can tell why it leads.</param>
+            public PaletteRow(SettingsPaletteEntry entry, string? query, bool pinned = false)
             {
                 Entry = entry;
                 Glyph = entry.Glyph;
                 Label = entry.Label;
                 Context = entry.Context;
                 var was = SettingsPaletteIndex.WasHint(entry, query);
-                WasHint = was == null ? string.Empty : "  " + Localization.Loc.GetF("nav_was_hint", was);
+                WasHint = pinned ? PinnedMark
+                        : was == null ? string.Empty : "  " + Localization.Loc.GetF("nav_was_hint", was);
             }
+
+            /// <summary>Two spaces and the star the Home drawer's handle wears (U+2605).</summary>
+            public const string PinnedMark = "  ★";
 
             public SettingsPaletteEntry Entry { get; }
             public string WasHint { get; }
