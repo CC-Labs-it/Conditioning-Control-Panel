@@ -35,6 +35,10 @@ namespace ConditioningControlPanel.Avalonia
         /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
         internal static AchievementEngine? Achievements { get; private set; }
 
+        /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
+        /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
+        internal static FeatureDayLogService? FeatureDayLog { get; private set; }
+
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
         /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.md).</summary>
         internal static WindowAwarenessService WindowAwareness { get; } =
@@ -275,6 +279,20 @@ namespace ConditioningControlPanel.Avalonia
             Mods?.AttachReleaseContent();
         }
 
+        /// <summary>
+        /// WPF App.xaml.cs:3163 (<c>ContentPacks = new ContentPackService()</c>) and :448 (the pack-video
+        /// seam): register the installed packs under &lt;assets&gt;/.packs and the network half beside them.
+        /// The proxy follows the friends rule: a sandbox without a loopback override sends nothing.
+        /// </summary>
+        internal static void StartContentPacks(ContentPackStore store, string? userDataDir, string? overrideUrl)
+        {
+            var url = Platform.FriendsHead.BaseUrl(userDataDir, overrideUrl);
+            ConditioningControlPanel.Services.Packs.ContentPackService.DefaultBaseUrl = () => url;
+            ContentPackStore.Current = store;
+            ConditioningControlPanel.Services.Packs.ContentPackService.Current = new ConditioningControlPanel.Services.Packs.ContentPackService(store);
+            CoreProgram.ActivePackVideoCountProvider = () => ContentPackStore.Current?.GetAllActivePackVideos().Count ?? 0;
+        }
+
         private AvaloniaCoreDispatch? _desktopDispatch;
         private int _exitHandled;
         private int _warnedMissingCustomAssetsPath;
@@ -298,6 +316,7 @@ namespace ConditioningControlPanel.Avalonia
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
+            Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
             // App.OnStartup; every head must, because LocalizationManager holds no language until
@@ -438,13 +457,8 @@ namespace ConditioningControlPanel.Avalonia
                 await step(0.4, "Initializing flash service...");
                 // The ambient flash surface. CoreFlash owns the rhythm; a burst needs any attached
                 // visual to reach Screens, and the main window is the one that always is.
-                CoreFlash.IsBusyProvider = () => Views.Overlays.FlashOverlay.IsBusy;
-                CoreFlash.ShowProvider = () =>
-                {
-                    if (desktop.MainWindow is not { } host) return;
-                    Views.Overlays.FlashOverlay.TriggerOnce(host);
-                    NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash);
-                };
+                Views.Overlays.FlashOverlay.SeedCore(() => desktop.MainWindow,
+                    () => NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash));
 
                 // Subliminal and bouncing-text surfaces. Core owns the schedule / the motion;
                 // these draw on click-through overlays (Views/Overlays), hosted like the flash.
@@ -566,9 +580,17 @@ namespace ConditioningControlPanel.Avalonia
                         Platform.FriendsHead.Service = friends;
                         CoreAccount.UnifiedIdentityChanged += (_, _) => friends.Kick();
                         friends.Start(new Platform.FriendsHead.Timer());
+                        // WPF App.xaml.cs:2991 LEASH: rides the friends poll (report out, block in, 20 s while leashed).
+                        try
+                        {
+                            Platform.LeashHead.Start(friends, Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                                Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
+                        }
+                        catch (Exception exLeash) { Serilog.Log.Warning(exLeash, "[Leash] service could not be built"); }
                     }
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
+                Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
                 // WPF App.xaml.cs:2940-2968. EnsureBaselineAsync keeps WPF's rules: no-op on a full
                 // install, under a debugger, in offline mode, or when nothing is missing. A Linux dev
                 // build never reads as a full install (flashes_audio is not shipped here), so an
@@ -590,6 +612,17 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     Serilog.Log.Error(ex, "Failed to initialize ReleaseContentService - downloaded content unavailable this session");
                 }
+                // WPF App.xaml.cs:915 CleanupStaleTempFiles: decrypts a crash or kill left behind. A sandbox
+                // sweeps only its own assets, never the shared system temp another instance may be using.
+                var sandboxed = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"));
+                try { ContentPackStore.SweepStaleTemps(Path.Combine(CorePaths.EffectiveAssets, ".temp"), sandboxed ? null : Path.GetTempPath()); }
+                catch (Exception ex) { Serilog.Log.Debug("Stale pack temp sweep failed: {E}", ex.Message); }
+                try
+                {
+                    StartContentPacks(new ContentPackStore(), Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                        Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
+                }
+                catch (Exception ex) { Serilog.Log.Error(ex, "Failed to initialize ContentPackStore - content packs unavailable this session"); }
                 await step(0.3, "Initializing audio...");
                 // Real audio through LibVLC, seeded only if libvlc loads. If it is missing,
                 // CoreAudio stays unseeded: every clip "finishes" at once and nothing plays.
@@ -672,6 +705,10 @@ namespace ConditioningControlPanel.Avalonia
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
+                // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
+                // Its loss must not cost the launch.
+                try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
+                catch (Exception exDayLog) { Serilog.Log.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
                 CoreProgram.UnlockAchievementProvider = id => Achievements?.TryUnlock(id);
                 // WPF App.xaml.cs: the invite ladder's badges and the invites wire (friends' proxy and
                 // door; a sandbox reaches only a loopback CCP_FRIENDS_API_URL, else nothing is sent).
@@ -717,8 +754,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:447: ritual photos file through the roadmap. Lazy - the shell creates its
                 // RoadmapService on first use, so DisposeRoadmapIfCreated keeps its contract.
                 CoreProgram.RoadmapProvider = () => Views.Windows.MainShellWindow.Roadmap;
-                // CoreProgram's pack-video provider stays unseeded - this head has no ContentPackService,
-                // so it answers "no pack videos".
+                // CoreProgram's pack-video provider is seeded by StartContentPacks.
                 // HasPremiumProvider is seeded by AccountSeed.Seed(); NotifyProvider below, once the
                 // shell's toast host exists.
 
@@ -1086,8 +1122,10 @@ namespace ConditioningControlPanel.Avalonia
             // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
             try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
+            try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
@@ -1098,6 +1136,9 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.Dispose(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
+            // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
+            // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
+            try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
             try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
 

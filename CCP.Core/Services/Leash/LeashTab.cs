@@ -2,8 +2,8 @@ using System;
 
 namespace ConditioningControlPanel.Services.Leash;
 
-/// <summary>Where leash time meets Circe's tab. Tests hand in a fake; the app's one is
-/// <see cref="ChasterLeashTab"/>.</summary>
+/// <summary>Where leash time meets Circe's tab. Tests hand in a fake; the WPF head's one is
+/// ChasterLeashTab (ConditioningControlPanel/Services/Leash).</summary>
 public interface ILeashTab
 {
     /// <summary>Book a Chaster punishment (+seconds on row <c>leash</c>). Returns what was applied.</summary>
@@ -37,24 +37,5 @@ public static class LeashChasterRule
         if (size is not int s) return 0;
         foreach (var c in LeashGrammar.CreditSizes) if (c == s) return s;
         return 0;
-    }
-}
-
-/// <summary>The app's tab: <c>App.Chaster</c>, the same NoteSeconds path an Awareness trigger uses.
-/// The row ids are literal on purpose (the price-row wiring test reads them).</summary>
-public sealed class ChasterLeashTab : ILeashTab
-{
-    public int BookPunish(int seconds)
-    {
-        if (seconds <= 0) return 0;
-        try { return App.Chaster?.NoteSeconds("leash", seconds).AppliedSeconds ?? 0; }
-        catch (Exception ex) { App.Logger?.Debug("Leash tab punish failed: {E}", ex.Message); return 0; }
-    }
-
-    public int BookCredit(int seconds)
-    {
-        if (seconds <= 0) return 0;
-        try { return App.Chaster?.NoteSeconds("leash_credit", -seconds).AppliedSeconds ?? 0; }
-        catch (Exception ex) { App.Logger?.Debug("Leash tab credit failed: {E}", ex.Message); return 0; }
     }
 }

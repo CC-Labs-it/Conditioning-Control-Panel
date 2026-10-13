@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
@@ -89,9 +90,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private readonly Grid _contentRoot, _teaseHost;
         private readonly TextBlock _txtTitle, _txtGlyph, _txtTeaseGlyph, _txtLockLabel, _txtTierBadge;
         private readonly Button _btnHelp;
-        private readonly DropShadowEffect _activeGlow;
+        private readonly Border _activeGlow;   // the GlowLayer sibling (CardGlow)
+        private double _glowBlur = -1;
         private readonly ScaleTransform _rootScale = new(1, 1);
-        private CancellationTokenSource? _breath;
+        private BeatLoop? _breath;
         private IDisposable? _visibilityWatch;
         private bool _hovered;
 
@@ -113,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _txtLockLabel = this.FindControl<TextBlock>("TxtLockLabel")!;
             _txtTierBadge = this.FindControl<TextBlock>("TxtTierBadge")!;
             _btnHelp = this.FindControl<Button>("BtnHelp")!;
-            _activeGlow = (DropShadowEffect)_rootBorder.Effect!;
+            _activeGlow = this.FindControl<Border>("GlowLayer")!;
 
             // Hover lift (WPF: MotionFx.HoverLift) as a transition on the root scale (the art pop is
             // Controls/HoverPop, driven from ApplyHover as WPF does); the 6px margin on RootBorder is the headroom the lift paints into.
@@ -124,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             };
             _rootScale.Transitions = hoverTransitions;
             _rootBorder.RenderTransform = _rootScale;
+            _activeGlow.RenderTransform = _rootScale;   // the glow lifts with the tile, as WPF's Effect did
 
             _contentRoot.SizeChanged += (_, _) => UpdateRoundedClip();
             PointerEntered += (_, _) => ApplyHover(true);
@@ -288,7 +291,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// WPF ApplyActiveBreath (:643): when ambient motion is not allowed both park at PEAK.</summary>
         private void ApplyActiveBreath(bool active)
         {
-            _breath?.Cancel();
+            _breath?.Stop();
             _breath = null;
             if (!active)
             {
@@ -298,34 +301,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             }
             var tier = Env.CurrentTier;
             bool glow = Env.AllowGlow(tier) && Env.Level != Models.MotionLevel.Off;
-            if (glow) _activeGlow.BlurRadius = Math.Min(18, Env.MaxGlowBlurRadius(tier));
+            if (glow) SetGlowBlur(Math.Min(CardGlow.BlurRadius, Env.MaxGlowBlurRadius(tier)));
             if (!AmbientAllowed)
             {
                 _activeGlow.Opacity = glow ? ActiveGlowMaxOpacity : 0;
                 _activeBorder.Opacity = ActiveRingMaxOpacity;
                 return;
             }
-            _breath = new CancellationTokenSource();
-            if (glow) _ = Breathe(_activeGlow, ActiveGlowMinOpacity, ActiveGlowMaxOpacity).RunAsync(_activeGlow, _breath.Token);
-            else _activeGlow.Opacity = 0;
-            _ = Breathe(_activeBorder, ActiveRingMinOpacity, ActiveRingMaxOpacity).RunAsync(_activeBorder, _breath.Token);
+            // WPF Breathe (FeatureCard.xaml.cs:679-688): 3.5 s, AutoReverse, SineEase InOut, 30 fps;
+            // on the shared 30 fps beat instead of an infinite Animation (P82).
+            _breath = new BeatLoop(this, t =>
+            {
+                double k = BeatLoop.Breath(t, ActiveBreathSeconds);
+                _activeGlow.Opacity = glow ? ActiveGlowMinOpacity + (ActiveGlowMaxOpacity - ActiveGlowMinOpacity) * k : 0;
+                _activeBorder.Opacity = ActiveRingMinOpacity + (ActiveRingMaxOpacity - ActiveRingMinOpacity) * k;
+            });
+            _breath.Start();
         }
 
-        private static Animation Breathe(Animatable target, double min, double max)
+        private void SetGlowBlur(double blur)
         {
-            var prop = target is Visual ? Visual.OpacityProperty : DropShadowEffect.OpacityProperty;
-            return new Animation
-            {
-                Duration = TimeSpan.FromSeconds(ActiveBreathSeconds),
-                IterationCount = IterationCount.Infinite,
-                PlaybackDirection = PlaybackDirection.Alternate,
-                Easing = new SineEaseInOut(),
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(prop, min) } },
-                    new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(prop, max) } },
-                },
-            };
+            if (blur == _glowBlur) return;
+            _glowBlur = blur;
+            CardGlow.Bind(_activeGlow, blur);
         }
 
         /// <summary>Rounded clip matching RootBorder's inner arc: a Border never clips its

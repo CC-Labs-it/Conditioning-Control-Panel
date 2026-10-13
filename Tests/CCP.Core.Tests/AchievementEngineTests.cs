@@ -54,6 +54,18 @@ public sealed class AchievementEngineTests : IDisposable
     }
 
     [Fact]
+    public void FlashImagesCountAndUnlockRetinalBurnAt5000()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.Progress.TotalFlashImages = 4998;
+        engine.TrackFlashImage();
+        Assert.False(engine.Progress.IsUnlocked("retinal_burn"));
+        engine.TrackFlashImage();
+        Assert.Equal(5000, engine.Progress.TotalFlashImages);
+        Assert.True(engine.Progress.IsUnlocked("retinal_burn"));
+    }
+
+    [Fact]
     public void UnlockPersistsThenRaisesExactlyOnce()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));
