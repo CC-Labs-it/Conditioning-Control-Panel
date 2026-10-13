@@ -61,7 +61,7 @@ public class EmiCodexTests
     [Fact]
     public void The_book_sits_sixth_in_the_catalogue()
     {
-        Assert.Equal(5, EmiTargets.OrderOf(EmiCodex.TargetId));
+        Assert.Equal(EmiCodex.TargetId, EmiDoors.All[5].Id);
         Assert.Equal(EmiCodex.TargetId, EmiTargets.All[5].Id);
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using ConditioningControlPanel.Localization;
 using Serilog;
@@ -111,13 +112,18 @@ internal static class EmiNames
     }
 
     /// <summary>A ring target id as a lowercase display name, or null when it is not in the catalogue.</summary>
+    /// <remarks>Reads <see cref="EmiDoors"/>, not a head's EmiTargets: the name is the card's label
+    /// (<see cref="EmiTarget.Label"/>, so the same fallback) and a door this head hides still has
+    /// one. Both heads therefore name every door the same.</remarks>
     private static string? FromTarget(string id)
     {
         try
         {
-            var t = EmiTargets.Find(id);
-            if (t == null) return null;
-            return Clean(t.Label);
+            if (!EmiDoors.All.Any(d => string.Equals(d.Id, id, StringComparison.Ordinal))) return null;
+            string label;
+            try { label = Loc.Get("emi_desk_target_" + id); }
+            catch { label = id; }
+            return Clean(label);
         }
         catch (Exception ex)
         {

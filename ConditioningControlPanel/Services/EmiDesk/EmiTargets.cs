@@ -105,15 +105,6 @@ public static class EmiTargets
     /// <summary>Every target, in default order.</summary>
     public static IReadOnlyList<EmiTarget> All => _all;
 
-    /// <summary>Catalogue position, the suggester's tie-break. Unknown ids sort last.</summary>
-    public static int OrderOf(string? id)
-    {
-        if (string.IsNullOrEmpty(id)) return int.MaxValue;
-        for (int i = 0; i < _all.Count; i++)
-            if (string.Equals(_all[i].Id, id, StringComparison.Ordinal)) return i;
-        return int.MaxValue;
-    }
-
     /// <summary>Look a target up by id, or null.</summary>
     public static EmiTarget? Find(string? id)
     {
@@ -122,47 +113,8 @@ public static class EmiTargets
     }
 
     // ============================================================================
-    // opens that did not come from the ring
+    // opens that did not come from the ring (the maps and why they are partial: Core EmiDoors)
     // ============================================================================
-    //
-    // The suggester ranks doors by how often they are OPENED, not by how often a card is
-    // clicked, so the nav rail, the mosaic, the Ctrl+K palette, a hotkey and a bark link all
-    // have to score too. Rather than scatter NoteOpen through the UI, the two chokepoints every
-    // one of those paths already funnels through call in here.
-    //
-    // The maps are deliberately partial. A tab with no card in the catalogue scores nothing
-    // (Home, Quests, Achievements, the Studio itself), and three keys are missing on purpose:
-    // "fyp" and "justdrop" never reach the bottom of ShowTab (they are intercepted into their
-    // own launchers, which count there), while "gradedintake" is the quiz LANDING page whose
-    // start button calls IntakeHostService.Launch - counting both would score one sitting twice.
-    // "spiral" as a TAB key is the Spiral Room, a different thing from the spiral OVERLAY card.
-
-    private static readonly Dictionary<string, string> _tabTargets = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["presets"] = "sessions",
-        ["companion"] = "companion",
-        ["awareness"] = "awareness",
-        ["remotecontrol"] = "remote",
-        ["bambitakeover"] = "takeover",
-        ["lockdown"] = "lockdown",
-        // Polish 12 (2026-10-07): "exclusives" redirects before the counter, "premium" is the page.
-        ["premium"] = "vault",
-        ["discord"] = "profile",
-        ["appsettings"] = "settings",
-        ["progression"] = "progression",
-    };
-
-    private static readonly Dictionary<string, string> _rackTargets = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["flash"] = "flashes",
-        ["video"] = "videos",
-        ["subliminal"] = "subliminals",
-        ["bubbles"] = "bubbles",
-        ["spiral"] = "loom",          // the Studio's Spiral module IS the Loom editor
-        ["pinkfilter"] = "pinkfilter",
-        ["braindrain"] = "braindrain",
-        ["mindwipe"] = "mindwipe",
-    };
 
     /// <summary>A tab was navigated to by any route. Score the card that points at it, if any.</summary>
     public static void NoteTabOpened(string? tabKey)
@@ -170,7 +122,7 @@ public static class EmiTargets
         if (string.IsNullOrEmpty(tabKey)) return;
         try
         {
-            if (_tabTargets.TryGetValue(tabKey, out var id)) App.EmiDesk?.NoteOpen(id);
+            if (EmiDoors.TabTargets.TryGetValue(tabKey, out var id)) App.EmiDesk?.NoteOpen(id);
         }
         catch (Exception ex)
         {
@@ -184,7 +136,7 @@ public static class EmiTargets
         if (string.IsNullOrEmpty(rackKey)) return;
         try
         {
-            if (_rackTargets.TryGetValue(rackKey, out var id)) App.EmiDesk?.NoteOpen(id);
+            if (EmiDoors.RackTargets.TryGetValue(rackKey, out var id)) App.EmiDesk?.NoteOpen(id);
         }
         catch (Exception ex)
         {
