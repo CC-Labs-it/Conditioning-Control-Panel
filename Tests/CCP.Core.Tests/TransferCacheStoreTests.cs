@@ -11,7 +11,9 @@ namespace CCP.Core.Tests;
 
 /// <summary>TransferCacheStore, moved from the WPF head: the LRU policy, the cap and preset
 /// protection read through CoreSettings, and the index round trip under the sandbox profile
-/// (RoadmapTestProfile points CCP_USERDATA_DIR, so CorePaths.UserData, at a temp dir).</summary>
+/// (RoadmapTestProfile points CCP_USERDATA_DIR, so CorePaths.UserData, at a temp dir).
+/// Fail-proven: the LRU pass ordered OrderByDescending(LastUsed) turns PlanEvictions_StaleFailuresFirst red;
+/// CapBytes reading DefaultCapBytes instead of CoreSettings turns CapBytes_ReadsCoreSettings_Clamped red.</summary>
 [Collection(SessionStatics.Name)] // CoreSettings.ServiceProvider is process-global
 public sealed class TransferCacheStoreTests : IDisposable
 {
