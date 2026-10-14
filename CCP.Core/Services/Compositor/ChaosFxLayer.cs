@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Compositor;
@@ -29,10 +31,30 @@ public sealed class ChaosFxLayer : BaseLayer
     private static readonly SKColor GoldCore = new(0xFF, 0xE9, 0xA0);
     private static readonly SKColor CursorPink = new(0xFF, 0x8F, 0xC8);
 
-    public ChaosFxLayer(CompositorEngine engine) : base(engine.Wake)
+    // ELECTRIC (ChaosBoonColors.Electric on both heads): E-Stim bolts and ripples.
+    private static readonly SKColor Electric = new(0x42, 0xDC, 0xE6);
+
+    private readonly Func<float>? _stageScale;
+
+    /// <param name="wake">Wakes whatever drives Update/Render (CompositorEngine.Wake on WPF, the overlay's
+    /// frame loop on Avalonia).</param>
+    /// <param name="stageScale">The stage scale the DIP-tuned constants are multiplied by (WPF: the primary
+    /// monitor's DPI scale, world-space px). Null = 1: the caller draws in DIPs, like the legacy window.</param>
+    /// <param name="rng">Tests seed it.</param>
+    public ChaosFxLayer(Action wake, Func<float>? stageScale = null, Random? rng = null) : base(wake)
     {
+        _stageScale = stageScale;
+        if (rng != null) _rng = rng;
         RefreshScale();
     }
+
+    /// <summary>Live particles / bolts / ripples (tests).</summary>
+    internal int ParticleCount => _n;
+    internal int BoltCount => _bolts.Count;
+    internal int RippleCount => _ripples.Count;
+    internal bool CursorArmed => _cursorArmed;
+    /// <summary>A ripple's leading-edge radius right now (tests): linear in age, as the kill front.</summary>
+    internal float RippleFront(int i) => _ripples[i].MaxR * (_ripples[i].Age / _ripples[i].Life);
 
     public override int ZIndex => CompositorLayers.Fx;
 
@@ -101,11 +123,7 @@ public sealed class ChaosFxLayer : BaseLayer
     private void RefreshScale()
     {
         float s = 1f;
-        try
-        {
-            var scr = System.Windows.Forms.Screen.PrimaryScreen;
-            if (scr != null) s = (float)CompositorHostWindow.GetDpiScaleForScreen(scr);
-        }
+        try { if (_stageScale != null) s = _stageScale(); }
         catch { }
         if (s <= 0) s = 1f;
         if (Math.Abs(s - _s) > 0.001f || _boltGlow.MaskFilter == null)
@@ -144,7 +162,7 @@ public sealed class ChaosFxLayer : BaseLayer
 
     // ---- emit API (UI thread; ChaosSkiaFxOverlay's statics marshal) ----
 
-    public void EmitTrail(Point centerPx, double lifeSec, bool warm, double dirX = 0, double dirY = 0)
+    public void EmitTrail(SKPoint centerPx, double lifeSec, bool warm, double dirX = 0, double dirY = 0)
     {
         float s = _s;
         // Travel direction → a unit "behind" vector. The burst originates a touch behind the
@@ -176,7 +194,7 @@ public sealed class ChaosFxLayer : BaseLayer
 
     /// <summary>Pop burst: a white core flash, an expanding ring, and radiating shards, all in
     /// the bubble's payload colour. Reads fast at the tail like every other particle.</summary>
-    public void EmitBurst(Point centerPx, SKColor col, float scale)
+    public void EmitBurst(SKPoint centerPx, SKColor col, float scale)
     {
         if (scale <= 0.05f) scale = 1f;
         float s = _s;
@@ -211,10 +229,10 @@ public sealed class ChaosFxLayer : BaseLayer
         _p[_n++] = new Particle { X = x, Y = y, VX = vx, VY = vy, Life = life, Max = life, Size = size, Kind = kind, Col = col };
     }
 
-    public void AddStrike(IReadOnlyList<(Point From, Point To)> boltsPx)
+    public void AddStrike(IReadOnlyList<(SKPoint From, SKPoint To)> boltsPx)
     {
         if (boltsPx == null || boltsPx.Count == 0) return;
-        var color = ChaosBoonColors.ToSk(ChaosBoonColors.Electric);
+        var color = Electric;
         foreach (var (fromPx, toPx) in boltsPx)
         {
             var bolt = new Bolt
@@ -266,11 +284,11 @@ public sealed class ChaosFxLayer : BaseLayer
         }
     }
 
-    public void EmitRipple(Point centerPx, double radiusPx, double lifeMs, bool strong)
+    public void EmitRipple(SKPoint centerPx, double radiusPx, double lifeMs, bool strong)
     {
         float r = (float)Math.Max(1.0, radiusPx);   // world px — no DIP conversion needed
         float life = (float)Math.Max(0.1, lifeMs / 1000.0);
-        var col = ChaosBoonColors.ToSk(ChaosBoonColors.Electric);
+        var col = Electric;
         _ripples.Add(new RippleFx { C = new SKPoint((float)centerPx.X, (float)centerPx.Y), MaxR = r, Age = 0, Life = life, Strong = strong, Color = col });
 
         // A ring of sparks thrown outward with the front (they drag/settle, so they read as

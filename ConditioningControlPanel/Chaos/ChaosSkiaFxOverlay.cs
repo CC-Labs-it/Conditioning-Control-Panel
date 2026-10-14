@@ -6,6 +6,7 @@ using System.Windows.Media;
 using SkiaSharp;
 using SkiaSharp.Views.Desktop;
 using SkiaSharp.Views.WPF;
+using ConditioningControlPanel.Services.Compositor;
 
 namespace ConditioningControlPanel;
 
@@ -157,7 +158,7 @@ public sealed class ChaosSkiaFxOverlay : Window
                     {
                         if (_layer == null)
                         {
-                            _layer = new Services.Compositor.ChaosFxLayer(App.Compositor!);
+                            _layer = Services.Compositor.ChaosFxLayerWpf.Create(App.Compositor!);
                             App.Compositor!.RegisterLayer(_layer);
                         }
                         viaLayer(_layer);
