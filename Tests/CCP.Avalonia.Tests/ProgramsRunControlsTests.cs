@@ -128,6 +128,21 @@ public sealed class ProgramsRunControlsTests
             .Single(b => b.IsEffectivelyVisible && b.Tag is int && b.GetVisualDescendants().OfType<TextBlock>()
                 .Any(t => t.Text == Loc.Get("btn_program_open_mantras")));
         Assert.Equal(Math.Max(1, target), door.Tag);
+        // ...and the click opens the Mantra Lab at those reps (win-mantra's user path).
+        var opener = MantraWindow.DroneOpener;
+        MantraWindow.DroneOpener = _ => null;
+        try
+        {
+            Click(door);
+            var lab = await Owned<MantraWindow>(shell);
+            Dispatcher.UIThread.RunJobs();   // Loaded paints the target
+            Assert.True(AvApp.Mantra.IsActive);
+            Assert.Equal(Math.Max(1, target), AvApp.Mantra.TargetCount);
+            Assert.Equal($"/{Math.Max(1, target)}", lab.FindControl<TextBlock>("TxtTarget")!.Text);
+            lab.Close();
+            Assert.False(AvApp.Mantra.IsActive);
+        }
+        finally { MantraWindow.DroneOpener = opener; }
 
         // Restart is a new attempt: refused like CanEnroll for a program this head cannot finish.
         enrollment.State = ProgramEnrollmentState.Lapsed;

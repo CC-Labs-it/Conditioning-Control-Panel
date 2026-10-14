@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    code-held <c>Transform</c>. Same targets, values and key times as MantraWindow.xaml:14-58;
     ///    a Begin on a running storyboard restarts it, a shake starts from the current X (WPF snapshot).
     ///  - Opened with no running session (the render proof), it starts one with MantraDefaultCount;
-    ///    WPF assumes the opener did. A failed StartMantraSession is logged, not shown in a MessageBox.
+    ///    WPF assumes the opener did.
     ///  - Timers and the drone are also stopped in <c>OnClosed</c>, because --render-all closes the
     ///    window externally.
     ///  - <c>DataObject.AddPastingHandler</c> -> <c>TextBox.PastingFromClipboardEvent</c>;
