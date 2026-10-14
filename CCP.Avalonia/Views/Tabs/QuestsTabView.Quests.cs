@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnAttachedToVisualTree(e);
             UpdateAmbient(attached: true);
             if (App.Quests is not { } quests) return;
+            ObserveQuestPresentation();
             quests.QuestCompleted += OnQuestCompleted;
             quests.QuestProgressChanged += OnQuestProgressChanged;
             quests.QuestsRefreshed += OnQuestsRefreshed;
@@ -48,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnDetachedFromVisualTree(e);
             UpdateAmbient(attached: false);
+            ReleaseQuestPresentation();
             if (App.Quests is not { } quests) return;
             quests.QuestCompleted -= OnQuestCompleted;
             quests.QuestProgressChanged -= OnQuestProgressChanged;
@@ -115,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static string Localized(string localized, string fallback) =>
             string.IsNullOrWhiteSpace(localized) || localized.StartsWith("quest_", StringComparison.Ordinal) ? fallback : localized;
 
-        private static DailyQuestCardModel BuildDailyCardModel(int slot, ActiveQuest quest, QuestDefinition def, int rerollsLeft, AppSettings s)
+        private DailyQuestCardModel BuildDailyCardModel(int slot, ActiveQuest quest, QuestDefinition def, int rerollsLeft, AppSettings s)
         {
             var (xp, streakPct, rerollPct) = ComputeQuestXpDisplay(def, s);
             bool canReroll = !quest.IsCompleted && rerollsLeft > 0;
@@ -131,9 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 XpText = $"{xp} XP",
                 StreakBonusPct = streakPct,
                 RerollBonusPct = rerollPct,
-                // ponytail: no quest art - GetModeAwareQuestImagePath resolves pack:// resources this
-                // head does not ship; the card draws its icon instead.
-                Art = null,
+                Art = GetQuestArt(def),
                 CanReroll = canReroll,
                 RerollKey = canReroll ? "btn_reroll_with_count" : "btn_reroll_none",
                 RerollCount = rerollsLeft,
@@ -141,14 +141,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
         }
 
-        /// <summary>MainWindow.QuestsTab.cs:188 RefreshQuestUI, minus the punch card (its service is
-        /// WPF-only) and the season title (App.QuestDefinitions is not exposed; the XAML title stays).</summary>
+        /// <summary>MainWindow.QuestsTab.cs:188 RefreshQuestUI. The intake punch-card service and
+        /// manual streak-fix spend remain in the named follow-up lane.</summary>
         internal void RefreshQuestUI()
         {
             var quests = App.Quests;
             if (quests == null) return;
             var s = CoreSettings.Current;
             quests.RecalculateStreak();
+            if (App.QuestDefinitions?.SeasonTitle is { Length: > 0 } title) TxtSeasonTitle.Text = title;
 
             int dailyCompleted = quests.GetDailyQuestsCompletedToday();
             TxtDailyQuestCounter.Text = $"{dailyCompleted}/{QuestService.MaxDailyQuestsPerDay}";
@@ -180,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var rerollText = TxtWeeklyReroll;
             if (weeklyDef != null && weekly != null)
             {
+                if (GetQuestArt(weeklyDef) is { } weeklyArt) ImgWeeklyQuest.Source = weeklyArt;
                 TxtWeeklyQuestIcon.Emoji = weeklyDef.Icon;   // collapsed, as in WPF
                 TxtWeeklyQuestName.Text = CoreMods.MakeModAware(weeklyDef.Name);
                 TxtWeeklyQuestDesc.Text = CoreMods.MakeModAware(weeklyDef.Description);

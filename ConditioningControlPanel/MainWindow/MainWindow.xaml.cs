@@ -3381,20 +3381,11 @@ namespace ConditioningControlPanel
                         return Services.ModResourceResolver.ResolveUri(relativePath);
                 }
 
-                // Legacy mode-specific swaps for built-in mods
-                if (App.Settings?.Current?.IsSissyMode == true)
-                {
-                    if (imagePath.Contains("logo.png"))
-                        return "pack://application:,,,/Resources/logo2.png";
-                    if (imagePath.Contains("bambi takeover.png"))
-                        return "pack://application:,,,/Resources/features/mandatory_videos.png";
-                }
-                // CCP Default uses the same neutral wordmark as Sissy.
-                if (App.Mods?.IsCCPDefault == true)
-                {
-                    if (imagePath.Contains("logo.png"))
-                        return "pack://application:,,,/Resources/logo2.png";
-                }
+                // Shared selection rule; the head keeps URI resolution and decoding.
+                var replacement = Services.QuestArtRules.ModeReplacement(imagePath,
+                    App.Settings?.Current?.IsSissyMode == true, App.Mods?.IsCCPDefault == true);
+                if (replacement != null)
+                    return "pack://application:,,,/Resources/" + replacement;
             }
 
             return imagePath;

@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>The Core quest board (WPF App.Quests), built by StartQuests before the shell.</summary>
         internal static QuestService? Quests { get; set; }
+        internal static QuestDefinitionService? QuestDefinitions { get; set; }
 
         /// <summary>WPF App.Programs (App.xaml.cs:2704), the full writing instance since programs 3a
         /// (docs/avalonia-decisions.md): timers, startup repair + rollover, Dispose flush. A file stamped by
@@ -121,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
-            var definitions = new QuestDefinitionService();
+            var definitions = QuestDefinitions = new QuestDefinitionService();
             _ = definitions.InitializeAsync(); // cache first, then the server, as WPF
             Quests = new QuestService(definitions);
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
@@ -1178,6 +1179,7 @@ namespace ConditioningControlPanel.Avalonia
             // WPF AchievementService.Dispose saves synchronously; only when dirty here, so an idle exit
             // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
             try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }
+            try { QuestDefinitions?.Dispose(); } catch { /* definition transport belongs to the quest head */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }

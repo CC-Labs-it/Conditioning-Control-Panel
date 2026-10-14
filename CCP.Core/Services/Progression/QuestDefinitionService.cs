@@ -117,9 +117,9 @@ public class QuestDefinitionService : IDisposable
     public QuestDefinitionService() : this(CorePaths.UserData) { }
 
     /// <summary>Cache root as an argument so tests never touch the real profile.</summary>
-    internal QuestDefinitionService(string appDataPath)
+    internal QuestDefinitionService(string appDataPath, HttpClient? httpClient = null)
     {
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         _httpClient.DefaultRequestHeaders.Add("X-Client-Version", CoreReleaseContent.AppVersion);
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{CoreReleaseContent.AppVersion}");
 
