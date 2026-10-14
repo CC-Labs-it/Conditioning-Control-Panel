@@ -3,8 +3,9 @@
 // offline, blocked), a friend's card with the menu (squelch, remove and block after a confirm,
 // report), request answers, add by code and your own code. Driven only by IFriendsService.
 // The send pickers (poke / invite / watch) are in FriendsDrawer.Pickers.cs.
+// Open goon tables are in FriendsDrawer.Tables.cs.
 // ponytail: no feed, trails,
-// open tables or leash section, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
+// or leash section, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
 // head), no per-PC block list (the server's list only). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -145,13 +146,14 @@ public sealed partial class FriendsDrawer : Border
         Rebind();
         try { _svc?.SetDrawerOpen(true); } catch { }
         if (_svc?.Available == true) _ = SafeRefreshAsync();
+        try { if (_svc?.Available == true) StartTables(); } catch { }
         Render();
         Dispatcher.UIThread.Post(() => Focus());
     }
     public void OnClosed()
     {
         try { _svc?.SetDrawerOpen(false); } catch { }
-        Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes)
+        Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes); also stops the tables poll
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
     }
     private void Rebind()
@@ -166,6 +168,7 @@ public sealed partial class FriendsDrawer : Border
     {
         if (_subscribed && _svc != null) _svc.SnapshotChanged -= OnSnapshot;
         _subscribed = false;
+        StopTables();
     }
     private void OnSnapshot(FriendsSnapshot _) => Render();
     private async Task SafeRefreshAsync()
@@ -237,6 +240,7 @@ public sealed partial class FriendsDrawer : Border
             return;
         }
         var (online, offline) = FriendsDrawerRules.Split(snap);
+        (online, offline) = FriendsDrawerRules.HostingFirst(online, offline, f => TableFor(f) != null);
         if (_openId != null && !Contains(snap, _openId)) (_openId, _picker) = (null, null);
         if (_confirm is { } c && !Contains(snap, c.Id)) _confirm = null;
         if (online.Count > 0)
@@ -284,9 +288,10 @@ public sealed partial class FriendsDrawer : Border
     private Control FriendRow(Friend f)
     {
         bool open = _openId == f.Id;
-        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*") };
-        var avatar = Avatar(f.Name, 38, f.Online);
-        if (!f.Online) avatar.Opacity = 0.55;
+        var table = TableFor(f);
+        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
+        var avatar = Avatar(f.Name, 38, f.Online || table != null);
+        if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         nameLine.Children.Add(Label(f.Name, 14, f.Online ? Text : Muted, Display, FontWeight.Medium));
@@ -297,10 +302,16 @@ public sealed partial class FriendsDrawer : Border
             nameLine.Children.Add(sq);
         }
         mid.Children.Add(nameLine);
-        mid.Children.Add(ActivityLine(f));
+        mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
         Grid.SetColumn(mid, 1);
         top.Children.Add(avatar);
         top.Children.Add(mid);
+        if (table != null)
+        {
+            var join = TableJoinButton(f, table);
+            Grid.SetColumn(join, 2);
+            top.Children.Add(join);
+        }
         var outer = new StackPanel { Children = { top } };
         if (open) outer.Children.Add(Card(f));
         if (_results.TryGetValue(f.Id, out var res))
@@ -315,6 +326,7 @@ public sealed partial class FriendsDrawer : Border
             Background = open ? Raised : Brushes.Transparent, Cursor = Hand(),
             Tag = "friends-row:" + f.Id, Child = outer, ContextMenu = Menu(f),
         };
+        if (table != null && !open) DressHostingRow(row);
         // A click on the row (not inside the open card) opens or folds its card.
         top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
         return row;
