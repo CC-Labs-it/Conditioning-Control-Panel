@@ -267,8 +267,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>True while a chain is on screen.</summary>
         // ponytail: needs EmiChains.Player (Services/EmiDesk/EmiChains.cs), wired when the chain
-        // player moves to Core. Nothing on this head can start a chain, so nothing is ever live.
-        public bool ChainLive => false;
+        // player moves to Core. The landed speech slice runs its own finite dispatcher cadence.
+        public bool ChainLive => _speechTimer is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -898,15 +898,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: needs EmiChains.MakeSay / SayHoldMs / FrameForFace, none of them in Core.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
-        {
-            done?.Invoke();
-        }
+            => StartSpeech(line, reactionFace, done);
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
+            StopSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -1461,6 +1459,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>The live book, or null (tests).</summary>
         internal EmiBookWindow? Book => _book;
+        internal int BookSide => _book?.SideOfHer ?? 0;
+        internal event EventHandler? BookSideChanged;
+        internal void NoteBookSideChanged()
+        {
+            try { BookSideChanged?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] book side notification failed"); }
+            PostBubbleRelayout();
+        }
 
         /// <summary>
         /// HER MANUAL. Open the book beside her, at <paramref name="cardId"/> or at the first card.
@@ -1474,8 +1480,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// rather than building a second panel.</para>
         ///
         /// <para>Bookmark and the lifetime open count are the router's own (EmiBook.cs Open):
-        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. ponytail: still missing
-        /// <c>NoteSideChanged</c> (the bubble dodge in EmiDeskWindow.Bubble.cs).</para>
+        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core.
+        /// <c>NoteSideChanged</c> is owner-local on this head (the bubble dodge).</para>
         /// </summary>
         internal void OpenBook(string? cardId = null)
         {
@@ -1496,6 +1502,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Closed += OnBookClosed;
                 _book = win;
                 win.OpenBook(cardId);
+                NoteBookSideChanged();
             }
             catch (Exception ex)
             {
@@ -1516,12 +1523,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Kill();
             }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] book close failed"); }
+            NoteBookSideChanged();
         }
 
         private void OnBookClosed(object? sender, EventArgs e)
         {
             if (!ReferenceEquals(sender, _book)) return;
             _book = null;
+            NoteBookSideChanged();
         }
 
         /// <summary>Clear the resize hold, whichever way the drag ended.</summary>
@@ -2659,6 +2668,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelChain();
             }
             catch (Exception ex)
             {
