@@ -2317,3 +2317,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/leash-punish: +999
 - Leash task runner host + caged punish video window: the gate action starts the task, panic/Cut park it and close a locked window.
 - A palette-closing Escape is not a panic (WPF MainWindow.Leash.cs:382).
+
+## avalonia-port/welcome-back-logo: +832
+- Welcome-back sheet + its WPF trigger (backup-less; row stub). WelcomeBackDecision moved to Core.
+- The dashboard logo animates on the 30 fps beat, drawn off-thread and parked when hidden (row wired).
