@@ -462,6 +462,57 @@ export function createOnlineMatch({
     bus.emit('opponent', { online: on });
   }
 
+  /** "N watching": the seat routes carry the count once spectating is on; the HUD shows it past zero. */
+  let watchers = 0;
+  function noteWatchers(n) {
+    if (!Number.isFinite(Number(n))) return;
+    const next = Math.max(0, Math.trunc(Number(n)));
+    if (next === watchers) return;
+    watchers = next;
+    bus.emit('watchers', { count: watchers });
+  }
+
+  /**
+   * The stands' preset reactions (spectate v2). The seat routes carry
+   * `reactions_buckets: [{ b, r }]`, the last three COMPLETED 3 s buckets: each
+   * bucket is told once, deduped by `b`, so a poll that comes back twice inside
+   * one bucket (or skips one) neither repeats nor loses a cheer. A server without
+   * the field sends only `reactions` (the last bucket, unnamed); then the same
+   * counts heard again inside one bucket's span are taken as the same bucket.
+   */
+  const CHEERS = ['fire', 'wow', 'laugh', 'clap', 'heart', 'eyes'];
+  const cheerCounts = (r) => {
+    const counts = {};
+    if (!r || typeof r !== 'object') return counts;
+    for (const k of CHEERS) {
+      const n = Math.trunc(Number(r[k]) || 0);
+      if (n > 0) counts[k] = n;
+    }
+    return counts;
+  };
+  let lastCheer = { key: '', at: -Infinity };
+  let lastBucket = -Infinity;
+  function noteReactions(r, buckets) {
+    if (Array.isArray(buckets)) {
+      const list = buckets.filter((x) => x && Number.isFinite(Number(x.b))).sort((x, y) => Number(x.b) - Number(y.b));
+      for (const x of list) {
+        const b = Number(x.b);
+        if (b <= lastBucket) continue;
+        lastBucket = b;
+        const counts = cheerCounts(x.r);
+        if (Object.keys(counts).length) bus.emit('watch-reactions', { counts });
+      }
+      return;
+    }
+    const counts = cheerCounts(r);
+    const key = JSON.stringify(counts);
+    if (key === '{}') return;
+    const t = monoNow();
+    if (key === lastCheer.key && t - lastCheer.at < 3000) return;
+    lastCheer = { key, at: t };
+    bus.emit('watch-reactions', { counts });
+  }
+
   function startHeartbeat() {
     if (beat || disposed) return;
     beat = setInterval(() => {
@@ -563,6 +614,8 @@ export function createOnlineMatch({
   /** Adopt a whole GET match payload. Also the way the first position arrives. */
   function applyState(state) {
     if (!state || disposed) return;
+    noteWatchers(state.watchers);
+    noteReactions(state.reactions, state.reactions_buckets);
 
     // THE SEAT, FROM THE SERVER. `you` is authoritative and settles the case the
     // lobby cannot answer: an outgoing challenge accepted at `color: random`
@@ -718,6 +771,8 @@ export function createOnlineMatch({
     if (!data || typeof data !== 'object') return 'resync';
     if (Number.isFinite(Number(data.server_now_ms))) clock.noteServerNow(Number(data.server_now_ms));
     noteOpponent(data.opponent_online);
+    noteWatchers(data.watchers);
+    noteReactions(data.reactions, data.reactions_buckets);
     const list = Array.isArray(data.events) ? data.events : [];
     // Ordered by seq before anything is applied: the gap check is only worth
     // having if the stream it checks is actually in order.
@@ -946,6 +1001,8 @@ export function createOnlineMatch({
     drawOffer: () => drawOffer,
     /** The server's last word on whether he is still there. */
     opponentOnline: () => opponentOnline,
+    /** How many people are watching this game (0 until the server says). */
+    watchers: () => watchers,
     seq: () => seq,
     status: () => status,
     dispose,
