@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView">
+<UserControl.Resources><SolidColorBrush x:Key="SurfaceBgBrush" Color="#303050"/><SolidColorBrush x:Key="PanelAccentBrush" Color="#FF69B4"/></UserControl.Resources>
+<StackPanel Orientation="Horizontal"><Border x:Name="Card1" Classes="packCard" Classes.external="{Binding IsExternal}"
+                                            PointerEntered="PackCard_PointerEntered" PointerExited="PackCard_PointerExited"
+                                            Width="192" Height="240" Margin="0,0,10,0" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceBgBrush}"
+                                            BorderBrush="{DynamicResource PanelAccentBrush}" BorderThickness="1"><TextBlock Text="Pack 1" Foreground="White" Margin="12"/></Border><Border x:Name="Card2" Classes="packCard" Classes.external="{Binding IsExternal}"
+                                            PointerEntered="PackCard_PointerEntered" PointerExited="PackCard_PointerExited"
+                                            Width="192" Height="240" Margin="0,0,10,0" CornerRadius="8"
+                                            Background="{DynamicResource SurfaceBgBrush}"
+                                            BorderBrush="{DynamicResource PanelAccentBrush}" BorderThickness="1"><TextBlock Text="Pack 2" Foreground="White" Margin="12"/></Border></StackPanel></UserControl>

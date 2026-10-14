@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Confirm = (title, msg) => MessageDialog.ConfirmAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             IsVisibleChanged(this);
-            Unloaded += (_, _) => DetachPackCardSheen();
+            InitializePackCardFx();
             BtnPickAssetsFolder.Click += BtnPickAssetsFolder_Click;
             InitializeRemoteMediaPicker();   // AssetsTabView.MediaPicker.cs; re-syncs on every show
         }
@@ -600,54 +600,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private async void BtnDeleteAssetPreset_Click(object? sender, RoutedEventArgs e) => await DeleteAssetPresetAsync();
 
         // ---- FX (MainWindow.AssetsFx.cs) -----------------------------------------------------
-
-        private static bool MotionAllowed()
-        {
-            try { return AmbientFxCanvas.Env.AllowTransitions; }
-            catch { return true; }
-        }
-
-        private Control? _packCardSheenHost;
-        private CardSheenAdorner? _packCardSheen;
-        private IDisposable? _packCardVisibility;
-
-        // WPF MainWindow.AssetsFx.cs:OnPackCardHover. The strip stays collapsed as on WPF;
-        // ponytail: its cards still use the seeded model, pending the content-pack browser lane.
-        private void PackCard_PointerEntered(object? sender, PointerEventArgs e) => OnPackCardHover(sender as Control, true);
-        private void PackCard_PointerExited(object? sender, PointerEventArgs e) => OnPackCardHover(sender as Control, false);
-
-        private void OnPackCardHover(Control? card, bool on)
-        {
-            try
-            {
-                if (!on)
-                {
-                    if (card == null || ReferenceEquals(card, _packCardSheenHost)) DetachPackCardSheen();
-                    return;
-                }
-                if (card == null || !card.IsEffectivelyVisible || !MotionAllowed()) return;
-                if (ReferenceEquals(card, _packCardSheenHost) && _packCardSheen != null) return;
-                DetachPackCardSheen();
-                _packCardSheen = CardSheenAdorner.Attach(card, 8);
-                if (_packCardSheen == null) return;
-                _packCardSheenHost = card;
-                _packCardVisibility = EffectiveVisibility.Watch(card, () =>
-                {
-                    if (!card.IsEffectivelyVisible) DetachPackCardSheen();
-                });
-            }
-            catch (Exception ex) { Log.Debug(ex, "Pack card hover failed"); DetachPackCardSheen(); }
-        }
-
-        private void DetachPackCardSheen()
-        {
-            _packCardVisibility?.Dispose();
-            _packCardVisibility = null;
-            _packCardSheenHost = null;
-            var sheen = _packCardSheen;
-            _packCardSheen = null;
-            CardSheenAdorner.Detach(sheen);
-        }
 
         /// <summary>AssetsFx OnAssetTreeRowHover: a 3 px, 130 ms ease-out slide.</summary>
         private void AssetTreeRow_PointerEntered(object? sender, PointerEventArgs e) => NudgeRow(sender as Control, true);

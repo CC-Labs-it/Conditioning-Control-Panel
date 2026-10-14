@@ -290,6 +290,22 @@ public sealed class AssetsTabTests
         Assert.False(sheen.IsTicking);
     });
 
+    [Fact]
+    public Task RebuildingPackCardsRemovesTheDetachedCardsSheen() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        tab.PackCardsItemsControl.ItemsSource = Array.Empty<PackCardViewModel>();
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+    });
+
     private static void HoverPack(Window shell, Control card, bool on) => card.RaiseEvent(
         new PointerEventArgs(on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent,
             card, new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), shell, default,
