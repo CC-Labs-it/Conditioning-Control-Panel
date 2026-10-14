@@ -50,11 +50,6 @@ namespace ConditioningControlPanel.Avalonia.Controls
     ///     <see cref="RefreshMotion"/>, never polled — a live MotionLevel change reaches a glyph
     ///     that re-shows, and the hosts must call this method the way WPF re-armed from
     ///     MainWindow.UiUpdates.CmbMotionLevel_SelectionChanged.</item>
-    ///   <item>ponytail: <c>SpiralRailHost.StageNumeral</c> lives in
-    ///     <c>ConditioningControlPanel/Controls/SpiralRailHost.cs</c>, a <c>System.Windows</c>
-    ///     Control, so the numeral table is copied into <see cref="StageNumeral"/> verbatim. The
-    ///     table is pure and belongs in Core; delete the copy and call the shared one when it
-    ///     lands there — the two must not drift apart.</item>
     ///   <item>WPF <c>Timeline.SetDesiredFrameRate(24)</c> has no Avalonia twin; the breath runs at
     ///     the compositor's rate.</item>
     /// </list>
@@ -214,22 +209,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// A 40px circle has room for a glyph and not for "Crush Depth", so the stage rides as a
         /// numeral and the name rides a tooltip on the surfaces with room for one. n = 0 is the
         /// real pre-begin rung and reads as a dot.
-        /// ponytail: verbatim copy of <c>SpiralRailHost.StageNumeral</c>
-        /// (<c>ConditioningControlPanel/Controls/SpiralRailHost.cs</c>, a WPF Control); the table
-        /// is pure and belongs in Core. Call the shared one once it lands there.
         /// </summary>
-        internal static string StageNumeral(int n) => n switch
-        {
-            1 => "I",
-            2 => "II",
-            3 => "III",
-            4 => "IV",
-            5 => "V",
-            6 => "VI",
-            7 => "VII",
-            8 => "VIII",
-            _ => n > 8 ? n.ToString(System.Globalization.CultureInfo.InvariantCulture) : "·",
-        };
+        internal static string StageNumeral(int n) => SpiralRailState.StageNumeral(n);
 
         /// <summary>The unit-space point at fraction <paramref name="t"/> along the arm.</summary>
         private static Point PointAt(double t)
