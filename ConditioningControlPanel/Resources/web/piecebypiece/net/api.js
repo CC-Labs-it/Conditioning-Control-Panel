@@ -57,6 +57,8 @@ export const ROUTES = Object.freeze({
   react: (id) => `${BASE}/watch/${encodeURIComponent(id)}/react`,
   reactions: (id, b) => `${BASE}/watch/${encodeURIComponent(id)}/reactions/${Math.max(0, Math.trunc(Number(b) || 0))}`,
   fx: (id) => `${BASE}/match/${encodeURIComponent(id)}/fx`,
+  ladder: () => `${BASE}/ladder`,
+  ladderMe: () => `${BASE}/ladder/me`,
 });
 
 /** Machine-readable `error` values. The UI maps these to sentences, not the reverse. */
@@ -341,6 +343,16 @@ export function history(limit) {
   const n = Math.min(50, Math.max(1, Math.trunc(Number(limit) || 50)));
   return call('GET', withUid(`${ROUTES.history()}?limit=${n}`), undefined);
 }
+
+/**
+ * The ladder (contract section 5): the top 50 rated accounts, PUBLIC and
+ * CDN-cached a minute, `{ rows: [{ rank, display_name, rating, games }], total }`,
+ * names only. Rides the public road like the tape.
+ */
+export function ladder() { return call('GET', ROUTES.ladder(), undefined, publicTransport); }
+
+/** Your own place: `{ rated, rating, rank, games, best, total }`; rank null until you are on it. */
+export function ladderMe() { return call('GET', withUid(ROUTES.ladderMe()), undefined); }
 
 /* ------------------------------------------------------------- spectating */
 
