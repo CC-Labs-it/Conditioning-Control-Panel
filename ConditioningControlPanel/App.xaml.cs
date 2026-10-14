@@ -395,6 +395,7 @@ namespace ConditioningControlPanel
             CoreAudio.DuckProvider = strength => Audio?.Duck(strength);
             CoreAudio.UnduckProvider = generation => Audio?.Unduck(generation);
             CoreAudio.DuckGenerationProvider = () => Audio?.DuckGeneration ?? 0;
+            CoreAudio.IsOutputSuppressedProvider = () => Audio == null || Audio.IsOutputSuppressed;
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
             // The board's picture rules moved to Core; the PNG codec stays WPF imaging.
             Services.Billboard.Board.BoardPng.Install();
@@ -3289,7 +3290,7 @@ namespace ConditioningControlPanel
             // Companion wave (POSSESSION.md): the ember tick / dip cues, and the one remembered charge a
             // Full Doki lockdown leaves for the next launch. Both only subscribe; neither costs anything
             // until a lockdown runs (or, for the charge, until the flag from the last one is spent).
-            Services.Possession.PossessionAudio.Install();
+            Services.Possession.PossessionAudio.Install(Lockdown, Possession);
             Services.Possession.PossessionWpfHead.InstallRemember();
             // The Dose: a lockdown refuses to run empty (engine off -> started; nothing on -> the warden
             // picks). Recovery first, so a killed lockdown's conscripted toggles go back off before the

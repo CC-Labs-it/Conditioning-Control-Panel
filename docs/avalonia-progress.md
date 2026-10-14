@@ -2285,3 +2285,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
   moves, ask probes and ask test are that branch's; this one moves EmiNames, EmiBarkBridge, EmiBubblePlacement,
   EmiTopmostRule, TubeDeskVisibility to Core with three head seams. +291 includes emi-line-engine's two commits.
   rgate GATE-OK (run 38344989624). Land emi-line-engine first.
+
+## avalonia-port/possession-core-b2: +291
+- PossessionAudio (ember tick + rung/tripwire dip) git mv'd to CCP.Core behind CoreAudio (+IsOutputSuppressed seam), stacked on possession-core-b; Install takes the Core director directly (App.WirePossessionAudio gone).
+- Tests/CCP.Core.Tests/PossessionAudioTests.cs: 7 facts, each fail-proven (evidence/review-possession-core-b2/failproof.log); no Avalonia caller yet (no director on this head).
