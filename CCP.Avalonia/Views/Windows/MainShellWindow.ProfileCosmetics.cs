@@ -1,76 +1,54 @@
-// PORTED from ConditioningControlPanel/MainWindow/MainWindow.ProfileCosmetics.cs (532 lines) -
-// the Trainer Card's cosmetics painter, sorted member by member. TWO of its twenty members cross,
-// and both are rules rather than paint.
-//
-// ONE SERVICE BLOCKS SEVENTEEN OF THE OTHERS: Services.CosmeticsCatalog
-// (ConditioningControlPanel/Services/Profile/CosmeticsCatalog.cs). It owns SanitizeOwn,
-// SanitizeViewed, GetAvatarImage, GetBannerImage and TryGetAccentColor - both what a loadout is
-// ALLOWED to contain and what it looks like. The sanitize half is portable logic; the four
-// image/colour members decode to System.Windows.Media types, so the class cannot move as it
-// stands - it splits, or it grows a seam. Until then ApplyOwnProfileCosmetics,
-// ApplyViewedProfileCosmetics, ApplyProfileCosmetics, ApplyProfileAvatarPreset,
-// ApplyProfileBanner, ApplyProfileAccent, ApplyProfilePins, RefreshShowcasePinArt and
-// ToggleOwnAchievementPin are blocked at the door (the wardrobe half of the apply path is in
-// MainShellWindow.ProfileWardrobe.cs). Models.ProfileCosmetics itself IS in Core, so the model is not what is missing.
-//
-// THE REST, each with the exact symbol and where it lives today:
-//   ApplyProfileTitle          - Models.Achievement.All / .LocalizedName
-//   ResolveAchievementTitle      (ConditioningControlPanel/Models/Achievement.cs). CoreMods
-//                                .MakeModAware answers the mod-aware half; the roster does not
-//                                exist here, so every id would resolve to null.
-//   OpenProfileCustomizeDialog - PORTED to MainShellWindow.ProfileWardrobe.cs: settings save,
-//   PersistOwnCosmetics          wardrobe repaint and the push (Core SyncPush.PushCosmeticsAsync).
-//   ToggleOwnAchievementPin    - App.Achievements again, plus CosmeticsCatalog's pin cap.
-//   FlashPinCapNotice          - portable, but only ever fires from ToggleOwnAchievementPin.
-//   SetProfilePictureLoad      - clears _appliedPresetAvatar, an ImageSource only
-//                                ApplyProfileAvatarPreset reads. A setter without its only reader
-//                                is a token method.
-//   DefaultHeroBorderColor     - belongs with ApplyProfileAccent.
-//
-// WHAT IS REAL HERE: ProfilePictureLoad and ProfileAvatarSlot.PresetMayClaim - the avatar slot's
-// CLAIM RULE (bug #847), kept as a pure function so it can be reasoned about without standing a
-// Window up, and carrying no WPF type at all. They belong in CCP.Core, which this layer does not
-// own; restored here verbatim so the layer that ports ApplyProfileAvatarPreset finds the rule
-// rather than re-deriving it from the bug report. NO CALLER YET - that method is blocked above.
+// WPF MainWindow.ProfileCosmetics: paint every equipped and cleared state. Avatar slot
+// ownership and quick pin gestures remain the named follow-up in the parity ledger.
+using System.Collections.Generic;
+using Avalonia.Controls;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
-    /// <summary>
-    /// Where the real profile picture stands for the card on screen. The preset avatar and the
-    /// picture share one slot, so "no picture" and "no picture YET" have to be distinguishable -
-    /// an empty bubble on its own means neither (#847).
-    /// </summary>
-    internal enum ProfilePictureLoad
-    {
-        /// <summary>A load is in flight; the empty slot belongs to it and nothing else may take it.</summary>
-        Pending,
-        /// <summary>A real picture is in the slot.</summary>
-        Loaded,
-        /// <summary>The load finished with nothing: no avatar, sharing off, or a lookup that failed.</summary>
-        None
-    }
-
-    /// <summary>
-    /// The avatar slot's claim rule, kept as a pure function so it can be reasoned about (and
-    /// tested) without standing a Window up. See MainWindow.ApplyProfileAvatarPreset.
-    /// </summary>
-    internal static class ProfileAvatarSlot
-    {
-        /// <summary>Whether the preset avatar may write the shared avatar slot right now.</summary>
-        internal static bool PresetMayClaim(bool slotHoldsOurPreset, bool slotHasPicture, ProfilePictureLoad load)
-        {
-            // Already ours: swapping one preset for another, or clearing back to the blank circle.
-            if (slotHoldsOurPreset) return true;
-            // Someone's real picture is in there. It always wins.
-            if (slotHasPicture) return false;
-            // Empty - but only a load that has DEFINITIVELY come back with nothing hands it over.
-            return load == ProfilePictureLoad.None;
-        }
-    }
-
     public partial class MainShellWindow
     {
-        // Deliberately empty - see the header. No member of this partial is referenced from
-        // MainShellWindow.axaml.
+        // ponytail: retain the existing Core sanitization and ModArt decoders. This painter
+        // handles banner/accent/title/pins beside the already wired wardrobe apply path.
+        private void ApplyProfileCosmeticsPaint(ProfileCosmetics cosmetics)
+        {
+            var page = ProfilePage;
+            if (page == null) return;
+            if (page.FindControl<Border>("ProfileHeroBanner") is { } banner)
+                banner.Background = ModArt.Banner(cosmetics.BannerId, 1024, AlignmentY.Top);
+
+            var hasAccent = cosmetics.Accent != null;
+            var accent = Color.Parse(cosmetics.Accent ?? "#FF69B4");
+            page.ProfileHeroCard.BorderBrush = new SolidColorBrush(Color.FromArgb(0x99, accent.R, accent.G, accent.B));
+            if (page.FindControl<Border>("ProfileAccentGlow") is { } glow)
+                glow.BoxShadow = hasAccent
+                    ? new BoxShadows(new BoxShadow { Color = Color.FromArgb(0x80, accent.R, accent.G, accent.B), Blur = 22 })
+                    : default;
+            var headerBrush = new SolidColorBrush(hasAccent ? accent : Colors.White);
+            foreach (var name in new[] { "TxtProfileRecordHeader", "TxtProfileShowcaseHeader", "TxtProfileCommunityHeader" })
+                if (page.FindControl<TextBlock>(name) is { } header) header.Foreground = headerBrush;
+
+            if (page.FindControl<TextBlock>("TxtProfileEquippedTitle") is { } title)
+            {
+                title.Text = cosmetics.TitleId != null && Achievement.All.TryGetValue(cosmetics.TitleId, out var achievement)
+                    ? CoreMods.MakeModAware(achievement.TitleName) : string.Empty;
+                title.IsVisible = !string.IsNullOrEmpty(title.Text);
+            }
+
+            var tiles = new List<ProfileAchievementTile>();
+            foreach (var id in cosmetics.PinnedAchievements)
+            {
+                if (!Achievement.All.TryGetValue(id, out var achievement)) continue;
+                var art = ModArt.TryLoad($"achievements/{achievement.ImageName}", 176);
+                if (art != null) tiles.Add(new ProfileAchievementTile(id, CoreMods.MakeModAware(achievement.TitleName), art));
+            }
+            if (page.FindControl<ItemsControl>("ProfilePinnedShowcase") is { } pins)
+                pins.ItemsSource = tiles.Count > 0 ? tiles : null;
+            if (page.FindControl<StackPanel>("ProfilePinnedPlaceholders") is { } placeholders)
+                placeholders.IsVisible = PinPlaceholdersVisible(tiles.Count > 0);
+        }
     }
 }
