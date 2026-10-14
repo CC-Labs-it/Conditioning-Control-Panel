@@ -89,7 +89,7 @@ public sealed class BureauCoreTests : IDisposable
     }
 
     [Fact]
-    public async Task NoPackServiceReportsReadyAndEmpty()
+    public async Task NoPackServiceReportsReady()
     {
         BureauIndexService.InstalledPacksProvider = () => null;
         await BureauIndexService.RebuildAsync();
@@ -97,11 +97,11 @@ public sealed class BureauCoreTests : IDisposable
     }
 
     [Theory]
-    [InlineData(":3", false)]
-    [InlineData("", false)]
-    [InlineData("x:1", false)]
-    public void MalformedTargetsAreRejected(string target, bool ok) =>
-        Assert.Equal(ok, BureauHostRules.TryParseTarget(target, out _, out _));
+    [InlineData(":3")]
+    [InlineData("")]
+    [InlineData("x:1")]
+    public void MalformedTargetsAreRejected(string target) =>
+        Assert.False(BureauHostRules.TryParseTarget(target, out _, out _));
 
     [Fact]
     public void ATargetIsA64CharHashAndAFrame()
