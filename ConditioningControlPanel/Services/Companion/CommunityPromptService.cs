@@ -18,13 +18,9 @@ namespace ConditioningControlPanel.Services
     {
         private readonly HttpClient _httpClient;
         private readonly string _promptsFolder;
-        private readonly string _manifestCachePath;
-        private List<CommunityPromptManifestEntry> _availablePrompts = new();
+        private readonly CommunityPromptCatalogue _catalogue;
         private bool _disposed;
 
-        // Server endpoint for prompts manifest
-        private const string PromptsManifestUrl = "https://codebambi-proxy.vercel.app/prompts/manifest";
-        private const string PromptsDownloadUrl = "https://codebambi-proxy.vercel.app/prompts";
 
         // Events
         public event EventHandler<CommunityPrompt>? PromptInstalled;
@@ -49,7 +45,8 @@ namespace ConditioningControlPanel.Services
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
             _promptsFolder = Path.Combine(App.UserDataPath, "community-prompts");
-            _manifestCachePath = Path.Combine(_promptsFolder, "manifest-cache.json");
+            _catalogue = new CommunityPromptCatalogue(_httpClient, _promptsFolder);
+            _catalogue.Error += (_, error) => Error?.Invoke(this, error);
 
             // Create prompts folder if needed
             if (!Directory.Exists(_promptsFolder))
@@ -57,8 +54,6 @@ namespace ConditioningControlPanel.Services
                 Directory.CreateDirectory(_promptsFolder);
             }
 
-            // Load cached manifest
-            LoadCachedManifest();
 
             App.Logger?.Debug("CommunityPromptService initialized. Prompts folder: {Folder}", _promptsFolder);
         }
@@ -68,72 +63,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Fetches available community prompts from the server.
         /// </summary>
-        public async Task<List<CommunityPromptManifestEntry>> GetAvailablePromptsAsync(bool forceRefresh = false)
-        {
-            // Skip network request if offline mode is enabled
-            if (App.Settings?.Current?.OfflineMode == true)
-            {
-                App.Logger?.Debug("Offline mode enabled, using cached prompts only");
-                return _availablePrompts;
-            }
-
-            if (!forceRefresh && _availablePrompts.Count > 0)
-            {
-                return _availablePrompts;
-            }
-
-            try
-            {
-                var response = await _httpClient.GetAsync(PromptsManifestUrl);
-                if (response.IsSuccessStatusCode)
-                {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var manifest = JsonConvert.DeserializeObject<CommunityPromptsManifest>(json);
-
-                    if (manifest?.Prompts != null)
-                    {
-                        _availablePrompts = new List<CommunityPromptManifestEntry>(manifest.Prompts);
-
-                        // Cache the manifest
-                        await File.WriteAllTextAsync(_manifestCachePath, json);
-
-                        App.Logger?.Information("Fetched {Count} community prompts from server", _availablePrompts.Count);
-                    }
-                }
-                else
-                {
-                    App.Logger?.Warning("Failed to fetch community prompts manifest: {Status}", response.StatusCode);
-                }
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning("Error fetching community prompts manifest: {Error}", ex.Message);
-                Error?.Invoke(this, ex);
-            }
-
-            return _availablePrompts;
-        }
-
-        private void LoadCachedManifest()
-        {
-            try
-            {
-                if (File.Exists(_manifestCachePath))
-                {
-                    var json = File.ReadAllText(_manifestCachePath);
-                    var manifest = JsonConvert.DeserializeObject<CommunityPromptsManifest>(json);
-                    if (manifest?.Prompts != null)
-                    {
-                        _availablePrompts = new List<CommunityPromptManifestEntry>(manifest.Prompts);
-                        App.Logger?.Debug("Loaded {Count} prompts from manifest cache", _availablePrompts.Count);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("Could not load manifest cache: {Error}", ex.Message);
-            }
-        }
+        public Task<List<CommunityPromptManifestEntry>> GetAvailablePromptsAsync(bool forceRefresh = false) =>
+            _catalogue.GetAvailablePromptsAsync(forceRefresh);
 
         #endregion
 
@@ -144,57 +75,9 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public async Task<CommunityPrompt?> InstallPromptAsync(string promptId)
         {
-            // Block downloads in offline mode
-            if (App.Settings?.Current?.OfflineMode == true)
-            {
-                App.Logger?.Information("Offline mode enabled, prompt download blocked");
-                return null;
-            }
-
-            try
-            {
-                var url = $"{PromptsDownloadUrl}/{promptId}";
-                var response = await _httpClient.GetAsync(url);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    App.Logger?.Warning("Failed to download prompt {Id}: {Status}", promptId, response.StatusCode);
-                    return null;
-                }
-
-                var json = await response.Content.ReadAsStringAsync();
-                var prompt = JsonConvert.DeserializeObject<CommunityPrompt>(json);
-
-                if (prompt == null)
-                {
-                    App.Logger?.Warning("Failed to parse prompt {Id}", promptId);
-                    return null;
-                }
-
-                // Save to local storage
-                var filePath = GetPromptFilePath(promptId);
-                await File.WriteAllTextAsync(filePath, json);
-
-                // Add to installed list
-                var settings = App.Settings?.Current;
-                if (settings != null && !settings.InstalledCommunityPromptIds.Contains(promptId))
-                {
-                    settings.InstalledCommunityPromptIds.Add(promptId);
-                    App.Settings?.Save();
-                }
-
-                prompt.IsInstalled = true;
-                PromptInstalled?.Invoke(this, prompt);
-
-                App.Logger?.Information("Installed community prompt: {Name} by {Author}", prompt.Name, prompt.Author);
-                return prompt;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Error(ex, "Error installing prompt {Id}", promptId);
-                Error?.Invoke(this, ex);
-                return null;
-            }
+            var prompt = await _catalogue.InstallPromptAsync(promptId);
+            if (prompt != null) PromptInstalled?.Invoke(this, prompt);
+            return prompt;
         }
 
         /// <summary>
@@ -239,31 +122,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Gets an installed prompt by ID.
         /// </summary>
-        public CommunityPrompt? GetInstalledPrompt(string promptId)
-        {
-            try
-            {
-                var filePath = GetPromptFilePath(promptId);
-                if (!File.Exists(filePath))
-                    return null;
-
-                var json = File.ReadAllText(filePath);
-                var prompt = JsonConvert.DeserializeObject<CommunityPrompt>(json);
-
-                if (prompt != null)
-                {
-                    prompt.IsInstalled = true;
-                    prompt.IsActive = promptId == ActivePromptId;
-                }
-
-                return prompt;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning("Error loading prompt {Id}: {Error}", promptId, ex.Message);
-                return null;
-            }
-        }
+        public CommunityPrompt? GetInstalledPrompt(string promptId) => _catalogue.GetInstalledPrompt(promptId);
 
         /// <summary>
         /// Gets all installed prompts.
@@ -515,6 +374,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_disposed) return;
             _disposed = true;
+            _catalogue.Dispose();
             _httpClient?.Dispose();
         }
     }

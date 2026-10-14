@@ -102,6 +102,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     public sealed class MakeHerYoursViewModel : INotifyPropertyChanged
     {
         private readonly global::Avalonia.Visual? _host;
+        internal CommunityPromptCatalogue? PromptCatalogue;
+        private CommunityPromptCatalogue Catalogue => PromptCatalogue ??= CommunityPromptCatalogue.Shared;
         private readonly ObservableCollection<PresetChip> _presets = new();
         private bool _isSpiceOn;
         private string _activeLine = string.Empty;
@@ -115,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             OpenTraitDashboardCommand = new CompanionRelayCommand(OpenPromptEditor);
             ViewCompiledPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
             ForkPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
+            CommunityPromptsCommand = new CompanionRelayCommand(() => _ = BrowseCommunityPromptsAsync());
             ResetPersonalityCommand = new CompanionRelayCommand(() =>
             {
                 // WPF BtnDeactivatePrompt_Click -> CommunityPromptService.DeactivatePrompt.
@@ -187,10 +190,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public ICommand ResetPersonalityCommand { get; }
         public ICommand ViewCompiledPromptCommand { get; }
         public ICommand ForkPromptCommand { get; }
-        // ponytail: WPF BtnBrowsePrompts_Click opens the community prompt browser
-        // (App.CommunityPrompts, WPF-head CommunityPromptService); no browser exists on this head, so the
-        // link stays a null command (disabled) rather than a dead button that looks alive.
-        public ICommand? CommunityPromptsCommand => null;
+        public ICommand CommunityPromptsCommand { get; }
+
+        internal async Task BrowseCommunityPromptsAsync()
+        {
+            if (_host == null || TopLevel.GetTopLevel(_host) is not Window owner) return;
+            try
+            {
+                var available = await Catalogue.GetAvailablePromptsAsync();
+                if (available.Count == 0)
+                { await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_community_prompts"), Loc.Get("msg_no_community_prompts")); return; }
+                var remaining = CommunityPromptCatalogue.NotInstalled(available, CoreSettings.Current.InstalledCommunityPromptIds);
+                if (remaining.Count == 0)
+                { await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_community_prompts"), Loc.Get("msg_all_prompts_installed")); return; }
+                if (!await Dialogs.MessageDialog.ConfirmAsync(owner, Loc.Get("title_browse_community_prompts"),
+                    CommunityPromptCatalogue.BrowseMessage(remaining), okText: Loc.Get("btn_install"), cancelText: Loc.Get("btn_cancel"))) return;
+                if (await Catalogue.InstallPromptAsync(remaining[0].Id) is { } prompt)
+                    await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_installed"), Loc.GetF("msg_prompt_installed", prompt.Name));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error browsing community prompts");
+                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_error"), Loc.GetF("msg_failed_to_browse_prompts", ex.Message));
+            }
+            finally { Sync(); }
+        }
 
         /// <summary>Re-reads settings and the personality service (WPF MakeHerYoursRuntimeVm.SyncCore).</summary>
         public void Sync()
@@ -210,9 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             var communityId = settings.ActiveCommunityPromptId;
             if (!string.IsNullOrEmpty(communityId))
             {
-                // ponytail: WPF shows the installed prompt's NAME (CommunityPromptService.GetInstalledPrompt,
-                // head-only); this head has no installed-prompt store yet, so the id stands in.
-                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", communityId);
+                var prompt = Catalogue.GetInstalledPrompt(communityId);
+                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", prompt?.Name ?? communityId);
                 CanResetPersonality = true;
                 return;
             }

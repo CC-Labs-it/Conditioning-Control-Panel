@@ -2263,7 +2263,7 @@ namespace ConditioningControlPanel
 
                 // Build selection list
                 var installed = App.Settings?.Current?.InstalledCommunityPromptIds ?? new List<string>();
-                var notInstalled = available.Where(p => !installed.Contains(p.Id)).ToList();
+                var notInstalled = CommunityPromptCatalogue.NotInstalled(available, installed);
 
                 if (notInstalled.Count == 0)
                 {
@@ -2271,18 +2271,7 @@ namespace ConditioningControlPanel
                     return;
                 }
 
-                // Show simple selection (first 5)
-                var message = Loc.Get("label_available_prompts");
-                for (int i = 0; i < Math.Min(5, notInstalled.Count); i++)
-                {
-                    var p = notInstalled[i];
-                    message += $"• {p.Name} by {p.Author}\n  {p.Description}\n\n";
-                }
-
-                if (notInstalled.Count > 5)
-                    message += Loc.GetF("label_and_more_prompts", notInstalled.Count - 5);
-
-                message += Loc.Get("label_install_first_one");
+                var message = CommunityPromptCatalogue.BrowseMessage(notInstalled);
 
                 var result = ShowStyledDialog(Loc.Get("title_browse_community_prompts"), message, Loc.Get("btn_install"), Loc.Get("btn_cancel"));
                 if (result && notInstalled.Count > 0)
