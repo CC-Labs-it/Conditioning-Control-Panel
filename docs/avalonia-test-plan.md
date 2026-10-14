@@ -17,8 +17,8 @@ One report per row id (a GitHub issue titled `[test] <row id>: pass` or `[test] 
 - **Screenshot or short screen recording** of the Linux app (and of Windows when they differ).
 - Your distro, desktop (KDE, GNOME, ...), X11 or Wayland, and the app version (Settings -> Updates).
 
-Only tester reports move a row to `verified` in the ledger. A developer links your report from the row;
-nobody marks a row verified from a build, a test or a screenshot alone.
+A tester report is evidence that a developer adds to the ledger row, next to the automated test and the
+developers' own check of the running app; together they move a row to `verified`.
 
 ## Before you start
 
@@ -29,9 +29,9 @@ nobody marks a row verified from a build, a test or a screenshot alone.
 - Some areas are not on Linux yet (the ledger says `missing`). Check that nothing broken shows up instead,
   and report it if it does; there is nothing else to compare.
 
-**[SAFETY] steps** (panic, Lockdown, stop and lock paths) are marked **[SAFETY] agent live check required
-before the shipping switch**. Please test them, but a tester pass alone does not clear them for shipping:
-the agent repeats them live on the release build first.
+**[SAFETY] steps** (panic, Lockdown, stop and lock paths) are marked **[SAFETY] developers re-check this
+before release**. Please test them, but a tester pass alone does not clear them: the developers repeat them
+on the release build first.
 
 **General check (G)**, for every row in a "Rows" list below: open the screen named in the row (the
 Avalonia column of the ledger), click every button, toggle and tab on it, change the language once, and
@@ -41,13 +41,13 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 
 ### Start, stop and panic
 1. Home -> press Start. Expect the engine to run and the button to read Stop; press Stop -> everything ends. WPF `MainWindow/MainWindow.StartStop.cs:35`. Rows: `shell-start-stop`.
-2. **[SAFETY] agent live check required before the shipping switch.** Lab -> Lockdown on, then press Stop. Expect a refusal message and nothing stops. WPF `MainWindow/MainWindow.StartStop.cs:45`. Rows: `shell-start-stop`, `shell-session-feature-lock`.
-3. **[SAFETY] agent live check required before the shipping switch.** Under Lockdown press the window close button. Expect the window to stay open (not even hidden). WPF `MainWindow/MainWindow.WindowChrome.cs:126-131`. Rows: `shell-window-chrome`, `shell-main-window`.
-4. **[SAFETY] agent live check required before the shipping switch.** Under Lockdown pick tray -> Exit. Expect nothing to happen. WPF `MainWindow/MainWindow.Launcher.cs:184`. Rows: `shell-tray-icon`.
-5. **[SAFETY] agent live check required before the shipping switch.** With the engine running press the panic key once. Expect every effect, sound and overlay to stop; the app stays open. WPF `MainWindow/MainWindow.xaml.cs:1548`, `:1934`. Rows: `shell-start-stop`, `shell-global-hotkeys`.
-6. **[SAFETY] agent live check required before the shipping switch.** With nothing running press the panic key twice within 2 s. Expect the app to exit at once, with no Chaster bill. WPF `MainWindow/MainWindow.xaml.cs:1801-1905`. Rows: `shell-chaster-bill`, `shell-start-stop`.
-7. **[SAFETY] agent live check required before the shipping switch.** Tray -> Stop everything (Linux only; Windows has the panic key instead). Expect the same result as one panic press. WPF `MainWindow/MainWindow.xaml.cs:1934`. Rows: `shell-tray-icon`.
-8. Tray menu: expect Show the window, Wake them up (Wake Bambi up in Bambi mode), Stop everything, Exit, in that order. WPF `Services/Notifications/TrayIconService.cs:98-135`. Rows: `shell-tray-icon`.
+2. **[SAFETY] developers re-check this before release.** Lab -> Lockdown on, then press Stop. Expect a refusal message and nothing stops. WPF `MainWindow/MainWindow.StartStop.cs:45`. Rows: `shell-start-stop`, `shell-session-feature-lock`.
+3. **[SAFETY] developers re-check this before release.** Under Lockdown press the window close button. Expect the window to stay open (not even hidden). WPF `MainWindow/MainWindow.WindowChrome.cs:126-131`. Rows: `shell-window-chrome`, `shell-main-window`.
+4. **[SAFETY] developers re-check this before release.** Under Lockdown pick tray -> Exit. Expect nothing to happen. WPF `MainWindow/MainWindow.Launcher.cs:184`. Rows: `shell-tray-icon`.
+5. **[SAFETY] developers re-check this before release.** With the engine running press the panic key once. Expect every effect, sound and overlay to stop; the app stays open. WPF `MainWindow/MainWindow.xaml.cs:1548`, `:1934`. Rows: `shell-start-stop`, `shell-global-hotkeys`.
+6. **[SAFETY] developers re-check this before release.** With nothing running press the panic key twice within 2 s. Expect the app to exit at once, with no Chaster bill. WPF `MainWindow/MainWindow.xaml.cs:1801-1905`. Rows: `shell-chaster-bill`, `shell-start-stop`.
+7. **[SAFETY] developers re-check this before release.** Tray -> Stop everything (Linux only; Windows has the panic key instead). Expect the same result as one panic press. WPF `MainWindow/MainWindow.xaml.cs:1934`. Rows: `shell-tray-icon`.
+8. Tray menu: expect Show the window, Back to launcher (only while the launcher is open; greyed under Lockdown), Wake them up (Wake Bambi up in Bambi mode), then Stop everything (Linux only) and Exit. Windows also shows Cut leash after Wake while you are leashed; Linux does not have it yet (known gap, not a failure). WPF `Services/Notifications/TrayIconService.cs:98-135`. Rows: `shell-tray-icon`.
 9. Chaster linked with a bill: tray -> Exit. Expect Circe's bill to hold the exit for a few seconds or one click, then the app closes. WPF `MainWindow/MainWindow.Launcher.cs:182`. Rows: `shell-chaster-bill`.
 10. Close the window (not under Lockdown). Expect it to go to the tray with a "still running" notification. WPF `Services/Notifications/TrayIconService.cs:191`. Rows: `shell-tray-icon`, `shell-window-chrome`.
 
@@ -61,27 +61,27 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 17. Settings -> Account -> sign in with Patreon, then Discord. Expect the tier card to update; sign out clears it. WPF `App.xaml.cs:2267`. Rows: `shell-login`, `shell-patreon`, `shell-subscribestar`, `shell-secret-store`, `shell-account-shell`.
 
 ### Tabs and features hosted by the shell
-18. Takeover tab -> enable, press Test. Expect a takeover action to run; panic stops it but keeps the switch on. WPF `MainWindow/MainWindow.StartStop.cs:485`. Rows: `shell-autonomy`, `shell-takeover-ui`.
+18. **[SAFETY] developers re-check this before release.** Takeover tab -> enable, press Test. Expect a takeover action to run; panic stops it but keeps the switch on. WPF `MainWindow/MainWindow.StartStop.cs:485`. Rows: `shell-autonomy`, `shell-takeover-ui`.
 19. Awareness: turn it on (consent), switch between apps. Expect the companion to react to the window title (X11 apps only). WPF `MainWindow/MainWindow.CompanionRoom.cs:236`. Rows: `shell-awareness`.
 20. Programs tab -> enrol in a program. Expect the banner and step list as on Windows. WPF `MainWindow/MainWindow.ProgramsTab.cs:605`, `:2251`. Rows: `shell-programs-tab`, `shell-program-banner`.
 21. Presets tab -> apply, save and import a preset. WPF `MainWindow/MainWindow.Presets.cs:2202-2381`, `MainWindow/MainWindow.SessionIO.cs:453`. Rows: `shell-presets`, `shell-preset-io`, `shell-session-io`.
 22. Assets tab -> tick and untick folders, preview a file. WPF `MainWindow/MainWindow.TabNavigation.cs:433-438`. Rows: `shell-assets`, `shell-assets-fx`.
-23. Blink Trainer tab -> start a session with the webcam. Expect the dot to breathe while running and panic to stop it. WPF `MainWindow/MainWindow.BlinkTrainer.cs:671`. Rows: `shell-blink-trainer`, `shell-webcam`.
+23. **[SAFETY] developers re-check this before release.** Blink Trainer tab -> start a session with the webcam. Expect the dot to breathe while running and panic to stop it. WPF `MainWindow/MainWindow.BlinkTrainer.cs:671`. Rows: `shell-blink-trainer`, `shell-webcam`.
 24. Companion tab and Her Room: open each page. WPF `MainWindow/MainWindow.CompanionRoom.cs:121-178`, `MainWindow/MainWindow.Patreon.cs:1266`. Rows: `shell-companion`, `shell-companion-room`, `shell-companion-tab`.
 25. Spiral room, Lab tab, Quests, Achievements, Leaderboard, Roadmap, Profile: open each and use every control. WPF `MainWindow/MainWindow.SpiralRoom.cs:76`, `MainWindow/MainWindow.LabTab.cs:134-153`, `App.xaml.cs:414`. Rows: `shell-spiral-room`, `shell-lab-tab`, `shell-quests`, `shell-achievements-tab`, `shell-leaderboard`, `shell-roadmap`, `shell-profile-card`.
 26. Chaster tab: link a test lock. Expect the rail padlock and hero to update. WPF `App.xaml.cs:3149`. Rows: `shell-chaster`.
-27. **[SAFETY] agent live check required before the shipping switch.** Remote Control: let a controller connect, press panic. Expect the controller to drop and everything to stop. WPF `MainWindow/MainWindow.RemoteControl.cs:1401`. Rows: `shell-remote-control`.
+27. **[SAFETY] developers re-check this before release.** Remote Control: let a controller connect, press panic. Expect the controller to drop and everything to stop. WPF `MainWindow/MainWindow.RemoteControl.cs:1401`. Rows: `shell-remote-control`.
 
-### Possession (from the live queue)
+### Possession
 28. Start a session with Possession on; watch shell buttons nudge, drift, breathe or wobble, then ease home. WPF `Services/Possession/Possession.cs`. Rows: `shell-possession`.
-29. **[SAFETY] agent live check required before the shipping switch.** Expect the panic control, the Lockdown tab and the safe word never to be possessed. WPF `Services/Possession/PossessionOffLimitsTree.cs`. Rows: `shell-possession`.
-30. **[SAFETY] agent live check required before the shipping switch.** With two or more effects moving, press panic, then tray -> Stop everything. Expect every moved control back in place at once. Rows: `shell-possession`.
+29. **[SAFETY] developers re-check this before release.** Expect the panic control, the Lockdown tab and the safe word never to be possessed. WPF `Services/Possession/PossessionOffLimitsTree.cs`. Rows: `shell-possession`.
+30. **[SAFETY] developers re-check this before release.** With two or more effects moving, press panic, then tray -> Stop everything. Expect every moved control back in place at once. Rows: `shell-possession`.
 
-### Web pages inside the app (from the live queue)
+### Web pages inside the app
 31. Search for "intake" -> start Graded Intake. Expect the page to draw and keep moving (not a frozen frame). WPF `MainWindow/MainWindow.Lab.cs:343`. Rows: `shell-webview2-hosts`, `views-tab-graded-intake`.
 32. Browser site buttons and Reload: each navigates and the status line says connected. WPF `MainWindow/MainWindow.Browser.cs:132-158`. Rows: `shell-browser`.
 
-### Tray friends line (from the live queue)
+### Tray friends line
 33. Have a friend poke you, hover the tray icon. Expect "Conditioning Control Panel" plus a 1-unread friends line; open and close the friends drawer, hover again: the line is gone. WPF `Services/Friends/FriendsFeedTray.cs:18`. Rows: `shell-tray-icon`, `feat-friends-feed`.
 
 ### Rows (general check G)
@@ -200,29 +200,29 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 - [ ] `svc-media-session-watcher` - WPF `Services/Awareness/SmtcMediaWatcher.cs`
 - [ ] `svc-content-packs` - WPF `App.xaml.cs:3163`
 - [ ] `game-race` - WPF `Services/Chaos/CaucusHostService.cs:132`
-- [ ] `shell-installer` - WPF `installer.iss`
+- [ ] `shell-installer` - WPF `installer.iss` (repo root)
 
 ## 2. Windows (`windows`)
 
-### Panic key on pop-up windows (from the live queue)
+### Panic key on pop-up windows
 Set the panic key to Enter for steps 1-4 (Settings -> panic key).
-1. **[SAFETY] agent live check required before the shipping switch.** Mandatory video: press Escape (pause card), Tab to Resume, press Enter. Expect the video to stop and close, not resume. WPF `Services/Video/VideoService.cs:361`, `Windows/GracePauseOverlayWindow.cs:61`. Rows: `win-grace-pause-overlay`.
-2. **[SAFETY] agent live check required before the shipping switch.** Bubble Count game: press Enter during the clip. Expect the game to close. WPF `Services/BubbleCountService.cs:353`. Rows: `win-bubble-count`.
-3. **[SAFETY] agent live check required before the shipping switch.** Bubble Count answer box: type the right count, press Enter. Expect the windows to close with no "CORRECT!" and no XP. WPF `Services/BubbleCountService.cs:373`. Rows: `win-bubble-count`, `win-bubble-count-result`.
-4. **[SAFETY] agent live check required before the shipping switch.** First show (welcome): Tab to a choice, press Enter. Expect the show to close without taking the choice. WPF `MainWindow/MainWindow.xaml.cs:546-553`. Rows: `feat-first-show`.
-5. **[SAFETY] agent live check required before the shipping switch.** Repeat step 1 with the panic key set to F12: Enter must not stop anything. Rows: `win-grace-pause-overlay`.
+1. **[SAFETY] developers re-check this before release.** Mandatory video: press Escape (pause card), Tab to Resume, press Enter. Expect the video to stop and close, not resume. WPF `Services/Video/VideoService.cs:361`, `Windows/GracePauseOverlayWindow.cs:61`. Rows: `win-grace-pause-overlay`.
+2. **[SAFETY] developers re-check this before release.** Bubble Count game: press Enter during the clip. Expect the game to close. WPF `Services/BubbleCountService.cs:353`. Rows: `win-bubble-count`.
+3. **[SAFETY] developers re-check this before release.** Bubble Count answer box: type the right count, press Enter. Expect the windows to close with no "CORRECT!" and no XP. WPF `Services/BubbleCountService.cs:373`. Rows: `win-bubble-count`, `win-bubble-count-result`.
+4. **[SAFETY] developers re-check this before release.** First show (welcome): Tab to a choice, press Enter. Expect the show to close without taking the choice. WPF `MainWindow/MainWindow.xaml.cs:546-553`. Rows: `feat-first-show`.
+5. **[SAFETY] developers re-check this before release.** Repeat step 1 with the panic key set to F12: Enter must not stop anything. Rows: `win-grace-pause-overlay`.
 
-### Friend invite card (from the live queue)
+### Friend invite card
 6. Have a friend send you a Back Room invite while the panel is open. Expect a "dling" sound and a card at the panel's top-right with name, art, Not now and x, a countdown ring; the panel keeps keyboard focus. WPF `Windows/Friends/KnockCard.cs:341`. Rows: `win-knock-card`, `feat-friends-landing`.
-7. A second invite stacks under the first. After 45 s both shrink; hovering one opens it again. Rows: `win-knock-card`.
-8. Click x: the card goes to the Inbox; opening the Inbox row brings it back. Click Not now: "sink" sound, card and row gone. Rows: `win-knock-card`, `shell-inbox`.
-9. **[SAFETY] agent live check required before the shipping switch.** Press the panic key with cards up. Expect every card to fold into the Inbox; panic otherwise behaves as usual. Rows: `win-knock-card`.
-10. Start a session with a card up. Expect it to fold into the Inbox within 3 s; new invites wait until the session ends. Rows: `win-knock-card`.
-11. A Ramp invite: with the panel hidden behind the launcher, press Join. Expect the panel on the Studio tab. Rows: `win-knock-card`, `feat-friends-landing`.
+7. A second invite stacks under the first. After 45 s both shrink; hovering one opens it again. WPF `Windows/Friends/KnockCard.cs`. Rows: `win-knock-card`.
+8. Click x: the card goes to the Inbox; opening the Inbox row brings it back. Click Not now: "sink" sound, card and row gone. WPF `Windows/Friends/KnockCard.cs`. Rows: `win-knock-card`, `shell-inbox`.
+9. **[SAFETY] developers re-check this before release.** Press the panic key with cards up. Expect every card to fold into the Inbox; panic otherwise behaves as usual. WPF `Windows/Friends/KnockCard.cs`. Rows: `win-knock-card`.
+10. Start a session with a card up. Expect it to fold into the Inbox within 3 s; new invites wait until the session ends. WPF `Windows/Friends/KnockCard.cs`. Rows: `win-knock-card`.
+11. A Ramp invite: with the panel hidden behind the launcher, press Join. Expect the panel on the Studio tab. WPF `Windows/Friends/KnockCard.cs`. Rows: `win-knock-card`, `feat-friends-landing`.
 
 ### Other windows
 12. First start on a fresh profile: the first-run wizard walks every page, Back and Next work. WPF `Windows/FirstRunWizard.xaml.cs:913-969`. Rows: `win-first-run-wizard`, `win-splash-screen`.
-13. **[SAFETY] agent live check required before the shipping switch.** Lock card: start one, type the phrase wrong, then right. Expect it to stay until the right phrase; panic closes it. WPF `Windows/LockCardWindow.xaml.cs:763`. Rows: `win-lock-card`.
+13. **[SAFETY] developers re-check this before release.** Lock card: start one, type the phrase wrong, then right. Expect it to stay until the right phrase; panic closes it. WPF `Windows/LockCardWindow.xaml.cs:763`. Rows: `win-lock-card`.
 14. Unlock an achievement and finish a quest. Expect the pop-ups with the same text and sound. Rows: `win-achievement-popup`, `win-quest-complete`, `win-item-unlocked`.
 15. Lab -> Quiz: play a round, report a question, edit a category. WPF `MainWindow/MainWindow.Lab.cs:116`, `:468`, `Windows/QuizWindow.xaml.cs:356`. Rows: `win-quiz`, `win-quiz-report`, `win-quiz-category-editor`, `win-pop-quiz`.
 16. Finish a session. Expect the summary, then the log history lists it. WPF `Windows/SessionLogHistoryWindow.xaml.cs:46`, `MainWindow/MainWindow.Presets.cs:1551`. Rows: `win-session-complete`, `win-session-log-history`, `win-session-editor`.
@@ -232,11 +232,11 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 20. Emi desk: open it, its options, ring and book; mute prompt. WPF `AvatarTube/AvatarTubeWindow.Speech.cs:461`. Rows: `win-emi-desk`, `win-emi-options`, `win-emi-ring`, `win-emi-book`, `win-emi-codex`, `win-emi-mute-prompt`.
 21. Settings palette shortcut opens the command palette. WPF `MainWindow/MainWindow.xaml.cs:280-283`. Rows: `win-settings-palette`.
 
-### Down the Rabbit Hole game (from the live queue)
+### Down the Rabbit Hole game
 22. Launcher -> Down the Rabbit Hole -> Play (signed in). Expect the game window and the Warren hub within 45 s. WPF `Services/Chaos/DtrhHostService.cs:94`. Rows: `win-launcher`.
 23. Start a descent. Expect the tube to draw and bubbles to spawn; note any missing pictures or sounds. Rows: `win-launcher`.
-24. **[SAFETY] agent live check required before the shipping switch.** Panic key = Escape: press it once mid-descent. Expect the game to pause and stay open; click the title bar, wait 2 s, press again: it still only pauses. WPF `MainWindow/MainWindow.xaml.cs:1651`, `Services/Chaos/DtrhHostService.cs:231`. Rows: `win-launcher`.
-25. **[SAFETY] agent live check required before the shipping switch.** Press Escape twice within 2 s. Expect the game window to close and the app to stay up; tray -> Stop everything also closes it. Compare carefully: on Windows the game owns Escape (pause, hold to leave). Rows: `win-launcher`.
+24. **[SAFETY] developers re-check this before release.** Panic key = Escape: press it once mid-descent. Expect the game to pause and stay open; click the title bar, wait 2 s, press again: it still only pauses. WPF `MainWindow/MainWindow.xaml.cs:1651`, `Services/Chaos/DtrhHostService.cs:231`. Rows: `win-launcher`.
+25. **[SAFETY] developers re-check this before release.** Press Escape twice within 2 s. Expect the game window to close and the app to stay up; tray -> Stop everything also closes it. Compare carefully: on Windows the game owns Escape (pause, hold to leave). Rows: `win-launcher`.
 26. Settings -> Motion Reduced, then Off; reopen the game. Expect calmer, then no motion. Rows: `win-launcher`.
 27. Without Lab access press Play. Expect no window and a "needs Lab" message. Rows: `win-launcher`.
 
@@ -301,16 +301,16 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 ## 3. Views (`views`)
 
 1. Settings: open every section (General, Audio, Data, Devices, Notifications, Performance, Updates, Account, Emi desk). Expect the same options in the same order. WPF `MainWindow/MainWindow.Presets.cs:54`, `MainWindow/MainWindow.UiUpdates.cs:2701`. Rows: `views-settings-*`, `views-tab-settings`, `views-tab-app-settings`.
-2. **[SAFETY] agent live check required before the shipping switch.** Lockdown tab: arm Lockdown, then try Stop, close, Exit and leaving the tab. Expect each to refuse with the Windows message; the wrong unlock phrase is refused. WPF `MainWindow/MainWindow.Lab.cs:672`, `:862`. Rows: `views-tab-lockdown`.
-3. **[SAFETY] agent live check required before the shipping switch.** Lockdown on: press Pause in a session. Expect it refused. WPF `MainWindow/MainWindow.Presets.cs:2033`. Rows: `views-tab-lockdown`, `views-tab-presets`.
-4. **[SAFETY] agent live check required before the shipping switch.** Her Room -> chat History link opens "Chat history"; press panic. Expect it to close; a second press does nothing odd. WPF `Views/Controls/Companion/Runtime/CompanionTranscriptWindow.cs:121`. Rows: `views-companion-transcript-window`.
+2. **[SAFETY] developers re-check this before release.** Lockdown tab: arm Lockdown, then try Stop, close, Exit and leaving the tab. Expect each to refuse with the Windows message; the wrong unlock phrase is refused. WPF `MainWindow/MainWindow.Lab.cs:672`, `:862`. Rows: `views-tab-lockdown`.
+3. **[SAFETY] developers re-check this before release.** Lockdown on: press Pause in a session. Expect it refused. WPF `MainWindow/MainWindow.Presets.cs:2033`. Rows: `views-tab-lockdown`, `views-tab-presets`.
+4. **[SAFETY] developers re-check this before release.** Her Room -> chat History link opens "Chat history"; press panic. Expect it to close; a second press does nothing odd. WPF `Views/Controls/Companion/Runtime/CompanionTranscriptWindow.cs:121`. Rows: `views-companion-transcript-window`.
 5. Companion pages: Engine room, Memory diary, Constellation, Workshop cells, Make her yours, keyword triggers, chat threshold. WPF `MainWindow/MainWindow.CompanionTab.cs:85`, `MainWindow/MainWindow.xaml.cs:3164-3383`. Rows: `views-companion-*`.
 6. Studio: Ramp and Scheduler racks, Brain Drain card. WPF `Views/Tabs/StudioTabView.xaml.cs:1231`. Rows: `views-tab-studio`, `views-studio-*`.
 7. Achievements: filters, reward band, tile effects. WPF `MainWindow/MainWindow.AchievementsTab.cs:886`. Rows: `views-tab-achievements`.
 8. Quests: daily cards, reroll, stamps. WPF `MainWindow/MainWindow.Animations.cs:35`. Rows: `views-tab-quests`, `views-daily-quest-card`.
 9. Presets: load, save, session import/export. WPF `MainWindow/MainWindow.SessionIO.cs:911-972`. Rows: `views-tab-presets`.
 10. Awareness tab: consent, privacy rules, app picker. WPF `App.xaml.cs:1574`. Rows: `views-tab-awareness`, `views-companion-awareness-privacy`.
-11. **[SAFETY] agent live check required before the shipping switch.** Remote Control tab: share a code, let a controller in, end it from both sides. WPF `MainWindow/MainWindow.RemoteControl.cs:325-480`. Rows: `views-tab-remote-control`.
+11. **[SAFETY] developers re-check this before release.** Remote Control tab: share a code, let a controller in, end it from both sides. WPF `MainWindow/MainWindow.RemoteControl.cs:325-480`. Rows: `views-tab-remote-control`.
 12. Blink Trainer, Haptics, Discord, Leaderboard, Deeper, Enhancements, Exclusives, Friends, Leash, Play, Programs, She's Listening, Spiral, Chaster, Subjects, Takeover tabs: open each, use every control. WPF `MainWindow/MainWindow.Presets.cs:118` (Blink Trainer). Rows: `views-tab-*`.
 13. Deeper editor: new enhancement, URL prompt, gaze picker, play one. Rows: `views-deeper-*`.
 
@@ -451,41 +451,41 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 
 ## 5. Features and controls (`features-controls`)
 
-### Effects and monitors (from the live queue; 2 monitors needed for 1-4)
+### Effects and monitors (2 monitors needed for 1-4)
 1. Settings -> Monitors -> "Show content on". Expect All monitors, Primary only, then `Monitor N (Primary, WxH)` per screen. WPF `Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35`. Rows: `feat-monitor-target-picker`, `shell-multi-monitor`.
-2. Pick Monitor 2; start pink filter, spiral, bubbles, a flash, a subliminal, bouncing text and a mandatory video. Expect each only on monitor 2. Rows: `feat-monitor-target-picker`, `feat-pink-filter`, `feat-spiral`, `feat-bubble-pop`, `feat-flash`, `feat-subliminal`, `feat-bouncing-text`, `feat-video`.
-3. With them running switch to All monitors. Expect them on every screen without a restart. Rows: `feat-monitor-target-picker`.
-4. Pick Monitor 2, quit, unplug it, start. Expect content on the primary; plug it back: Monitor 2 is chosen again. Rows: `feat-monitor-target-picker`.
-5. Each effect card on Home/Studio: enable, change sliders, Test. Expect the same look and timing; panic clears all. WPF `MainWindow/MainWindow.Presets.cs:1360`, `:1380-1433`, `Services/BubbleService.cs:1089`, `Services/Subliminal/BouncingTextService.cs:372`, `Services/Video/VideoService.cs:3372`. Rows: `feat-*` effect rows, `feat-feature-card`.
+2. Pick Monitor 2; start pink filter, spiral, bubbles, a flash, a subliminal, bouncing text and a mandatory video. Expect each only on monitor 2. WPF `Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35`. Rows: `feat-monitor-target-picker`, `feat-pink-filter`, `feat-spiral`, `feat-bubble-pop`, `feat-flash`, `feat-subliminal`, `feat-bouncing-text`, `feat-video`.
+3. With them running switch to All monitors. Expect them on every screen without a restart. WPF `Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35`. Rows: `feat-monitor-target-picker`.
+4. Pick Monitor 2, quit, unplug it, start. Expect content on the primary; plug it back: Monitor 2 is chosen again. WPF `Views/Controls/AppSettings/MonitorsSettingsSection.xaml:35`. Rows: `feat-monitor-target-picker`.
+5. **[SAFETY] developers re-check this before release.** Each effect card on Home/Studio: enable, change sliders, Test. Expect the same look and timing; panic clears all. WPF `MainWindow/MainWindow.Presets.cs:1360`, `:1380-1433`, `Services/BubbleService.cs:1089`, `Services/Subliminal/BouncingTextService.cs:372`, `Services/Video/VideoService.cs:3372`. Rows: `feat-*` effect rows, `feat-feature-card`.
 6. Corner hit with Bouncing Text: one "did you see that" line per session. Rows: `feat-bouncing-text`.
 
-### Takeover and Deeper cues (from the live queue)
+### Takeover and Deeper cues
 7. Takeover with announcements on: wait for an action. Expect "TAKEOVER" over the effect word near the top, with a glow and a short shake, gone after ~2 s; clicks pass through. WPF `Overlays/TakeoverAnnouncerOverlay.cs:69`. Rows: `overlay-takeover-announcer`.
 8. Two actions back to back: the second cue waits for the first. Rows: `overlay-takeover-announcer`.
-9. **[SAFETY] agent live check required before the shipping switch.** Press panic while a cue shows. Expect it gone at once and the queued one never shown. Rows: `overlay-takeover-announcer`.
+9. **[SAFETY] developers re-check this before release.** Press panic while a cue shows. Expect it gone at once and the queued one never shown. Rows: `overlay-takeover-announcer`.
 10. Deeper enhancement with a "speak" prompt: "SAY IT" over the line near the top; clicks pass through; it fades when answered. WPF `Overlays/SpeakCueOverlay.cs:39`. Rows: `overlay-speak-cue`.
-11. **[SAFETY] agent live check required before the shipping switch.** With the speak cue up press panic, then tray -> Stop everything, then close the app. Expect the cue gone every time. Rows: `overlay-speak-cue`.
+11. **[SAFETY] developers re-check this before release.** With the speak cue up press panic, then tray -> Stop everything, then close the app. Expect the cue gone every time. Rows: `overlay-speak-cue`.
 
-### Chaster pop (from the live queue)
+### Chaster pop
 12. Chaster linked: pop a priced bubble. Expect a big "+N:NN" at the bubble that lifts and fades in ~1.5 s, clicks pass through; the rail padlock ring pulses. WPF `Controls/ChasterBookedPop.cs:117`. Rows: `ctrl-chaster-booked-pop`, `ctrl-chaster-rail-chip`.
 13. Two prices within half a second: one bigger number. Daily cap full: one lilac "day is full" tag. Motion Reduced or Off: no lift. Rows: `ctrl-chaster-booked-pop`.
 
-### Chaos mode (from the live queue)
+### Chaos mode
 14. Rabbit Hole -> FALL IN. Expect the hub to close, the HUD and countdown, then bubbles rising. WPF `Chaos/ChaosHubWindow.xaml.cs:1730`, `Services/Chaos/ChaosModeService.cs:297`. Rows: `chaos-hub-window`, `chaos-hud-window`, `chaos-overlay-window`, `chaos-bubble-host`.
-15. **[SAFETY] agent live check required before the shipping switch.** Pop a few bubbles, press panic. Expect HUD, overlay and every bubble gone at once, no recap, and drops/gold unchanged in the hub. WPF `Services/Chaos/ChaosModeService.cs:288`, `:3161`. Rows: `chaos-hud-window`, `chaos-overlay-window`.
-16. **[SAFETY] agent live check required before the shipping switch.** FALL IN again, press panic twice within 2 s. Expect the run to end and the app to stay open. Rows: `chaos-hud-window`.
-17. **[SAFETY] agent live check required before the shipping switch.** Tray -> Stop everything mid-run: same as step 15. Rows: `chaos-hud-window`.
+15. **[SAFETY] developers re-check this before release.** Pop a few bubbles, press panic. Expect HUD, overlay and every bubble gone at once, no recap, and drops/gold unchanged in the hub. WPF `Services/Chaos/ChaosModeService.cs:288`, `:3161`. Rows: `chaos-hud-window`, `chaos-overlay-window`.
+16. **[SAFETY] developers re-check this before release.** FALL IN again, press panic twice within 2 s. Expect the run to end and the app to stay open. Rows: `chaos-hud-window`.
+17. **[SAFETY] developers re-check this before release.** Tray -> Stop everything mid-run: same as step 15. Rows: `chaos-hud-window`.
 18. Let a run finish. Expect the recap; the hub then shows the recap's drops, +1 descent, more gold, and the XP bar moved. Rows: `chaos-hub-window`.
 19. First visit to the hub: the intro card appears; "i understand. take me down" closes it; `?` shows it again; it does not come back on reopen. WPF `Chaos/ChaosHubWindow.Reveals.cs:145-153`. Rows: `chaos-intro-window`.
-20. **[SAFETY] agent live check required before the shipping switch.** Intro card up: press panic with its button focused. Expect the card to close and panic to run. Rows: `chaos-intro-window`.
+20. **[SAFETY] developers re-check this before release.** Intro card up: press panic with its button focused. Expect the card to close and panic to run. Rows: `chaos-intro-window`.
 21. Toy button (with a toy pocket): round button bottom-right with a key badge; click or press its key: "20s" countdown, then "ready". It never steals focus. WPF `Chaos/ChaosToyButtonWindow.cs:42`. Rows: `chaos-toy-button`.
-22. **[SAFETY] agent live check required before the shipping switch.** Set the toy key to the panic key: pressing it panics and does not fire the toy. After panic the toy key does nothing. Rows: `chaos-toy-button`.
+22. **[SAFETY] developers re-check this before release.** Set the toy key to the panic key: pressing it panics and does not fire the toy. After panic the toy key does nothing. Rows: `chaos-toy-button`.
 23. Pocket Watch charm: a "WAVE 1/N" pill top-right; clock turns red under 10 s; "LAST WAVE" blinks. WPF `Chaos/ChaosWaveTimerOverlay.cs:23`. Rows: `chaos-wave-timer`.
 24. Announcer on: "THE HOLE IS CLOSING..." pops near the top, lines never overlap. WPF `Chaos/ChaosAnnouncerOverlay.cs:65`. Rows: `chaos-announcer`.
 25. Draft a mantra and a sin: tiles appear in a pill top-right, hover shows a card. WPF `Chaos/ChaosBoonBarOverlay.cs:34`. Rows: `chaos-boon-bar`.
 26. Heat bar full: warm edge tint fades in; off when "colour flashes" is off. WPF `Chaos/ChaosFxWindow.cs:26`. Rows: `chaos-fx-window`.
 27. Pop words ("SNAP"), effect banners, cursor halo, vibe trail, sparks, ripples, DVD logo, GIF rain, brain-drain wash, e-stim bolt: when each appears, clicks pass through and nothing takes focus. WPF `Chaos/ChaosPopText.cs:50`, `Chaos/ChaosEffectBannerOverlay.cs:57`, `Chaos/ChaosCursorGlowOverlay.cs:46`, `Chaos/ChaosVibeTrailOverlay.cs:58`, `Chaos/ChaosSkiaFxOverlay.cs:72`, `Chaos/ChaosFieldFxOverlay.cs:59`, `Chaos/ChaosDvdOverlay.cs:92`, `Chaos/ChaosGifCascadeOverlay.cs:51`, `Chaos/ChaosFlashOverlay.cs:44`, `Chaos/ChaosEStimOverlay.cs:40`. Rows: `chaos-pop-text`, `chaos-effect-banner`, `chaos-cursor-glow`, `chaos-vibe-trail`, `chaos-skia-fx`, `chaos-field-fx`, `chaos-dvd-overlay`, `chaos-dvd-host`, `chaos-gif-cascade`, `chaos-flash-overlay`, `chaos-estim-overlay`, `chaos-estim-glow`.
-28. **[SAFETY] agent live check required before the shipping switch.** While any of step 27's effects or the wave pill, boon pill or announcer shows: panic, tray -> Stop everything, and the safe word each close it at once with no window left behind. Rows: as step 27, plus `chaos-wave-timer`, `chaos-boon-bar`, `chaos-announcer`, `chaos-fx-window`, `chaos-toy-button`.
+28. **[SAFETY] developers re-check this before release.** While any of step 27's effects or the wave pill, boon pill or announcer shows: panic, tray -> Stop everything, and the safe word each close it at once with no window left behind. Rows: as step 27, plus `chaos-wave-timer`, `chaos-boon-bar`, `chaos-announcer`, `chaos-fx-window`, `chaos-toy-button`.
 29. Without a compositor (or on plain Wayland): those effects show nothing rather than a black or click-blocking sheet. Rows: as step 27.
 30. Click a bubble: it pops and the click does not reach the window below; empty space between bubbles stays clickable. WPF `Chaos/ChaosBubbleHostOverlay.cs:137`. Rows: `chaos-bubble-host`.
 
@@ -515,7 +515,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 - [ ] `feat-spiral` - WPF `Features/SpiralFeatureControl.xaml`
 - [ ] `feat-split-card` - WPF `Features/SplitFeatureCard.xaml`
 - [ ] `feat-subliminal` - WPF `Features/SubliminalFeatureControl.xaml`
-- [ ] `feat-system` - WPF `Features/SystemFeatureControl.xaml(.cs)`
+- [ ] `feat-system` - WPF `Features/SystemFeatureControl.xaml(.cs)` (gone from Windows; compare with the Windows app)
 - [ ] `feat-video` - WPF `Services/Video/VideoService.cs:3372`
 - [ ] `feat-visuals` - WPF `Features/VisualsFeatureControl.xaml`
 - [ ] `ctrl-attention-check` - WPF `App.xaml.cs:3229-3246`
@@ -616,24 +616,24 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 - [ ] `win-emi-desk-extras` - WPF `Windows/EmiDesk/EmiDeskWindow.Presentation.cs`
 - [ ] `feat-session-summary-passive` - WPF `CCP.Core/Services/Session/SessionSummaryPresentation.cs`
 - [ ] `companion-ccp-default-voice` - WPF `builtin-ccp-default barks`
-- [ ] `release-content-pack-script` - WPF `build-content-packs.ps1`
+- [ ] `release-content-pack-script` - WPF `Scripts/build-content-packs.ps1`
 - [ ] `release-content-avalonia-service` - WPF `App.xaml.cs:346-356`
 - [ ] `release-content-mod-manager-rows` - WPF `Dialogs/ModManagerDialog.xaml.cs:56-316`
 - [ ] `blocked-migration-input` - WPF `Tests (migration)`
 
 ## 7. Main sync 3 additions (`main-sync-3 additions`)
 
-### Leash hold-to-cut (from the live queue)
-1. **[SAFETY] agent live check required before the shipping switch.** Leashed, tap the panic key once. Expect a normal panic and no ring. WPF `MainWindow/MainWindow.Leash.cs:307`. Rows: `feat-leash-receipts-hold`.
-2. **[SAFETY] agent live check required before the shipping switch.** Hold it ~3 s and let go. Expect a small countdown ring (5, 4, 3) bottom-centre that vanishes on release; still leashed. WPF `MainWindow/MainWindow.Leash.cs:323-350`, `Controls/Leash/LeashHoldRing.cs:20`. Rows: `feat-leash-receipts-hold`.
-3. **[SAFETY] agent live check required before the shipping switch.** Hold 5 s. Expect "Cut the leash?" centred; held keys do not answer it. "No" keeps the leash; "Yes, cut it" shows "Cut. You are off the leash." WPF `MainWindow/MainWindow.Leash.cs:358`. Rows: `feat-leash-receipts-hold`, `feat-leash`.
-4. **[SAFETY] agent live check required before the shipping switch.** Panic key turned off in Settings, leashed: holding it 5 s still asks. Not leashed: holding it is one panic only, never an exit. WPF `MainWindow/MainWindow.Leash.cs:316`, `:347`. Rows: `feat-leash-receipts-hold`.
+### Leash hold-to-cut
+1. **[SAFETY] developers re-check this before release.** Leashed, tap the panic key once. Expect a normal panic and no ring. WPF `MainWindow/MainWindow.Leash.cs:307`. Rows: `feat-leash-receipts-hold`.
+2. **[SAFETY] developers re-check this before release.** Hold it ~3 s and let go. Expect a small countdown ring (5, 4, 3) bottom-centre that vanishes on release; still leashed. WPF `MainWindow/MainWindow.Leash.cs:323-350`, `Controls/Leash/LeashHoldRing.cs:20`. Rows: `feat-leash-receipts-hold`.
+3. **[SAFETY] developers re-check this before release.** Hold 5 s. Expect "Cut the leash?" centred; held keys do not answer it. "No" keeps the leash; "Yes, cut it" shows "Cut. You are off the leash." WPF `MainWindow/MainWindow.Leash.cs:358`. Rows: `feat-leash-receipts-hold`, `feat-leash`.
+4. **[SAFETY] developers re-check this before release.** Panic key turned off in Settings, leashed: holding it 5 s still asks. Not leashed: holding it is one panic only, never an exit. WPF `MainWindow/MainWindow.Leash.cs:316`, `:347`. Rows: `feat-leash-receipts-hold`.
 5. The ring never takes clicks or focus. Rows: `feat-leash-receipts-hold`.
 
-### Companion voice lines (from the live queue)
+### Companion voice lines
 6. Default mod, companion on: open a tab with a voice line (e.g. Leaderboard). Expect a speech bubble and the voice, at most one per minute. WPF `MainWindow/MainWindow.xaml.cs:1755`. Rows: `feat-companion-barks`, `companion-ccp-default-voice`.
 7. Master volume 0: text only. Companion muted: text, no voice. Rows: `feat-companion-barks`.
-8. **[SAFETY] agent live check required before the shipping switch.** Press panic while she speaks. Expect the voice cut at once. Rows: `feat-companion-barks`.
+8. **[SAFETY] developers re-check this before release.** Press panic while she speaks. Expect the voice cut at once. Rows: `feat-companion-barks`.
 
 ### Other
 9. Friends drawer: feed, trail, blocked list, presence setting. Rows: `feat-friends-feed`, `feat-friends-blocked-presence`, `feat-friends-landing`.
@@ -664,7 +664,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 
 ## 8. Main syncs 4, 5 and 6
 
-These sections of the ledger point at delta ledgers ([`avalonia-main-sync-20261005.md`](avalonia-main-sync-20261005.md),
+These sections of the ledger point at per-commit lists ([`avalonia-main-sync-20261005.md`](avalonia-main-sync-20261005.md),
 [`avalonia-main-sync-20261008.md`](avalonia-main-sync-20261008.md), [`avalonia-main-sync-20261009.md`](avalonia-main-sync-20261009.md)),
 one row per Windows commit, not per screen. Test them through the screen each commit touched, using the
 area sections above; report against the commit row only when no screen row fits.
@@ -672,4 +672,4 @@ area sections above; report against the commit row only when no screen row fits.
 ## Still to write
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
-- Delta-ledger rows of main syncs 4-6 that touch no screen in sections 1-7.
+- Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
