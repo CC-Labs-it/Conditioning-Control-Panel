@@ -79,7 +79,8 @@ Evidence: ~/ccp-port/evidence/package-verify/.
 
 ## Installing the tarball by hand
 The tarball's `.desktop` runs `conditioning-control-panel` from `PATH`, so extracting it alone gives a menu entry that
-does not start. Lay it out the way the AUR package does (any prefix; `~/.local` needs no root):
+does not start. Lay it out the way the AUR package does (any prefix; `~/.local` needs no root). The last line points the
+menu entry at the launcher's absolute path, since `~/.local/bin` is often not on the desktop session's `PATH`:
 ```bash
 mkdir -p ~/.local/opt ~/.local/bin
 tar -xzf ConditioningControlPanel-<ver>-linux-x64.tar.gz -C ~/.local/opt
@@ -87,10 +88,11 @@ mv ~/.local/opt/ConditioningControlPanel ~/.local/opt/conditioning-control-panel
 printf '#!/bin/sh\nexec %s "$@"\n' ~/.local/opt/conditioning-control-panel/CCP.Avalonia > ~/.local/bin/conditioning-control-panel
 chmod 755 ~/.local/bin/conditioning-control-panel
 cp -r ~/.local/opt/conditioning-control-panel/share/. ~/.local/share/
+sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/conditioning-control-panel|" ~/.local/share/applications/io.github.CodeBambi.ConditioningControlPanel.desktop
 ```
 Remove: delete `opt/conditioning-control-panel`, `bin/conditioning-control-panel` and the
 `io.github.CodeBambi.ConditioningControlPanel.*` files under `share/applications`, `share/icons/hicolor/*/apps`,
-`share/metainfo`).
+`share/metainfo`.
 
 ## Installed run (avalonia-port/linux-package-wired, 7.1.5)
 Evidence: ~/ccp-port/evidence/linux-package-wired/ (scripts `install-run.sh`, `window-run.sh`, `wmclose.py` alongside).
