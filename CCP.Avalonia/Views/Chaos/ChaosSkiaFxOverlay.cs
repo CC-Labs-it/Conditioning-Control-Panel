@@ -101,7 +101,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 try
                 {
                     if (Active == null && Create() is { } w) Active = w;
-                    if (Active != null) act(Active);
+                    if (Active == null) return;
+                    act(Active);
+                    if (Active.IsVisible) X11Overlay.Raise(Active);   // WPF StartActivity: ChaosWindowZ.RaiseAboveVideo on every effect
                 }
                 catch (Exception ex) { Log.Debug("ChaosSkiaFx: {E}", ex.Message); }
             });
@@ -186,10 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var b = primary.Bounds;
             if (CoreSettings.Current?.DualMonitorEnabled ?? true)
                 foreach (var s in all) b = b.Union(s.Bounds);
-            _stagePx = b;
-            Position = b.Position;
-            Width = b.Width / _scale;
-            Height = b.Height / _scale;
+            _stagePx = b;   // geometry is applied by SetOverrideRedirect (X11Overlay: placing first lets KWin replay a stale size)
         }
 
         /// <summary>WPF Local(): physical px to this window's DIPs.</summary>
@@ -209,7 +208,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 try { Show(); } catch (Exception ex) { Log.Debug("ChaosSkiaFx show: {E}", ex.Message); }
             }
-            X11Overlay.Raise(this);   // WPF ChaosWindowZ.RaiseAboveVideo
             _idleFrames = 0;
             if (_frames != null) return;
             _frames = FramesForTests ?? TopLevelFrameSource.For(this);

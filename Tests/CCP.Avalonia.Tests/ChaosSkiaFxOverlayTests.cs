@@ -134,4 +134,50 @@ public sealed class ChaosSkiaFxOverlayTests
         }
         return Task.CompletedTask;
     });
+
+    /// <summary>WPF ChaosModeService EndRun and CleanupAfterRun each close the field: the run's end (recap)
+    /// and the recap's dismissal.</summary>
+    [Fact]
+    public Task RunEndAndRecapDismissCloseTheField() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var savedEnabled = s.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        try
+        {
+            s.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
+
+            ChaosRunHost.StartRun(new ConditioningControlPanel.Services.Chaos.ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            var overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown();
+            ChaosSkiaFxOverlay.TrailDot(new Point(200, 200), 0.4);
+            Assert.NotNull(ChaosSkiaFxOverlay.Active);
+            ChaosRunHost.RequestStop();                       // EndRun: the recap
+            Assert.True(ChaosRunHost.IsActive);
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+
+            ChaosSkiaFxOverlay.TrailDot(new Point(200, 200), 0.4);
+            Assert.NotNull(ChaosSkiaFxOverlay.Active);
+            overlay.Close();                                  // dismiss: OnOverlayClosed -> CleanupAfterRun
+            Assert.False(ChaosRunHost.IsActive);
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            s.ChaosSkiaFxEnabled = savedEnabled;
+        }
+        return Task.CompletedTask;
+    });
 }
