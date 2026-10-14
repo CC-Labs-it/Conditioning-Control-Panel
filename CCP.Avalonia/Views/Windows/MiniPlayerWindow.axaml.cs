@@ -91,9 +91,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal WriteableBitmap? VideoFrame => _frames?.Bitmap;
         internal bool FrameBufferFreed => _frames?.Freed ?? true;
 
+        private static readonly HashSet<MiniPlayerWindow> OpenPreviews = new();
+
+        internal static void CloseAllForPanic()
+        {
+            foreach (var window in new List<MiniPlayerWindow>(OpenPreviews)) window.Close();
+        }
+
         public MiniPlayerWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            Opened += (_, _) => OpenPreviews.Add(this);
+            Closed += (_, _) => OpenPreviews.Remove(this);
 
             _txtFileName = this.FindControl<TextBlock>("TxtFileName")!;
             _txtTime = this.FindControl<TextBlock>("TxtTime")!;

@@ -230,6 +230,84 @@ public sealed class AssetsTabTests
         await tab.ThumbnailLoads;
     });
 
+    [Fact]
+    public Task LibraryShowsActiveEncryptedPackAndSelectionChangesItsPlaybackPool() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var oldService = ConditioningControlPanel.Services.Packs.ContentPackService.Current;
+        var guid = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, ".packs", guid);
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        using var bitmap = new SkiaSharp.SKBitmap(8, 8);
+        bitmap.Erase(SkiaSharp.SKColors.HotPink);
+        using var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        File.WriteAllBytes(Path.Combine(dir, "content", "image.enc"), PackEncryptionService.Encrypt(data.ToArray()));
+        File.WriteAllBytes(Path.Combine(dir, "content", "video.enc"), PackEncryptionService.Encrypt(new byte[16]));
+        var manifest = new InstalledPackManifest
+        {
+            PackId = "library-pack", PackGuid = guid, PackName = "Library pack",
+            Files = new List<PackFileEntry>
+            {
+                new() { OriginalName = "a.png", ObfuscatedName = "image.enc", FileType = "image", Extension = ".png" },
+                new() { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" }
+            }
+        };
+        PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(dir, ".manifest.enc"));
+        var store = new ContentPackStore(() => ConditioningControlPanel.CorePaths.EffectiveAssets, () => s, () => { }, tempDir: () => Path.Combine(dir, ".temp"));
+        try
+        {
+            ContentPackStore.Current = store;
+            ConditioningControlPanel.Services.Packs.ContentPackService.Current = null;
+            tab.OnTabShown();
+            var packs = tab.AssetTree.Single(n => n.IsPackFolder);
+            var pack = Assert.Single(packs.Children);
+            Assert.Equal("library-pack", pack.Name); // WPF's built-in name lookup falls back to the id
+            Assert.Equal(new[] { "images", "videos" }, pack.Children.Select(n => n.Name));
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 4, 3), tab.TxtAssetCounts.Text);
+            packs.IsExpanded = pack.IsExpanded = true;
+            tab.AssetTreeView.SelectedItem = pack.Children[0];
+            await tab.ThumbnailLoads;
+            var image = Assert.Single(tab.CurrentFolderFiles);
+            Assert.NotNull(image.Thumbnail);
+            Assert.Equal("pack:library-pack/a.png", image.RelativePath);
+            Assert.Empty(Directory.Exists(Path.Combine(dir, ".temp")) ? Directory.GetFiles(Path.Combine(dir, ".temp")) : Array.Empty<string>());
+            var tile = await Realized(shell, () => tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<Border>()
+                .FirstOrDefault(b => b.DataContext == image && b.ContextMenu != null));
+            var preview = tile.ContextMenu!.Items.OfType<MenuItem>().First();
+            preview.DataContext = image;
+            preview.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Single(shell.OwnedWindows.OfType<MiniPlayerWindow>());
+            Assert.Single(Directory.GetFiles(Path.Combine(dir, ".temp")));
+            PanicSurfaces.All.Single(surface => surface.Id == "asset-preview").Stop(shell);
+            Assert.Empty(shell.OwnedWindows.OfType<MiniPlayerWindow>());
+            Assert.Empty(Directory.GetFiles(Path.Combine(dir, ".temp")));
+            tab.ToggleFile(image);
+            Assert.Empty(store.GetAllActivePackImages());
+            Assert.Contains(image.RelativePath, s.DisabledAssetPaths);
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 3, 3), tab.TxtAssetCounts.Text);
+            tab.RefreshAssetTree();
+            await tab.ThumbnailLoads;
+            Assert.False(Assert.Single(tab.CurrentFolderFiles).IsChecked);
+            Assert.Equal("image", ((AssetTreeItem)tab.AssetTreeView.SelectedItem!).PackFileType);
+            // Real Space gesture on the video folder's checkbox changes the encrypted video pool.
+            var video = tab.AssetTree.Single(n => n.IsPackFolder).Children.Single().Children[1];
+            var cb = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<CheckBox>()
+                .FirstOrDefault(c => c.DataContext == video));
+            PressSpace(shell, cb);
+            Assert.Empty(store.GetAllActivePackVideos());
+            Assert.Contains("pack:library-pack/v.mp4", s.DisabledAssetPaths);
+            store.DeactivatePack("library-pack");
+            tab.RefreshAssetTree();
+            Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);
+            Assert.True(store.IsPackInstalled("library-pack"));
+        }
+        finally
+        {
+            ContentPackStore.Current = oldStore;
+            ConditioningControlPanel.Services.Packs.ContentPackService.Current = oldService;
+        }
+    });
+
     // ---- harness ----------------------------------------------------------------------
 
     private static void PressSpace(Window shell, Control target)
