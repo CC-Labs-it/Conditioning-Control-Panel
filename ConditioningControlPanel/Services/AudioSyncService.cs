@@ -117,7 +117,7 @@ namespace ConditioningControlPanel.Services
 
                 // Clean up previous session
                 _chunkManager?.Dispose();
-                _chunkManager = new ChunkManager(_settings);
+                _chunkManager = new ChunkManager(_settings, MediaFoundationRangeReader.Read);
                 _chunkManager.ChunkReady += OnChunkReady;
                 _chunkManager.Progress += OnChunkProgress;
                 _chunkManager.Error += OnChunkError;

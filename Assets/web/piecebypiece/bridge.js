@@ -53,10 +53,33 @@
 // smoke runs pull net/api.js in, and api.js pulls this in. Nothing here runs
 // without a host anyway; the guard only stops the reference itself throwing.
 const win = (typeof window !== 'undefined') ? window : null;
-const webview = (win && win.chrome && win.chrome.webview) || null;
+// The Avalonia head (WebKitGTK) injects window.invokeCSharpAction (string only) instead of chrome.webview;
+// host->page frames come back through window.__ccpRnPush(json), the string carrier of backroom/bridge.js and
+// intake/web-shim.js. It is wrapped in chrome.webview's shape so every reader (here and ramp/media.js) speaks one carrier.
+const webview = (win && win.chrome && win.chrome.webview) || stringCarrier(win);
+
+/** The host carrier, chrome.webview-shaped whichever head delivered it; null with no host. */
+export const hostCarrier = webview;
 
 /** True when the page is running inside the desktop host. */
 export const isHosted = !!webview;
+
+function stringCarrier(w) {
+  if (!w || typeof w.invokeCSharpAction !== 'function') return null;
+  const subs = new Set();
+  try {
+    w.__ccpRnPush = (json) => {
+      let m;
+      try { m = typeof json === 'string' ? JSON.parse(json) : json; } catch (_e) { return; }
+      for (const fn of [...subs]) { try { fn({ data: m }); } catch (_e) { /* keep delivering */ } }
+    };
+  } catch (_e) { return null; }   // frozen window: never throw at import
+  return {
+    postMessage: (m) => w.invokeCSharpAction(JSON.stringify(m)),
+    addEventListener: (t, fn) => { if (t === 'message' && typeof fn === 'function') subs.add(fn); },
+    removeEventListener: (t, fn) => { subs.delete(fn); },
+  };
+}
 
 const listeners = [];     // fn(msg)
 const internals = [];     // fn(msg), bridge-owned, never buffered - see the pump

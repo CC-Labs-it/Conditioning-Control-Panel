@@ -4,6 +4,7 @@
 import * as stats from './stats.js';
 import { createFeed } from './feed.js';
 import { createPage } from './surfaces.js';
+import { carrier } from '../shared/carrier.js';
 
 const PAGE_TRANSITION_MS = 340;
 // Neighbour pages this many steps from the active one stay mounted in PREVIEW
@@ -43,7 +44,8 @@ const track = $('track');
 
 // ---------- bridge ----------
 
-const bridge = window.chrome?.webview;
+// WebView2's chrome.webview on WPF, the WebKitGTK string carrier on Avalonia (shared/carrier.js).
+const bridge = carrier(window);
 function post(msg) {
   try { bridge?.postMessage(msg); } catch { /* host gone */ }
 }
@@ -999,6 +1001,7 @@ function eyeStatusText() {
     case 'consent': return 'Webcam permission declined - eye control is off.';
     case 'no-camera': return 'Webcam unavailable - eye control is off.';
     case 'error': return 'Webcam error - eye control is off.';
+    case 'unsupported': return 'Eye control is not available in this version yet.';
     default: break;
   }
   if (!settings.eyeControl) return null;

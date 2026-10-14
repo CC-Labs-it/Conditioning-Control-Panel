@@ -25,7 +25,7 @@
 //     in the same place WPF fires it - see ShowTab.
 //   - The keys that are WINDOWS, not tabs, and the one launcher door: "patreon" (Settings · Account,
 //     as WPF ShowAppInfoPopup - wired), "fyp" (OpenFypFeed), "justdrop" (the shop host).
-//     fyp and justdrop are documented no-ops below until their service exists here. The "webapp" door is
+//     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The "webapp" door is
 //     wired (DoorWebApp_Click opens it through the Launcher).
 //
 // Every panel and door is resolved by x:Name through FindControl, never by generated field, so
@@ -149,6 +149,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF ShowTab("patreon") -> ShowAppInfoPopup -> ShowAccountSettings (MainWindow.TabNavigation.cs:126,
             // MainWindow.AccountShell.cs:73): Settings, scrolled to Account. Before the bark, as there.
             if (tab == "patreon") { OpenAppSettingsSection("account"); return; }
+            // WPF :248 "fyp" is a window: OpenFypFeed (MainWindow.Lab.cs:234) demands premium, then the feed
+            // opens; here the gate is the Game spec's (GameWindow.Fyp.cs) and the feed is a GameWindow.
+            if (tab == "fyp") { Games.GameWindow.Launch(Games.GameWindow.FypId); return; }
+            // WPF :264-272: the door's own refusal, then the shop window. Before the bark, as there.
+            if (tab == "justdrop") { OpenJustDrop(); return; }
             if (WindowKeys.Contains(tab)) return;                 // a window, not a tab - see header
 
             // Bark hook: announce navigation (gated/chanced in the rules so it isn't spammy).
@@ -281,10 +286,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF MaybeShowFeatureIntro (MainWindow.TabNavigation.cs:1094): through the
-        /// startup ladder, so a quiet window turns the card into an Inbox row. ponytail: no
-        /// FirstShowService on this head, so WPF's first-show early return has nothing to read.</summary>
+        /// startup ladder, so a quiet window turns the card into an Inbox row; never over the welcome show (:948).</summary>
         internal void MaybeShowFeatureIntro(string key, string? doorTab = null)
         {
+            if (WelcomeShow.FirstShowService.IsActive) return;
             try { FeatureIntroPopup.ShowWhenStartupSettles(key, this, NavDoorForTab(doorTab ?? key)); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Feature intro hook failed for {Key}", key); }
         }

@@ -79,8 +79,8 @@ public sealed class PanicSurfacesTests
     /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "games", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "companion-transcript", "attention-test", "deeper-editor-audio", "camera",
+        "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics",
+        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
@@ -92,6 +92,8 @@ public sealed class PanicSurfacesTests
         ("intake", "voice-capture", "intake loops end before the mic abort"),
         // decisions "Panic <-> mic": capture and the command chain end before anything can react to them.
         ("voice-capture", "ai-followups", "mic first"),
+        // WPF :1553 FirstShowService.Stop() runs before CancelPendingAi and the rest of HandlePanicKeyPress.
+        ("first-show", "ai-followups", "the welcome show ends first"),
         // WPF :1543 CancelPendingAi() is the first stop in HandlePanicKeyPress, long before the tail's StopEngine (:1827).
         ("ai-followups", "engine", "AI cancel early"),
         // WPF :1714-1721 game surfaces + Lab minigames close BEFORE RunPanicStopTail (:1722); the engine stop never reaches them.
@@ -113,6 +115,10 @@ public sealed class PanicSurfacesTests
         ("corner-gif", "tube-speech", "tube after corner GIFs"),
         // WPF :2030 StopAdHocEffects closes lock cards after the media stops; engine before lock cards.
         ("engine", "lock-cards", "engine before lock cards"),
+        // WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does: the task parks before
+        // the tail's StopEngine and lock-card close, so nothing it drives comes back by itself.
+        ("leash-task", "engine", "leash task parks before the engine stop"),
+        ("leash-task", "lock-cards", "leash task parks before its lock card closes"),
         // gaze minigame ends before the camera it reads (PanicSurfaces.cs comment).
         ("gaze-minigame", "camera", "gaze ends before the camera stops"),
     };
@@ -154,6 +160,7 @@ public sealed class PanicSurfacesTests
     {
         ["LockCardWindow"] = "phrase mic + cards: the 'lock-cards' surface (StopLockCards) closes every card",
         ["DevicesSettingsSection"] = "camera preview/calibration: the 'camera' surface stops WebcamTracker",
+        ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
@@ -167,6 +174,7 @@ public sealed class PanicSurfacesTests
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
+        ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
     };
 

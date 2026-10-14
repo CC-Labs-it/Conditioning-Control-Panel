@@ -155,6 +155,7 @@ public sealed class NavRailPaintTests
         w.GlowNavKey("playsessions");
         Assert.Equal(1, Glows(play));
         Assert.Equal(1, Glows(sessions));
+        Assert.All(Rings(play), r => Assert.True(r.OnFrameBeat));   // the shell's shared frame beat, not a private timer (P82)
 
         w.ShowTab("appsettings");
         Dispatcher.UIThread.RunJobs();

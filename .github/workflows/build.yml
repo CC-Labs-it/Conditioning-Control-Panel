@@ -5,6 +5,18 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      scope:
+        type: choice
+        options: [all, windows]
+        default: all
+        description: 'windows = only the Windows jobs; the Linux half ran locally (bin/rgate hybrid)'
+
+# rgate dispatches this workflow on throwaway avalonia-port/gate-* branches: a newer run there cancels
+# the older one. Every other ref gets a group of its own run, so PR and main runs never cancel each other.
+concurrency:
+  group: ${{ startsWith(github.ref, 'refs/heads/avalonia-port/gate-') && format('build-{0}', github.ref) || format('build-run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/heads/avalonia-port/gate-') }}
 
 jobs:
   # THE ANTI-DRIFT JOB. Its entire value is that it runs on a machine where WPF cannot exist:
@@ -13,6 +25,7 @@ jobs:
   # either change makes the job pass on code that cannot run on Linux, which destroys the
   # only signal we have. The Windows build lives in the `windows` job below, on purpose.
   core-linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,11 +94,7 @@ jobs:
       # Core/session roots, so it must keep its own testhost and process-global App state.
       - name: Test Avalonia catalogue startup fallback
         run: dotnet test Tests/CCP.Avalonia.CatalogueStartup.Tests/CCP.Avalonia.CatalogueStartup.Tests.csproj -c Release
-      # Sharded: one testhost for the whole suite outgrew the 16 GB runner (see the script).
-      - name: Test Avalonia notification suite
-        run: bash .github/scripts/avalonia-tests-sharded.sh
-        env:
-          CCP_REQUIRE_VOSK: "1"
+      # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-linux matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release
       - name: Test Avalonia report workflow
@@ -170,11 +179,7 @@ jobs:
         run: dotnet test Tests/CCP.Avalonia.Language.Tests/CCP.Avalonia.Language.Tests.csproj -c Release
       - name: Test Avalonia catalogue startup fallback
         run: dotnet test Tests/CCP.Avalonia.CatalogueStartup.Tests/CCP.Avalonia.CatalogueStartup.Tests.csproj -c Release
-      # Sharded like ubuntu: one testhost ran out of memory here too ("Unable to allocate pixels",
-      # OutOfMemoryException 32 min into run 38144551173, failing three unrelated tests).
-      - name: Test Avalonia notification suite
-        shell: bash
-        run: bash .github/scripts/avalonia-tests-sharded.sh
+      # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-windows matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release
       - name: Test Avalonia report workflow
@@ -202,6 +207,129 @@ jobs:
           $p = Start-Process -FilePath CCP.Avalonia\bin\publish\win-x64\CCP.Avalonia.exe -ArgumentList '--smoke' -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoke.out -RedirectStandardError smoke.err
           Get-Content smoke.out, smoke.err
           if ($p.ExitCode -ne 0) { throw "--smoke exited $($p.ExitCode)" }
+      # The WH_KEYBOARD_LL panic hook (Platform/Win32PanicKey.cs) on a real desktop: injects F24 and
+      # asserts one press stops, a held key is one press, two presses exit. The F23 run binds a key that
+      # is never pressed, so it MUST fail: proof the check can fail. Sandbox profile only.
+      - name: Avalonia Windows panic key check (WH_KEYBOARD_LL)
+        timeout-minutes: 5
+        run: |
+          $exe = 'CCP.Avalonia\bin\publish\win-x64\CCP.Avalonia.exe'
+          function Check($key) {
+            $env:CCP_USERDATA_DIR = Join-Path $env:RUNNER_TEMP "panic-$key"
+            $p = Start-Process -FilePath $exe -ArgumentList '--win-panic-check', $key -Wait -PassThru -NoNewWindow -RedirectStandardOutput "panic-$key.out" -RedirectStandardError "panic-$key.err"
+            Get-Content "panic-$key.out", "panic-$key.err" | Out-Host
+            return $p.ExitCode
+          }
+          $ok = Check 'F24'
+          if ($ok -ne 0) { throw "--win-panic-check F24 exited $ok" }
+          $neg = Check 'F23'
+          if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
+
+  # CCP.Avalonia.Tests, one shard per job so the shards run in parallel instead of one after another.
+  # Sharded: one testhost for the whole suite outgrew the 16 GB runner; the shard definitions live in
+  # .github/scripts/avalonia-tests-sharded.sh, the last shard is the complement of the others.
+  avalonia-linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+          cache: true
+          cache-dependency-path: "**/*.csproj"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccp-test/vosk
+          key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
+      - run: bash .github/scripts/fetch-vosk-model.sh
+      # LibVLC tests use the system libvlc, like --smoke in core-linux.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvlc-dev vlc-plugin-base
+      - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
+      - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
+        run: bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
+        env:
+          CCP_REQUIRE_VOSK: "1"
+      - name: Record the suite's test count for the coverage check
+        if: ${{ !cancelled() }}
+        run: bash .github/scripts/avalonia-tests-sharded.sh --expected > avalonia-expected.txt
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: avalonia-linux-shard-${{ matrix.shard }}
+          path: |
+            avalonia-shard-${{ matrix.shard }}.total
+            avalonia-expected.txt
+          retention-days: 7
+
+  # Sharded like ubuntu: one testhost ran out of memory here too ("Unable to allocate pixels",
+  # OutOfMemoryException 32 min into run 38144551173, failing three unrelated tests).
+  avalonia-windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+          cache: true
+          cache-dependency-path: "**/*.csproj"
+      - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
+      - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
+        shell: bash
+        run: bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
+      - name: Record the suite's test count for the coverage check
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/avalonia-tests-sharded.sh --expected > avalonia-expected.txt
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: avalonia-windows-shard-${{ matrix.shard }}
+          path: |
+            avalonia-shard-${{ matrix.shard }}.total
+            avalonia-expected.txt
+          retention-days: 7
+
+  # The coverage guarantee the sequential script used to give: the shards' Total: counts must add up to
+  # the suite's own --list-tests count, so a test can never fall between shards (or a shard go missing).
+  # !cancelled() also keeps this running when avalonia-linux is skipped (scope=windows).
+  avalonia-coverage:
+    needs: [avalonia-linux, avalonia-windows]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # scope=windows (hybrid rgate): the Linux shards ran locally, so only the Windows total is checked here.
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'windows' && '["windows"]' || '["linux", "windows"]') }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: avalonia-${{ matrix.os }}-shard-*
+          path: shards
+      - name: Shard totals must add up to the suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(cat shards/*/avalonia-expected.txt | tr -d '\r' | sort -u)
+          [ "$(wc -l <<<"$expected")" -eq 1 ] || { echo "::error::shards disagree on the suite size: $expected"; exit 1; }
+          ran=0; n=0
+          for f in shards/*/avalonia-shard-*.total; do ran=$((ran + $(tr -d '\r' < "$f"))); n=$((n + 1)); done
+          echo "avalonia ${{ matrix.os }} shards ran $ran of $expected tests ($n shard files)"
+          if [ "$ran" -ne "$expected" ]; then
+            echo "::error::Avalonia ${{ matrix.os }} shards ran $ran tests but the suite lists $expected"
+            exit 1
+          fi
 
   # build-content-packs.ps1 is Windows-only (\\?\ long paths), so its proof runs here.
   # (a) The committed install-relative [InstallDelete] list must regenerate unchanged.
@@ -211,6 +339,7 @@ jobs:
   # Greps the compiler cannot do: APIs that compile fine in a net10.0 library and only fail at
   # runtime, plus the XAML clr-namespace tripwire. See the script for what and why.
   core-guards:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
