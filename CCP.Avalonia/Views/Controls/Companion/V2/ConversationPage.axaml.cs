@@ -25,7 +25,6 @@ public partial class ConversationPage : UserControl
     private CompanionRoomView? _room;
     /// <summary>Set by the room's constructor; the bindings start then, so Hero is never a null path.</summary>
     internal CompanionRoomView? Room { get => _room; set { _room = value; DataContext = Vm; } }
-
     public ConversationPage()
     {
         InitializeComponent();
@@ -37,41 +36,38 @@ public partial class ConversationPage : UserControl
             if (Math.Abs(e.ExtentDelta.Y) < .1) _followBottom = Transcript.Offset.Y >= Transcript.ScrollBarMaximum.Y - 24;
         };
     }
-
     internal void Resume() => Vm.Resume();
     internal void Park() => Vm.Detach();
-
     // A closed shell does not detach its tree (MainShellWindow unsubscribes statics on Closed), so
     // both edges release the static subscriptions (CoreAccount, the ask service, the brain's session).
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) { Release(); base.OnDetachedFromVisualTree(e); }
-
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
         Services.Companion.Asks.CompanionAskService.Instance.FocusChatRequested -= FocusComposer;
         Services.Companion.Asks.CompanionAskService.Instance.FocusChatRequested += FocusComposer;
-        if (TopLevel.GetTopLevel(this) is Window window) window.Closed += (_, _) => Release();
+        _window = TopLevel.GetTopLevel(this) as Window;
+        if (_window != null) _window.Closed += WindowClosed;
     }
-
+    private Window? _window;
+    private void WindowClosed(object? sender, EventArgs e) => Release();
     private void Release()
     {
+        if (_window != null) { _window.Closed -= WindowClosed; _window = null; }
         Vm.Stop();
         Vm.Detach();
         Services.Companion.Asks.CompanionAskService.Instance.FocusChatRequested -= FocusComposer;
     }
-
     private void TurnsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_followBottom) Dispatcher.UIThread.Post(() => Transcript.ScrollToEnd(), DispatcherPriority.Normal);
     }
-
     internal async void Send_Click(object? sender, RoutedEventArgs e)
     {
         _followBottom = true;
         await Vm.SendAsync();
         if (IsEffectivelyVisible) Composer.Focus();
     }
-
     /// <summary>Enter sends, Shift+Enter is a new line (WPF Composer_KeyDown).</summary>
     private void Composer_KeyDown(object? sender, KeyEventArgs e)
     {
@@ -79,41 +75,34 @@ public partial class ConversationPage : UserControl
         e.Handled = true;
         Send_Click(sender, e);
     }
-
     private void Starter_Click(object? sender, RoutedEventArgs e)
     {
         if (Vm.Busy || sender is not Button { Content: TextBlock label }) return;
         Vm.Draft = label.Text ?? string.Empty;
         Composer.Focus();
     }
-
     private void Start_Click(object? sender, RoutedEventArgs e) { Vm.Start(); Composer.Focus(); }
     private void Stop_Click(object? sender, RoutedEventArgs e) => Vm.Stop();
-
     private async void New_Click(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this) is Window owner
             && await MessageDialog.ConfirmAsync(owner, Loc.Get("companion_v2_new"), Loc.Get("companion_v2_history_note")))
             Vm.NewChat();
     }
-
     private async void Copy_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string text } && TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             try { await clipboard.SetTextAsync(text); } catch (Exception ex) { Serilog.Log.Debug("Companion copy failed: {E}", ex.Message); }
     }
-
     private void Activity_Click(object? sender, RoutedEventArgs e) { if (sender is Button { DataContext: ConversationAction a }) Vm.OpenActivity(a); }
     private void AskChoice_Click(object? sender, RoutedEventArgs e) { if (sender is Button { DataContext: ConversationAskChoice c }) Vm.AnswerAsk(c); }
     private void Link_Click(object? sender, RoutedEventArgs e) { if (sender is Button { DataContext: ConversationLine l }) Vm.OpenLink(l); }
-
     private void FocusComposer()
     {
         if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(FocusComposer); return; }
         if (IsEffectivelyVisible) Composer.Focus();
         else AvatarTube.AvatarTubeWindow.Live?.OpenChatInput();
     }
-
     /// <summary>WPF OpenSheet: who/personality, permissions, videos, memory and connection are Companion pages.</summary>
     internal static string? PageFor(string? kind) => kind switch
     {
@@ -123,7 +112,6 @@ public partial class ConversationPage : UserControl
         "memory" or "connection" => "companionai",
         _ => null
     };
-
     private void Sheet_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string kind } && PageFor(kind) is { } page)

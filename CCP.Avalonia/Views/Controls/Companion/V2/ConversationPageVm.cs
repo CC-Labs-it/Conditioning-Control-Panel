@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.Companion.Asks;
 using ConditioningControlPanel.Services.Companion.Brain;
@@ -28,7 +29,6 @@ internal sealed record ConversationLine(string Id, string Speaker, string Text, 
     public string? LinkUrl { get; init; }
     public bool HasLink => !string.IsNullOrEmpty(LinkTitle) && !string.IsNullOrEmpty(LinkUrl);
     public bool HasAsk => AskChoices.Length > 0;
-
     /// <summary>WPF ConversationLine.WithAsk: the live ask card; one the service forgot draws as plain text.</summary>
     internal ConversationLine WithAsk(string? cardId)
     {
@@ -63,9 +63,7 @@ internal sealed class ConversationPageVm : CompanionObservable
     private IMemoryStore? _memoryOwner;
     private EngineRoomVm? _watchedEngine;
     private CompanionHeroCardViewModel? _watchedHero;
-
     public ConversationPageVm(Func<CompanionHeroCardViewModel?> hero, Func<EngineRoomVm?> engine) { _hero = hero; _engine = engine; }
-
     public CompanionHeroCardViewModel? Hero => _hero();
     public ObservableCollection<ConversationLine> Turns { get; } = new();
     public string Draft { get => _draft; set { Set(ref _draft, value ?? string.Empty); Raise(nameof(CanSend)); Raise(nameof(DraftEmpty)); } }
@@ -76,8 +74,10 @@ internal sealed class ConversationPageVm : CompanionObservable
     public bool CanCompose => !Busy;
     public bool CanSend => !Busy && !string.IsNullOrWhiteSpace(Draft);
     public bool CanRetry { get => _canRetry; private set => Set(ref _canRetry, value); }
-    public string Name => Hero?.Name ?? string.Empty;
-    public string Flavor => Hero?.Flavor ?? string.Empty;
+    // WPF: the active mod's own companion name (CCP Default's manifest says "Companion"), and the
+    // active personality preset's description, falling back to the hero's.
+    public string Name => CoreMods.Service?.GetCompanionName() ?? Hero?.Name ?? string.Empty;
+    public string Flavor => PersonalityService.Shared.GetActivePreset()?.Description ?? Hero?.Flavor ?? string.Empty;
     public string PerkCost => CompanionCore.ActivePerk == CompanionBonusType.XPDrain ? "Leech: -3 XP/s" : string.Empty;
     public bool HasPerkCost => PerkCost.Length > 0;
     private Mode Provider => _engine()?.Provider ?? Mode.Off;
@@ -98,11 +98,9 @@ internal sealed class ConversationPageVm : CompanionObservable
         : _engine() is { IsHealthy: false, StatusLine: { Length: > 0 } line } ? line : Loc.Get("companion_v2_ready");
     public string Privacy => Loc.Get(CoreSettings.Current?.CompanionPrompt?.AiProvider is AiProviderType.Local or AiProviderType.OpenAiCompatible
         ? "companion_v2_privacy_endpoint" : "companion_v2_privacy_cloud");
-
     private static readonly string[] Derived = { nameof(NeedsStart), nameof(NeedsSignIn), nameof(ShowStart), nameof(StartLabel), nameof(Status),
         nameof(Privacy), nameof(Name), nameof(Flavor), nameof(StatusColor), nameof(PerkCost), nameof(HasPerkCost), nameof(VoiceLabel),
         nameof(CompanionShown), nameof(CompanionHidden), nameof(Hero) };
-
     /// <summary>WPF Refresh: an account switch drops the send in flight, the draft and the notice.</summary>
     public void Refresh()
     {
@@ -116,11 +114,11 @@ internal sealed class ConversationPageVm : CompanionObservable
             Notice = string.Empty;
             CanRetry = false;
         }
+        _engine()?.Sync();   // WPF _room.SyncBrain(): provider and sign-in re-read before the page decides
         if (_observing) { Attach(App.Brain?.Session); Watch(); }
         Reconcile();
         foreach (var name in Derived) Raise(name);
     }
-
     public void Resume()
     {
         if (!_observing)
@@ -131,7 +129,6 @@ internal sealed class ConversationPageVm : CompanionObservable
         }
         Refresh();
     }
-
     public void Detach()
     {
         _observing = false;
@@ -140,9 +137,7 @@ internal sealed class ConversationPageVm : CompanionObservable
         Attach(null);
         Watch(stop: true);
     }
-
     private void IdentityChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(Refresh, DispatcherPriority.Normal);
-
     private void Watch(bool stop = false)
     {
         var engine = stop ? null : _engine();
@@ -158,9 +153,7 @@ internal sealed class ConversationPageVm : CompanionObservable
             if ((_watchedHero = hero) != null) hero!.PropertyChanged += RoomChanged;
         }
     }
-
     private void RoomChanged(object? sender, PropertyChangedEventArgs e) { foreach (var name in Derived) Raise(name); }
-
     private void Attach(ChatSession? session)
     {
         if (ReferenceEquals(session, _session)) return;
@@ -168,9 +161,7 @@ internal sealed class ConversationPageVm : CompanionObservable
         _session = session;
         if (_session != null) _session.TurnsChanged += Changed;
     }
-
     private void Changed(object? sender, EventArgs e) => Dispatcher.UIThread.Post(Reconcile, DispatcherPriority.Normal);
-
     /// <summary>Updates only the changed suffix, keeping scroll position and selected text (WPF Reconcile).</summary>
     internal void Reconcile()
     {
@@ -188,15 +179,12 @@ internal sealed class ConversationPageVm : CompanionObservable
         Raise(nameof(HasNoTurns));
         Raise(nameof(HasTurns));
     }
-
     private void AskChanged(AskCard card) => Dispatcher.UIThread.Post(() =>
     {
         for (int i = 0; i < Turns.Count; i++)
             if (Turns[i].AskCardId == card.Id) Turns[i] = Turns[i].WithAsk(card.Id);
     }, DispatcherPriority.Normal);
-
     public void AnswerAsk(ConversationAskChoice choice) => CompanionAskService.Instance.Answer(choice.CardId, choice.ChoiceId);
-
     /// <summary>WPF Line: only a model reply gets a watch link, and its text loses the dead "[Title]" brackets.</summary>
     internal static ConversationLine Line(CompanionTurn t, string name, Func<string?, CompanionLinkIndex.Entry?> findTitle)
     {
@@ -207,12 +195,10 @@ internal sealed class ConversationPageVm : CompanionObservable
         return new(t.Id, isUser ? Loc.Get("companion_v2_you") : name, text, t.Utc.ToLocalTime().ToString("t"), isUser)
         { LinkTitle = link?.Title, LinkUrl = link?.Url };
     }
-
     public void OpenLink(ConversationLine line)
     {
         if (line.HasLink && CompanionLinkIndex.IsSanctioned(line.LinkUrl)) Platform.ExternalOpener.Open(line.LinkUrl);
     }
-
     public void OpenActivity(ConversationAction action)
     {
         App.Brain?.EnsureCurrentAccount();
@@ -223,7 +209,6 @@ internal sealed class ConversationPageVm : CompanionObservable
         Notice = Loc.Get("companion_v2_activity_unavailable");
         CanRetry = false;
     }
-
     /// <summary>WPF Start: Off picks the configured provider; Cloud without an account asks to sign in.</summary>
     public void Start()
     {
@@ -238,9 +223,7 @@ internal sealed class ConversationPageVm : CompanionObservable
         // EngineRoomVm.LoginCommand is null on this head; account sign-in is ShowTab("patreon") like the room's other sign-in doors.
         if (NeedsSignIn) { if (_engine()?.LoginCommand is { } login) login.Execute(null); else Hero?.Shell?.ShowTab("patreon"); }
     }
-
     public void Stop() => _send?.Cancel();
-
     public async Task SendAsync()
     {
         Refresh();
@@ -291,7 +274,6 @@ internal sealed class ConversationPageVm : CompanionObservable
         }
         finally { _send = null; Busy = false; Refresh(); }
     }
-
     public void NewChat()
     {
         if (Busy) return;

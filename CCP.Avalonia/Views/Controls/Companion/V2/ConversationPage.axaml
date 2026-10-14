@@ -20,8 +20,19 @@
       <Setter Property="CornerRadius" Value="8"/><Setter Property="Cursor" Value="Hand"/>
       <Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
-    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="#F68BC8"/></Style>
+    <!-- WPF's template keeps its own Background/Foreground on hover and when disabled (opacity 0.45);
+         Fluent's states swap in grey brushes, so each state re-binds the button's own. -->
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{TemplateBinding Background}"/><Setter Property="Foreground" Value="{TemplateBinding Foreground}"/><Setter Property="BorderBrush" Value="#F68BC8"/>
+    </Style>
+    <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="#F5A3D3"/></Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#B52A7C"/></Style>
+    <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{TemplateBinding Background}"/><Setter Property="Foreground" Value="{TemplateBinding Foreground}"/><Setter Property="BorderBrush" Value="{TemplateBinding BorderBrush}"/>
+    </Style>
     <Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.45"/></Style>
+    <Style Selector="TextBox#Composer:pointerover /template/ Border#PART_BorderElement"><Setter Property="Background" Value="#231B30"/></Style>
+    <Style Selector="TextBox#Composer:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="#231B30"/><Setter Property="BorderBrush" Value="#F5A3D3"/></Style>
     <Style Selector="Button.primary">
       <Setter Property="Background"><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#C82D86" Offset="0"/><GradientStop Color="#8E43BC" Offset="1"/></LinearGradientBrush></Setter>
       <Setter Property="BorderBrush" Value="#F087C6"/><Setter Property="FontWeight" Value="SemiBold"/>
@@ -70,10 +81,10 @@
           <ItemsControl x:Name="Messages" ItemsSource="{Binding Turns}" MaxWidth="920">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="v2:ConversationLine">
-                <Border CornerRadius="6" Padding="18,14" BorderThickness="3,0,0,0" Classes.user="{Binding IsUser}">
+                <Border CornerRadius="6" Padding="18,14" BorderThickness="3,0,0,0" Classes="line" Classes.user="{Binding IsUser}">
                   <Border.Styles>
-                    <Style Selector="Border"><Setter Property="BorderBrush" Value="#F27BBF"/><Setter Property="Background" Value="#231B30"/><Setter Property="Margin" Value="0,0,44,16"/></Style>
-                    <Style Selector="Border.user"><Setter Property="BorderBrush" Value="#C5A4EE"/><Setter Property="Background" Value="#342344"/><Setter Property="Margin" Value="72,0,6,16"/></Style>
+                    <Style Selector="Border.line"><Setter Property="BorderBrush" Value="#F27BBF"/><Setter Property="Background" Value="#231B30"/><Setter Property="Margin" Value="0,0,44,16"/></Style>
+                    <Style Selector="Border.line.user"><Setter Property="BorderBrush" Value="#C5A4EE"/><Setter Property="Background" Value="#342344"/><Setter Property="Margin" Value="72,0,6,16"/></Style>
                   </Border.Styles>
                   <StackPanel>
                     <DockPanel Margin="0,0,0,6">
