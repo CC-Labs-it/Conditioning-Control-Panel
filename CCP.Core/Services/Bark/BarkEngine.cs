@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: DispatchIdle, PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// ponytail: DispatchIdle, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
     /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
@@ -81,6 +81,15 @@ namespace ConditioningControlPanel.Services.Bark
         {
             _loadRules = loadRules ?? BarkRuleManifest.Load;
             _rng = rng ?? new Random();
+        }
+
+        private VoiceLinePicker? _voiceLines;
+
+        /// <summary>Inline wake/command confirmations use the current manifest without spending a bark gate.</summary>
+        public (string Text, string? Audio)? PickVoiceLine(string ruleId)
+        {
+            lock (_gate)
+                return (_voiceLines ??= new VoiceLinePicker(_rng)).Pick(_rules, ruleId, SafeResolveAudio);
         }
 
         public int RuleCount { get { lock (_gate) return _rules.Count; } }
