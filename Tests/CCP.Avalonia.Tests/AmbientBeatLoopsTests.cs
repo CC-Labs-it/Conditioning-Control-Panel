@@ -68,7 +68,7 @@ public sealed class AmbientBeatLoopsTests
     {
         "Controls/HoverBubbleBar.cs", "Controls/PremiumGateFx.cs", "Views/Chaos/ChaosHudWindow.axaml.cs",
         "Views/Chaos/ChaosOverlayWindow.axaml.cs", "Views/Chaos/ChaosSlotPickerWindow.axaml.cs",
-        "Views/Controls/DailyQuestCard.axaml.cs", "Views/Controls/EmiDock.axaml.cs",
+        "Views/Controls/EmiDock.axaml.cs",
         "Views/Dialogs/AwarenessPresetDetailDialog.axaml.cs", "Views/Dialogs/ColorEditorDialog.axaml.cs",
         "Views/Dialogs/TubeFitDialog.axaml.cs", "Views/Dialogs/WardrobeEditorDialog.axaml.cs",
         "Views/Features/FeatureCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
