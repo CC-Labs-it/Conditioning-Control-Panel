@@ -2297,3 +2297,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/monitor-picker: +56
 - Overlays honour the global "Show content on" pick like WPF ResolveScreens (pink/spiral Default, unplugged fallback to primary); fail-proven resolver tests.
 - feat-monitor-target-picker ledger row missing -> wired (picker already existed).
+
+## avalonia-port/arcademy-core-a: +249
+- Cloud session (Opus), local review + gate.
+- Fix round: the meta-store debounce runs on a TimeProvider and its timer is disposed; the test uses a stepped clock and cleans up its temp folders; every test store runs on a fake clock.
