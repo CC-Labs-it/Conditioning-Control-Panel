@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Emi's speech bubble stays inside the monitor work area (ticket 2026-09-24, the line ran off the

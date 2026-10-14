@@ -110,14 +110,17 @@ internal static class EmiNames
         }
     }
 
+    /// <summary>The head half: WPF <c>EmiTargets.Find(id)?.Label</c>. Null = not in the catalogue.</summary>
+    public static Func<string, string?>? TargetLabelProbe { get; set; }
+
     /// <summary>A ring target id as a lowercase display name, or null when it is not in the catalogue.</summary>
     private static string? FromTarget(string id)
     {
         try
         {
-            var t = EmiTargets.Find(id);
-            if (t == null) return null;
-            return Clean(t.Label);
+            var label = TargetLabelProbe?.Invoke(id);
+            if (label == null) return null;
+            return Clean(label);
         }
         catch (Exception ex)
         {

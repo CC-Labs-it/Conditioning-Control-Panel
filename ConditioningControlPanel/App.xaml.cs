@@ -349,6 +349,11 @@ namespace ConditioningControlPanel
             CoreBark.AllLinesProvider = () =>
                 (System.Collections.Generic.IReadOnlyList<Services.Bark.BarkLineInfo>?)Bark?.GetAllBarkLines()
                 ?? System.Array.Empty<Services.Bark.BarkLineInfo>();
+            // EMI's names and bark mirror live in Core; what only the desk can see crosses here.
+            // Lazy like the bark seam: EmiDesk and Video are built in OnStartup.
+            Services.EmiDesk.EmiNames.TargetLabelProbe = id => Services.EmiDesk.EmiTargets.Find(id)?.Label;
+            Services.EmiDesk.EmiBarkBridge.DeskFire = () => EmiDesk is { } desk ? desk.Fire : null;
+            Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = () => Video?.LastVideoTitle ?? Video?.LastVideoPath;
             // The downloadable packs: the pack service seeds what the mod service reads.
             CoreReleaseContent.StampProvider = ReleaseContentService.GetStampFor;
             CoreReleaseContent.PackInfoProvider = id => ReleaseContent?.GetPackInfo(id);
