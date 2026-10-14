@@ -10,6 +10,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.AIService;
 using ConditioningControlPanel.Services.Moderation;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services
 {
@@ -31,7 +32,7 @@ namespace ConditioningControlPanel.Services
         public static void RaiseQuizCompleted(int score, bool passed, bool perfect, string category)
         {
             try { QuizCompleted?.Invoke(null, new QuizCompletedEventArgs { Score = score, Passed = passed, Perfect = perfect, Category = category }); }
-            catch (Exception ex) { App.Logger?.Debug("QuizCompleted subscriber error: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("QuizCompleted subscriber error: {Error}", ex.Message); }
         }
 
         /// <summary>
@@ -47,7 +48,7 @@ namespace ConditioningControlPanel.Services
         public static void RaiseQuizAbandoned()
         {
             try { QuizAbandoned?.Invoke(null, EventArgs.Empty); }
-            catch (Exception ex) { App.Logger?.Debug("QuizAbandoned subscriber error: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("QuizAbandoned subscriber error: {Error}", ex.Message); }
         }
 
         private readonly HttpClient _httpClient;
@@ -66,7 +67,6 @@ namespace ConditioningControlPanel.Services
         // misleading "AI busy / daily limit" message (BUG-cloud-quiz HateSpeech, 2026-06).
         private static readonly string OutputBlocked = new(" quiz-output-blocked ".ToCharArray());
 
-        private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
         private const int QuestionMaxTokens = 400;
         private const int ResultMaxTokens = 500;
         private const double Temperature = 0.9;
@@ -78,15 +78,19 @@ namespace ConditioningControlPanel.Services
         public int MaxPossibleScore => TotalQuestions * MaxPointsPerQuestion;
         public bool IsActive => _questionNumber > 0 && _questionNumber <= TotalQuestions;
 
-        public QuizService()
+        // Same base-URL rule as Core's AiService: a CCP_USERDATA_DIR sandbox only ever reaches a loopback CCP_AI_BASE_URL.
+        public QuizService() : this(AiService.ResolveBaseUrl(Environment.GetEnvironmentVariable("CCP_AI_BASE_URL"),
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))) { }
+
+        internal QuizService(string? baseUrl)
         {
             _httpClient = new HttpClient
             {
-                BaseAddress = new Uri(ProxyBaseUrl),
+                BaseAddress = baseUrl == null ? null : new Uri(baseUrl),
                 Timeout = TimeSpan.FromSeconds(45)
             };
-            _httpClient.DefaultRequestHeaders.Add("X-Client-Version", UpdateService.AppVersion);
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}");
+            _httpClient.DefaultRequestHeaders.Add("X-Client-Version", CoreReleaseContent.AppVersion);
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{CoreReleaseContent.AppVersion}");
         }
 
         public async Task<QuizQuestion?> StartQuizAsync(QuizCategoryDefinition categoryDef)
@@ -565,7 +569,7 @@ Do NOT include any other text before or after the question format. Just the ques
             // Route to whichever provider the user has selected for the companion. The
             // quiz used to be cloud-only, so switching to local Ollama left it stuck on
             // "AI busy / daily limit" even though chat worked (BUG-XQRK4USW5X / #334).
-            bool useLocal = App.Settings?.Current?.CompanionPrompt?.UseLocalAi == true;
+            bool useLocal = CoreSettings.Service?.Current?.CompanionPrompt?.UseLocalAi == true;
             string? content = useLocal
                 ? await CallLocalAiAsync(messagesToSend)
                 : await CallCloudAiAsync(messagesToSend, maxTokens);
@@ -582,25 +586,25 @@ Do NOT include any other text before or after the question format. Just the ques
             // AI-generated questions / result archetype text that trips the guard.
             // Returning null lets the existing fallback path (deterministic archetype +
             // canned question) take over so the quiz continues without leaking content.
-            var guard = App.ModerationGuard;
+            var guard = CoreModerationLog.Guard;
             if (guard != null)
             {
                 var modelHint = useLocal ? "local-quiz" : "cloud-quiz";
                 var outputCheck = guard.CheckOutput(content);
                 if (!outputCheck.Allow && outputCheck.Category.HasValue)
                 {
-                    App.ModerationLog?.Record(outputCheck.Category.Value, source: "output", modelHint: modelHint);
+                    CoreModerationLog.Record(outputCheck.Category.Value, source: "output", modelHint: modelHint);
                     // Quiz questions are AI-generated OUTPUT, never user-typed input, so
                     // a hit is logged for the compliance record but does NOT escalate
                     // the user-facing Content Policy Notice. The batch is still
                     // discarded fail-closed (return null) so nothing prohibited leaks.
-                    App.Logger?.Information("QuizService: output blocked by ModerationGuard (category={Cat})", outputCheck.Category);
+                    Log.Information("QuizService: output blocked by ModerationGuard (category={Cat})", outputCheck.Category);
                     Meter(AIService.AiMeter.OutcomeRefusedOutput, content.Length);
                     return OutputBlocked;
                 }
                 if (outputCheck.Allow && outputCheck.Category == ProhibitedCategory.ProfessionalAdvice)
                 {
-                    App.ModerationLog?.Record(ProhibitedCategory.ProfessionalAdvice, source: "output", modelHint: modelHint);
+                    CoreModerationLog.Record(ProhibitedCategory.ProfessionalAdvice, source: "output", modelHint: modelHint);
                 }
             }
 
@@ -613,12 +617,13 @@ Do NOT include any other text before or after the question format. Just the ques
         {
             try
             {
-                var unifiedId = App.UnifiedUserId;
-                var authToken = App.Settings?.Current?.AuthToken;
+                var unifiedId = CoreAccount.UnifiedUserId;
+                var authToken = CoreSettings.Service?.Current?.AuthToken;
 
+                if (_httpClient.BaseAddress == null) return null;   // sandbox without a loopback proxy: never send
                 if (string.IsNullOrEmpty(unifiedId))
                 {
-                    App.Logger?.Warning("QuizService: No unified ID available");
+                    Log.Warning("QuizService: No unified ID available");
                     return null;
                 }
 
@@ -640,8 +645,8 @@ Do NOT include any other text before or after the question format. Just the ques
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorText = await response.Content.ReadAsStringAsync();
-                    if (await MergedAccountRecovery.TryHandleAsync(response, errorText)) return null;   // contract D
-                    App.Logger?.Warning("QuizService: API returned {Status}: {Error}", response.StatusCode, errorText);
+                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, errorText)) return null;   // contract D
+                    Log.Warning("QuizService: API returned {Status}: {Error}", response.StatusCode, errorText);
                     return null;
                 }
 
@@ -649,13 +654,13 @@ Do NOT include any other text before or after the question format. Just the ques
 
                 if (result == null || !string.IsNullOrEmpty(result.Error))
                 {
-                    App.Logger?.Warning("QuizService: API error: {Error}", result?.Error);
+                    Log.Warning("QuizService: API error: {Error}", result?.Error);
                     return null;
                 }
 
                 if (string.IsNullOrEmpty(result.Content))
                 {
-                    App.Logger?.Warning("QuizService: Empty response");
+                    Log.Warning("QuizService: Empty response");
                     return null;
                 }
 
@@ -663,12 +668,12 @@ Do NOT include any other text before or after the question format. Just the ques
             }
             catch (TaskCanceledException)
             {
-                App.Logger?.Warning("QuizService: Request timed out");
+                Log.Warning("QuizService: Request timed out");
                 return null;
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "QuizService: Unexpected error calling cloud AI");
+                Log.Error(ex, "QuizService: Unexpected error calling cloud AI");
                 return null;
             }
         }
@@ -765,7 +770,7 @@ Do NOT include any other text before or after the question format. Just the ques
         /// the archetype name. Any change signals the caller to use a fallback profile.
         /// Also fixes wrong percentage ranges like "(0-25%)" when archetype is correct.
         /// </summary>
-        private static string FixArchetypeIfWrong(string text, int score, int maxScore, QuizCategory category, QuizCategoryDefinition? categoryDef = null)
+        internal static string FixArchetypeIfWrong(string text, int score, int maxScore, QuizCategory category, QuizCategoryDefinition? categoryDef = null)
         {
             var percentage = maxScore > 0 ? (double)score / maxScore * 100 : 0;
 
@@ -856,12 +861,12 @@ Make all phrases thematically consistent with the quiz category and the user's s
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "QuizService: Failed to generate session content");
+                Log.Warning(ex, "QuizService: Failed to generate session content");
                 return null;
             }
         }
 
-        private static SessionTextContent? ParseSessionContent(string text)
+        internal static SessionTextContent? ParseSessionContent(string text)
         {
             var content = new SessionTextContent();
 
