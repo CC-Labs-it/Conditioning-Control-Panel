@@ -493,7 +493,7 @@ namespace ConditioningControlPanel.Features
         {
             if (FromHelpButton(e)) return;
             bool invert = DashboardDepth && App.Settings?.Current?.DashboardInvertClicks == true;
-            bool toggle = right != invert;
+            bool toggle = Services.UI.DashboardDepthLaw.ToggleFor(DashboardDepth, invert, right);
             bool halfA = ResolveHalfA(e.GetPosition(ContentRoot));
             if (right || toggle) e.Handled = true;
             var evt = toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent);

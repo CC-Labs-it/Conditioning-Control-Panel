@@ -35,66 +35,72 @@
             RenderTransformOrigin="50%,50%">
 
         <Grid x:Name="ContentRoot">
-            <!-- The two art halves. Full-bleed brushes, polygon-clipped in code. -->
-            <Border x:Name="HalfHostA" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
-            <Border x:Name="HalfHostB" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
-
-            <!-- Per-half hover wash: opacity flips on pointer move, geometry rides the seam. -->
-            <Path x:Name="HoverWashA" Fill="#14FFFFFF" Opacity="0" IsHitTestVisible="False"/>
-            <Path x:Name="HoverWashB" Fill="#14FFFFFF" Opacity="0" IsHitTestVisible="False"/>
-
-            <!-- Peek scrim: the receding half's surviving corner wedge is darkened as the fill
-                 runs, so the filled half reads as a card laid ON TOP. -->
-            <Path x:Name="PeekScrimA" Fill="Black" Opacity="0" IsHitTestVisible="False"/>
-            <Path x:Name="PeekScrimB" Fill="Black" Opacity="0" IsHitTestVisible="False"/>
+            <!-- Each region owns a fixed socket/ring; only its face moves on press. -->
+            <Grid x:Name="HalfRegionA">
+                <Border x:Name="HalfSocketA" Background="#FF080811" CornerRadius="11" IsVisible="False"/>
+                <Grid x:Name="HalfFaceA" RenderTransformOrigin="50%,50%">
+                    <Border x:Name="HalfHostA" CornerRadius="11"
+                            RenderOptions.BitmapInterpolationMode="HighQuality">
+                        <Border x:Name="HalfMuteA" CornerRadius="11" Opacity="0" IsHitTestVisible="False"
+                                RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    </Border>
+                    <Path x:Name="HoverWashA" Fill="#14FFFFFF" Opacity="0" IsHitTestVisible="False"/>
+                    <Path x:Name="PeekScrimA" Fill="Black" Opacity="0" IsHitTestVisible="False"/>
+                    <Border x:Name="TitlePillA"
+                            HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Margin="8,8,0,0" CornerRadius="7" Background="#B01A1A2E"
+                            Padding="7,2,8,3" IsHitTestVisible="False"
+                            RenderTransformOrigin="0%,0%">
+                        <Border.Transitions>
+                            <Transitions>
+                                <DoubleTransition Property="Opacity" Duration="0:0:0.26" Easing="QuadraticEaseOut"/>
+                            </Transitions>
+                        </Border.Transitions>
+                        <TextBlock x:Name="TxtTitleA" Text="A" Foreground="White"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="11" FontWeight="SemiBold"/>
+                    </Border>
+                    <Path x:Name="DepthBevelA" StrokeThickness="2" IsHitTestVisible="False" IsVisible="False"/>
+                </Grid>
+                <Path x:Name="ActiveRingA" Stroke="{DynamicResource FxGlowBrush}"
+                      StrokeThickness="3" Fill="#12FF69B4"
+                      IsVisible="False" IsHitTestVisible="False"/>
+            </Grid>
+            <Grid x:Name="HalfRegionB">
+                <Border x:Name="HalfSocketB" Background="#FF080811" CornerRadius="11" IsVisible="False"/>
+                <Grid x:Name="HalfFaceB" RenderTransformOrigin="50%,50%">
+                    <Border x:Name="HalfHostB" CornerRadius="11"
+                            RenderOptions.BitmapInterpolationMode="HighQuality">
+                        <Border x:Name="HalfMuteB" CornerRadius="11" Opacity="0" IsHitTestVisible="False"
+                                RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    </Border>
+                    <Path x:Name="HoverWashB" Fill="#14FFFFFF" Opacity="0" IsHitTestVisible="False"/>
+                    <Path x:Name="PeekScrimB" Fill="Black" Opacity="0" IsHitTestVisible="False"/>
+                    <Border x:Name="TitlePillB"
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                            Margin="0,0,8,8" CornerRadius="7" Background="#B01A1A2E"
+                            Padding="7,2,8,3" IsHitTestVisible="False"
+                            RenderTransformOrigin="100%,100%">
+                        <Border.Transitions>
+                            <Transitions>
+                                <DoubleTransition Property="Opacity" Duration="0:0:0.26" Easing="QuadraticEaseOut"/>
+                            </Transitions>
+                        </Border.Transitions>
+                        <TextBlock x:Name="TxtTitleB" Text="B" Foreground="White"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="11" FontWeight="SemiBold"/>
+                    </Border>
+                    <Path x:Name="DepthBevelB" StrokeThickness="2" IsHitTestVisible="False" IsVisible="False"/>
+                </Grid>
+                <Path x:Name="ActiveRingB" Stroke="{DynamicResource FxGlowBrush}"
+                      StrokeThickness="3" Fill="#12FF69B4"
+                      IsVisible="False" IsHitTestVisible="False"/>
+            </Grid>
 
             <!-- The seam. Stroke is the FULL-fill white; the code-behind parks its Opacity at
                  SeamRestOpacity so the resting seam renders as the ~#66 hair line. -->
             <Path x:Name="SeamLine" Stroke="#B3FFFFFF" StrokeThickness="1.2"
                   Opacity="0.6" IsHitTestVisible="False"/>
-
-            <!-- Per-half active rings: polygon outlines in the mod glow colour. -->
-            <Path x:Name="ActiveRingA" Stroke="{DynamicResource FxGlowBrush}"
-                  StrokeThickness="3" Fill="#12FF69B4"
-                  IsVisible="False" IsHitTestVisible="False"/>
-            <Path x:Name="ActiveRingB" Stroke="{DynamicResource FxGlowBrush}"
-                  StrokeThickness="3" Fill="#12FF69B4"
-                  IsVisible="False" IsHitTestVisible="False"/>
-
-            <!-- Half titles: A pinned to its top-left corner, B to its bottom-right, each on a
-                 dark pill. TextTrimming, not wrapping: a pill in a triangle's corner has one
-                 line of room. Each pill render-scales up when its half fills the card, anchored
-                 to its own corner. -->
-            <Border x:Name="TitlePillA"
-                    HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Margin="8,8,0,0" CornerRadius="7" Background="#B01A1A2E"
-                    Padding="7,2,8,3" IsHitTestVisible="False"
-                    RenderTransformOrigin="0%,0%">
-                <Border.Transitions>
-                    <Transitions>
-                        <DoubleTransition Property="Opacity" Duration="0:0:0.26" Easing="QuadraticEaseOut"/>
-                    </Transitions>
-                </Border.Transitions>
-                <TextBlock x:Name="TxtTitleA" Text="A" Foreground="White"
-                           TextTrimming="CharacterEllipsis"
-                           FontSize="11" FontWeight="SemiBold"/>
-            </Border>
-            <Border x:Name="TitlePillB"
-                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                    Margin="0,0,8,8" CornerRadius="7" Background="#B01A1A2E"
-                    Padding="7,2,8,3" IsHitTestVisible="False"
-                    RenderTransformOrigin="100%,100%">
-                <Border.Transitions>
-                    <Transitions>
-                        <DoubleTransition Property="Opacity" Duration="0:0:0.26" Easing="QuadraticEaseOut"/>
-                    </Transitions>
-                </Border.Transitions>
-                <TextBlock x:Name="TxtTitleB" Text="B" Foreground="White"
-                           TextTrimming="CharacterEllipsis"
-                           FontSize="11" FontWeight="SemiBold"/>
-            </Border>
 
             <!-- Hover rim-light, same register as FeatureCard's. -->
             <Border x:Name="RimLight"
