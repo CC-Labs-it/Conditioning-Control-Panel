@@ -1,5 +1,6 @@
 # Chrome banner message sheen (coherent slice)
 
+- Changed files: `CCP.Avalonia/Views/Windows/MainShellWindow.ChromeFx.cs`, `CCP.Avalonia/Views/Windows/MainShellWindow.Marquee.cs`, `CCP.Avalonia/Views/Windows/MainShellWindow.axaml.cs`, `CCP.Core/Services/UI/ChromeBannerSheen.cs`, `ConditioningControlPanel/MainWindow/MainWindow.ChromeFx.cs`, `Tests/CCP.Avalonia.Tests/ChromeBannerSheenTests.cs`, `Tests/CCP.Core.Tests/ChromeBannerSheenTests.cs`, `docs/avalonia-parity.md`, `docs/cloud/wire-shell-chrome-fx.md`.
 - Restore WPF's banner cue on the existing four-second banner rotation and `SetBannerAnnouncement` user path: a 0.75-second sine travel, 0.22 peak opacity, and a twenty-second minimum gap for ordinary rotations. New announcements bypass the gap.
 - Run the finite pass on the existing shared 30 Hz `BeatLoop`. Stop and park it on completion, deactivation, minimize, hide, close, or Motion Off. Reduced motion and the performance tier retain this interaction cue as WPF does; no ambient animation or animated Effect was added.
 - Move the throttle/motion/window decision to `CCP.Core.Services.UI.ChromeBannerSheen`; WPF calls the same rule.
