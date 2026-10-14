@@ -462,7 +462,7 @@ public sealed class BrowserMediaService
                 {
                     if (_sessionGeneration != generation || !_isTakeover) return;
                 }
-                App.Logger?.Information("BrowserMedia: takeover ran past its clip length - force-ending");
+                App.Logger?.Information("BrowserMedia: takeover reached its hard stop (clip length or the user's max video length) - force-ending");
                 ForceEndCore("takeover-overran");
             });
         });

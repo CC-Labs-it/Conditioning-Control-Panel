@@ -6820,9 +6820,11 @@ namespace ConditioningControlPanel.Services
         private void CarryMaxLenCap(bool replay)
         {
             var maxSec = App.Settings?.Current?.VideoMaxDurationSeconds ?? 0;
-            _maxLenSpentSec = replay && maxSec > 0 && _maxLenCapTimer?.IsEnabled == true
-                ? maxSec - RemainingTimerInterval(_maxLenArm.ArmedUtc, _maxLenArm.Interval, DateTime.UtcNow).TotalSeconds
-                : 0;
+            // A grace pause stops the timer and parks its time left in _maxLenArm.Remaining (#735).
+            var left = _maxLenCapTimer?.IsEnabled == true
+                ? RemainingTimerInterval(_maxLenArm.ArmedUtc, _maxLenArm.Interval, DateTime.UtcNow)
+                : _maxLenArm.Remaining;
+            _maxLenSpentSec = replay && maxSec > 0 && left > TimeSpan.Zero ? maxSec - left.TotalSeconds : 0;
         }
 
         /// <summary>

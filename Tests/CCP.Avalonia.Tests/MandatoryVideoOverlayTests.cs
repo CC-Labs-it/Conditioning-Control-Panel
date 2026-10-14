@@ -253,19 +253,20 @@ public sealed class MandatoryVideoOverlayTests
                     Assert.Empty(o.Windows);
 
                     // BUG-7NAKK79CZ2: the heal replay continues the clip's max-length cap instead of restarting it.
-                    // 8 s cap; 7 s played (fake clock), output lost -> replay; 2 s more ends it at the cap.
-                    s.VideoMaxDurationSeconds = 8;
+                    // 14 s cap (under the 10 s clip's 15 s overrun guard); 9 s played (fake clock), output lost -> replay;
+                    // 6 s more ends it at the cap. 5 s of real-time margin each side (P08).
+                    s.VideoMaxDurationSeconds = 14;
                     w = await Open(strict: false);
-                    o.PlayedSkew = 7;
+                    o.PlayedSkew = 9;
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
-                    Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output at 7 s replays the clip");
+                    Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output at 9 s replays the clip");
                     await Framed();
                     o.GuardTick();
-                    Assert.True(v.IsPlaying, "the replay keeps the 1 s of cap left");
-                    o.PlayedSkew = 2;
+                    Assert.True(v.IsPlaying, "the replay keeps the 5 s of cap left");
+                    o.PlayedSkew = 6;
                     o.GuardTick();
-                    Assert.False(v.IsPlaying, "7 s + 2 s past an 8 s cap: the replayed clip ends at the cap");
+                    Assert.False(v.IsPlaying, "9 s + 6 s past a 14 s cap: the replayed clip ends at the cap");
                     Assert.Empty(o.Windows);
                     s.VideoMaxDurationSeconds = 0;
 
