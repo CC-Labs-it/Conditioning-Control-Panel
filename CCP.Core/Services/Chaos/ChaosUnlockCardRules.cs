@@ -4,7 +4,7 @@ namespace ConditioningControlPanel.Services.Chaos;
 
 /// <summary>What one unlock card says, head-neutral: ribbon + accent, the item, a context line,
 /// the placeholder glyph, where its art lives and which reward cue it plays. Each head turns
-/// this into its own visual (WPF <c>ChaosUnlockCards</c>, Avalonia <c>ChaosUnlockCardVisual</c>).</summary>
+/// this into its own visual (WPF <c>ChaosUnlockCards</c>, Avalonia <c>ChaosUnlockCardLayer</c>).</summary>
 public sealed record ChaosUnlockCardInfo(
     string Ribbon, uint AccentRgb, string Title, string Desc, string? Flavor, string? Context,
     string Glyph, string? IconFolder = null, string? IconId = null, string? IconPath = null)

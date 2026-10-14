@@ -606,13 +606,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         };
 
-        /// <summary>WPF xaml.cs:503. ponytail: reveal flashes and the ui_denied cue are not on this
-        /// head yet; the purchase and its unlock card are real.</summary>
+        /// <summary>WPF xaml.cs:503. ponytail: reveal flashes are not on this head yet; the
+        /// purchase, its unlock card and the ui_denied cue are real.</summary>
         private void Buy_Click(object? sender, RoutedEventArgs e)
         {
             var id = (sender as Button)?.Tag?.ToString();
             if (string.IsNullOrEmpty(id)) return;
-            if (!ChaosMeta.TryPurchase(id!)) { Log.Debug("ChaosHub: train {Id} denied", id); return; }
+            if (!ChaosMeta.TryPurchase(id!)) { ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f); return; }
             if (id == "extreme_tier") ApplyExtremeGate();
             BuildHabits();
             BuildLoadoutTiles();
@@ -849,20 +849,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             AfterBoonChange();
         }
 
-        /// <summary>WPF xaml.cs:832/846 (unlock / deepen). ponytail: the ui_denied / ui_deepen
-        /// cues are not on this head yet; the unlock and capstone cards are.</summary>
+        /// <summary>WPF xaml.cs:832/846 (unlock / deepen): cards, ui_denied and ui_deepen cues.</summary>
         private void BoonUnlock_Click(object? sender, RoutedEventArgs e)
         {
-            if ((sender as Button)?.Tag is not string id || !ChaosMeta.TryUnlockBoon(id)) return;
+            if ((sender as Button)?.Tag is not string id) return;
+            if (!ChaosMeta.TryUnlockBoon(id)) { ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f); return; }
             AfterBoonChange();
             UnlockCards.Show(ChaosUnlockCardRules.ForBoonUnlock(id));   // after the unlock: reads auto-equip state
         }
 
         private void BoonUpgrade_Click(object? sender, RoutedEventArgs e)
         {
-            if ((sender as Button)?.Tag is not string id || !ChaosMeta.TryUpgradeBoon(id)) return;
+            if ((sender as Button)?.Tag is not string id) return;
+            if (!ChaosMeta.TryUpgradeBoon(id)) { ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f); return; }
             AfterBoonChange();
-            UnlockCards.Show(ChaosUnlockCardRules.ForUpgrade(id));   // only the final level gets a card
+            // Only the final level gets a card (it stings itself); mid levels keep the quiet deepen cue.
+            var card = ChaosUnlockCardRules.ForUpgrade(id);
+            if (card != null) UnlockCards.Show(card);
+            else ChaosOverlayWindow.ChaosSfx.Play("ui_deepen", 0.5f);
         }
 
         /// <summary>WPF Bench.cs BenchBuy_Click: Core prices, gates, the gift and the save.</summary>
