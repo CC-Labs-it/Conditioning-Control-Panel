@@ -232,7 +232,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// Re-entrancy guard for the one place a bark is fired ON BEHALF of the arbiter. See
-        /// <see cref="CommitFire"/>: every other bark reports itself to the arbiter's shared ledger,
+        /// <c>RecordWithArbiter</c>: every other bark reports itself to the arbiter's shared ledger,
         /// this one is already accounted for there.
         /// </summary>
         private bool _inAwarenessBark;
@@ -241,7 +241,7 @@ namespace ConditioningControlPanel.Services
         /// Tells this service that the companion just spoke a line it did not fire — today, an
         /// awareness quip written by the model and delivered straight to the speech bubble.
         ///
-        /// <para>The 60s <see cref="GlobalMinGapMs"/> floor is only a floor if it moves for every
+        /// <para>The 60s <see cref="BarkEngine.GlobalMinGapMs"/> floor is only a floor if it moves for every
         /// ambient line, not just the ones this class produced: without this the next bark trigger
         /// after the awareness bubble closes fires against a stale gap, and a preempting bark can
         /// speak over the bubble outright.</para>

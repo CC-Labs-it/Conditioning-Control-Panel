@@ -140,6 +140,16 @@ public class BarkEngineTests
     }
 
     [Fact]
+    public void AThrowingBusyProbe_DropsTheBark_AsWpfDid()
+    {
+        var (e, _) = Engine(Rule(Uid("t"), "TrigA"));
+        e.AvatarSpeaking = () => throw new InvalidOperationException("probe");
+        Assert.Null(e.Decide("TrigA", new BarkContext("TrigA")));
+        e.AvatarSpeaking = () => false;
+        Assert.NotNull(e.Decide("TrigA", new BarkContext("TrigA")));
+    }
+
+    [Fact]
     public void ChanceZero_NeverFires_AndUserChatSuppresses()
     {
         var (e, clock) = Engine(Rule(Uid("c"), "TrigA", chance: 0.0), Rule(Uid("d"), "TrigB"));

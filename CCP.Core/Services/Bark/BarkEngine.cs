@@ -154,7 +154,12 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var rules = _rules.ForTrigger(trigger);
                 BarkRule? winner = rules.FirstOrDefault(r => ConditionsPass(r, ctx));
-                return winner == null ? null : DecideLocked(winner, ctx, guaranteed);
+                if (winner == null)
+                {
+                    Serilog.Log.Debug("[BARK] trigger={Trigger} no rule matched conditions", trigger);
+                    return null;
+                }
+                return DecideLocked(winner, ctx, guaranteed);
             }
         }
 
@@ -187,14 +192,17 @@ namespace ConditioningControlPanel.Services.Bark
         {
             var pool = ResolvePool(winner);
             var (fire, idx, reason) = EvaluateGate(winner, pool, guaranteed);
+            string tag = DryRun ? "[BARK dry-run]" : "[BARK]"; // WPF LogDecision :2030
             if (!fire)
             {
-                Serilog.Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} reason={Reason}", ctx.Trigger, winner.Id, reason);
+                Serilog.Log.Debug("{Tag} blocked trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
+                    tag, ctx.Trigger, winner.Id, winner.Class, winner.Priority, reason);
                 return null;
             }
             CommitFire(winner, idx, pool);
-            Serilog.Log.Information("[BARK] {Verb} trigger={Trigger} rule={Rule} variant#={Idx}",
-                DryRun ? "WOULD FIRE" : "FIRE", ctx.Trigger, winner.Id, idx);
+            Serilog.Log.Information("{Tag} {Verb} trigger={Trigger} rule={Rule} class={Class} mood={Mood} priority={Priority} variant#={Idx} lineChars={Chars}",
+                tag, DryRun ? "WOULD FIRE" : "FIRE", ctx.Trigger, winner.Id, winner.Class, winner.Mood, winner.Priority, idx,
+                idx >= 0 && idx < pool.Count ? (pool[idx].Text ?? "").Length : -1);
             return DryRun ? null : new BarkPick(winner, pool[idx], ctx);
         }
 
@@ -339,7 +347,9 @@ namespace ConditioningControlPanel.Services.Bark
 
         // ===================== gate (WPF EvaluateGate :1645) =====================
 
-        private static bool Ask(Func<bool>? f) { try { return f?.Invoke() == true; } catch { return false; } }
+        // A throwing busy/mute probe blocks the bark (fail closed): in WPF the same throw
+        // escaped into Raise's catch and the bark was dropped.
+        private static bool Ask(Func<bool>? f) { try { return f?.Invoke() == true; } catch { return true; } }
 
         private (bool Fire, int Index, string Reason) EvaluateGate(BarkRule rule, List<BarkVariant> pool, bool guaranteed)
         {
@@ -420,7 +430,7 @@ namespace ConditioningControlPanel.Services.Bark
 
         private bool CompanionBusy(int windowMs, DateTime now)
         {
-            try { if (AvatarBusy?.Invoke(windowMs) == true) return true; } catch { }
+            try { if (AvatarBusy?.Invoke(windowMs) == true) return true; } catch { return true; }
             return windowMs > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < windowMs;
         }
 

@@ -261,7 +261,7 @@ namespace ConditioningControlPanel.Services
 
             // Reactive "bark" voicelines for the active mod (BarkService). Treated as built-in: the
             // "Bark:" id prefix shares DisabledPhraseIds / RemovedPhraseIds, so toggling/hiding routes
-            // through the same path and BarkService.ResolvePool drops disabled lines at speak time.
+            // through the same path and BarkEngine.ResolvePool drops disabled lines at speak time.
             var barkLines = App.Bark?.GetAllBarkLines();
             if (barkLines != null)
             {
