@@ -15,6 +15,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         /// <summary>WPF <c>PrizeGrants.FlashDriftBounce</c>: a wire id, spelled as the server does.</summary>
         internal const string FlashDriftBounce = "fx.flash.drift_bounce";
+        internal const string FlashPendulum = "fx.flash.pendulum";
+        internal const string JackpotRemix = "fx.jackpot_remix";
+        internal const string BubbleRain = "fx.bubble.rain";
+        internal const string BubbleSpiralIn = "fx.bubble.spiral_in";
 
         /// <summary>The DEBUG override spec, read once; always null in Release.</summary>
         internal static readonly string? OverrideSpec = ReadOverride();
@@ -30,6 +34,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return null;
 #endif
         }
+
+        /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
+        internal static bool FlashV2Owned() =>
+            IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum) || IsGranted(JackpotRemix);
+
+        /// <summary>WPF V2Badges.BubbleOwned: either ambient bubble motion.</summary>
+        internal static bool BubbleV2Owned() => IsGranted(BubbleRain) || IsGranted(BubbleSpiralIn);
 
         /// <summary>WPF OwnershipService.ParseOverride + MatchesOverride over one comma list.</summary>
         internal static bool Matches(string? spec, string id) =>
