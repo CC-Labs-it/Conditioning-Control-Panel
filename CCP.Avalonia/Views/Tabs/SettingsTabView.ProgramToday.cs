@@ -1,14 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using Avalonia;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
-using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -23,8 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The dashboard's Training Programs "Today" card: WPF MainWindow.ProgramsTab.cs
     /// RefreshProgramTodayCard (:2251-2318) and MainWindow.ProgramBanner.cs (banner art, fog, sheen,
     /// sparkles, accent breath, hover parallax). Read-only: it only reads App.Programs. The ambient
-    /// loops run only while the card is on screen and MotionFx.AllowAmbientLoops (P01), each on one
-    /// CancellationTokenSource, and stop on detach (P65).
+    /// loops run only while the card is on screen and MotionFx.AllowAmbientLoops (P01), on one 30 fps
+    /// BeatLoop, and stop on detach (P65).
     /// </summary>
     public partial class SettingsTabView
     {
@@ -33,12 +29,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private const double ProgramBannerParallax = 10;
 
         private ProgramService? _todaySubscribed;
-        private CancellationTokenSource? _programBannerCts;
-        private CancellationTokenSource? _programBannerNudgeCts;
+        private BeatLoop? _programBannerLoop;
+        private int _programBannerNudge;   // bumped to cancel a running nudge
         private bool _programBannerArtOn;
 
         /// <summary>True while the fog/sheen/sparkle/breath loops run (tests read it).</summary>
-        internal bool ProgramBannerFxRunning => _programBannerCts != null;
+        internal bool ProgramBannerFxRunning => _programBannerLoop != null;
 
         /// <summary>Constructor hook.</summary>
         private void InitProgramTodayCard()
@@ -66,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 LocalizationManager.Instance.LanguageChanged -= OnProgramTodayLanguageChanged;
                 CoreMods.ModChanged -= OnProgramTodayModChanged;
                 StopProgramBannerFx();
-                _programBannerNudgeCts?.Cancel();
+                _programBannerNudge++;
             };
         }
 
@@ -230,58 +226,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var want = VisualRoot is not null && IsVisible && ProgramTodayCard.IsVisible && ProgramTodayDecor.IsVisible
                        && AmbientFxCanvas.Env.AllowAmbientLoops && ProgramTodayDecor.Bounds.Width >= 80;
             if (!want) StopProgramBannerFx();
-            else if (_programBannerCts == null) StartProgramBannerFx();
+            else if (_programBannerLoop == null) StartProgramBannerFx();
         }
 
+        /// <summary>WPF StartProgramBannerFx (ProgramBanner.cs:290-340, 445-458): fog, sheen, sparkles and
+        /// accent breath, all on one 30 fps beat (WPF SetDesiredFrameRate(AmbientFrameRate = 30)), never an
+        /// infinite Animation (P82). The card's width is read every frame, so a resize stays correct.</summary>
         private void StartProgramBannerFx()
         {
-            try
+            ProgramTodayFog.IsVisible = ProgramTodaySheen.IsVisible = ProgramTodaySparkles.IsVisible = true;
+            var fog = Slide(ProgramTodayFog);
+            var sheen = Slide(ProgramTodaySheen);
+            var dots = ProgramTodaySparkles.Children.OfType<Ellipse>().ToArray();
+            _programBannerLoop = new BeatLoop(ProgramTodayCard, t =>
             {
                 var w = ProgramTodayDecor.Bounds.Width;
-                var token = (_programBannerCts = new CancellationTokenSource()).Token;
+                fog.X = -w * 0.55 * BeatLoop.Breath(t, 26);              // FX 1: 26 s each way, sine in-out
+                sheen.X = SheenAt(t % 11, w);                            // FX 2: 1.7 s across, rest of 11 s paused
+                for (var i = 0; i < dots.Length; i++)                    // FX 3: staggered 1.15 s (BeginTime)
+                    dots[i].Opacity = TwinkleAt(t - i * 1.15);
+                ProgramTodayAccent.Opacity = 0.55 + 0.45 * BeatLoop.Breath(t, 3.4);   // FX 4: 3.4 s each way
+            });
+            _programBannerLoop.Start();
+        }
 
-                // FX 1: drifting fog, 26 s each way, sine in-out.
-                ProgramTodayFog.IsVisible = true;
-                _ = Loop(TimeSpan.FromSeconds(26), PlaybackDirection.Alternate, TranslateTransform.XProperty,
-                        (0, 0d), (1, -w * 0.55)).RunAsync(Slide(ProgramTodayFog), token);
+        /// <summary>WPF sweep keyframes (:315-319): linear -160 -> w+60 by 1.7 s, held, discrete back at 1.75 s.</summary>
+        internal static double SheenAt(double t, double w) =>
+            t < 1.7 ? -160 + (w + 220) * t / 1.7 : t < 1.75 ? w + 60 : -160;
 
-                // FX 2: sheen sweep - 1.7 s across, then the flat tail of the 11 s cycle is the pause.
-                ProgramTodaySheen.IsVisible = true;
-                _ = Linear(Loop(TimeSpan.FromSeconds(11), PlaybackDirection.Normal, TranslateTransform.XProperty,
-                        (0, -160d), (1.7 / 11, w + 60), (1.75 / 11, -160d), (1, -160d))).RunAsync(Slide(ProgramTodaySheen), token);
-
-                // FX 3: sparkles - 0.45 s in, 0.85 s out, dark for the rest of 6 s, staggered 1.15 s.
-                ProgramTodaySparkles.IsVisible = true;
-                var i = 0;
-                foreach (var dot in ProgramTodaySparkles.Children.OfType<Ellipse>())
-                {
-                    var twinkle = Loop(TimeSpan.FromSeconds(6), PlaybackDirection.Normal, OpacityProperty,
-                        (0, 0d), (0.45 / 6, 0.9), (1.3 / 6, 0d), (1, 0d));
-                    twinkle.Delay = TimeSpan.FromSeconds(i++ * 1.15);   // WPF BeginTime: first cycle only
-                    _ = Linear(twinkle).RunAsync(dot, token);
-                }
-
-                // FX 4: accent-bar breath, 0.55 <-> 1 over 3.4 s.
-                _ = Loop(TimeSpan.FromSeconds(3.4), PlaybackDirection.Alternate, OpacityProperty,
-                        (0, 0.55), (1, 1d)).RunAsync(ProgramTodayAccent, token);
-            }
-            catch (Exception ex)
-            {
-                Serilog.Log.Warning(ex, "Program banner FX start failed");
-            }
+        /// <summary>WPF twinkle keyframes (:445-457): 0 -> 0.9 by 0.45 s (QuadraticEase out), -> 0 by 1.3 s
+        /// linear, dark to 6 s; nothing before its BeginTime.</summary>
+        internal static double TwinkleAt(double t)
+        {
+            if (t < 0) return 0;
+            t %= 6;
+            if (t < 0.45) { var p = 1 - t / 0.45; return 0.9 * (1 - p * p); }
+            return t < 1.3 ? 0.9 * (1.3 - t) / 0.85 : 0;
         }
 
         private void StopProgramBannerFx()
         {
-            if (_programBannerCts == null) return;
-            _programBannerCts.Cancel();
-            _programBannerCts.Dispose();
-            _programBannerCts = null;
+            if (_programBannerLoop == null) return;
+            _programBannerLoop.Stop();
+            _programBannerLoop = null;
             ProgramTodayFog.IsVisible = false;
             ProgramTodaySheen.IsVisible = false;
             ProgramTodaySparkles.IsVisible = false;
             ProgramTodayAccent.Opacity = 1;
-            _programBannerNudgeCts?.Cancel();
+            _programBannerNudge++;
             Slide(ProgramTodayArt).X = 0;
         }
 
@@ -292,49 +284,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return t;
         }
 
-        private static Animation Loop(TimeSpan duration, PlaybackDirection direction, AvaloniaProperty property,
-            params (double cue, double value)[] frames)
-        {
-            var animation = new Animation
-            {
-                Duration = duration,
-                IterationCount = IterationCount.Infinite,
-                PlaybackDirection = direction,
-                Easing = new SineEaseInOut(),
-            };
-            foreach (var (cue, value) in frames)
-                animation.Children.Add(new KeyFrame { Cue = new Cue(cue), Setters = { new Setter(property, value) } });
-            return animation;
-        }
-
-        /// <summary>WPF's sheen and twinkle are linear keyframes (the twinkle's 0.45 s rise is a
-        /// quadratic ease-out there; linear here, 0.45 s of a 6 s cycle).</summary>
-        private static Animation Linear(Animation a) { a.Easing = new LinearEasing(); return a; }
-
-        /// <summary>WPF NudgeProgramBannerArt: 260 ms quadratic ease-out slide of the art.</summary>
+        /// <summary>WPF NudgeProgramBannerArt (:478-490): 260 ms quadratic ease-out slide of the art, per
+        /// rendered frame (an Animation cannot run on a Transform, P82). A newer nudge or a stop cancels it.</summary>
         private void NudgeProgramBannerArt(double to)
         {
-            try
+            if (!_programBannerArtOn || !ProgramTodayArt.IsVisible) return;
+            var slide = Slide(ProgramTodayArt);
+            var from = slide.X;   // from where it is, so leaving mid-slide eases back
+            var run = ++_programBannerNudge;
+            var top = TopLevel.GetTopLevel(this);
+            if (!AmbientFxCanvas.Env.AllowTransitions || top == null) { slide.X = to; return; }
+            var start = BeatLoop.Time.GetTimestamp();   // elapsed on the beat's clock: a test steps it (P08)
+            void Frame(TimeSpan _)
             {
-                if (!_programBannerArtOn || !ProgramTodayArt.IsVisible) return;
-                var slide = Slide(ProgramTodayArt);
-                var from = slide.X;   // read before Cancel drops the held value, so leaving eases back
-                _programBannerNudgeCts?.Cancel();
-                if (!AmbientFxCanvas.Env.AllowTransitions) { slide.X = to; return; }
-                _programBannerNudgeCts = new CancellationTokenSource();
-                _ = new Animation
-                {
-                    Duration = TimeSpan.FromMilliseconds(260),
-                    Easing = new QuadraticEaseOut(),
-                    FillMode = FillMode.Forward,
-                    Children =
-                    {
-                        new KeyFrame { Cue = new Cue(0), Setters = { new Setter(TranslateTransform.XProperty, from) } },
-                        new KeyFrame { Cue = new Cue(1), Setters = { new Setter(TranslateTransform.XProperty, to) } },
-                    },
-                }.RunAsync(slide, _programBannerNudgeCts.Token);
+                if (run != _programBannerNudge) return;
+                var p = Math.Min(1, BeatLoop.Time.GetElapsedTime(start).TotalMilliseconds / 260);
+                slide.X = from + (to - from) * (1 - (1 - p) * (1 - p));
+                if (p < 1) top.RequestAnimationFrame(Frame);
             }
-            catch { /* decoration */ }
+            top.RequestAnimationFrame(Frame);
         }
     }
 }

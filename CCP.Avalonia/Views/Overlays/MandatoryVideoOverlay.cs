@@ -229,7 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var targets = new List<global::Avalonia.Platform.Screen?>();
             if (screens.Count == 0) { targets.Add(null); return targets; }   // headless: one window where the platform puts it
             var primaryIdx = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-            var idx = PinkFilterOverlay.ResolveScreenIndices(VideoTarget(s.VideoTargetMonitor, s.GlobalTargetMonitor, screens.Count),
+            var idx = PinkFilterOverlay.ResolveScreenIndices(VideoTarget(s.VideoTargetMonitor, s.GlobalTargetMonitor, screens.Count), s.GlobalTargetMonitor,
                 s.DualMonitorEnabled, screens.Count, primaryIdx);
             var first = idx.Contains(primaryIdx) ? primaryIdx : idx[0];
             targets.Add(screens[first]);

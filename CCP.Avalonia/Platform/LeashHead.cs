@@ -1,8 +1,8 @@
 // PORTED from WPF ConditioningControlPanel/App.xaml.cs:2991-3022 (THE LEASH wiring) and :6289-6292 (exit),
 // Services/Leash/LeashServiceApp.cs CreateForApp + AppDayInputs, LeashCutSafetyApp.cs AppTargets and
 // ChasterLeashTab.cs. The service itself is Core (CCP.Core/Services/Leash); this is the head's half.
-// ponytail: the task runner (WPF AppLeashTaskHost + LeashTaskRunner, App.xaml.cs:3010-3013) and the
-// explainer/drawer UI land with the leash-punish / Drawer units (the gate card is MainShellWindow.LeashGate).
+// The task runner is Platform/LeashTaskHost (gate card: MainShellWindow.LeashGate).
+// ponytail: the explainer/drawer UI lands with the Drawer unit.
 using System;
 using System.IO;
 using Avalonia.Threading;
