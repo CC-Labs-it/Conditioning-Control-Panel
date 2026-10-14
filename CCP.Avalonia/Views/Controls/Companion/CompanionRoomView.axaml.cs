@@ -155,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             try
             {
+                WorkshopZone.RefreshPhrasePresets();
                 // WPF CompanionTabView.IsVisibleChanged -> CompanionRoom.Sync(): the hero re-reads
                 // what changed while the tab was hidden (level, mute, awareness, AI pill, mod art).
                 HeroZone.ApplyAvatarArt();
