@@ -304,6 +304,32 @@ public class StakeTests
     }
 
     [Fact]
+    public async Task The_app_bridge_reads_the_head_gate_live_and_is_signed_out_unseeded()
+    {
+        // ForApp is Core since stakes-core; the head seeds the gate (WPF: StakeAppHooks.Seed).
+        var (gate, row, id) = (StakeBridge.TimeOkHook, StakeBridge.EnableLossRowHook, ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity);
+        try
+        {
+            ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity = () => null;
+            var posted = new List<JObject>();
+            var bridge = StakeBridge.ForApp("goon", posted.Add);
+            StakeBridge.TimeOkHook = () => true; // seeded after the bridge was built: still read
+            await bridge.Handle(new JObject { ["type"] = "stake-limits" });
+
+            var o = Assert.Single(posted);
+            Assert.True((bool)o["time_ok"]!);
+            Assert.Equal("signin", (string?)o["reason"]);
+            Assert.Equal("goon", (string?)o["game"]);
+        }
+        finally
+        {
+            StakeBridge.TimeOkHook = gate;
+            StakeBridge.EnableLossRowHook = row;
+            ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity = id;
+        }
+    }
+
+    [Fact]
     public async Task Limits_carry_whether_time_is_on_offer_and_the_labels()
     {
         var b = new BridgeRig();

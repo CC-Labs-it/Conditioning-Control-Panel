@@ -3,10 +3,11 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Invites;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Stakes;
 
@@ -45,8 +46,9 @@ public sealed class StakeApi : IStakeApi
     public StakeApi(HttpClient? http = null, Func<(string UnifiedId, string Token)?>? identity = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
-        _identity = identity ?? BackRoomApi.AppIdentity;
-        _baseUrl = baseUrl ?? BackRoomApi.BaseUrl;
+        // The head's account door and proxy, seeded at startup (WPF: BackRoomApi.AppIdentity / BaseUrl).
+        _identity = identity ?? InviteApi.DefaultIdentity;
+        _baseUrl = baseUrl ?? InviteApi.DefaultBaseUrl() ?? "";
     }
 
     public string? Account()
@@ -78,7 +80,7 @@ public sealed class StakeApi : IStakeApi
         catch (OperationCanceledException) { return null; }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Stakes {Op} failed: {E}", op, ex.Message);
+            Log.Debug("Stakes {Op} failed: {E}", op, ex.Message);
             return null;
         }
     }

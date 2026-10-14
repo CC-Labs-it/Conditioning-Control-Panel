@@ -2,8 +2,8 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
-// ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (no Core
-// StakeBridge on this head), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (Core StakeBridge.ForApp
+// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;

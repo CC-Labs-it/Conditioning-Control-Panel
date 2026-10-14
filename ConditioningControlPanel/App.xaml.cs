@@ -459,6 +459,7 @@ namespace ConditioningControlPanel
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Stakes.StakeAppHooks.Seed();
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
             CoreProgram.ActivePackVideoCountProvider = () => ContentPacks?.GetAllActivePackVideos().Count ?? 0;
             CoreProgram.RoadmapProvider = () => Roadmap;

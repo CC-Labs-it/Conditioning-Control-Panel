@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Localization;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Stakes;
 
@@ -50,9 +51,14 @@ public sealed class StakeBridge
         _labels = labels ?? StakeText.Labels;
     }
 
+    /// <summary>The head's gates, seeded at startup (WPF: <c>StakeAppHooks</c>). Unseeded: time is
+    /// never on offer and the loss row is never switched.</summary>
+    public static Func<bool> TimeOkHook { get; set; } = () => false;
+    public static Action EnableLossRowHook { get; set; } = () => { };
+
     /// <summary>The app's bridge for one game (<c>pbp</c> or <c>goon</c>).</summary>
     public static StakeBridge ForApp(string game, Action<JObject> post) =>
-        new(game, post, new StakeApi(), StakeSettlement.Shared, AppTimeOk, AppEnableLossRow);
+        new(game, post, new StakeApi(), StakeSettlement.Shared, () => TimeOkHook(), () => EnableLossRowHook());
 
     public static bool Handles(string? type) =>
         type is "stake-limits" or "stake-offer" or "stake-state" or "stake-settle";
@@ -73,7 +79,7 @@ public sealed class StakeBridge
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Stakes: bridge threw on {Type}: {E}", (string?)msg["type"], ex.Message);
+            Log.Debug("Stakes: bridge threw on {Type}: {E}", (string?)msg["type"], ex.Message);
             return Task.CompletedTask;
         }
     }
@@ -99,7 +105,7 @@ public sealed class StakeBridge
         {
             if (!SafeTimeOk()) { Post("offer", Refusal("no_chaster"), match); return; }
             // The pick IS the consent: the row a loss books on goes on now, before anything is sent.
-            try { _enableLossRow(); } catch (Exception ex) { App.Logger?.Debug("Stakes: loss row switch failed: {E}", ex.Message); }
+            try { _enableLossRow(); } catch (Exception ex) { Log.Debug("Stakes: loss row switch failed: {E}", ex.Message); }
         }
         var idem = (string?)msg["idem"];
         if (string.IsNullOrWhiteSpace(idem) || idem!.Length > 64) idem = Guid.NewGuid().ToString("N");
@@ -153,7 +159,7 @@ public sealed class StakeBridge
         // Which match the frame is about, so a page that moved on can drop a late one.
         if (match != null) o["match"] = match;
         try { _post(o); }
-        catch (Exception ex) { App.Logger?.Debug("Stakes: post failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Stakes: post failed: {E}", ex.Message); }
     }
 
     private bool SafeTimeOk()
@@ -175,33 +181,6 @@ public sealed class StakeBridge
     private static int IntOr(JToken? t) =>
         t is JValue { Type: JTokenType.Integer or JTokenType.Float } v ? (int)Math.Round(v.Value<double>())
         : t is JValue { Type: JTokenType.String } sv && int.TryParse((string?)sv, out var n) ? n : 0;
-
-    // ------------------------------------------------------------------ the app's gates
-
-    /// <summary>Time is on offer while the Chaster tab could book a loss right now.</summary>
-    public static bool AppTimeOk()
-    {
-        var chaster = App.Chaster;
-        var s = App.Settings?.Current;
-        if (chaster == null || s == null) return false;
-        return StakeRules.TimeAllowed(chaster.IsLinked, s.ChasterTabEnabled, s.ChasterPaused, chaster.SafetyHoldRemaining);
-    }
-
-    /// <summary>Switch <see cref="StakeRules.LossRowId"/> on, on the UI thread, the way the tab
-    /// page does: a new list every time, never one being edited.</summary>
-    public static void AppEnableLossRow()
-    {
-        void Apply()
-        {
-            if (App.Settings?.Current is not { } s) return;
-            var now = s.ChasterPrices ?? new List<string>();
-            if (now.Contains(StakeRules.LossRowId)) return;
-            s.ChasterPrices = new List<string>(now) { StakeRules.LossRowId };
-            App.Settings.Save();
-        }
-        var d = App.Current?.Dispatcher;
-        if (d == null || d.CheckAccess()) Apply(); else d.Invoke(Apply);
-    }
 }
 
 /// <summary>The words a stake row and a result line use, localised by the host so every page
