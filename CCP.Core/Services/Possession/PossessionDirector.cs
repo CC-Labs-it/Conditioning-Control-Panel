@@ -379,7 +379,7 @@ public sealed class PossessionDirector : IDisposable
             try { EffectStarted?.Invoke(effect.Id, target?.Key, effect.IsBig); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             if (knock && Warden != null)
-                await RunWardenAsync(ct => Warden.KnockAsync(target!, ct), "knock").ConfigureAwait(true);
+                await RunWardenAsync(ct => Warden.KnockAsync(target!, ct), WardenRules.Knock).ConfigureAwait(true);
 
             try
             {
@@ -1045,7 +1045,7 @@ public sealed class PossessionDirector : IDisposable
             if (repeat >= 3 && _wardenEnabled && Warden?.IsAvailable == true && now - _lastStareAt >= StareCooldown)
             {
                 _lastStareAt = now;
-                FireAndForget(RunWardenAsync(ct => Warden!.StareAsync(attempt.Kind, ct), "stare"), "warden stare");
+                FireAndForget(RunWardenAsync(ct => Warden!.StareAsync(attempt.Kind, ct), WardenRules.Stare), "warden stare");
             }
         }
         catch (Exception ex) { Log.Warning("Possession tripwire failed: {Error}", ex.Message); }
