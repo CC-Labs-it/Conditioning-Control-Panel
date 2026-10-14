@@ -259,6 +259,10 @@ public sealed class RemoteDirectoryTabTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("Sending...", speech.Text);
             Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+            // Up one second longer than a preset line of the same text (WPF ShowEmoteFeedback).
+            var timer = (DispatcherTimer)typeof(AvatarTubeWindow).GetField("_speechTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(tube)!;
+            Assert.Equal(TimeSpan.FromSeconds(Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0) + 1), timer.Interval);
 
             var longText = new string('x', 50);
             tube.ShowEmoteFeedback(longText, isPending: false);

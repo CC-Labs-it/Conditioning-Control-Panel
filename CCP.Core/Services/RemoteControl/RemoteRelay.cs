@@ -187,6 +187,7 @@ namespace ConditioningControlPanel.Services
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
             (_remoteSetStrictLock, _pollBackedOff, _lastControllerCommand) = (false, false, DateTime.MinValue);
             (_lastOptInTags, _lastOptInStatus) = (null, null);
+            Interlocked.Increment(ref _sessionGeneration);   // an opt-in still in flight must not list the next session
             // StopAsync and the poll loop land here off the UI thread, and the stops close windows: run
             // them on the UI like ControllerLeft, posted if a stalled UI cancels the Invoke.
             void StopEffects() { try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); } }
@@ -264,7 +265,7 @@ namespace ConditioningControlPanel.Services
             if (changed)
             {
                 ControllerConnected = connected;
-                if (!connected) { ControllerLeft(); _ = RepublishDirectoryIfOptedInAsync(); }
+                if (!connected) { ControllerLeft(); LastRepublish = RepublishDirectoryIfOptedInAsync(); }
                 ControllerConnectedChanged?.Invoke(this, EventArgs.Empty);
             }
             if (idle != ControllerIdle)
@@ -278,7 +279,7 @@ namespace ConditioningControlPanel.Services
                 Log.Information("[RemoteControl] Controller idle for {Seconds:F0}s - auto-disconnecting", (Now() - since).TotalSeconds);
                 (_autoDisconnected, ControllerConnected, ControllerIdle) = (true, false, false);
                 ControllerLeft();
-                _ = RepublishDirectoryIfOptedInAsync();
+                LastRepublish = RepublishDirectoryIfOptedInAsync();
                 ControllerConnectedChanged?.Invoke(this, EventArgs.Empty);
                 ControllerIdleChanged?.Invoke(this, EventArgs.Empty);
                 changed = true;
@@ -411,6 +412,7 @@ namespace ConditioningControlPanel.Services
             if (string.IsNullOrEmpty(uid) || _baseUrl == null) return false;
             tags ??= new List<string>();
             statusText ??= "";
+            var generation = Volatile.Read(ref _sessionGeneration);
             try
             {
                 using var resp = await PostAsync("/v2/directory/opt-in",
@@ -422,6 +424,9 @@ namespace ConditioningControlPanel.Services
                 }
                 // Kept so the entry can be re-published when the controller leaves (the server keeps
                 // the claim flag across a disconnect, so the subject would stay "taken").
+                // A stop while the POST was in flight forgets it, so the next session is not shown as listed
+                // (nor re-published) without its own consent. (WPF records it regardless.)
+                if (generation != Volatile.Read(ref _sessionGeneration)) return false;
                 (_lastOptInTags, _lastOptInStatus) = (tags, statusText);
                 Log.Information("[RemoteControl] Directory opt-in OK ({TagCount} tags, status={StatusLen}c)", tags.Count, statusText.Length);
                 return true;
@@ -434,6 +439,10 @@ namespace ConditioningControlPanel.Services
 
         private List<string>? _lastOptInTags;
         private string? _lastOptInStatus;
+        private int _sessionGeneration;
+
+        /// <summary>The re-publish the last controller leave started (tests await it instead of sleeping).</summary>
+        internal Task LastRepublish { get; private set; } = Task.CompletedTask;
 
         /// <summary>WPF RepublishDirectoryIfOptedInAsync: after a controller leaves, the entry goes back to available.</summary>
         internal async Task RepublishDirectoryIfOptedInAsync()

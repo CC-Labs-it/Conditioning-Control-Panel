@@ -21,12 +21,15 @@ public sealed class RemoteDirectoryOptInTests
         public readonly List<(string Path, JObject Body)> Seen = new();
         public string Poll = "{}";
         public HttpStatusCode OptIn = HttpStatusCode.OK;
+        public TaskCompletionSource? OptInGate;
+        public readonly TaskCompletionSource OptInArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             var seen = JObject.Parse(await r.Content!.ReadAsStringAsync(ct));
             lock (Seen) Seen.Add((path, seen));
+            if (path == "/v2/directory/opt-in" && OptInGate is { } gate) { OptInArrived.TrySetResult(); await gate.Task; }
             return path switch
             {
                 "/v2/remote/start" => Json(HttpStatusCode.OK, "{\"code\":\"ABC123\"}"),
@@ -90,7 +93,7 @@ public sealed class RemoteDirectoryOptInTests
 
         f.Poll = "{\"controller_connected\":false}";
         await r.PollOnceAsync();
-        for (var i = 0; i < 200 && f.OptIns().Count < 2; i++) await Task.Delay(10);
+        await r.LastRepublish;
         var again = f.OptIns();
         Assert.Equal(2, again.Count);   // the same payload, re-published
         Assert.Equal("drone", (string?)again[1]["tags"]![0]);
@@ -112,7 +115,55 @@ public sealed class RemoteDirectoryOptInTests
         await r.PollOnceAsync();
         f.Poll = "{\"controller_connected\":false}";
         await r.PollOnceAsync();
-        await Task.Delay(50);
+        await r.LastRepublish;
         Assert.Empty(f.OptIns());
+    }
+
+    [Fact]
+    public async Task An_idle_controller_auto_disconnected_after_120s_puts_the_listing_back()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        r.Now = () => now;
+        await r.StartAsync("light");
+        Assert.True(await r.OptInToDirectoryAsync(new List<string> { "drone" }, "status"));
+        f.Poll = "{\"controller_connected\":true,\"controller_idle\":true}";
+        await r.PollOnceAsync();
+        Assert.True(r.ControllerConnected);
+
+        now = now.AddSeconds(RemoteRelay.IdleAutoDisconnectSeconds - 1);
+        await r.PollOnceAsync();
+        await r.LastRepublish;
+        Assert.True(r.ControllerConnected);
+        Assert.Single(f.OptIns());
+
+        now = now.AddSeconds(1);
+        await r.PollOnceAsync();
+        await r.LastRepublish;
+        Assert.False(r.ControllerConnected);
+        Assert.Equal(2, f.OptIns().Count);
+    }
+
+    [Fact]
+    public async Task An_opt_in_still_in_flight_when_the_session_stops_does_not_list_the_next_session()
+    {
+        var f = new FakeRelay { OptInGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) };
+        using var r = Relay(f);
+        await r.StartAsync("light");
+        var optIn = r.OptInToDirectoryAsync(new List<string> { "drone" }, "status");
+        await f.OptInArrived.Task;
+        await r.StopAsync();
+        await r.StartAsync("light");   // the fake relay hands out the same code again
+        f.OptInGate.SetResult();
+        Assert.False(await optIn);
+        Assert.False(r.DirectoryOptedIn);
+
+        f.Poll = "{\"controller_connected\":true}";
+        await r.PollOnceAsync();
+        f.Poll = "{\"controller_connected\":false}";
+        await r.PollOnceAsync();
+        await r.LastRepublish;
+        Assert.Single(f.OptIns());   // only the original, never re-published for the new session
     }
 }
