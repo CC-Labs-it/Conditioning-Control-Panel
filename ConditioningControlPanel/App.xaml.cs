@@ -2682,6 +2682,9 @@ namespace ConditioningControlPanel
             // CCP_PRIZE_GRANTS desk-test override. The static PrizeGrants facade the effect lanes call forwards here.
             Ownership = new Services.Prizes.OwnershipService();
             Services.Prizes.PrizeGrants.Attach(Ownership);
+            // BackRoomApi moved to Core; these were its App.Ownership default and its Contract D call.
+            Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
+            Services.BackRoom.BackRoomApi.OnReply = Services.MergedAccountRecovery.TryHandle;
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
             // screen. The relay is the room's own, so a reply applies its prizes block.

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.BackRoom;
 
@@ -105,22 +106,34 @@ public sealed class BackRoomApi : IBackRoomRelay
     /// <param name="identity">Null result = no account (or offline): every request refuses <c>offline</c>.</param>
     /// <param name="adoptSp">Receives settlement balances; decoration state and layout replies are excluded.</param>
     /// <param name="applyPrizes">Receives (account sent for, revision, grants) from a counter reply.
-    /// Null = <c>App.Ownership.ApplySnapshot</c>.</param>
+    /// Null = <see cref="DefaultApplyPrizes"/> (the WPF head seeds <c>App.Ownership.ApplySnapshot</c>).</param>
+    /// <param name="baseUrl">Null = <see cref="BaseUrl"/>. The Avalonia head passes its sandbox-checked proxy.</param>
     public BackRoomApi(HttpClient? http, Func<(string UnifiedId, string Token)?> identity, Action<int>? adoptSp,
-        Action<string, long, string[]>? applyPrizes = null)
+        Action<string, long, string[]>? applyPrizes = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
         _identity = identity;
         _adoptSp = adoptSp;
-        _applyPrizes = applyPrizes ?? ((account, revision, grants) => App.Ownership?.ApplySnapshot(account, revision, grants));
+        _applyPrizes = applyPrizes ?? ((account, revision, grants) => DefaultApplyPrizes?.Invoke(account, revision, grants));
+        _baseUrl = baseUrl ?? BaseUrl;
     }
+
+    private readonly string _baseUrl;
+
+    /// <summary>Head hook: where a counter reply's prizes block goes when the caller names none.
+    /// WPF seeds <c>App.Ownership.ApplySnapshot</c> at startup.</summary>
+    public static Action<string, long, string[]>? DefaultApplyPrizes;
+
+    /// <summary>Head hook: Contract D, handed every status + body (WPF seeds
+    /// <c>MergedAccountRecovery.TryHandle</c>, which is head-only).</summary>
+    public static Func<int, string, bool>? OnReply;
 
     /// <summary>The account's token door off AppSettings, or null when there is none to use.</summary>
     public static (string UnifiedId, string Token)? AppIdentity()
     {
         try
         {
-            var s = App.Settings?.Current;
+            var s = CoreSettings.Current;
             if (s == null || s.OfflineMode) return null;
             if (string.IsNullOrWhiteSpace(s.UnifiedId) || string.IsNullOrWhiteSpace(s.AuthToken)) return null;
             return (s.UnifiedId, s.AuthToken);
@@ -161,7 +174,7 @@ public sealed class BackRoomApi : IBackRoomRelay
                 using var res = await _http.SendAsync(req, budget.Token).ConfigureAwait(false);
                 var text = await res.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
                 if (_identity()?.UnifiedId != id.Value.UnifiedId) return BackRoomStationResult.Refuse("closed");
-                MergedAccountRecovery.TryHandle((int)res.StatusCode, text);   // contract D
+                OnReply?.Invoke((int)res.StatusCode, text);   // contract D
                 return Read(station, op, id.Value.UnifiedId, (int)res.StatusCode, res.IsSuccessStatusCode, text);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -175,20 +188,20 @@ public sealed class BackRoomApi : IBackRoomRelay
             catch (HttpRequestException ex)
             {
                 // Never reached the server (or the socket died under the reply). Once more, same idem.
-                App.Logger?.Debug("BackRoom relay {Station}/{Op} network failure (attempt {N}): {E}",
+                Log.Debug("BackRoom relay {Station}/{Op} network failure (attempt {N}): {E}",
                     station, op, attempt + 1, ex.Message);
             }
         }
         return BackRoomStationResult.Refuse("offline");
     }
 
-    private static HttpRequestMessage BuildRequest(string method, string path, (string UnifiedId, string Token) id,
+    private HttpRequestMessage BuildRequest(string method, string path, (string UnifiedId, string Token) id,
         string? idem, JObject? body)
     {
         HttpRequestMessage req;
         if (method == "GET")
         {
-            req = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
+            req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
         }
         else
         {
@@ -197,7 +210,7 @@ public sealed class BackRoomApi : IBackRoomRelay
             var o = body != null ? (JObject)body.DeepClone() : new JObject();
             if (!string.IsNullOrEmpty(idem)) o["idem"] = idem;
             o["unified_id"] = id.UnifiedId;
-            req = new HttpRequestMessage(HttpMethod.Post, BaseUrl + path)
+            req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + path)
             {
                 Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
             };
@@ -228,7 +241,7 @@ public sealed class BackRoomApi : IBackRoomRelay
         if ((station != "decorations" || op == "buy") && o["sp"] is JValue { Type: JTokenType.Integer } sp)
         {
             try { _adoptSp?.Invoke(sp.Value<int>()); }
-            catch (Exception ex) { App.Logger?.Debug("BackRoom adopt sp failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("BackRoom adopt sp failed: {E}", ex.Message); }
         }
         bool ok = success && o.Value<bool?>("ok") == true;
         var reason = o.Value<string?>("reason");
@@ -245,6 +258,6 @@ public sealed class BackRoomApi : IBackRoomRelay
             || p["grants"] is not JArray list) return;
         var grants = list.Where(g => g.Type == JTokenType.String).Select(g => (string)g!).ToArray();
         try { _applyPrizes(sentFor, rev.Value<long>(), grants); }
-        catch (Exception ex) { App.Logger?.Debug("BackRoom apply prizes failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("BackRoom apply prizes failed: {E}", ex.Message); }
     }
 }
