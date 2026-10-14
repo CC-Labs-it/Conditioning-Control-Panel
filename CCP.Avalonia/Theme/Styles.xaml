@@ -11,8 +11,9 @@
      That one substitution is the bulk of the work in porting a view, which is why it is worth
      writing down here rather than rediscovering it 193 times.
 
-     Only the styles needed by the first ported view live here. The remaining ~12 keys in
-     Controls.xaml and the rest of MainWindow.xaml follow the same mapping. -->
+     Controls.xaml keys are shared here, including the three Deeper button themes.
+     ponytail: the WPF press/release tween timings and SecondaryButton/PinkButton HudPlank depth
+     behavior remain wire-theme-controls-b. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
@@ -786,6 +787,82 @@
       <Style Selector="^:pointerover /template/ Border#bd">
           <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
       </Style>
+  </ControlTheme>
+
+        <!-- WPF Controls.xaml:563. Standard body button, 8px corners; Background / BorderBrush /
+             Padding stay TemplateBound so every inline setter at the call sites keeps working. -->
+        <ControlTheme x:Key="DeeperRoundButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="8"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.85"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.70"/>
+            </Style>
+            <Style Selector="^:disabled /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.40"/>
+            </Style>
+        </ControlTheme>
+
+        <!-- WPF Controls.xaml:597. Icon-only buttons, 6px corners, no size defaults. -->
+        <ControlTheme x:Key="DeeperRoundIconButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="6"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.85"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.70"/>
+            </Style>
+            <Style Selector="^:disabled /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.40"/>
+            </Style>
+        </ControlTheme>
+
+
+  <!-- WPF Controls.xaml:629. The creator lock's checked plate is six-pixel rounded. -->
+  <ControlTheme x:Key="DeeperRoundIconToggleButton" TargetType="ToggleButton">
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="bd" CornerRadius="6" Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:checked /template/ Border#bd">
+      <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent20Brush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Opacity" Value="0.85"/></Style>
   </ControlTheme>
 
 </ResourceDictionary>

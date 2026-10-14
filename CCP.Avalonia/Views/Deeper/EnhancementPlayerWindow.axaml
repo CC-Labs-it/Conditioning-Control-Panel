@@ -75,28 +75,8 @@
     </Window.Resources>
 
     <Window.Styles>
-        <!-- The implicit rounded-button style. WPF used
-             <Style TargetType="Button" BasedOn="{StaticResource DeeperRoundButton}"/>; here it is an
-             ADDITIVE Style rather than a ControlTheme so the Fluent template survives (a
-             property-only ControlTheme on a templated control draws nothing) and the per-button
-             inline Background/Foreground/BorderBrush keep winning over these setters.
-             ponytail: local copy of Resources/Theme/Controls.xaml:DeeperRoundButton, hoist when a
-             second Avalonia view needs the 8px Deeper button. -->
-        <Style Selector="Button">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Opacity" Value="0.85"/>
-        </Style>
-        <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Opacity" Value="0.70"/>
-        </Style>
-        <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Opacity" Value="0.40"/>
-        </Style>
+        <!-- Shared WPF rounded themes. Setting Theme preserves each control's local theme/template. -->
+        <Style Selector="Button"><Setter Property="Theme" Value="{StaticResource DeeperRoundButton}"/></Style>
         <!-- ponytail: the WPF DeeperScrollBarRepeat/Thumb/ScrollBar re-skin is dropped; Avalonia's
              Fluent scrollbar is already a thin dark overlay bar rather than WPF's white Windows
              chrome, which is the whole reason that style existed. Port it if the accent tint is
