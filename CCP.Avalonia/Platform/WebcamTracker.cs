@@ -90,8 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
     /// ponytail: no mouth/tongue yet (the MAR/HSV detectors are still WPF-only), so calibration's
-    /// mouth prompts time out to "moving on", as WPF does on a miss. Long stare and gaze lock-on
-    /// are in Core (LongStareDetector, GazeLock) but not consumed here yet (webcam-avalonia-lock).
+    /// mouth prompts time out to "moving on", as WPF does on a miss.
     /// </summary>
     internal sealed class WebcamTracker
     {
@@ -117,6 +116,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
         public event Action<ScreenPoint>? OnGazeMove;
+        public event Action<ScreenPoint>? OnLongStare;
+        private sealed record GazeSnapshot(double X, double Y);
+        private volatile GazeSnapshot? _lastPreLockGaze;
+        public ScreenPoint? LastPreLockGaze => _lastPreLockGaze is { } p ? new ScreenPoint(p.X, p.Y) : null;
+        public void SetGazeAttractor(double x, double y, double radius) => _gazeLock.SetTarget(x, y, radius);
+        public void ClearGazeAttractor() => _gazeLock.Clear();
         /// <summary>Start's stage and status text, 1.0 when tracking is up (WPF OnStartupProgress, same
         /// texts); drives the loading splash. A failed start ends with StateChanged and LastError.</summary>
         public event Action<double, string>? OnStartupProgress;
@@ -165,6 +170,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal bool IsClosing => _wedged is { IsAlive: true };
         private readonly BlinkDetector _blink = new();
         private readonly GazeEngine _gaze = new();
+        private readonly GazeLock _gazeLock = new();
+        private readonly LongStareDetector _longStare = new();
         private int _busy;
         /// <summary>Bumped by every Stop (and so by panic). A start that began before it never publishes
         /// its camera: it releases it instead. Guarded by <see cref="_gate"/> with the publish.</summary>
@@ -240,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 _blink.Reset();
                 _gaze.Reset();
+                _longStare.Clear();
                 run.Thread = new Thread(() => Loop(run)) { IsBackground = true, Name = "WebcamCapture", Priority = ThreadPriority.BelowNormal };
                 bool stale;
                 lock (_gate)
@@ -368,7 +376,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>WPF ProcessFrame without mouth/tongue: face, mesh, face lost/found, head pose,
-        /// iris, EAR blink, then the gaze chain (EmitGazeEvents minus lock-on and long stare).</summary>
+        /// iris, EAR blink, then the shared gaze lock, follower and long-stare chain.</summary>
         private void ProcessFrame(Run run, Mat bgr)
         {
             var found = run.Face!.Detect(bgr);
@@ -403,8 +411,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var mapped = _gaze.Step(Calibration, dx, dy, GazeEngine.Now(), out var side);
             Dispatcher.UIThread.Post(() => OnGazeSide?.Invoke(side));
             if (mapped is not { } m) return;
-            var p = _gaze.Follow(m.X, m.Y);
+            EmitProjectedGaze(m.X, m.Y, DateTime.UtcNow);
+        }
+
+        /// <summary>WPF EmitGazeEvents' final stages. Also feeds synthetic projected points in tests.</summary>
+        internal void EmitProjectedGaze(double x, double y, DateTime now)
+        {
+            _lastPreLockGaze = new GazeSnapshot(x, y); // accuracy uses the uncontracted projection
+            var locked = _gazeLock.Apply(x, y);
+            var p = _gaze.Follow(locked.X, locked.Y);
             Dispatcher.UIThread.Post(() => OnGazeMove?.Invoke(new ScreenPoint(p.X, p.Y)));
+            if (_longStare.Push(now, p.X, p.Y) is { } stare)
+                Dispatcher.UIThread.Post(() => OnLongStare?.Invoke(new ScreenPoint(stare.X, stare.Y)));
         }
 
         /// <summary>WPF UpdateHeadPose: solvePnP here (OpenCvSharp 4.13 takes SolvePnPMethod, see
@@ -432,10 +450,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { gaze.HeadPoseFailed(); Log.Debug("[Webcam] head pose failed: {Error}", ex.Message); return null; }
         }
 
-        private void NoFace()
+        internal void NoFace()
         {
             if (_gaze.FaceMissing()) Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
             _blink.CancelClosure();
+            if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2) _longStare.Clear();
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation.Easings;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -30,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// unsaved candidate live); the mouth prompts always time out (no MAR detector yet); the redo prompt
     /// is ConfirmAsync (Yes / Cancel); Close(bool) for DialogResult; Screens.ScreenFromWindow for the monitor.
     /// Verify's live cursor is a pink dot in this window (WPF: GazeDebugCursorService's overlay, minus its trail).
-    /// ponytail: the bubble test (WPF RunBubbleTestAsync, gaze attractor, auto-fix) is not ported: it only places a bubble.
+    /// ponytail: bubble-test residual auto-trim and near-miss recalibration are not ported yet.
     /// The ring pulse is a DispatcherTimer: Avalonia's Animation cannot target a Transform.
     /// </summary>
     public partial class WebcamCalibrationWindow : Window
@@ -74,6 +75,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DispatcherTimer? _ringPulse;
         private int _verifyCountdownSecondsLeft, _verifyToken;
         private bool _verifyGazeSubscribed;
+        private bool _bubbleTestRunning;
+        private Point? _bubbleGaze;
+        private long _bubbleGazeAt;
         private bool _completedOk;
 
         // Per-dot iris samples tagged with the head pose at that frame, and the session's poses.
@@ -188,6 +192,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _introDone.TrySetResult(false);
             StopRingPulse();
             StopVerifyCountdown();
+            Tracker.OnGazeMove -= OnBubbleTestGaze;
+            Tracker.ClearGazeAttractor();
             if (!_subscribed) return;
             Tracker.OnRawIris -= OnRawIris;
             Tracker.OnHeadPose -= OnHeadPose;
@@ -491,14 +497,116 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtVerifyStatus.Text = "Click Verify to preview accuracy with a live gaze cursor, or close when ready.";
         }
 
-        private void BtnVerifyBubbleTest_Click()
+        private async void BtnVerifyBubbleTest_Click()
         {
+            if (_bubbleTestRunning) return;
+            _bubbleTestRunning = true;
             StopVerifyCountdown();
             _verifyPanel.IsVisible = false;
             _shortcutHintBanner.IsVisible = false;
             _bubbleTestPanel.IsVisible = true;
-            MoveBubbleTo(new Point(Bounds.Width / 2, Bounds.Height / 2));
-            UpdateRing(_testBubbleRingFg, 0.0);
+            Tracker.OnGazeMove += OnBubbleTestGaze;
+            string summary;
+            try { summary = await RunBubbleTestAsync(); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "WebcamCalibrationWindow: bubble test threw");
+                summary = "Bubble test hit an error — see logs/app.log.";
+            }
+            finally
+            {
+                Tracker.OnGazeMove -= OnBubbleTestGaze;
+                Tracker.ClearGazeAttractor();
+                _verifyCursor.IsVisible = false;
+                _bubbleTestPanel.IsVisible = false;
+                _bubbleTestRunning = false;
+            }
+            if (_cancelled) return;
+            _verifyPanel.IsVisible = true;
+            _shortcutHintBanner.IsVisible = true;
+            _txtVerifyStatus.Text = summary;
+        }
+
+        private void OnBubbleTestGaze(Point p)
+        {
+            _bubbleGaze = p;
+            _bubbleGazeAt = Time.GetTimestamp();
+            OnVerifyGaze(p); // WPF's debug cursor, drawn in this existing fullscreen window
+        }
+
+        private async Task<string> RunBubbleTestAsync()
+        {
+            var spots = CalibrationBubbleProbe.BuildLayout(Bounds.Width, Bounds.Height, _testBubbleRingBg.Height / 2).Points;
+            var status = this.FindControl<TextBlock>("TxtBubbleTestStatus")!;
+            int popped = 0;
+            var errors = new List<double>();
+            for (int i = 0; i < spots.Length; i++)
+            {
+                var center = spots[i];
+                MoveBubbleTo(new Point(center.X, center.Y));
+                UpdateRing(_testBubbleRingFg, 0);
+                _testBubble.Opacity = 1;
+                status.Text = $"Bubble {i + 1} / {spots.Length} — pop it with your eyes.";
+                Tracker.SetGazeAttractor(center.X, center.Y, CalibrationBubbleProbe.RadiusX);
+                var dwell = new CalibrationBubbleProbe(center.X, center.Y);
+                var samples = new List<(double X, double Y)>();
+                long started = Time.GetTimestamp();
+                while (true)
+                {
+                    await Delay(CalibrationBubbleProbe.TickMs);
+                    if (_cancelled) return "";
+                    if (Time.GetElapsedTime(started).TotalMilliseconds > CalibrationBubbleProbe.TimeoutMs) break;
+                    bool fresh = _bubbleGaze.HasValue && Time.GetElapsedTime(_bubbleGazeAt).TotalMilliseconds < 300;
+                    var gaze = _bubbleGaze.GetValueOrDefault();
+                    dwell.Tick(fresh, gaze.X, gaze.Y);
+                    if (dwell.OnTarget)
+                    {
+                        var raw = Tracker.LastPreLockGaze ?? gaze;
+                        samples.Add((raw.X, raw.Y));
+                    }
+                    UpdateRing(_testBubbleRingFg, dwell.Progress);
+                    if (dwell.Complete) break;
+                }
+                Tracker.ClearGazeAttractor();
+                if (dwell.Complete)
+                {
+                    popped++;
+                    errors.Add(CalibrationBubbleProbe.Distance(CalibrationBubbleProbe.Median(samples), center));
+                    WebcamQuickRecalWindow.Play("bubbles/Pop.mp3", 0.5f); // WPF CalibrationSoundService.BubblePop
+                    await PlayBubblePopAsync();
+                }
+                else
+                {
+                    status.Text = "Moving on…";
+                    _testBubble.Opacity = 0.25;
+                    await Delay(500);
+                }
+                if (_cancelled) return "";
+            }
+            HideBubble();
+            // ponytail: no residual auto-trim yet; report measured pre-lock accuracy without changing the calibration.
+            return popped == 0 ? "Couldn't pop any bubbles — tracking may be off for this setup. Consider recalibrating."
+                : $"Popped {popped} / {spots.Length} · average accuracy {errors.Average():F0} px.";
+        }
+
+        private async Task PlayBubblePopAsync()
+        {
+            var scale = (ScaleTransform)_testBubble.RenderTransform!;
+            var ease = new QuadraticEaseOut();
+            long started = Time.GetTimestamp();
+            while (true)
+            {
+                if (_cancelled) return;
+                double t = Math.Clamp(Time.GetElapsedTime(started).TotalMilliseconds / 180, 0, 1);
+                scale.ScaleX = scale.ScaleY = 1 + 0.7 * ease.Ease(t);
+                _testBubble.Opacity = 1 - t;
+                if (t >= 1) break;
+                await Delay(15); // one 180 ms tween; never Animation.RunAsync on a Transform
+            }
+            int remaining = (int)Math.Max(0, 320 - Time.GetElapsedTime(started).TotalMilliseconds);
+            if (remaining > 0) await Delay(remaining); // WPF holds the pop for 320 ms total
+            scale.ScaleX = scale.ScaleY = 1;
+            _testBubble.Opacity = 1;
         }
 
         private void BtnVerifyRecalibrate_Click()

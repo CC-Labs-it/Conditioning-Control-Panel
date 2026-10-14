@@ -286,10 +286,10 @@
             <StackPanel>
                 <TextBlock Text="Calibration verified" Foreground="#FF69B4" FontSize="22"
                            FontWeight="Bold" HorizontalAlignment="Center"/>
-                <TextBlock Text="Calibration complete. Blink and mouth tracking warmed up — you're all set."
+                <TextBlock Text="Calibration complete — you're all set."
                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13" Margin="0,8,0,0"
                            TextWrapping="Wrap" HorizontalAlignment="Center"/>
-                <TextBlock x:Name="TxtVerifyStatus" Text="Preview accuracy with a live gaze cursor, or pop a few bubbles with your eyes to test (and auto fine-tune) precision."
+                <TextBlock x:Name="TxtVerifyStatus" Text="Preview accuracy with a live gaze cursor, or pop a few bubbles with your eyes to test precision."
                            Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,16,0,20"
                            TextWrapping="Wrap" HorizontalAlignment="Center" MaxWidth="440"/>
 

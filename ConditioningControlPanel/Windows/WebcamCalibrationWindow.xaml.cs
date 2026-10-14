@@ -832,14 +832,11 @@ namespace ConditioningControlPanel
         // ~45 px, so the visual bubble is 136 x 180 DIPs (3.0 x 4.0 degrees,
         // set in the XAML) and the dwell zone below is an ELLIPSE, not a
         // circle.
-        private const double BubblePopRadiusXDips = 130;    // gaze-to-center X half-extent that counts as "on it" (bubble half-width 68 + slack)
-        private const double BubblePopRadiusYDips = 195;    // 1.5x the X radius - matches the measured vertical:horizontal error ratio
-        private const int BubbleDwellNeededMs = 700;
-        private const int BubbleAvgWindowSamples = 12;      // ~400ms rolling mean drives the on-target decision
-        private const int BubbleTimeoutMs = 10000;
+        private const double BubblePopRadiusXDips = CalibrationBubbleProbe.RadiusX;    // gaze-to-center X half-extent that counts as "on it" (bubble half-width 68 + slack)
+        private const int BubbleTimeoutMs = CalibrationBubbleProbe.TimeoutMs;
         private const double NearMissMaxXDips = 250;         // timeout bubbles still yield a recal sample within this
         private const double NearMissMaxYDips = 375;         // 1.5x again - a 300 px vertical miss at the bottom row is a REAL sample, not garbage
-        private const double BubbleHeaderClearDips = 108;    // top strip owned by the "Accuracy test" caption; probe rows clamp below it
+        private const double BubbleHeaderClearDips = CalibrationBubbleProbe.HeaderClear;    // top strip owned by the "Accuracy test" caption; probe rows clamp below it
 
         private bool _bubbleTestRunning;
         private WpfPoint? _bubbleGaze;
@@ -889,7 +886,7 @@ namespace ConditioningControlPanel
 
         private async Task<string> RunBubbleTestAsync()
         {
-            const int TickMs = 33;
+            const int TickMs = CalibrationBubbleProbe.TickMs;
 
             double w = ActualWidth, h = ActualHeight;
 
@@ -955,64 +952,15 @@ namespace ConditioningControlPanel
             // enough. Compressing symmetrically also keeps all four levels
             // distinct, because the 0.12/0.35 ratio is preserved.
             double ringHalfH = TestBubbleRingBg.Height / 2.0;
-            double rowMin = BubbleHeaderClearDips + ringHalfH;
-            double rowMax = h - ringHalfH - 16;
-            const double OuterFrac = 0.35;   // 0.5 -/+ 0.35 => the ideal 0.15 / 0.85 rows
-            const double InnerFrac = 0.12;   // 0.5 -/+ 0.12 => the ideal 0.38 / 0.62 rows
-
-            double rowCenter, rowScale;
-            bool rowsDegenerate = false;
-            if (rowMin > rowMax)
-            {
-                rowsDegenerate = true;
-                // Absurdly short window: the caption strip plus one whole ring
-                // does not fit at all. Degenerate but safe - all four probes
-                // land on one line. Balance still holds (both columns collapse
-                // to the same point) but there is no vertical geometry left to
-                // fit, so say so out loud rather than returning a bogus slope.
-                rowCenter = h / 2.0;
-                rowScale = 0;
+            var layout = CalibrationBubbleProbe.BuildLayout(w, h, ringHalfH);
+            double rowCenter = layout.Center, rowScale = layout.Scale;
+            bool rowsDegenerate = layout.Degenerate;
+            const double OuterFrac = CalibrationBubbleProbe.OuterFraction;
+            if (rowsDegenerate)
                 App.Logger?.Warning(
-                    "WebcamCalibrationWindow: bubble test cannot lay out probe rows at window height {H:F0} DIPs " +
-                    "(needs at least {Need:F0}) - all four probes collapse to one line and the vertical fit is meaningless.",
-                    h, rowMin + ringHalfH + 16);
-            }
-            else
-            {
-                double band = rowMax - rowMin;
-                double maxScale = band / (2.0 * OuterFrac * h);
-                if (maxScale >= 1.0)
-                {
-                    // The ideal span fits. Keep the centre as close to h/2 as
-                    // the band allows: FitAxisTrim pivots on ActualHeight/2, and
-                    // a design centred on that pivot makes its offset and slope
-                    // estimates orthogonal (uncorrelated), which is worth the
-                    // few DIPs of shift it costs.
-                    rowScale = 1.0;
-                    double lo = rowMin + OuterFrac * h;
-                    double hi = rowMax - OuterFrac * h;
-                    // maxScale >= 1 already guarantees hi >= lo; this only
-                    // protects against the two expressions rounding differently
-                    // at the exact boundary, because Math.Clamp THROWS on min > max.
-                    if (hi < lo) hi = lo;
-                    rowCenter = Math.Clamp(h / 2.0, lo, hi);
-                }
-                else
-                {
-                    // Recentre on the usable band - that is precisely the centre
-                    // that affords the longest symmetric span - then compress
-                    // both pairs by one shared factor.
-                    rowScale = maxScale;
-                    rowCenter = (rowMin + rowMax) / 2.0;
-                }
-            }
-
-            double outerOffset = OuterFrac * h * rowScale;
-            double innerOffset = InnerFrac * h * rowScale;
-            double yTop = rowCenter - outerOffset;
-            double yBottom = rowCenter + outerOffset;
-            double yUpperMid = rowCenter - innerOffset;
-            double yLowerMid = rowCenter + innerOffset;
+                    "WebcamCalibrationWindow: bubble test cannot lay out probe rows at window height {H:F0} DIPs "
+                    + "(needs at least {Need:F0}) - all four probes collapse to one line and the vertical fit is meaningless.",
+                    h, BubbleHeaderClearDips + 2 * ringHalfH + 16);
 
             // Note the guard is "not already warned about" and NOT "rowScale > 0":
             // at h == 352 exactly the usable band is zero DIPs wide, so rowScale
@@ -1044,13 +992,7 @@ namespace ConditioningControlPanel
                 }
             }
 
-            var spots = new[]
-            {
-                new WpfPoint(w * 0.24, yTop),        // top extreme
-                new WpfPoint(w * 0.76, yLowerMid),
-                new WpfPoint(w * 0.24, yBottom),     // bottom extreme (hardest)
-                new WpfPoint(w * 0.76, yUpperMid),
-            };
+            var spots = layout.Points.Select(p => new WpfPoint(p.X, p.Y)).ToArray();
 
             int popped = 0;
             var errors = new List<double>();          // |gaze−bubble| per popped bubble
@@ -1079,10 +1021,9 @@ namespace ConditioningControlPanel
                 // below, which is ours.
                 App.Webcam?.SetGazeAttractor(center.X, center.Y, BubblePopRadiusXDips);
 
-                double dwellMs = 0;
+                var dwell = new CalibrationBubbleProbe(center.X, center.Y);
                 var insideSamples = new List<WpfPoint>();
                 var recentSamples = new Queue<(DateTime At, WpfPoint P)>();
-                var avgWindow = new Queue<WpfPoint>();
                 var started = DateTime.UtcNow;
                 bool didPop = false;
 
@@ -1107,47 +1048,13 @@ namespace ConditioningControlPanel
                         recentSamples.Enqueue((now, raw));
                         while (recentSamples.Count > 0 && (now - recentSamples.Peek().At).TotalMilliseconds > 2000)
                             recentSamples.Dequeue();
-                        avgWindow.Enqueue(gaze.Value);
-                        while (avgWindow.Count > BubbleAvgWindowSamples) avgWindow.Dequeue();
                     }
 
-                    // On-target decision runs on the ROLLING MEAN, not the
-                    // instantaneous point: if the user is lingering on the
-                    // zone on average, a single wobble frame outside the
-                    // radius must not drop the target (user report — "at the
-                    // first wobble out of the bubble zone we lose it").
-                    // Measured as a NORMALISED ELLIPTICAL distance (<=1 is
-                    // inside), not a circle: the dwell zone is 1.5x taller
-                    // than it is wide so the axis carrying more error gets
-                    // more tolerance. Without this, moving the probe rows out
-                    // to 0.15/0.85 h would just convert fast pops into 10 s
-                    // timeouts - a longer AND less informative test.
-                    double onTarget = double.MaxValue;
-                    if (fresh && avgWindow.Count >= 3)
-                    {
-                        double ax = 0, ay = 0;
-                        foreach (var q in avgWindow) { ax += q.X; ay += q.Y; }
-                        ax /= avgWindow.Count;
-                        ay /= avgWindow.Count;
-                        double ex = (ax - center.X) / BubblePopRadiusXDips;
-                        double ey = (ay - center.Y) / BubblePopRadiusYDips;
-                        onTarget = Math.Sqrt(ex * ex + ey * ey);
-                    }
+                    dwell.Tick(fresh, gaze?.X ?? 0, gaze?.Y ?? 0);
+                    if (dwell.OnTarget) insideSamples.Add(raw);
+                    UpdateRing(TestBubbleRingFg, dwell.Progress);
 
-                    if (onTarget <= 1.0)
-                    {
-                        dwellMs += TickMs;
-                        insideSamples.Add(raw);
-                    }
-                    else
-                    {
-                        // Leaky decay instead of a hard reset — a stray
-                        // stretch shouldn't wipe accumulated dwell.
-                        dwellMs = Math.Max(0, dwellMs - TickMs);
-                    }
-                    UpdateRing(TestBubbleRingFg, dwellMs / BubbleDwellNeededMs);
-
-                    if (dwellMs >= BubbleDwellNeededMs)
+                    if (dwell.Complete)
                     {
                         didPop = true;
                         break;
@@ -1159,7 +1066,7 @@ namespace ConditioningControlPanel
                 {
                     popped++;
                     var med = MedianPoint(insideSamples);
-                    double err = Math.Sqrt(Math.Pow(med.X - center.X, 2) + Math.Pow(med.Y - center.Y, 2));
+                    double err = CalibrationBubbleProbe.Distance((med.X, med.Y), (center.X, center.Y));
                     errors.Add(err);
                     samples.Add((center, med));
                     CalibrationSoundService.BubblePop();
@@ -1340,9 +1247,8 @@ namespace ConditioningControlPanel
 
         private static WpfPoint MedianPoint(List<WpfPoint> pts)
         {
-            var xs = pts.Select(p => p.X).OrderBy(v => v).ToList();
-            var ys = pts.Select(p => p.Y).OrderBy(v => v).ToList();
-            return new WpfPoint(xs[xs.Count / 2], ys[ys.Count / 2]);
+            var p = CalibrationBubbleProbe.Median(pts.Select(p => (p.X, p.Y)).ToArray());
+            return new WpfPoint(p.X, p.Y);
         }
 
         private void MoveDotTo(WpfPoint screenPoint)
