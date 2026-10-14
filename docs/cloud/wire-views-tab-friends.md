@@ -1,5 +1,6 @@
 # Friends page presence question (coherent slice)
 
+- Changed files: `CCP.Avalonia/Views/Controls/FriendsDrawer.cs`, `CCP.Core/Services/Friends/FriendsPresenceAsk.cs`, `ConditioningControlPanel/Controls/Friends/FriendsDrawer.cs`, `Tests/CCP.Avalonia.Tests/FriendsDrawerTests.cs`, `Tests/CCP.Core.Tests/FriendsPresenceAskTests.cs`, `docs/avalonia-parity.md`, `docs/cloud/wire-views-tab-friends.md`.
 - Add WPF's once-only presence question to the existing shared FriendsDrawer hosted by Social > Friends and the rail popup: matching question/subtitle, mint Yes, No, and spacing beneath the header.
 - Yes shares through the real friends service; No leaves the player hidden. Both persist acknowledgement. The existing header/settings presence switch still counts as answering, so the question never repeats after a choice.
 - Move eligibility and marker storage into Core `FriendsPresenceAsk`. WPF and Avalonia call the shared copy; test seams remain at the heads and tests use sandboxes/fake wires.
