@@ -126,7 +126,7 @@ public sealed class FlashLayer : BaseLayer
     private readonly SKPaint _fillPaint = new();
     private readonly SKPaint _ringPaint = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
 
-    public FlashLayer(CompositorEngine engine) : base(engine) { }
+    public FlashLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.Flash;
 
