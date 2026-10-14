@@ -6,6 +6,7 @@ using ConditioningControlPanel.Controls.Billboard;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Billboard;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.PieceByPiece;
 
 namespace ConditioningControlPanel
 {
@@ -80,7 +81,19 @@ namespace ConditioningControlPanel
                 };
             }
 
+            // The featured chess match asks the server only while the board is on screen.
+            cardHost.IsVisibleChanged += (_, _) => SyncFeaturedPoll();
+            StateChanged += (_, _) => SyncFeaturedPoll();
+            Closed += (_, _) => PbpFeaturedFeed.SetActive(false);
+            SyncFeaturedPoll();
+
             cardHost.Begin();
+        }
+
+        private void SyncFeaturedPoll()
+        {
+            try { PbpFeaturedFeed.SetActive(PbpFeaturedPoll.ShouldRun(_billboardHost?.IsVisible == true, WindowState == WindowState.Minimized)); }
+            catch (Exception ex) { App.Logger?.Debug("Billboard featured poll gate failed: {E}", ex.Message); }
         }
 
         /// <summary>The motion level changed (MainWindow.UiUpdates): the board re-reads its gates.</summary>
