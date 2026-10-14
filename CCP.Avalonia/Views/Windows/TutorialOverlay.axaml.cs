@@ -9,7 +9,6 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
-using ConditioningControlPanel.Avalonia.Platform;
 
 // The step model now comes from the tutorial seam. Aliased to the names the WPF original uses so
 // this file still reads against ConditioningControlPanel/Windows/TutorialOverlay.xaml.cs line for
@@ -26,8 +25,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// title, description and its Skip / Skip step / Previous / Next row.
     ///
     /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
-    /// ponytail: the in-window stage, cross-window retarget, narration and spotlight input hole
-    /// remain in follow-up wire-win-tutorial-overlay-b. The parameterless constructor renders a
+    /// Live cards use the host overlay layer, including a real spotlight input hole. Narration,
+    /// guide navigation, keyword demo and fade timing remain in wire-win-tutorial-overlay-c. The parameterless constructor renders a
     /// sample and never subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
@@ -214,6 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             base.OnClosed(e);
+            if (!_live) Closed?.Invoke(this, e);
         }
 
         /// <summary>A step's Icon string is data (WPF drew the emoji): mapped through IconMap to a Fluent
@@ -267,10 +267,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void UpdateStep(TutorialStep step)
         {
+            if (_closed) return;
             _step = step;
-
-            // ponytail: cross-window retarget and WindowLoaded fallback are still in
-            // wire-win-tutorial-overlay-b. This slice binds to the current host only.
+            if (RetargetIfNeeded(step)) return;
             _advanceFiredThisStep = false;
 
             _txtStepCounter.Text = StepCounterText();
@@ -317,7 +316,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // button's Click sequence. This is what makes Escape -> Skip reachable.
             Dispatcher.UIThread.Post(() =>
             {
-                try { Focus(); } catch { /* window already closing */ }
+                try { if (!_live) Focus(); } catch { /* window already closing */ }
             }, DispatcherPriority.Background);
 
             if (_live) SubscribeAdvanceTrigger(step);
@@ -383,10 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // WPF gave the target window a chance to prepare itself here (expand the collapsed
-            // drawer that holds TargetElementName) via step.PrepareTargetWindowAction. That hook
-            // is an Action<System.Windows.Window> and did not cross with the seam - see the class
-            // header for what a step behind a collapsed drawer degrades to.
+            PrepareTarget(step);
             try { _targetWindow.UpdateLayout(); } catch { /* not laid out yet */ }
 
             var targetElement = FindElementByName(_targetWindow, step.TargetElementName);
@@ -514,8 +510,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             byte alpha = blockClicks ? DimAlpha() : (byte)0x00;
             var overlay = new Rectangle
             {
-                Width = Bounds.Width,
-                Height = Bounds.Height,
+                Width = StageW,
+                Height = StageH,
                 Fill = new SolidColorBrush(Color.FromArgb(alpha, 0x00, 0x00, 0x00)),
                 IsHitTestVisible = blockClicks,
             };
@@ -523,16 +519,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Canvas.SetTop(overlay, 0);
             _spotlightCanvas.Children.Add(overlay);
 
-            // ponytail: needs the same rect input region as the spotlight hole (see
-            // ApplyWindowSpotlightRegion). WPF got its pass-through here for free, from alpha-0
-            // pixels on a layered window; X11 does not honour pixel alpha for input, and
-            // X11Overlay.SetClickThrough is whole-window, so handing input away would take the
-            // card's Skip Tutorial / Skip step with it and strand the user with no way out — the
-            // exact failure #443 was about. So the region is cleared in BOTH branches and the
-            // pass-through dim (used while the user works an OS file dialog on top of us) is lost
-            // until X11Overlay gains that entry point. The dim still drops to alpha 0, so the card
-            // alone signals the wait state as it does on Windows.
-            ClearWindowSpotlightRegion();
+            // The stage leaves input outside its dim and card with the host.
         }
 
         private void DrawSpotlightOverlay(Rect highlightBounds, bool clickThroughHole)
@@ -545,7 +532,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 highlightBounds.Height + padding * 2
             );
 
-            var fullRect = new RectangleGeometry(new Rect(0, 0, Bounds.Width, Bounds.Height));
+            var fullRect = new RectangleGeometry(new Rect(0, 0, StageW, StageH));
             var spotlightRect = new RectangleGeometry(glowBounds) { RadiusX = 8, RadiusY = 8 };
 
             // When clickThroughHole=true the dark fill is the full rect MINUS the spotlight rect,
@@ -572,61 +559,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BorderThickness = new Thickness(2),
                 Background = Brushes.Transparent,
                 IsHitTestVisible = false,
-                Effect = new DropShadowEffect
-                {
-                    Color = Color.FromRgb(0xFF, 0x69, 0xB4),
-                    BlurRadius = 15,
-                    OffsetX = 0,
-                    OffsetY = 0,
-                    Opacity = 0.7,
-                },
+                BoxShadow = new BoxShadows(new BoxShadow { Blur = 15, Color = Color.FromArgb(179, 255, 105, 180) }),
             };
             Canvas.SetLeft(glowBorder, glowBounds.X);
             Canvas.SetTop(glowBorder, glowBounds.Y);
             _spotlightCanvas.Children.Add(glowBorder);
 
-            if (clickThroughHole) ApplyWindowSpotlightRegion(highlightBounds);
-            else ClearWindowSpotlightRegion();
         }
 
         /// <summary>WPF dimmed harder over MainWindow (0xA0) than over a dialog (0x70). Sample mode
         /// has no target, and the overlay's normal home is MainWindow, so it takes the same
         /// value.</summary>
         private byte DimAlpha() => _targetWindow is null or MainWindow or MainShellWindow ? (byte)0xA0 : (byte)0x70;
-
-        // ---- Window-level click-through ---------------------------------------------
-
-        /// <summary>
-        /// WPF punched the spotlight rect out of the window's OS region with
-        /// CreateRectRgn + CombineRgn(RGN_DIFF) + SetWindowRgn, because a layered WPF window
-        /// receives clicks over its whole client area whatever the pixel alpha, so the drawn hole
-        /// alone gave no click-through.
-        ///
-        /// ponytail: needs a rect-region entry point on CCP.Avalonia/Platform/X11Overlay — it
-        /// exposes only SetClickThrough(TopLevel, bool), which is the whole window or nothing, and
-        /// no view layer may edit it. XFixes CAN express this exactly (an input region of
-        /// everything-minus-the-hole; X11Overlay's own doc-comment says a non-empty region would
-        /// be strictly more capable than WS_EX_TRANSPARENT), so this is one small addition to that
-        /// class, not a lost feature. Until it lands: the spotlight hole is VISUAL ONLY — the ring
-        /// and the lit rect draw correctly, but a click inside the hole is eaten by the overlay
-        /// instead of reaching the highlighted control, which strands every auto-advance step that
-        /// waits on the user clicking through. The region is cleared here rather than left
-        /// half-applied so at least the card's own buttons keep working.
-        /// </summary>
-        private void ApplyWindowSpotlightRegion(Rect spotlightBoundsDip)
-        {
-            _ = spotlightBoundsDip;
-            ClearWindowSpotlightRegion();
-        }
-
-        /// <summary>The exact analogue of SetWindowRgn(hwnd, IntPtr.Zero, true): give the window
-        /// its whole input area back.</summary>
-        private void ClearWindowSpotlightRegion() => SetWholeWindowClickThrough(false);
-
-        /// <summary>X11Overlay handles X11 and (via Win32Overlay) Windows, and returns false everywhere
-        /// else (native Wayland, the headless render), so it is called unconditionally.</summary>
-        private void SetWholeWindowClickThrough(bool clickThrough)
-            => X11Overlay.SetClickThrough(this, clickThrough);
 
         // ---- Card placement ---------------------------------------------------------
 
@@ -647,8 +591,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var (left, top) = ComputePanelPosition(position, targetBounds, panelWidth, panelHeight, margin);
 
             // Clamp to overlay extent.
-            double clampedLeft = Math.Max(margin, Math.Min(left, Bounds.Width - panelWidth - margin));
-            double clampedTop = Math.Max(margin, Math.Min(top, Bounds.Height - panelHeight - margin));
+            double clampedLeft = Math.Max(margin, Math.Min(left, StageW - panelWidth - margin));
+            double clampedTop = Math.Max(margin, Math.Min(top, StageH - panelHeight - margin));
 
             // If clamping moved us into / over the target (small overlay or target near an edge),
             // flip to the opposite side so the card never sits on top of the spotlighted control.
@@ -657,8 +601,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var flipped = FlipPosition(position);
                 var (altLeft, altTop) = ComputePanelPosition(flipped, targetBounds, panelWidth, panelHeight, margin);
-                double altClampedLeft = Math.Max(margin, Math.Min(altLeft, Bounds.Width - panelWidth - margin));
-                double altClampedTop = Math.Max(margin, Math.Min(altTop, Bounds.Height - panelHeight - margin));
+                double altClampedLeft = Math.Max(margin, Math.Min(altLeft, StageW - panelWidth - margin));
+                double altClampedTop = Math.Max(margin, Math.Min(altTop, StageH - panelHeight - margin));
                 var altRect = new Rect(altClampedLeft, altClampedTop, panelWidth, panelHeight);
                 if (!altRect.Intersects(targetBounds))
                 {
@@ -764,6 +708,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                if (_stage != null && element.TranslatePoint(new Point(0, 0), _stage) is { } local)
+                    return new Rect(local, element.Bounds.Size);
                 var screenTopLeft = element.PointToScreen(new Point(0, 0));
                 var overlayLocal = this.PointToClient(screenTopLeft);
                 return new Rect(overlayLocal, element.Bounds.Size);
