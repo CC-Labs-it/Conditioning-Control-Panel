@@ -12,13 +12,13 @@
 // thumbnail checks, Select/Deselect All, thumbnails (images; videos keep the placeholder), preview
 // and reveal, the asset counts and the preset combo + Save As/Update/Delete. AssetPresetService
 // .OnlineChannelsReset is seeded in App startup (main 03af6e8bb). Still missing from the tree: the
-// Content Packs node (BuildPackTree, App.ContentPacks) - no pack service on this head.
+// Content Packs node, encrypted image thumbnails, pack checks/counts and preview now live in AssetsTabView.Packs.cs, using ContentPackStore.
 //
 // The rest, by blocker:
 //   App.ContentPacks - RefreshPacksAsync, BtnRefreshPacks_Click, BtnPackDownload_Click,
 //     BtnPackActivate_Click, BtnPackUpgrade_Click, BtnDeleteDownloadedPacks_Click, and the four
 //     OnPack* progress/auth/rate-limit callbacks.
-//   Pack thumbnails - LoadPackFolderThumbnails, LoadPackThumbnailAsync (App.ContentPacks).
+//   Pack video thumbnails - WPF Windows shell thumbnailer needs a portable replacement.
 //   The OS - BtnCreatorDiscord_Click, BtnPackPatreon_Click (pack cards only).
 //   Pack preview rotation - StartPackPreviewRotation, StopPackPreviewRotation, LoadPreviewImagesFromUrlsAsync,
 //     GetPackPreviewFileStem (pure, and held with the rotation that is its only caller).
