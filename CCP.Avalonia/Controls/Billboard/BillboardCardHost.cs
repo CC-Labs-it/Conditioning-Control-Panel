@@ -69,7 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         private Rectangle? _fill;
         private double _holdBase;
         private long _holdSince;
-        private DispatcherTimer? _holdTimer;
+        private Helpers.BeatLoop? _holdTimer;
         private IDisposable? _toastTimer;
         private IDisposable? _visibilityWatch;
 
@@ -550,7 +550,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         {
             if (_holdTimer != null) return;
             _holdSince = Time.GetTimestamp();
-            _holdTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Background, (_, _) => HoldTick());
+            // WPF BillboardCardHost.Chips.cs:278 runs the fill as a DoubleAnimation; here it rides the window's shared
+            // 30 fps beat (it was a free-running 25 fps timer that ticked between the beat's frames: lag-fixes-b).
+            _holdTimer = new Helpers.BeatLoop(this, _ => HoldTick());
             _holdTimer.Start();
         }
 

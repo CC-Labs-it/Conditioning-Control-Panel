@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// unchanged: a static attached-property class plus one drawing control per surface, added to
     /// the adorner layer with <c>SetAdornedElement</c> so it is arranged over the card rather than
     /// over the whole window. The WPF clock (a frame-rate-capped <c>DoubleAnimation</c> on an
-    /// AffectsRender property) becomes a 24fps <see cref="DispatcherTimer"/> driving a phase field
+    /// AffectsRender property) becomes a 30fps <see cref="Fx.FrameClock"/> on the shared beat driving a phase field
     /// and <c>InvalidateVisual</c> - the cap made explicit instead of buried in
     /// <c>Timeline.SetDesiredFrameRate</c>.</para>
     /// </summary>
@@ -279,7 +279,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// </summary>
     public sealed class TierFxBorderAdorner : Control
     {
-        private const int AmbientFrameRate = 24;
+        private const int AmbientFrameRate = 30;   // WPF Controls/TierFxBorder.cs:246, on the shared beat
 
         /// <summary>Share of the perimeter the band covers.</summary>
         private const double BandFraction = 0.25;
@@ -319,7 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private Control? _visibilityHost;
         private IDisposable? _visibilityWatch;
 
-        private DispatcherTimer? _timer;
+        private ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock? _timer;
         private readonly Stopwatch _lapClock = new Stopwatch();
         private bool _clockRunning;
         private bool _hover;
@@ -446,10 +446,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _phaseAtStart = _phase;
             _lapClock.Restart();
 
-            _timer ??= new DispatcherTimer(
-                TimeSpan.FromMilliseconds(1000.0 / AmbientFrameRate),
-                DispatcherPriority.Background,
-                OnTick);
+            // On the window's shared 30 fps beat (FrameClock), not a free-running timer: a timer ticks between
+            // the beat's frames, so the window composed twice as often as either asked (lag-fixes-b).
+            if (_timer == null)
+            {
+                _timer = new ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock(this) { Interval = TimeSpan.FromSeconds(1.0 / AmbientFrameRate) };
+                _timer.Tick += OnTick;
+            }
             _timer.Start();
             InvalidateVisual();
         }

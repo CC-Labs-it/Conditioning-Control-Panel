@@ -40,8 +40,6 @@ internal static class ChasterHead
                 Paused: s.ChasterPaused,
                 PriceOverrides: new Dictionary<string, int>(s.ChasterPriceOverrides ?? new Dictionary<string, int>(), StringComparer.Ordinal));
         };
-        // ponytail: no MinutesOn (the feature day log is not on this head); optional on the service,
-        // read as "nobody can tell".
         var target = Target(userDataDir, overrideUrl);
         inner ??= new HttpClientHandler();
         return new ChasterService(
@@ -56,6 +54,13 @@ internal static class ChasterHead
                 FriendsHead.Identity, ChasterClient.ProxyBase),
             RafflePostDays = () => CoreSettings.Current.ChasterRafflePostDays,
             LadderShowName = () => CoreSettings.Current.ChasterLadderShowName,
+            // WPF ChasterServiceApp.cs:40,49 MinutesFromDayLog: the day log's minutes, fed by the conditioning-time
+            // tracker (MainShellWindow.UiUpdates.cs). Null without a log = "nobody can tell". Also null for a day
+            // before the log's first conditioning day: on upgrade that day predates the tracker and reads 0, which
+            // would charge an idle day the user may have conditioned (docs/avalonia-decisions.md 2026-10-12).
+            MinutesOn = dayKey => App.FeatureDayLog is { } log && log.FirstConditioningDay() is { } first
+                                  && string.CompareOrdinal(dayKey, first) >= 0
+                ? log.ConditioningMinutesOn(dayKey) : null,
         };
     }
 

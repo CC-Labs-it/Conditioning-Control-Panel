@@ -322,7 +322,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, screens.Count, primary))
+            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, screens.Count, primary))
             {
                 var w = new OverlayWindow();
                 w.PlaceOn(screens[i]);
