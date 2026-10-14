@@ -15,7 +15,9 @@
  *                                  turns the camera and answers with watch-info
  *   Leave                          `watch-leave`, which the door answers
  *   the crowd                      ui/reactions.js (bar for the stands,
- *                                  floats for everyone)
+ *                                  floats for everyone; sounds, anti-spam,
+ *                                  mute and a seat's "Play watchers'
+ *                                  reactions" live there)
  *   the effects switch             `watch-effects { on, amount, media }` on
  *                                  every watch deal and every change of the
  *                                  watcher's own choice (game/preferences.js
@@ -158,6 +160,7 @@ export function createWatchHud({
       el.watchers.hidden = !text;
       el.watchers.textContent = text;
     }
+    crowd.setStands(watching);
     crowd.setWatching(watching && !over);
     paintHeat();
     paintMedia();

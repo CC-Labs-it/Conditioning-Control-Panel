@@ -495,4 +495,44 @@ body.pbp-replay-corner .game-settings:not(:has(.game-options-panel:not([hidden])
 .hud.still .pbp-fade-in, .hud.still .pbp-fade-out, .hud.still .react-btn.sent { animation: none; }
 .hud.still .react-btn, .hud.still .react-btn:hover { transition: none; transform: none; }
 @media (prefers-reduced-motion: reduce) { .pbp-fade-in, .pbp-fade-out { animation: none; } }
+/* The crowd's polish (ui/reactions.js, 2026-10-14): a press flies into the board, the bar rests after a
+   burst (grey, a draining line, a small lift as it wakes), a press on a resting bar shakes it, and a
+   speaker at the end mutes the reactions' sounds. `rotate` / `scale` rather than transform, so the
+   bar keeps its centring and the fade keeps its `translate`. */
+.react-mute { width: 30px; height: 38px; margin-left: 2px; padding: 0 0 0 4px; border: 0; border-left: 1px solid #49415d; border-radius: 0 50% 50% 0;
+  cursor: pointer; background: transparent; font: 16px/1 'Segoe UI Emoji', 'Segoe UI Symbol', 'Segoe UI', sans-serif; opacity: .85;
+  transition: opacity 120ms ease; }
+.react-mute.off { opacity: .5; }
+.react-mute:hover { opacity: 1; }
+.react-mute:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 2px; }
+.react-mute.sent { animation: pbp-react-sent 340ms ease-out 1; }
+.react-bar .react-btn { transition: transform 120ms ease, background-color 120ms ease, filter 160ms ease, opacity 160ms ease; }
+.react-bar.cooling .react-btn { filter: grayscale(1); opacity: .42; cursor: default; }
+.react-bar.cooling .react-btn:hover { background: transparent; transform: none; }
+.react-cool { position: absolute; left: 16px; right: 16px; bottom: 2px; height: 2px; border-radius: 1px; background: #ff91c9;
+  transform-origin: left center; transform: scaleX(0); opacity: 0; pointer-events: none; }
+.react-bar.cooling .react-cool.run { opacity: .85; animation: pbp-react-cool var(--cool-ms, 1500ms) linear forwards; }
+@keyframes pbp-react-cool { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.react-bar.cool-out { animation: pbp-react-wake 260ms ease-out 1; }
+@keyframes pbp-react-wake { 0% { scale: 1; } 45% { scale: 1.05; } 100% { scale: 1; } }
+.react-bar.nope { animation: pbp-react-nope 320ms ease-in-out 1; }
+@keyframes pbp-react-nope { 0%, 100% { rotate: 0deg; } 20% { rotate: -2.2deg; } 45% { rotate: 1.8deg; } 70% { rotate: -1deg; } }
+.react-bar.nope-still { border-color: #ff91c9; }
+.react-btn.sent-still { background: #5a2f4d; box-shadow: inset 0 0 0 2px #ff91c9; }
+.react-fly { position: fixed; z-index: 50; pointer-events: none; font: 30px/1 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  transform: translate(-50%, -50%); animation: pbp-react-fly 820ms cubic-bezier(.2, .7, .3, 1) forwards; will-change: transform, opacity;
+  filter: drop-shadow(0 4px 8px #0008); }
+@keyframes pbp-react-fly {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(.7) rotate(0deg); }
+  18% { transform: translate(calc(-50% + var(--dx) * .12), calc(-50% + var(--dy) * .12 - 46px)) scale(1.5) rotate(var(--tilt, 0deg)); }
+  70% { opacity: 1; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.15) rotate(0deg); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) - 18px)) scale(2.1) rotate(0deg); }
+}
+.hud.still .react-bar.nope, .hud.still .react-bar.cool-out, .hud.still .react-mute.sent { animation: none; }
+.hud.still .react-bar .react-btn { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .react-bar.nope, .react-bar.cool-out, .react-mute.sent, .react-fly { animation: none; }
+  .react-fly { display: none; }
+}
+@media (max-width: 760px) { .react-mute { width: 28px; height: 34px; font-size: 15px; } }
 /* --- end the stands -------------------------------------------------------- */
