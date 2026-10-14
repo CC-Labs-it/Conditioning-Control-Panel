@@ -39,10 +39,18 @@ public sealed class PerformanceSettingsWiringTests
         var s = CoreSettings.Current;
         var (perf, auto, motion) = (s.PerformanceMode, s.AutoPerformanceMode, s.MotionLevel);
         var bubbles = BubbleOverlay.Field.Bubbles;
+        var savedBubbles = bubbles.ToArray();
+        Window? w = null;
         try
         {
             (s.PerformanceMode, s.AutoPerformanceMode, s.MotionLevel) = (false, true, MotionLevel.Full);
             bubbles.Clear();
+            var section = new PerformanceSettingsSection();
+            w = new Window { Content = section, Width = 700, Height = 1400 };
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var box = section.FindControl<CheckBox>("ChkAutoPerformance")!;
+            Assert.True(box.IsChecked);
             Assert.Equal(PerformanceTier.Quality, AmbientFxCanvas.Env.CurrentTier);
             for (var i = 0; i < 8; i++) bubbles.Add(new AmbientBubble());
             Assert.Equal(8, AmbientFxCanvas.Env.HeavyElementCount);
@@ -51,12 +59,15 @@ public sealed class PerformanceSettingsWiringTests
             Assert.Equal(PerformanceTier.Performance, AmbientFxCanvas.Env.CurrentTier);
             Assert.False(AmbientFxCanvas.Env.AllowAmbientLoops);   // the heavy screen sheds the ambient loops
 
-            s.AutoPerformanceMode = false;   // the user's opt-out: load never escalates
+            box.IsChecked = false;   // the user's opt-out, through the box: load never escalates
+            Assert.False(s.AutoPerformanceMode);
             Assert.Equal(PerformanceTier.Quality, AmbientFxCanvas.Env.CurrentTier);
         }
         finally
         {
+            w?.Close();
             bubbles.Clear();
+            foreach (var b in savedBubbles) bubbles.Add(b);
             (s.PerformanceMode, s.AutoPerformanceMode, s.MotionLevel) = (perf, auto, motion);
         }
         return Task.CompletedTask;
