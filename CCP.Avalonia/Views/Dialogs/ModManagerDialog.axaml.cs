@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<Button>("BtnCreate")!.Click += (_, _) => BtnCreate_Click();
             _btnDownloadPack.Click += (_, _) => _ = BtnDownloadPack_Click();
             _btnActivate.Click += (_, _) => BtnActivate_Click();
-            _btnShare.Click += (_, _) => BtnShare_Click();
+            _btnShare.Click += (_, _) => LastShare = ShareSelectedAsync();
             _btnTubeFit.Click += (_, _) => BtnTubeFit_Click();
             _btnUninstall.Click += (_, _) => BtnUninstall_Click();
             _btnInstall.Click += (_, _) => BtnInstall_Click();
@@ -559,7 +559,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         // WPF BtnShare_Click (ModManagerDialog.xaml.cs:692): disabled for the upload, then the list
         // is rebuilt to pick up the new status badge.
-        private async void BtnShare_Click()
+        // The click keeps the task so a test can await the upload instead of polling.
+        internal Task? LastShare { get; private set; }
+
+        internal async Task ShareSelectedAsync()
         {
             if (_selectedMod == null || Owner is not Windows.MainShellWindow mw) return;
 

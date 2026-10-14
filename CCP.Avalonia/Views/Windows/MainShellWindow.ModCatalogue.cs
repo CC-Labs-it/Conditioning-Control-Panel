@@ -122,7 +122,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var path = Path.Combine(mod.InstalledPath, "resources", mod.Manifest.PreviewImage);
                 if (!File.Exists(path)) return null;
 
-                using var src = SKBitmap.Decode(path);
+                // Decode near the target width (WPF DecodePixelWidth); the codec rounds to a size it can do cheaply.
+                using var codec = SKCodec.Create(path);
+                if (codec == null || codec.Info.Width <= 0) return null;
+                var dims = codec.GetScaledDimensions(Math.Min(1f, (float)ModPreviewMaxPixels / codec.Info.Width));
+                using var src = SKBitmap.Decode(codec, codec.Info.WithSize(dims.Width, dims.Height));
                 if (src == null || src.Width <= 0) return null;
                 var height = Math.Max(1, (int)Math.Round(src.Height * (double)ModPreviewMaxPixels / src.Width));
                 using var thumb = src.Resize(new SKImageInfo(ModPreviewMaxPixels, height), new SKSamplingOptions(SKCubicResampler.Mitchell));

@@ -143,6 +143,8 @@ public sealed class AssetSubmitWireTests
     public Task ModManagerShareAsksForTheMegaLinkThenSubmitsTheModEnvelope() => Run(async (shell, fake) =>
     {
         // A user-installed mod with tags and a previewImage, installed the way a dropped .ccpmod is.
+        var oldMods = AvApp.Mods;
+        using var coreMods = new CoreModsSnapshot();   // P02: undo StartMods' CoreMods seeding
         if (AvApp.Mods == null) AvApp.StartMods();
         var id = "share-mod-" + Guid.NewGuid().ToString("N")[..6];
         var scratch = Directory.CreateTempSubdirectory("ccp-mod-share-").FullName;
@@ -191,7 +193,7 @@ public sealed class AssetSubmitWireTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(submit.IsEnabled);
             submit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            for (var i = 0; i < 200 && !share.IsEnabled; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(20); }
+            await manager.LastShare!;
             Assert.True(share.IsEnabled);
 
             Assert.Equal(new[] { "/api/auth/token-exchange", "/api/catalogue/mods" }, fake.Paths);
@@ -212,6 +214,8 @@ public sealed class AssetSubmitWireTests
         finally
         {
             AvApp.Mods.UninstallMod(id);
+            typeof(AvApp).GetProperty(nameof(AvApp.Mods), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(null, oldMods);
             CoreSettings.Current.CatalogueModSubmissions.Clear();
             foreach (var kv in saved) CoreSettings.Current.CatalogueModSubmissions[kv.Key] = kv.Value;
             Directory.Delete(scratch, true);
