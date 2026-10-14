@@ -44,8 +44,6 @@ public sealed class AmbientBeatLoopsTests
         "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml.cs",
         "Views/Tabs/BlinkTrainerTabView.axaml",
-        "Views/Tabs/ProgramsTabView.Ignition.cs",        // from the tip: programs-ignition-fx (Pulse/Spin factories, 8 sites)
-        "Views/Tabs/SettingsTabView.ProgramToday.cs",     // from the tip: programs-today-card (Loop factory, 5 sites)
         "Views/Windows/QuizWindow.axaml",
         "Views/Windows/SplashScreen.axaml",
         "Views/Windows/TeaseRevealPopup.axaml.cs",
@@ -76,7 +74,6 @@ public sealed class AmbientBeatLoopsTests
         "Views/Features/FeatureCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
         "Views/Tabs/AchievementsTabView.axaml.cs", "Views/Tabs/AchievementsTabView.Fx.cs",
         "Views/Tabs/LockdownTabView.axaml.cs", "Views/Tabs/QuestsTabView.Fx.cs", "Views/Tabs/StudioTabView.axaml.cs",
-        "Views/Tabs/ProgramsTabView.Ignition.cs",   // from the tip: programs-ignition-fx (rail/boss DropShadow)
         "Views/Windows/AnnouncementPopup.axaml.cs", "Views/Windows/FeatureIntroPopup.axaml.cs",
         "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
         "Views/Windows/LockCardWindow.axaml.cs", "Views/Windows/MainShellWindow.Animations.cs",
@@ -129,7 +126,7 @@ public sealed class AmbientBeatLoopsTests
     {
         "Controls/DescentFuseRailChip.cs", "Controls/Fx/FrameClock.cs",   // FrameClock: its own off-window fallback
         "Controls/HoverPop.cs", "Controls/PremiumSpark.cs", "Controls/TakeoverOrb.cs", "Controls/VatGlassCanvas.cs",
-        "Controls/NavGlow.cs", "Views/Overlays/FlashOverlayWindow.cs",   // from the tip: sync6-nav-rail-c, flash-wire
+        "Views/Overlays/FlashOverlayWindow.cs",   // its own overlay window: no beat to share, and the exit must close it even unrendered
         "Views/AvatarTube/AvatarTubeWindow.Chat.cs", "Views/Chaos/ChaosHudWindow.axaml.cs", "Views/Chaos/ChaosOverlayWindow.axaml.cs",
         "Views/Controls/SeasonRecapCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
         "Views/Overlays/AttentionTestTarget.cs", "Views/Overlays/FlashOverlay.cs", "Views/Overlays/SpiralOverlay.cs",

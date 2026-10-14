@@ -30,11 +30,9 @@
 //     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
 //     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a
 //     modal" arbitration those read from App.
-//   RefreshMarqueeFromSettings / CheckServerUpdateBanner and their two response DTOs
-//     (MarqueeResponse, UpdateBannerResponse), plus _serverUpdateUrl and
-//     _serverAnnouncementShownThisLaunch (only the intake nudge reads it) - HttpClient calls to
-//     the CC Labs API with no Core client yet. CheckServerAnnouncement is ported:
-//     MainShellWindow.Announcement.cs over Core V2AuthService.
+//   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
+//     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
+//   _serverAnnouncementShownThisLaunch - only the intake nudge reads it.
 //   CheckIntakePassNudge / StartIntakeFromNudge - App.Programs (the weekly intake pass); the
 //     accepted nudge then wants ShowTab("gradedintake"), which does exist here.
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
@@ -42,9 +40,7 @@
 //   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
 //     formatters, neither of which runs here; Loc.Get already returns the key when a string is
 //     missing, so there is nothing to restore in isolation.
-//   StartMarqueeAnimation / UpdateMarqueeMessage - the scrolling marquee strip, a WPF Storyboard
-//     over a TranslateTransform on a control MainShellWindow.axaml does not carry. Nothing to
-//     drive: a still banner that says the right thing beats a faked scroll.
+//   (StartMarqueeAnimation is PORTED onto the page that carries the strip: SettingsTabView.Marquee.cs.)
 //   SweepBannerSheen - MainShellWindow.ChromeFx.cs, still a stub. The BannerSheen border is in
 //     the XAML and parked at Opacity 0, so its absence costs nothing visible.
 

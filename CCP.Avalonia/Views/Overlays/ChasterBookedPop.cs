@@ -88,7 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 var screen = host?.Screens?.ScreenFromPoint(new PixelPoint((int)origin.X, (int)origin.Y)) ?? host?.Screens?.Primary;
                 var scale = screen?.Scaling is > 0 and var k ? k : 1.0;
-                BookedPopLayout.MonitorPx? monitor = screen is { } s ? new(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height) : null;
+                AvatarTubeLayout.Box? monitor = screen is { } s ? new(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height) : null;
                 var tl = BookedPopLayout.TopLeftPx(origin, slot, scale, monitor);
                 var bounds = new PixelRect((int)tl.X, (int)tl.Y,
                     (int)Math.Ceiling(BookedPopLayout.WindowWidthDip * scale), (int)Math.Ceiling(BookedPopLayout.WindowHeightDip * scale));

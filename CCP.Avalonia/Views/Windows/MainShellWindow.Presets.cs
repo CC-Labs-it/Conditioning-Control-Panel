@@ -293,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Dispatcher.UIThread.Post(RefreshWallActiveStates);
             }
             void OnReplaced() => Dispatcher.UIThread.Post(Rebind);
-            Opened += (_, _) => { Rebind(); if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnReplaced; };
+            Opened += (_, _) => { Rebind(); if (CoreSettings.Service is { } svc) { svc.CurrentReplaced -= OnReplaced; svc.CurrentReplaced += OnReplaced; } };   // Opened fires on every Hide/Show
             Closed += (_, _) =>
             {
                 if (hooked != null) hooked.PropertyChanged -= OnFlag;

@@ -330,7 +330,7 @@ namespace ConditioningControlPanel.Controls
                 var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)_originPx.X, (int)_originPx.Y));
                 var scale = CompositorHostWindow.GetDpiScaleForScreen(screen);
                 var b = screen.Bounds;
-                var topLeft = BookedPopLayout.TopLeftPx(_originPx, _slot, scale, new BookedPopLayout.MonitorPx(b.Left, b.Top, b.Width, b.Height));
+                var topLeft = BookedPopLayout.TopLeftPx(_originPx, _slot, scale, new AvatarTubeLayout.Box(b.Left, b.Top, b.Width, b.Height));
                 SetWindowPos(hwnd, HWND_TOPMOST, (int)topLeft.X, (int)topLeft.Y, 0, 0,
                     SWP_NOSIZE | SWP_NOACTIVATE);
             }

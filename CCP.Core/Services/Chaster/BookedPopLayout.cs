@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using ConditioningControlPanel.AvatarTubeLayout;
 using ConditioningControlPanel.Models;
-using Point = ConditioningControlPanel.Services.Chaster.ScreenPoint;
 
 namespace ConditioningControlPanel.Services.Chaster;
 
@@ -37,14 +37,6 @@ public static class BookedPopLayout
     /// climbing off the screen.</summary>
     public const int MaxSlots = 4;
 
-    /// <summary>A monitor in physical desktop px (Core twin of the WPF <c>Rect</c> it took before the move).</summary>
-    public readonly record struct MonitorPx(double Left, double Top, double Width, double Height)
-    {
-        public double Right => Left + Width;
-        public double Bottom => Top + Height;
-        public bool IsEmpty => !(Width > 0) || !(Height > 0);
-    }
-
     /// <summary>How one pop looks and moves at a motion level.</summary>
     /// <param name="FontDip">Figure size.</param>
     /// <param name="RiseDip">How far it lifts over its life (0 = still).</param>
@@ -70,17 +62,17 @@ public static class BookedPopLayout
 
     /// <summary>The point the figure is born at: the thing that caused it, else the cursor, else
     /// nothing (the caller falls back to the rail padlock).</summary>
-    public static Point? ResolveOrigin(Point? cause, Point? cursor) => cause ?? cursor;
+    public static ScreenPoint? ResolveOrigin(ScreenPoint? cause, ScreenPoint? cursor) => cause ?? cursor;
 
     /// <summary>A pop that is still on screen: where it was born, when, and which rung it took.</summary>
-    public readonly record struct LivePop(Point OriginPx, long BornMs, int LifeMs, int Slot);
+    public readonly record struct LivePop(ScreenPoint OriginPx, long BornMs, int LifeMs, int Slot);
 
     /// <summary>
     /// The lowest rung no live pop near <paramref name="originPx"/> is standing on. Pops far away
     /// (another bubble across the screen) do not push this one up. Past <see cref="MaxSlots"/>
     /// the top rung is reused.
     /// </summary>
-    public static int PickSlot(IEnumerable<LivePop> live, Point originPx, long nowMs)
+    public static int PickSlot(IEnumerable<LivePop> live, ScreenPoint originPx, long nowMs)
     {
         var taken = new bool[MaxSlots];
         foreach (var pop in live)
@@ -100,7 +92,7 @@ public static class BookedPopLayout
     /// (raised by its rung), kept inside <paramref name="monitorPx"/> when one is known.
     /// <paramref name="scale"/> is that monitor's DPI scale (1.0 = 96 dpi).
     /// </summary>
-    public static Point TopLeftPx(Point originPx, int slot, double scale, MonitorPx? monitorPx)
+    public static ScreenPoint TopLeftPx(ScreenPoint originPx, int slot, double scale, Box? monitorPx)
     {
         if (!(scale > 0) || double.IsNaN(scale)) scale = 1.0;
         var w = WindowWidthDip * scale;
@@ -112,11 +104,11 @@ public static class BookedPopLayout
         {
             // Clamp the figure, not the window: a bubble popped at the very top edge still shows
             // its number on screen, a little lower than the bubble.
-            x = Math.Clamp(x, m.Left - w * 0.25, Math.Max(m.Left - w * 0.25, m.Right - w * 0.75));
-            var minY = m.Top - h * (FigureAnchorY - 0.2);
+            x = Math.Clamp(x, m.X - w * 0.25, Math.Max(m.X - w * 0.25, m.Right - w * 0.75));
+            var minY = m.Y - h * (FigureAnchorY - 0.2);
             var maxY = m.Bottom - h * (FigureAnchorY + 0.12);
             y = Math.Clamp(y, minY, Math.Max(minY, maxY));
         }
-        return new Point(Math.Round(x), Math.Round(y));
+        return new ScreenPoint(Math.Round(x), Math.Round(y));
     }
 }

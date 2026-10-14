@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
@@ -14,30 +13,7 @@ public class RenderStallGuardTests
 {
     // ---- #1312 lucky toast ----
 
-    [Fact]
-    public void LuckyToast_SkipsWhileAGameOwnsTheScreen()
-    {
-        Assert.Equal(LuckyToastRule.Decision.Skip,
-            LuckyToastRule.Decide(notificationsSuppressed: false, gameOwnsScreen: true, toastVisible: false));
-        Assert.Equal(LuckyToastRule.Decision.Skip,
-            LuckyToastRule.Decide(notificationsSuppressed: false, gameOwnsScreen: true, toastVisible: true));
-    }
-
-    [Fact]
-    public void LuckyToast_SkipsWhenPerkNoticesAreOff()
-    {
-        Assert.Equal(LuckyToastRule.Decision.Skip,
-            LuckyToastRule.Decide(notificationsSuppressed: true, gameOwnsScreen: false, toastVisible: false));
-    }
-
-    [Fact]
-    public void LuckyToast_ASecondProcRefreshesInsteadOfShowingAgain()
-    {
-        Assert.Equal(LuckyToastRule.Decision.Show,
-            LuckyToastRule.Decide(notificationsSuppressed: false, gameOwnsScreen: false, toastVisible: false));
-        Assert.Equal(LuckyToastRule.Decision.Refresh,
-            LuckyToastRule.Decide(notificationsSuppressed: false, gameOwnsScreen: false, toastVisible: true));
-    }
+    // The pure Decide facts moved with LuckyToastRule to Tests/CCP.Core.Tests/LuckyToastRuleTests.cs.
 
     [Fact]
     public void LuckyToast_HandlerNeverBuildsAWindowPerProc()
