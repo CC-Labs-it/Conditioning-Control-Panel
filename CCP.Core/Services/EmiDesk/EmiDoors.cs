@@ -132,6 +132,42 @@ public static class EmiDoors
         new("settings", "nav/door_settings.png", 0x9A9AB8, true),
     };
 
+    private static readonly Dictionary<string, string> _tabTargets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["presets"] = "sessions",
+        ["companion"] = "companion",
+        ["awareness"] = "awareness",
+        ["remotecontrol"] = "remote",
+        ["bambitakeover"] = "takeover",
+        ["lockdown"] = "lockdown",
+        // Polish 12 (2026-10-07): "exclusives" redirects before the counter, "premium" is the page.
+        ["premium"] = "vault",
+        ["discord"] = "profile",
+        ["appsettings"] = "settings",
+        ["progression"] = "progression",
+    };
+
+    private static readonly Dictionary<string, string> _rackTargets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["flash"] = "flashes",
+        ["video"] = "videos",
+        ["subliminal"] = "subliminals",
+        ["bubbles"] = "bubbles",
+        ["spiral"] = "loom",          // the Studio's Spiral module IS the Loom editor
+        ["pinkfilter"] = "pinkfilter",
+        ["braindrain"] = "braindrain",
+        ["mindwipe"] = "mindwipe",
+    };
+
+    /// <summary>The ring door taught by a tab open, shared by both heads.
+    /// Host launchers count themselves; intake landing and Spiral Room aren't their host cards.</summary>
+    public static string? TargetForTab(string? key) =>
+        key != null && _tabTargets.TryGetValue(key, out var target) ? target : null;
+
+    /// <summary>The Studio module's ring door; opening Studio itself teaches no card.</summary>
+    public static string? TargetForRack(string? key) =>
+        key != null && _rackTargets.TryGetValue(key, out var target) ? target : null;
+
     /// <summary>
     /// The head's catalogue, in table order. <paramref name="wire"/> answers each id with its three
     /// delegates, or null when the door has no surface on that head: a null HIDES the card, the

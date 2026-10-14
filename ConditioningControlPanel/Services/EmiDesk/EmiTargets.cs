@@ -137,40 +137,13 @@ public static class EmiTargets
     // start button calls IntakeHostService.Launch - counting both would score one sitting twice.
     // "spiral" as a TAB key is the Spiral Room, a different thing from the spiral OVERLAY card.
 
-    private static readonly Dictionary<string, string> _tabTargets = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["presets"] = "sessions",
-        ["companion"] = "companion",
-        ["awareness"] = "awareness",
-        ["remotecontrol"] = "remote",
-        ["bambitakeover"] = "takeover",
-        ["lockdown"] = "lockdown",
-        // Polish 12 (2026-10-07): "exclusives" redirects before the counter, "premium" is the page.
-        ["premium"] = "vault",
-        ["discord"] = "profile",
-        ["appsettings"] = "settings",
-        ["progression"] = "progression",
-    };
-
-    private static readonly Dictionary<string, string> _rackTargets = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["flash"] = "flashes",
-        ["video"] = "videos",
-        ["subliminal"] = "subliminals",
-        ["bubbles"] = "bubbles",
-        ["spiral"] = "loom",          // the Studio's Spiral module IS the Loom editor
-        ["pinkfilter"] = "pinkfilter",
-        ["braindrain"] = "braindrain",
-        ["mindwipe"] = "mindwipe",
-    };
-
     /// <summary>A tab was navigated to by any route. Score the card that points at it, if any.</summary>
     public static void NoteTabOpened(string? tabKey)
     {
         if (string.IsNullOrEmpty(tabKey)) return;
         try
         {
-            if (_tabTargets.TryGetValue(tabKey, out var id)) App.EmiDesk?.NoteOpen(id);
+            if (EmiDoors.TargetForTab(tabKey) is { } id) App.EmiDesk?.NoteOpen(id);
         }
         catch (Exception ex)
         {
@@ -184,7 +157,7 @@ public static class EmiTargets
         if (string.IsNullOrEmpty(rackKey)) return;
         try
         {
-            if (_rackTargets.TryGetValue(rackKey, out var id)) App.EmiDesk?.NoteOpen(id);
+            if (EmiDoors.TargetForRack(rackKey) is { } id) App.EmiDesk?.NoteOpen(id);
         }
         catch (Exception ex)
         {
