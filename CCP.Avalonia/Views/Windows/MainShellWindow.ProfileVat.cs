@@ -24,11 +24,9 @@
 //   EvaluateVatPoll          (CCP.Core/Services/Descent/), so the fold and the read parsing are
 //   CreateVatPollTimer       already portable - only the thing that ASKS the server is not, and a
 //                            vat filled from anything else is a number nobody agreed to.
-//   the faucet               - _faucetHold, ArmFaucet, DisarmFaucet, OnFaucetVatOffScreen,
-//                            UpdateFaucetPresentation and PositionVatTickGlyphs are all in
-//                            MainShellWindow.ProfileFaucet.cs, still a wholesale stub (1,146 WPF
-//                            lines). ArmVat and DisarmVat below therefore arm and disarm the JAR
-//                            only; the tap that holds earned XP comes with that file.
+//   the faucet: Arm/Disarm and charge-hold now live in MainShellWindow.ProfileFaucet.cs.
+//   ApplyFaucetReading takes the accepted coordinator read; server-feed integration and
+//   remaining ambient/celebration FX are deferred in shell-profile-faucet.
 //   MaybeShowFeatureIntro  - CCP.Avalonia/Views/Windows/FeatureIntroPopup exists, but the spend
 //                            ledger it reads is on the shell's stub side; and the explainer may
 //                            only fire from ApplyDescentToVat, which is blocked above.
@@ -168,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             UpdateVatReadout();
 
-            // ponytail: ArmFaucet(glass, jarW, jarH) belongs here - see the header.
+            ArmFaucet(glass, jarW, jarH);
             Log.Information("[Descent] vat armed on the Trainer Card");
         }
 
@@ -201,7 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var readout = ProfilePage?.FindControl<TextBlock>("ProfileVatReadout");
             if (readout != null) readout.IsVisible = false;
 
-            // ponytail: DisarmFaucet() belongs here - see the header.
+            DisarmFaucet();
         }
     }
 }
