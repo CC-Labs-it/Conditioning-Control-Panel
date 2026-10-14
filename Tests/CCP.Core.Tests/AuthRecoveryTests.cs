@@ -109,6 +109,15 @@ public sealed class AuthRecoveryTests : IDisposable
         Assert.Equal(1, providerAsks);
     }
 
+    [Fact]   // WPF JObject.Parse threw on it, so the provider re-validate got its turn (P28)
+    public async Task AnUnparseable200FromRestoreSession_FallsThroughToTheProvider()
+    {
+        AuthRecovery.ProviderRevalidate = () => { _settings.AuthToken = "minted"; return Task.FromResult(true); };
+        _http.Answers.Enqueue((HttpStatusCode.OK, ""));
+        Assert.True(await AuthRecovery.HandleUnauthorizedAsync(Status(HttpStatusCode.Unauthorized)));
+        Assert.Equal("minted", _settings.AuthToken);
+    }
+
     [Fact]
     public async Task AProviderThatMintsAFreshTokenRecovers()
     {

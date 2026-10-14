@@ -62,6 +62,8 @@ public sealed partial class AccountSeedTests
         wire.Seen.Clear();
         MainShellWindow.NewLegacyApi = () => new LegacyAccountApi(wire);
         MainShellWindow.PendingRegistrationDelay = launchDelay;   // null: the test drives the check, the launch check stays unarmed
+        // An armed zero wait looks up during Show(), so its answer must already be on the wire.
+        if (launchDelay is not null) wire.Answer("/auth/lookup", (HttpStatusCode.OK, "{\"exists\":false}"));
         var shell = new MainShellWindow();
         shell.Show();
         return (wire, shell);
@@ -132,10 +134,9 @@ public sealed partial class AccountSeedTests
     public Task PendingRegistration_IsArmedByTheShellOpening() =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
-            var (wire, shell) = await PendingPatron(launchDelay: TimeSpan.FromMilliseconds(1));
+            var (wire, shell) = await PendingPatron(launchDelay: TimeSpan.Zero);   // armed, but no real timer (P08)
             try
             {
-                wire.Answer("/auth/lookup", (HttpStatusCode.OK, "{\"exists\":false}"));
                 await Welcome(shell);   // nobody called the check: Opened did
                 Assert.Equal("/auth/lookup", wire.Seen.Single().Path);
             }

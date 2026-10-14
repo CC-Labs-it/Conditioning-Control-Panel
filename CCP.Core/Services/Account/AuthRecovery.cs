@@ -136,8 +136,8 @@ namespace ConditioningControlPanel.Services
                 // The token is still valid on the server (the 401 was transient). The server does not
                 // rotate here; if it ever sends a new one, adopt it.
                 var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                string? newToken = null;
-                try { newToken = JObject.Parse(json)["auth_token"]?.ToString(); } catch { /* an empty 200 is still a yes */ }
+                // WPF parity (P28): an empty/non-JSON 200 throws here and falls through to the provider re-validate.
+                var newToken = JObject.Parse(json)["auth_token"]?.ToString();
                 if (!string.IsNullOrEmpty(newToken) && string.Equals(settings.UnifiedId, unifiedId, StringComparison.Ordinal))
                 {
                     settings.AuthToken = newToken;
