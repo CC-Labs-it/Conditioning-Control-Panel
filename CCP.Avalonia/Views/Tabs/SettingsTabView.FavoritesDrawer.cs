@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -109,14 +110,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void PeekFavoritesDrawer(string pinnedId)
         {
             if (!IsEffectivelyVisible) return;
+            int glowAfter = 0;
             if (!_drawerOpen)
             {
                 _drawerPeeking = true;
                 SetFavoritesDrawer(true, animate: true);
+                glowAfter = AmbientFxCanvas.Env.AllowTransitions ? FavoritesDrawerSlideMs + 40 : 0;
             }
             BurstFavoritesDrawer(90);
             TwinkleFavoritesDrawerStar(1.45, 220);
             if (_drawerPeeking) { _drawerPeekTimer.Stop(); _drawerPeekTimer.Start(); }
+            DispatcherTimer.RunOnce(() =>
+            {
+                if (!IsEffectivelyVisible) return;
+                var chip = FavoritesList.Children.OfType<Control>().FirstOrDefault(c => Equals(c.Tag, pinnedId));
+                NavGlow.Once(chip, Color.FromUInt32(0xff000000 | ConditioningControlPanel.Services.UI.NavStripTable.Lilac), why: "favorites pin " + pinnedId);
+            }, TimeSpan.FromMilliseconds(Math.Max(1, glowAfter)));
         }
 
         internal void FavoritesDrawerPeekElapsed()
