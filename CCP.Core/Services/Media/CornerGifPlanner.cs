@@ -12,9 +12,9 @@ namespace ConditioningControlPanel.Services
     /// head.
     ///
     /// <para>What is deliberately NOT here: the layered / click-through window itself, the GIF
-    /// decode, the DPI read and the screen enumeration - all per-platform - and the ADMISSION rule
-    /// ("may a standalone slot realize at all?"), which stays beside the session-side rule it must
-    /// never disagree with, in the head's <c>CornerGifMedia</c>.</para>
+    /// decode, the DPI read and the screen enumeration - all per-platform. The ADMISSION rules
+    /// (session vs standalone, ticket 1539282547484139682) are at the bottom, moved from WPF
+    /// CornerGifMedia, which now forwards here.</para>
     ///
     /// <para>Pure and static: no clock, no settings read, no I/O beyond a <c>File.Exists</c> probe
     /// on paths the caller hands in. Every value it returns is finite, or null.</para>
@@ -163,5 +163,35 @@ namespace ConditioningControlPanel.Services
             cursor = at + StaggerMs;
             return Math.Max(0, at - nowTick);
         }
+
+        // ---- who may raise a corner overlay (WPF CornerGifMedia, ticket 1539282547484139682) ----
+
+        /// <summary>Does a session's corner overlay draw a SPIRAL? True when the template names no
+        /// art of its own on disk, because the overlay then falls back to the spiral.</summary>
+        public static bool SessionCornerArtIsSpiral(string? cornerGifPath)
+        {
+            if (string.IsNullOrWhiteSpace(cornerGifPath)) return true;
+            try { return !File.Exists(cornerGifPath); }
+            catch { return true; }
+        }
+
+        /// <summary>May a SESSION raise its corner GIF right now? The template asked, the user's
+        /// master (<c>SessionCornerGifAllowed</c>) allows it, no standalone overlay owns the corner,
+        /// and a spiral corner yields to the user's spiral OFF and to a fullscreen spiral on screen.</summary>
+        public static bool AllowSessionCornerGif(
+            bool templateEnabled,
+            bool userAllowed,
+            bool standaloneOverlayActive,
+            bool artIsSpiral,
+            bool userSpiralAllowed,
+            bool spiralOverlayActive)
+            => templateEnabled
+               && userAllowed
+               && !standaloneOverlayActive
+               && (!artIsSpiral || (userSpiralAllowed && !spiralOverlayActive));
+
+        /// <summary>May a STANDALONE slot realize? It yields while a session corner GIF is up.</summary>
+        public static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive)
+            => slotEnabled && !sessionCornerGifActive;
     }
 }

@@ -40,5 +40,23 @@ namespace ConditioningControlPanel
         {
             try { RefreshHandler?.Invoke(index); } catch { /* a live-apply nudge must never throw */ }
         }
+
+        // ---- the session-scoped overlay (WPF SessionEngine's own corner window) ----
+
+        /// <summary>Show (or re-show, replacing) the session's corner overlay for this setting.</summary>
+        public static volatile Action<Models.CornerGifOverlaySetting>? SessionShowHandler;
+
+        /// <summary>Take the session's overlay down; true also hands the corner back to the
+        /// standalone slots (WPF CloseCornerGif(handBackCorner)).</summary>
+        public static volatile Action<bool>? SessionCloseHandler;
+
+        /// <summary>WPF StandaloneCornerGifActive: a standalone slot is up or queued.</summary>
+        public static volatile Func<bool>? StandaloneActiveProvider;
+
+        /// <summary>WPF SpiralOverlayActive: the fullscreen spiral is on screen.</summary>
+        public static volatile Func<bool>? SpiralOverlayActiveProvider;
+
+        internal static bool StandaloneActive { get { try { return StandaloneActiveProvider?.Invoke() == true; } catch { return false; } } }
+        internal static bool SpiralOverlayActive { get { try { return SpiralOverlayActiveProvider?.Invoke() == true; } catch { return false; } } }
     }
 }
