@@ -5,15 +5,18 @@
 //                         attach, on IsVisible, on IntakePass.PassStateChanged and from
 //                         MainShellWindow.Patreon.cs, which is WPF's three call sites).
 //   StartMantraSession    PORTED below. Its one caller is the Programs Mantra-task door.
-//   LaunchPlayBreakoutDemo / LaunchPlayBreakout / LaunchPlayChess / LaunchPlayGoon
-//                         NOT PORTED: BreakoutHostService, PieceByPieceHostService and
-//                         GoonHostService are WPF-only WebView hosts. The Play wall's four game
-//                         buttons are disabled with the exclusives_not_on_this_build tooltip.
+//   LaunchPlayBreakoutDemo / LaunchPlayChess reuse the launcher's existing GameWindow hosts.
+//   LaunchPlayBreakout / LaunchPlayGoon remain unported; their buttons refuse honestly.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        // WPF MainWindow.PlayTab.cs: both doors are free and focus an existing game.
+        internal void LaunchPlayBreakoutDemo() => Games.GameWindow.Launch("breakoutdemo");
+
+        internal void LaunchPlayChess() => Games.GameWindow.Launch("piecebypiece");
+
         /// <summary>
         /// WPF MainWindow.PlayTab.cs StartMantraSession: focus a running MantraWindow rather than
         /// restart it (a second StartSession would wipe the run), else start the session THEN open the
