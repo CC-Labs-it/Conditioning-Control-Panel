@@ -160,6 +160,8 @@ html, body {
 }
 .online-row .word { margin-right: 4px; }
 .online-note { margin: 0 4px 0 0; }
+/* "N watching": a quiet line under the status, for the players and the stands alike */
+.watchers { margin: 6px 0 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.55; }
 .hud-btn {
   pointer-events: auto; cursor: pointer;
   padding: 6px 11px; border-radius: 10px;
@@ -435,3 +437,60 @@ body.pbp-replay-corner .game-settings:not(:has(.game-options-panel:not([hidden])
 .game-options-panel .dial-slider { display: grid; grid-template-columns: 64px minmax(0, 1fr) 40px; gap: 6px; align-items: center; font-size: 13px; color: #d0c2de; cursor: default; }
 .game-options-panel .dial-slider input { width: 100%; min-width: 0; height: 17px; margin: 0; }
 .dial-slider output { text-align: right; font-variant-numeric: tabular-nums; color: #ffe1f0; }
+
+/* --- the stands (ui/watch-hud.js, ui/reactions.js) -------------------------
+   Kept to the page's own glass: the plates gain a thin Distraction bar (the
+   turn player's lit), the rows that cannot apply to a watcher go, the crowd
+   gets six round buttons where the piece hint sits and a lane up the right edge. */
+.hud.watching [data-seat-only] { display: none !important; }
+.game-settings { z-index: 2; }   /* an open Options panel stays over the crowd */
+.player-heat { height: 6px; border-radius: 3px; background: #4b3a57; overflow: hidden; opacity: .45; transition: opacity 200ms ease; }
+.player-heat i { display: block; height: 100%; width: 0; border-radius: 3px; background: #ff91c9; transition: width 600ms ease; }
+.player-heat.lit { opacity: 1; }
+.player-heat.lit i { box-shadow: 0 0 8px #ff91c9aa; }
+.hud.still .player-heat i { transition: none; }
+.watch-media { margin-top: 8px; padding: 9px 11px; display: grid; gap: 8px; background: #211d38; border: 1px solid #80668e; border-radius: 10px; }
+.watch-media p { margin: 0; font-size: 13px; line-height: 1.4; color: #ead6ed; }
+.watch-media .online-row { flex-wrap: wrap; }
+.watch-media .online-row[hidden], .watch-media .hud-btn[hidden] { display: none; }
+.react-bar { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px; border-radius: 999px;
+  background: #211d38e8; border: 1px solid #49415d; pointer-events: auto; }
+.react-btn { width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; background: transparent;
+  font: 20px/1 'Segoe UI Emoji', 'Segoe UI Symbol', 'Segoe UI', sans-serif; transition: transform 120ms ease, background-color 120ms ease; }
+.react-btn:hover { background: #33253f; transform: translateY(-2px); }
+.react-btn:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 2px; }
+.react-btn.sent { animation: pbp-react-sent 340ms ease-out 1; }
+@keyframes pbp-react-sent { 0% { transform: scale(1); } 40% { transform: scale(1.32); } 100% { transform: scale(1); } }
+.react-floats { position: absolute; z-index: 1; right: 18px; bottom: 130px; width: 72px; height: 46vh; pointer-events: none; overflow: visible; }
+.react-float { position: absolute; bottom: 0; left: calc(var(--x, .5) * 44px); font: 24px/1 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  opacity: 0; animation: pbp-react-rise 2400ms ease-out forwards; will-change: transform, opacity; }
+@keyframes pbp-react-rise {
+  0% { opacity: 0; transform: translateY(0) scale(.6); }
+  12% { opacity: 1; transform: translateY(-6vh) scale(1.05); }
+  80% { opacity: .9; }
+  100% { opacity: 0; transform: translateY(-44vh) scale(.9); }
+}
+.react-still { position: absolute; right: 0; bottom: 0; white-space: nowrap; padding: 6px 10px; border-radius: 10px; background: #211d38e8;
+  font: 15px/1.2 'Segoe UI Emoji', 'Segoe UI', sans-serif; color: #ead6ed; }
+@media (prefers-reduced-motion: reduce) {
+  .react-btn.sent { animation: none; }
+  .player-heat i { transition: none; }
+}
+@media (max-width: 760px) {
+  .react-bar { bottom: 105px; gap: 2px; padding: 4px; }
+  .react-btn { width: 34px; height: 34px; font-size: 18px; }
+  .react-floats { right: 12px; bottom: 150px; }
+  .player-heat { height: 5px; }
+}
+/* An IN and an OUT for the stands' blocks (ui/fade.js): a short rise into place and a sink out of it.
+   `translate` rather than transform, so the reaction bar keeps its own centring. */
+.pbp-fade-in { animation: pbp-hud-in 180ms ease-out both; }
+.pbp-fade-out { animation: pbp-hud-out 180ms ease-in both; pointer-events: none !important; }
+.pbp-fade-out * { pointer-events: none !important; }
+@keyframes pbp-hud-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+@keyframes pbp-hud-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 6px; } }
+/* the in-app Reduce motion (hud.js toggles .still from Options at once) stills them like the OS does */
+.hud.still .pbp-fade-in, .hud.still .pbp-fade-out, .hud.still .react-btn.sent { animation: none; }
+.hud.still .react-btn, .hud.still .react-btn:hover { transition: none; transform: none; }
+@media (prefers-reduced-motion: reduce) { .pbp-fade-in, .pbp-fade-out { animation: none; } }
+/* --- end the stands -------------------------------------------------------- */
