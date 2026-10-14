@@ -21,6 +21,10 @@ namespace ConditioningControlPanel
         /// <summary>Amount and source after the award (WPF XPAwarded; the sync nudge listens).</summary>
         public static event Action<double, string>? Awarded;
 
+        public sealed record XpAward(double Amount, XPSource Source, bool LeveledUp);
+        // Presentation needs the adjusted amount; Awarded retains the base amount for quests.
+        public static event Action<XpAward>? XPAwarded;
+
         public static void Add(double amount, string source)
         {
             var s = CoreSettings.Current;
@@ -57,6 +61,8 @@ namespace ConditioningControlPanel
             }
             CoreSettings.Save();
             foreach (var l in levels) LevelUp?.Invoke(l);
+            XPAwarded?.Invoke(new XpAward(adjusted,
+                Enum.TryParse<XPSource>(source, out var parsed) ? parsed : XPSource.Other, levels.Count > 0));
             Awarded?.Invoke(amount, source);
         }
     }

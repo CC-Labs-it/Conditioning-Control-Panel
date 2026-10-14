@@ -952,6 +952,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// launching the next flight; letting it run mid-walk would mutate the array under the
         /// iterator.</para>
         /// </summary>
+        internal void StepBankTokensForTests(float seconds)
+        {
+            StepTokens(seconds);
+            InvalidateVisual();
+        }
+
         private void StepTokens(float dt)
         {
             if (_tok == null || _tokN == 0) return;

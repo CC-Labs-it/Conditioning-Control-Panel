@@ -31,6 +31,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
+    <Compile Include="..\ConditioningControlPanel.Tests\BankAccumulatorTests.cs" Link="BankAccumulatorTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\BankFlightPlanTests.cs" Link="BankFlightPlanTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
   </ItemGroup>
 
