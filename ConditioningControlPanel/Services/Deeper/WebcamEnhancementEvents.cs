@@ -5,9 +5,11 @@ namespace ConditioningControlPanel.Services.Deeper
 {
     /// <summary>
     /// Adapts <see cref="WebcamTrackingService"/> to the Core engine's
-    /// <see cref="IEnhancementWebcam"/>. The tracker raises on its capture thread and this head
-    /// installs no CoreDispatch provider, so the adapter does the marshal the engine used to do
-    /// itself: inline on the UI thread, BeginInvoke otherwise, dropped once shutdown started.
+    /// <see cref="IEnhancementWebcam"/>. The tracker raises on its capture thread, so the adapter
+    /// does the marshal the engine used to do itself: inline on the UI thread, BeginInvoke
+    /// otherwise, dropped once shutdown started. The engine's CoreDispatch.Post (App.xaml.cs
+    /// PostProvider) then runs inline; this marshal is kept because that provider runs the
+    /// action inline after shutdown instead of dropping it.
     /// One per engine bind; Dispose unhooks the long-lived tracker.
     /// </summary>
     public sealed class WebcamEnhancementEvents : IEnhancementWebcam, IDisposable

@@ -111,7 +111,7 @@ public sealed class EnhancementEngineCoreTests
     public void GazeRuleMapsTheNormalizedRectOntoTheSourcesPlaybackRect()
     {
         var saved = CoreDispatch.PostProvider;
-        CoreDispatch.PostProvider = null; // inline, as on a head with no UI-thread provider
+        CoreDispatch.PostProvider = null; // run Post inline so the test stays on one thread
         try
         {
             var src = new FakeSource(); // video at (100,100) 200x100
