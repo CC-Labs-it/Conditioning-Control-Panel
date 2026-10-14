@@ -83,6 +83,52 @@ public sealed class NavSearchTests
     });
 
     [Fact]
+    public Task GamesRowReturnsToTheGamesZoneAfterTheWallWasScrolled() => Shell(shell =>
+    {
+        shell.ShowTab("play");
+        Dispatcher.UIThread.RunJobs();
+        var play = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
+        var scroll = play.FindControl<ScrollViewer>("WallScroll")!;
+        scroll.Offset = new Vector(0, 400);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(scroll.Offset.Y > 0, "the wall must be scrolled before the palette landing");
+
+        SettingsPaletteWindow.Toggle(shell);
+        var palette = OpenPalette();
+        palette.FindControl<TextBox>("TxtQuery")!.Text = "games";
+        Dispatcher.UIThread.RunJobs();
+        var list = palette.FindControl<ListBox>("ListResults")!;
+        list.SelectedItem = list.Items.Cast<PaletteRow>().Single(r => r.Entry.Id == "tab.play");
+        Enter(palette);
+
+        Assert.False(SettingsPaletteWindow.IsOpen);
+        Assert.Equal("play", shell.CurrentTab);
+        Assert.Equal(0, scroll.Offset.Y);
+    });
+
+    [Fact]
+    public Task PanicClosesThePaletteWithoutConsumingAnEscapePress() => Shell(shell =>
+    {
+        SettingsPaletteWindow.Toggle(shell);
+        OpenPalette();
+        PanicSurfaces.StopAll("palette test", shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(SettingsPaletteWindow.IsOpen);
+        Assert.False(SettingsPaletteWindow.TryConsumeEscape());
+    });
+
+    [Fact]
+    public Task GameRowUsesTheLaunchersLeashGate() => Run(() => LeashGateCardTests.Run(punished: true, (shell, _, _) =>
+    {
+        Assert.False(shell.LeashGate!.IsUp);
+        SettingsPaletteWindow.Navigate(shell, SettingsPaletteIndex.All.Single(e => e.GameId == "intake"));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.IsVisible);
+        Assert.True(shell.LeashGate.IsUp);
+        Assert.NotEqual("gradedintake", shell.CurrentTab);
+    }));
+
+    [Fact]
     public Task RowsOpenThroughTheirOwnVerb() => Shell(shell =>
     {
         // A Studio module lands on the Studio, a Library launcher opens its window.
@@ -281,7 +327,7 @@ public sealed class NavSearchTests
     {
         if (Application.Current is null)
         {
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();

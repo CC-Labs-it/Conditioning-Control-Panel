@@ -22,10 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// PORTED from ConditioningControlPanel/Windows/SettingsPaletteWindow.xaml.cs. What moved:
     ///  - <c>OpenPaletteCommand</c> (a WPF <c>RoutedUICommand</c>) is gone. Avalonia has no
-    ///    RoutedUICommand, and its only consumer was MainWindow's KeyBinding; the shell HAS ported
-    ///    (MainShellWindow), so the remaining work is a KeyGesture on it calling
-    ///    <see cref="Toggle"/> - which is a shell file, not this one. Inventing an ICommand here
-    ///    would be a second API to reconcile later.
+    ///    RoutedUICommand; MainShellWindow.InitializePaletteShortcut routes Ctrl+K to
+    ///    <see cref="Toggle"/> before a focused control can swallow the gesture.
     ///  - <c>Refresh</c> queries Core's <c>SettingsPaletteIndex.Search</c>, as WPF does.
     ///  - <c>Navigate</c> is the same ShowTab + FocusSection + first-named-element 2s glow.
     ///  - <c>Top = Math.Max(20, Top - 70)</c> becomes a <c>Position</c> nudge: Avalonia has no
@@ -414,8 +412,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!string.IsNullOrWhiteSpace(entry.LauncherKey) && shell.OpenLibraryLauncher(entry.LauncherKey!)) return;
 
                 if (!string.IsNullOrWhiteSpace(entry.TabKey)) shell.ShowTab(entry.TabKey);
-                // ponytail: WPF then scrolls the Play wall to entry.PlayZone (PlayTab.ScrollToZone);
-                // this head's Play tab has no zones yet, so the Games row lands at the top.
+                // As WPF: the Games row resets a scrolled wall after the page has laid out.
+                // ScrollToZone owns the background layout hop and the zone header glow.
+                if (!string.IsNullOrWhiteSpace(entry.PlayZone))
+                    shell.Named<Views.Tabs.PlayTabView>("PlayTab")?.ScrollToZone(entry.PlayZone!);
 
                 if (!string.IsNullOrWhiteSpace(entry.SectionKey))
                 {
