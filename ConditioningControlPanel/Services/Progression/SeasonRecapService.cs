@@ -313,12 +313,7 @@ namespace ConditioningControlPanel.Services
             App.Logger?.Information("SeasonRecap: rolled season counters to {Season}", newSeasonKey);
         }
 
-        public static int PercentileFor(int rank, int total)
-        {
-            if (rank <= 0 || total <= 0) return 0;
-            var pct = (int)Math.Ceiling((double)rank / total * 100);
-            return Math.Min(99, Math.Max(1, pct));
-        }
+        public static int PercentileFor(int rank, int total) => EnhancementAnalytics.Percentile(rank, total);
 
         public static bool HasMeaningfulData(SeasonRecapSnapshot s) =>
             s.SeasonMinutes > 0 || s.SessionCount > 0 || s.FeatureUse.Count > 0

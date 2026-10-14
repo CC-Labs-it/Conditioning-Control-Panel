@@ -1142,7 +1142,7 @@ namespace ConditioningControlPanel
 
         /// <summary>Minutes → "H.h h" / "M m" using the existing time loc units.</summary>
         private static string FormatProMinutes(double minutes) =>
-            minutes >= 60 ? $"{minutes / 60:F1} {Loc.Get("label_hrs")}" : $"{minutes:F0} {Loc.Get("label_min_abbrev")}";
+            Services.EnhancementAnalytics.FormatMinutes(minutes);
 
         private static TextBlock ProLabel(string text) => new()
         {
@@ -1173,38 +1173,15 @@ namespace ConditioningControlPanel
         /// All seasons with data, oldest → newest (snapshots from disk + the live bucket),
         /// capped to the most recent <paramref name="cap"/>.
         /// </summary>
-        private List<(string Key, double Minutes, int Level, List<string> ActiveDays)> GetSeasonSeriesAscending(int cap = 12)
-        {
-            var result = new List<(string, double, int, List<string>)>();
-            var settings = App.Settings?.Current;
-            if (settings == null) return new();
+        private List<(string Key, double Minutes, int Level, List<string> ActiveDays)> GetSeasonSeriesAscending(int cap = 12) =>
+            App.Settings?.Current is { } settings
+                ? Services.EnhancementAnalytics.Series(settings, ReadProSnapshots(24), Services.SeasonRecapService.CurrentSeasonKey, cap)
+                : new();
 
-            foreach (var key in Services.SeasonRecapService.ListSeasonKeys().Take(24))
-            {
-                var snap = Services.SeasonRecapService.Load(key);
-                if (snap == null) continue;
-                result.Add((snap.SeasonKey, snap.SeasonMinutes, snap.PeakLevel, snap.ActiveDays ?? new List<string>()));
-            }
+        private static IEnumerable<Models.SeasonRecapSnapshot> ReadProSnapshots(int count) => Services.SeasonRecapService.ListSeasonKeys()
+            .Take(count).Select(Services.SeasonRecapService.Load).OfType<Models.SeasonRecapSnapshot>();
 
-            var liveKey = settings.SeasonStatsSeason ?? Services.SeasonRecapService.CurrentSeasonKey;
-            if (!result.Any(r => r.Item1 == liveKey))
-                result.Add((liveKey, settings.SeasonConditioningMinutes,
-                    Math.Max(settings.SeasonPeakLevel, settings.PlayerLevel),
-                    new List<string>(settings.SeasonActiveDays)));
-
-            return result
-                .OrderBy(r => r.Item1, StringComparer.Ordinal)
-                .TakeLast(cap)
-                .Select(r => ((string)r.Item1, (double)r.Item2, (int)r.Item3, (List<string>)r.Item4))
-                .ToList();
-        }
-
-        private static string SeasonMonthLabel(string seasonKey)
-        {
-            if (Models.SeasonNumbering.TryParse(seasonKey, out var y, out var m))
-                return new DateTime(y, m, 1).ToString("MMM", System.Globalization.CultureInfo.InvariantCulture).ToLowerInvariant();
-            return seasonKey;
-        }
+        private static string SeasonMonthLabel(string seasonKey) => Services.EnhancementAnalytics.MonthLabel(seasonKey);
 
         /// <summary>
         /// Minutes-per-season bar chart: thin pink bars, rounded data ends, 2px gaps,
@@ -1527,29 +1504,7 @@ namespace ConditioningControlPanel
 
             var showSpent = App.SkillTree?.HasSkill("certified_data_bimbo") == true;
 
-            // (key, minutes, sessions, days, streak, pct, level, spent, isLive, hasSchema2)
-            var rows = new List<(string Key, double Minutes, int Sessions, int Days, int Streak, int Pct, int Level, int Spent, bool IsLive, bool HasV2)>();
-
-            var liveKey = settings.SeasonStatsSeason ?? Services.SeasonRecapService.CurrentSeasonKey;
-            rows.Add((liveKey,
-                settings.SeasonConditioningMinutes,
-                settings.SeasonSessionsStarted,
-                settings.SeasonActiveDays.Count,
-                settings.SeasonPeakStreak,
-                Services.SeasonRecapService.PercentileFor(settings.SeasonPeakRank, settings.SeasonPeakRankTotal),
-                Math.Max(settings.SeasonPeakLevel, settings.PlayerLevel),
-                settings.SeasonPointsSpent,
-                true, true));
-
-            foreach (var key in Services.SeasonRecapService.ListSeasonKeys().Take(8))
-            {
-                if (key == liveKey) continue; // don't double-list a desynced bucket
-                var snap = Services.SeasonRecapService.Load(key);
-                if (snap == null) continue;
-                rows.Add((snap.SeasonKey, snap.SeasonMinutes, snap.SessionCount, snap.DaysActive,
-                    snap.LongestStreak, snap.Percentile, snap.PeakLevel, snap.PointsSpentSeason,
-                    false, snap.Schema >= 2));
-            }
+            var rows = Services.EnhancementAnalytics.Rewind(settings, ReadProSnapshots(8), Services.SeasonRecapService.CurrentSeasonKey);
 
             var colCount = showSpent ? 8 : 7;
             var grid = new Grid();
@@ -1662,29 +1617,17 @@ namespace ConditioningControlPanel
             AddRecord("label_pro_highest_level", settings.HighestLevelEver.ToString("N0"));
 
             // Season-scoped records mined from snapshots + the live bucket
-            var seasons = new List<(string Key, double Minutes, int Rank, int Level)>
-            {
-                (settings.SeasonStatsSeason ?? Services.SeasonRecapService.CurrentSeasonKey,
-                 settings.SeasonConditioningMinutes, settings.SeasonPeakRank,
-                 Math.Max(settings.SeasonPeakLevel, settings.PlayerLevel))
-            };
-            foreach (var key in Services.SeasonRecapService.ListSeasonKeys().Take(24))
-            {
-                var snap = Services.SeasonRecapService.Load(key);
-                if (snap != null) seasons.Add((snap.SeasonKey, snap.SeasonMinutes, snap.PeakRank, snap.PeakLevel));
-            }
+            var best = Services.EnhancementAnalytics.BestRecords(settings, ReadProSnapshots(24), Services.SeasonRecapService.CurrentSeasonKey);
 
-            var bestTime = seasons.OrderByDescending(s => s.Minutes).First();
+            var bestTime = best.Time;
             if (bestTime.Minutes > 0)
                 AddRecord("label_pro_best_season_time", FormatProMinutes(bestTime.Minutes), bestTime.Key);
 
-            var ranked = seasons.Where(s => s.Rank > 0).OrderBy(s => s.Rank).ToList();
-            if (ranked.Count > 0)
-                AddRecord("label_pro_best_rank", $"#{ranked[0].Rank}", ranked[0].Key);
+            if (best.Rank.Rank > 0)
+                AddRecord("label_pro_best_rank", $"#{best.Rank.Rank}", best.Rank.Key);
 
-            var levelled = seasons.Where(s => s.Level > 0).OrderByDescending(s => s.Level).ToList();
-            if (levelled.Count > 0)
-                AddRecord("label_pro_best_season_level", levelled[0].Level.ToString("N0"), levelled[0].Key);
+            if (best.Level.Level > 0)
+                AddRecord("label_pro_best_season_level", best.Level.Level.ToString("N0"), best.Level.Key);
 
             return stack;
         }
@@ -1699,17 +1642,7 @@ namespace ConditioningControlPanel
             var stack = new StackPanel();
             if (settings == null) return stack;
 
-            var lifetime = new Dictionary<string, int>(settings.SeasonFeatureUse);
-            foreach (var key in Services.SeasonRecapService.ListSeasonKeys().Take(24))
-            {
-                var snap = Services.SeasonRecapService.Load(key);
-                if (snap == null) continue;
-                foreach (var kv in snap.FeatureUse)
-                {
-                    lifetime.TryGetValue(kv.Key, out var n);
-                    lifetime[kv.Key] = n + kv.Value;
-                }
-            }
+            var lifetime = Services.EnhancementAnalytics.LifetimeFeatureUse(settings, ReadProSnapshots(24));
 
             var maxLifetime = Math.Max(1, lifetime.Count > 0 ? lifetime.Values.Max() : 1);
             var accentLight = (Color)ColorConverter.ConvertFromString(App.Mods?.GetAccentLightColorHex() ?? "#FFB6C1");

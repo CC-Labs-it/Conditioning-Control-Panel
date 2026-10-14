@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
     /// <para>Not here (see the parity rows): purchasing (SkillCard_Click / PurchaseSkillAsync is a
-    /// server call behind account auth) and the four Ditzy Data PRO analytics expanders.</para>
+    /// server call behind account auth); the four Ditzy Data PRO analytics expanders are ported in Analytics.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
     {
@@ -379,7 +379,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return _blurredArt[id] = baked;
         }
 
-        /// <summary>CreateSkillTreeHeader, minus the four PRO expanders (AddProSection).</summary>
+        /// <summary>CreateSkillTreeHeader, including the four lazy PRO expanders (AddProSection).</summary>
         private Control Header()
         {
             var settings = CoreSettings.Current;
@@ -451,6 +451,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             if (SkillTreeRules.HasSkill(settings, "ditzy_data"))
                 AddDitzyStats(main, mods?.GetStatsTitle());
+
+            // ponytail: authenticated purchase/click/celebration remains wire-views-tab-enhancements-b;
+            // this coherent slice supplies the four analytics panels without inventing local purchases.
+            AddProSection(main, "ditzy_data_pro", FluentIcons.Common.Symbol.DataTrending, "label_pro_lifetime_title", BuildProLifetimePanel);
+            AddProSection(main, "season_rewind", FluentIcons.Common.Symbol.Rewind, "label_pro_rewind_title", BuildSeasonRewindPanel);
+            AddProSection(main, "bestie_records", FluentIcons.Common.Symbol.Trophy, "label_pro_bestie_title", BuildBestieRecordsPanel);
+            AddProSection(main, "brain_drain_report", FluentIcons.Common.Symbol.Brain, "label_pro_braindrain_title", BuildBrainDrainPanel);
 
             // Stats: XP multiplier (+ rush), conditioning time.
             var xp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
