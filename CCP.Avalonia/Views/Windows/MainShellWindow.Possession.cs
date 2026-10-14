@@ -5,12 +5,12 @@
 // window as a haunted room: two overlay canvases, the registry of controls that opted in via
 // poss:Possession.Role, and the walk that turns the visual tree into possession targets.
 //
-// Head-side, and not for want of a seam: the CONTRACTS THEMSELVES ARE WPF TYPES.
-// ConditioningControlPanel/Services/Possession/PossessionHostContracts.cs declares IPossessionHost,
-// PossessionTarget and PossessionRole against FrameworkElement, and this partial implements
-// IPossessionHost - a Core-side twin would have to be re-declared against Avalonia's Control
-// before any of this walk could be ported. Also missing: App.Possession (the director),
-// Services/Possession/PossessionPointer.Attach, and the attached property the opt-in reads.
+// possession-core-b moved the director and the head-neutral contracts to Core
+// (CCP.Core/Services/Possession/PossessionContracts.cs: IPossessionHost, PossessionTarget with the
+// control as object, PossessionRole) behind PossessionDirectorHead seams. Still missing here: an
+// Avalonia PossessionDirectorHead (bounds, parent walk, barks, shake), this partial implementing
+// IPossessionHost, the effects/scenes (WPF-only), PossessionPointer.Attach, and the attached
+// property the opt-in reads.
 //
 // The walk itself is the portable half, and it is large: PassesSizeAndPlacement, InferLeafRole,
 // IsInsideScrollBar / IsInteractiveRole / IsCardBorder and DisplayNameFor are pure geometry and
