@@ -32,9 +32,10 @@ namespace ConditioningControlPanel.Services.Deeper
         public static AudioWaveformResult DecodeWaveform(string audioPath)
         {
             using var reader = new MediaFoundationReader(audioPath);
-            var sp = reader.ToSampleProvider();
+            // Built on first read, as before the move: BucketPeaks returns early on an unknown duration.
+            NAudio.Wave.ISampleProvider? sp = null;
             return AudioWaveformCache.BucketPeaks(reader.WaveFormat.Channels, reader.WaveFormat.SampleRate,
-                reader.TotalTime.TotalSeconds, buf => sp.Read(buf, 0, buf.Length));
+                reader.TotalTime.TotalSeconds, buf => (sp ??= reader.ToSampleProvider()).Read(buf, 0, buf.Length));
         }
 
         private static double? ProbeMediaFoundation(string path)
