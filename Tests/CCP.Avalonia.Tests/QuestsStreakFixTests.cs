@@ -43,7 +43,7 @@ public sealed class QuestsStreakFixTests
         try
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             LocalizationManager.Instance.SetLanguage("en");

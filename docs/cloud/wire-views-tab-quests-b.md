@@ -1,0 +1,23 @@
+# wire-views-tab-quests-b
+
+Base: `avalonia-port/cloud-wire-views-tab-quests`. Branch: `avalonia-port/cloud-wire-views-tab-quests-b`.
+
+- Ported the remaining WPF QuestsTabView depth pass into the existing quest UI: daily sunken well and floating seats, weekly floating card, live done-sink/rim changes, static mint DONE stamp, raised counter/XP coins, and the weekly sunken groove with tube gloss and eight-pixel bead.
+- Wrapped the existing Reroll/Fix day buttons with sibling shadow bands and bevels. Existing handlers and quest services continue to drive them. Hover/press/release uses existing Core DepthLaw, including Full/Reduced/Off timing and release overshoot. Finite travel uses the shared BeatLoop and stops on hide/detach; no resting loop, new timer or Transform Animation.RunAsync.
+- Shell section painting now passes its live hue to the tab; all drop/float bands derive from Core DepthLaw.ShadowColor. The base already shares these rules with WPF, so no Core or WPF source changed and no duplicated pure logic was added.
+- No new window or panic surface; existing shell shutdown detaches the view and stops finite travel. Updated only ledger row views-tab-quests, retaining wired status without a verified claim.
+- Read WPF Views/Tabs/QuestsTabView.xaml/.xaml.cs and Tests/QuestDepthTests.cs as the spec. Fetched parity/trunk read-only; no code imported from it. Retained existing Fluent icon policy and replaced the weekly completion icon with a Fluent check in the WPF stamp layout.
+
+## Verification limits
+
+- Fail-first `dotnet test Tests/CCP.Avalonia.Tests -c Release --filter FullyQualifiedName~QuestsDepthTests`: 3 failed, 0 passed/skipped against the named BASE; daily seat/well and plank layers were absent.
+- First implementation run: 2 passed, 1 test-fixture failure because IsPressed is readonly. Changed the fixture to real headless mouse input rather than setting that property. The next combined run passed 7/8 and caught a real detach/capture-loss race: a late input update restarted the finite beat after parent teardown. A detached-face guard and face teardown now prevent that restart; the unchanged combined assertion then passed 8/8.
+- `bash .github/scripts/core-guards.sh`: all guards passed (424 XAML references).
+- `dotnet test Tests/CCP.Avalonia.Tests -c Release --filter 'FullyQualifiedName~QuestsDepthTests|FullyQualifiedName~QuestsTabFxTests|FullyQualifiedName~QuestsTabLiveTests|FullyQualifiedName~QuestsStreakFixTests|FullyQualifiedName~AmbientBeatLoopsTests.NoNewEffectInCodeBehind'`: 8 passed, 0 failed/skipped. Changed only the three legacy fixture builders to the production BuildAvaloniaApp so their bundled font setup matches the shipped head; their assertions were retained. The new fixture maps Windows UI families to bundled Inter for geometry tests.
+- Final strengthened `dotnet test Tests/CCP.Avalonia.Tests -c Release --filter FullyQualifiedName~QuestsDepthTests`: 3 passed, 0 failed/skipped. Additionally asserts real hover lift/drop length and stops a currently running travel on hide, then on detach after showing again.
+- `dotnet test Tests/CCP.Core.Tests -c Release --no-build` with official pinned Vosk model required: 2789 passed, 0 failed/skipped. This older named BASE has a different test count from the goongame-core-c branches. No Core/WPF sources or test budgets changed.
+- Final `dotnet build -c Release` passed for Core, Avalonia and every Linux test project listed in build.yml: CatalogueStartup, Consent, GeneralSettings, Language, Report, Scheduler, Snapshot, Avalonia.Tests, Core.Content, Core.Settings and Core.Tests (13 targets). Used SDK 10.0.402, bounded GC, one MSBuild node, disabled shared compilation and SDK copy hardlinks. BuildProjectReferences=false after freshly building dependencies; final guards also passed.
+- `dotnet run --project CCP.Avalonia -c Release --no-build -- --render-all /workspace/scratch/root-quests-final-render`: 221/221 views rendered, exit 0. Inspected QuestsTabView.png; it shows the daily well/seats, raised counter/XP chips and weekly groove/plank. The idle fixture has placeholder art and no completed weekly; the live DONE stamp and progress bead are proven by focused tests rather than this screenshot.
+- The prior claim's cross-target WPF test attempt in this session failed in native SDK ResourceUpdater.CreateAppHost with AccessViolation (exit -6). No WPF source changed; that unchanged native SDK path was not repeated for this visual-only claim. Windows runtime/native desktop behavior was not run.
+
+No real browser/service/account activity was used. All head windows used the assembly CCP_USERDATA_DIR sandbox. No tests were deleted, weakened or newly skipped.
