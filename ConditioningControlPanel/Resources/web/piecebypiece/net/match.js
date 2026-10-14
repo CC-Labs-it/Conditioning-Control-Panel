@@ -257,6 +257,47 @@ export function createRemoteClock({ perSideMs = DEFAULT_MS, now = null } = {}) {
   };
 }
 
+/**
+ * The contract's nine `result.reason` values, mapped onto the endings the
+ * board and the HUD already know how to draw. The mapping lives here and only
+ * here - hotseat's vocabulary is what the rest of the page speaks, and
+ * translating at the door is what keeps every listener downstream ignorant of
+ * whether this game was played online.
+ */
+export const REASON_KIND = Object.freeze({
+  checkmate: 'checkmate',
+  stalemate: 'stalemate',
+  insufficient_material: 'draw',
+  threefold: 'draw',
+  fifty_move: 'draw',
+  agreement: 'draw',
+  draw: 'draw',
+  resign: 'resign',
+  timeout: 'flag',
+  abandon: 'abandon',
+});
+
+/**
+ * The server's `status`/`result` fields, turned into hotseat's ending shape.
+ * A finished match resyncs into a finished board - reconnecting to a game you
+ * already lost must not put you back in a live seat.
+ */
+export function endingFrom(state) {
+  const st = String((state && state.status) || '').toLowerCase();
+  if (!st || st === 'live' || st === 'active' || st === 'playing') return null;
+  const r = (state && state.result) || {};
+  const winner = (r.winner === 'w' || r.winner === 'b') ? r.winner : null;
+  const reason = String(r.reason || r.result || r.type || st).toLowerCase();
+  return {
+    result: REASON_KIND[reason] || (winner ? 'resign' : 'draw'),
+    winner,
+    reason,
+    /** Elo movement, when the match was rated. Null otherwise; the HUD may show it. */
+    ratingDelta: r.rating_delta || null,
+    endedMs: Number.isFinite(Number(r.ended_ms)) ? Number(r.ended_ms) : null,
+  };
+}
+
 /* ---------------------------------------------------------------------------
  * THE DRIVER
  * ------------------------------------------------------------------------- */
@@ -450,47 +491,6 @@ export function createOnlineMatch({
     stopTimers();
     paint();
     bus.emit('gameover', { result: end.result, winner: end.winner === undefined ? null : end.winner });
-  }
-
-  /**
-   * The contract's nine `result.reason` values, mapped onto the endings the
-   * board and the HUD already know how to draw. The mapping lives here and only
-   * here - hotseat's vocabulary is what the rest of the page speaks, and
-   * translating at the door is what keeps every listener downstream ignorant of
-   * whether this game was played online.
-   */
-  const REASON_KIND = {
-    checkmate: 'checkmate',
-    stalemate: 'stalemate',
-    insufficient_material: 'draw',
-    threefold: 'draw',
-    fifty_move: 'draw',
-    agreement: 'draw',
-    draw: 'draw',
-    resign: 'resign',
-    timeout: 'flag',
-    abandon: 'abandon',
-  };
-
-  /**
-   * The server's `status`/`result` fields, turned into hotseat's ending shape.
-   * A finished match resyncs into a finished board - reconnecting to a game you
-   * already lost must not put you back in a live seat.
-   */
-  function endingFrom(state) {
-    const st = String((state && state.status) || '').toLowerCase();
-    if (!st || st === 'live' || st === 'active' || st === 'playing') return null;
-    const r = (state && state.result) || {};
-    const winner = (r.winner === 'w' || r.winner === 'b') ? r.winner : null;
-    const reason = String(r.reason || r.result || r.type || st).toLowerCase();
-    return {
-      result: REASON_KIND[reason] || (winner ? 'resign' : 'draw'),
-      winner,
-      reason,
-      /** Elo movement, when the match was rated. Null otherwise; the HUD may show it. */
-      ratingDelta: r.rating_delta || null,
-      endedMs: Number.isFinite(Number(r.ended_ms)) ? Number(r.ended_ms) : null,
-    };
   }
 
   /* ------------------------------------------------------- moving the men */
