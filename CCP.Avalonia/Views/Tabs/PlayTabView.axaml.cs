@@ -260,8 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BtnPlayIntakePassHome_Click(object? sender, RoutedEventArgs e) => Owner?.ShowTab("settings");
 
         /// <summary>ShowTab("fyp"), never FypHostService.Launch() - that would be a second, ungated
-        /// launch path. ponytail: "fyp" is one of the shell's WindowKeys, so the call is a
-        /// documented no-op until OpenFypFeed exists (MainShellWindow.TabNavigation.cs).</summary>
+        /// launch path. The shell intercepts the key into the feed window (MainShellWindow.TabNavigation.cs).</summary>
         private void BtnPlayFyp_Click(object? sender, RoutedEventArgs e) => Owner?.ShowTab("fyp");
 
         private void BtnPlayLockdown_Click(object? sender, RoutedEventArgs e) => Owner?.ShowTab("lockdown");

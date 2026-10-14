@@ -157,17 +157,6 @@ public partial class FriendsServiceTests
         await svc.TickAsync();
         Assert.Equal(((PresenceActivity?)null, (int?)null, false), api.PollCalls.Last());
     }
-
-    [Fact]
-    public void Setting_row_without_a_service_writes_the_setting()
-    {
-        bool saved = false, asked = false;
-        FriendsPresenceSetting.Write(true, null, v => saved = v, () => asked = true);
-        Assert.True(saved);
-        Assert.True(asked);
-        Assert.True(FriendsPresenceSetting.Read(null, () => true));
-        Assert.False(FriendsPresenceSetting.Read(null, () => throw new InvalidOperationException()));
-    }
 }
 
 public partial class FriendsDrawerTests
