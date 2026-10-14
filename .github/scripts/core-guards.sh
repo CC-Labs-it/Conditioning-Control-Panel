@@ -181,6 +181,16 @@ done < <(find ConditioningControlPanel -name '*.xaml' -not -path '*/obj/*' -not 
 [ "$XAML_REFS" -gt 0 ] || { echo "FATAL: matched 0 XAML type references - the extraction is broken"; exit 1; }
 echo "checked $XAML_REFS XAML type references against $APP_TYPES app types / $(wc -l < "$WORK/core.txt") Core types"
 
+# The installer ships the Avalonia head (docs/avalonia-decisions.md, 2026-10-14 installer switch). A
+# PublishDir/Source pointing back at the WPF build output would silently ship WPF again.
+echo
+echo "== installer.iss must not package the WPF build (ConditioningControlPanel\\bin) =="
+[ -f installer.iss ] || { echo "FATAL: installer.iss not found"; exit 1; }
+if grep -niE 'ConditioningControlPanel[\\/]bin' installer.iss; then
+  echo "FAIL installer.iss: references ConditioningControlPanel\\bin - ship CCP.Avalonia\\bin\\publish\\win-x64."
+  FAIL=1
+fi
+
 echo
 [ "$FAIL" -eq 0 ] && echo "All Core guards passed." || echo "Core guards FAILED."
 exit "$FAIL"

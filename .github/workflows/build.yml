@@ -224,6 +224,29 @@ jobs:
           if ($ok -ne 0) { throw "--win-panic-check F24 exited $ok" }
           $neg = Check 'F23'
           if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
+      # installer.iss ships the Avalonia publish above (2026-10-14 installer switch). Proves the script
+      # compiles against it, the way build-installer.bat drives ISCC (short staging path, version from
+      # Version.props). Unsigned CI artifact only: never a release, never a tag.
+      - name: Compile installer.iss (Inno Setup) against the Avalonia publish
+        timeout-minutes: 20
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE -ne 0) { throw 'choco install innosetup failed' } }
+          if (-not (Test-Path redist\VC_redist.x64.exe)) { curl.exe -L -f -o redist\VC_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe; if ($LASTEXITCODE -ne 0) { throw 'VC_redist download failed' } }
+          $version = ([xml](Get-Content Version.props)).Project.PropertyGroup.Version
+          $stage = 'C:\ccpb\pub'
+          robocopy CCP.Avalonia\bin\publish\win-x64 $stage /MIR /NJH /NJS /NDL /NFL /NP
+          if ($LASTEXITCODE -ge 8) { throw "robocopy exited $LASTEXITCODE" }
+          & $iscc "/DPublishDir=$($stage -replace '\\','\\')" "/DMyAppVersion=$version" installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC exited $LASTEXITCODE" }
+          if (-not (Test-Path "installer-output\ConditioningControlPanel-$version-Setup.exe")) { throw 'Setup.exe missing' }
+          $global:LASTEXITCODE = 0
+      - name: Upload the unsigned installer (CI artifact, not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-unsigned
+          path: installer-output/*-Setup.exe
+          retention-days: 3
 
   # CCP.Avalonia.Tests, one shard per job so the shards run in parallel instead of one after another.
   # Sharded: one testhost for the whole suite outgrew the 16 GB runner; the shard definitions live in

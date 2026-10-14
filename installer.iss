@@ -3,7 +3,10 @@
 ;
 ; Requirements:
 ; 1. Install Inno Setup from https://jrsoftware.org/isinfo.php
-; 2. Build the app first: dotnet publish -c Release
+; 2. Build the app first (on Windows):
+;      dotnet publish CCP.Avalonia\CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64
+;    The shipped head is CCP.Avalonia (docs/avalonia-decisions.md, 2026-10-14 installer switch).
+;    ConditioningControlPanel\ (WPF) is no longer packaged; never point PublishDir at its bin.
 ; 3. Compile this script with Inno Setup Compiler
 ;
 ; The installer will:
@@ -13,10 +16,18 @@
 ; - Store install path in registry for Velopack updates
 
 #define MyAppName "Conditioning Control Panel"
-#define MyAppVersion "7.1.5"
+; Version comes from Version.props: build-installer.bat passes /DMyAppVersion=<Version>.
+; The fallback below only serves a bare ISCC run and must match Version.props.
+#ifndef MyAppVersion
+  #define MyAppVersion "7.1.5"
+#endif
 #define MyAppPublisher "CodeBambi"
 #define MyAppURL "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF"
+; Installed exe name. The Avalonia publish produces CCP.Avalonia.exe (AssemblyName stays CCP.Avalonia so
+; avares://CCP.Avalonia URIs keep resolving); [Files] renames it with DestName. Keeping this name keeps
+; the WPF updater's relaunch, shortcuts, the Run key, taskkill /IM and unins000 detection working.
 #define MyAppExeName "ConditioningControlPanel.exe"
+#define MyAppSourceExe "CCP.Avalonia.exe"
 #define MyAppDescription "A professional visual conditioning application with gamification features"
 
 ; Path to the published output (adjust if needed)
@@ -25,7 +36,7 @@
 ; ~131 chars deep, and a handful of builtin-sissyhypno audio files push past MAX_PATH (260)
 ; from there, aborting the ISCC compile. Staging to e.g. C:\ccpb\pub keeps every path short.
 #ifndef PublishDir
-  #define PublishDir "ConditioningControlPanel\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish"
+  #define PublishDir "CCP.Avalonia\bin\publish\win-x64"
 #endif
 
 [Setup]
@@ -131,11 +142,11 @@ Source: "redist\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall;
 ;   https://go.microsoft.com/fwlink/p/?LinkId=2124703
 Source: "redist\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2RuntimeNeeded
 
-; Main executable
-Source: "{#PublishDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; Main executable: the Avalonia single-file exe, installed under the WPF name.
+Source: "{#PublishDir}\{#MyAppSourceExe}"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
 
-; All other files from publish directory
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hans\*,zh-Hant\*"
+; All other files from publish directory (the source exe is excluded: it is installed above, renamed)
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppSourceExe},*.pdb,cs\*,de\*,es\*,fr\*,it\*,ja\*,ko\*,pl\*,pt-BR\*,ru\*,tr\*,zh-Hans\*,zh-Hant\*"
 
 ; NOTE: Don't include user data files - those go to %APPDATA%
 
@@ -198,6 +209,13 @@ Type: files;      Name: "{app}\Resources\sounds\GIGGLETIME.mp3"
 Type: files;      Name: "{app}\Resources\sounds\PRIMPED AND PAMPERED.MP3"
 Type: files;      Name: "{app}\Resources\sounds\SNAP AND FORGET.MP3"
 Type: files;      Name: "{app}\Resources\sounds\ZAP COCK DRAIN OBEY.mp3"
+
+; WPF -> AVALONIA SWITCH (2026-10-14, docs/avalonia-decisions.md): files only the WPF build installed.
+; {app} only, never %LOCALAPPDATA%\ConditioningControlPanel. libvlc: WPF shipped VideoLAN.LibVLC.Windows
+; 3.0.21 loose under {app}\libvlc; the Avalonia head ships 3.0.24 to the same folder (CopyLibVLCAfterPublish).
+; A plugin dropped between versions would otherwise linger and be loaded by the newer libvlc. The folder is
+; installer-owned (no user files), so it is cleared whole and [Files] lays 3.0.24 down fresh.
+Type: filesandordirs; Name: "{app}\libvlc"
 
 [Icons]
 ; Start Menu shortcut

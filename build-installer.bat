@@ -7,10 +7,19 @@ echo ============================================
 echo.
 
 :: Configuration
-set VERSION=7.1.5
-set PROJECT_DIR=ConditioningControlPanel
+:: The shipped head is CCP.Avalonia (docs/avalonia-decisions.md, 2026-10-14 installer switch); the WPF
+:: head is not published. Version comes from Version.props, the one place every head reads it.
+set VERSION=
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "([xml](Get-Content 'Version.props')).Project.PropertyGroup.Version"`) do set VERSION=%%V
+if "%VERSION%"=="" (
+    echo ERROR: could not read Version from Version.props
+    pause
+    exit /b 1
+)
+set PROJECT_DIR=CCP.Avalonia
 set CORE_DIR=CCP.Core
-set PUBLISH_DIR=%PROJECT_DIR%\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish
+:: PublishDir of CCP.Avalonia\Properties\PublishProfiles\win-x64.pubxml
+set PUBLISH_DIR=%PROJECT_DIR%\bin\publish\win-x64
 set INSTALLER_OUTPUT=installer-output
 :: Short staging path for the Inno Setup compile. The publish tree sits ~131 chars
 :: deep, and some builtin-sissyhypno audio files run past MAX_PATH (260) from there,
@@ -53,14 +62,13 @@ mkdir "%INSTALLER_OUTPUT%" 2>nul
 
 echo.
 echo [2/4] Building application (Release)...
-cd %PROJECT_DIR%
-dotnet publish -c Release -r win-x64 --self-contained true
+:: win-x64.pubxml: self-contained, single-file, native self-extract, R2R, no trimming.
+dotnet publish %PROJECT_DIR%\CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64
 if errorlevel 1 (
     echo ERROR: Build failed!
     pause
     exit /b 1
 )
-cd ..
 
 echo.
 echo [2.5/6] Cleaning empty locale folders from publish output...
@@ -105,7 +113,8 @@ echo [3/6] CODE SIGN - Application EXE
 echo ============================================
 echo.
 echo Sign the app exe now:
-echo   C:\downloads\ActalisCodeSigner-win-x64-latest\ActalisCodeSigner.exe -fu YOUR_USERNAME -fp YOUR_PASSWORD -in "%PUBLISH_DIR%\ConditioningControlPanel.exe" -ts
+echo   C:\downloads\ActalisCodeSigner-win-x64-latest\ActalisCodeSigner.exe -fu YOUR_USERNAME -fp YOUR_PASSWORD -in "%PUBLISH_DIR%\CCP.Avalonia.exe" -ts
+echo (installer.iss installs it as ConditioningControlPanel.exe)
 echo.
 pause
 
@@ -125,7 +134,7 @@ echo.
 echo [4/6] Compiling installer with Inno Setup (from staging path)...
 :: ISPP treats backslashes in a /D value as escape chars (C:\ccpb\pub would arrive as
 :: C:ccpbpub), so double them via %VAR:\=\\% — ISPP unescapes \\ back to a single \.
-"%ISCC_PATH%" /DPublishDir=%STAGING_DIR:\=\\% installer.iss
+"%ISCC_PATH%" /DPublishDir=%STAGING_DIR:\=\\% /DMyAppVersion=%VERSION% installer.iss
 if errorlevel 1 (
     echo ERROR: Installer compilation failed!
     rmdir /s /q "%STAGING_DIR%" 2>nul

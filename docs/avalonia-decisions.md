@@ -1160,3 +1160,24 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   steps). WPE suspect: frame_complete is only dispatched when the compositor consumes a buffer (WpeWebViewAdapter.cs:421).
   The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
+
+## 2026-10-14: The Windows installer ships the Avalonia head (avalonia-port/installer-avalonia-a, U5) - HIGH RISK
+- Question: phase 5 "switch shipping": which build does `installer.iss` / `build-installer.bat` package, and how does an
+  installed WPF build upgrade in place?
+- Options: (A) keep packaging WPF until parity; (B) package Avalonia under a new AppId/exe name; (C) package Avalonia in place:
+  same AppId, folder and exe name.
+- Choice: C (advised by: oracle-deep, `~/ccp-port/briefs/oracle-updater-installer.md` section 1; assigned by the supervisor).
+  `build-installer.bat` publishes only `CCP.Avalonia` (`-p:PublishProfile=win-x64`: self-contained, single-file,
+  `IncludeNativeLibrariesForSelfExtract`, R2R, no trimming) and passes `/DMyAppVersion` read from `Version.props`.
+  `installer.iss` defaults `PublishDir` to `CCP.Avalonia\bin\publish\win-x64` and installs `CCP.Avalonia.exe` with
+  `DestName: ConditioningControlPanel.exe`; `AssemblyName` stays `CCP.Avalonia` (avares URIs). That one name keeps the WPF
+  updater's relaunch (UpdateService.cs:859), shortcuts, the Run key, `taskkill /IM`, `AppMutex` and unins000 detection
+  working. AppId, `UsePreviousAppDir`, `DefaultDirName`, the WebView2 bootstrapper and VC redist are unchanged.
+  `[InstallDelete]` clears `{app}\libvlc` (WPF's 3.0.21 plugins; Avalonia ships 3.0.24 there) - `{app}` only, never user data.
+  `core-guards.sh` fails if `installer.iss` references `ConditioningControlPanel\bin`; Windows CI compiles it with ISCC and
+  uploads the unsigned Setup as an artifact (never a release).
+- Release gate: this must NOT reach a release branch until testers sign off on Avalonia parity on Windows: once released, the
+  WPF updater installs it silently for every Windows user.
+- Not done here (installer-avalonia-b): HKCU `AssetsPath` (WPF `ApplyInstallerAssetsPath`) is ignored by the Avalonia head;
+  `--play`/`--edit` from the `fileassoc` task are not handled; no CI job installs v6.11.3 and upgrades over it.
+- Limits: the Windows parts are compiled-not-run on Linux (the .bat and the Setup were never executed; ISCC runs only in CI).
