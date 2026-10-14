@@ -523,12 +523,12 @@
                   <Button x:Name="BtnFixStreak" Grid.Column="2" Theme="{StaticResource OutlineButton}"
                           Padding="8,3" FontSize="11" IsVisible="False" VerticalAlignment="Center"
                           ToolTip.ShowOnDisabled="True">
-                    <fx:IconLabel Key="btn_fix_day"/>
+                    <fx:IconLabel x:Name="FixStreakLabel" Key="btn_fix_day"/>
                   </Button>
                 </Grid>
                 <Canvas x:Name="StreakCalendarCanvas" Height="50" ClipToBounds="True"/>
-                <TextBlock x:Name="TxtFixStreakStatus" Text="" Foreground="{DynamicResource PinkBrush}"
-                           FontSize="11" TextAlignment="Center" Margin="0,5,0,0" IsVisible="False"/>
+                <fx:IconLabel x:Name="TxtFixStreakStatus" TextElement.Foreground="{DynamicResource PinkBrush}"
+                              TextElement.FontSize="11" HorizontalAlignment="Center" Margin="0,5,0,0" IsVisible="False"/>
               </StackPanel>
             </Border>
 
