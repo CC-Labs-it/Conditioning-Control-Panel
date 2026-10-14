@@ -126,7 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosRunHost.UseToyById(_toy.Id);
             };
             _toy.PropertyChanged += OnToyChanged;
-            Opened += (_, _) => Place(slotIndex);
+            Place(slotIndex);                       // before Show: no frame at (0,0)
+            Opened += (_, _) => Place(slotIndex);   // again once the screen is known for sure
             Closed += (_, _) => { _toy.PropertyChanged -= OnToyChanged; _clock.Stop(); };
 
             ChaosOverlayWindow.ChaosTips.Attach(_disc, $"{toy.Glyph} {toy.Name} · {toy.KeyLabel}", toy.Desc,

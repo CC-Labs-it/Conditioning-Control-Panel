@@ -42,6 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
         internal static bool IsManuallyPaused => _manualPaused;
+        /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
+        internal static void StopTimerForTests() => _runTimer?.Stop();
 
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {

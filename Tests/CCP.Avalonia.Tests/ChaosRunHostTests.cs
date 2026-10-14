@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -108,6 +109,7 @@ public sealed class ChaosRunHostTests
             {
                 ChaosRunHost.StartRun(Cfg());
                 ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();   // P08: only stepped Ticks move the run clock
                 var btn = Assert.Single(ChaosRunHost.ToyButtons);
                 Assert.True(btn.IsVisible);
                 Assert.Equal("ready", btn.Status.Text);
@@ -117,17 +119,14 @@ public sealed class ChaosRunHostTests
                 var mid = new Point(btn.Width / 2, btn.Height / 2);
                 btn.MouseDown(mid, global::Avalonia.Input.MouseButton.Left);
                 btn.MouseUp(mid, global::Avalonia.Input.MouseButton.Left);
-                // The real 4 Hz run timer may tick inside the input pump, so read the cooldown back.
-                double cd = btn.Toy.CooldownRemainingSec;
-                Assert.InRange(cd, 1, 20);    // 20 s VibePopping cooldown started by the click
-                Assert.Equal($"{Math.Ceiling(cd):0}s", btn.Status.Text);
+                Assert.Equal(20, btn.Toy.CooldownRemainingSec);   // VibePopping's 20 s cooldown
+                Assert.Equal("20s", btn.Status.Text);
                 Ticks(4);   // one run-clock second
-                Assert.Equal(cd - 1, btn.Toy.CooldownRemainingSec, 3);
-                Assert.Equal($"{Math.Ceiling(cd - 1):0}s", btn.Status.Text);
+                Assert.Equal("19s", btn.Status.Text);
 
                 ChaosRunHost.OnToyKey("F8");   // the panic key never fires a toy
                 ChaosRunHost.OnToyKey("Q");    // cooling: denied, the cooldown is untouched
-                Assert.Equal(cd - 1, btn.Toy.CooldownRemainingSec, 3);
+                Assert.Equal(19, btn.Toy.CooldownRemainingSec, 3);
 
                 shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
                 Assert.False(btn.IsVisible);
@@ -144,6 +143,26 @@ public sealed class ChaosRunHostTests
             }
             return Task.CompletedTask;
         });
+    }
+
+    /// <summary>The hub offers digit toy keys ("1"-"4"); on the Win32 hook the digit row is D1..D4.</summary>
+    [Fact]
+    public void Win32_hook_fires_a_digit_toy_key()
+    {
+        var fired = new List<string>();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys = () => new[] { "1" };
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey = fired.Add;
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnDown(0x31, DateTime.UtcNow);   // VK '1'
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnUp(0x31);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey = null;
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys = null;
+        }
+        Assert.Equal(new[] { "1" }, fired);
     }
 
     /// <summary>Decisions 2026-10-08 (panic-surfaces): the safe word, the only exit under Lockdown, ends a run.</summary>
