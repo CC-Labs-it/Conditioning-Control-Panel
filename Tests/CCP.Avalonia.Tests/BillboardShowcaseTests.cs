@@ -35,10 +35,7 @@ public sealed class BillboardShowcaseTests
     [Fact]
     public Task ShowcaseCardWearsItsPosterOnHomeAndLetsGoOnClose() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var old = CoreSettings.ServiceProvider;
         var oldMake = MainShellWindow.MakeShowcase;
         var service = new SettingsService();
@@ -56,7 +53,6 @@ public sealed class BillboardShowcaseTests
         File.WriteAllBytes(video, new byte[] { 0 });
         var clip = new ShowcaseClip("dtrh", ShowcaseTier.Prime, "showcase-dtrh.mp4", 1, "", "showcase-dtrh.jpg", 1, "", 6);
         string? Copy(string key) { var v = Loc.Get(key); return v == key ? null : v; }
-        EnsureApp();
         var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, poster, null), Copy);
         Assert.NotNull(card);
         var fake = new FakeShowcase(card);
@@ -173,8 +169,6 @@ public sealed class BillboardShowcaseTests
         return done();
     }
 
-    /// <summary>A shown shell whose deck is the house cards plus this showcase card, turned to it.
-    /// Motion Off keeps the deck still; <see cref="ClipArtView.MotionAllowed"/> decides the clip.</summary>
     /// <summary>The test app (whose Initialize loads the strings) exists before a card is built.</summary>
     private static void EnsureApp()
     {
@@ -184,6 +178,8 @@ public sealed class BillboardShowcaseTests
                 .SetupWithoutStarting();
     }
 
+    /// <summary>A shown shell whose deck is the house cards plus this showcase card, turned to it.
+    /// Motion Off keeps the deck still; <see cref="ClipArtView.MotionAllowed"/> decides the clip.</summary>
     private static MainShellWindow ShowHome(BillboardCardSpec card, out Action undo)
     {
         EnsureApp();
