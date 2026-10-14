@@ -1443,11 +1443,7 @@ namespace ConditioningControlPanel
             {
                 // Convert List<string> to Dictionary<string, bool> for the editor
                 // Use Distinct() to handle any duplicate triggers that could crash ToDictionary
-                var triggers = App.Settings.Current.CustomTriggers ?? new List<string>();
-                var triggerDict = triggers
-                    .Where(t => !string.IsNullOrWhiteSpace(t))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(t => t, _ => true);
+                var triggerDict = TriggerPhraseEdits.ForEditor(App.Settings.Current.CustomTriggers);
 
                 // Note: We no longer auto-populate defaults when empty.
                 // Users can add triggers manually via the editor if they want them.
@@ -1458,35 +1454,10 @@ namespace ConditioningControlPanel
 
                 if (dialog.ShowDialog() == true && dialog.ResultData != null)
                 {
-                    // Get only enabled triggers
-                    var newTriggers = dialog.ResultData
-                        .Where(kvp => kvp.Value)
-                        .Select(kvp => kvp.Key)
-                        .ToList();
-
-                    // Remember phrases the user typed themselves so ModService's cross-mod trigger
-                    // prune never deletes them - a hand-typed trigger can legitimately collide with
-                    // another built-in mod's default (OBEY, KNEEL, DROP...). Mirrors the subliminal
-                    // editor's UserAddedSubliminals bookkeeping in MainWindow.UiUpdates.cs.
-                    var modDefaults = new HashSet<string>(
-                        App.Mods?.GetDefaultCustomTriggers() ?? new List<string>(),
-                        StringComparer.OrdinalIgnoreCase);
-                    var oldTriggers = new HashSet<string>(triggerDict.Keys, StringComparer.OrdinalIgnoreCase);
-                    var newSet = new HashSet<string>(newTriggers, StringComparer.OrdinalIgnoreCase);
-                    foreach (var t in newTriggers)
-                    {
-                        if (!oldTriggers.Contains(t) && !modDefaults.Contains(t))
-                            App.Settings.Current.UserAddedCustomTriggers.Add(t);
-                    }
-                    foreach (var t in oldTriggers)
-                    {
-                        if (!newSet.Contains(t))
-                            App.Settings.Current.UserAddedCustomTriggers.Remove(t);
-                    }
-
-                    App.Settings.Current.CustomTriggers = newTriggers;
+                    TriggerPhraseEdits.Apply(App.Settings.Current, triggerDict, dialog.ResultData,
+                        App.Mods?.GetDefaultCustomTriggers());
                     App.Settings.Save();
-                    App.Logger?.Information("Updated {Count} custom triggers", newTriggers.Count);
+                    App.Logger?.Information("Updated {Count} custom triggers", App.Settings.Current.CustomTriggers.Count);
                 }
             }
             catch (Exception ex)

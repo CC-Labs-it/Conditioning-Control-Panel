@@ -1,34 +1,135 @@
+using System;
+using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
+using CoreAppSettings = ConditioningControlPanel.Models.AppSettings;
+using ConditioningControlPanel.Services;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
-    /// <summary>Z8 · TRIGGERS &amp; PHRASES. See the XAML header.
-    ///
-    /// The WPF code-behind is pure forwarding: every handler walks up to MainWindow and calls the
-    /// matching internal method there. That target does not exist on this head - the phrase editor,
-    /// the preset store and the avatar trigger timer all hang off <c>App</c>/<c>MainWindow</c> in
-    /// the WPF project - so only the two behaviours that are purely local to this cell are wired:
-    /// the toggle showing the interval panel (MainWindow.Patreon.cs:1209) and the slider writing
-    /// its own value label (MainWindow.Patreon.cs:1235). Edit Phrases, Manage Phrases and the three
-    /// preset controls stay inert until that runtime crosses; they are not stubbed, so nothing here
-    /// pretends to work.</summary>
+    /// <summary>WPF MainWindow.Patreon trigger settings and editor, owned by their Workshop cell.</summary>
     public partial class WorkshopTriggersCell : UserControl
     {
+        private readonly CheckBox _toggle;
+        private readonly StackPanel _panel;
+        private readonly Slider _slider;
+        private readonly TextBlock _intervalText;
+        private bool _loading, _attached;
+        private CoreAppSettings? _settings;
+        private SettingsService? _service;
+
         public WorkshopTriggersCell()
         {
             AvaloniaXamlLoader.Load(this);
             DataContext = new WorkshopTriggersCellViewModel();
+            _toggle = this.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
+            _panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
+            _slider = this.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
+            _intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
+            _toggle.IsCheckedChanged += (_, _) =>
+            {
+                _panel.IsVisible = _toggle.IsChecked == true;
+                if (_loading) return;
+                CoreSettings.Current.TriggerModeEnabled = _toggle.IsChecked == true;
+                CoreSettings.Save();
+            };
+            _slider.ValueChanged += (_, _) =>
+            {
+                _intervalText.Text = $"{(int)_slider.Value}s";
+                if (_loading) return;
+                CoreSettings.Current.TriggerIntervalSeconds = (int)_slider.Value;
+                CoreSettings.Save();
+            };
+            this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += (_, _) => EditTriggers();
+            // ponytail: tube timer, CompanionPhraseService count/management and phrase presets
+            // remain wire-views-companion-workshop-triggers-cell-b; no playback is claimed here.
+            SyncFromSettings();
+        }
 
-            var toggle = this.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
-            var panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
-            var slider = this.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
-            var intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            _attached = true;
+            Rebind();
+            SyncFromSettings();
+        }
 
-            // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
-            toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
-            slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            _attached = false;
+            Disconnect();
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        private void Disconnect()
+        {
+            if (_settings != null) _settings.PropertyChanged -= OnSettingsChanged;
+            if (_service != null) _service.CurrentReplaced -= QueueRefresh;
+            _settings = null;
+            _service = null;
+        }
+
+        private void Rebind()
+        {
+            Disconnect();
+            _settings = CoreSettings.Current;
+            _service = CoreSettings.Service;
+            _settings.PropertyChanged += OnSettingsChanged;
+            if (_service != null) _service.CurrentReplaced += QueueRefresh;
+        }
+
+        private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (!_loading && e.PropertyName is null or "" or nameof(CoreAppSettings.TriggerModeEnabled)
+                or nameof(CoreAppSettings.TriggerIntervalSeconds)) QueueRefresh();
+        }
+
+        private void QueueRefresh() => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_attached) return;
+            Rebind();
+            SyncFromSettings();
+        });
+
+        private void SyncFromSettings()
+        {
+            _loading = true;
+            try
+            {
+                var s = CoreSettings.Current;
+                _toggle.IsChecked = s.TriggerModeEnabled;
+                _panel.IsVisible = s.TriggerModeEnabled;
+                _slider.Value = s.TriggerIntervalSeconds;
+                _intervalText.Text = $"{s.TriggerIntervalSeconds}s";
+            }
+            finally { _loading = false; }
+        }
+
+        private async void EditTriggers()
+        {
+            if (TopLevel.GetTopLevel(this) is not Window owner) return;
+            try
+            {
+                var settings = CoreSettings.Current;
+                var mod = CoreMods.ActiveModToken;
+                var original = TriggerPhraseEdits.ForEditor(settings.CustomTriggers);
+                var dialog = new TextEditorDialog("Trigger Phrases", original);
+                if (await dialog.ShowDialogSafe<bool?>(owner) != true || dialog.ResultData is not { } edited) return;
+                // A cloud restore or mod switch during the modal editor must not overwrite its new pool.
+                if (!ReferenceEquals(settings, CoreSettings.Current) || !ReferenceEquals(mod, CoreMods.ActiveModToken)) return;
+                TriggerPhraseEdits.Apply(settings, original, edited, CoreMods.Service?.GetDefaultCustomTriggers());
+                CoreSettings.Save();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to open trigger editor");
+                await MessageDialog.ShowAsync(owner, "Error", $"Error opening trigger editor: {ex.Message}");
+            }
         }
     }
 
