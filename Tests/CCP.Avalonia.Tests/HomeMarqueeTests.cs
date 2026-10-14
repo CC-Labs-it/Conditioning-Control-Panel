@@ -264,6 +264,11 @@ public sealed class HomeMarqueeTests
         Assert.False(reads.IsPlaying);
         Assert.Equal(1, canvas.Opacity);
         Assert.Empty(dash.FindControl<Grid>("MarqueeRead")!.Children);
+        // WPF MarqueeRead_IsVisibleChanged: the loop clock stops on hide and restarts on show.
+        Assert.Null(reads.LoopInterval);
+        w.ShowTab("settings");
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(reads.LoopInterval);
         return Task.CompletedTask;
     });
 

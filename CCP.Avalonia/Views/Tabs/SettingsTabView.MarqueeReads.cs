@@ -11,11 +11,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Banner;
@@ -64,6 +66,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _act = new BeatLoop(host, Step) { OnParked = Cancel };
             _loopTimer = new DispatcherTimer(DispatcherPriority.Background);
             _loopTimer.Tick += (_, _) => OnLoop();
+            // WPF MarqueeRead_IsVisibleChanged stops the loop clock on hide and restarts it on show. Avalonia's
+            // IsVisible is not effective, so watch the strip and its ancestors (the tab hosts toggle IsVisible).
+            host.AttachedToVisualTree += (_, _) => Watch();
+            host.DetachedFromVisualTree += (_, _) => Unwatch();
+            if (host.IsAttachedToVisualTree()) Watch();
+        }
+
+        private Action? _unwatch;
+
+        private void Watch()
+        {
+            Unwatch();
+            var chain = _host.GetSelfAndVisualAncestors().ToArray();
+            void On(object? s, AvaloniaPropertyChangedEventArgs e)
+            {
+                if (e.Property == Visual.IsVisibleProperty) SyncLoop();
+            }
+            foreach (var a in chain) a.PropertyChanged += On;
+            _unwatch = () => { foreach (var a in chain) a.PropertyChanged -= On; };
+        }
+
+        private void Unwatch()
+        {
+            _unwatch?.Invoke();
+            _unwatch = null;
+        }
+
+        /// <summary>The loop clock runs only while armed, idle and on screen.</summary>
+        private void SyncLoop()
+        {
+            if (_armed && !IsPlaying && _host.IsEffectivelyVisible) _loopTimer.Start();
+            else _loopTimer.Stop();
         }
 
         /// <summary>The rule (tests swap in one on a stepped clock).</summary>
@@ -83,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             double seconds = loopSeconds > 0.5 ? loopSeconds : ParkedLoopSeconds;
             _loopTimer.Interval = TimeSpan.FromSeconds(Math.Min(600, seconds));
             _armed = true;
-            if (!IsPlaying) _loopTimer.Start();
+            SyncLoop();
         }
 
         /// <summary>WPF ShutdownMarqueeReads: no clock left pointing at a detached strip.</summary>
@@ -209,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _host.Opacity = 0;
                 _canvas.Opacity = 1;
                 _ticker.Resume();
-                if (_armed) _loopTimer.Start();   // a hidden strip just counts nothing (OnLoop)
+                SyncLoop();
             }
             catch (Exception ex) { Serilog.Log.Debug("[MarqueeReads] restore: {E}", ex.Message); }
         }
