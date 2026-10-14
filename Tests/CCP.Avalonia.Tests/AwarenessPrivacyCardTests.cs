@@ -58,8 +58,8 @@ public sealed class AwarenessPrivacyCardTests
     public Task DialConsentBandChipsPauseAndWipeAreReal() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -152,8 +152,8 @@ public sealed class AwarenessPrivacyCardTests
     public Task RefreshTicksOnlyWhileTheRoomIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var shell = new MainShellWindow();
         try

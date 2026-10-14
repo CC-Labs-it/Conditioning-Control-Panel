@@ -1,0 +1,30 @@
+# wire-views-companion-awareness-privacy
+
+Retained awareness history can now be reviewed and erased through the existing Companion privacy card. The row remains **stub**: this slice does not add the v2 observer or claim that the wire view is live.
+
+- Move the existing pure WPF `ActivityLedger` and `AwarenessLive` implementations into CCP.Core. Replace the ledger's head settings/logging references with CoreSettings/Serilog; WPF uses the shared types, with no duplicate implementation.
+- The Avalonia desktop owns one ledger, loads an existing file, applies retention at startup, stops/resumes with awareness and stops on panic/disposes on exit. No observer or capture is started; an absent ledger is not created. The headless initialization path never loads a profile.
+- Known-app chips show retained ids plus session transitions, with the WPF order, eight-chip cap and localized forget tooltip. Their actual bound buttons forget the app from memory and disk. Retention changes prune history; the existing two-step wipe uses the shared full-erasure pipeline so pending saves and in-memory history are erased too.
+- Link the unchanged WPF-source ledger boundary tests into the Linux Core suite. Add a synthetic, temporary-directory headless card test for persisted chips, bound forget, retention, panic stop and two-step wipe. Existing card tests use the production font registration; assertions are unchanged.
+- Sources are this brief's BASE (`avalonia-port/goongame-core-c`) and its WPF reference. Read-only `parity/trunk` was fetched at `a4ee52d40cd347d288dcf7fdaa8445b79f8e5038`; no trunk files were imported.
+
+## Verification limits
+
+Commands used .NET 10.0.402, Release, `DiffEngine_Disabled=true`; builds used `-m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` and the four MSBuild hardlink-copy flags to fit this shared workspace. Existing tests and assertions remain intact.
+
+- `dotnet build CCP.Core/CCP.Core.csproj -c Release` and `dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release`: succeeded, zero errors. Sequentially built every test csproj in `.github/workflows/build.yml`: Core, Core.Settings, Core.Content, Avalonia.Consent, Avalonia.Language, Avalonia.CatalogueStartup, Avalonia.Scheduler, Avalonia.Report, Avalonia.GeneralSettings, Avalonia.Snapshot, ConditioningControlPanel, Avalonia. All **14** required project builds succeeded.
+- The WPF test project used `-p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`: succeeded, **512 warnings / 0 errors**, 8m41s. This proves WPF callers compile against the moved shared types; Windows GUI and Windows tests were **not run** on Linux.
+- `bash .github/scripts/core-guards.sh`: `All Core guards passed`, **424** XAML type references checked.
+- `dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --filter FullyQualifiedName~AwarenessLedgerTests`: **43 passed / 0 failed / 0 skipped**. These unchanged, linked WPF-source tests cover clock boundaries, startup retention without UI, persistence, per-app forgetting, and pending-save-safe wipe.
+- Required full `dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --no-build`: first run **2853 passed / 1 failed / 5 skipped**, total 2859. `GoonClockAndRoundsTests.SyncedEventAndScheduledFireBothHopThroughCoreDispatch` returned a null scheduled handle: unchanged `SafeFireAt()` supplies exactly the minimum buffer and `ScheduleAt` rejects if time has advanced. Isolated retry failed the same assertion. Bounded full retry: **2852 passed / 2 failed / 5 skipped**, total 2859; same clock failure, plus unchanged `BoardTilesTests.A_frame_fits_the_budget` measured **30.59 ms** against its **12 ms** guard on the shared runner. Clock/board implementation and tests are untouched. Full-suite green is **not claimed**. The five existing Vosk skips reflect the missing speech model; no model was fetched for this history slice.
+- `dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build --filter 'FullyQualifiedName~AwarenessLedgerPrivacyTests|FullyQualifiedName~AwarenessPrivacyCardTests|FullyQualifiedName~PanicSurfacesTests'`: final **9 passed / 0 failed / 0 skipped**. Test files use headless Avalonia, isolated test-profile setup and a temporary synthetic ledger. No real app ids, desktop activity, secrets or user data were used.
+- Fail-before proof: replacing just the viewmodel with BASE while keeping the new fixture/shared ledger caused `HasKnownApps` to fail (expected true, actual false); restored implementation passes. A visible bound button is exercised for forget; confirmation is armed before full wipe.
+- Desktop startup/exit ownership and the real Windows observer/capture path are compiled, **not run**. Native LibVLC playback/smoke and model-backed speech were not run; they are outside this retained-history slice.
+- `CCP_USERDATA_DIR=/tmp/worker6-awareness-render-profile dotnet run --project CCP.Avalonia -c Release --no-build -- --render-all /tmp/worker6-awareness-render`: exit 0, **224/224 views rendered**. Inspected `AwarenessPrivacyView.png`: default awareness Off, existing deny chips/retention/wipe layout visible, no invented history. Synthetic retained chips are proven by the visible bound-button test, rather than this empty-profile image. Loopback manifest/preview warnings are render fixtures, not real account requests.
+
+## Remaining work: wire-views-companion-awareness-privacy-b
+
+- Port the v2 observer/arbiter and platform capture, then publish the actual cut frames. Render the real cloud/local projections, live wire line and blinking cursor only when that pipeline is working.
+- Hide the older-pipeline warning band and enable its review/switch-on action only with that observer. Current conservative warning and empty wire/JSON remain truthful.
+- Fold the keyword-trigger ring and ledger transition candidates into the seen-app/picker rows. Known retained ids are implemented here; the candidate picker still uses the existing head sources.
+- Run the real Windows desktop and platform capture path; headless synthetic input does not prove those paths.

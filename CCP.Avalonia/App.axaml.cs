@@ -446,6 +446,17 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                // ponytail: WPF retention applies at launch even while awareness is off. No observer is started
+                // here: this owner only loads an existing ledger and honours its retention promise.
+                var privacyLedger = new ConditioningControlPanel.Services.Awareness.ActivityLedger();
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = privacyLedger;
+                if (System.IO.File.Exists(privacyLedger.LedgerPath)) privacyLedger.Start();
+                WindowAwarenessService.V2Lifecycle = start =>
+                {
+                    if (start && System.IO.File.Exists(privacyLedger.LedgerPath)) privacyLedger.Start();
+                    else if (!start) privacyLedger.Stop();
+                };
+
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -1187,6 +1198,7 @@ namespace ConditioningControlPanel.Avalonia
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
+            try { ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger?.Dispose(); } catch { }
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
             // WPF App.OnExit:6336: only the `ollama serve` this app spawned; a user's own server is untouched.
