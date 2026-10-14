@@ -311,6 +311,83 @@ public sealed class GameWindowTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PieceByPiece_FirstEscapePauses_SecondEscapeCloses(bool overrideAll) => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        CoreSettings.Current.PanicOverridesAll = overrideAll;
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        board.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(board.IsActive);
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var now = DateTime.Now;
+        shell.HandlePanicKeyPress(now);
+        Assert.True(board.IsVisible);
+        Assert.Single(sent, x => (string?)x["type"] == "pbp:escape");
+        shell.HandlePanicKeyPress(now.AddSeconds(1));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(sent, x => (string?)x["type"] == "pbp:escape");
+    });
+
+    [Fact]
+    public void PieceByPiece_EscapeDuringBoot_DoesNotQueueAPause() => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        board.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(board.IsActive);
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.True(board.IsVisible);
+        Assert.Empty(sent);
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.DoesNotContain(sent, x => (string?)x["type"] == "pbp:escape");
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Theory]
+    [InlineData("F9", true)]
+    [InlineData("Escape", false)]
+    public void PieceByPiece_ReboundOrBackgroundPanic_ClosesImmediately(string key, bool foreground) => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = key;
+        launcher.Hide();
+        var board = GameWindow.Launch("piecebypiece")!;
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        if (foreground) board.Activate();
+        else { shell.Show(); shell.Activate(); }
+        Dispatcher.UIThread.RunJobs();
+        if (!foreground)
+        {
+            // Headless Activate does not deactivate the previous window; deliver the native
+            // notification after queued activation work, as a compositor does on focus loss.
+            var deactivated = typeof(global::Avalonia.Platform.IWindowBaseImpl).GetProperty("Deactivated",
+                global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public
+                | global::System.Reflection.BindingFlags.NonPublic)!;
+            Assert.IsType<Action>(deactivated.GetValue(board.PlatformImpl))();
+        }
+        Assert.Equal(foreground, board.IsActive);
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.DoesNotContain(sent, x => (string?)x["type"] == "pbp:escape");
+    });
+
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
     private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {

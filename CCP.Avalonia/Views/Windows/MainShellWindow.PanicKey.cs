@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is a rebind, never a panic.</summary>
         internal static bool CapturingPanicKey { get; set; }
 
+        private DateTime? _lastPbpEscapeClaimUtc;
         private int _panicPressCount;
         private DateTime _lastPanicTime = DateTime.MinValue;
 
@@ -53,7 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
         }
 
-        /// <summary>One press of the configured key (UI thread). Each press stops everything; a second
+        /// <summary>One press of the configured key (UI thread). A foreground board may keep the first
+        /// Escape as pause; unclaimed presses stop everything. A second
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
         internal void HandlePanicKeyPress(DateTime now)
         {
@@ -64,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
+            if (TryPbpPauseOnEscape(now.ToUniversalTime())) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
@@ -107,6 +110,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Double panic! Exiting application...");
                 ExitWithoutBill();   // WPF MainWindow.xaml.cs:1841 shuts down directly, no bill
+            }
+        }
+
+        // WPF TryRacePauseOnEscape: keep the first foreground board Escape, but a quick
+        // second press must reach the ordinary stop pass. Never queue a pause during boot.
+        private bool TryPbpPauseOnEscape(DateTime nowUtc)
+        {
+            try
+            {
+                var board = Views.Games.GameWindow.ForegroundPbp();
+                if (!PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
+                    board != null, CoreEngine.IsRunning, LockCardWindow.IsAnyOpen(),
+                    _lastPbpEscapeClaimUtc, nowUtc))
+                {
+                    _lastPbpEscapeClaimUtc = null;
+                    return false;
+                }
+                _lastPbpEscapeClaimUtc = nowUtc;
+                if (PanicPolicy.KeptEscapeGoesTo(true, false, false, true, board!.IsReady, false, false)
+                    == PanicPolicy.KeptEscapePage.Board) board.PostPbpKeptEscape();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "PieceByPiece Escape handoff failed; continuing panic");
+                return false;
             }
         }
 

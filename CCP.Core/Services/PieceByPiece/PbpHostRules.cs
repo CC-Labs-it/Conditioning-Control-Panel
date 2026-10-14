@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 /// here touches a window, a WebView or a setting; the head's host (Avalonia
 /// <c>Views/Games/GameWindow.Pbp.cs</c>) does that and calls in. WPF spec, PieceByPieceHostService.cs:
 /// identity :330, settings :359 + :758, media-request :447-538, net lane :559-626, watchdogs :694-745.
-/// The WPF host keeps its inline copy (unchanged, so the Windows app behaves exactly as before).
+/// Both heads delegate their net, local media and watchdog decisions to this copy.
 /// </summary>
 public static class PbpHostRules
 {
