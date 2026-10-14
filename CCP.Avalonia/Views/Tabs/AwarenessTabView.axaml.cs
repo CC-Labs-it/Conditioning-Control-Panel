@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields this code-behind reads.
             InitializeComponent();
+            InitializeStatusPulse();
 
             // WPF's Slider.ValueChanged forwards to MainWindow, which writes the setting AND the
             // label. Wired here rather than in XAML so the seed below can move the sliders before
@@ -174,8 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtAwarenessStatus.Text = on ? "Live" : "Off";
             TxtAwarenessStatus.Foreground = on ? pink ?? Brushes.HotPink : OffLabel;
 
-            // ponytail: WPF also breathes the dot while the engine is genuinely live
-            // (SetAwarenessStatusPulse). Cosmetic, and it belongs with the engine seam.
+            ApplyStatusPulse();
         }
 
         // ------------------------------------------------------------------ live editors

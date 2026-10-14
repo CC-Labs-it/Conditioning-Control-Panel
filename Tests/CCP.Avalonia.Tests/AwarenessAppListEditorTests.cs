@@ -21,7 +21,7 @@ public sealed class AwarenessAppListEditorTests
     public void AppNamesCommitOnEnterAndBlurInsteadOfWhileTyping() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current == null)
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options())
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var old = (s.KeywordTriggerAppScope, s.KeywordTriggerApps);
