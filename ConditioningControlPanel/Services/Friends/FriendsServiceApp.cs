@@ -37,7 +37,10 @@ public static class FriendsServiceApp
     /// <summary>The poll's timer: what FriendsService built for itself before it moved to Core.</summary>
     public sealed class Timer : IUiTimer
     {
-        private readonly DispatcherTimer _t = new(DispatcherPriority.Background);
+        private readonly DispatcherTimer _t;
+
+        /// <summary>Background for the poll; the leash task runner keeps the Normal it always had.</summary>
+        public Timer(DispatcherPriority priority = DispatcherPriority.Background) => _t = new(priority);
 
         public TimeSpan Interval { get => _t.Interval; set => _t.Interval = value; }
         public event EventHandler? Tick { add => _t.Tick += value; remove => _t.Tick -= value; }

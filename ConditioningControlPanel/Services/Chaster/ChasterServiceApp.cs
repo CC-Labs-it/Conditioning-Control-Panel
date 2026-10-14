@@ -46,14 +46,7 @@ public static class ChasterServiceApp
 
     /// <summary>The idle-day row's eyes: conditioning minutes the feature day log booked on a
     /// day. A day with no entry had none; no log at all means nobody can tell (null).</summary>
-    private static int? MinutesFromDayLog(string dayKey)
-    {
-        var log = App.FeatureDayLog?.Log;
-        if (log == null) return null;
-        foreach (var entry in log.Days.ToArray())
-            if (entry != null && entry.D == dayKey) return entry.Cm;
-        return 0;
-    }
+    private static int? MinutesFromDayLog(string dayKey) => App.FeatureDayLog?.ConditioningMinutesOn(dayKey);
 
 #if DEBUG
     /// <summary>The demo switch, the same shape as <c>CCP_PRIZE_GRANTS</c>: with the environment

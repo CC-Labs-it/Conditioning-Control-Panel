@@ -38,6 +38,7 @@
      the SubscribeStar and device-code blocks were literals there too and stay literals here. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog"
         Title="{loc:Str btn_login}" Height="560" Width="420"
@@ -73,7 +74,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{loc:Str label_text_6}" FontSize="20" Margin="0,0,10,0"/>
+                        <fx:IconGlyph Kind="Games" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Str login_discord}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -85,7 +86,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{loc:Str label_text_7}" FontSize="20" Margin="0,0,10,0"/>
+                        <fx:IconGlyph Kind="Star" Variant="Filled" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Str login_patreon}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -97,7 +98,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="★" FontSize="20" Margin="0,0,10,0"/>
+                        <fx:IconGlyph Kind="Star" Variant="Filled" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="Login with SubscribeStar" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -109,7 +110,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{loc:Str label_text_3}" FontSize="20" Margin="0,0,10,0"/>
+                        <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Str login_anonymous}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>

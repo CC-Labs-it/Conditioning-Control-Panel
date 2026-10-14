@@ -4,6 +4,7 @@
 # CONTENT for IconEmojiRatchet. Only content belongs here at the finish (L12); "font:" entries are temporary.
 # Liveness is checked on comment-stripped code. A "path:" literal is listed once per line it covers (a new Path built
 # the same way fails the count). Literal `*` (path: only) exempts every file whose path starts with the entry's path.
+# A "verbatim:" reason with `*` exempts ONE exact file (Stack rule 4 import) from the emoji and prefixed-loc ratchets.
 
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" :: font: temporary - MDL2 settings gear, the one icon-font site at L0b; L10 converts it to IconGlyph Kind=Settings
@@ -67,5 +68,35 @@ Views/Tabs/SpiralTabView.axaml :: <Path x:Name="SplashGlyph" :: path: D6 art - s
 Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralPath" :: path: D6 art - launcher spiral
 Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralSmallPath" :: path: D6 art - launcher spiral
 Views/Windows/MainShellWindow.axaml :: <Path Stretch="Fill" Stroke="#FFE5C76B" StrokeThickness="1.2" :: path: D6 art - fuse ticket frame
+
+Views/Dialogs/TubeFitDialog.axaml.cs :: "🧍", "🙋", "💃", "🧎" :: pose pictograms drawn in place of a pose image that failed to load (oracle (c) ambiguous 3: default keep, content)
+
+Views/Dialogs/TubeFitDialog.axaml.cs :: $"×{_scale:0.00}" :: scale readout "×1.00", multiplication sign as typography (content (c).4)
+
+Views/Dialogs/MicConsentDialog.axaml :: View on GitHub → :: arrow inside a link sentence, typography (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml :: Content="← Back" :: "← Back" wizard button, arrow as typography like "← Back to the app" (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml :: I want to know more → :: arrow ending a sentence-style button label, typography (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml.cs :: I want to know more → :: same label set from code per step, typography (content (c).4)
+Views/Dialogs/MicConsentDialog.axaml.cs :: Continue → :: arrow ending a sentence-style button label, typography (content (c).4)
+
+Views/Dialogs/WebcamConsentDialog.axaml :: View on GitHub → :: arrow inside a link sentence, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml :: Content="← Back" :: "← Back" wizard button, arrow as typography like "← Back to the app" (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml :: I want to know more → :: arrow ending a sentence-style button label, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml.cs :: I want to know more → :: same label set from code per step, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml.cs :: Continue → :: arrow ending a sentence-style button label, typography (content (c).4)
+Views/Dialogs/WebcamConsentDialog.axaml :: (5×5 grid) :: multiplication sign in prose, typography (content (c).4)
+
+Views/Dialogs/AwarenessPresetDetailDialog.axaml.cs :: Icon = "🎯", :: render sample preset icon, a user-chosen preset icon is data (content (c).2)
+
+Views/Tabs/PresetsTabView.axaml.cs :: | ×{preset.SimultaneousImages} | :: "×3" simultaneous-images count in a detail sentence, typography (content (c).4)
+Views/Tabs/PresetsTabView.axaml.cs :: ───────────────── :: text rule between description and summary inside one text block, typography (content (c).4)
+Views/Tabs/PresetsTabView.axaml.cs :: ? "🎬" : session.Icon :: session title keeps the session's own icon text (data); the 🎬 is its text fallback in the same slot (content (c).2)
+
+Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Up => "\u2191", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
+Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Down => "\u2193", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
+Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Flat => "\u2192", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
 Views/Controls/Companion/CompanionRoomPreviewWindow.axaml :: narrow ⇄ wide :: arrow between two words of a dev-preview button label, typography (content (c).4)
 App.axaml.cs :: Glyph = "👗" :: InboxItem.Glyph is Core row data, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon - IconMap maps 👗 to Wand once it draws via IconGlyph Emoji=
+
+# --- verbatim imports (Stack rule 4); each follow-up converts the file and deletes its entry ---
+Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3c0aabdedc9280218757373970439ed4); step Icon strings are data mapped via IconMap at render; follow-up tutorials-icons converts the data and removes this exemption

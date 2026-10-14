@@ -34,14 +34,29 @@ namespace ConditioningControlPanel.Services
         // into the next test (the 500 ms timer outlives the test that armed it).
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<SettingsService, byte> Armed = new();
         internal bool HasPendingSave { get { lock (_timerLock) return _saveDebounceTimer != null; } }
+        // Debounce callbacks between their first instruction and the end of their write. A callback
+        // that already fired is no longer Armed (SaveImmediate disarms itself first), so without this
+        // the hook could restore the files and the write would land after it, into the next test.
+        private static int _debouncedSavesInFlight;
         internal static void DisarmAllPendingSaves()
         {
+            var fired = new List<WaitHandle>();
             foreach (var s in Armed.Keys)
             {
                 s._savePending = false;
                 s._suppressCloudBackupPending = false;
-                lock (s._timerLock) { s._saveDebounceTimer?.Dispose(); s._saveDebounceTimer = null; Armed.TryRemove(s, out _); }
+                lock (s._timerLock)
+                {
+                    // Dispose(WaitHandle) signals once callbacks already queued have run; waited on
+                    // outside the lock, which the callback's own SaveImmediate takes.
+                    var done = new ManualResetEvent(false);
+                    if (s._saveDebounceTimer?.Dispose(done) == true) fired.Add(done); else done.Dispose();
+                    s._saveDebounceTimer = null;
+                    Armed.TryRemove(s, out _);
+                }
             }
+            foreach (var done in fired) { done.WaitOne(TimeSpan.FromSeconds(5)); done.Dispose(); }
+            SpinWait.SpinUntil(() => Volatile.Read(ref _debouncedSavesInFlight) == 0, TimeSpan.FromSeconds(5));
         }
         private long _saveSequence;
         private long _lastWrittenSaveSequence;
@@ -817,13 +832,18 @@ namespace ConditioningControlPanel.Services
                 _saveDebounceTimer?.Dispose();
                 _saveDebounceTimer = new System.Threading.Timer(_ =>
                 {
-                    if (_savePending)
+                    Interlocked.Increment(ref _debouncedSavesInFlight);
+                    try
                     {
-                        _savePending = false;
-                        var suppress = _suppressCloudBackupPending;
-                        _suppressCloudBackupPending = false;
-                        SaveImmediate(suppress);
+                        if (_savePending)
+                        {
+                            _savePending = false;
+                            var suppress = _suppressCloudBackupPending;
+                            _suppressCloudBackupPending = false;
+                            SaveImmediate(suppress);
+                        }
                     }
+                    finally { Interlocked.Decrement(ref _debouncedSavesInFlight); }
                 }, null, SaveDebounceDueTimeMilliseconds, Timeout.Infinite);
                 Armed[this] = 0;
             }

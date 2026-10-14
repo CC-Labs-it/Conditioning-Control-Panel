@@ -39,6 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool _racePinged, _raceExiting, _raceStarted, _raceDisposed;
 
         internal bool RaceRunActive => _raceRun.IsActive;
+        /// <summary>The watchdog clock (P08); tests step it.</summary>
+        internal static Func<DateTime> RaceUtcNow = () => DateTime.UtcNow;
         internal bool RaceWatchRunning => _raceHeartbeatWatch?.IsEnabled == true;
 
         /// <summary>WPF Launch after the gate: fresh run state, heartbeat watch, presence. On Opened.</summary>
@@ -48,9 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _raceStarted = true;
             _raceRun.Reset();
             _raceExiting = _racePinged = false;
-            _raceLastHeartbeatUtc = DateTime.UtcNow;
+            _raceLastHeartbeatUtc = RaceUtcNow();
             _raceHeartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            _raceHeartbeatWatch.Tick += (_, _) => CheckRaceHeartbeat(DateTime.UtcNow);
+            _raceHeartbeatWatch.Tick += (_, _) => CheckRaceHeartbeat(RaceUtcNow());
             _raceHeartbeatWatch.Start();
             try { Platform.FriendsHead.Service?.EnterActivity(PresenceActivity.Race); }   // WPF :223
             catch (Exception ex) { Log.Debug("RaceHost: presence enter: {E}", ex.Message); }
@@ -70,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     return true;
                 case "heartbeat":
                 case "pong":
-                    _raceLastHeartbeatUtc = DateTime.UtcNow;
+                    _raceLastHeartbeatUtc = RaceUtcNow();
                     _racePinged = false;
                     return true;
                 case "run-started":
@@ -90,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageReady (:255): init with the race's settings block, then the manifest.</summary>
         private void OnRacePageReady()
         {
-            _raceLastHeartbeatUtc = DateTime.UtcNow;
+            _raceLastHeartbeatUtc = RaceUtcNow();
             _racePinged = false;
             Post(RaceInitMessage());
             try

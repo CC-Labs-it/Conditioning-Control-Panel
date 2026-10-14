@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Avalonia.Controls;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,6 +7,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -318,9 +320,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <see cref="TutorialOverlay"/> is the ported overlay, which reads that seam itself.
         ///
         /// <para>The overlay is only shown once the seam confirms a tour is actually running.
-        /// Unseeded, <c>Start</c> is a silent no-op and <c>IsActive</c> stays false, so this does
-        /// nothing rather than putting an empty coach-mark card on screen - a tour that looks
-        /// started while nothing tracks is worse than no tour.</para>
+        /// <c>Tours.TutorialHead.Seed</c> backs the seam; if <c>Start</c> is refused (another tour
+        /// running) <c>IsActive</c> answers for that tour, never an empty coach-mark card.</para>
         ///
         /// <para>ponytail: the step-rewriting half cannot be done through the seam. WPF walks
         /// <c>App.Tutorial.CurrentSteps</c> and replaces each <c>step.OnActivate</c> so a step
@@ -965,7 +966,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var capturedContainer = container;
             var removeBtn = new Button
             {
-                Content = "✕ Remove",
+                Content = new IconLabel { Kind = IconKind.Dismiss, Text = "Remove", Spacing = 4 },
                 Background = Brushes.Transparent,
                 Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100)),
                 BorderThickness = new Thickness(0),
@@ -1125,7 +1126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Play button
             var playBtn = new Button
             {
-                Content = "▶",
+                Content = new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 12 },
+                [AutomationProperties.NameProperty] = "Play preview",
                 Width = 28,
                 Height = 28,
                 Background = Brushes.Transparent,
@@ -1165,7 +1167,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Clear button
             var clearBtn = new Button
             {
-                Content = "✕",
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 10 },
+                [AutomationProperties.NameProperty] = "Clear",
                 Width = 24,
                 Height = 24,
                 Background = Brushes.Transparent,
@@ -1215,14 +1218,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// The WPF version reached the row through label.Parent and matched buttons by their
         /// Content glyph. The row is created here, so it is looked up by key; the glyph match
-        /// stays, because the play button's Content flips between ▶ and ⏹.
+        /// stays, because the play button's Content flips between ▶ and ⏹ in WPF (play-only here, see ToggleAudioPreview).
         /// </summary>
         private void SetAudioRowButtons(string key, bool visible)
         {
             if (!_audioRows.TryGetValue(key, out var grid)) return;
             foreach (var child in grid.Children)
             {
-                if (child is Button btn && btn.Content is string glyph && (glyph == "▶" || glyph == "⏹" || glyph == "✕"))
+                if (child is Button { Content: IconGlyph } btn)   // the play and clear icons; Browse is text
                     btn.IsVisible = visible;
             }
         }
@@ -1239,7 +1242,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Play button
             var playBtn = new Button
             {
-                Content = "▶",
+                Content = new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 12 },
+                [AutomationProperties.NameProperty] = "Play preview",
                 Width = 24,
                 Height = 24,
                 Background = Brushes.Transparent,
@@ -1276,7 +1280,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Remove button
             var removeBtn = new Button
             {
-                Content = "✕",
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 9 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Width = 20,
                 Height = 20,
                 Background = Brushes.Transparent,
@@ -1458,7 +1463,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var removeBtn = new Button
             {
-                Content = "✕",
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 10 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Width = 24,
                 Height = 24,
                 Background = Brushes.Transparent,
@@ -1632,7 +1638,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var delBtn = new Button
             {
-                Content = "×",
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 12 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Foreground = new SolidColorBrush(Color.Parse("#FF6B6B")),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
@@ -1731,11 +1738,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Grid.SetColumn(fromBox, 0);
             row.Children.Add(fromBox);
 
-            var arrow = new TextBlock
+            var arrow = new IconGlyph
             {
-                Text = "→",
+                Kind = IconKind.ArrowRight,
                 Foreground = new SolidColorBrush(Color.Parse("#808080")),
-                FontSize = 16,
+                Size = 16,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 8, 0),
             };
@@ -1754,7 +1761,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var delBtn = new Button
             {
-                Content = "×",
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 12 },
+                [AutomationProperties.NameProperty] = "Remove",
                 Foreground = new SolidColorBrush(Color.Parse("#FF6B6B")),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
@@ -1833,7 +1841,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Clear button
             var clearBtn = new Button
             {
-                Content = "×",
+                Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 12 },
+                [AutomationProperties.NameProperty] = "Clear",
                 Foreground = new SolidColorBrush(Color.Parse("#FF6B6B")),
                 Background = new SolidColorBrush(Color.FromArgb(180, 30, 30, 50)),
                 BorderThickness = new Thickness(0),

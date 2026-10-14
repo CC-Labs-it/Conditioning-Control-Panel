@@ -35,6 +35,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                               panel => panel.ShowTab("gradedintake")),
                 // WPF BreakoutHostService.LaunchDemo: free, no account; Play opens it via LaunchGameWindow.
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
+                // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
+                [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
                 ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
             };
@@ -88,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildTiles();
             HookVeil();
             HookFx();
+            HookLinks();
             PaintSoundButton();
         }
 
@@ -647,6 +650,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 new SolidColorBrush(Color.FromRgb(0x2A, 0x1C, 0x08)), 10));
             if (card.IsNew) plate.Children.Add(Pill("exclusives_badge_new", null, Res("AccentGradientBrush"), Brushes.White,
                 needsAccount || locked ? 40 : 10));
+            plate.Children.Add(ShortcutButton(tile, card.Id));
             body.Children.Add(plate);
 
             // --- title, blurb, play: fixed heights so every title sits on the same line ---

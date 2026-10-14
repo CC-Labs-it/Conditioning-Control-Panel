@@ -7,6 +7,8 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 
+using ConditioningControlPanel.Avalonia.Helpers;
+
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
     /// <summary>
@@ -21,8 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// (SectionTabStrip.xaml.cs:114).</summary>
         internal static readonly Color HomeHue = Color.FromRgb(0xB7, 0x9C, 0xFF);
 
-        private DispatcherTimer? _foldBreath;
-        private DropShadowEffect? _foldGlow;
+        private BeatLoop? _foldBreath;
         private long _foldBreathStart;
         private bool? _foldPainted;
 
@@ -44,30 +45,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _foldBreath?.Stop();
             if (!BrowserFoldRule.Glows(collapsed) || !AmbientFxCanvas.Env.AllowTransitions)
             {
-                btn.ClearValue(Visual.EffectProperty);
-                _foldGlow = null;
+                FoldGlow.IsVisible = false;
                 return;
             }
-            _foldGlow ??= new DropShadowEffect { BlurRadius = 16, OffsetX = 0, OffsetY = 0 };
-            _foldGlow.Color = HomeHue;
-            btn.Effect = _foldGlow;
-            if (!AmbientFxCanvas.Env.AllowAmbientLoops || !IsVisible || VisualRoot == null || !_hostShown) { _foldGlow.Opacity = BrowserFoldRule.GlowStatic; return; }
-            _foldGlow.Opacity = BrowserFoldRule.GlowLow;
+            // The glow is a sibling BoxShadow layer, not a DropShadowEffect on the button: an Effect makes the
+            // button an offscreen layer re-blurred on every breath frame (P82 rule 3). Only its Opacity moves.
+            FoldGlow.BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, Color = HomeHue });
+            FoldGlow.IsVisible = true;
+            if (!AmbientFxCanvas.Env.AllowAmbientLoops || !IsVisible || VisualRoot == null || !_hostShown) { FoldGlow.Opacity = BrowserFoldRule.GlowStatic; return; }
+            FoldGlow.Opacity = BrowserFoldRule.GlowLow;
             _foldBreathStart = FxAdorner.Time.GetTimestamp();
-            // A sine breath, low -> high -> low over GlowBreathMs, at 24 fps like WPF's SetDesiredFrameRate.
-            _foldBreath ??= new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / 24), DispatcherPriority.Background, (_, _) => StepFoldBreath());
+            // A sine breath, low -> high -> low over GlowBreathMs, on the window's 30 fps beat (WPF SettingsTabView.xaml.cs:588 sets 24;
+            // one shared beat composes fewer frames than a second rate). It parks while minimised.
+            _foldBreath ??= new BeatLoop(this, _ => StepFoldBreath());
             _foldBreath.Start();
         }
 
-        internal bool FoldArrowBreathing => _foldBreath?.IsEnabled == true;
+        internal bool FoldArrowBreathing => _foldBreath?.IsRunning == true;
 
         internal void StepFoldBreath()
         {
-            if (_foldGlow == null) return;
+            if (!FoldGlow.IsVisible) return;
             double half = BrowserFoldRule.GlowBreathMs / 2000.0;
             double t = FxAdorner.Time.GetElapsedTime(_foldBreathStart).TotalSeconds % (2 * half);
             double u = t < half ? t / half : 2 - (t / half);
-            _foldGlow.Opacity = BrowserFoldRule.GlowLow + ((BrowserFoldRule.GlowHigh - BrowserFoldRule.GlowLow) * (1 - Math.Cos(Math.PI * u)) / 2);
+            FoldGlow.Opacity = BrowserFoldRule.GlowLow + ((BrowserFoldRule.GlowHigh - BrowserFoldRule.GlowLow) * (1 - Math.Cos(Math.PI * u)) / 2);
         }
 
         /// <summary>Visibility hook: the breath runs only while Home is on screen (P01).</summary>
