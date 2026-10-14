@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged -= OnModChanged;
             Platform.ProgramEngineBridge.SessionChanged -= OnProgramSessionChanged;
             UnsubscribePrograms();
+            StopSessionSheen();
             UnhookIgnition();
             base.OnDetachedFromVisualTree(e);
         }

@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Program;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Views.Tabs;
 
 namespace ConditioningControlPanel
@@ -1387,13 +1388,7 @@ namespace ConditioningControlPanel
         // -----------------------------------------------------------------------------------
 
         /// <summary>mm:ss, or h:mm:ss past the hour. Never negative.</summary>
-        private static string FormatProgramClock(TimeSpan span)
-        {
-            if (span < TimeSpan.Zero) span = TimeSpan.Zero;
-            return span.TotalHours >= 1
-                ? $"{(int)span.TotalHours}:{span.Minutes:D2}:{span.Seconds:D2}"
-                : $"{(int)span.TotalMinutes}:{span.Seconds:D2}";
-        }
+        private static string FormatProgramClock(TimeSpan span) => SessionClockLabel.ProgramClock(span);
 
         /// <summary>programs.json stamped by a newer build loads read-only (ProgramService.IsReadOnly,
         /// docs/avalonia-decisions.md programs 3a): every lifecycle control greys, since Core refuses them.</summary>
@@ -1494,7 +1489,7 @@ namespace ConditioningControlPanel
                     if (elapsed > total) elapsed = total;
 
                     tab.TodaySessionProgressBar.Foreground = accent;
-                    tab.TodaySessionProgressBar.Value = Math.Clamp(engine.ProgressPercent, 0, 100);
+                    tab.TodaySessionProgressBar.Value = SessionClockLabel.ProgramProgress(engine.ElapsedTime, current.DurationMinutes);
 
                     var clock = Loc.GetF("programs_session_progress",
                         FormatProgramClock(elapsed), FormatProgramClock(total));

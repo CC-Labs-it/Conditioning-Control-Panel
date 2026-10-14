@@ -48,6 +48,20 @@ namespace ConditioningControlPanel.Services
             showCountdown ? Format(withClock, name, Minutes(remaining), Seconds(remaining), pauseIndicator)
                           : name + pauseIndicator;
 
+        /// <summary>Programs' elapsed / total clock (WPF ProgramsTab.cs): m:ss below an hour,
+        /// h:mm:ss above it, with negative elapsed time shown as zero.</summary>
+        public static string ProgramClock(TimeSpan span)
+        {
+            if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+            return span.TotalHours >= 1
+                ? $"{(int)span.TotalHours}:{span.Minutes:D2}:{span.Seconds:D2}"
+                : $"{(int)span.TotalMinutes}:{span.Seconds:D2}";
+        }
+
+        /// <summary>Clamped fill for a session's elapsed time, independent of its clock text.</summary>
+        public static double ProgramProgress(TimeSpan elapsed, double durationMinutes) =>
+            durationMinutes > 0 ? Math.Clamp(elapsed.TotalMinutes / durationMinutes * 100, 0, 100) : 0;
+
         private static string Minutes(TimeSpan t) => ((int)t.TotalMinutes).ToString("D2");
         private static string Seconds(TimeSpan t) => t.Seconds.ToString("D2");
 
