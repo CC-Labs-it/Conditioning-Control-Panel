@@ -1,5 +1,5 @@
 // PORTED from ConditioningControlPanel/Services/Safety/GameSurfaces.cs and MainWindow.xaml.cs
-// PanicStopEverySurface (:1923): one list of everything a panic stops, so a new surface is one line here
+// PanicStopEverySurface (:1934): one list of everything a panic stops, so a new surface is one line here
 // instead of a call remembered in each route (P06). The panic key, the tray's Stop everything and the
 // spoken safe word all call StopAll; Lockdown refusal, the lock-card/palette/grace-pause rungs, the
 // window restore and the double-press exit ladder stay in the routes. Guarded by PanicSurfacesTests.
@@ -37,13 +37,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
             new("ai-followups", _ => MainShellWindow.CancelPendingAi(), After: ["voice-capture", "first-show"]),
-            // WPF MainWindow.xaml.cs:1726: standalone Lab minigames first; the engine stop never reaches them.
+            // WPF MainWindow.xaml.cs:1732: standalone Lab minigames first; the engine stop never reaches them.
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
-            // WPF PanicStopEverySurface (:1992): the toys go to zero, bypassing throttles and gates.
+            // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
@@ -53,20 +53,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // programs 3a (P06, docs/avalonia-decisions.md): today's program session ENDS, not pauses, so
             // a panic never leaves a program run holding the screen; foreign sessions stay paused below.
             new("program-session", sh => { if (sh != null) sh.EndProgramSessionQuietly("panic"); else App.Programs?.StopProgramSessionIfRunning("panic"); }),
-            // WPF :1543 CancelPendingAi is the first stop, long before StopEngine (:1827); :1714-1721 game surfaces and Lab
-            // minigames (GameSurfaces.cs:50 'chaos') close before RunPanicStopTail (:1722); :1808 KillAllAudio (App.xaml.cs:1780
-            // Mantra.Dispose), :1786/:1992 haptics PanicStop and :1811 Autonomy.CancelActivePulses all precede StopEngine.
+            // WPF :1554 CancelPendingAi (right after FirstShowService.Stop :1553) runs long before StopEngine (:1838); :1721-1732 game
+            // surfaces and Lab minigames (GameSurfaces.cs:50 'chaos') close before RunPanicStopTail (:1733); :1819 KillAllAudio
+            // (App.xaml.cs:1780 Mantra.Dispose), :1797 remote haptics, :2003 haptics PanicStop and :1822 Autonomy.CancelActivePulses
+            // all precede StopEngine.
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover"]),
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
             new("pink-rush", _ => PinkRushHost.Stop(), After: ["engine"]),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
-            // WPF :1967 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel;
-            // :1963-1967 the engine-owned session GIF goes first, these standalone slots after it.
+            // WPF :1978 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel;
+            // :1974-1978 the engine-owned session GIF goes first, these standalone slots after it.
             new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll(), After: ["engine"]),
-            // WPF :1980-1981 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
-            // WPF :1977-1981: after the corner GIFs.
+            // WPF :1981-1982 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
+            // WPF :1978-1981: after the corner GIFs.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence(), After: ["corner-gif"]),
-            // WPF LockCardService.Stop(dismissOpenCards: true); :2030 StopAdHocEffects closes lock cards after the engine/media stop.
+            // WPF LockCardService.Stop(dismissOpenCards: true); :2041 StopAdHocEffects closes lock cards after the engine/media stop.
             new("lock-cards", _ => MainShellWindow.StopLockCards(), After: ["engine"]),
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)

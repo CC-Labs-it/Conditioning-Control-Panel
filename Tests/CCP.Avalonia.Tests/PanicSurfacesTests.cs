@@ -132,13 +132,35 @@ public sealed class PanicSurfacesTests
         Assert.True(broken.Count == 0, "Panic order broken: " + string.Join("; ", broken));
     }
 
-    /// <summary>The rules are data, so their absence is a regression too: the WPF-ordered pairs this
-    /// registry has always carried stay declared (a rule deleted with its cite would pass the check above).</summary>
+    /// <summary>"first>then" WPF/decision ordering pairs that must stay declared on the registry (cites beside
+    /// each <c>After</c> in PanicSurfaces.cs): the record independent of the registry, so retargeting or deleting a
+    /// rule fails here. One pair per line, sorted; new rules on entries need no edit here.</summary>
+    private static readonly string[] PinnedOrder =
+    {
+        "ai-followups>engine",
+        "blink-trainer>engine",
+        "chaos>engine",
+        "corner-gif>tube-speech",
+        "engine>corner-gif",
+        "engine>lock-cards",
+        "engine>pink-rush",
+        "first-show>ai-followups",
+        "gaze-minigame>camera",
+        "gaze-minigame>engine",
+        "haptics>engine",
+        "intake>voice-capture",
+        "mantra>engine",
+        "remote-haptics>engine",
+        "takeover>engine",
+        "voice-capture>ai-followups",
+    };
+
     [Fact]
     public void TheWpfOrderingRulesStayDeclared()
     {
-        var rules = PanicSurfaces.All.SelectMany(s => (s.After ?? Array.Empty<string>()).Select(f => (f, s.Id))).ToHashSet();
-        Assert.True(rules.Count >= 16, $"Only {rules.Count} ordering rules declared on PanicSurfaces.All");
+        var rules = PanicSurfaces.All.SelectMany(s => (s.After ?? Array.Empty<string>()).Select(f => $"{f}>{s.Id}")).ToHashSet();
+        var lost = PinnedOrder.Where(p => !rules.Contains(p)).ToList();
+        Assert.True(lost.Count == 0, "Ordering rules no longer declared on PanicSurfaces.All: " + string.Join(", ", lost));
     }
 
     /// <summary>P23: comments and string literals never count as code.</summary>
