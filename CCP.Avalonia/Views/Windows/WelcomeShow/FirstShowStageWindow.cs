@@ -34,10 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// <summary>PORTED from ConditioningControlPanel/Services/FirstShow/FirstShowDesktopWindow.cs: EMI and the show's
 /// effects over the primary screen. The stage is transparent and click-through (<see cref="X11Overlay"/>); EMI is
 /// the real <see cref="EmiDeskWindow"/> presenting; her speech card is its own window so its buttons stay
-/// clickable (WPF :30). Timings are <see cref="FirstShowScript"/>'s. ponytail: the guide after the verdict
-/// (WPF Guide.cs, "Show me around") is first-show-c, so the reply offers only "explore"; bubble pops need input
-/// rects on the click-through stage (WPF's layered canvas took the click).</summary>
-internal sealed class FirstShowStageWindow : Window
+/// clickable (WPF :30). Timings are <see cref="FirstShowScript"/>'s; the guide after the verdict is the Guide
+/// partial. ponytail: bubble pops need input rects on the click-through stage (WPF's layered canvas took the click).</summary>
+internal sealed partial class FirstShowStageWindow : Window
 {
     private readonly Canvas _stage = new() { Background = null };
     private EmiDeskWindow? _emi;
@@ -64,12 +63,13 @@ internal sealed class FirstShowStageWindow : Window
     private readonly Stopwatch _life = Stopwatch.StartNew();
     private readonly List<string> _files = new();
     private readonly string _panic;
-    private readonly PixelRect _screenPx;
-    private readonly double _scale;
+    private readonly MainShellWindow? _main;
+    private PixelRect _screenPx;
+    private double _scale;
     private readonly bool _redirected;
     private FirstShowEffects? _effects;
     private CancellationTokenSource? _load;
-    private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving;
+    private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
     private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
@@ -92,6 +92,7 @@ internal sealed class FirstShowStageWindow : Window
     public FirstShowStageWindow(MainShellWindow? main)
     {
         Clock = () => _life.Elapsed.TotalSeconds;
+        _main = main;
         _panic = CoreSettings.Current?.PanicKey ?? "Escape";
         Title = "CCP - Emi show";
         WindowDecorations = WindowDecorations.None; Background = Brushes.Transparent;
@@ -242,7 +243,7 @@ internal sealed class FirstShowStageWindow : Window
             await candidate.LoadAsync(paths);
             request.Token.ThrowIfCancellationRequested();
             if (_closed || _load != request) return;
-            Adopt(candidate); candidate = null;
+            Adopt(candidate); candidate = null; _bundled = false;
             ReleaseFiles(); _files.AddRange(paths); paths.Clear();
             Confirm();
         }
@@ -275,7 +276,7 @@ internal sealed class FirstShowStageWindow : Window
         {
             await effects.LoadAsync(BundledPictures());
             if (_closed) { effects.Dispose(); return; }
-            Adopt(effects); Confirm();
+            Adopt(effects); _bundled = true; Confirm();
         }
         catch (Exception ex) { effects.Dispose(); Log.Debug(ex, "First show fallback unavailable"); if (!_closed) Choose(); }
     }
@@ -296,9 +297,6 @@ internal sealed class FirstShowStageWindow : Window
         _choices.Children.Clear(); _serious = false; _playing = true; _ending = false; _beat = -1;
         _stage.Background = Brushes.Transparent; _showStart = Clock(); AddButton(Text("stop"), Close);
     }
-    // WPF Guide.cs AskVerdict/Reply :25-37.
-    private void AskVerdict() { Ask(Text("verdict")); AddButton(Text("liked"), () => Reply("replyLiked")); AddButton(Text("showoff"), () => Reply("replyShowoff")); }
-    private void Reply(string key) { Ask(Text(key)); AddButton(Text("explore"), Close); }
     // WPF Frame :239-318.
     internal void Frame()
     {
@@ -334,9 +332,13 @@ internal sealed class FirstShowStageWindow : Window
         if (m == 0 && _centered) move = 1;
         var previous = new Point(_x, _y);
         var body = BodySize();
-        _x = (Width - Math.Max(205, body.Width / 2 + 24)) * (1 - move) + Width * .5 * move;
-        _y = (Height - Math.Max(150, body.Height / 2 + 24)) * (1 - move) + Height * .56 * move;
-        if (_playing || _ending)
+        if (_guiding) GuideFrame(dt);
+        else
+        {
+            _x = (Width - Math.Max(205, body.Width / 2 + 24)) * (1 - move) + Width * .5 * move;
+            _y = (Height - Math.Max(150, body.Height / 2 + 24)) * (1 - move) + Height * .56 * move;
+        }
+        if (!_guiding && (_playing || _ending))
         {
             // EMI conducts from just below centre, then steps aside for the logo.
             _x = Width * .5; _y = Height * .56;
@@ -350,12 +352,12 @@ internal sealed class FirstShowStageWindow : Window
             }
         }
         _moving = arriving || Math.Abs(_x - previous.X) + Math.Abs(_y - previous.Y) > .3 || (_centered && move < 1)
-            || ((_playing || _ending) && time >= S.StepAsideAt && time < S.StepAsideAt + S.StepAsideSeconds);
+            || (!_guiding && (_playing || _ending) && time >= S.StepAsideAt && time < S.StepAsideAt + S.StepAsideSeconds);
         if (_moving) _settledAt = now;
         var bob = (Math.Sin(now * 2.5) * 3 + Math.Sin(now * 1.1) * 2) * m;
         var turn = Math.Sin(now * 1.5) * 1.6 * m;
         _emi?.PresentAt(ToScreen(_x, _y), bob, turn, S.Pose(_playing, _ending, time, m), S.Face(_serious, m, now));
-        if (time >= S.RevealAt && (_playing || _ending))
+        if (!_guiding && time >= S.RevealAt && (_playing || _ending))
         {
             var reveal = Math.Clamp((time - S.RevealAt) / S.RevealSeconds, 0, 1);
             _logo.Opacity = Math.Clamp(reveal * (m == 0 ? 1 : .95 + .05 * Math.Sin(now * 1.7)), 0, 1);
@@ -366,7 +368,7 @@ internal sealed class FirstShowStageWindow : Window
     private ShowSize BodySize() => _emi == null ? new ShowSize(0, 0) : new ShowSize(_emi.BodyWidth, _emi.BodyWidth * EmiDeskWindow.BodyAspect);
     private RectD SafeBounds()
     {
-        var area = (Screens?.Primary)?.WorkingArea;
+        var area = (_guiding && _main != null ? Screens?.ScreenFromWindow(_main) : Screens?.Primary)?.WorkingArea;
         if (area == null) return new RectD(16, 16, Math.Max(1, Width - 32), Math.Max(1, Height - 32));
         var a = area.Value;
         double ax = (a.X - Position.X) / _scale, ay = (a.Y - Position.Y) / _scale;
@@ -394,7 +396,7 @@ internal sealed class FirstShowStageWindow : Window
         if (_moving || Clock() - _settledAt < .16) { if (_speechWindow.IsVisible) _speechWindow.Hide(); return; }
         var size = BodySize(); var speech = SpeechSize();
         var body = new RectD(_x - size.Width / 2, _y - size.Height / 2, size.Width, size.Height);
-        var rect = FirstShowLayout.Speech(SafeBounds(), speech, body, _logo.Opacity > 0 ? logo : FirstShowLayout.Empty, new Vec2(body.Right + 18, body.Top));
+        var rect = FirstShowLayout.Speech(SafeBounds(), speech, body, _guiding ? TargetRect : _logo.Opacity > 0 ? logo : FirstShowLayout.Empty, new Vec2(body.Right + 18, body.Top));
         var pixel = ToScreen(rect.Left, rect.Top);
         _speechWindow.Position = new PixelPoint((int)Math.Round(pixel.X), (int)Math.Round(pixel.Y));
         _speechWindow.Width = rect.Width; _speechWindow.Height = rect.Height;
@@ -406,6 +408,7 @@ internal sealed class FirstShowStageWindow : Window
     private void Cleanup()
     {
         if (_closed) return;
+        ClearGuideTarget();
         _closed = true;
         if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown -= OnGlobalKey;
         _clock.Stop();

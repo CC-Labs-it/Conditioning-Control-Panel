@@ -96,7 +96,7 @@ clicks must be resolved the same way.
 | File | Lines | What it owns |
 |---|---:|---|
 | `Services/EmiDesk/EmiDeskService.cs` | 1281 | The facade: `App.EmiDesk`. Summon/dismiss/toggle, the hotkey, the moment bus (`Fire`), `NoteOpen`, the mute arbitration, teardown. |
-| `Services/EmiDesk/EmiLineEngine.cs` | 1287 | **The voice.** Loads `desk-lines.json`, runs the draw algorithm, owns holds, cooldowns, limits, the shuffle bags and the ask gates. |
+| `CCP.Core/Services/EmiDesk/EmiLineEngine.cs` | 1287 | **The voice.** Loads `desk-lines.json`, runs the draw algorithm, owns holds, cooldowns, limits, the shuffle bags and the ask gates. |
 | `Services/EmiDesk/EmiChains.cs` | 567 | Verbatim port of `chains.js`: the face animation sequences (`glee`, `smug`, `cool`, …), the frames, the one-shot fx and body moves. **LOCKED.** |
 | `Services/EmiDesk/EmiFace.cs` | 517 | Verbatim port of `face.js`: the kaomoji renderer, a `FrameworkElement` that draws glyph **outlines** so the face stays crisp at any size. **LOCKED.** |
 | `Services/EmiDesk/EmiChannels.cs` | 540 | The glass channels (`spiral`, `video`, `burst`, `rain`), their idle timings and their painters. |

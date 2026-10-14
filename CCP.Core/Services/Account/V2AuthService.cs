@@ -851,6 +851,55 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>The server-controlled update banner, as <c>GET /config/update-banner</c> serves it (WPF MainWindow.Marquee.cs UpdateBannerResponse).</summary>
+        public class ServerUpdateBanner
+        {
+            [JsonProperty("enabled")] public bool Enabled { get; set; }
+            [JsonProperty("version")] public string? Version { get; set; }
+            [JsonProperty("message")] public string? Message { get; set; }
+            [JsonProperty("url")] public string? Url { get; set; }
+        }
+
+        /// <summary>
+        /// WPF MainWindow.CheckServerUpdateBanner (Marquee.cs:799-826): the banner only when it is enabled, names a
+        /// version, and that version is newer than <paramref name="current"/>. Null otherwise, and on any failure.
+        /// </summary>
+        public async Task<ServerUpdateBanner?> GetUpdateBannerAsync(Version current)
+        {
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));   // WPF's 10 s client
+                var response = await _http.GetAsync($"{SERVER_URL}/config/update-banner", cts.Token);
+                if (!response.IsSuccessStatusCode) return null;
+                var b = JsonConvert.DeserializeObject<ServerUpdateBanner>(await response.Content.ReadAsStringAsync());
+                if (b is not { Enabled: true } || string.IsNullOrWhiteSpace(b.Version)) return null;
+                return System.Version.TryParse(b.Version, out var v) && v > current ? b : null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Failed to check server update banner: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>WPF MainWindow.RefreshMarqueeFromSettings (Marquee.cs:740): the server's marquee line, or null. Never throws.</summary>
+        public async Task<string?> GetMarqueeMessageAsync()
+        {
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var response = await _http.GetAsync($"{SERVER_URL}/config/marquee", cts.Token);
+                if (!response.IsSuccessStatusCode) return null;
+                var message = JObject.Parse(await response.Content.ReadAsStringAsync())["message"]?.ToString();
+                return string.IsNullOrWhiteSpace(message) ? null : message;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Failed to refresh marquee from server: {Error}", ex.Message);
+                return null;
+            }
+        }
+
         /// <summary>
         /// WPF ProfileSyncService.DismissAnnouncementAsync: records the dismissal on the account so it does not
         /// replay on the next PC. Fire-and-forget, never throws; no-op without a unified id.
