@@ -1597,10 +1597,7 @@
     </Storyboard>
 
     <!-- three-dot "she's thinking" pulse. Triggered while a send is in flight, stopped after. -->
-    <Storyboard x:Key="CmpThinkingDotsStoryboard" x:Shared="False" RepeatBehavior="Forever">
-        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0.25" To="1.0" Duration="0:0:0.45"
-                         AutoReverse="True"/>
-    </Storyboard>
+
 
     <!-- the wire view's blinking cursor — only alive while the awareness card is live -->
     <Storyboard x:Key="CmpCursorBlinkStoryboard" x:Shared="False" RepeatBehavior="Forever">

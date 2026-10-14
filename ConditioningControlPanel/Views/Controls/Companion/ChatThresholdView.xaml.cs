@@ -1,5 +1,6 @@
 using System;
-using System.Collections.Generic;
+using System.Diagnostics;
+using ConditioningControlPanel.Motion;
 using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
@@ -24,7 +25,8 @@ namespace ConditioningControlPanel.Views.Controls.Companion
     /// </summary>
     public partial class ChatThresholdView : UserControl
     {
-        private readonly List<Storyboard> _dotClocks = new();
+        private global::ConditioningControlPanel.Controls.FrameClock? _thinkingClock;
+        private readonly Stopwatch _thinkingElapsed = new();
         private INotifyCollectionChanged? _watchedTurns;
         private bool _shimmerPlayed;
 
@@ -241,40 +243,30 @@ namespace ConditioningControlPanel.Views.Controls.Companion
         /// reply lands, so the page is back to exactly one running loop (the hero portrait).</summary>
         public void StartThinking()
         {
-            try
+            if (!IsLoaded || _thinkingClock?.IsEnabled == true) return;
+            if (_thinkingClock == null)
             {
-                if (!IsLoaded || _dotClocks.Count > 0) return;
-                if (TryFindResource("CmpThinkingDotsStoryboard") is not Storyboard proto) return;
+                _thinkingClock = new global::ConditioningControlPanel.Controls.FrameClock();
+                _thinkingClock.Tick += (_, _) => PaintThinking(_thinkingElapsed.Elapsed.TotalMilliseconds);
+            }
+            _thinkingElapsed.Restart();
+            _thinkingClock.Start();
+            PaintThinking(0);
+        }
 
-                var dots = new UIElement[] { Dot1, Dot2, Dot3 };
-                for (int i = 0; i < dots.Length; i++)
-                {
-                    var sb = proto.Clone();
-                    foreach (var tl in sb.Children)
-                    {
-                        if (tl is not DoubleAnimation da) continue;
-                        da.BeginTime = TimeSpan.FromMilliseconds(150 * i);
-                        Storyboard.SetTarget(da, dots[i]);
-                    }
-                    sb.Begin(this, isControllable: true);
-                    _dotClocks.Add(sb);
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                StopThinking();
-            }
+        private void PaintThinking(double milliseconds)
+        {
+            if (_thinkingClock?.IsEnabled != true) return;
+            Dot1.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 0);
+            Dot2.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 1);
+            Dot3.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 2);
         }
 
         /// <summary>Stops the pulse and restores full opacity.</summary>
         public void StopThinking()
         {
-            foreach (var sb in _dotClocks)
-            {
-                try { sb.Stop(this); }
-                catch (InvalidOperationException) { /* already torn down */ }
-            }
-            _dotClocks.Clear();
+            _thinkingClock?.Stop();
+            _thinkingElapsed.Stop();
             Dot1.Opacity = Dot2.Opacity = Dot3.Opacity = 1.0;
         }
 
