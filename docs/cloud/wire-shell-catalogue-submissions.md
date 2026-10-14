@@ -7,6 +7,23 @@
 - Only ledger row `shell-catalogue-submissions` changes to wired. Existing ordinary mod/confirmation windows do not introduce a WPF panic-controlled surface.
 - Read-only `parity/trunk` fetched at `a4ee52d40cd347d288dcf7fdaa8445b79f8e5038`; no trunk files imported. Behavior was adapted from the WPF reference on base `0e1aa0473e7a5b6120544923e94bb04cc62a7e50`.
 
+## Changed files
+
+- `CCP.Avalonia/Helpers/NotificationService.cs`
+- `CCP.Avalonia/Views/Dialogs/ModManagerDialog.axaml.cs`
+- `CCP.Avalonia/Views/Windows/MainShellWindow.CatalogueStatus.cs`
+- `CCP.Avalonia/Views/Windows/MainShellWindow.CatalogueSubmissions.cs`
+- `CCP.Avalonia/Views/Windows/MainShellWindow.ModCatalogue.cs`
+- `CCP.Core/Services/Catalogue/ModCatalogueAsset.cs`
+- `ConditioningControlPanel/MainWindow/MainWindow.ModCatalogue.cs`
+- `Tests/CCP.Avalonia.Tests/AssetSubmitWireTests.cs`
+- `Tests/CCP.Avalonia.Tests/CatalogueShellTests.cs`
+- `Tests/CCP.Avalonia.Tests/ModPreviewThumbTests.cs`
+- `Tests/CCP.Avalonia.Tests/StickyNotificationTests.cs`
+- `Tests/CCP.Core.Tests/ModCatalogueAssetTests.cs`
+- `docs/avalonia-parity.md`
+- `docs/cloud/wire-shell-catalogue-submissions.md`
+
 ## Verification limits
 
 Commands used SDK 10.0.402 via `PATH=/workspace/.dotnet:$PATH`, `DiffEngine_Disabled=true`. Headless tests/rendering used a temporary `FONTCONFIG_FILE` selecting installed DejaVu/Liberation/Noto fonts and mapping Segoe UI to DejaVu: this host's default fontconfig selected an unsupported OpenAI Sans WOFF2 font. Tests use the repository's isolated temporary user-data profiles and fake HTTP handlers.
