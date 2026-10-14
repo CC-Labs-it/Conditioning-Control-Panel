@@ -230,6 +230,67 @@ public sealed class AssetsTabTests
         await tab.ThumbnailLoads;
     });
 
+    [Fact]
+    public Task ActivePackTreeOpensDecryptsTogglesAndKeepsSelectionOnRefresh() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var root = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var packDir = Path.Combine(root, ".packs", "test-pack");
+        Directory.CreateDirectory(Path.Combine(packDir, "content"));
+        var file = new PackFileEntry { OriginalName = "face.png", ObfuscatedName = "one.enc", Extension = ".png", FileType = "image" };
+        File.WriteAllBytes(Path.Combine(packDir, "content", file.ObfuscatedName),
+            PackEncryptionService.Encrypt(File.ReadAllBytes(Path.Combine(root, "images", "a.png"))));
+        var manifest = new InstalledPackManifest { PackId = "p1", PackGuid = "test-pack", PackName = "Pack One", Files = new() { file } };
+        PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(packDir, ".manifest.enc"));
+        var store = new ContentPackStore(() => root, () => s, () => { });
+        ContentPackStore.Current = store;
+        try
+        {
+            tab.RefreshAssetTree();
+            var packs = tab.AssetTree.Single(n => n.IsPackFolder);
+            Assert.Equal("Content Packs", packs.Name);
+            var pack = Assert.Single(packs.Children);
+            Assert.Equal("Pack One", pack.Name);
+            var images = Assert.Single(pack.Children);
+            Assert.Equal("image", images.PackFileType);
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 4, 2), tab.TxtAssetCounts.Text);
+            tab.AssetTreeView.SelectedItem = images;
+            await tab.ThumbnailLoads;
+            Dispatcher.UIThread.RunJobs();
+            var tile = Assert.Single(tab.CurrentFolderFiles);
+            Assert.Equal("face.png", tile.Name);
+            Assert.NotNull(tile.Thumbnail);
+            Assert.Equal("pack:p1/face.png", tile.RelativePath);
+
+            tab.BtnDeselectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains(tile.RelativePath, s.DisabledAssetPaths);
+            Assert.False(tile.IsChecked);
+            Assert.Empty(store.GetAllActivePackImages());
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 3, 2), tab.TxtAssetCounts.Text);
+            tab.BtnSelectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(store.GetAllActivePackImages());
+            tab.RefreshAssetTree();
+            Assert.Equal("image", ((AssetTreeItem)tab.AssetTreeView.SelectedItem!).PackFileType);
+            Assert.Single(tab.CurrentFolderFiles);
+            await tab.ThumbnailLoads;
+
+            // The same context-menu preview path as a disk tile, with a temporary decrypt.
+            var tileControl = await Realized(shell, () => tab.ThumbnailsItemsControl.GetVisualDescendants()
+                .OfType<Border>().FirstOrDefault(b => b.ContextMenu != null));
+            tileControl.ContextMenu!.Open(tileControl);
+            Dispatcher.UIThread.RunJobs();
+            var menuItem = (MenuItem)tileControl.ContextMenu.Items[0]!;
+            menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var player = Assert.Single(shell.OwnedWindows.OfType<MiniPlayerWindow>());
+            Assert.True(player.IsVisible);
+            Assert.Single(Directory.GetFiles(Path.Combine(root, ".temp")));
+            PanicSurfaces.StopAll("asset-preview-test", shell);
+            Assert.False(player.IsVisible);
+            Assert.Empty(Directory.GetFiles(Path.Combine(root, ".temp")));
+        }
+        finally { ContentPackStore.Current = oldStore; store.CleanupTempFiles(); }
+    });
+
     // ---- harness ----------------------------------------------------------------------
 
     private static void PressSpace(Window shell, Control target)
@@ -270,7 +331,7 @@ public sealed class AssetsTabTests
     private static Task Run(Func<MainShellWindow, AssetsTabView, AppSettings, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Directory.CreateTempSubdirectory("ccp-assets-tab-").FullName;
