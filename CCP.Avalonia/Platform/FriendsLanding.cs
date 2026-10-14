@@ -3,7 +3,7 @@
 // the Core FriendsLandingRouter. The rules are Core LandingRules; this reads the world and draws.
 // ponytail: the corner toast (FriendNotices), the knock card (win-knock-card), the Inbox rows and the
 // friend-request notices are not on this head yet, so Knock / Inbox / Request* draw nothing (folded into
-// win-knock-card and feat-friends-open-tables); WPF's poke toast over a game is dropped with them.
+// win-knock-card and feat-friends-open-tables); WPF's "Poke back" toast (shown for every poke) is dropped with them.
 // The flavour-on word rides a watch knock's Go (WPF WatchFlavour) and lands with win-knock-card.
 using System;
 using System.Collections.Generic;
@@ -98,7 +98,7 @@ internal static class FriendsLanding
         return new LandingWorld(
             Lockdown: lockdown, StrictLock: strict, ProgramSession: program,
             PanelVisible: OnScreen(Shell), LauncherVisible: OnScreen(Launcher),
-            GameHostActive: GameWindow.IsAnyOpen(), SessionRunning: session);
+            GameHostActive: ActiveGame() != null, SessionRunning: session);
     }
 
     /// <summary>WPF Anchor: the panel, else the launcher, when on screen.</summary>
@@ -109,8 +109,7 @@ internal static class FriendsLanding
     }
 
     /// <summary>WPF ActiveGameWindow: the active window when it is a game host's, while one is up.</summary>
-    private static Window? ActiveGame() =>
-        GameWindow.IsAnyOpen() ? GameWindow.OpenWindowsForTests().FirstOrDefault(w => w.IsActive) : null;
+    private static Window? ActiveGame() => GameWindow.ActiveOpen();
 
     private static void DeskSays(string line, string face)
     {
