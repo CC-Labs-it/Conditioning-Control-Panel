@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     public partial class UsernamePickerDialog : Window
     {
         private static readonly HttpClient _http = new();
+        private readonly HttpClient _client;
         private readonly string _serverUrl = "https://codebambi-proxy.vercel.app";
         private CancellationTokenSource? _checkCts;
 
@@ -52,8 +53,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// </summary>
         public string? ChosenDisplayName { get; private set; }
 
-        public UsernamePickerDialog()
+        public UsernamePickerDialog() : this(_http) { }
+
+        // Test transport seam: the production endpoint, debounce and response rules stay unchanged.
+        internal UsernamePickerDialog(HttpClient client)
         {
+            _client = client;
             AvaloniaXamlLoader.Load(this);
 
             _txtUsername = this.FindControl<TextBox>("TxtUsername")!;
@@ -156,7 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             try
             {
-                var response = await _http.GetAsync($"{_serverUrl}/user/check-display-name?display_name={Uri.EscapeDataString(name)}");
+                var response = await _client.GetAsync($"{_serverUrl}/user/check-display-name?display_name={Uri.EscapeDataString(name)}");
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
