@@ -24,7 +24,7 @@ public sealed class SpiralRoomShellTests
     public Task FuseArmsTheRailChip_ChipOpensTheFog_KillSwitchEndsBoth() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -57,6 +57,7 @@ public sealed class SpiralRoomShellTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(tab.IsVisible);
             Assert.True(tab.FindControl<Grid>("FogHost")!.IsVisible);
+            Assert.Single(tab.FindControl<Grid>("FogHost")!.Children); // first-light canvas also supplies the fog
             var digits = tab.FindControl<TextBlock>("FogDigits")!;
             Assert.Equal(56, digits.FontSize);   // the hero T-minus, not "any moment now"
             Assert.NotEqual(DescentFuseCopy.FogImminent, digits.Text);
