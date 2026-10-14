@@ -308,6 +308,11 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // Race rules live in Core; the prize store and the NAudio decoder stay here.
+            Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
+            Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
+            // The compositor layers moved to Core; their per-monitor fill gate resolves screens here.
+            Services.Compositor.BaseLayer.ScreenTargetGate = ShouldRenderTargetOnScreen;
             // The mod service's side effects on a switch, and what it asks the head.
             CoreModsHooks.ModSwitched = newCompanionName => Brain?.OnModSwitched(newCompanionName);
             CoreModsHooks.ReloadBarkRules = () => Bark?.ReloadRules();
@@ -361,13 +366,19 @@ namespace ConditioningControlPanel
             // stamps) that need a version string or the installed build's notes and nothing else.
             CoreReleaseContent.AppVersionProvider = () => Services.UpdateService.AppVersion;
             CoreReleaseContent.PatchNotesProvider = () => Services.UpdateService.CurrentPatchNotes;
+            // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
+            Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
+            Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
+            Services.MergedAccountRecoveryHead.Seed();
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
             Services.ProviderSubscription.PrizesSink = Services.ProfileSyncService.ApplyValidatePrizes;
             // BugReportService stays head-side in this layer, but its report assembly is portable.
             // The diagnostic writer/heartbeat remains WPF; only its bounded tail crosses the seam.
             BugReportService.DiagnosticTailProvider = VideoDiag.Tail;
+            // VideoSurfaceHealth moved to Core; its per-surface line still lands in video-diag.log.
+            VideoSurfaceHealth.DiagSink = VideoDiag.Log;
             // The freeze-report trio main added: the ring dump, the newest dump on disk and this
             // session's log file. All three sinks are WPF-bound, so the head hands them over.
             BugReportService.FlightRecorderDump = reason => Services.Logging.FlightRecorderSink.DumpIfActive(reason);
@@ -380,6 +391,8 @@ namespace ConditioningControlPanel
             CoreAudio.UnduckProvider = generation => Audio?.Unduck(generation);
             CoreAudio.DuckGenerationProvider = () => Audio?.DuckGeneration ?? 0;
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
+            // The board's picture rules moved to Core; the PNG codec stays WPF imaging.
+            Services.Billboard.Board.BoardPng.Install();
             // Mind wipe's playing half. The schedule (tick interval, per-tick probability, the
             // session escalation and the clip folders) is MindWipeSchedule in Core; what cannot
             // cross is NAudio's crossfading loop, so the card asks for it through this seam. Lazy
@@ -444,6 +457,8 @@ namespace ConditioningControlPanel
             Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
             Services.Invites.InviteApi.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
+            Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
             Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
@@ -886,29 +901,8 @@ namespace ConditioningControlPanel
 
         #endregion
 
-        /// <summary>
-        /// Returns a temp directory for media files (decrypted packs, video downloads, etc.)
-        /// located inside the effective assets path so it lives on the same drive as assets.
-        /// Falls back to system temp if the assets path isn't available yet.
-        /// </summary>
-        public static string GetMediaTempPath()
-        {
-            try
-            {
-                var assetsPath = EffectiveAssetsPath;
-                if (!string.IsNullOrEmpty(assetsPath))
-                {
-                    var tempDir = Path.Combine(assetsPath, ".temp");
-                    Directory.CreateDirectory(tempDir);
-                    return tempDir;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger?.Debug("GetMediaTempPath: Could not use assets temp dir, falling back to system temp: {Error}", ex.Message);
-            }
-            return Path.GetTempPath();
-        }
+        /// <summary>Media temp directory (assets/.temp, else system temp); the rule lives in <see cref="CorePaths.MediaTemp"/>.</summary>
+        public static string GetMediaTempPath() => CorePaths.MediaTemp();
 
         /// <summary>
         /// Cleans up stale temp files from previous sessions (crash recovery).
@@ -2661,7 +2655,7 @@ namespace ConditioningControlPanel
             };
             // Spiral rail day log. Needs Achievements and Settings (both up by now); reads them on
             // a 60 s timer and on sync, never hooks a feature. Its loss must not cost the launch.
-            try { FeatureDayLog = new FeatureDayLogService(); }
+            try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
             catch (Exception exDayLog) { Logger?.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
             // Intake onboarding. Both are cheap and synchronous (the pass reads AppSettings; the
             // punch card loads one small json), and both must exist before MainWindow paints the
@@ -2985,7 +2979,7 @@ namespace ConditioningControlPanel
             {
                 _friendsService = Services.Friends.FriendsServiceApp.CreateForApp();
                 Friends = _friendsService;
-                try { FriendsFeed = Services.Friends.FriendsFeed.CreateForApp(_friendsService); } catch (Exception exFeed) { Logger?.Debug("Friends feed failed to start: {E}", exFeed.Message); }
+                try { FriendsFeed = Services.Friends.FriendsFeed.CreateForApp(_friendsService, () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId); } catch (Exception exFeed) { Logger?.Debug("Friends feed failed to start: {E}", exFeed.Message); }
                 ProfileSync.ProfileLoaded += (_, _) => _friendsService?.Kick();
                 _friendsService.Start(new Services.Friends.FriendsServiceApp.Timer());
             }
@@ -3125,6 +3119,8 @@ namespace ConditioningControlPanel
 
             // Initialize Discord Rich Presence (only if Discord is linked — prevents
             // accidental exposure for users who chose anonymous invite-code accounts)
+            // The service lives in Core; its 15 s refresh ticks hop back to this UI thread (was a DispatcherTimer).
+            DiscordRichPresenceService.PostToUi = a => Dispatcher.BeginInvoke(a);
             DiscordRpc = new DiscordRichPresenceService();
             if (Settings.Current.DiscordRichPresenceEnabled && Settings.Current.HasLinkedDiscord)
             {
@@ -3282,13 +3278,14 @@ namespace ConditioningControlPanel
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
             // and LockdownPossessionEnabled is on, so constructing it here costs nothing.
-            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll());
+            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll(),
+                Services.Possession.PossessionWpfHead.CreateDirectorHead());
             Possession.Warden = new Services.Possession.Warden();
             // Companion wave (POSSESSION.md): the ember tick / dip cues, and the one remembered charge a
             // Full Doki lockdown leaves for the next launch. Both only subscribe; neither costs anything
             // until a lockdown runs (or, for the charge, until the flag from the last one is spent).
             Services.Possession.PossessionAudio.Install();
-            Services.Possession.PossessionRemember.Install();
+            Services.Possession.PossessionWpfHead.InstallRemember();
             // The Dose: a lockdown refuses to run empty (engine off -> started; nothing on -> the warden
             // picks). Recovery first, so a killed lockdown's conscripted toggles go back off before the
             // engine can ever read them.
