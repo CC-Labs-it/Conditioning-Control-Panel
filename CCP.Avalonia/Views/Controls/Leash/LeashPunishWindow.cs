@@ -44,7 +44,7 @@ internal sealed class LeashPunishWindow : Window
     private string? _pageUrl;
     private WindowState _prevState;
     private DispatcherTimer? _refuseTimer;
-    private DispatcherTimer? _shakeTimer;
+    private Helpers.BeatLoop? _shake;
     private DispatcherTimer? _cageTimer;
     internal WebHost? View => _web;
     internal string TitleLine => _title.Text ?? "";
@@ -267,7 +267,7 @@ internal sealed class LeashPunishWindow : Window
         base.OnClosed(e);
         if (ReferenceEquals(Current, this)) Current = null;
         _refuseTimer?.Stop();
-        _shakeTimer?.Stop();
+        _shake?.Stop();
         _cageTimer?.Stop();
         if (_web != null) _web.WebMessage -= OnMessage;
         _web = null;
@@ -295,18 +295,17 @@ internal sealed class LeashPunishWindow : Window
     {
         if (WindowState is WindowState.Maximized or WindowState.FullScreen) return;   // Position is ignored there
         var origin = Position;
-        _shakeTimer?.Stop();
-        var start = DateTime.UtcNow;
+        _shake?.Stop();
         const double ms = 420;
-        _shakeTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
-        _shakeTimer.Tick += (_, _) =>
+        // On the shared beat (AmbientBeatLoopsTests ratchet), not a private 16 ms timer.
+        _shake = new Helpers.BeatLoop(this, sec =>
         {
-            var t = (DateTime.UtcNow - start).TotalMilliseconds;
+            var t = sec * 1000;
             var dx = t >= ms ? 0 : (int)Math.Round(amp * (1 - t / ms) * Math.Sin(t / ms * Math.PI * 9));
             try { Position = new PixelPoint(origin.X + dx, origin.Y); } catch { }
-            if (t >= ms) _shakeTimer?.Stop();
-        };
-        _shakeTimer.Start();
+            if (t >= ms) _shake?.Stop();
+        });
+        _shake.Start();
     }
     /// <summary>WPF CageScript, whitespace-packed (same statements); only the message carrier is this head's (<see cref="Post"/>). Idempotent.</summary>
     internal const string CageScript = @"(function(){
