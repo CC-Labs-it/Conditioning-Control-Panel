@@ -28,6 +28,8 @@ public class SpiralLayer : BaseLayer
 
     public override int ZIndex => CompositorLayers.Spiral;
 
+    protected override bool GentleFades => true;   // gentle visuals: spiral fades in and out
+
     // Fullscreen fill: honor the spiral's per-effect monitor target (suggestion #639), which
     // itself falls back to DualMonitorEnabled when set to -1. The compositor hosts every screen,
     // so a non-targeted monitor just records an empty (transparent) frame for this layer.
@@ -130,9 +132,13 @@ public class SpiralLayer : BaseLayer
         if (_frames.Length < 2) return;
         int start = _frameIndex;
         _accum += delta;
-        while (_accum >= _frameDelay)
+        // Gentle visuals: the spiral turns at the gentle speed (longer frame delay).
+        var frameDelay = Safety.GentleVisuals.On
+            ? TimeSpan.FromMilliseconds(Safety.GentleVisuals.ScaleDelayMs(_frameDelay.TotalMilliseconds))
+            : _frameDelay;
+        while (_accum >= frameDelay)
         {
-            _accum -= _frameDelay;
+            _accum -= frameDelay;
             _frameIndex = (_frameIndex + 1) % _frames.Length;
         }
         if (_frameIndex != start) _dirty = true;   // only repaint the surface when the frame changed

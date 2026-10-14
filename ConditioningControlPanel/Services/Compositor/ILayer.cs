@@ -23,6 +23,20 @@ public interface IWpfLayer
     bool IsActive { get; }
 
     /// <summary>
+    /// True while the engine must still draw this layer. Same as <see cref="IsActive"/> except
+    /// while gentle visuals fade a hidden layer away: services already see it as gone, the
+    /// engine keeps drawing it until its <see cref="VisibilityAlpha"/> reaches 0.
+    /// </summary>
+    bool IsRendering => IsActive;
+
+    /// <summary>Gentle visuals fade, 0..1, applied over the whole layer. Always 1 when off.</summary>
+    double VisibilityAlpha => 1.0;
+
+    /// <summary>Advance the gentle visuals fade one tick. True when the alpha moved (repaint).
+    /// Called by the engine every tick, before it reads <see cref="IsRendering"/>.</summary>
+    bool AdvanceVisibility(TimeSpan delta) => false;
+
+    /// <summary>
     /// True routes this layer to the capture-EXCLUDED surface (WDA_EXCLUDEFROMCAPTURE), used by
     /// brain drain to avoid self-capture feedback. Everything else stays on the main surface,
     /// which must NEVER be capture-excluded (subliminals/flash/spiral are visible in recordings
