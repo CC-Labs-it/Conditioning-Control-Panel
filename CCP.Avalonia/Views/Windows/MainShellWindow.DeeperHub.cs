@@ -105,6 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return player;
         }
 
+        internal void StopDeeperPlayerForPanic() => _deeperPlayer?.Close();
+
         /// <summary>WPF BtnDeeperOpenPlayer_Click (MainWindow.DeeperTab.cs:202).</summary>
         internal void BtnDeeperOpenPlayer_Click()
         {

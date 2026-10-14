@@ -40,10 +40,8 @@
 //   Drag and drop - PORTED below: Window_DragEnter/Over/Leave/Drop, ImportDroppedFilesAsync,
 //   UpdateDropOverlay, HandleAssetDropAsync, over Core DropRules (the DetectDropType lift both
 //   heads call). Session/preset drops go to PresetsTabView; .ccpmod to HandleModDropAsync
-//   (MainShellWindow.ModCatalogue.cs). Not ported: the single-media Play/Edit choices and the
-//   enhancement import (no Deeper player/editor/library on this head) - a lone playable file
-//   offers "Add to Asset Library"/Cancel only, and an enhancement drop says the library is not
-//   ready, WPF's own string (docs/avalonia-decisions.md, 2026-10-09 window-wide drop).
+//   (MainShellWindow.ModCatalogue.cs). Single-media Play/Edit/Library choices are restored.
+//   Enhancement import still reports library-not-ready; see wire-shell-file-dialogs-b.
 //
 //   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
 //   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
@@ -71,6 +69,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -125,14 +124,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (files == null || files.Length == 0) return;
 
-            // WPF prompts Play / Edit / Add-to-Library. Play and Edit need the Deeper player and
-            // editor, which this head does not host yet, so only the library half is offered.
+            // WPF's single-file choice; reuse the hub's existing editor and player hosts.
             if (files.Length == 1 && File.Exists(files[0]) && DropRules.IsDeeperPlayableMedia(files[0]))
             {
-                var library = await Dialogs.MessageDialog.ConfirmAsync(this, Loc.Get("dlg_media_drop_title"),
-                    Path.GetFileName(files[0]), okText: Loc.Get("dlg_media_drop_library"),
-                    cancelText: Loc.Get("dlg_media_drop_cancel"));
-                if (library) await HandleAssetDropAsync(files);
+                var dialog = new Dialogs.MediaDropDialog(files[0]);
+                await dialog.ShowDialogSafe(this);
+                try
+                {
+                    switch (dialog.Choice)
+                    {
+                        case Dialogs.MediaDropChoice.Play:
+                            ShowOrActivateDeeperPlayer().OpenLocalMediaFile(files[0]);
+                            break;
+                        case Dialogs.MediaDropChoice.Edit:
+                            OpenDeeperEditor(new Models.Deeper.Enhancement
+                            {
+                                MediaType = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(files[0]))
+                                    ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio,
+                                MediaSource = files[0],
+                            }, null);
+                            break;
+                        case Dialogs.MediaDropChoice.Library:
+                            await HandleAssetDropAsync(files);
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to open dropped media");
+                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_error"), ex.Message);
+                }
                 return;
             }
 

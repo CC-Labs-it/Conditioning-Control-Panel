@@ -15,6 +15,8 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
+using System.Reflection;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -32,11 +34,11 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
         Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "BtnOk"));
         Click(ask, "BtnOk");
 
-        var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault(d => d != ask));
+        var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
         Assert.Equal("Imported 1 video", done.FindControl<TextBlock>("TxtMessage")!.Text);
         Assert.True(File.Exists(Path.Combine(assets, "videos", "clip.mp4")));
         Assert.True(File.Exists(video));   // copied, never moved
@@ -51,12 +53,68 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
         Click(ask, "BtnCancel");
-        await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any() ? null : shell);
+        await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().Any() ? null : shell);
 
         Assert.False(File.Exists(Path.Combine(assets, "videos", "clip.mp4")));
         Assert.True(File.Exists(video));
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task MediaDropOffersWpfChoicesAndClosingDoesNothing(bool escape) => Run(async (shell, root, assets) =>
+    {
+        var media = Path.Combine(root, "clip.mp4");
+        File.WriteAllBytes(media, new byte[] { 1, 2, 3 });
+        Drop(shell, media);
+        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
+        Assert.Equal(Loc.Get("dlg_media_drop_title"), ask.Title);
+        Assert.Equal(Loc.Get("dlg_media_drop_play"), ButtonText(ask, "BtnPlay"));
+        Assert.Equal(Loc.Get("dlg_media_drop_edit"), ButtonText(ask, "BtnEdit"));
+        Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "BtnOk"));
+        Assert.Equal(Loc.Get("dlg_media_drop_cancel"), ButtonText(ask, "BtnCancel"));
+        if (escape) ask.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        else ask.Close();
+        await Task.Yield();
+        Assert.Empty(shell.OwnedWindows);
+        Assert.False(File.Exists(Path.Combine(assets, "videos", Path.GetFileName(media))));
+        Assert.Equal(MediaDropChoice.Cancel, ask.Choice);
+    });
+
+    [Fact]
+    public Task MediaDropPlayRoutesToTheSharedPlayerAndPanicClosesIt() => Run(async (shell, root, assets) =>
+    {
+        var media = Path.Combine(root, "clip.wav");
+        File.WriteAllBytes(media, new byte[] { 1, 2, 3 });
+        Drop(shell, media);
+        Click(await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault()), "BtnPlay");
+        var player = await WaitFor(() => shell.OwnedWindows.OfType<EnhancementPlayerWindow>().SingleOrDefault());
+        Assert.Equal(media, player.FindControl<TextBlock>("TxtAudioPath")!.Text);
+        Assert.False(File.Exists(Path.Combine(assets, "videos", Path.GetFileName(media))));
+        PanicSurfaces.All.Single(x => x.Id == "deeper-player").Stop(shell);
+        Assert.False(player.IsVisible);
+    });
+
+    [Theory]
+    [InlineData(".mp4", "video")]
+    [InlineData(".MP4", "video")]
+    [InlineData(".wav", "audio")]
+    public Task MediaDropEditOpensAnUnsavedProjectWithTheOriginalSource(string extension, string type) => Run(async (shell, root, assets) =>
+    {
+        var media = Path.Combine(root, "clip" + extension);
+        File.WriteAllBytes(media, new byte[] { 1, 2, 3 });
+        Drop(shell, media);
+        Click(await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault()), "BtnEdit");
+        var editor = await WaitFor(() => shell.OwnedWindows.OfType<DeeperEditorWindow>().SingleOrDefault());
+        var project = (ConditioningControlPanel.Models.Deeper.Enhancement)typeof(DeeperEditorWindow)
+            .GetField("_enhancement", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(editor)!;
+        Assert.Null(editor.LoadedFilePath);
+        Assert.Equal(type, project.MediaType);
+        Assert.Equal(media, project.MediaSource);
+        Assert.False(File.Exists(Path.Combine(assets, "videos", Path.GetFileName(media))));
+        Assert.True(File.Exists(media));
     });
 
     [Fact]
@@ -193,7 +251,7 @@ public sealed class WindowDropTests
     private static Task Run(Func<MainShellWindow, string, string, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Directory.CreateTempSubdirectory("ccp-window-drop-").FullName;
