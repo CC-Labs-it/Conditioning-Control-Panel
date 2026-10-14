@@ -156,14 +156,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (tab == "justdrop") { OpenJustDrop(); return; }
             if (WindowKeys.Contains(tab)) return;                 // a window, not a tab - see header
 
-            // Bark hook: announce navigation (gated/chanced in the rules so it isn't spammy).
-            // Routed through BarkTabAliases so renamed tabs keep answering to their old bark key.
-            // Placed exactly where WPF places it (MainWindow.TabNavigation.cs:158) - AFTER the
-            // window-key intercepts and BEFORE the panel lookup, so an unknown key announces
-            // itself here too, as it does there.
-            CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
+            // WPF refuses an unknown key before the bark hook (TabNavigation.cs:274-295).
+            // The head's panel table owns which destinations actually exist here.
+            if (!TabPanels.TryGetValue(tab, out var target))
+            {
+                Serilog.Log.Warning("ShowTab({Tab}) ignored: no such tab", tab);
+                return;
+            }
 
-            if (!TabPanels.TryGetValue(tab, out var target)) return;
+            // Window launchers have already returned. Real tabs keep their legacy bark aliases.
+            CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
 
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
@@ -228,7 +230,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(Named<Tabs.CompanionTabView>("CompanionTab")?.Room);
                         break;
                     case "lockdown": MaybeShowFeatureIntro("lockdown"); break;
-                    case "blinktrainer": MaybeShowFeatureIntro("blinktrainer"); break;
+                    case "blinktrainer":
+                        // WPF refreshes on every ShowTab, including a visit to an already-visible page.
+                        Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab")?.Refresh();
+                        MaybeShowFeatureIntro("blinktrainer");
+                        break;
                     // WPF :581 - only once the room shows the map (its IsVisible hook re-read the gates).
                     case "spiral":
                         if (Named<Tabs.SpiralTabView>("SpiralTab")?.IsShowingSpiral == true)
