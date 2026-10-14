@@ -33,10 +33,11 @@ namespace ConditioningControlPanel.Services
         /// Windows' animation-effects flag is off (so the OS preference can only ever remove motion,
         /// never add it back).
         /// </summary>
-        public static MotionLevel ResolveLevel(MotionLevel setting, bool osAnimationsEnabled)
+        public static MotionLevel ResolveLevel(MotionLevel setting, bool osAnimationsEnabled, bool gentleVisuals = false)
         {
             if (setting == MotionLevel.Off) return MotionLevel.Off;
-            if (!osAnimationsEnabled) return MotionLevel.Reduced;
+            // Gentle visuals caps UI motion like the OS flag does: it can only remove motion.
+            if (!osAnimationsEnabled || gentleVisuals) return MotionLevel.Reduced;
             return setting;
         }
 
@@ -48,7 +49,7 @@ namespace ConditioningControlPanel.Services
                 var setting = App.Settings?.Current?.MotionLevel ?? MotionLevel.Full;
                 bool osAnim = true;
                 try { osAnim = SystemParameters.ClientAreaAnimation; } catch { }
-                return ResolveLevel(setting, osAnim);
+                return ResolveLevel(setting, osAnim, App.Settings?.Current?.GentleVisuals == true);
             }
         }
 

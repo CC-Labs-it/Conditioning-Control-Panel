@@ -5340,6 +5340,34 @@ namespace ConditioningControlPanel.Models
             set { _motionLevel = value; OnPropertyChanged(); }
         }
 
+        private bool _gentleVisuals;
+        /// <summary>
+        /// Gentle visuals (renardeau's photosensitivity ask, 2026-10-14): every overlay fades in and
+        /// out over <see cref="GentleFadeSeconds"/>, GIFs / spirals / videos play at
+        /// <see cref="GentleSpeed"/>, brightness jumps ease in and flicker becomes a fade. A pure
+        /// global preference like the motion level: never in SessionSettings, Preset or the remote
+        /// generators, so no session can switch it off. Read through Services/Safety/GentleVisuals.
+        /// </summary>
+        public bool GentleVisuals
+        {
+            get => _gentleVisuals;
+            set { _gentleVisuals = value; OnPropertyChanged(); }
+        }
+
+        private double _gentleFadeSeconds = Services.Safety.GentleVisuals.DefaultFadeSeconds;
+        public double GentleFadeSeconds
+        {
+            get => _gentleFadeSeconds;
+            set { _gentleFadeSeconds = Services.Safety.GentleVisuals.ClampFade(value); OnPropertyChanged(); }
+        }
+
+        private double _gentleSpeed = Services.Safety.GentleVisuals.DefaultSpeed;
+        public double GentleSpeed
+        {
+            get => _gentleSpeed;
+            set { _gentleSpeed = Services.Safety.GentleVisuals.ClampSpeed(value); OnPropertyChanged(); }
+        }
+
         private Services.BackRoom.BackRoomFxIntensity _backRoomFxIntensity = Services.BackRoom.BackRoomFxIntensity.Normal;
         /// <summary>
         /// THE BACK ROOM effects intensity (CONTRACT section 4): Calm, Normal or Full. The room is an
