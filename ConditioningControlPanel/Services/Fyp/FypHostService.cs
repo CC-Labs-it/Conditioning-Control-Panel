@@ -29,11 +29,8 @@ internal static class FypHostService
     private static ChaosWebViewHost? _host;
     private static FypMetaStore? _meta;
 
-    // Passive-XP rate cap: the page reports honest dwell, but cap awards anyway so a
-    // misbehaving page can't fountain XP. 12 clip-views/minute is faster than the feed
-    // can actually produce distinct 20-40s slices.
-    private const int MaxClipXpPerMinute = 12;
-    private static readonly Queue<DateTime> _clipXpTimes = new();
+    // The rules (init payload, settings frames, remote gate, clip XP cap, sub library, stats) are
+    // CCP.Core Services/Fyp/FypRules.cs, shared with the Avalonia head; this class keeps the window.
 
     private static string StatsFilePath => Path.Combine(App.UserDataPath, "fyp_stats.json");
 
@@ -177,62 +174,8 @@ internal static class FypHostService
 
             var s = App.Settings?.Current;
             _meta ??= new FypMetaStore();
-            _host?.Post(new
-            {
-                type = "init",
-                assets = FypAssetManifest.Build(_meta),
-                settings = new
-                {
-                    layout = s?.FypLayout ?? "duo",
-                    includeGifs = s?.FypIncludeGifs ?? true,
-                    mosaicAutoChange = s?.FypMosaicAutoChange ?? true,
-                    mosaicChangeSec = s?.FypMosaicChangeSec ?? 10,
-                    autoAdvance = s?.FypAutoAdvance ?? false,
-                    muted = s?.FypMuted ?? false,
-                    volume = s?.FypVolume ?? 100,
-                    windowOpacity = s?.FypWindowOpacity ?? 0.6,
-                    audioGlow = s?.FypAudioGlow ?? true,
-                    eyeControl = s?.FypEyeControl ?? false,
-                    eyeGaze = s?.FypEyeGaze ?? false,
-                    // Effective, not raw: the app-wide media source (Assets tab) reaches the
-                    // feed too — see EffectiveFeedSource. The page's popover still edits the
-                    // feed's own FypSource underneath.
-                    source = EffectiveFeedSource(),
-                    onlineRatio = EffectiveOnlineRatio(),
-                    // Either consent card (the feed's or the app-wide one) counts — asking the
-                    // same question twice in different words reads as the app forgetting.
-                    onlineConsented = s?.HasRemoteMediaConsent ?? false,
-                },
-                // The niche catalog rides along so the page can render chips (and knows
-                // each niche's subreddits — deselecting one prunes its clips client-side).
-                online = new
-                {
-                    niches = FypOnlineCoordinator.Catalog.Select(n => new
-                    {
-                        id = n.Id,
-                        label = n.Label,
-                        subs = n.Subs,
-                        selected = s?.FypOnlineNiches?.Contains(n.Id) ?? false,
-                    }),
-                    // Each custom sub rides with its last probe verdict so the page can paint
-                    // the verified pill (and its clip count) on first frame instead of
-                    // re-probing the whole list on every open. ok/videoCount are null when we
-                    // have never asked — "unknown", which the page renders differently from
-                    // a known-bad sub.
-                    customSubs = (s?.FypOnlineCustomSubs ?? new List<string>()).Select(name =>
-                    {
-                        RemoteSubVerdict? v = null;
-                        s?.FypOnlineSubVerdicts.TryGetValue(name, out v);
-                        return new { name, ok = (bool?)v?.Ok, videoCount = v?.VideoCount };
-                    }),
-                    // The LIBRARY: every sub the user has kept anywhere in the app, with
-                    // `selected` saying whether THIS surface's feed currently uses it. The popover
-                    // renders pills from here (toggle = selection, X = forget it everywhere);
-                    // `customSubs` above stays exactly as it was so an older page still paints.
-                    library = BuildLibraryPayload(s),
-                },
-                stats = LoadStats(),
-            });
+            // This head drives eye control, so the persisted toggles go out as stored.
+            _host?.Post(FypRules.BuildInit(s, FypAssetManifest.Build(_meta), eyeControl: true, StatsFilePath));
             // Opacity is applied host-side, but only once ghost mode engages (there is nothing to
             // make translucent before that); ghost mode itself is deliberately NOT restored
             // (session-only) — the page's toggle comes up off.
@@ -251,14 +194,14 @@ internal static class FypHostService
             case "stats-save":
             {
                 // The page owns the stats shape; we just persist the blob verbatim.
-                if (o["stats"] is JObject stats) SaveStats(stats);
+                if (o["stats"] is JObject stats) FypRules.SaveStats(StatsFilePath, stats);
                 break;
             }
             case "asset-meta":
             {
                 // Remote pools churn forever — never let their probes grow fyp_meta.json.
                 var id = (string?)o["id"];
-                if (!IsRemoteId(id))
+                if (!FypRules.IsRemoteId(id))
                     _meta?.Update(id, (long?)o["durationMs"], (int?)o["width"], (int?)o["height"]);
                 break;
             }
@@ -273,20 +216,20 @@ internal static class FypHostService
                     id, (int?)o["code"] ?? 0, (string?)o["message"] ?? "");
                 // Fail-strikes are for library files (a remote entry is one-shot anyway;
                 // the page's own error swap already pages past it).
-                if (!IsRemoteId(id)) _meta?.RecordFailure(id);
+                if (!FypRules.IsRemoteId(id)) _meta?.RecordFailure(id);
                 break;
             }
             case "clip-viewed":
             {
                 // Remote clips feed the channel-taste EWMA before the XP cap gets a say.
                 var segId = (string?)o["segId"];
-                if (IsRemoteId(segId))
+                if (FypRules.IsRemoteId(segId))
                 {
                     try { FypOnlineCoordinator.Fyp.RecordDwell(segId!, (long?)o["dwellMs"] ?? 0); }
                     catch (Exception ex) { App.Logger?.Debug("FypHost: dwell record failed: {E}", ex.Message); }
                 }
-                if (!AllowClipXp()) break;
-                try { App.Progression?.AddXP(5, XPSource.Fyp); }
+                if (!FypRules.AllowClipXp()) break;
+                try { App.Progression?.AddXP(FypRules.ClipXp, XPSource.Fyp); }
                 catch (Exception ex) { App.Logger?.Debug("FypHost: clip XP failed: {E}", ex.Message); }
                 break;
             }
@@ -307,7 +250,7 @@ internal static class FypHostService
             }
             case "attention-hit":
             {
-                try { App.Progression?.AddXP(15, XPSource.Fyp); }
+                try { App.Progression?.AddXP(FypRules.AttentionXp, XPSource.Fyp); }
                 catch (Exception ex) { App.Logger?.Debug("FypHost: attention XP failed: {E}", ex.Message); }
                 break;
             }
@@ -336,130 +279,23 @@ internal static class FypHostService
         }
     }
 
-    private static bool AllowClipXp()
-    {
-        var now = DateTime.UtcNow;
-        while (_clipXpTimes.Count > 0 && (now - _clipXpTimes.Peek()).TotalSeconds > 60)
-            _clipXpTimes.Dequeue();
-        if (_clipXpTimes.Count >= MaxClipXpPerMinute) return false;
-        _clipXpTimes.Enqueue(now);
-        return true;
-    }
-
+    /// <summary>One settings-changed frame: FypRules stores it (never trusting the page); the window
+    /// half (ghost mode, the mirror's opacity, the camera) happens here.</summary>
     private static void ApplySetting(string? key, JToken? value)
     {
-        if (key == null || value == null) return;
-        // Session-only and settings-free, so it is handled before the settings null-guard.
-        // ("clickThrough" is the on-the-wire key name the page has always used; host-side the
-        // feature is ghost mode. Only the user-facing strings changed.)
-        if (key == "clickThrough")
-        {
-            try
-            {
-                if ((bool?)value ?? false) EnterGhost();
-                else ExitGhost();
-            }
-            catch (Exception ex) { App.Logger?.Debug("FypHost: clickThrough failed: {E}", ex.Message); }
-            return;
-        }
-
-        var s = App.Settings?.Current;
-        if (s == null) return;
         try
         {
-            switch (key)
+            switch (FypRules.ApplySetting(App.Settings?.Current, key, value))
             {
-                case "layout": s.FypLayout = (string?)value ?? "duo"; break;
-                case "includeGifs": s.FypIncludeGifs = (bool?)value ?? true; break;
-                case "mosaicAutoChange": s.FypMosaicAutoChange = (bool?)value ?? true; break;
-                case "mosaicChangeSec": s.FypMosaicChangeSec = (int?)value ?? 10; break;
-                case "autoAdvance": s.FypAutoAdvance = (bool?)value ?? false; break;
-                case "muted": s.FypMuted = (bool?)value ?? false; break;
-                // 0-100. Clamped again by the property, so a hand-edited settings file or an
-                // out-of-range page value can never hand a media element an invalid volume.
-                case "volume": s.FypVolume = (int?)value ?? 100; break;
-                // Persist, and push straight onto the ghost mirror when one is up — the mirror
-                // is a plain window, so its constant alpha IS the opacity (see below).
-                case "windowOpacity":
-                {
-                    double v = (double?)value ?? 1.0;
-                    s.FypWindowOpacity = v;
-                    _ghost?.SetOpacity(v);
+                case FypRules.SettingEffect.GhostOn: EnterGhost(); break;
+                case FypRules.SettingEffect.GhostOff: ExitGhost(); break;
+                // Onto the ghost mirror when one is up: its constant alpha IS the opacity (see below).
+                case FypRules.SettingEffect.OpacityChanged:
+                    _ghost?.SetOpacity(App.Settings?.Current?.FypWindowOpacity ?? 1.0);
                     break;
-                }
-                case "audioGlow": s.FypAudioGlow = (bool?)value ?? true; break;   // page-side visual: persist only
-                case "eyeControl":
-                {
-                    bool on = (bool?)value ?? false;
-                    s.FypEyeControl = on;
-                    if (on) EnableEyeControl();
-                    else { DisableEyeControl(); PostEyeStatus(null); }
-                    break;
-                }
-                case "eyeGaze":
-                {
-                    s.FypEyeGaze = (bool?)value ?? false;
-                    SyncGazeSubscription();
-                    PostEyeStatus(null);
-                    break;
-                }
-                case "source":
-                {
-                    var src = (string?)value ?? "library";
-                    // The page shows the consent card before ever posting a non-library
-                    // source; belt and braces here so a stale page can't skip it.
-                    // HasRemoteMediaConsent, not the raw FYP flag: a user who accepted the
-                    // app-wide remote-media card has already agreed to exactly this.
-                    if (src != "library" && !s.HasRemoteMediaConsent) src = "library";
-                    s.FypSource = src;
-                    break;
-                }
-                case "onlineRatio": s.FypOnlineRatio = (int?)value ?? 30; break;
-                case "onlineConsented":
-                {
-                    // One-way: the page only ever sends true (accepting the card).
-                    if ((bool?)value == true && !s.FypOnlineConsented)
-                    {
-                        s.FypOnlineConsented = true;
-                        App.Logger?.Information("FypHost: online-content consent accepted");
-                    }
-                    break;
-                }
-                case "onlineNiches":
-                {
-                    if (value is JArray arr)
-                    {
-                        var known = new HashSet<string>(FypOnlineCoordinator.Catalog.Select(n => n.Id));
-                        s.FypOnlineNiches = arr.Select(t => (string?)t)
-                            .Where(id => id != null && known.Contains(id)).Select(id => id!)
-                            .Distinct().ToList();
-                        FypOnlineCoordinator.Fyp.ResetChannels();
-                    }
-                    break;
-                }
-                case "onlineCustomSubs":
-                {
-                    if (value is JArray arr)
-                    {
-                        s.FypOnlineCustomSubs = arr.Select(t => FypOnlineCoordinator.SanitizeSub((string?)t))
-                            .Where(x => x != null).Select(x => x!)
-                            .Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList();
-                        // This is the page's DESELECT path (it posts the surviving selection), so
-                        // drop the verdicts of whatever nothing keeps any more - otherwise the
-                        // store grows forever with subs nobody has, and re-adding one would paint
-                        // a stale pill. A name still in the LIBRARY is kept: deselecting a pill is
-                        // not forgetting it, and losing its verdict would grey out a verified sub.
-                        // Anything selected is by definition kept (an older page can post a name
-                        // the library has never seen); the migration on load says the same thing.
-                        foreach (var name in s.FypOnlineCustomSubs) s.TryAddLibrarySub(name);
-                        var kept = new HashSet<string>(s.FypOnlineCustomSubs, StringComparer.OrdinalIgnoreCase);
-                        foreach (var name in s.LibrarySubs) kept.Add(name);
-                        foreach (var gone in s.FypOnlineSubVerdicts.Keys.Where(k => !kept.Contains(k)).ToList())
-                            s.FypOnlineSubVerdicts.Remove(gone);
-                        FypOnlineCoordinator.Fyp.ResetChannels();
-                    }
-                    break;
-                }
+                case FypRules.SettingEffect.EyeControlOn: EnableEyeControl(); break;
+                case FypRules.SettingEffect.EyeControlOff: DisableEyeControl(); PostEyeStatus(null); break;
+                case FypRules.SettingEffect.EyeGazeChanged: SyncGazeSubscription(); PostEyeStatus(null); break;
             }
         }
         catch (Exception ex) { App.Logger?.Debug("FypHost: settings-changed {Key} failed: {E}", key, ex.Message); }
@@ -482,46 +318,10 @@ internal static class FypHostService
     /// rather than queued (the page commits on Enter AND on blur).</summary>
     private static readonly HashSet<string> _probesInFlight = new(StringComparer.OrdinalIgnoreCase);
 
-    private static bool IsRemoteId(string? id) =>
-        id != null && id.StartsWith("scrolller/", StringComparison.Ordinal);
-
-    /// <summary>
-    /// The feed's effective content source: "library", "online" or "mixed".
-    ///
-    /// The FYP predates the app-wide media source and kept its own picker
-    /// (FypSource/FypOnlineConsented) — which made it the ONE remote surface the app-wide
-    /// gate (<c>MediaSource != "local" &amp;&amp; HasRemoteMediaConsent</c>) never reached. A user
-    /// who flipped the Assets tab to Online got remote flashes, videos, intake and DTRH,
-    /// and a stubbornly local feed, because FypSource was still "library" and
-    /// <see cref="ServeRemoteBatch"/> refused to fetch (found live 2026-08-12: the flashes
-    /// consumer pulled 30 entries while the feed pulled zero in the same session).
-    ///
-    /// Web parity: the web app has exactly one source of remote content. Here the feed's
-    /// own picker wins whenever it has left "library"; otherwise the app-wide source
-    /// carries over, gated on the same consent property every other surface reads.
-    /// </summary>
-    private static string EffectiveFeedSource()
-    {
-        var s = App.Settings?.Current;
-        if (s == null) return "library";
-        if (s.FypSource != "library") return s.FypSource;
-        if (s.MediaSource != "local" && s.HasRemoteMediaConsent) return s.MediaSource;
-        return "library";
-    }
-
-    /// <summary>The mixed-mode remote share the effective source implies: the feed's own
-    /// ratio when its picker is active, the app-wide ratio when the source carried over.</summary>
-    private static int EffectiveOnlineRatio()
-    {
-        var s = App.Settings?.Current;
-        if (s == null) return 30;
-        return s.FypSource != "library" ? s.FypOnlineRatio : s.RemoteMediaRatio;
-    }
-
     private static async void ServeRemoteBatch()
     {
         var s = App.Settings?.Current;
-        if (s == null || !s.HasRemoteMediaConsent || EffectiveFeedSource() == "library")
+        if (!FypRules.RemoteAllowed(s))
         {
             // The page only asks when it believes remote is on, so a refusal here is the
             // interesting half of a "my feed is empty" report — say why, quietly.
@@ -540,25 +340,8 @@ internal static class FypHostService
             await win.Dispatcher.InvokeAsync(() =>
             {
                 if (_host == null) return;
-                if (batch.Entries.Count > 0)
-                    _host.Post(new { type = "assets-append", assets = batch.Entries });
-                // Status goes out either way so the page can clear its loading state or
-                // show "offline" instead of an eternal spinner.
-                //
-                // "added" is the FRESH count, not the raw page: the coordinator now filters
-                // ids this channel already served, and reporting the raw number was exactly
-                // what kept the page's dry backoff from ever arming (added:30, 0 new tiles,
-                // poll again in a second, forever).
-                _host.Post(new
-                {
-                    type = "online-status",
-                    ok = batch.Error == null,
-                    error = batch.Error,
-                    added = batch.Entries.Count,
-                    fresh = batch.Entries.Count,
-                    dry = batch.Dry,
-                    poolTotal = batch.PoolTotal,
-                });
+                // assets-append (when any), then online-status either way (FypRules.BatchFrames).
+                foreach (var frame in FypRules.BatchFrames(batch)) _host.Post(frame);
             });
         }
         catch (Exception ex) { App.Logger?.Warning("FypHost: remote batch failed: {E}", ex.Message); }
@@ -581,7 +364,7 @@ internal static class FypHostService
         {
             // Echo the raw text back so the page can attach the error to the box the user is
             // still looking at (it keyed its pending state on what it sent).
-            _host?.Post(new { type = "sub-probe", sub = rawSub ?? "", ok = false, videoCount = (int?)null, error = "invalid" });
+            _host?.Post(FypRules.InvalidProbeFrame(rawSub));
             return;
         }
 
@@ -599,46 +382,9 @@ internal static class FypHostService
             if (win == null) return;   // feed closed while probing
             await win.Dispatcher.InvokeAsync(() =>
             {
-                var s = App.Settings?.Current;
-                // A transport failure taught us nothing about the sub, so no verdict is written
-                // and nothing is committed — the page shows "could not check" and the user can
-                // try again. Every other outcome (found OR genuinely missing) is a real answer
-                // worth remembering for a week.
-                if (s != null && probe.Error == null)
-                {
-                    s.FypOnlineSubVerdicts[clean] = new RemoteSubVerdict
-                    {
-                        Ok = probe.Ok,
-                        VideoCount = probe.VideoCount,
-                        CheckedAtUtc = DateTime.UtcNow,
-                    };
-                    if (probe.Ok)
-                    {
-                        // Keeping it comes first and is unconditional: the library is where a
-                        // verified name lives, and it outlives any one surface's 20-channel feed.
-                        s.TryAddLibrarySub(clean);
-                        var subs = s.FypOnlineCustomSubs.ToList();
-                        if (!subs.Contains(clean, StringComparer.OrdinalIgnoreCase) && subs.Count < 20)
-                        {
-                            subs.Add(clean);
-                            s.FypOnlineCustomSubs = subs;
-                            // Every consumer's rotation, not just the feed's: the sub list is
-                            // app-wide (flashes, videos, intake, DTRH all resolve from it).
-                            FypOnlineCoordinator.ResetAllChannels();
-                            App.Logger?.Information("[FYP online] custom sub r/{Sub} verified ({N} videos) and added",
-                                clean, probe.VideoCount);
-                        }
-                    }
-                    App.Settings?.Save();
-                }
-                _host?.Post(new
-                {
-                    type = "sub-probe",
-                    sub = clean,
-                    ok = probe.Ok,
-                    videoCount = probe.VideoCount,
-                    error = probe.Error,
-                });
+                // A transport failure commits nothing; any real answer is remembered and a found
+                // sub is kept (FypRules.CommitProbe).
+                _host?.Post(FypRules.CommitProbe(App.Settings?.Current, clean, probe));
                 // The pill row is built from the library, so it has to hear about a new keeper.
                 if (probe.Ok) PushLibrary();
             });
@@ -655,63 +401,18 @@ internal static class FypHostService
     // and toggles the selection, so adding a sub for one surface no longer conscripts every other
     // one - and the X below still means "gone everywhere", in one gesture.
 
-    /// <summary>The library joined with verdicts and with this surface's selection.</summary>
-    private static object[] BuildLibraryPayload(Models.AppSettings? s)
-    {
-        if (s == null) return Array.Empty<object>();
-        var rows = s.BuildRemoteSubLibraryView();
-        var payload = new List<object>(rows.Count);
-        foreach (var r in rows)
-            payload.Add(new { name = r.Name, ok = r.Ok, videoCount = r.VideoCount, stillOnly = r.StillOnly, selected = r.Selected });
-        return payload.ToArray();
-    }
-
     /// <summary>Push the whole library after any change. Replace, never patch.</summary>
     private static void PushLibrary()
     {
-        try { _host?.Post(new { type = "library", library = BuildLibraryPayload(App.Settings?.Current) }); }
+        try { _host?.Post(FypRules.LibraryFrame(App.Settings?.Current)); }
         catch (Exception ex) { App.Logger?.Debug("FypHost.PushLibrary: {E}", ex.Message); }
     }
 
-    /// <summary>The X on a pill: the library entry, its verdict and its feed membership go
-    /// together (AppSettings.RemoveLibrarySub), then every consumer's rotation is reset because
-    /// the name may have been a live channel for all of them.</summary>
+    /// <summary>The X on a pill (FypRules.RemoveLibrarySub), then the pill row hears about it.</summary>
     private static void RemoveLibrarySub(string? rawName)
     {
-        try
-        {
-            var s = App.Settings?.Current;
-            if (s == null || string.IsNullOrWhiteSpace(rawName)) { PushLibrary(); return; }
-            if (s.RemoveLibrarySub(rawName))
-            {
-                App.Settings?.Save();
-                FypOnlineCoordinator.ResetAllChannels();
-                App.Logger?.Information("[FYP online] r/{Sub} removed from the library", rawName.Trim());
-            }
-            PushLibrary();
-        }
-        catch (Exception ex) { App.Logger?.Warning("FypHost: library remove failed: {E}", ex.Message); }
-    }
-
-    private static JObject? LoadStats()
-    {
-        try
-        {
-            if (File.Exists(StatsFilePath))
-                return JObject.Parse(File.ReadAllText(StatsFilePath));
-        }
-        catch (Exception ex) { App.Logger?.Warning("FypHost: stats load failed: {E}", ex.Message); }
-        return null;
-    }
-
-    private static void SaveStats(JObject stats)
-    {
-        try
-        {
-            Directory.CreateDirectory(App.UserDataPath);
-            File.WriteAllText(StatsFilePath, stats.ToString(Newtonsoft.Json.Formatting.None));
-        }
-        catch (Exception ex) { App.Logger?.Warning("FypHost: stats save failed: {E}", ex.Message); }
+        FypRules.RemoveLibrarySub(App.Settings?.Current, rawName);
+        PushLibrary();
     }
 
     // ================== window mechanics: GHOST MODE (opacity + click-through) ==================

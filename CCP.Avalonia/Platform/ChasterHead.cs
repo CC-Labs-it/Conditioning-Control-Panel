@@ -54,10 +54,13 @@ internal static class ChasterHead
                 FriendsHead.Identity, ChasterClient.ProxyBase),
             RafflePostDays = () => CoreSettings.Current.ChasterRafflePostDays,
             LadderShowName = () => CoreSettings.Current.ChasterLadderShowName,
-            // ponytail: no MinutesOn (WPF ChasterServiceApp.MinutesFromDayLog = App.FeatureDayLog.ConditioningMinutesOn).
-            // The day log's minutes come from TotalConditioningMinutes, and this head's conditioning-time tracker
-            // (WPF SkillTreeService.AddConditioningTime) is not ported (MainShellWindow.UiUpdates.cs "STILL OUT"), so
-            // every day would read 0 and be charged idle. Wire it when the tracker lands; null = "nobody can tell".
+            // WPF ChasterServiceApp.cs:40,49 MinutesFromDayLog: the day log's minutes, fed by the conditioning-time
+            // tracker (MainShellWindow.UiUpdates.cs). Null without a log = "nobody can tell". Also null for a day
+            // before the log's first conditioning day: on upgrade that day predates the tracker and reads 0, which
+            // would charge an idle day the user may have conditioned (docs/avalonia-decisions.md 2026-10-12).
+            MinutesOn = dayKey => App.FeatureDayLog is { } log && log.FirstConditioningDay() is { } first
+                                  && string.CompareOrdinal(dayKey, first) >= 0
+                ? log.ConditioningMinutesOn(dayKey) : null,
         };
     }
 

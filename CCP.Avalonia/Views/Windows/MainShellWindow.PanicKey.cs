@@ -90,6 +90,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StopCameraForPanic();
                 return;
             }
+            // WPF MainWindow.xaml.cs:1755: ladder mode only (the override rung and game hand-offs return first),
+            // after the grace pause and before the stop pass: her calm safety line, then 6 s of no other bark.
+            if (rung == PanicPolicy.Rung.RunLadder && !gameOwnedTheScreen) Platform.BarkHead.Engine?.Raise("Panic");
             bool wasRunning = CoreEngine.IsRunning;
             PanicSurfaces.StopAll("panic key", this);
             if (wasRunning) ShowFromTray();   // WPF: Show + Activate the main window after a running stop
