@@ -9,11 +9,9 @@
 // (UpdateQuickLoginUI) and tier changes (App RepaintVeils). XP / level-up / achievement events
 // pulse and glow the bubble (WPF OnBubble*).
 //
-// ponytail: still missing vs WPF - the equipped preset bust (CosmeticsCatalog is WPF-only, row
-// shell-profile-cosmetics), the tier badge's hover blow-up (MainWindow.ProfileBubbleTierFx.cs),
-// the level-up spark burst (FireBurstAt, shell-event-fx), the flash wobble and subliminal shimmer
+// ponytail: still missing vs WPF - the flash wobble and subliminal shimmer
 // (no FlashDisplayed / SubliminalDisplayed event on this head), the spiral row (shell-profile-spiral,
-// no DescentService here) and BrowserLauncher's copy-the-link prompt when the browser cannot open.
+// no DescentService here).
 // PlaceProfileBubblePopup is dropped: Placement="BottomEdgeAlignedRight" is the same result.
 //
 // Controls are reached with Named<T>(name): the window loads with AvaloniaXamlLoader.Load.
@@ -23,6 +21,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -270,9 +269,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OpenPublicProfilePage: the dashboard's sharing page, never /u/&lt;slug&gt; (the app holds
         /// no slug). Shared by the menu row and the Trainer Card's Share Profile button.</summary>
-        internal void OpenPublicProfilePage()
+        internal async void OpenPublicProfilePage()
         {
-            try { OpenProfileLink(ProfileSharingUrl); }
+            try
+            {
+                bool opened;
+                try { opened = OpenProfileLink(ProfileSharingUrl); }
+                catch { opened = false; }
+                if (opened) return;
+                // WPF BrowserLauncher.OpenUrlOrPrompt: a locked clipboard never suppresses the prompt.
+                try { if (Clipboard is { } clipboard) await clipboard.SetTextAsync(ProfileSharingUrl); } catch { }
+                await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
+                    Loc.GetF("msg_browser_no_default_for", "open your public profile")
+                    + Loc.GetF("msg_browser_link_copied", ProfileSharingUrl));
+            }
             catch (Exception ex) { Log.Warning(ex, "OpenPublicProfilePage failed"); }
         }
 
@@ -341,6 +351,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 initials.Text = loggedIn ? LeaderboardEntryData.BuildInitials(name) : "?";
                 fill.Fill = loggedIn ? Tabs.LeaderboardRow.BuildAvatarBrush(name) : ProfileBubbleNeutralBrush;
                 initials.IsVisible = true;
+                var bust = Helpers.ModArt.AvatarPreset(CoreSettings.Current.ProfileCosmetics?.AvatarId);
+                if (bust != null) PaintBubblePhoto(new ImageBrush(bust) { Stretch = Stretch.UniformToFill });
 
                 string? url = null;
                 if (CoreSettings.Current.ShareProfilePicture && AccountSeed.Discord?.IsAuthenticated == true)
@@ -365,6 +377,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var art = tier > 0 ? TierBadge.TierArt(tier) : null;
             img.Source = art;
             img.IsVisible = art != null;
+            if (art != null) EnsureProfileTierFx();
+            else HideProfileTierBig();
+            SyncProfileTierMotion();
         }
 
         private void PaintBubblePhoto(IBrush brush)
@@ -405,6 +420,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             PulseProfileBubble(1.35, 560);
             FlashProfileBubbleGlow();
+            FireProfileBubbleBurst();
             if (ProfileBubblePopupHost?.IsOpen == true) RefreshProfileMenu();
         }
 
