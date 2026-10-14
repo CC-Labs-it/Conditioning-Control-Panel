@@ -20,13 +20,33 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.8";
+        public const string AppVersion = "7.1.9";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.8 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.9 - Stay Tuned
+
+PIECE BY PIECE
+- watch a game: public games have a Watch button in the Lobby. you see the real board about 15 s behind, can swap sides, use the same camera and Options, and see both players' IQ. players still never see each other's. ""Let people watch my games"" sits in Options, on by default.
+- a featured game on the Home board, rotating every 20 s. Watch is one click.
+- reactions: six of them, each with its own little sound, with a cooldown so nobody can flood the board. players see them float up and can turn them off (""Play watchers' reactions"") or mute them.
+- the stands replay the turn player's Distraction with your own pictures. games between players on older versions get calm ambient pictures instead.
+- name tags: both players float at their end of the board, hop when they move, flinch when they lose a piece, and sweat and tremble in check.
+- rating and ladder: your rating sits by your name, the Ladder shows the top 50 and your rank, and the end card rolls your rating up or down. unrated games say why.
+- a short opening card when the game opens, and a clockwork board intro where the pieces rise through brass gears. both can be switched off in Options.
+- the menus are rebuilt: a Back button on every screen, clearer buttons, sounds, and things that react when you press them.
+
+NEW IN 7.1.9
+- Gentle visuals, for light-sensitive eyes: one switch in Settings > Performance. everything fades in and out (you pick 0.25 to 2 s), GIFs and spirals slow down (down to 0.25x), brightness eases in instead of snapping, nothing flickers, and subliminals lose their black card. videos fade but play at normal speed.
+- local AI setup: the first page now says plainly that the AI runs on your own graphics card and memory, shows what your PC has, and warns when it is under 16 GB memory or 8 GB graphics memory.
+- Intake: unlimited graded Intake for Basic too, not only Prime.
+
+FIXES IN 7.1.9
+- a lock card sent by the companion or Remote with no count showed 0 / 0 and never closed. it always asks for at least one now.
+- Flash ""Max on screen"" is now the ceiling in every mode. Stay mode could reach 40.
+- what the avatar says in the tube chat now shows in the Companion page history too.
 
 NEW IN 7.1.8
 - audio player: a playlist card on the Deeper page. add your own files, play, skip, seek. it has its own volume, Deeper enhancements can ride the current track, and panic or engine Stop silences it. .ogg files are not supported.
