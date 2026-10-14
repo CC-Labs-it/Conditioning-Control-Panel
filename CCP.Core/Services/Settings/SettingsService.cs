@@ -703,13 +703,6 @@ namespace ConditioningControlPanel.Services
             Unchanged,
         }
 
-        /// <summary>
-        /// Merges ONE bundled built-in preset into <paramref name="settings"/>. Pure with respect to
-        /// the app spine (no file IO, no <c>App.*</c>), which is what makes the contract testable.
-        /// See <see cref="MergeBuiltInAwarenessPresets"/> for the full contract; in short: definition
-        /// fields are copied unconditionally, <c>MasterEnabled</c> is user state and is preserved, and
-        /// only a strict version bump touches <paramref name="pendingReinstalls"/>.
-        /// </summary>
         /// <summary>Bundled preset JSON carries no action ids, so every load minted new ones and
         /// rewrote settings.json. Keep the stored id where the trigger id and the action's position
         /// and type match (found by the real-profile migration test).</summary>
@@ -728,6 +721,13 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>
+        /// Merges ONE bundled built-in preset into <paramref name="settings"/>. Pure with respect to
+        /// the app spine (no file IO, no <c>App.*</c>), which is what makes the contract testable.
+        /// See <see cref="MergeBuiltInAwarenessPresets"/> for the full contract; in short: definition
+        /// fields are copied unconditionally, <c>MasterEnabled</c> is user state and is preserved, and
+        /// only a strict version bump touches <paramref name="pendingReinstalls"/>.
+        /// </summary>
         internal static BuiltInPresetMergeResult MergeBuiltInPresetInto(
             AppSettings settings,
             KeywordTriggerPreset preset,

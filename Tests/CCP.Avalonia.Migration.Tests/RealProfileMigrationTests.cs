@@ -217,9 +217,6 @@ public sealed class RealProfileMigrationTests
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
 
-    /// <summary>Every original key keeps its value, or is absent and held the default (properties
-    /// marked DefaultValueHandling.Ignore). A key AppSettings does not know fails by name: there is
-    /// no JsonExtensionData, so the load drops it. Messages carry key names, never values.</summary>
     private static readonly string[] DailyRollKeys =
     {
         "DailyQuest", "DailyQuests", "DailyRerollsUsed", "DailyRerollResetDate", "DailyQuestGeneratedAt",
@@ -292,6 +289,9 @@ public sealed class RealProfileMigrationTests
         return clone;
     }
 
+    /// <summary>Every original key keeps its value, or is absent and held the default (properties
+    /// marked DefaultValueHandling.Ignore). A key AppSettings does not know fails by name: there is
+    /// no JsonExtensionData, so the load drops it. Messages carry key names, never values.</summary>
     internal static IEnumerable<string> CompareSettings(JObject original, JObject saved, Action<string> expect)
     {
         var contract = (JsonObjectContract)JsonSerializer.CreateDefault().ContractResolver.ResolveContract(typeof(AppSettings));
