@@ -841,6 +841,11 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         /// <summary>Marshal onto the UI thread (CoreDispatch) — every caller here may be on a worker thread, and
         /// <c>ChaosWebViewHost.Post</c> touches CoreWebView2 directly.</summary>
+        /// <remarks>Differs from the pre-move WPF code, which always queued (BeginInvoke) and dropped the frame once
+        /// dispatcher shutdown had started. The WPF CoreDispatch provider (App.xaml.cs) runs the action inline when
+        /// already on the UI thread, and also inline once shutdown has started. So a frame posted from the UI thread can
+        /// overtake frames still queued from workers, and a post during shutdown reaches the host off the UI thread;
+        /// the try/catch below logs that case. Accepted in review (P3); not exercised by a test.</remarks>
         private static void Post(object msg)
         {
             CoreDispatch.Post(() =>
