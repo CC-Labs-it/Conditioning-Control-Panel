@@ -203,8 +203,7 @@ public sealed class ExclusivesVaultTests
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;
-        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-            .UseSkia()
+        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithoutStarting();
     }

@@ -28,8 +28,8 @@ public sealed class ExclusivesVaultMotionTests
     public Task VaultChromeAndMotionFollowTheTabAndTheGates() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var old = (s.MotionLevel, s.PerformanceMode);

@@ -429,7 +429,7 @@
                                                 <fx:IconGlyph Name="VeilLock" Kind="LockClosed" Variant="Filled" Size="34" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"
                                                            Loaded="FxPart_Loaded" Unloaded="FxPart_Unloaded"/>
                                                 </Panel>
-                                                <Border Margin="0,8,0,0" CornerRadius="10" Padding="10,4"
+                                                <Border x:Name="SpotVeilPill" Margin="0,8,0,0" CornerRadius="10" Padding="10,4"
                                                         HorizontalAlignment="Center">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
