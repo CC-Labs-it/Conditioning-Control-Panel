@@ -110,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var quests = App.Quests;
             if (quests == null || sender is not DailyQuestCard card) return;
-            if (quests.RerollDailyQuest(card.Slot)) { RefreshQuestUI(); return; }
+            if (quests.RerollDailyQuest(card.Slot)) { RefreshQuestViews(); return; }
             // Out of rerolls is the only refusal worth a dialog; a finished seat stays as it was.
             if (quests.GetRemainingDailyRerolls() > 0) return;
             ShowRerollLimit(CoreEntitlement.HasPremium ? "quest_reroll_daily_none_patron" : "quest_reroll_daily_none_free");
@@ -120,8 +120,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var quests = App.Quests;
             if (quests == null) return;
-            if (quests.RerollWeeklyQuest()) RefreshQuestUI();
+            if (quests.RerollWeeklyQuest()) RefreshQuestViews();
             else ShowRerollLimit(CoreEntitlement.HasPremium ? "quest_reroll_weekly_none_patron" : "quest_reroll_weekly_none_free");
+        }
+
+        private void RefreshQuestViews()
+        {
+            RefreshQuestUI();
+            (TopLevel.GetTopLevel(this) as ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow)?.RefreshQuestStamps();
         }
 
         private void ShowRerollLimit(string key)

@@ -387,11 +387,7 @@ namespace ConditioningControlPanel
             if (info.Completed && known && !wasDone) PlayStampStampedPop(cell);
         }
 
-        private static double QuestStampFraction(int current, int target)
-        {
-            if (target <= 0) return 0;
-            return Math.Max(0, Math.Min(1.0, (double)current / target));
-        }
+        private static double QuestStampFraction(int current, int target) => QuestStampRules.Fraction(current, target);
 
         /// <summary>
         /// One stamp. A Grid rather than a Border because the ghost state needs a dashed outline,
@@ -524,17 +520,13 @@ namespace ConditioningControlPanel
         /// </summary>
         private static string QuestStampName(QuestDefinition def)
         {
-            var name = def.LocalizedName;
-            if (string.IsNullOrWhiteSpace(name) || name.StartsWith("quest_", StringComparison.Ordinal))
-                name = def.Name;
+            var name = QuestStampRules.Text(def.LocalizedName, def.Name);
             return App.Mods?.MakeModAware(name) ?? name;
         }
 
         private static string QuestStampDescription(QuestDefinition def)
         {
-            var desc = def.LocalizedDescription;
-            if (string.IsNullOrWhiteSpace(desc) || desc.StartsWith("quest_", StringComparison.Ordinal))
-                desc = def.Description;
+            var desc = QuestStampRules.Text(def.LocalizedDescription, def.Description);
             return App.Mods?.MakeModAware(desc) ?? desc;
         }
 
@@ -881,15 +873,16 @@ namespace ConditioningControlPanel
 
             // A completed quest reads 100% whatever its counter says - trackers that arrive in
             // lumps (whole minutes) routinely overshoot the target.
-            double fraction = info.Completed ? 1.0 : info.Fraction;
-            int current = info.Completed ? Math.Max(quest.CurrentProgress, def.TargetValue) : quest.CurrentProgress;
+            var display = QuestStampRules.Progress(quest.CurrentProgress, def.TargetValue, info.Completed);
+            double fraction = display.Fraction;
+            int current = display.Current;
 
             _stampPopFill!.Background = info.Completed ? QuestStampDoneInk : accent;
             _stampPopFill.Width = Math.Max(0, QuestStampPopTrackWidth * fraction);
             _stampPopProgress!.Foreground = info.Completed ? QuestStampDoneInk : accent;
             _stampPopProgress.Text = $"{current} / {def.TargetValue}";
 
-            int left = Math.Max(0, def.TargetValue - quest.CurrentProgress);
+            int left = display.Remaining;
             _stampPopRemaining!.Text = info.Completed ? "done" : left > 0 ? $"{left} to go" : "";
         }
 
