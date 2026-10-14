@@ -560,6 +560,32 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF onBenignPop (BubbleService.cs:1565): the ambient pop sound, then Bubble.Pop's
+    /// effect word in the variant tint (:4685) before the treat scores.</summary>
+    [Fact]
+    public async Task A_treat_pop_plays_the_pop_and_flashes_its_effect_word()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                log.Clear();
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.Equal(new[] { "sfx:", "label:SPIRAL" },
+                    log.Where(e => !e.StartsWith("label:+")).Select(e => e.StartsWith("sfx:Pop") ? "sfx:" : e));
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF Pulse/Shake (:1672) honour the run's flash and shake toggles; panic clears a live
     /// field without a label, cue or effect (EndChaosMode fires nothing).</summary>
     [Fact]

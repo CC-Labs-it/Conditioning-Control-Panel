@@ -276,7 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         private static string ChaosCuePath(string name) =>
-            Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "chaos", name + ".mp3");
+            ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", name + ".mp3"));   // as ChaosSfx
 
         /// <summary>WPF PlayChaosCue/PlayCue (BubbleService.cs:2049, :2058): the chaos cue at
         /// (master x bubbles)^1.5 x scale, or the ambient pop when the cue is absent (or null).</summary>
