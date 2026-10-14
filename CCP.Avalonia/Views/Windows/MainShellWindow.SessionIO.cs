@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private AssetImportService? _assetImportService;
 
-        private static string[] DroppedPaths(DragEventArgs e) =>
+        internal static string[] DroppedPaths(DragEventArgs e) =>
             e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToArray()
             ?? Array.Empty<string>();
 
