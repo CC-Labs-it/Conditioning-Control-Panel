@@ -9,6 +9,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -646,11 +647,11 @@ namespace ConditioningControlPanel.Services.GoonGame
             return c;
         }
 
-        /// <summary>Only the duel's own endpoints are ever forwarded. A dot segment is refused too:
-        /// the prefix test alone would let "/v2/goon/../x" through to another route.</summary>
+        /// <summary>Only the duel's own endpoints are ever forwarded, judged on the BUILT Uri
+        /// (HostNetPathRule): the prefix test alone would let "/v2/goon/../x", an encoded dot or a
+        /// backslash through to another route once System.Uri normalises it.</summary>
         public static bool IsAllowedPath(string? path) =>
-            path != null && path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal)
-            && !path.Contains("..", StringComparison.Ordinal) && !path.Contains('\\');
+            HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out _);
 
         /// <summary>The body of a net-post frame as the string to send (WPF OnNetPost).</summary>
         public static string NetPostBody(JObject o) =>
@@ -665,14 +666,14 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// </summary>
         public static async Task<(int Status, string Body)> NetPostAsync(string? path, string body, HttpMessageInvoker? http = null)
         {
-            if (!IsAllowedPath(path))
+            if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out var target) || target is null)
             {
                 Log.Warning("GoonHostService: net-post REJECTED for path '{Path}'", path);
                 return (0, "forbidden_path");
             }
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, ProxyBaseUrl + path)
+                using var request = new HttpRequestMessage(HttpMethod.Post, target)
                 {
                     Content = new StringContent(body ?? "", Encoding.UTF8, "application/json"),
                 };

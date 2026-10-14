@@ -56,6 +56,41 @@ public sealed class PbpHostRulesTests
         Assert.Null(h.Seen);
     }
 
+    [Theory]
+    [InlineData("/v2/pbp/../user/me")]
+    [InlineData("/v2/pbp/%2e%2e/user/me")]
+    [InlineData("/v2/pbp/%2E%2E/user/me")]
+    [InlineData("/v2/pbp/..%2fuser%2fme")]
+    [InlineData("/v2/pbp/..\\user\\me")]
+    [InlineData("/v2/pbp//evil.example/x")]
+    [InlineData("/v2/pbp/lobby?next=https://evil.example/")]
+    public async Task Net_PathThatEscapesThePrefixAfterParsing_IsRefused_AndNeverSent(string path)
+    {
+        var call = PbpHostRules.ReadNet(new JObject { ["id"] = "n9", ["method"] = "GET", ["path"] = path });
+        Assert.Equal("forbidden_path", call.Refusal);
+
+        // A NetCall built by hand (no ReadNet) is judged again on the way out.
+        var h = new Capture();
+        var forged = new PbpHostRules.NetCall("n9", "GET", path, "", null);
+        var (status, body) = await PbpHostRules.SendAsync(new HttpClient(h), "https://example.test", forged, "tok", "7.1.5");
+        Assert.Equal((0, "forbidden_path"), (status, body));
+        Assert.Null(h.Seen);
+    }
+
+    [Fact]
+    public async Task Net_RealRouteWithQuery_IsSentToTheBuiltUri()
+    {
+        var h = new Capture();
+        var call = PbpHostRules.ReadNet(new JObject
+        {
+            ["id"] = "n10", ["path"] = "/v2/pbp/match/m_1/events?unified_id=discord%3A12&after=3",
+        });
+        Assert.Null(call.Refusal);
+        await PbpHostRules.SendAsync(new HttpClient(h), "https://example.test", call, "tok", "7.1.5");
+        Assert.Equal("/v2/pbp/match/m_1/events", h.Seen!.RequestUri!.AbsolutePath);
+        Assert.Equal("example.test", h.Seen.RequestUri.Host);
+    }
+
     [Fact]
     public async Task Net_AttachesTheTokenOnTheHostSide_AndSendsAnObjectBodyCompact()
     {
