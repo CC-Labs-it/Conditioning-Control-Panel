@@ -28,6 +28,10 @@ public sealed partial class FriendsDrawer
     /// <summary>The feed this drawer draws: the app's own (WPF App.FriendsFeed). The chip's badge reads it too.</summary>
     internal Func<FriendsFeed?> FeedSource { get; set; } = () => FriendsHead.Feed;
 
+    /// <summary>WPF FriendsLook.Body and HoverBrush (white at 0x14).</summary>
+    internal static readonly FontFamily Body = new("Segoe UI");
+    internal static readonly IBrush Hover = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
+
     private readonly StackPanel _feedBox = new() { Tag = "friends-feed", IsVisible = false };
     /// <summary>Lines that were unread when this open first showed them: they keep the dot until the drawer folds.</summary>
     private readonly HashSet<string> _feedFresh = new(StringComparer.Ordinal);
@@ -175,7 +179,7 @@ public sealed partial class FriendsDrawer
             });
         var text = new TextBlock
         {
-            FontSize = 12, Foreground = isNew ? Text : Muted, TextWrapping = TextWrapping.NoWrap,
+            FontFamily = Body, FontSize = 12, Foreground = isNew ? Text : Muted, TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Tag = "friends-feed-text",
         };
         var plain = FillLine(text, e, friends, isNew);
@@ -218,7 +222,7 @@ public sealed partial class FriendsDrawer
     private void MakeOpener(Border row, string friendId)
     {
         (row.Cursor, row.Focusable) = (Hand(), true);
-        row.PointerEntered += (_, _) => row.Background = Raised;
+        row.PointerEntered += (_, _) => row.Background = Hover;
         row.PointerExited += (_, _) => row.Background = Brushes.Transparent;
         row.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { e.Handled = true; OpenFromFeed(friendId); } };
         row.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { e.Handled = true; OpenFromFeed(friendId); } };
@@ -230,6 +234,8 @@ public sealed partial class FriendsDrawer
         try
         {
             if (_openId != friendId) Toggle(friendId);
+            // The row was just rebuilt: measure it before scrolling to it (WPF _list.UpdateLayout()).
+            _list.UpdateLayout();
             _list.Children.OfType<Control>().FirstOrDefault(c => c.Tag as string == "friends-row:" + friendId)?.BringIntoView();
         }
         catch (Exception ex) { Serilog.Log.Debug("[Friends] feed open failed: {E}", ex.Message); }
@@ -240,6 +246,9 @@ public sealed partial class FriendsDrawer
         var b = Pill(text, Brushes.Transparent, Lilac, tag);
         b.Padding = new Thickness(6, 2, 6, 2);
         if (b.Content is TextBlock t) t.FontSize = 11.5;
+        // WPF FeedLink hover: FriendsLook.HoverBrush, ink unchanged (Fluent reads these per button on :pointerover / :pressed).
+        foreach (var state in new[] { "PointerOver", "Pressed" })
+            (b.Resources["ButtonBackground" + state], b.Resources["ButtonForeground" + state], b.Resources["ButtonBorderBrush" + state]) = (Hover, Lilac, Brushes.Transparent);
         return b;
     }
 

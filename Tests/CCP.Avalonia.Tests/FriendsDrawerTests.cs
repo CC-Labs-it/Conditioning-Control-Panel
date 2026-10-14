@@ -448,6 +448,7 @@ public sealed class FriendsDrawerTests
             Assert.Equal(3, d.GetLogicalDescendants().OfType<Control>().Count(c => c.Tag as string == "friends-feed-new"));
             Assert.Equal(Loc.GetF("friends_feed_new", 3), Tagged<TextBlock>(d, "friends-feed-count")!.Text);
             var line = Tagged<Border>(d, "friends-feed-line:a")!.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Tag as string == "friends-feed-text");
+            Assert.Equal(FriendsDrawer.Body, line.FontFamily);   // WPF FriendsLook.Body
             Assert.Contains("Mia", string.Concat(line.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text)));
 
             // A line that lands while open is drawn at once, on top, and read.
@@ -462,6 +463,7 @@ public sealed class FriendsDrawerTests
             Assert.Null(Tagged<TextBlock>(d, "friends-feed-count"));
             Assert.DoesNotContain(d.GetLogicalDescendants().OfType<Control>(), c => c.Tag as string == "friends-feed-new");
             Assert.Null(Tagged<Button>(d, "friends-feed-less"));
+            Assert.Same(FriendsDrawer.Hover, Tagged<Button>(d, "friends-feed-more")!.Resources["ButtonBackgroundPointerOver"]);   // WPF FeedLink hover
             Click(d, "friends-feed-more");
             Assert.Equal(4, d.FeedLineKeys.Count);
             Click(d, "friends-feed-less");

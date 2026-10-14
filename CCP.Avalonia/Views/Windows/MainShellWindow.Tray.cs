@@ -50,13 +50,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
             Closed += (_, _) => _windowClosed = true;
-            AttachFeedTooltip(Platform.FriendsHead.Feed);
+            AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
             return Tray;
         }
 
         /// <summary>WPF FriendsFeedTray: the tray tooltip adds how many friends-feed lines are unread.
-        /// Refreshed on every feed change (Avalonia's tray has no hover event to refresh on).</summary>
-        internal void AttachFeedTooltip(global::ConditioningControlPanel.Services.Friends.FriendsFeed? feed)
+        /// Refreshed on every feed change, and on an account change (the feed switches accounts lazily and
+        /// raises nothing; WPF refreshes on hover, which Avalonia's tray does not have).</summary>
+        internal void AttachFeedTooltip(global::ConditioningControlPanel.Services.Friends.FriendsFeed? feed,
+            global::ConditioningControlPanel.Services.Friends.IFriendsService? service = null)
         {
             if (Tray == null || feed == null) return;
             var baseText = Tray.ToolTipText ?? "";
@@ -70,8 +72,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 catch (Exception ex) { Serilog.Log.Debug("[Friends] tray tooltip failed: {E}", ex.Message); }
             }
+            void OnIdentity(object? s, EventArgs e) => Refresh();
+            void OnSnapshot(global::ConditioningControlPanel.Services.Friends.FriendsSnapshot _) => Refresh();
             feed.Changed += Refresh;
-            Closed += (_, _) => feed.Changed -= Refresh;
+            CoreAccount.UnifiedIdentityChanged += OnIdentity;
+            if (service != null) service.SnapshotChanged += OnSnapshot;
+            Closed += (_, _) =>
+            {
+                feed.Changed -= Refresh;
+                CoreAccount.UnifiedIdentityChanged -= OnIdentity;
+                if (service != null) service.SnapshotChanged -= OnSnapshot;
+            };
             Refresh();
         }
 
