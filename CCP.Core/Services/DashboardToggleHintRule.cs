@@ -15,5 +15,13 @@ namespace ConditioningControlPanel.Services
         public const int MaxUses = 3;
 
         public static bool ShouldShow(int usesSoFar) => usesSoFar < MaxUses;
+
+        /// <summary>Record one learned gesture; false means the caption was already retired.</summary>
+        public static bool NoteUse(Models.AppSettings settings)
+        {
+            if (!ShouldShow(settings.DashboardToggleHintUses)) return false;
+            settings.DashboardToggleHintUses++;
+            return true;
+        }
     }
 }
