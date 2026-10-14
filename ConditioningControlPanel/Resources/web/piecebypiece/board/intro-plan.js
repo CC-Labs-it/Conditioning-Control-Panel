@@ -37,10 +37,23 @@ export function ratchet(u, n) {
   return (k + smooth(f / 0.62)) / n;
 }
 
-/** Which level plays: the Board intro option off is 'off', reduced motion is 'reduced'. */
-export function introLevel({ enabled = true, reduced = false } = {}) {
+/** Which level plays: the Board intro option off is 'off', reduced motion is 'reduced'.
+ *  Gentle visuals (gentle > 0) play the full clockwork, slower (the clock runs at `gentle`). */
+export function introLevel({ enabled = true, reduced = false, gentle = 0 } = {}) {
   if (!enabled) return 'off';
+  if (gentle > 0) return 'full';
   return reduced ? 'reduced' : 'full';
+}
+
+/**
+ * How fast the intros run under the host's Gentle visuals: 0 = not gentle (the usual levels),
+ * else 0.5..1 (0.5 = twice as long). The host sends gentleIntroSpeed > 0 only when Gentle is the
+ * one reason for its reduced motion; the page's own reduce-motion box or the OS asking still win.
+ */
+export function gentleSpeed({ host = 0, ownReduced = false, osReduced = false } = {}) {
+  const s = Number(host);
+  if (!Number.isFinite(s) || s <= 0 || ownReduced || osReduced) return 0;
+  return Math.max(0.5, Math.min(1, s));
 }
 
 /** Only a board set up for a new game: never a takeback, a resume, a resync or a replay. */

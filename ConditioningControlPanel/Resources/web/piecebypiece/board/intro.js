@@ -15,7 +15,8 @@
  * simply stands where the game put him.
  *
  * Levels follow the page's motion choice: full, reduced (a short calm lift, no
- * gears, no wheels) and off (the Options box "Board intro" unticked).
+ * gears, no wheels) and off (the Options box "Board intro" unticked). Gentle
+ * visuals on the desktop play the full clockwork, its clock slowed.
  * ==========================================================================*/
 
 import * as THREE from 'three';
@@ -65,8 +66,10 @@ export function createIntro({ view, pieces, bus, game, sfx = () => null, prefs =
 
   const levelNow = () => {
     const p = prefs() || {};
-    return introLevel({ enabled: p.boardIntro !== false, reduced: !!(p.reducedMotion || window.PBP?.settings?.reducedMotion) });
+    return introLevel({ enabled: p.boardIntro !== false, reduced: !!(p.reducedMotion || window.PBP?.settings?.reducedMotion), gentle: speedNow() });
   };
+  // Gentle visuals: the full clockwork, its clock slowed (game/preferences.js introSpeed, 0 = not gentle)
+  const speedNow = () => Number((prefs() || {}).introSpeed) || 0;
 
   function begin() {
     const level = levelNow();
@@ -76,7 +79,7 @@ export function createIntro({ view, pieces, bus, game, sfx = () => null, prefs =
     const plan = introPlan(list, level);
     const root = new THREE.Group();
     root.name = 'pbp-intro';
-    const r = { plan, level, t: 0, skipAt: null, root, men: [], wheels: [], clipped: new Set(), geos: [], mats: [] };
+    const r = { plan, level, t: 0, speed: (level === 'full' && speedNow()) || 1, skipAt: null, root, men: [], wheels: [], clipped: new Set(), geos: [], mats: [] };
     let brass = null, brassDark = null, small = null;
     if (level === 'full') {
       brass = new THREE.MeshStandardMaterial({ color: 0xffcb5c, metalness: 0.78, roughness: 0.3, envMapIntensity: 1.5, emissive: 0x3d2600 });
@@ -171,7 +174,8 @@ export function createIntro({ view, pieces, bus, game, sfx = () => null, prefs =
     if (pending) { pending = false; finish(); begin(); }
     if (!run) return;
     const prevT = run.t;
-    run.t += Math.max(0, dt || 0);
+    // gentle runs the whole clockwork slower; a skip still goes out at its own pace
+    run.t += Math.max(0, dt || 0) * (run.skipAt == null ? run.speed : 1);
     if (introOver(run.plan, run.t, run.skipAt)) { finish(); return; }
     pose(prevT);
   }
@@ -226,7 +230,7 @@ export function createIntro({ view, pieces, bus, game, sfx = () => null, prefs =
     render,
     skip,
     active: () => !!run,
-    state: () => (run ? { level: run.level, t: +run.t.toFixed(3), total: +run.plan.total.toFixed(3), skipped: run.skipAt != null, men: run.men.length, wheels: run.wheels.length } : null),
+    state: () => (run ? { level: run.level, t: +run.t.toFixed(3), speed: run.speed, total: +run.plan.total.toFixed(3), skipped: run.skipAt != null, men: run.men.length, wheels: run.wheels.length } : null),
     dispose() {
       finish();
       for (const fn of off) if (typeof fn === 'function') fn();

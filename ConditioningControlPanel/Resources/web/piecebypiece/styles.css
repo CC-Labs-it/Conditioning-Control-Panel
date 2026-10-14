@@ -214,6 +214,8 @@ html, body {
 }
 .loader p { margin: 0; letter-spacing: 0.12em; text-transform: lowercase; opacity: 0.75; }
 .loader.gone { opacity: 0; pointer-events: none; }
+/* The card the page opens on (ui/open-intro.js): over everything for about 3 s; a press anywhere skips it. */
+.pbp-open { position: fixed; inset: 0; z-index: 95; display: block; width: 100%; height: 100%; cursor: pointer; touch-action: none; }
 .loader-ring {
   width: 46px; height: 46px; border-radius: 50%;
   border: 3px solid rgba(245, 230, 200, 0.18); border-top-color: var(--pbp-pink);
