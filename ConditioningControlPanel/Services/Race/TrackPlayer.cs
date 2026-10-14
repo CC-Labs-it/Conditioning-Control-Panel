@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Services.Race;
 /// through the dispatcher with the usual null and HasShutdownStarted guards before Ended is
 /// raised, so subscribers never have to think about threads.
 /// </summary>
-public sealed class TrackPlayer : IDisposable
+public sealed class TrackPlayer : IDisposable, ITrackTransport
 {
     /// <summary>Raised once when the file plays out to its end. A deliberate Stop does not raise it.</summary>
     public event Action? Ended;

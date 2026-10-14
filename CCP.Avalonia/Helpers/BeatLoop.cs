@@ -51,6 +51,15 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         /// <summary>True while the beat's clock is actually subscribed (not parked).</summary>
         internal bool IsTicking => _clock.IsEnabled;
 
+        /// <summary>Ticking on its window's frames, not the off-window dispatcher fallback (tests).</summary>
+        internal bool OnFrameBeat => _clock.IsEnabled && _clock.IsFrameLocked;
+
+        /// <summary>What the loop parks with (tests).</summary>
+        internal Visual Owner => _owner;
+
+        /// <summary>Every started loop (tests).</summary>
+        internal static IReadOnlyCollection<BeatLoop> Running => Live;
+
         /// <summary>Started and not stopped; a parked loop is still running.</summary>
         public bool IsRunning => _running;
 
@@ -61,6 +70,21 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             _started = Time.GetTimestamp();
             _step(0);
             Live.Add(this);
+            Arm();
+        }
+
+        private void Arm()
+        {
+            // Not in a window yet (content of a ScrollViewer whose template is not applied): a clock
+            // started now would fall back to the off-window dispatcher pump for good, and the watch
+            // below would miss the window. Wait for the attach (lag-fixes-c review).
+            if (global::Avalonia.Controls.TopLevel.GetTopLevel(_owner) == null)
+            {
+                void Attached(object? s, VisualTreeAttachmentEventArgs e) { Unwatch(); if (_running) Arm(); }
+                _owner.AttachedToVisualTree += Attached;
+                _unwatch = () => _owner.AttachedToVisualTree -= Attached;
+                return;
+            }
             // Watch the owner and its ancestors (the window included) for IsVisible / WindowState,
             // so a hide or a minimise parks the clock at once and a show wakes it.
             var chain = _owner.GetSelfAndVisualAncestors().ToArray();
