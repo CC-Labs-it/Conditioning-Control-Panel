@@ -609,6 +609,23 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             }
         }
 
+        /// <summary>
+        /// The tube just showed an AI line. Records it for the Companion page unless a chat or
+        /// ambient reply already holds the same words (ccp-bugs #1443).
+        /// </summary>
+        public void NoteTubeLine(string? text)
+        {
+            try
+            {
+                if (ChatSession.TubeLineIsNew(Session.Turns, text, DateTime.UtcNow))
+                    Session.Append(TurnKind.TubeLine, text!.Trim());
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("CompanionBrain: tube line failed: {Error}", ex.Message);
+            }
+        }
+
         /// <summary>The active companion's display name, or null when the mod stack isn't up (tests).</summary>
         private static string? ActiveSpeakerName()
         {
