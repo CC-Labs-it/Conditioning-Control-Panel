@@ -53,6 +53,14 @@ public sealed class BrowserVideoGateTests : IDisposable
     }
 
     [Fact]
+    public void SettingsNotLoaded_RoutesToLibVlc_WithoutAskingTheEngine()
+    {
+        CoreSettings.ServiceProvider = () => null;
+        Assert.False(BrowserVideoGate.ShouldUseBrowser("clip.mp4"));
+        Assert.Empty(_asked);
+    }
+
+    [Fact]
     public void NoEngineSeeded_RoutesToLibVlc()
     {
         BrowserVideoGate.EngineAccepts = null;

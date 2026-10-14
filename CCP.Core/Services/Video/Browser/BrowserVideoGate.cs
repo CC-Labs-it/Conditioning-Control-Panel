@@ -54,8 +54,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
             try
             {
                 if (string.IsNullOrEmpty(path)) return false;
-                var settings = CoreSettings.Current;
-                if (!settings.BrowserVideoEngineEnabled) return false;
+                // Before settings load the WPF gate answered false; CoreSettings.Current would hand
+                // back defaults (engine on) instead, so read the live service only.
+                var settings = CoreSettings.Service?.Current;
+                if (settings == null || !settings.BrowserVideoEngineEnabled) return false;
                 if (!IsBrowserExtension(path)) return false;
                 // #938: the browser engine cannot honour a chosen audio output device. WebView2
                 // exposes no setSinkId (deferred in BROWSER_VIDEO_ENGINE_PLAN.md par.9), so it always
