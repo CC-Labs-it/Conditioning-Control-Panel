@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.BackRoom;
 
 /// <summary>
-/// THE BACK ROOM PROTOCOL (CONTRACT section 2), with no WPF in it. <see cref="BackRoomHostService"/>
+/// THE BACK ROOM PROTOCOL (CONTRACT section 2), with no WPF in it. The head's <c>BackRoomHostService</c>
 /// owns the window and feeds every page message through <see cref="Handle"/>; everything the host
 /// side of protocol 1 promises lives here so the suite can hold it to the letter:
 /// <list type="bullet">

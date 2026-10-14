@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
-using ConditioningControlPanel.Services.Chaster;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -90,17 +89,6 @@ public class BackRoomTabLedgerTests
         Assert.Equal("melt", l.Land("slot", "t1", false, 5, T0.AddSeconds(1)));
     }
 
-    [Theory]
-    [InlineData("melt", "melt")]
-    [InlineData("emi3", CircesTab.JackpotEventId)]
-    [InlineData("gif3same", null)]
-    [InlineData("none", null)]
-    [InlineData(null, null)]
-    public void Only_the_melt_line_and_the_jackpot_line_touch_the_tab(string? line, string? row)
-    {
-        Assert.Equal(row, ChasterHooks.SlotLineRow(line));
-    }
-
     [Fact]
     public async Task The_bridge_hands_over_the_relayed_line_for_a_landed_frame_and_ignores_a_page_that_names_its_own()
     {
@@ -119,9 +107,11 @@ public class BackRoomTabLedgerTests
             UtcNow = () => T0,
         });
 
-        bridge.Handle(JObject.Parse("{\"type\":\"station-request\",\"reqId\":\"" + BackRoomBridgeTests.Req + "\",\"station\":\"slot\",\"op\":\"tape\",\"idem\":\"idem-0123456789abcdef\",\"body\":{\"count\":2}}"));
-        relay.Next.SetResult(new BackRoomStationResult(true, 200, null, TapeBody("t1", 0, "melt", "none")));
-        for (var i = 0; i < 200; i++) { lock (posted) if (posted.Count > 0) break; await Task.Delay(5); }
+        // Inline continuations, no captured context, SetResult off the test thread: awaiting it waits for the tape.
+        relay.Next = new TaskCompletionSource<BackRoomStationResult>();
+        await Task.Run(() => bridge.Handle(JObject.Parse("{\"type\":\"station-request\",\"reqId\":\"" + BackRoomBridgeTests.Req + "\",\"station\":\"slot\",\"op\":\"tape\",\"idem\":\"idem-0123456789abcdef\",\"body\":{\"count\":2}}")));
+        await Task.Run(() => relay.Next.SetResult(new BackRoomStationResult(true, 200, null, TapeBody("t1", 0, "melt", "none"))));
+        lock (posted) Assert.Single(posted);
 
         // A page claiming a jackpot on a blank row still gets the blank: the line is never read off the frame.
         bridge.Handle(JObject.Parse("{\"type\":\"landed\",\"station\":\"slot\",\"tapeId\":\"t1\",\"i\":1,\"line\":\"emi3\"}"));

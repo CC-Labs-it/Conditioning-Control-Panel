@@ -86,7 +86,6 @@ public class BackRoomBridgeLifecycleTests
         rig.Send("{\"type\":\"station-open\",\"station\":\"slot\"}");
         rig.Send("{\"type\":\"station-open\",\"station\":\"../x\"}");
         Assert.Equal(new[] { "e_backroom_slot" }, rig.Events);
-        Assert.Contains("e_backroom_slot", ConditioningControlPanel.Models.FeatureDayEntry.EventKeys);
     }
 
     [Fact]

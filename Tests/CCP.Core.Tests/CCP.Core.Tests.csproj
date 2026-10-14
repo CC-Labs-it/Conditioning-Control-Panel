@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
+    <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
   </ItemGroup>
 
   <ItemGroup>

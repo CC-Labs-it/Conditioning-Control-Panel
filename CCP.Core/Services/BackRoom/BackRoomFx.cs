@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel.Models;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.BackRoom;
 
@@ -206,7 +207,7 @@ public sealed class BackRoomFx : IBackRoomFx
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning(ex, "[BackRoom] fx fire failed ({FxId})", fxId);
+            Log.Warning(ex, "[BackRoom] fx fire failed ({FxId})", fxId);
             return new BackRoomFxAck(Array.Empty<string>(), new[] { new BackRoomFxSkip(fxId, BackRoomFxSkipReason.Unknown) });
         }
     }
@@ -280,7 +281,7 @@ public sealed class BackRoomFx : IBackRoomFx
             if (System.Threading.Interlocked.Exchange(ref paid, 1) != 0) return;
             if (_xp == null || BackRoomFxXp.For(prim) is not { } amount) return;
             try { _xp(amount); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[BackRoom] fx xp failed"); }
+            catch (Exception ex) { Log.Warning(ex, "[BackRoom] fx xp failed"); }
         };
     }
 
@@ -323,7 +324,7 @@ public sealed class BackRoomFx : IBackRoomFx
                 onset.Hold?.Onsets.Remove(onset);
             }
             try { action(); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[BackRoom] fx primitive failed"); }
+            catch (Exception ex) { Log.Warning(ex, "[BackRoom] fx primitive failed"); }
         });
     }
 
@@ -368,7 +369,7 @@ public sealed class BackRoomFx : IBackRoomFx
             if (spiral) _sink.ReleaseSpiralLoom();
             if (haze) _sink.ReleaseBrainDrain();
         }
-        catch (Exception ex) { App.Logger?.Warning(ex, "[BackRoom] fx release failed"); }
+        catch (Exception ex) { Log.Warning(ex, "[BackRoom] fx release failed"); }
     }
 
     /// <summary><c>station-close</c>: release every hold that station started and cancel its tunnel.</summary>
@@ -393,7 +394,7 @@ public sealed class BackRoomFx : IBackRoomFx
         if (!double.IsFinite(level)) return;
         FxEnvironment env;
         try { env = _env(); }
-        catch (Exception ex) { App.Logger?.Warning(ex, "[BackRoom] fx environment failed"); return; }
+        catch (Exception ex) { Log.Warning(ex, "[BackRoom] fx environment failed"); return; }
 
         bool calm = env.Intensity == BackRoomFxIntensity.Calm;
         double next = Math.Clamp(level, 0, 1) * (calm ? BackRoomFxPlan.CalmStrength : 1);
@@ -433,7 +434,7 @@ public sealed class BackRoomFx : IBackRoomFx
     private void SinkTunnel(double level)
     {
         try { _sink.Tunnel(level); }
-        catch (Exception ex) { App.Logger?.Warning(ex, "[BackRoom] fx tunnel failed"); }
+        catch (Exception ex) { Log.Warning(ex, "[BackRoom] fx tunnel failed"); }
     }
 
     private void CancelTunnel()
@@ -447,7 +448,7 @@ public sealed class BackRoomFx : IBackRoomFx
             _tunnelStation = null;
         }
         try { timer?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex, "tunnel timer already gone"); }
-        try { _sink.CancelTunnel(); } catch (Exception ex) { App.Logger?.Warning(ex, "[BackRoom] fx tunnel cancel failed"); }
+        try { _sink.CancelTunnel(); } catch (Exception ex) { Log.Warning(ex, "[BackRoom] fx tunnel cancel failed"); }
     }
 
     /// <summary>Suspend or close: drop every waiting onset, forget the hero windows and holds, stop what is up.</summary>
@@ -472,7 +473,7 @@ public sealed class BackRoomFx : IBackRoomFx
         _gate.Clear();
         _pacer.Clear();
         try { _sink.StopAll(); }
-        catch (Exception ex) { App.Logger?.Warning(ex, "[BackRoom] fx stop failed"); }
+        catch (Exception ex) { Log.Warning(ex, "[BackRoom] fx stop failed"); }
     }
 
     private static void Dispose(IEnumerable<PendingOnset> onsets)
