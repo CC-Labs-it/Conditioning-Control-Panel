@@ -23,7 +23,7 @@ public sealed class IntakeHostWindowTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();

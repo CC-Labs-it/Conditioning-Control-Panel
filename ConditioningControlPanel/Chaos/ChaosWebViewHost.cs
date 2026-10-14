@@ -153,16 +153,7 @@ internal sealed class ChaosWebViewHost : IDisposable
     /// {exe}/Resources/web. The install dir is not writable under Program Files, so downloads land
     /// here (see the plan's "Runtime" section). Anchored on the SAME root the C# probe uses
     /// (<see cref="Services.ContentLocator.ContentRoot"/>) so the two can never drift apart.</summary>
-    public static string ContentWebRoot
-    {
-        get
-        {
-            var root = Services.ContentLocator.ContentRoot;
-            // Empty = the probe couldn't resolve LocalApplicationData. Stay empty rather than
-            // producing a RELATIVE path that CreateDirectory would honour next to the exe.
-            return string.IsNullOrEmpty(root) ? string.Empty : Path.Combine(root, "Resources", "web");
-        }
-    }
+    public static string ContentWebRoot => Services.ContentLocator.ContentWebRoot;
 
     /// <summary>The ccp.content mapping, with the folder created first — WebView2 SKIPS a mapping
     /// whose folder is missing (the same rule that forces ccp.spirals to be created before Launch).

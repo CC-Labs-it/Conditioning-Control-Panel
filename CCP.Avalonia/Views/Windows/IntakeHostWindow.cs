@@ -27,8 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// are in IntakeHostWindow.Bridge.cs; window mode, duck and the heartbeat watchdog in
     /// IntakeHostWindow.Lifecycle.cs.
     /// ponytail: not ported yet - relaunch on a web-process crash (WebHost raises no process-failed),
-    /// the bubble sprite / subliminal pool in init, serving ccp.content (the pack is requested but
-    /// WebAssetServer has no content root), the EmiDesk intakeRunning hold (this head's
+    /// the EmiDesk intakeRunning hold (this head's
     /// EmiDeskService has no Fire/ReleaseHold director), the punch card. Next slices in
     /// ~/ccp-port/briefs/intake-plan.md.
     /// </summary>
@@ -191,8 +190,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var (gifs, images) = IntakeRun.SampleMedia(CorePaths.EffectiveAssets, settings.DisabledAssetPaths);
-                if (gifs.Length + images.Length > 0)
-                    media = new { gifs = gifs.Select(r => AssetsBase + r).ToArray(), images = images.Select(r => AssetsBase + r).ToArray() };
+                var bubbleSprite = BubbleSpriteDataUri();
+                var subliminals = IntakeSubliminals.Sample(settings.SubliminalPool);
+                if (gifs.Length + images.Length > 0 || bubbleSprite != null || subliminals != null)
+                    media = new { gifs = gifs.Select(r => AssetsBase + r).ToArray(), images = images.Select(r => AssetsBase + r).ToArray(), bubbleSprite, subliminals };
             }
             catch (Exception ex) { Log.Debug("IntakeHost: media manifest: {E}", ex.Message); }
 
@@ -219,10 +220,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     media,
                     remoteMedia = IntakeRun.RemoteMediaEnabled(settings),
                     subjectId = IntakeRun.SubjectId(CorePaths.UserData),
-                    subliminals = (object?)null,
+                    subliminals = IntakeSubliminals.Build(settings.SubliminalPool, settings.SubAudioAudible,
+                        App.Mods?.ActiveMod?.InstalledPath is { Length: > 0 } modPath
+                            ? Path.Combine(modPath, "resources", "sounds", "flashes_audio") : null,
+                        ModAudioPolicy.UsesSharedSubAudio(App.Mods?.ActiveModId)
+                            ? Path.Combine(AppContext.BaseDirectory, "Resources", "sub_audio") : null),
                 },
                 ai,
             };
+        }
+
+        /// <summary>WPF BuildBubbleSpriteDataUri: mod-aware bitmap, encoded on the UI thread.</summary>
+        internal static string? BubbleSpriteDataUri()
+        {
+            try
+            {
+                using var sprite = Helpers.ModArt.TryLoad("bubble.png");
+                if (sprite == null) return null;
+                using var encoded = new MemoryStream();
+                sprite.Save(encoded);
+                return "data:image/png;base64," + Convert.ToBase64String(encoded.ToArray());
+            }
+            catch (Exception ex) { Log.Debug("IntakeHost: bubble sprite: {E}", ex.Message); return null; }
         }
 
         /// <summary>Every host -&gt; page frame, as sent (tests read the bridge from here).</summary>
