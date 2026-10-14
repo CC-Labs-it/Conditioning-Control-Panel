@@ -260,7 +260,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             for (int i = source.Count - 1; i >= 0; i--)
             {
                 var turn = source[i];
-                if (turn.Kind == TurnKind.SystemNote) continue;
+                if (turn.Kind is TurnKind.SystemNote or TurnKind.TubeLine) continue;
 
                 if (turn.Kind == TurnKind.BarkEcho)
                 {
@@ -295,8 +295,32 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// <summary>Maps a window onto transport messages, preserving order.</summary>
         public static IReadOnlyList<ChatMessage> ToMessages(IEnumerable<CompanionTurn> turns) =>
             (turns ?? Enumerable.Empty<CompanionTurn>())
-                .Where(t => t != null && t.Kind != TurnKind.SystemNote)
+                .Where(t => t != null && t.Kind is not (TurnKind.SystemNote or TurnKind.TubeLine))
                 .Select(t => t.ToMessage())
                 .ToList();
+
+        /// <summary>
+        /// Should a line the tube just showed become a <see cref="TurnKind.TubeLine"/>? No when it
+        /// is blank, or when one of the last ten turns from the past minute already says the same
+        /// words as a companion line (a chat reply or brain ambient reply reaches the tube after
+        /// its turn is logged). Pure so it can be tested.
+        /// </summary>
+        public static bool TubeLineIsNew(IReadOnlyList<CompanionTurn>? turns, string? text, DateTime nowUtc)
+        {
+            var words = Squash(text);
+            if (words.Length == 0) return false;
+            if (turns == null) return true;
+            for (int i = turns.Count - 1, seen = 0; i >= 0 && seen < 10; i--, seen++)
+            {
+                var t = turns[i];
+                if (t == null || nowUtc - t.Utc > TimeSpan.FromSeconds(60)) continue;
+                if ((t.Kind is TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine)
+                    && string.Equals(Squash(t.Text), words, StringComparison.Ordinal)) return false;
+            }
+            return true;
+        }
+
+        private static string Squash(string? text) =>
+            string.Join(' ', (text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 }

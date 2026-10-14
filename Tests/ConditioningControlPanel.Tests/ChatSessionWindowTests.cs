@@ -155,6 +155,37 @@ public class ChatSessionWindowTests
     }
 
     [Fact]
+    public void TubeLines_AreDisplayOnly_NeverInAWindowOrOnTheWire()
+    {
+        var s = SessionWith(
+            (TurnKind.UserChat, "hi"),
+            (TurnKind.TubeLine, "you went quiet"),
+            (TurnKind.AssistantChat, "hi you~"));
+
+        Assert.DoesNotContain(s.BuildWindow(ChatWindowSpec.Chat), t => t.Kind == TurnKind.TubeLine);
+        Assert.DoesNotContain(s.BuildWindow(ChatWindowSpec.Ambient), t => t.Kind == TurnKind.TubeLine);
+        Assert.Equal(2, ChatSession.ToMessages(s.Turns).Count);
+        Assert.False(s.Turns.Single(t => t.Kind == TurnKind.TubeLine).IsDialogue); // never persisted
+    }
+
+    [Fact]
+    public void TubeLineIsNew_SkipsWordsAReplyAlreadyHolds()
+    {
+        var s = SessionWith(
+            (TurnKind.UserChat, "pick something"),
+            (TurnKind.AssistantChat, "try  the pink one"),
+            (TurnKind.AmbientReply, "still here?"));
+        var now = T0.AddSeconds(5);
+
+        Assert.False(ChatSession.TubeLineIsNew(s.Turns, "try the pink one", now));   // chat reply
+        Assert.False(ChatSession.TubeLineIsNew(s.Turns, " still here? ", now));      // ambient reply
+        Assert.True(ChatSession.TubeLineIsNew(s.Turns, "pick something", now));      // user words never count
+        Assert.True(ChatSession.TubeLineIsNew(s.Turns, "a new thought", now));
+        Assert.True(ChatSession.TubeLineIsNew(s.Turns, "try the pink one", T0.AddMinutes(5))); // said again later
+        Assert.False(ChatSession.TubeLineIsNew(s.Turns, "   ", now));
+    }
+
+    [Fact]
     public void ToMessages_MapsRolesAndAppliesTheEventSigil()
     {
         var s = SessionWith(

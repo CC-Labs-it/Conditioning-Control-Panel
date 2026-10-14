@@ -349,6 +349,8 @@ namespace ConditioningControlPanel
 
                 // Capture AI reply for chat history
                 AddToChatHistory(text, isUser: false);
+                // ...and for the Companion page, which reads the brain's log (#1443).
+                if (aiGenerated) App.Brain?.NoteTubeLine(text);
 
                 // aiGenerated: when true, the bubble shows the "AI" badge. Most call sites that route
                 // through GigglePriority are AI replies, but the awareness keyword path can fall back
