@@ -2263,3 +2263,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/companion-core-b: +81
 - Cloud session (Opus), local review + gate.
+
+## avalonia-port/chaos-intro: +393
+- ChaosIntroWindow ported: the hub shows it on its first open, sets and saves SeenIntroGuide, the `?` button shows it again, and panic closes it (fail-first tests, render-all).
+- Ledger row chaos-intro-window goes from missing to stub, because nothing a user can reach opens the hub yet.
