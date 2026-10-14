@@ -44,7 +44,7 @@ public sealed class BlinkTrainerSessionTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -177,7 +177,7 @@ public sealed class BlinkTrainerSessionTests
     private static System.Threading.Tasks.Task WithSessionAsync(Func<string, List<BlinkTrainerSession.OverlayWindow>, System.Threading.Tasks.Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -396,25 +396,30 @@ public sealed class BlinkTrainerSessionTests
                 Assert.True(tab.IsVisible);
                 var dot = tab.FindControl<Control>("BlinkTrainerStatusDot")!;
                 Assert.Null(dot.Effect);
+                Assert.False(tab.FindControl<Border>("BlinkTrainerStatusGlow")!.IsVisible);
 
                 Assert.True(WebcamTracker.Instance.Start());
                 Assert.True(BlinkTrainerSession.Start(shell));
                 Dispatcher.UIThread.RunJobs();
-                Assert.IsType<global::Avalonia.Media.DropShadowEffect>(dot.Effect);
+                Assert.Null(dot.Effect);
+                Assert.True(tab.FindControl<Border>("BlinkTrainerStatusGlow")!.IsVisible);
                 Assert.True(tab.CountdownTicking);
 
                 shell.ShowTab("settings");
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(tab.CountdownTicking);
+                Assert.False(tab.FindControl<Border>("BlinkTrainerStatusGlow")!.IsVisible);
                 Assert.Null(dot.Effect);   // a hidden tab's dot does not breathe (IsEffectivelyVisible)
                 shell.ShowTab("blinktrainer");
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(tab.CountdownTicking);
-                Assert.IsType<global::Avalonia.Media.DropShadowEffect>(dot.Effect);
+                Assert.Null(dot.Effect);
+                Assert.True(tab.FindControl<Border>("BlinkTrainerStatusGlow")!.IsVisible);
 
                 BlinkTrainerSession.Stop();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Null(dot.Effect);
+                Assert.False(tab.FindControl<Border>("BlinkTrainerStatusGlow")!.IsVisible);
                 Assert.False(tab.CountdownTicking);
             }
             finally { shell.Close(); }

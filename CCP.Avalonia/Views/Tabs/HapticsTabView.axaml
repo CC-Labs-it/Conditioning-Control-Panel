@@ -516,9 +516,12 @@
                                     <Button x:Name="HelpBtnHaptics"
                                             Theme="{StaticResource HelpButtonStyle}" VerticalAlignment="Center"
                                             Margin="0,0,12,0" Tag="Haptics"/>
-                                    <Ellipse x:Name="HapticStatusDot"
-                                             Width="10" Height="10" Margin="0,0,7,0"
+                                    <Grid Width="10" Height="10" Margin="0,0,7,0" VerticalAlignment="Center">
+                    <Border x:Name="HapticStatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
+                    <Ellipse x:Name="HapticStatusDot"
+                                             Width="10" Height="10"
                                              VerticalAlignment="Center" Fill="#FF6B6B"/>
+                </Grid>
                                     <TextBlock x:Name="TxtHapticStatus"
                                                Text="{loc:Str label_disconnected}" Foreground="#FF6B6B"
                                                FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
