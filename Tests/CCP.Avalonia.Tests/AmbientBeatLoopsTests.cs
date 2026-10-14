@@ -39,7 +39,6 @@ public sealed class AmbientBeatLoopsTests
     /// a file NOT in this list that gains one fails, and so does a listed file that lost it.</summary>
     private static readonly string[] NotYetMoved =
     {
-        "Views/Controls/AttentionCheckControl.axaml.cs",
         "Views/Controls/Companion/ChatThresholdView.axaml",
         "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml.cs",
@@ -86,7 +85,7 @@ public sealed class AmbientBeatLoopsTests
     private static readonly string[] XamlEffects =
     {
         "Views/AvatarTube/AvatarTubeWindow.axaml", "Views/Chaos/ChaosHubWindow.axaml", "Views/Chaos/ChaosOverlayWindow.axaml",
-        "Views/Chaos/ChaosSlotPickerWindow.axaml", "Views/Controls/AttentionCheckControl.axaml",
+        "Views/Chaos/ChaosSlotPickerWindow.axaml",
         "Views/Controls/Companion/ChatThresholdView.axaml", "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/Companion/MakeHerYoursView.axaml", "Views/Controls/Companion/RelationshipConstellation.axaml",
         "Views/Controls/Companion/Themes/CompanionTheme.axaml", "Views/Controls/DailyQuestCard.axaml", "Views/Controls/EmiDock.axaml",
