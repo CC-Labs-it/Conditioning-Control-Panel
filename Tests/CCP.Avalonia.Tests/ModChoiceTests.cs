@@ -174,6 +174,99 @@ public sealed class ModChoiceTests
         picker.Close();
     });
 
+    [Theory]
+    [InlineData("BtnSkip")]
+    [InlineData("BtnCloseX")]
+    public Task ClosingPickerMidDownloadKeepsTheRequestAndActivatesAfterItCloses(string closeButton) => Run(async (shell, svc, server) =>
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var original = server.Handle;
+        server.Handle = async context =>
+        {
+            if (context.Request.Url!.AbsolutePath.EndsWith(".zip", StringComparison.Ordinal))
+                await release.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await original(context);
+        };
+        var picker = await ReadyPicker(shell);
+        var card = PickerCard(picker);
+        card.IsSelected = true;
+        var download = picker.BtnDownload_Click();
+        try
+        {
+            await WaitFor(() => server.PackGets == 1);
+            Assert.False(download.IsCompleted);
+            Assert.False(picker.FindControl<Button>("BtnDownload")!.IsEnabled);
+            Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+            picker.FindControl<Button>(closeButton)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(picker.IsVisible);
+            Assert.False(download.IsCompleted);
+        }
+        finally { release.TrySetResult(); }
+
+        await download.WaitAsync(TimeSpan.FromSeconds(10));
+        await WaitFor(() => AvApp.Mods!.ActiveModId == BuiltInMods.BambiSleepId);
+        Assert.True(svc.IsInstalled("mod-bambi"));
+        Assert.True(card.IsInstalled);
+        Assert.Null(PendingModChoice.Pending);
+        Assert.Equal(1, server.PackGets);
+    });
+
+    [Fact]
+    public Task FailedPickerDownloadStaysSelectedAndRetriesThroughTheSameButton() => Run(async (shell, svc, server) =>
+    {
+        var original = server.Handle;
+        var corrupt = BuildZip();
+        corrupt[^1] ^= 1;   // valid HTTP response, wrong hash: fails promptly after two verification passes
+        server.Handle = c => c.Request.Url!.AbsolutePath.EndsWith(".zip", StringComparison.Ordinal)
+            ? FakeServer.Send(c, corrupt)
+            : original(c);
+        var picker = await ReadyPicker(shell);
+        var card = PickerCard(picker);
+        card.IsSelected = true;
+        await picker.BtnDownload_Click();
+
+        Assert.Equal(ModPickerCard.CardState.Failed, card.State);
+        Assert.True(card.IsSelected);
+        Assert.True(card.CanSelect);
+        Assert.True(card.StatusOnlyVisible);
+        Assert.False(card.ProgressVisible);
+        Assert.True(picker.FindControl<Button>("BtnDownload")!.IsEnabled);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_download"),
+            picker.FindControl<TextBlock>("TxtDownload")!.Text);
+        Assert.Equal(BuiltInMods.CCPDefaultId, AvApp.Mods!.ActiveModId);
+
+        server.Handle = original;
+        var attempts = server.PackGets;
+        await picker.BtnDownload_Click();
+        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId);
+        Assert.Equal(attempts + 1, server.PackGets);
+        Assert.True(card.IsInstalled);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close"),
+            picker.FindControl<TextBlock>("TxtDownload")!.Text);
+        Assert.Null(PendingModChoice.Pending);
+        await picker.BtnDownload_Click();
+        Assert.False(picker.IsVisible);
+    });
+
+    [Fact]
+    public Task UpgraderRestoringAPreselectedPackKeepsTheActiveModAndRecordsNoSwitch() => Run(async (shell, svc, server) =>
+    {
+        shell.ActivateChosenMod(BuiltInMods.DronificationId, MainShellWindow.ModChoiceTrigger.Immediate);
+        var picker = await ReadyPicker(shell, BuiltInMods.DronificationId);
+        var cards = picker.FindControl<ItemsControl>("CardsList")!.ItemsSource!.Cast<ModPickerCard>().ToList();
+        Assert.True(cards.Single(c => c.ModId == BuiltInMods.DronificationId).IsSelected);
+        // Earlier catalogue entry finishes first, but an upgrader's intent is still their active mod.
+        cards.Single(c => c.ModId == BuiltInMods.DronificationId).IsSelected = false;
+        PickerCard(picker).IsSelected = true;
+        await picker.BtnDownload_Click();
+        Assert.True(svc.IsInstalled("mod-bambi"));
+        Assert.Equal(BuiltInMods.DronificationId, AvApp.Mods!.ActiveModId);
+        Assert.Equal(BuiltInMods.DronificationId, CoreSettings.Current.ActiveModId);
+        Assert.Null(PendingModChoice.Pending);
+        Assert.Equal(1, server.PackGets);
+        picker.Close();
+    });
+
     [Fact]
     public Task ShowIfNeededFollowsTheLiveServiceRules() => Run(async (shell, svc, server) =>
     {
@@ -198,6 +291,17 @@ public sealed class ModChoiceTests
     });
 
     // ---- helpers ----
+
+    private static async Task<ModPickerDialog> ReadyPicker(MainShellWindow shell, string? preselect = null)
+    {
+        var picker = new ModPickerDialog(preselect);
+        _ = picker.ShowDialog(shell);
+        await WaitFor(() => PickerCard(picker).SizeText != "" && picker.FindControl<Button>("BtnDownload")!.IsEnabled);
+        return picker;
+    }
+
+    private static ModPickerCard PickerCard(ModPickerDialog picker) =>
+        picker.FindControl<ItemsControl>("CardsList")!.ItemsSource!.Cast<ModPickerCard>().Single(c => c.PackId == "mod-bambi");
 
     private static FirstRunWizard Wizard(MainShellWindow shell)
     {
@@ -247,7 +351,10 @@ public sealed class ModChoiceTests
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);   // never the real profile
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont()
+                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var zip = BuildZip();
         var sha = Convert.ToHexString(SHA256.HashData(zip)).ToLowerInvariant();
