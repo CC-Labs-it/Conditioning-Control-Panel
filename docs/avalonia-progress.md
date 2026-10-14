@@ -2244,3 +2244,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - For You feed on the shared GameWindow behind OpenFypFeed's premium gate (Play hero, Exclusives spotlight, EMI door; panic closes it). Its rules are in Core `FypRules`, which WPF now calls too (one copy). A shared web carrier lets `fyp/main.js` talk to WebKitGTK.
 - Not done here (left for game-fyp-b): eye control, ghost mode and the file menu. The page gets WPF's own refusal frames instead. The live round trip is unproven: the window opens, but no ready frame showed up in the logs.
 - Review fixes: truthful eye-control status, EMI door opens the feed directly, WPF build no longer ships `shared/tests`. Byte-range seeking and the carrier JS test come in the next PR, game-fyp-range.
+
+## avalonia-port/game-fyp-range: +113
+- FYP follow-up: the asset server now answers byte ranges, so the For You feed can jump into a clip window and loop it instead of playing each video from the start. Adds the carrier JS test split off game-fyp.
+- WebAssetServerTests covers 206, suffix/open ranges, 416 (with `bytes */len`, and for `bytes=-0`), ignored backward/multi ranges, HEAD and `Accept-Ranges`. Remote gate: Linux green; windows red on 2 unrelated WPF timing flakes (run 38337309579). carrier.test.js runs locally only.
