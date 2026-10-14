@@ -1,40 +1,13 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
     /// <summary>
-    /// The Profile tab's "Privacy &amp; Sharing" body, ported from the WPF head.
-    ///
-    /// Only the two Rich Presence switches are wired (WirePresence). The rest: the refusal STANDS - but not for the reason first written. The
-    /// original note blamed MainWindow being a <c>System.Windows.Window</c>; that is stale. Every
-    /// flag these twelve toggles write (DiscordShareAchievements, PublicShareRealAvatar,
-    /// GoonShareAvatar, GoonShareDiscordDm, GoonRichPresence, ...) is on <c>CoreSettings.Current</c>
-    /// today, so the SETTINGS half is trivially reachable.
-    ///
-    /// ponytail: what actually blocks it is that the settings half is not the whole handler, and on
-    /// a consent surface the missing half is the one that matters. Read
-    /// ConditioningControlPanel/MainWindow/MainWindow.Patreon.cs:855-925 and
-    /// MainWindow.AccountShell.cs:279-300:
-    ///  - <c>ChkPublicShareRealAvatar</c>, <c>ChkGoonShareAvatar</c> and <c>ChkGoonShareDiscordDm</c>
-    ///    each PUSH to the server on change (<c>App.ProfileSync.SyncProfileAsync</c>), precisely so a
-    ///    REVOKE lands before the next duel instead of waiting for a scheduled sync. Writing the
-    ///    local flag alone gives a knob that reads "not shared" over an avatar the server still
-    ///    holds - a consent gate degraded into a label.
-    ///  - <c>ChkDiscordRichPresence</c> refuses to arm at all unless
-    ///    <c>Current.HasLinkedDiscord</c>, and snaps itself back when it does. That gate is a
-    ///    settings read and IS portable; it is listed here only so the next pass wires it with the
-    ///    push, not without.
-    ///    (Now wired: <c>WirePresence</c>, with ChkDiscordTabShowLevel.)
-    ///  - <c>ChkAllowDiscordDm</c> also needs the profile push.
-    /// The unblocking symbol is a profile-sync seam in CCP.Core (an equivalent of
-    /// ConditioningControlPanel/Services/Profile/ProfileSyncService.cs), not a host. Until then the
-    /// toggles render and animate and persist nothing, which is visibly inert rather than quietly
-    /// wrong. The x:Names are preserved, so each handler is a few lines once that seam exists.
-    ///
-    /// NOTE the x:Name hazard if you wire this: the ctor uses <c>AvaloniaXamlLoader.Load</c>, so the
-    /// generated fields are null. Switch to <c>InitializeComponent()</c> or use <c>FindControl</c>.
+    /// WPF ProfilePrivacyPanel: presence, local sharing and push-on-change audience consent.
+    /// Only explicitly chosen consent fields are sent, scoped to the account that chose them.
     /// </summary>
     public partial class ProfilePrivacyPanel : UserControl
     {
@@ -43,6 +16,107 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             AvaloniaXamlLoader.Load(this);
             DataContext = new ProfilePrivacyPanelViewModel();
             WirePresence();
+            WireSharing("ChkDiscordTabShareAchievements", s => s.DiscordShareAchievements, (s, on) => s.DiscordShareAchievements = on);
+            WireSharing("ChkDiscordTabShareLevelUps", s => s.DiscordShareLevelUps, (s, on) => s.DiscordShareLevelUps = on);
+            WireSharing("ChkGoonRichPresence", s => s.GoonRichPresence, (s, on) => s.GoonRichPresence = on);
+            WireSharing("ChkDiscordTabShowOnline", s => s.ShowOnlineStatus, (s, on) => s.ShowOnlineStatus = on, SyncBody.Field.ShowOnlineStatus);
+            WireSharing("ChkDiscordTabAllowDm", s => s.AllowDiscordDm, (s, on) => s.AllowDiscordDm = on, SyncBody.Field.AllowDiscordDm);
+            WireSharing("ChkDiscordTabSharePfp", s => s.ShareProfilePicture, (s, on) => s.ShareProfilePicture = on, SyncBody.Field.ShareProfilePicture);
+            WireSharing("ChkPublicShareRealAvatar", s => s.PublicShareRealAvatar, (s, on) => s.PublicShareRealAvatar = on, SyncBody.Field.PublicShareAvatar);
+            WireSharing("ChkGoonShareAvatar", s => s.GoonShareAvatar, (s, on) => s.GoonShareAvatar = on, SyncBody.Field.GoonShareAvatar);
+            WireSharing("ChkGoonShareDiscordDm", s => s.GoonShareDiscordDm, (s, on) => s.GoonShareDiscordDm = on, SyncBody.Field.GoonShareDm);
+            RefreshPrivacy();
+            if (this.FindControl<Button>("BtnDiscordTabLogin") is { } login)
+                login.Click += async (_, _) => await LoginAsync();
+        }
+
+        internal static System.Func<SyncBody.Field, System.Threading.Tasks.Task> PushPrivacy = field =>
+        {
+            if (Platform.AccountSeed.Sync is { } sync) return sync.PushPrivacyAsync(field);
+            if (SyncPush.RememberPrivacyChange(CoreSettings.Current, field)) CoreSettings.Save();
+            return System.Threading.Tasks.Task.CompletedTask;
+        };
+
+        private static async System.Threading.Tasks.Task PushSafe(SyncBody.Field field)
+        {
+            try { await PushPrivacy(field); }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Privacy switch: immediate sync push failed"); }
+        }
+
+        private bool _paintingLocal;
+
+        // Adapted from parity/trunk 4f739180ca68a1e45f62c70a78d2bfbd0f1afcc0.
+        // Local sharing saves only; audience consent also requests the Core push-on-change path.
+        private void WireSharing(string name, System.Func<global::ConditioningControlPanel.Models.AppSettings, bool> read,
+            System.Action<global::ConditioningControlPanel.Models.AppSettings, bool> write, SyncBody.Field consent = SyncBody.Field.None)
+        {
+            if (this.FindControl<CheckBox>(name) is not { } box) return;
+            box.IsCheckedChanged += (_, _) =>
+            {
+                if (_paintingLocal) return;
+                var s = CoreSettings.Current;
+                var on = box.IsChecked == true;
+                if (read(s) == on) return;
+                write(s, on);
+                CoreSettings.Save();
+                if (consent != SyncBody.Field.None) _ = PushSafe(consent);
+            };
+        }
+
+        private void RefreshPrivacy()
+        {
+            _paintingLocal = true;
+            try
+            {
+                var s = CoreSettings.Current;
+                var discord = Platform.AccountSeed.Discord;
+                var linked = discord?.IsAuthenticated == true;
+                if (this.FindControl<TextBlock>("TxtDiscordTabStatus") is { } status)
+                    status.Text = linked ? Loc.GetF("label_connected_as_0", discord!.Username) : Loc.Get("label_not_connected");
+                if (this.FindControl<TextBlock>("TxtDiscordTabInfo") is { } info)
+                    info.Text = Loc.Get(linked ? "label_discord_account_linked" : "label_link_discord_for_community_features");
+                if (this.FindControl<Button>("BtnDiscordTabLogin")?.Content is TextBlock word)
+                    word.Text = Loc.Get(linked ? "btn_logout" : string.IsNullOrEmpty(s.UnifiedId) ? "btn_login" : "btn_link_discord_2");
+                // Paint before handling user changes; reattaching the long-lived panel must not push.
+                PaintConsent("ChkDiscordTabShowOnline", s.ShowOnlineStatus);
+                PaintConsent("ChkDiscordTabAllowDm", s.AllowDiscordDm);
+                PaintConsent("ChkDiscordTabSharePfp", s.ShareProfilePicture);
+                PaintConsent("ChkPublicShareRealAvatar", s.PublicShareRealAvatar);
+                PaintConsent("ChkGoonShareAvatar", s.GoonShareAvatar);
+                PaintConsent("ChkGoonShareDiscordDm", s.GoonShareDiscordDm);
+                if (this.FindControl<CheckBox>("ChkDiscordTabShareAchievements") is { } achievements)
+                    achievements.IsChecked = s.DiscordShareAchievements;
+                if (this.FindControl<CheckBox>("ChkDiscordTabShareLevelUps") is { } levels)
+                    levels.IsChecked = s.DiscordShareLevelUps;
+                if (this.FindControl<CheckBox>("ChkGoonRichPresence") is { } goon)
+                    goon.IsChecked = s.GoonRichPresence;
+            }
+            finally { _paintingLocal = false; }
+        }
+
+        private void PaintConsent(string name, bool on)
+        {
+            if (this.FindControl<CheckBox>(name) is not { } box) return;
+            box.IsChecked = on;
+        }
+
+        internal System.Func<Views.Windows.MainShellWindow, System.Threading.Tasks.Task> DiscordAction = shell =>
+            shell.AppSettingsPage?.FindControl<AppSettings.AccountSettingsSection>("SectionAccount")?.DiscordFromProfileAsync()
+                ?? System.Threading.Tasks.Task.CompletedTask;
+
+        internal async System.Threading.Tasks.Task LoginAsync()
+        {
+            try
+            {
+                var host = TopLevel.GetTopLevel(this) as Window;
+                var shell = host as Views.Windows.MainShellWindow ?? host?.Owner as Views.Windows.MainShellWindow;
+                if (shell == null || CoreSettings.Current.OfflineMode) return;
+                if (Platform.AccountSeed.Discord?.IsAuthenticated != true && host is Dialogs.ProfilePrivacyDialog dialog)
+                    dialog.Close();
+                await DiscordAction(shell);
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Privacy panel Discord action failed"); }
+            finally { RefreshPrivacy(); }
         }
 
         private bool _paintingPresence;
@@ -100,6 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnAttachedToVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            RefreshPrivacy();
+            PaintPresence();
             Views.Windows.MainShellWindow.SetOfflineDisabled(
                 this.FindControl<Button>("BtnDiscordTabLogin"), CoreSettings.Current.OfflineMode);
         }
@@ -115,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// TxtDiscordTabInfo, BtnDiscordTabLogin) take their markup default here, exactly as the WPF
     /// panel does before a Discord connection exists - the "connected" strings
     /// (label_connected_as_0, label_discord_account_linked, btn_logout, btn_link_discord_2) are
-    /// set by that host, which is not ported, so they are not modelled here.
+    /// painted by RefreshPrivacy from the account when the panel opens.
     /// </summary>
     public sealed class ProfilePrivacyPanelViewModel
     {

@@ -17,7 +17,7 @@
                                         advertise a contract nothing implements. The x:Names are
                                         kept, so re-adding the accessors later is mechanical.
 
-     Every Checked/Unchecked handler and the login Click are LEFT UNWIRED - see the code-behind. -->
+     Switch changes and the Discord button are wired in the code-behind. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.ProfilePrivacyPanel"
