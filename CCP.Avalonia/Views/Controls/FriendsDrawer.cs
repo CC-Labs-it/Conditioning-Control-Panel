@@ -4,7 +4,7 @@
 // report), request answers, add by code and your own code. Driven only by IFriendsService.
 // The send pickers (poke / invite / watch) are in FriendsDrawer.Pickers.cs.
 // ponytail: no feed, trails,
-// open tables or leash section, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
+// open tables or leash section, no lock-day chip, no juice (.Juice.cs), no bell (the corner notices are not on this
 // head), no per-PC block list (the server's list only). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -54,6 +54,7 @@ public sealed partial class FriendsDrawer : Border
     private (string Id, string What)? _confirm;
     private readonly Dictionary<string, (string Text, bool Good)> _results = new();
     private readonly Border _head = new(), _addBox = new(), _foot = new();
+    private readonly Border _ask = new() { Tag = "friends-presence-ask", Margin = new Thickness(10, 8, 10, 0) };
     private readonly StackPanel _list = new();
     private readonly TextBox _codeBox = new();
     private readonly Button _addGo;
@@ -82,15 +83,16 @@ public sealed partial class FriendsDrawer : Border
             GradientStops = { new GradientStop(Color.FromRgb(0x24, 0x17, 0x42), 0), new GradientStop(Color.FromRgb(0x1C, 0x12, 0x33), 1) },
         };
         (BorderBrush, BorderThickness, Focusable) = (Line2, new Thickness(1), true);
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto") };
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
         var (scroll, top, line) = (new ScrollViewer { Content = _list, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
         (_head.Background, _head.CornerRadius, _head.BorderBrush, _head.BorderThickness, _head.Padding) = (Raised, new CornerRadius(15, 15, 0, 0), line, new Thickness(0, 0, 0, 1), new Thickness(12, 12, 12, 10));
         (_addBox.IsVisible, _addBox.Padding, _addBox.BorderBrush, _addBox.BorderThickness) = (false, new Thickness(10, 8, 10, 8), line, top);
         (_foot.Background, _foot.BorderBrush, _foot.BorderThickness, _foot.CornerRadius, _foot.Padding) = (Foot, line, top, new CornerRadius(0, 0, 15, 15), new Thickness(8));
-        Grid.SetRow(scroll, 1);
-        Grid.SetRow(_addBox, 2);
-        Grid.SetRow(_foot, 3);
-        root.Children.AddRange(new Control[] { _head, scroll, _addBox, _foot });
+        Grid.SetRow(_ask, 1);
+        Grid.SetRow(scroll, 2);
+        Grid.SetRow(_addBox, 3);
+        Grid.SetRow(_foot, 4);
+        root.Children.AddRange(new Control[] { _head, _ask, scroll, _addBox, _foot });
         Child = root;
         // The add box (WPF BuildAddBox): CCP- and five letters from the code alphabet.
         (_codeBox.MaxLength, _codeBox.FontFamily, _codeBox.Tag) = (9, Mono, "friends-code-box");
@@ -178,6 +180,7 @@ public sealed partial class FriendsDrawer : Border
         var snap = FriendsSnapshot.Empty;
         try { if (_svc?.Available == true) snap = _svc.Snapshot ?? FriendsSnapshot.Empty; } catch { }
         RenderHead();
+        RenderAsk();
         RenderList(snap);
         RenderFoot(snap);
     }
@@ -210,6 +213,41 @@ public sealed partial class FriendsDrawer : Border
         g.Children.Add(avatar);
         g.Children.Add(who);
         _head.Child = g;
+    }
+
+    /// <summary>WPF FriendsDrawer.RenderAsk: choosing No is an answer, never a request to ask again.</summary>
+    private void RenderAsk()
+    {
+        _ask.Child = null;
+        _ask.IsVisible = false;
+        if (!FriendsPresenceAsk.ShouldAsk(_svc?.Available == true, Shared(), PresenceAsk.Asked())) return;
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(Wrap(Label(Loc.Get("friends_presence_ask"), 12.5, Text, null, FontWeight.SemiBold)));
+        var sub = Wrap(Label(Loc.Get("friends_presence_ask_sub"), 11, Muted));
+        sub.Margin = new Thickness(0, 2, 0, 0);
+        words.Children.Add(sub);
+        var yes = Pill(Loc.Get("friends_presence_yes"), Mint, MintInk, "friends-presence-yes", Mint);
+        var no = Pill(Loc.Get("friends_presence_no"), Raised, Text, "friends-presence-no", Line2);
+        foreach (var b in new[] { yes, no }) { b.FontSize = 12; b.CornerRadius = new CornerRadius(8); b.Padding = new Thickness(9, 3, 9, 3); }
+        no.Margin = new Thickness(6, 0, 0, 0);
+        yes.Click += (_, _) =>
+        {
+            try { if (_svc != null) _svc.PresenceShared = true; } catch { }
+            PresenceAsk.MarkAsked();
+            Render();
+        };
+        no.Click += (_, _) => { PresenceAsk.MarkAsked(); Render(); };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 0), Children = { yes, no } };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { words, buttons } };
+        Grid.SetColumn(buttons, 1);
+        _ask.Child = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x1F, 0x5F, 0xFF, 0xD0)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0x5F, 0xFF, 0xD0)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(10, 6, 6, 6), Child = grid,
+        };
+        _ask.IsVisible = true;
     }
 
     internal void TogglePresence()
@@ -702,11 +740,9 @@ public sealed partial class FriendsDrawer : Border
     }
 }
 
-/// <summary>WPF PresenceAsk: the once-only presence question's marker, beside the settings. The ask
-/// strip itself is not on this head yet; the switch still marks it, so it never nags once it is.</summary>
+/// <summary>The heads' shared marker rule, with replaceable delegates for sandboxed UI tests.</summary>
 internal static class PresenceAsk
 {
-    internal static Func<bool> Asked { get; set; } = () => { try { return System.IO.File.Exists(MarkerPath); } catch { return false; } };
-    internal static Action MarkAsked { get; set; } = () => { try { System.IO.File.WriteAllText(MarkerPath, DateTime.UtcNow.ToString("o")); } catch { } };
-    private static string MarkerPath => System.IO.Path.Combine(CorePaths.UserData, "friends_presence_asked.flag");
+    internal static Func<bool> Asked { get; set; } = () => FriendsPresenceAsk.Asked(CorePaths.UserData);
+    internal static Action MarkAsked { get; set; } = () => FriendsPresenceAsk.MarkAsked(CorePaths.UserData);
 }
