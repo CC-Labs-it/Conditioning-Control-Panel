@@ -198,7 +198,7 @@ namespace ConditioningControlPanel.Services
         /// Whether the user has Lab access: Tier 2+ OR whitelisted.
         ///
         /// This is the Prime (tier 2) bar: Down the Rabbit Hole, the Arcademy, full Breakout,
-        /// unlimited Graded Intake and the gaze games. It is NOT the Goon Game host bar any more:
+        /// and the gaze games (unlimited Graded Intake moved to Basic on 2026-10-14). It is NOT the Goon Game host bar any more:
         /// hosting a room is a Basic perk since 2026-09-24 (<c>GoonHostService.HostingAllowed</c>
         /// reads <see cref="HasPremiumAccess"/>, and the server's <c>/v2/goon/invite</c> asks for
         /// <c>computeEffectiveTier &gt;= 1</c>). In this codebase "premium" means tier 1.
