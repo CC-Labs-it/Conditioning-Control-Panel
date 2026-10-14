@@ -242,7 +242,7 @@ internal sealed class JackpotRemixDirector : IDisposable
         Consumed(path);
     }
 
-    private void Poll()
+    internal void Poll() // internal: tests drive one tick synchronously instead of waiting on the timer
     {
         if (_disposed) return;
         IReadOnlyList<string> pool;

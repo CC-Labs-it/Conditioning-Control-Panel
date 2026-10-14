@@ -77,29 +77,27 @@ public sealed class JackpotRemixDirectorTests : IDisposable
     }
 
     [Fact]
-    public async Task A_carried_hit_builds_once_through_the_seam_then_plays_the_file()
+    public void A_poll_builds_once_through_the_seam_then_a_hit_plays_the_file()
     {
+        // Poll is driven directly (no TakeForFlash first, so no Task.Run nudge races it); the build seam
+        // returns a completed task, so the file is cached by the time Poll returns.
         using var d = Make();
-        Assert.Null(d.TakeForFlash());
-        string? got = null;
-        for (int i = 0; i < 100 && got == null; i++)
-        {
-            await Task.Delay(50, TestContext.Current.CancellationToken);
-            got = d.TakeForFlash();
-        }
-        Assert.Equal(Path.Combine(_out, "remix-built.gif"), got);
+        d.Poll();
+        Assert.Equal(1, _builds);
+        Assert.Equal(Path.Combine(_out, "remix-built.gif"), d.TakeForFlash());
         Assert.Equal(1, _builds);
     }
 
     [Fact]
-    public async Task Memory_pressure_or_a_flash_on_screen_holds_the_build()
+    public void Memory_pressure_or_a_flash_on_screen_holds_the_build()
     {
-        // Both stay alive through the wait: a disposed director skips Poll, which would pass vacuously.
         using var tight = Make(freeBytes: 0);
         using var busy = Make(flashShowing: true);
-        Assert.Null(tight.TakeForFlash());
-        Assert.Null(busy.TakeForFlash());
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        tight.Poll();
+        busy.Poll();
         Assert.Equal(0, _builds);
+        using var free = Make();
+        free.Poll();
+        Assert.Equal(1, _builds); // the same tick does build when nothing holds it
     }
 }
