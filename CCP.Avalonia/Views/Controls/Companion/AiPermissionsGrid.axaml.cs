@@ -46,6 +46,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public AiPermissionsGrid()
         {
             InitializeComponent();
+            if (global::ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled)
+            {
+                // WPF's V2 sheet stacks its two permission groups instead of squeezing columns.
+                PermissionColumns.ColumnDefinitions.Clear();
+                PermissionColumns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                PermissionColumns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                Grid.SetColumn(MemoryPane, 0);
+                Grid.SetRow(MemoryPane, 1);
+                MemoryPane.Margin = new global::Avalonia.Thickness(0, 16, 0, 0);
+                PreviewBetaTag.IsVisible = false;
+                HeaderTierTag.IsVisible = false;
+            }
             Helpers.ModArt.BindFeaturePlates(this, "features/lab_aimemory_hero.png", null, LabAiMemoryHeroArt);
             SyncFromSettings();
             Loaded += (_, _) => ApplyTierGate();
@@ -141,11 +153,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         }
 
         private void BtnEffectsLockCta_Click(object? sender, RoutedEventArgs e)
-            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);
+            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("patreon");
 
         /// <summary>WPF MainWindow.Patreon.cs BtnClearChatMemory_Click: confirm, then the brain forgets the
-        /// conversation (session.json + live turn log) and the local-provider history is cleared.
-        /// ponytail: no AiLiveActions feed on this head yet, so there is no feed to clear.</summary>
+        /// conversation (session.json + live turn log), local-provider history and live-actions feed are cleared.</summary>
         private async void BtnClearChatMemory_Click(object? sender, RoutedEventArgs e)
         {
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
@@ -155,6 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 App.Brain?.ForgetConversation();
                 (App.Ai as Services.AIService.AiServiceStrategy)?.ClearLocalHistory();
+                App.AiLiveActions.Clear();
                 await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("btn_forget_everything"),
                     Loc.Get("dialog_forget_everything_done"));
             }
@@ -239,6 +251,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (on) return;
             try { App.Brain?.ForgetConversation(); }
             catch (Exception ex) { Log.Warning(ex, "ChkChatMemoryEnabled_Changed: brain wipe failed"); }
+            try { (App.Ai as Services.AIService.AiServiceStrategy)?.ClearLocalHistory(); }
+            catch (Exception ex) { Log.Warning(ex, "ChkChatMemoryEnabled_Changed: local wipe failed"); }
         }
 
         private void SliderMaxHapticIntensity_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)

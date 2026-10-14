@@ -21,9 +21,7 @@ namespace ConditioningControlPanel
 
                 void Apply()
                 {
-                    var list = AiLiveActions;
-                    list.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
-                    while (list.Count > AiCommandService.MaxLiveActions) list.RemoveAt(0);
+                    AiLiveActionFeed.Append(AiLiveActions, line, DateTime.Now);
                 }
 
                 if (dispatcher.CheckAccess()) Apply();

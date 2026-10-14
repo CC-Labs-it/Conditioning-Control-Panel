@@ -26,6 +26,7 @@
        pack:// merged dictionary    ->  avares:// ResourceInclude -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -293,15 +294,12 @@
 
             <Border Theme="{StaticResource CmpInsetPanelStyle}" Margin="0,12,0,0"
                     IsVisible="{ReflectionBinding ShowLiveActions}">
-                <!-- WPF named this so the code-behind could attach CompanionWheelRelay: the list is
-                     capped and scrolls internally, so its unusable wheel notches must reach
-                     PageScroll. That relay is a WPF-head helper and is NOT ported; the name is kept
-                     for the diff and for whoever wires the equivalent here. -->
+                <!-- Avalonia ScrollViewer chains wheel input at the capped list's edge. -->
                 <ItemsControl x:Name="LiveActionsFeed" ItemsSource="{ReflectionBinding LiveActions}"
                               Theme="{StaticResource CmpVirtualizedItemsControlStyle}" MaxHeight="140">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{ReflectionBinding}" Theme="{StaticResource CmpWorkshopRowStyle}"/>
+                            <local:AiLiveActionRow/>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
