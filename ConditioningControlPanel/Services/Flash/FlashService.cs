@@ -698,8 +698,8 @@ namespace ConditioningControlPanel.Services
             if (StayUntilPopped(stay, pointFired: false))
             {
                 bool layer = UseCompositor;
-                int cap = FlashStayRule.Cap(ResolveFlashCap(layer, !layer && stay.FlashSolidMode), true,
-                    sharedHost: layer || stay.FlashSolidMode);
+                int cap = FlashStayRule.OnScreen(FlashStayRule.Cap(ResolveFlashCap(layer, !layer && stay.FlashSolidMode), true,
+                    sharedHost: layer || stay.FlashSolidMode), stay.HydraLimit);
                 int active;
                 lock (_lockObj) active = _activeWindows.Count;
                 if (FlashStayRule.ScreenFull(true, active, cap)) return;
@@ -1688,8 +1688,11 @@ namespace ConditioningControlPanel.Services
             // Prevent memory explosion / compositor backup from too many concurrent flash windows.
             // Only the classic layered-window path carries that risk; compositor/solid flashes are
             // cheap shared-host items, so they get the higher cap (see MAX_CONCURRENT_FLASH_HOST).
-            int cap = FlashStayRule.Cap(ResolveFlashCap(useLayer, useHost),
-                StayUntilPopped(settings, pointFired: oneShotGen != null), sharedHost: useLayer || useHost);
+            // Every path (timed, one-shot bursts, bubble pops, hydra) lands here, so this is the one
+            // place the player's Max on screen is enforced.
+            int cap = FlashStayRule.OnScreen(FlashStayRule.Cap(ResolveFlashCap(useLayer, useHost),
+                StayUntilPopped(settings, pointFired: oneShotGen != null), sharedHost: useLayer || useHost),
+                settings.HydraLimit);
             lock (_lockObj)
             {
                 if (_activeWindows.Count >= cap) return;
