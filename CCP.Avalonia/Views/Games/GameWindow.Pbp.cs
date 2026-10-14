@@ -2,8 +2,7 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
-// ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (Core StakeBridge.ForApp
-// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// ccp.words; the settings frame sends none, which the page reads as "no whispers"), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -17,6 +16,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -102,6 +102,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var type = (string?)o["type"];
             try
             {
+                // PvP stakes (WPF :388): the Core bridge talks to /v2/stakes/* itself and books a lost time
+                // stake once the match settles. Online PvP only; the page never sends these solo or hotseat.
+                if (StakeBridge.Handles(type))
+                {
+                    _pbpStakes ??= PbpStakeBridge("pbp", PostPbpStake);
+                    PbpStakePending = _pbpStakes.Handle(o);
+                    return true;
+                }
                 switch (type)
                 {
                     case "ready":
@@ -241,5 +249,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     return "idle";
             }
         }
+
+        // ---- stakes (WPF PieceByPieceHostService :650-660) ----
+
+        /// <summary>One bridge for the life of the app (WPF static <c>_stakes</c>): a settle watch it started keeps
+        /// running (and books) after the board closes, so panic or an exit never strands a settled loss.</summary>
+        private static StakeBridge? _pbpStakes;
+
+        private static Func<string, Action<JObject>, StakeBridge> _pbpStakeBridge = StakeBridge.ForApp;
+
+        /// <summary>Test seam: how the bridge is built (the app's is <see cref="StakeBridge.ForApp"/>). Setting it
+        /// drops the cached bridge.</summary>
+        internal static Func<string, Action<JObject>, StakeBridge> PbpStakeBridge
+        {
+            get => _pbpStakeBridge;
+            set { _pbpStakeBridge = value; _pbpStakes = null; }
+        }
+
+        /// <summary>Test seam: the last stake frame's work (replies are posted on the UI thread when it ends).</summary>
+        internal static Task PbpStakePending { get; private set; } = Task.CompletedTask;
+
+        /// <summary>WPF PostStake: a <c>stake</c> frame to the open board, on the UI thread; a closed board is a quiet no-op.</summary>
+        private static void PostPbpStake(JObject o) => Dispatcher.UIThread.Post(() =>
+        {
+            GameWindow? w;
+            lock (Open) w = Open.FirstOrDefault(x => x.Spec.Id == PbpId && x._pbpOpen);
+            try { w?.Post(o); }
+            catch (Exception ex) { Log.Debug("PieceByPiece: stake post failed: {E}", ex.Message); }
+        });
     }
 }
