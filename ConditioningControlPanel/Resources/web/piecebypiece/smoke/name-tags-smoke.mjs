@@ -5,7 +5,8 @@
  *   B  the bus folded: who hops, who flinches, checks in a row, the end
  *   C  the check effects grow with the run and are gone at zero
  *   D  springs settle (every kick has its way out); the anchors sit off the board
- *   E  wiring: Options has the box, the preference defaults on
+ *   E  wiring: boot hooks it, Options has the box, the preference defaults on,
+ *      reduced motion drops the shake, the bob and the drops
  *
  *   node smoke/name-tags-smoke.mjs        (no server, no browser)
  * ==========================================================================*/
@@ -129,6 +130,9 @@ const has = (beats, side, kind) => beats.some((b) => b.side === side && b.kind =
 
 /* ---- E: wiring ------------------------------------------------------------------ */
 {
+  const boot = readFileSync(here('boot.js'), 'utf8');
+  expect(/import\('\.\/board\/name-tags\.js'\)/.test(boot) && /board\.nameTags\.update\(dt\)/.test(boot), 'boot loads the tags late and ticks them');
+  expect(/door\?\.isUp\(\)/.test(boot.slice(boot.indexOf('name-tags.js'))), 'hidden while the door is up');
   const html = readFileSync(here('index.html'), 'utf8');
   const box = html.match(/<label[^>]*><input type="checkbox" id="game-name-tags" checked> Name tags<\/label>/);
   expect(!!box, 'Options has a Name tags box, ticked');
@@ -136,7 +140,13 @@ const has = (beats, side, kind) => beats.some((b) => b.side === side && b.kind =
   const prefs = readFileSync(here('game/preferences.js'), 'utf8');
   expect(/nameTags: saved\.nameTags !== false/.test(prefs), 'Name tags are on unless the player turned them off');
   expect(/typeof patch\.nameTags === 'boolean'/.test(prefs), 'the box saves');
-  for (const [name, text] of [['name-tags-plan.js', readFileSync(here('board/name-tags-plan.js'), 'utf8')]]) {
+  const tags = readFileSync(here('board/name-tags.js'), 'utf8');
+  expect(/calm \? 0 : bob\(/.test(tags), 'reduced motion: no bob');
+  expect(/run > 0 && !calm \? 1 : 0/.test(tags), 'reduced motion: no tremble');
+  expect(/run > 0 && !calm && t\.appear/.test(tags), 'reduced motion: no sweat drops');
+  expect(/checkTint\(run\)/.test(tags), 'reduced motion still gets the calm check colour');
+  expect(!/\biq\b/i.test(tags.replace(/\/\*[\s\S]*?\*\//g, '')), 'the tags never show an IQ');
+  for (const [name, text] of [['name-tags.js', tags], ['name-tags-plan.js', readFileSync(here('board/name-tags-plan.js'), 'utf8')]]) {
     expect(!/[\u2013\u2014]/.test(text) && !text.startsWith('\uFEFF'), name + ': no long dashes, no BOM');
   }
 }

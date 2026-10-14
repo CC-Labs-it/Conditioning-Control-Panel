@@ -335,6 +335,12 @@ function main() {
     board.bloom = m.createBloom({ view });
     feelLate.push((dt) => board.bloom.update(dt));
   }).catch((e) => console.warn('[pbp] bloom missing', e));
+  // The players as floating name tags at their ends of the board (board/name-tags.js), seats and stands alike.
+  import('./board/name-tags.js').then((m) => {
+    board.nameTags = m.createNameTags({ view, bus, game, menuUp: () => !!window.PBP.door?.isUp(), own: () => window.PBP.settings.playerName || '' });
+    feelLate.push((dt) => board.nameTags.update(dt));
+    const dispose = view.dispose; view.dispose = () => { board.nameTags.dispose(); dispose(); };
+  }).catch((e) => console.warn('[pbp] name tags missing', e));
   // --- end N ---
   // --- T: the room (floor, dome, and the light that leans to the mover) ---
   // Loaded late and guarded like the rest: without it the board sits in the
