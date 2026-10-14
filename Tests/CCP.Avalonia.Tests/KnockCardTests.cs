@@ -255,7 +255,21 @@ public sealed class KnockCardTests
             Assert.Equal(1.02, scale.ScaleY, 3);
             card.MouseMove(new Point(2, 60));
             Assert.Equal(1, scale.ScaleX, 3);
+            Assert.Null(scale.Transitions);   // Motion Off snaps
         }
+
+        // Motion on: the lift eases over WPF's 150 ms quad-out (MotionFx.cs:74-85); Run restores the level.
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        var go = card.GoButton!;
+        var lift = Assert.IsType<global::Avalonia.Media.ScaleTransform>(go.RenderTransform);
+        card.MouseMove(go.TranslatePoint(new Point(go.Bounds.Width / 2, go.Bounds.Height / 2), card)!.Value);
+        Assert.NotNull(lift.Transitions);
+        Assert.Equal(2, lift.Transitions!.Count);
+        Assert.All(lift.Transitions.OfType<global::Avalonia.Animation.DoubleTransition>(), t =>
+        {
+            Assert.Equal(TimeSpan.FromMilliseconds(150), t.Duration);
+            Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseOut>(t.Easing);
+        });
     });
 
     /// <summary>P04/P11: startup starts the landing on the friends service; exit stops it before the poll goes.</summary>
