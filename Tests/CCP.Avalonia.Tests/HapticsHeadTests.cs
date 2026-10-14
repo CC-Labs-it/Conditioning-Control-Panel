@@ -281,11 +281,14 @@ public sealed class HapticsHeadTests
                     Assert.True(tab.PreviewRunning);
                     tab.IsVisible = false;
                     Assert.False(tab.PreviewRunning);
+                    Assert.True(tab.LastPreview.Wait(3000));   // the cancelled Play really ended (P56)
+                    Dispatcher.UIThread.RunJobs();
                     tab.IsVisible = true;
 
+                    // Called synchronously: it has linked the panic token and is parked in its 8 s loop
+                    // when it returns, so no wait is needed to know the test is in flight.
                     var key = h.DeviceManager.Devices[0].DeviceKey;
-                    var test = System.Threading.Tasks.Task.Run(() => h.TestDeviceAsync(key, VibrationMode.Constant, 0.6, 8000));
-                    Thread.Sleep(300);
+                    var test = h.TestDeviceAsync(key, VibrationMode.Constant, 0.6, 8000);
                     Assert.False(test.IsCompleted);
                     h.PanicStop();
                     Assert.True(test.Wait(3000));

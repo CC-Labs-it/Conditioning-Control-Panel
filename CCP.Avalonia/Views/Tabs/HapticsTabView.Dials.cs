@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // it. Panic ends it too: PanicSurfaces "haptics" -> HapticService.PanicStop.
         private System.Threading.CancellationTokenSource? _previewCts;
         internal bool PreviewRunning => _previewCts is { IsCancellationRequested: false };
+        internal System.Threading.Tasks.Task LastPreview { get; private set; } = System.Threading.Tasks.Task.CompletedTask;   // test seam (P56)
 
         private System.Threading.CancellationToken NewPreview()
         {
@@ -410,10 +411,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var token = NewPreview();
             try
             {
-                if (string.IsNullOrEmpty(deviceKey))
-                    await h.PlayPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode, priority: 5, token: token);
-                else
-                    await h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500, token);
+                await (LastPreview = string.IsNullOrEmpty(deviceKey)
+                    ? h.PlayPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode, priority: 5, token: token)
+                    : h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500, token));
             }
             catch (Exception ex) { Log.Warning(ex, "Haptics pattern play failed"); }
             finally { EndPreview(token); }
