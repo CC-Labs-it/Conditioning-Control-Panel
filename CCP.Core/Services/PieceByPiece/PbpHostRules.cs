@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -57,7 +58,9 @@ public static class PbpHostRules
                 ? ""
                 : o["body"]!.ToString(Newtonsoft.Json.Formatting.None));
         string? refusal = null;
-        if (!path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal)) refusal = "forbidden_path";
+        // Judged on the BUILT Uri, not the raw string: "/v2/pbp/../user/me" starts with the prefix and
+        // still lands on /v2/user/me once System.Uri collapses it (HostNetPathRule).
+        if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out _)) refusal = "forbidden_path";
         else if (method != "GET" && method != "POST") refusal = "forbidden_method";
         return new NetCall(id, method, path, body, refusal);
     }
@@ -72,10 +75,14 @@ public static class PbpHostRules
     {
         if (call.Refusal != null) return (0, call.Refusal);
         if (string.IsNullOrEmpty(baseUrl)) return (0, "");
+        // Again against the base this call really goes to, so a NetCall built by hand (not by ReadNet)
+        // cannot skip the gate either; the request is sent to the Uri judged here, never a re-concatenation.
+        if (!HostNetPathRule.TryBuild(baseUrl, call.Path, AllowedPathPrefix, out var target) || target is null)
+            return (0, "forbidden_path");
         try
         {
             var verb = call.Method == "POST" ? HttpMethod.Post : HttpMethod.Get;
-            using var request = new HttpRequestMessage(verb, baseUrl + call.Path);
+            using var request = new HttpRequestMessage(verb, target);
             if (call.Method == "POST") request.Content = new StringContent(call.Body, Encoding.UTF8, "application/json");
             if (!string.IsNullOrEmpty(authToken)) request.Headers.Add("X-Auth-Token", authToken);
             request.Headers.Add("X-Client-Version", appVersion);
