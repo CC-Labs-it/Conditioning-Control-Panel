@@ -732,12 +732,16 @@ namespace ConditioningControlPanel.Services
                 : Math.Max(100, App.Settings.Current.SubliminalDuration * 17);
             var targetOpacity = (opacity ?? App.Settings.Current.SubliminalOpacity) / 100.0;
             int fadeIn = Math.Max(1, fadeInMs ?? DefaultFadeMs), fadeOut = Math.Max(1, fadeOutMs ?? DefaultFadeMs);
+            // Gentle visuals: the card fades in and out over the gentle fade (hold time unchanged).
+            var gentle = Safety.GentleVisuals.On;
+            if (gentle) { fadeIn = Safety.GentleVisuals.FadeMs(fadeIn); fadeOut = Safety.GentleVisuals.FadeMs(fadeOut); }
 
             // Colors from settings
             var bgColor = ParseColor(App.Settings.Current.SubBackgroundColor, Colors.Black);
             var textColor = ParseColor(App.Settings.Current.SubTextColor, Color.FromRgb(255, 0, 255)); // Magenta
             var borderColor = ParseColor(App.Settings.Current.SubBorderColor, Colors.White);
-            var bgTransparent = App.Settings.Current.SubBackgroundTransparent;
+            // Gentle visuals: no full-screen card behind the words.
+            var bgTransparent = App.Settings.Current.SubBackgroundTransparent || gentle;
 
             // Get all monitors and reuse (or lazily create) the keep-alive window per screen
             var screens = App.GetGlobalScreens();

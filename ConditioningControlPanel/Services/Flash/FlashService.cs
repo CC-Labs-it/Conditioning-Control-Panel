@@ -1759,6 +1759,8 @@ namespace ConditioningControlPanel.Services
                 window.ClipPath = imageData.ClipPath;
                 // #1194: the user's GIF speed slider, applied once here rather than per tick.
                 window.FrameDelay = ScaleFrameDelay(imageData.FrameDelay, settings.FlashGifSpeedMultiplier);
+                if (Safety.GentleVisuals.On)   // gentle visuals: GIFs play at the gentle speed
+                    window.FrameDelay = TimeSpan.FromMilliseconds(Safety.GentleVisuals.ScaleDelayMs(window.FrameDelay.TotalMilliseconds));
                 window.StartTime = DateTime.Now;
                 window.CurrentFrameIndex = 0;
                 // The shared host is fully click-through (pops on it would need the global mouse
@@ -2947,7 +2949,8 @@ namespace ConditioningControlPanel.Services
             // it. Purely how the picture leaves - the XP below, the hydra roll and the active list
             // all run exactly as they did, and a timer expiry never reaches here.
             window.ShatterOnDismiss = true;
-            SafeCloseFlashWindow(window);
+            if (Safety.GentleVisuals.On && !window.UsesLayer) GentleFadeThenClose(window);
+            else SafeCloseFlashWindow(window);
             FlashClicked?.Invoke(this, EventArgs.Empty);
             _ = App.Haptics?.FlashClickVibeAsync();
 
@@ -3165,6 +3168,10 @@ namespace ConditioningControlPanel.Services
             // Read the Fade slider live so a mid-session change lands on the next frame.
             // 0% = instant: a full-alpha step arrives (and leaves) in a single frame.
             var fadeSeconds = settings.FadeDuration * FADE_SECONDS_PER_PERCENT;
+            // Gentle visuals: never shorter than the gentle fade, on every host (the layered
+            // path's 0.5 s cap is lifted too: a slow fade is the point).
+            var gentle = Safety.GentleVisuals.On;
+            if (gentle) fadeSeconds = Safety.GentleVisuals.Fade(fadeSeconds);
 
             FlashWindow[] windowsCopy;
             lock (_lockObj)
@@ -3214,9 +3221,12 @@ namespace ConditioningControlPanel.Services
                     // thinned. The compositor keeps the slider's full ramp length because the
                     // quantiser, not the frame rate, is what bounds its writes.
                     var cheapAlpha = window.UsesHost;
-                    var winFadeSeconds = ResolveFadeSeconds(fadeSeconds, fullRamp: cheapAlpha || window.UsesLayer);
+                    var winFadeSeconds = ResolveFadeSeconds(fadeSeconds, fullRamp: cheapAlpha || window.UsesLayer || gentle);
                     if (window.BubbleDelivery && showThisWindow)
+                    {
                         winFadeSeconds = window.UsesLayer || MotionFx.Level == MotionLevel.Off ? 0 : .18;
+                        if (gentle) winFadeSeconds = Safety.GentleVisuals.Fade(winFadeSeconds);
+                    }
                     var fadeStep = winFadeSeconds > 0 ? dt / winFadeSeconds : 1.0;
 
                     var currentAlpha = cheapAlpha ? window.VisualOpacity : window.FadeAlpha;
@@ -5004,6 +5014,28 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>
+        /// Gentle visuals: a popped window or solid-host flash fades out over the gentle fade, then
+        /// takes the normal close. It is already off the active list, so nothing else touches it.
+        /// The animation is cleared before the close so a pooled window comes back writable.
+        /// </summary>
+        private void GentleFadeThenClose(FlashWindow window)
+        {
+            UIElement? target = window.UsesHost ? window.HostedRoot : window;
+            if (target == null) { SafeCloseFlashWindow(window); return; }
+            target.IsHitTestVisible = false;
+            var anim = new System.Windows.Media.Animation.DoubleAnimation(target.Opacity, 0,
+                TimeSpan.FromSeconds(Safety.GentleVisuals.FadeSeconds));
+            anim.Completed += (_, _) =>
+            {
+                try { target.BeginAnimation(UIElement.OpacityProperty, null); target.Opacity = 0; target.IsHitTestVisible = true; }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+                SafeCloseFlashWindow(window);
+            };
+            try { target.BeginAnimation(UIElement.OpacityProperty, anim); }
+            catch (Exception ex) { Diag.Swallowed(ex); SafeCloseFlashWindow(window); }
+        }
+
         private void SafeCloseFlashWindow(FlashWindow window)
         {
             try
@@ -5067,8 +5099,11 @@ namespace ConditioningControlPanel.Services
                     {
                         var item = window.LayerItem;
                         window.LayerItem = null;
-                        var shatter = shatterThis ? BuildShatter(window, item) : null;
-                        var exit = shatter == null && shatterThis ? BuildExit() : null;
+                        // Gentle visuals: a popped flash leaves as a plain fade (no break, no style).
+                        var gentlePop = shatterThis && Safety.GentleVisuals.On;
+                        var shatter = shatterThis && !gentlePop ? BuildShatter(window, item) : null;
+                        var exit = gentlePop ? FlashExit.Gentle(Safety.GentleVisuals.Fade(FlashExit.DurationOf(FlashExitStyle.Mix)), _random.Next())
+                            : shatter == null && shatterThis ? BuildExit() : null;
                         if (shatter != null) _flashLayer?.BeginShatter(item, shatter);
                         else if (exit != null) _flashLayer?.BeginExit(item, exit);
                         else _flashLayer?.Remove(item);

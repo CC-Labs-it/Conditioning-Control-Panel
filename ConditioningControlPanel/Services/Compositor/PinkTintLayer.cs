@@ -18,6 +18,8 @@ public class PinkTintLayer : BaseLayer
 
     public override int ZIndex => CompositorLayers.PinkTint;
 
+    protected override bool GentleFades => true;   // gentle visuals: tint fades in and out
+
     // Fullscreen fill: honor the pink filter's per-effect monitor target (suggestion #639), which
     // itself falls back to DualMonitorEnabled when set to -1. The compositor hosts every screen,
     // so a non-targeted monitor just records an empty (transparent) frame for this layer.

@@ -55,7 +55,8 @@ internal sealed class FlashClipPlayer : IDisposable
             _player.SetVideoFormat("RV32", (uint)_width, (uint)_height, (uint)_width * 4);
             _player.SetVideoCallbacks(Lock, null, Display);
             if (!_player.Play(_media)) throw new InvalidOperationException("Clip playback refused");
-            _player.SetRate((float)Math.Clamp(speed, .25, 4));
+            // Gentle visuals: clips play at the gentle speed too (Speed is 1 when off).
+            _player.SetRate((float)Math.Clamp(speed * Safety.GentleVisuals.Speed, .25, 4));
         }
         catch
         {
