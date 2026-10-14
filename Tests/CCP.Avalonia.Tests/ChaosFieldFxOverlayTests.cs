@@ -59,6 +59,15 @@ public sealed class ChaosFieldFxOverlayTests
                 Assert.Null(ChaosFieldFxOverlay.Active);
                 Assert.False(w.IsVisible);
                 Assert.False(w.Clock.IsEnabled);
+
+                // Run teardown closes it too (WPF ChaosModeService CloseActive).
+                ChaosFieldFxOverlay.Residue(new Point(5, 5), 20, 500);
+                var w2 = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
+                typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost)
+                    .GetMethod("CleanupAfterRun", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+                    .Invoke(null, null);
+                Assert.Null(ChaosFieldFxOverlay.Active);
+                Assert.False(w2.IsVisible);
             }
             finally
             {

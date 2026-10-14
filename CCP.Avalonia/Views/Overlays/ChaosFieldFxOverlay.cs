@@ -78,6 +78,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void OnUi(Action<ChaosFieldFxOverlay> act)
         {
+            // WPF BeginInvoke'd every call onto the UI thread; callers may be off it.
+            if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(() => OnUi(act));
+                return;
+            }
             try
             {
                 if (_active == null)
@@ -114,15 +120,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CanResize = false;
             Focusable = false;
             IsHitTestVisible = false;
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            Width = 900;
-            Height = 600;
+            WindowStartupLocation = WindowStartupLocation.Manual;   // no geometry here: SetOverrideRedirect places it (X11Overlay notes)
             _canvas = new FieldCanvas();
             Content = _canvas;
             Clock = new FrameClock(this) { Interval = TimeSpan.FromMilliseconds(1000.0 / 60) };
             Clock.Tick += (_, _) => Step(NowMs());
             if (sample)
             {
+                Width = 900;
+                Height = 600;
                 Model.Ripple(200, 300, 160, 1000, 0);
                 Model.SnapRipple(520, 300, 220, 1000, 0);
                 Model.Residue(780, 150, 90, 1000, 0, new Random(7));
@@ -142,10 +148,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var s in screens) bounds = bounds.Union(s.Bounds);
             _scale = primary?.Scaling is > 0 and var sc ? sc : 1;
             _origin = bounds.Position;
-            Position = bounds.Position;
-            Width = bounds.Width / _scale;
-            Height = bounds.Height / _scale;
-            if (SkipPlatformChecksForTests) return true;
+            if (SkipPlatformChecksForTests)
+            {
+                Position = bounds.Position;
+                Width = bounds.Width / _scale;
+                Height = bounds.Height / _scale;
+                return true;
+            }
+            // Override-redirect before any geometry, or KWin can replay a stale size (X11Overlay.SetOverrideRedirect).
             if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds))
             {
                 Log.Warning("ChaosFieldFx: the platform refused a click-through overlay, so no field FX are drawn");
@@ -167,11 +177,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_active == this) HideIfIdle(now);
         }
 
+        /// <summary>Nothing drawn: the clock parks (WPF storyboards had simply ended). The window stays
+        /// up while the Tail-Plug boon is on (WPF's hide rule) and the next TrailDot restarts the clock.</summary>
         private void HideIfIdle(double? now = null)
         {
-            double trail = ChaosRunHost.IsDescending ? ChaosRunHost.State?.RabbitTrailSec ?? 0 : 0;
-            if (!Model.IsIdle(now ?? NowMs(), trail)) return;
+            double t = now ?? NowMs();
+            if (!Model.IsIdle(t, 0)) return;
             Clock.Stop();
+            double trail = ChaosRunHost.IsDescending ? ChaosRunHost.State?.RabbitTrailSec ?? 0 : 0;
+            if (trail > 0) return;
             try { Hide(); } catch (Exception ex) { Log.Debug("ChaosFieldFx hide: {E}", ex.Message); }
         }
 
@@ -192,6 +206,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             private static Color C(FieldFxColor c) => Color.FromArgb(c.A, c.R, c.G, c.B);
 
+            private static readonly Dictionary<FieldFxColor, IImmutableSolidColorBrush> Solid = new();
+            private static IImmutableSolidColorBrush S(FieldFxColor c) =>
+                Solid.TryGetValue(c, out var b) ? b : Solid[c] = new ImmutableSolidColorBrush(C(c));
+
             public FieldCanvas() => IsHitTestVisible = false;
 
             public override void Render(DrawingContext ctx)
@@ -210,13 +228,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         {
                             case FieldFxKind.Ring:
                                 if (p.Radius > 0)
-                                    ctx.DrawEllipse(null, new ImmutablePen(new ImmutableSolidColorBrush(C(p.Color)), p.Thickness), c, p.Radius, p.Radius);
+                                    ctx.DrawEllipse(null, new ImmutablePen(S(p.Color), p.Thickness), c, p.Radius, p.Radius);
                                 break;
                             case FieldFxKind.Shard:
-                                ctx.DrawLine(new ImmutablePen(new ImmutableSolidColorBrush(C(p.Color)), p.Thickness, lineCap: PenLineCap.Round), c, new Point(p.X2, p.Y2));
+                                ctx.DrawLine(new ImmutablePen(S(p.Color), p.Thickness, lineCap: PenLineCap.Round), c, new Point(p.X2, p.Y2));
                                 break;
                             case FieldFxKind.Tether:
-                                ctx.DrawLine(new ImmutablePen(new ImmutableSolidColorBrush(C(p.Color)), p.Thickness,
+                                ctx.DrawLine(new ImmutablePen(S(p.Color), p.Thickness,
                                     new ImmutableDashStyle(new double[] { 4, 3 }, 0), PenLineCap.Round), c, new Point(p.X2, p.Y2));
                                 break;
                             case FieldFxKind.Residue:
