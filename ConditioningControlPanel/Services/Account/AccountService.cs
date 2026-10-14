@@ -1,11 +1,7 @@
 using System;
-using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using ConditioningControlPanel.Localization;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using static ConditioningControlPanel.Services.V2AuthService;
 
 namespace ConditioningControlPanel.Services;
@@ -16,14 +12,8 @@ namespace ConditioningControlPanel.Services;
 /// </summary>
 public static class AccountService
 {
-    private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
-    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
-
-    static AccountService()
-    {
-        _httpClient.DefaultRequestHeaders.Add("X-Client-Version", UpdateService.AppVersion);
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}");
-    }
+    /// <summary>The legacy V1 endpoints (lookup / register / link-provider / claim), in Core.</summary>
+    private static readonly LegacyAccountApi _legacy = new();
 
     /// <summary>
     /// Handle post-authentication flow for any provider.
@@ -59,7 +49,7 @@ public static class AccountService
             var existingDisplayName = otherProviderIsAuthenticated ? App.UserDisplayName : null;
 
             // Step 1: Look up existing unified account for this provider
-            var lookupResult = await LookupAccountAsync(provider, accessToken);
+            var lookupResult = await _legacy.LookupAsync(provider, accessToken);
 
             if (lookupResult == null)
             {
@@ -120,7 +110,7 @@ public static class AccountService
                     App.Logger?.Information("AccountService: Auto-linking {Provider} to existing account {UnifiedId}",
                         provider, existingUnifiedId);
 
-                    var linkResult = await LinkProviderAsync(provider, accessToken, existingUnifiedId);
+                    var linkResult = await _legacy.LinkAsync(provider, accessToken, existingUnifiedId);
                     if (linkResult.Success)
                     {
                         if (provider == "patreon" && App.Patreon != null)
@@ -177,7 +167,7 @@ public static class AccountService
                     provider, lookupResult.AutoLinkUnifiedId);
 
                 // Auto-link the provider to existing account
-                var linkResult = await LinkProviderAsync(provider, accessToken, lookupResult.AutoLinkUnifiedId);
+                var linkResult = await _legacy.LinkAsync(provider, accessToken, lookupResult.AutoLinkUnifiedId);
 
                 if (linkResult.Success)
                 {
@@ -576,186 +566,9 @@ public static class AccountService
     #region V1 Authentication (Legacy - pre v5.5)
 
     /// <summary>
-    /// Look up if a provider account is linked to a unified user
-    /// </summary>
-    private static async Task<LookupResult?> LookupAccountAsync(string provider, string accessToken)
-    {
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/auth/lookup")
-            {
-                Content = new StringContent(
-                    JsonConvert.SerializeObject(new { provider }),
-                    Encoding.UTF8,
-                    "application/json")
-            };
-            request.Headers.Add("Authorization", $"Bearer {accessToken}");
-
-            var response = await _httpClient.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                App.Logger?.Warning("AccountService: Lookup failed - {Status} (body {Bytes} bytes)",
-                    (int)response.StatusCode, json?.Length ?? 0);
-                return null;
-            }
-
-            var data = JObject.Parse(json);
-
-            return new LookupResult
-            {
-                Exists = (bool?)data["exists"] ?? false,
-                UnifiedId = data["unified_id"]?.Value<string>(),
-                DisplayName = data["display_name"]?.Value<string>(),
-                HasDisplayName = (bool?)data["has_display_name"] ?? false,
-                NeedsRegistration = (bool?)data["needs_registration"] ?? true,
-                CanAutoLink = (bool?)data["can_auto_link"] ?? false,
-                AutoLinkUnifiedId = data["auto_link_unified_id"]?.Value<string>(),
-                AutoLinkDisplayName = data["auto_link_display_name"]?.Value<string>(),
-                ProviderData = data["provider_data"] as JObject
-            };
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Error(ex, "AccountService: LookupAccountAsync failed");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Register a new unified user with a display name
-    /// </summary>
-    private static async Task<RegisterResult> RegisterUserAsync(string provider, string accessToken, string displayName)
-    {
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/auth/register")
-            {
-                Content = new StringContent(
-                    JsonConvert.SerializeObject(new { display_name = displayName, provider }),
-                    Encoding.UTF8,
-                    "application/json")
-            };
-            request.Headers.Add("Authorization", $"Bearer {accessToken}");
-
-            var response = await _httpClient.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-            var data = JObject.Parse(json);
-
-            if (response.IsSuccessStatusCode && (bool?)data["success"] == true)
-            {
-                return new RegisterResult
-                {
-                    Success = true,
-                    UnifiedId = data["unified_id"]?.Value<string>(),
-                    DisplayName = data["display_name"]?.Value<string>()
-                };
-            }
-
-            return new RegisterResult
-            {
-                Success = false,
-                Error = data["error"]?.Value<string>() ?? "Registration failed",
-                CanClaim = (bool?)data["can_claim"] ?? false,
-                ExistingUnifiedId = data["existing_unified_id"]?.Value<string>()
-            };
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Error(ex, "AccountService: RegisterUserAsync failed");
-            return new RegisterResult { Success = false, Error = ex.Message };
-        }
-    }
-
-    /// <summary>
-    /// Link a provider to an existing unified user
-    /// </summary>
-    private static async Task<LinkResult> LinkProviderAsync(string provider, string accessToken, string unifiedId)
-    {
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/auth/link-provider")
-            {
-                Content = new StringContent(
-                    JsonConvert.SerializeObject(new { unified_id = unifiedId, provider }),
-                    Encoding.UTF8,
-                    "application/json")
-            };
-            request.Headers.Add("Authorization", $"Bearer {accessToken}");
-
-            var response = await _httpClient.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-            var data = JObject.Parse(json);
-
-            if (response.IsSuccessStatusCode && (bool?)data["success"] == true)
-            {
-                return new LinkResult
-                {
-                    Success = true,
-                    UnifiedId = data["unified_id"]?.Value<string>()
-                };
-            }
-
-            return new LinkResult
-            {
-                Success = false,
-                Error = data["error"]?.Value<string>() ?? "Linking failed"
-            };
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Error(ex, "AccountService: LinkProviderAsync failed");
-            return new LinkResult { Success = false, Error = ex.Message };
-        }
-    }
-
-    /// <summary>
-    /// Claim an existing display name (for account merging)
-    /// </summary>
-    private static async Task<LinkResult> ClaimAccountAsync(string provider, string accessToken, string displayName)
-    {
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/auth/claim")
-            {
-                Content = new StringContent(
-                    JsonConvert.SerializeObject(new { display_name = displayName, provider }),
-                    Encoding.UTF8,
-                    "application/json")
-            };
-            request.Headers.Add("Authorization", $"Bearer {accessToken}");
-
-            var response = await _httpClient.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-            var data = JObject.Parse(json);
-
-            if (response.IsSuccessStatusCode && (bool?)data["success"] == true)
-            {
-                return new LinkResult
-                {
-                    Success = true,
-                    UnifiedId = data["unified_id"]?.Value<string>()
-                };
-            }
-
-            return new LinkResult
-            {
-                Success = false,
-                Error = data["error"]?.Value<string>() ?? "Claim failed"
-            };
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Error(ex, "AccountService: ClaimAccountAsync failed");
-            return new LinkResult { Success = false, Error = ex.Message };
-        }
-    }
-
-    /// <summary>
     /// Prompt the user to choose a display name for registration
     /// </summary>
-    private static async Task<bool> PromptForRegistrationAsync(Window owner, string provider, string accessToken, LookupResult lookupResult)
+    private static async Task<bool> PromptForRegistrationAsync(Window owner, string provider, string accessToken, LegacyAccountApi.LookupResult lookupResult)
     {
         bool nameSet = false;
 
@@ -775,7 +588,7 @@ public static class AccountService
                 var trimmedName = dialog.DisplayName.Trim();
 
                 // Try to register with this name
-                var result = await RegisterUserAsync(provider, accessToken, trimmedName);
+                var result = await _legacy.RegisterAsync(provider, accessToken, trimmedName);
 
                 if (result.Success)
                 {
@@ -812,7 +625,7 @@ public static class AccountService
 
                     if (claimResult == MessageBoxResult.Yes)
                     {
-                        var claimResponse = await ClaimAccountAsync(provider, accessToken, trimmedName);
+                        var claimResponse = await _legacy.ClaimAsync(provider, accessToken, trimmedName);
 
                         if (claimResponse.Success)
                         {
@@ -878,40 +691,6 @@ public static class AccountService
 
         return true;
     }
-
-    #region V1 Result Classes
-
-    private class LookupResult
-    {
-        public bool Exists { get; set; }
-        public string? UnifiedId { get; set; }
-        public string? DisplayName { get; set; }
-        public bool HasDisplayName { get; set; }
-        public bool NeedsRegistration { get; set; }
-        public bool CanAutoLink { get; set; }
-        public string? AutoLinkUnifiedId { get; set; }
-        public string? AutoLinkDisplayName { get; set; }
-        public JObject? ProviderData { get; set; }
-    }
-
-    private class RegisterResult
-    {
-        public bool Success { get; set; }
-        public string? UnifiedId { get; set; }
-        public string? DisplayName { get; set; }
-        public string? Error { get; set; }
-        public bool CanClaim { get; set; }
-        public string? ExistingUnifiedId { get; set; }
-    }
-
-    private class LinkResult
-    {
-        public bool Success { get; set; }
-        public string? UnifiedId { get; set; }
-        public string? Error { get; set; }
-    }
-
-    #endregion // V1 Result Classes
 
     #endregion // V1 Authentication
 }

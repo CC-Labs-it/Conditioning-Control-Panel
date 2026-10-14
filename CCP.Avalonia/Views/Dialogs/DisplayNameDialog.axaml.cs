@@ -16,9 +16,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     /// The parameterless constructor is the real "welcome" mode and doubles as the render ctor.
     ///
     /// <para>Callers: the Trainer Card's rename and delete buttons (MainShellWindow.Browser.cs
-    /// ChangeDisplayNameAsync / DeleteProfileAsync, through CoreAccount). ponytail: the welcome mode's
-    /// WPF caller (MainWindow CheckPendingRegistrationAsync -> AccountService.HandlePostAuthAsync ->
-    /// PromptForRegistrationAsync, the legacy V1 lookup/register) has no twin on this head yet.</para>
+    /// ChangeDisplayNameAsync / DeleteProfileAsync, through CoreAccount), and the welcome mode's
+    /// pending registration (MainShellWindow.PendingRegistration.cs, WPF MainWindow CheckPendingRegistrationAsync
+    /// -> AccountService.HandlePostAuthAsync -> PromptForRegistrationAsync over Core LegacyAccountApi).</para>
     /// </summary>
     public partial class DisplayNameDialog : Window
     {
