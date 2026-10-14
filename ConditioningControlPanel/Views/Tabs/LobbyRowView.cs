@@ -28,7 +28,7 @@ public sealed class LobbyRowView
     /// <summary>The game's feature art, small: light and coloured, readable on a dark card.</summary>
     public ImageSource? Art => ArtFor(Row.Game);
     /// <summary>Stable identity across polls, for the "new table" pop.</summary>
-    public string Id => Row.Game + "|" + (Row.Key ?? Row.HostName + "|" + Row.OpponentName) + "|" + Row.State;
+    public string Id => LobbyPageRules.Id(Row);
     public bool Friend => Row.Friend;
     public string ButtonText { get; }
     public bool HasButton { get; }
@@ -63,9 +63,7 @@ public sealed class LobbyRowView
         Row = row;
         GameIcon = IconFor(row.Game);
         GameLabel = loc(LabelKey(row.Game));
-        Title = row.State == LobbyRowState.Playing && !string.IsNullOrEmpty(row.OpponentName)
-            ? string.Format(loc("lobby_row_versus"), row.HostName, row.OpponentName)
-            : row.HostName;
+        Title = LobbyPageRules.Title(row, loc);
         Summary = LobbySummary.For(row, loc);
         HasButton = row.CanJoin || row.CanWatch;
         Locked = row.CanJoin && !gates.CanJoin(row.Game);
@@ -113,12 +111,7 @@ public sealed class LobbyRowView
         }
     }
 
-    public static string LabelKey(LobbyGame g) => g switch
-    {
-        LobbyGame.Chess => "lobby_game_chess",
-        LobbyGame.Goon => "lobby_game_goon",
-        _ => "lobby_game_remote",
-    };
+    public static string LabelKey(LobbyGame g) => LobbyPageRules.LabelKey(g);
 
     public static List<LobbyRowView> From(IEnumerable<LobbyRow> rows, LobbyGates gates, Func<string, string>? loc = null) =>
         rows.Select(r => new LobbyRowView(r, gates, loc)).ToList();
