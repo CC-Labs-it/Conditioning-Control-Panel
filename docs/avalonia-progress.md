@@ -2305,3 +2305,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/quiz-core-a: +178
 - AI quiz (`QuizService`) moved into CCP.Core (git mv, Core seams); WPF now honours a loopback `CCP_AI_BASE_URL` like Core `AiService`.
 - 8 Core tests against a loopback fake proxy; cloud session, local review + remote gate.
+
+## avalonia-port/chaster-trailer-pop: +519
+- ctrl-chaster-booked-pop missing -> wired: the "+N:NN" pops at its cause/cursor in an X11 click-through window on a FrameClock (rail flash fallback on Wayland), and the day/tab-full CapRefused tag; BookedPopLayout + CapNotice git-mv to Core.
+- ctrl-chaster-trailer-view stays missing: it needs the views-chaster-help-price-edit menu rows (its only WPF host), so it should be ported with them.
