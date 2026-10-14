@@ -45,6 +45,9 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog" Version="3.1.1" />
+    <!-- Discord Rich Presence (Services/Account/DiscordRichPresenceService.cs): the client WPF ships, managed only
+         (named pipe on Windows, discord-ipc-N unix socket on Linux). Same version as the WPF head's reference. -->
+    <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
     <PackageReference Include="Buttplug" Version="5.0.1" />
     <!-- LibVLCSharp (managed only): VideoMetadataCache parses clip lengths for the video length filter.
          3.8.5 = what LibVLCSharp.WPF resolves in the WPF head, so WPF ships unchanged; the Avalonia head
@@ -58,6 +61,11 @@
          own OpenCV + ONNX Runtime natives, so nothing native ships from here. -->
     <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.20.1" />
+    <!-- SkiaSharp (managed + its own win/mac natives): the compositor layers and text rules in
+         Services/Compositor (GlyphFallback.cs). 2.88.8 = what SkiaSharp.Views.WPF pins in the WPF head,
+         so WPF ships unchanged; the Avalonia head resolves 3.119.x through Avalonia.Skia and that wins there.
+         Linux natives come from each head (Avalonia.Skia brings them; the Core test project references them itself). -->
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
   </ItemGroup>
 
   <!--

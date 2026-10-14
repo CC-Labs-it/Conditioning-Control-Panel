@@ -104,7 +104,7 @@ public sealed class ExclusivesVaultTests
                 var tip = ConditioningControlPanel.Localization.Loc.Get("exclusives_not_on_this_build");
                 Assert.Equal(tip, rows.Single(r => r.Feature.Key == "backroom").UnavailableTip);
                 Assert.Null(rows.Single(r => r.Feature.Key == "haptics").UnavailableTip);
-                Assert.False(view.FindControl<Button>("BtnSpotOpen")!.IsEnabled);
+                Assert.True(view.FindControl<Button>("BtnSpotOpen")!.IsEnabled);   // the fyp spotlight opens the feed (GameWindow.Fyp)
 
                 // A free account with its weekly pass unspent, and fyp rotated in as today's free one.
                 CoreEntitlement.IntakePassAvailableProvider = () => true;

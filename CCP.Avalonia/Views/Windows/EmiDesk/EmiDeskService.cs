@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
     /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats, needs EmiLineEngine + EmiState), the nudge machine, the
+    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off (<c>TubeDeskVisibility</c>). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>

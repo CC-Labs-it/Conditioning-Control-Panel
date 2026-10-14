@@ -5,9 +5,8 @@
 //   page -> host: track-pick, track-play, track-pause {on}, track-stop, track-cancel
 //   host -> page: track-progress {stage, pct, name}, track-chart {chart, partial, authored},
 //                 track-clock {t, playing, durationSec}, track-ended, track-error {message}
-// ponytail: the player (WPF TrackPlayer, NAudio) and the decoder seed (TrackDecoder.DecodeProvider, WPF
-// App.xaml.cs:313) are the next unit (LibVLC). Until then RaceNewPlayer is null, so a pick answers
-// track-error NoAudioMessage, and the unseeded Core decoder answers "this build cannot decode audio".
+// The player and the decoder seed are RaceTrackPlayer (LibVLC); without libvlc a pick answers
+// track-error RaceNoAudioMessage.
 using System;
 using System.IO;
 using System.Linq;
@@ -38,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>Seams: the player factory (null = this build has none) and the file dialog
         /// (null result = the player cancelled).</summary>
-        internal Func<IRaceTrackPlayer>? RaceNewPlayer;
+        internal Func<IRaceTrackPlayer>? RaceNewPlayer = () => new RaceTrackPlayer();
         internal Func<Task<string?>>? RacePickFile;
 
         /// <summary>The analysis in flight, if any; a test's way to wait for the worker.</summary>

@@ -13,7 +13,8 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
 | Need | Arch / CachyOS | Debian / Ubuntu | Fedora |
 |---|---|---|---|
 | Web views (WebHost) | webkit2gtk-4.1 | libwebkit2gtk-4.1-0 | webkit2gtk4.1 |
-| Web views, WPE path (Avalonia WebView also loads libwpe-1.0.so.1, libWPEBackend-fdo-1.0.so.1, libWPEWebKit-2.0.so.1; user hit "WPE WebKit libs not installed") | wpewebkit wpebackend-fdo libwpe (extra, verified `pacman -Si` 2026-10-10) | not packaged (Ubuntu 24.04: none; Debian 12 / Ubuntu 22.04: WebKit 1.x only, distro-check F2) | not packaged (Fedora 44, distro-check F2) |
+| Web page sound (GStreamer `autoaudiosink`, `libgstautodetect.so`; without it WebKitWebProcess aborts on a page's first WebAudio sound and the page freezes, webview-render 2026-10-13) | gst-plugins-good | gstreamer1.0-plugins-good | gstreamer1-plugins-good |
+| Web views, WPE path, opt-in only since 2026-10-13 (`CCP_LINUX_WEBVIEW=wpe`; WebKitGTK is the Linux engine; Avalonia WebView also loads libwpe-1.0.so.1, libWPEBackend-fdo-1.0.so.1, libWPEWebKit-2.0.so.1; user hit "WPE WebKit libs not installed") | wpewebkit wpebackend-fdo libwpe (extra, verified `pacman -Si` 2026-10-10) | not packaged (Ubuntu 24.04: none; Debian 12 / Ubuntu 22.04: WebKit 1.x only, distro-check F2) | not packaged (Fedora 44, distro-check F2) |
 | Audio / video (LibVLCSharp; the runtime package's libvlc.so.5 is enough, LibVlcNative resolves the soname) | vlc (libvlc) | libvlc5 + vlc-plugin-base | vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio (vlc-libs alone has no plugins: "Failed to perform instanciation") |
 | Ducking, microphone list, quest mic probe (`pactl`; works on PipeWire too) | libpulse | pulseaudio-utils | pulseaudio-utils (openSUSE: pulseaudio-utils) |
 | Fonts | none: Inter, Fredoka, Noto Sans Mono and Noto Emoji are bundled (a system emoji font is used first when present) | none | none |
@@ -33,9 +34,10 @@ which LibVLCSharp does not find (audio disabled). None of the rows pulls a font 
    (tray), portals for notifications, GlobalShortcuts and Secret (libsecret uses the Secret portal inside Flatpak).
    Updates come from the store. Host: own Flatpak repo + `.flatpakref` on the website first; Flathub only after checking
    its content policy for this app.
-2. **AUR package** (Arch/CachyOS): `depends=(webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libpulse libsecret libx11 libxi)`.
-   Debian/Ubuntu/Fedora: no WPE packages exist, so a .deb/.rpm cannot declare them; the in-app message says those pages are
-   unavailable there until a Flatpak bundling WPE ships (none has been built yet).
+2. **AUR package** (Arch/CachyOS): `depends=(webkit2gtk-4.1 gst-plugins-good vlc libpulse libsecret libx11 libxi icu)`, the WPE trio
+   in `optdepends` (opt-in engine since 2026-10-13).
+   Debian/Ubuntu/Fedora: no WPE packages exist, which no longer matters: web pages run on WebKitGTK there too, and the in-app
+   messages (startup toast, WebHost panel) no longer name WPE (`LinuxDependencies.Required`/`WebViews`).
 3. Later, on demand: `.deb` / `.rpm` with the same dependency lists; AppImage only as a fallback (cannot pull WebKit).
 
 ## In-app work that goes with it

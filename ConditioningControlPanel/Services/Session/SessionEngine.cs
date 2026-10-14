@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Services
         public bool IsPaused => _isPaused;
         public int CurrentPhaseIndex => _currentPhaseIndex;
         public int PauseCount => _pauseCount;
-        public int XPPenalty => _pauseCount * 100; // 100 XP per pause
+        public int XPPenalty => _pauseCount * SessionXp.PausePenalty;
         public Session? CurrentSession => _currentSession;
         public TimeSpan ElapsedTime
         {
@@ -107,24 +107,8 @@ namespace ConditioningControlPanel.Services
                 if (!_isRunning) return TimeSpan.Zero;
                 if (_isPaused) return _pausedElapsedTime;
 
-                var dateTimeElapsed = _pausedElapsedTime + (DateTime.Now - _startTime);
-                var stopwatchElapsed = _wallClockStopwatch.Elapsed;
-
-                // Anti-cheat / clock-jump guard: if DateTime-based elapsed diverges from the
-                // monotonic Stopwatch by more than 30s in EITHER direction, trust the Stopwatch.
-                // A positive divergence guards against speed-hacking; a negative divergence guards
-                // against a backward wall-clock jump (DST/NTP/sleep-resume), which otherwise makes
-                // RemainingTime balloon (e.g. "149 minutes left" on a 30-minute session). See #369.
-                var divergence = dateTimeElapsed - stopwatchElapsed;
-                if (Math.Abs(divergence.TotalSeconds) > 30)
-                {
-                    App.Logger?.Warning("Timer integrity: DateTime elapsed {DateTimeElapsed} vs Stopwatch {StopwatchElapsed} — divergence {Divergence}s, using Stopwatch",
-                        dateTimeElapsed, stopwatchElapsed, divergence.TotalSeconds);
-                    return stopwatchElapsed;
-                }
-
-                // Never report negative elapsed time.
-                return dateTimeElapsed < TimeSpan.Zero ? TimeSpan.Zero : dateTimeElapsed;
+                // Anti-cheat / clock-jump guard (#369): the Stopwatch wins past 30s divergence. Core rule.
+                return SessionClock.Elapsed(_pausedElapsedTime, _startTime, DateTime.Now, _wallClockStopwatch.Elapsed);
             }
         }
         public TimeSpan RemainingTime
@@ -419,17 +403,11 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Debug("Session XP calculation: Session={Name}, Source={Source}, BonusXP={BonusXP}, Penalty={Penalty}, Duration={Duration:F1}min",
                     _currentSession.Name, _currentSession.Source, _currentSession.BonusXP, XPPenalty, finalElapsedTime.TotalMinutes);
 
-                int baseXP = Math.Max(0, Math.Min(2500, _currentSession.BonusXP) - XPPenalty);
-
-                // Apply level-based XP multiplier
+                // Pause penalty, level multiplier, duration bonus past 2 min: Core rule.
+                // ponytail: WPF fell back to a 1.0 multiplier when App.Progression was null; it is
+                // set at startup before any session can run, so Core's level multiplier always applies.
                 int level = App.Settings?.Current?.PlayerLevel ?? 1;
-                double multiplier = App.Progression?.GetSessionXPMultiplier(level) ?? 1.0;
-
-                // Duration bonus: reward time investment (sessions under 2 min don't count)
-                double durationMinutes = Math.Max(0, finalElapsedTime.TotalMinutes - 2);
-                int durationBonus = (int)Math.Round(durationMinutes * (8 + level * 0.15));
-
-                int finalXP = Math.Max(0, (int)Math.Round(baseXP * multiplier) + durationBonus);
+                int finalXP = SessionXp.Compute(_currentSession.BonusXP, _pauseCount, level, finalElapsedTime);
                 xpForLog = finalXP;
 
                 // Track achievement using settings captured at session START (not current settings).
@@ -460,8 +438,9 @@ namespace ConditioningControlPanel.Services
                     App.Logger?.Error(ex, "Error in SessionCompleted event handler");
                 }
 
-                App.Logger?.Information("Session completed: {Name}, XP: {XP} (base: {Base}, multiplier: {Mult:F2}x, paused {PauseCount}x, penalty: -{Penalty})",
-                    _currentSession.Name, finalXP, baseXP, multiplier, _pauseCount, XPPenalty);
+                // ponytail: "base" left this line with the formula (bonus and penalty are logged at Debug above).
+                App.Logger?.Information("Session completed: {Name}, XP: {XP} (multiplier: {Mult:F2}x, paused {PauseCount}x, penalty: -{Penalty})",
+                    _currentSession.Name, finalXP, SessionXp.Multiplier(level), _pauseCount, XPPenalty);
 
                 // EMI Desk (MOMENTS 4.B). THE branch that tells a finish from a walk-out: no
                 // elapsed-vs-planned heuristic is needed, because StopSession is already told which
@@ -671,16 +650,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_currentSession?.Phases == null) return;
             
-            // Find which phase we should be in
-            int newPhaseIndex = 0;
-            for (int i = _currentSession.Phases.Count - 1; i >= 0; i--)
-            {
-                if (elapsedMinutes >= _currentSession.Phases[i].StartMinute)
-                {
-                    newPhaseIndex = i;
-                    break;
-                }
-            }
+            int newPhaseIndex = SessionTimeline.PhaseIndexAt(_currentSession.Phases, elapsedMinutes);
             
             if (newPhaseIndex != _currentPhaseIndex)
             {
@@ -822,35 +792,21 @@ namespace ConditioningControlPanel.Services
             var settings = _currentSession.Settings;
 
             // Deferred feature starts queued by ApplySessionSettings (timeline start
-            // events, #483). Reverse-iterate so firing removes in place.
-            for (int i = _pendingFeatureStarts.Count - 1; i >= 0; i--)
+            // events, #483), fired by the Core queue.
+            _pendingFeatureStarts.FireDue(elapsedMinutes, (name, startMinute) =>
             {
-                var pending = _pendingFeatureStarts[i];
-                if (elapsedMinutes < pending.StartMinute) continue;
-                _pendingFeatureStarts.RemoveAt(i);
+                // EMI Desk (MOMENTS 4.B): the name is already a human feature name
+                // ("lock cards", "bubble count"), so it needs no key mapping.
                 try
                 {
-                    pending.Start();
-                    App.Logger?.Information("Session: {Feature} started at {Minutes:F1} minutes (target was {Target})",
-                        pending.Name, elapsedMinutes, pending.StartMinute);
-
-                    // EMI Desk (MOMENTS 4.B): pending.Name is already a human feature name
-                    // ("lock cards", "bubble count"), so it needs no key mapping.
-                    try
+                    App.EmiDesk?.Fire("sessionFeatureArrived", new
                     {
-                        App.EmiDesk?.Fire("sessionFeatureArrived", new
-                        {
-                            target = pending.Name?.ToLowerInvariant(),
-                            n = (int)pending.StartMinute,
-                        });
-                    }
-                    catch { }
+                        target = name?.ToLowerInvariant(),
+                        n = startMinute,
+                    });
                 }
-                catch (Exception ex)
-                {
-                    App.Logger?.Warning(ex, "Session: deferred start of {Feature} failed", pending.Name);
-                }
-            }
+                catch { }
+            });
 
             // Pink filter delayed start (use randomized time)
             if (settings.PinkFilterEnabled && !App.Settings.Current.PinkFilterEnabled)
@@ -974,26 +930,10 @@ namespace ConditioningControlPanel.Services
             var settings = session.Settings;
             
             // Randomize pink filter start (±3 min, min 0)
-            if (settings.PinkFilterEnabled && settings.PinkFilterStartMinute > 0)
-            {
-                var offset = (_random.NextDouble() * 6) - 3; // -3 to +3
-                _randomizedPinkStartMinute = Math.Max(0, settings.PinkFilterStartMinute + offset);
-            }
-            else
-            {
-                _randomizedPinkStartMinute = settings.PinkFilterStartMinute;
-            }
+            _randomizedPinkStartMinute = SessionRunner.RandomizedStart(settings.PinkFilterEnabled, settings.PinkFilterStartMinute, _random);
             
             // Randomize spiral start (±3 min, min 0)
-            if (settings.SpiralEnabled && settings.SpiralStartMinute > 0)
-            {
-                var offset = (_random.NextDouble() * 6) - 3; // -3 to +3
-                _randomizedSpiralStartMinute = Math.Max(0, settings.SpiralStartMinute + offset);
-            }
-            else
-            {
-                _randomizedSpiralStartMinute = settings.SpiralStartMinute;
-            }
+            _randomizedSpiralStartMinute = SessionRunner.RandomizedStart(settings.SpiralEnabled, settings.SpiralStartMinute, _random);
             
             App.Logger?.Debug("Randomized start times - Pink: {Pink:F1}min, Spiral: {Spiral:F1}min",
                 _randomizedPinkStartMinute, _randomizedSpiralStartMinute);
@@ -1199,13 +1139,13 @@ namespace ConditioningControlPanel.Services
                 switch (propertyName)
                 {
                     case nameof(AppSettings.SubliminalPool):
-                        FoldUserPoolEdit(current.SubliminalPool, ref _prescribedSubliminalPool, ref _savedSubliminalPool);
+                        PhrasePoolCustody.FoldUserPoolEdit(current.SubliminalPool, ref _prescribedSubliminalPool, ref _savedSubliminalPool);
                         break;
                     case nameof(AppSettings.BouncingTextPool):
-                        FoldUserPoolEdit(current.BouncingTextPool, ref _prescribedBouncingTextPool, ref _savedBouncingTextPool);
+                        PhrasePoolCustody.FoldUserPoolEdit(current.BouncingTextPool, ref _prescribedBouncingTextPool, ref _savedBouncingTextPool);
                         break;
                     case nameof(AppSettings.LockCardPhrases):
-                        FoldUserPoolEdit(current.LockCardPhrases, ref _prescribedLockCardPool, ref _savedLockCardPool);
+                        PhrasePoolCustody.FoldUserPoolEdit(current.LockCardPhrases, ref _prescribedLockCardPool, ref _savedLockCardPool);
                         break;
                 }
                 // Every fold assumes a GENUINE user edit (session writes are in-place/no-INPC,
@@ -1217,60 +1157,6 @@ namespace ConditioningControlPanel.Services
             {
                 App.Logger?.Warning(ex, "[Session] Failed to fold a mid-session phrase edit into the restore snapshot");
             }
-        }
-
-        /// <summary>
-        /// Applies the user's delta (live pool vs what the session prescribed) to the pre-session
-        /// snapshot, then re-bases the prescribed copy onto the live pool so a later edit diffs
-        /// against what is actually on screen — and so a mod switch re-asserts the edited pool.
-        /// Phrases the session owns are never folded into the user's pool: only keys the user
-        /// added, deleted, or re-toggled on their OWN phrases move across.
-        /// </summary>
-        private static void FoldUserPoolEdit(
-            Dictionary<string, bool>? live,
-            ref Dictionary<string, bool>? prescribed,
-            ref Dictionary<string, bool>? saved)
-        {
-            if (live == null || saved == null) return;
-
-            if (prescribed == null)
-            {
-                // The session left this pool alone, so the live pool IS the user's own.
-                saved = new Dictionary<string, bool>(live);
-                return;
-            }
-
-            foreach (var kvp in live)
-            {
-                if (!prescribed.TryGetValue(kvp.Key, out var wasEnabled))
-                {
-                    saved[kvp.Key] = kvp.Value;                     // added while the session ran
-                }
-                else if (saved.ContainsKey(kvp.Key))
-                {
-                    // Differs from what the session prescribed: an unambiguous re-toggle of one of
-                    // their own phrases.
-                    //
-                    // EQUAL to what the session prescribed is ambiguous, and stays ambiguous: the
-                    // phrase editor is seeded from the LIVE pool, so the user may have ticked the
-                    // box onto the session's value on purpose, or may simply have saved an
-                    // unrelated edit with the session's own value standing. Adopt only the ENABLED
-                    // side of that ambiguity - ApplySessionSettings disables every pre-existing
-                    // phrase and enables only its own, so adopting a `false` here would silence
-                    // the user's whole pool the moment they save any mid-session edit, while
-                    // adopting a `true` at worst leaves one phrase they already own switched on,
-                    // and it is the half the fold actually loses today (ticking a phrase the
-                    // session happens to run too, which then reverted at session end).
-                    if (wasEnabled != kvp.Value || kvp.Value) saved[kvp.Key] = kvp.Value;
-                }
-            }
-
-            foreach (var key in prescribed.Keys)
-            {
-                if (!live.ContainsKey(key)) saved.Remove(key);       // deleted while the session ran
-            }
-
-            prescribed = new Dictionary<string, bool>(live);
         }
 
         /// <summary>
@@ -1328,16 +1214,12 @@ namespace ConditioningControlPanel.Services
         // started at t=0 regardless (#483). ApplySessionSettings queues one entry per
         // delayed feature; CheckDelayedFeatures fires each when its minute arrives. The
         // four original features keep their bespoke delay paths (randomized starts, ramps).
-        private readonly List<(string Name, int StartMinute, Action Start)> _pendingFeatureStarts = new();
+        private readonly DeferredStartQueue _pendingFeatureStarts = new();
 
-        private void DeferFeatureStart(string name, int startMinute, Action start)
-        {
-            _pendingFeatureStarts.Add((name, startMinute, start));
-            App.Logger?.Information("Session: {Feature} start deferred to minute {Minute}", name, startMinute);
-        }
+        private void DeferFeatureStart(string name, int startMinute, Action start) =>
+            _pendingFeatureStarts.Defer(name, startMinute, start);
 
-        private bool IsFeaturePending(string name) =>
-            _pendingFeatureStarts.Any(p => p.Name == name);
+        private bool IsFeaturePending(string name) => _pendingFeatureStarts.IsPending(name);
 
         private void ApplySessionSettings(SessionSettings settings)
         {
@@ -2503,7 +2385,7 @@ namespace ConditioningControlPanel.Services
         public TimeSpan Duration { get; }
         public int XPEarned { get; }
         public int PauseCount { get; }
-        public int XPPenalty => PauseCount * 100;
+        public int XPPenalty => PauseCount * SessionXp.PausePenalty;
 
         public SessionCompletedEventArgs(Session session, TimeSpan duration, int xp, int pauseCount = 0)
         {
