@@ -400,5 +400,36 @@ namespace ConditioningControlPanel.Services
         [JsonProperty] public double CenterX { get; set; }
         [JsonProperty] public double CenterY { get; set; }
         [JsonProperty] public DateTime CapturedAt { get; set; }
+
+        /// <summary>
+        /// Fold a newly-measured correction into <paramref name="old"/> (both heads' ApplyGazeTrim). The
+        /// new fit was measured with the old trim ACTIVE, so the two compose (apply old, then new): for
+        /// x' = x + a0 + a1·u then x'' = x' + b0 + b1·u', c0 = a0 + b0 + b1·a0, c1 = a1 + b1 + a1·b1.
+        /// The composed coefficients are clamped so repeated tests can't wind the map up.
+        /// </summary>
+        public static GazeTrimData Compose(GazeTrimData? old, double x0, double x1, double y0, double y1,
+            double centerX, double centerY, DateTime capturedAt)
+        {
+            const double MaxOffset = 300;   // DIPs
+            const double MaxScale = 0.35;   // ±35% stretch, total
+            double cx0 = x0, cx1 = x1, cy0 = y0, cy1 = y1;
+            if (old != null)
+            {
+                cx0 = old.X0 + x0 + x1 * old.X0;
+                cx1 = old.X1 + x1 + old.X1 * x1;
+                cy0 = old.Y0 + y0 + y1 * old.Y0;
+                cy1 = old.Y1 + y1 + old.Y1 * y1;
+            }
+            return new GazeTrimData
+            {
+                X0 = Math.Clamp(cx0, -MaxOffset, MaxOffset),
+                X1 = Math.Clamp(cx1, -MaxScale, MaxScale),
+                Y0 = Math.Clamp(cy0, -MaxOffset, MaxOffset),
+                Y1 = Math.Clamp(cy1, -MaxScale, MaxScale),
+                CenterX = centerX,
+                CenterY = centerY,
+                CapturedAt = capturedAt,
+            };
+        }
     }
 }

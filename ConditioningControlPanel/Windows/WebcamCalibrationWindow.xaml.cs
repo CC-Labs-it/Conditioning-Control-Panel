@@ -811,35 +811,10 @@ namespace ConditioningControlPanel
         //  RECALIBRATION: the dwell samples ARE ground truth ("user is
         //  looking at the bubble"), so the per-bubble residuals feed a
         //  per-axis linear correction — offset AND scale — applied as the
-        //  calibration's GazeTrim (see FitAxisTrim / ApplyGazeTrim). A
+        //  calibration's GazeTrim (Core BubbleAccuracyTest / ApplyGazeTrim). A
         //  multi-point quick-recal the user experiences as a minigame.
 
         private const string BubbleTestCursorKey = "calibration-bubbletest";
-
-        // -- Anisotropic target geometry ----------------------------------
-        // Everything about this test carries WIDER TOLERANCE VERTICALLY on
-        // purpose. Vertical gaze error measures 1.5-2x horizontal for
-        // physical reasons no amount of fitting removes: a full-screen
-        // vertical sweep is only ~+/-13 degrees of eyeball rotation against
-        // ~+/-26.5 horizontally, so the iris translates about half as far
-        // per screen unit (roughly 6 px of travel in the model's 64x64
-        // tensor space has to encode 1440 screen px), and the eyelid
-        // occludes the top and bottom of the iris exactly where accuracy is
-        // already worst -- looking DOWN drops the lid further, so the bottom
-        // rows are the hardest of all. CHI 2025 gaze-target guidance: size
-        // the target so its SHAPE absorbs the axis carrying the error, ~3
-        // degrees wide by ~4 tall. At 60 cm on a 27" 1440p panel 1 degree is
-        // ~45 px, so the visual bubble is 136 x 180 DIPs (3.0 x 4.0 degrees,
-        // set in the XAML) and the dwell zone below is an ELLIPSE, not a
-        // circle.
-        private const double BubblePopRadiusXDips = 130;    // gaze-to-center X half-extent that counts as "on it" (bubble half-width 68 + slack)
-        private const double BubblePopRadiusYDips = 195;    // 1.5x the X radius - matches the measured vertical:horizontal error ratio
-        private const int BubbleDwellNeededMs = 700;
-        private const int BubbleAvgWindowSamples = 12;      // ~400ms rolling mean drives the on-target decision
-        private const int BubbleTimeoutMs = 10000;
-        private const double NearMissMaxXDips = 250;         // timeout bubbles still yield a recal sample within this
-        private const double NearMissMaxYDips = 375;         // 1.5x again - a 300 px vertical miss at the bottom row is a REAL sample, not garbage
-        private const double BubbleHeaderClearDips = 108;    // top strip owned by the "Accuracy test" caption; probe rows clamp below it
 
         private bool _bubbleTestRunning;
         private WpfPoint? _bubbleGaze;
@@ -889,179 +864,20 @@ namespace ConditioningControlPanel
 
         private async Task<string> RunBubbleTestAsync()
         {
-            const int TickMs = 33;
-
-            double w = ActualWidth, h = ActualHeight;
-
-            // -- Probe layout -------------------------------------------------
-            // WAS two rows at h*0.30 / h*0.72 - a 2x2 quadrant block that
-            // never touched the top or bottom 25% of the screen. That is
-            // precisely where vertical error is worst, so the trim fit was
-            // both computed from AND validated against the easy middle band
-            // while the user's real experience at screen top/bottom went
-            // unmeasured and uncorrected.
-            //
-            // Fixed by MOVING the samples outward, not by adding more. Four
-            // bubbles stay four bubbles - the test's wall-clock length is
-            // unchanged (~12 s typical), which matters because a longer test
-            // is a WORSE test: concentration decays and late samples get
-            // noisy. Two changes buy the coverage for free:
-            //
-            //   1. The rows span 0.15..0.85 h instead of 0.30..0.72 h - a
-            //      1.67x longer lever arm for the slope term, and slope
-            //      variance falls with the SQUARE of the lever arm.
-            //   2. All FOUR y-levels are now DISTINCT (0.15 / 0.38 / 0.62 /
-            //      0.85) instead of two levels doubled up. FitAxisTrim's
-            //      slope was estimated from two rows only, which is why it
-            //      needs the 0.5 damping below to stop oscillating; four
-            //      distinct levels raise the y sum-of-squared-deviations by
-            //      ~1.6x AND make one bad dot visible instead of duplicated.
-            //
-            // Column balance is preserved deliberately: the left column takes
-            // {0.15, 0.85} and the right {0.38, 0.62}, so both columns have
-            // the SAME mean height. Any x-dependent vertical cross-talk
-            // therefore cancels out of the per-axis y fit instead of
-            // masquerading as a vertical slope.
-            //
-            // Visit order alternates columns (L,R,L,R) and puts the two
-            // extreme rows 1st and 3rd - the hardest target (the bottom row,
-            // where the eyelid drop degrades the iris landmark most) lands
-            // mid-test while concentration is still good.
-            //
-            // ── Why this is expressed as MIRROR PAIRS and not as four literal
-            //    fractions ────────────────────────────────────────────────────
-            // The rows have to clear the caption strip at the top
-            // (BubbleHeaderClearDips) plus the ring's half-height, and the
-            // ideal 0.15 h row does NOT clear that on a normal monitor:
-            // rowMin is 108 + 114 = 222 DIPs, but 0.15 h is 162 at 1080p and
-            // 216 even at 1440p. The previous code ran each row through
-            // Math.Clamp individually, which silently
-            //   (a) shrank the vertical span this test exists to probe, and
-            //   (b) BROKE the column balance - clamping moves ONE member of a
-            //       pair and not the other, so the left column's mean drifted
-            //       off the right column's (at 1080p: 570 vs 540) and vertical
-            //       error leaked straight back into the horizontal fit.
-            // Neither was visible from the outside. So the layout is now
-            // defined the way the invariant actually works: two MIRROR PAIRS of
-            // offsets about one common centre.
-            //     outer pair (left column)  = centre +/- 0.35 h * scale
-            //     inner pair (right column) = centre +/- 0.12 h * scale
-            // Both columns are mirror pairs about the SAME centre, so their
-            // means are equal for ANY centre and ANY scale - the invariant
-            // holds at every window height by construction, not by luck. When
-            // the ideal span will not fit we move the CENTRE first (the top is
-            // the only crowded end; the bottom only owes a 16 DIP margin) and
-            // compress both pairs by the SAME factor only if recentring is not
-            // enough. Compressing symmetrically also keeps all four levels
-            // distinct, because the 0.12/0.35 ratio is preserved.
-            double ringHalfH = TestBubbleRingBg.Height / 2.0;
-            double rowMin = BubbleHeaderClearDips + ringHalfH;
-            double rowMax = h - ringHalfH - 16;
-            const double OuterFrac = 0.35;   // 0.5 -/+ 0.35 => the ideal 0.15 / 0.85 rows
-            const double InnerFrac = 0.12;   // 0.5 -/+ 0.12 => the ideal 0.38 / 0.62 rows
-
-            double rowCenter, rowScale;
-            bool rowsDegenerate = false;
-            if (rowMin > rowMax)
-            {
-                rowsDegenerate = true;
-                // Absurdly short window: the caption strip plus one whole ring
-                // does not fit at all. Degenerate but safe - all four probes
-                // land on one line. Balance still holds (both columns collapse
-                // to the same point) but there is no vertical geometry left to
-                // fit, so say so out loud rather than returning a bogus slope.
-                rowCenter = h / 2.0;
-                rowScale = 0;
-                App.Logger?.Warning(
-                    "WebcamCalibrationWindow: bubble test cannot lay out probe rows at window height {H:F0} DIPs " +
-                    "(needs at least {Need:F0}) - all four probes collapse to one line and the vertical fit is meaningless.",
-                    h, rowMin + ringHalfH + 16);
-            }
-            else
-            {
-                double band = rowMax - rowMin;
-                double maxScale = band / (2.0 * OuterFrac * h);
-                if (maxScale >= 1.0)
-                {
-                    // The ideal span fits. Keep the centre as close to h/2 as
-                    // the band allows: FitAxisTrim pivots on ActualHeight/2, and
-                    // a design centred on that pivot makes its offset and slope
-                    // estimates orthogonal (uncorrelated), which is worth the
-                    // few DIPs of shift it costs.
-                    rowScale = 1.0;
-                    double lo = rowMin + OuterFrac * h;
-                    double hi = rowMax - OuterFrac * h;
-                    // maxScale >= 1 already guarantees hi >= lo; this only
-                    // protects against the two expressions rounding differently
-                    // at the exact boundary, because Math.Clamp THROWS on min > max.
-                    if (hi < lo) hi = lo;
-                    rowCenter = Math.Clamp(h / 2.0, lo, hi);
-                }
-                else
-                {
-                    // Recentre on the usable band - that is precisely the centre
-                    // that affords the longest symmetric span - then compress
-                    // both pairs by one shared factor.
-                    rowScale = maxScale;
-                    rowCenter = (rowMin + rowMax) / 2.0;
-                }
-            }
-
-            double outerOffset = OuterFrac * h * rowScale;
-            double innerOffset = InnerFrac * h * rowScale;
-            double yTop = rowCenter - outerOffset;
-            double yBottom = rowCenter + outerOffset;
-            double yUpperMid = rowCenter - innerOffset;
-            double yLowerMid = rowCenter + innerOffset;
-
-            // Note the guard is "not already warned about" and NOT "rowScale > 0":
-            // at h == 352 exactly the usable band is zero DIPs wide, so rowScale
-            // comes out 0 from the NON-degenerate branch and all four rows
-            // collapse onto one line. That must still be reported.
-            if (!rowsDegenerate && rowScale < 0.999)
-            {
-                double spanFrac = 2.0 * OuterFrac * rowScale;
-                // FitAxisTrim only fits a vertical SLOPE when the measured
-                // y-spread clears ActualHeight * 0.15. Below twice that margin,
-                // sample noise alone decides whether a given run produces a
-                // slope or an offset-only fit, which is not a usable
-                // measurement - so that case is a Warning, not an FYI.
-                if (spanFrac < 2.0 * 0.15)
-                {
-                    App.Logger?.Warning(
-                        "WebcamCalibrationWindow: bubble-test probe span compressed to {Span:P0} of a {H:F0} DIP window " +
-                        "(scale {Scale:F2}, centre {Centre:F0}) - under the 30% FitAxisTrim needs for a vertical slope, " +
-                        "so this run will be offset-only. Column balance is intact.",
-                        spanFrac, h, rowScale, rowCenter);
-                }
-                else
-                {
-                    App.Logger?.Information(
-                        "WebcamCalibrationWindow: bubble-test probe rows compressed to scale {Scale:F2} " +
-                        "(span {Span:P0} of {H:F0} DIPs, centre {Centre:F0}) - header clearance {Clear:F0} + ring half-height " +
-                        "{Ring:F0} will not fit the ideal 0.15/0.85 rows. Column balance is intact.",
-                        rowScale, spanFrac, h, rowCenter, BubbleHeaderClearDips, ringHalfH);
-                }
-            }
-
-            var spots = new[]
-            {
-                new WpfPoint(w * 0.24, yTop),        // top extreme
-                new WpfPoint(w * 0.76, yLowerMid),
-                new WpfPoint(w * 0.24, yBottom),     // bottom extreme (hardest)
-                new WpfPoint(w * 0.76, yUpperMid),
-            };
+            // Probe layout, dwell, recal fit and summary: Core BubbleAccuracyTest (the Avalonia head
+            // runs the same copy).
+            var spots = BubbleAccuracyTest.ProbeSpots(ActualWidth, ActualHeight, TestBubbleRingBg.Height / 2.0);
 
             int popped = 0;
             var errors = new List<double>();          // |gaze−bubble| per popped bubble
             // Ground-truth pairs for the recalibration fit: where the bubble
             // was vs where the (pre-lock) cursor actually hovered.
-            var samples = new List<(WpfPoint Target, WpfPoint Measured)>();
+            var samples = new List<((double X, double Y) Target, (double X, double Y) Measured)>();
 
             for (int i = 0; i < spots.Length; i++)
             {
                 if (_cancelled) return "";
-                var center = spots[i];
+                var center = new WpfPoint(spots[i].X, spots[i].Y);
                 MoveBubbleTo(center);
                 UpdateRing(TestBubbleRingFg, 0);
                 TestBubble.Opacity = 1.0;
@@ -1069,120 +885,42 @@ namespace ConditioningControlPanel
                 TestBubbleScale.ScaleY = 1.0;
                 TxtBubbleTestStatus.Text = $"Bubble {i + 1} / {spots.Length} — pop it with your eyes.";
 
-                // Declare this bubble as the current intent target: the gaze
-                // attractor contracts wobble around it so the cursor stays in
-                // the zone once the user is clearly trying to hit it.
-                // The service's attractor is circular and takes one scalar, so
-                // it gets the (smaller) X radius: the lock's target-switch
-                // threshold and 4x distance taper keep exactly the behaviour
-                // they were tuned with. The anisotropy lives in the dwell test
-                // below, which is ours.
-                App.Webcam?.SetGazeAttractor(center.X, center.Y, BubblePopRadiusXDips);
+                // Declare this bubble as the current intent target. The service's attractor is
+                // circular, so it gets the (smaller) X radius; the anisotropy lives in the dwell test.
+                App.Webcam?.SetGazeAttractor(center.X, center.Y, BubbleAccuracyTest.PopRadiusX);
 
-                double dwellMs = 0;
-                var insideSamples = new List<WpfPoint>();
-                var recentSamples = new Queue<(DateTime At, WpfPoint P)>();
-                var avgWindow = new Queue<WpfPoint>();
+                var dwell = new BubbleAccuracyTest.Dwell(center.X, center.Y);
                 var started = DateTime.UtcNow;
-                bool didPop = false;
-
                 while (true)
                 {
-                    await Task.Delay(TickMs);
+                    await Task.Delay(BubbleAccuracyTest.TickMs);
                     if (_cancelled) return "";
                     var now = DateTime.UtcNow;
-                    if ((now - started).TotalMilliseconds > BubbleTimeoutMs) break;
+                    if ((now - started).TotalMilliseconds > BubbleAccuracyTest.TimeoutMs) break;
 
                     var gaze = _bubbleGaze;
-                    bool fresh = gaze.HasValue && (now - _bubbleGazeAt).TotalMilliseconds < 300;
-                    WpfPoint raw = default;
-                    if (fresh)
-                    {
-                        // Residual/accuracy math must not be flattered by the
-                        // lock-on — record the pre-lock point the tracking
-                        // service snapshots each frame. The dwell decision
-                        // below deliberately DOES use the locked point
-                        // (that's the forgiveness).
-                        raw = App.Webcam?.LastPreLockGaze ?? gaze!.Value;
-                        recentSamples.Enqueue((now, raw));
-                        while (recentSamples.Count > 0 && (now - recentSamples.Peek().At).TotalMilliseconds > 2000)
-                            recentSamples.Dequeue();
-                        avgWindow.Enqueue(gaze.Value);
-                        while (avgWindow.Count > BubbleAvgWindowSamples) avgWindow.Dequeue();
-                    }
-
-                    // On-target decision runs on the ROLLING MEAN, not the
-                    // instantaneous point: if the user is lingering on the
-                    // zone on average, a single wobble frame outside the
-                    // radius must not drop the target (user report — "at the
-                    // first wobble out of the bubble zone we lose it").
-                    // Measured as a NORMALISED ELLIPTICAL distance (<=1 is
-                    // inside), not a circle: the dwell zone is 1.5x taller
-                    // than it is wide so the axis carrying more error gets
-                    // more tolerance. Without this, moving the probe rows out
-                    // to 0.15/0.85 h would just convert fast pops into 10 s
-                    // timeouts - a longer AND less informative test.
-                    double onTarget = double.MaxValue;
-                    if (fresh && avgWindow.Count >= 3)
-                    {
-                        double ax = 0, ay = 0;
-                        foreach (var q in avgWindow) { ax += q.X; ay += q.Y; }
-                        ax /= avgWindow.Count;
-                        ay /= avgWindow.Count;
-                        double ex = (ax - center.X) / BubblePopRadiusXDips;
-                        double ey = (ay - center.Y) / BubblePopRadiusYDips;
-                        onTarget = Math.Sqrt(ex * ex + ey * ey);
-                    }
-
-                    if (onTarget <= 1.0)
-                    {
-                        dwellMs += TickMs;
-                        insideSamples.Add(raw);
-                    }
-                    else
-                    {
-                        // Leaky decay instead of a hard reset — a stray
-                        // stretch shouldn't wipe accumulated dwell.
-                        dwellMs = Math.Max(0, dwellMs - TickMs);
-                    }
-                    UpdateRing(TestBubbleRingFg, dwellMs / BubbleDwellNeededMs);
-
-                    if (dwellMs >= BubbleDwellNeededMs)
-                    {
-                        didPop = true;
-                        break;
-                    }
+                    bool fresh = gaze.HasValue && (now - _bubbleGazeAt).TotalMilliseconds < BubbleAccuracyTest.FreshGazeMs;
+                    // Residual math records the pre-lock point; the dwell decision uses the locked one.
+                    var raw = fresh ? App.Webcam?.LastPreLockGaze ?? gaze!.Value : default;
+                    dwell.Tick((long)(now - started).TotalMilliseconds,
+                        fresh ? (gaze!.Value.X, gaze.Value.Y) : null, (raw.X, raw.Y));
+                    UpdateRing(TestBubbleRingFg, dwell.Progress);
+                    if (dwell.Popped) break;
                 }
                 App.Webcam?.ClearGazeAttractor();
 
-                if (didPop)
+                if (dwell.Popped)
                 {
                     popped++;
-                    var med = MedianPoint(insideSamples);
-                    double err = Math.Sqrt(Math.Pow(med.X - center.X, 2) + Math.Pow(med.Y - center.Y, 2));
-                    errors.Add(err);
-                    samples.Add((center, med));
+                    var med = dwell.PopSample;
+                    errors.Add(Math.Sqrt(Math.Pow(med.X - center.X, 2) + Math.Pow(med.Y - center.Y, 2)));
+                    samples.Add(((center.X, center.Y), med));
                     CalibrationSoundService.BubblePop();
                     await PlayBubblePopAnimationAsync();
                 }
                 else
                 {
-                    // Timeout. If the gaze hovered at a consistent spot near
-                    // the bubble, that's still a usable sample — the user was
-                    // looking at it, the mapping just missed. These are the
-                    // MOST valuable pairs for the fit: the biggest errors.
-                    if (recentSamples.Count >= 10)
-                    {
-                        var med = MedianPoint(recentSamples.Select(s => s.P).ToList());
-                        // Elliptical gate, same reasoning as the dwell zone: a
-                        // vertical miss that would be absurd horizontally is
-                        // routine at the top/bottom rows, and those are the
-                        // pairs the fit most needs to see.
-                        double nx = (med.X - center.X) / NearMissMaxXDips;
-                        double ny = (med.Y - center.Y) / NearMissMaxYDips;
-                        if (nx * nx + ny * ny <= 1.0)
-                            samples.Add((center, med));
-                    }
+                    if (dwell.NearMissSample() is { } near) samples.Add(((center.X, center.Y), near));
                     TxtBubbleTestStatus.Text = "Moving on…";
                     TestBubble.Opacity = 0.25;
                     await Task.Delay(500);
@@ -1192,114 +930,15 @@ namespace ConditioningControlPanel
 
             HideBubble();
 
-            // Recalibrate from the residuals. Each bubble is ground truth —
-            // the user was trying to look THERE — so fit a per-axis linear
-            // correction (offset + center-relative scale) through the
-            // (measured → target) pairs. The scale term is what a plain
-            // offset can't express: if the cursor sat too high on the LOW
-            // bubbles but was fine on the high ones, the map is vertically
-            // stretched, and the slope measures exactly that. Falls back to
-            // offset-only when the sample geometry is too thin for a slope.
-            bool tuned = false;
-            double rmsBefore = 0, rmsAfter = 0;
-            if (samples.Count >= 2)
+            var fit = BubbleAccuracyTest.FitTrim(samples, ActualWidth, ActualHeight);
+            if (fit is { Apply: true })
             {
-                double cx = ActualWidth / 2.0, cy = ActualHeight / 2.0;
-                var (x0, x1) = FitAxisTrim(samples.Select(s => (s.Target.X, s.Measured.X)).ToList(), cx, ActualWidth * 0.15);
-                var (y0, y1) = FitAxisTrim(samples.Select(s => (s.Target.Y, s.Measured.Y)).ToList(), cy, ActualHeight * 0.15);
-
-                // Half-strength learning rate on the SCALE terms only.
-                // HISTORY: when this damping was added, the probe layout gave
-                // only TWO distinct bubble rows and two columns, so a single
-                // noisy median swung the slope hard — live
-                // logs showed y1 slamming its ±0.25 clamp in alternating
-                // directions across consecutive runs (chasing each run's
-                // noise instead of converging). Applying half of the fitted
-                // slope per run turns that oscillation into a damped
-                // approach; repeat runs still reach the true scale, just in
-                // 2-3 passes. Offsets stay full-strength — they average all
-                // samples and were converging fine.
-                //
-                // The Y layout now has FOUR distinct levels (0.15/0.38/0.62/
-                // 0.85) instead of two doubled ones, so the vertical slope is
-                // far better conditioned than when this damping was written
-                // and a bad dot shows up as an outlier instead of hiding in a
-                // duplicate. X still has only two columns. Kept at 0.5 for
-                // now because the damping is also what keeps GazeTrim
-                // COMPOSING sanely across repeated runs — revisit only with
-                // logs showing y1 converging in one pass.
-                x1 *= 0.5;
-                y1 *= 0.5;
-
-                foreach (var (t, m) in samples)
-                {
-                    double rx = t.X - m.X, ry = t.Y - m.Y;
-                    rmsBefore += rx * rx + ry * ry;
-                    double ax = m.X + x0 + x1 * (m.X - cx);
-                    double ay = m.Y + y0 + y1 * (m.Y - cy);
-                    rmsAfter += (t.X - ax) * (t.X - ax) + (t.Y - ay) * (t.Y - ay);
-                }
-                rmsBefore = Math.Sqrt(rmsBefore / samples.Count);
-                rmsAfter = Math.Sqrt(rmsAfter / samples.Count);
-
-                // Apply only when it measurably helps and isn't noise-level.
-                if (rmsAfter < rmsBefore - 2
-                    && (Math.Abs(x0) >= 3 || Math.Abs(y0) >= 3 || Math.Abs(x1) >= 0.01 || Math.Abs(y1) >= 0.01))
-                {
-                    App.Webcam?.ApplyGazeTrim(x0, x1, y0, y1, cx, cy, persist: true);
-                    tuned = true;
-                    App.Logger?.Information(
-                        "WebcamCalibrationWindow: bubble-test recal — x0={X0:F0} x1={X1:F3} y0={Y0:F0} y1={Y1:F3} from {N} bubbles (rms {B:F0}→{A:F0} DIPs)",
-                        x0, x1, y0, y1, samples.Count, rmsBefore, rmsAfter);
-                }
+                App.Webcam?.ApplyGazeTrim(fit.X0, fit.X1, fit.Y0, fit.Y1, ActualWidth / 2.0, ActualHeight / 2.0, persist: true);
+                App.Logger?.Information(
+                    "WebcamCalibrationWindow: bubble-test recal — x0={X0:F0} x1={X1:F3} y0={Y0:F0} y1={Y1:F3} from {N} bubbles (rms {B:F0}→{A:F0} DIPs)",
+                    fit.X0, fit.X1, fit.Y0, fit.Y1, samples.Count, fit.RmsBefore, fit.RmsAfter);
             }
-
-            if (popped == 0 && !tuned)
-                return "Couldn't pop any bubbles — tracking may be off for this setup. Consider recalibrating.";
-
-            var text = popped > 0
-                ? $"Popped {popped} / {spots.Length} · average accuracy {errors.Average():F0} px"
-                : $"Popped 0 / {spots.Length}";
-            if (tuned) text += $" · recalibrated from your aim ({rmsBefore:F0}→{rmsAfter:F0} px). Run it again to verify!";
-            else text += ".";
-            return text;
-        }
-
-        // LS fit of residual = c0 + c1·(measured − center) over the bubble
-        // samples of one axis. The slope needs ≥3 samples spanning enough of
-        // the axis (minSpreadForScale) to be identifiable — with less
-        // geometry it degrades to offset-only. Clamps keep one bad test from
-        // warping the map; ApplyGazeTrim clamps the composed total again.
-        private static (double C0, double C1) FitAxisTrim(
-            List<(double Target, double Measured)> pts, double center, double minSpreadForScale)
-        {
-            int n = pts.Count;
-            double meanU = 0, meanR = 0;
-            double minU = double.MaxValue, maxU = double.MinValue;
-            foreach (var (t, m) in pts)
-            {
-                double u = m - center;
-                meanU += u; meanR += t - m;
-                if (u < minU) minU = u;
-                if (u > maxU) maxU = u;
-            }
-            meanU /= n; meanR /= n;
-
-            double c1 = 0;
-            if (n >= 3 && maxU - minU >= minSpreadForScale)
-            {
-                double varU = 0, cov = 0;
-                foreach (var (t, m) in pts)
-                {
-                    double du = m - center - meanU;
-                    double dr = (t - m) - meanR;
-                    varU += du * du;
-                    cov += du * dr;
-                }
-                if (varU > 1e-6) c1 = Math.Clamp(cov / varU, -0.25, 0.25);
-            }
-            double c0 = Math.Clamp(meanR - c1 * meanU, -250, 250);
-            return (c0, c1);
+            return BubbleAccuracyTest.Summary(popped, spots.Length, errors, fit);
         }
 
         private async Task PlayBubblePopAnimationAsync()
@@ -1336,13 +975,6 @@ namespace ConditioningControlPanel
             TestBubble.Visibility = Visibility.Collapsed;
             TestBubbleRingBg.Visibility = Visibility.Collapsed;
             TestBubbleRingFg.Visibility = Visibility.Collapsed;
-        }
-
-        private static WpfPoint MedianPoint(List<WpfPoint> pts)
-        {
-            var xs = pts.Select(p => p.X).OrderBy(v => v).ToList();
-            var ys = pts.Select(p => p.Y).OrderBy(v => v).ToList();
-            return new WpfPoint(xs[xs.Count / 2], ys[ys.Count / 2]);
         }
 
         private void MoveDotTo(WpfPoint screenPoint)
