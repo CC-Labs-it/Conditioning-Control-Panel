@@ -43,13 +43,14 @@ public sealed class FriendsDrawerTests
         /// <summary>When set, a "send" waits for it: the answer is still out while the test folds the drawer.</summary>
         public TaskCompletionSource? HoldSends;
         public string StateBody = State;
+        public bool ActSucceeds = true;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var op = r.RequestUri!.AbsolutePath.Split('/').Last();
             lock (Ops) Ops.Add(op);
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
             var body = op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
-                : op == "send" ? """{"ok":true,"status":"sent"}""" : """{"ok":true}""";
+                : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
@@ -139,7 +140,10 @@ public sealed class FriendsDrawerTests
     public Task ASendAnsweredAfterTheDrawerFoldsFliesOverTheChipsWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (global::Avalonia.Application.Current is null)
-            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options())
+                .ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, wire) = Service();
         var chip = new FriendsRailChip(svc) { Width = 200, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom };
@@ -249,7 +253,10 @@ public sealed class FriendsDrawerTests
     public Task AClickInsideTheDrawerKeepsItOpen() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options())
+                .ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (svc, _) = Service();
@@ -331,6 +338,85 @@ public sealed class FriendsDrawerTests
         finally { PresenceAsk.MarkAsked = before; }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task TheOnceOnlyAskOffersBothAnswersAndStaysRetired(bool yes) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var oldAsked = PresenceAsk.Asked;
+        var oldMark = PresenceAsk.MarkAsked;
+        var asked = false;
+        PresenceAsk.Asked = () => asked;
+        PresenceAsk.MarkAsked = () => asked = true;
+        try
+        {
+            var d = new FriendsDrawer(svc);
+            await svc.RefreshAsync();
+            Assert.NotNull(Tagged<Button>(d, "friends-presence-yes"));
+            Assert.NotNull(Tagged<Button>(d, "friends-presence-no"));
+            Click(d, yes ? "friends-presence-yes" : "friends-presence-no");
+            Assert.Equal(yes, svc.PresenceShared);
+            Assert.True(asked);
+            Assert.Null(Tagged<Button>(d, "friends-presence-yes"));
+            d.TogglePresence();
+            d.TogglePresence();
+            d.Render();
+            Assert.Null(Tagged<Button>(d, "friends-presence-no"));
+            var signedOut = new FriendsDrawer(Service(account: null).Svc);
+            Assert.Null(Tagged<Button>(signedOut, "friends-presence-yes"));
+            Assert.Equal(Loc.Get("friends_me_signed_out"), Tagged<TextBlock>(signedOut, "friends-me-status")!.Text);
+        }
+        finally { PresenceAsk.Asked = oldAsked; PresenceAsk.MarkAsked = oldMark; }
+    });
+
+    [Fact]
+    public Task AnOldServerRemembersOnlySuccessfulBlocksAndUnblocksPerAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        wire.StateBody = State.Replace(",\"blocked\":[{\"id\":\"u_bad\",\"name\":\"Bob\"}]", "");
+        var old = FriendsBlockList.Shared;
+        var entries = new List<BlockedEntry>();
+        FriendsBlockList.Shared = new FriendsBlockList(() => entries, rows => entries = rows.ToList());
+        var account = "me";
+        try
+        {
+            var d = new FriendsDrawer(svc) { BlockAccount = () => account };
+            await svc.RefreshAsync();
+            Assert.Null(svc.Snapshot.Blocked);
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.ConfirmAsync("u_on", "Mia", "block"));
+            Assert.Empty(entries);
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.ConfirmAsync("u_on", "Mia", "block"));
+            var remembered = Assert.Single(entries);
+            d.ToggleBlocked();
+            Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_on"));
+            account = "other";
+            d.Render();
+            Assert.Null(Tagged<Border>(d, "friends-blocked:u_on"));
+            account = "me";
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.UnblockAsync(remembered));
+            Assert.Single(entries);
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.UnblockAsync(remembered));
+            Assert.Empty(entries);
+            Assert.Null(Tagged<Border>(d, "friends-blocked:u_on"));
+            Assert.Equal(ActResult.Done, await d.BlockRequesterAsync(svc.Snapshot.Incoming[0]));
+            Assert.Equal("u_req", Assert.Single(entries).Id);
+            Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_req"));
+            FriendsBlockList.Shared.Add("me", "stale", "Stale", DateTimeOffset.UtcNow);
+            wire.StateBody = State;
+            await svc.RefreshAsync();
+            d.Render();
+            Assert.Empty(entries);
+            Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_bad"));
+            Assert.Equal(3, wire.Ops.Count(op => op == "block"));
+        }
+        finally { FriendsBlockList.Shared = old; }
+    });
+
     [Fact]
     public Task SignedOutShowsTheSignInButtonAndNoCode() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -346,7 +432,10 @@ public sealed class FriendsDrawerTests
     public Task RemovingAFriendThrowsAFloatingWordOverTheWindowThatClosesItself() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (global::Avalonia.Application.Current is null)
-            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options())
+                .ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsDrawer(svc);
