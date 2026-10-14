@@ -18,7 +18,8 @@ import { createHotseat } from './game/hotseat.js';
 import { createSolo } from './game/solo.js';
 import { createTurnHandoff } from './ui/turn-handoff.js';
 import { createDirector } from './board/director.js';
-import { createDriverSwitch, startOnlineMatch } from './net/online.js';
+import { createDriverSwitch, startOnlineMatch, startWatchMatch } from './net/online.js';
+import { setWatchPolicy } from './net/api.js';
 import { DEFAULT_MS } from './game/clock.js';
 import { postToHost, onHostMessage, onIdentity, signalReady } from './bridge.js';
 import { createPauseHush } from './ui/pause-hush.js';
@@ -120,19 +121,29 @@ function main() {
    * know the game changed hands.
    */
   window.PBP.startOnline = (match) => startOnlineMatch({ bus, board, hud: dom.hud, game, match });
+  // The stands: watch a public game from "playing now" (net/watch.js), 15 s behind.
+  window.PBP.startWatch = (match) => startWatchMatch({ bus, board, hud: dom.hud, game, match });
+  // "Let people watch my games" (Options): off sends watchable:false when a public game is made.
+  setWatchPolicy(() => presentation().letPeopleWatch);
   // The friends drawer: challenge a friend, or take a friend's challenge up. Heard here, early,
   // because the frame can land before the door exists; it waits for the door.
   onHostMessage((m) => {
     if (!m || m.type !== 'pbp:friend') return;
     Promise.resolve(window.PBP.doorReady).then((door) => { if (door && door.friend) door.friend(m); }).catch(() => {});
   });
+  const spectated = new Set();
   onHostMessage((m) => {
     if (m.type !== 'pbp:settings') return;
     // The envelope's own key is not a setting, and reducedMotion belongs to preferences.js: it folds the
     // host's value in with the saved choice and the OS (they can only add reduction). Copying the raw host
     // value here wrote a false over a ticked "Reduce motion" on every launch.
-    const { type, reducedMotion, ...values } = m;
+    const { type, reducedMotion, spectateMatchId, letPeopleWatch, ...values } = m;
     Object.assign(window.PBP.settings, values);
+    // The desktop Lobby's Watch: the window opens straight into the stands, once per game id.
+    if (spectateMatchId && !spectated.has(String(spectateMatchId))) {
+      spectated.add(String(spectateMatchId));
+      Promise.resolve(window.PBP.doorReady).then((door) => { if (door && door.friend) door.friend({ mode: 'spectate', matchId: String(spectateMatchId) }); }).catch(() => {});
+    }
   });
   // The host names the player from the account (pbp:identity, displayName),
   // and that is the name the server lists in the lobby - so it is the name the
@@ -168,16 +179,26 @@ function main() {
   const updateBase = view.update;
   view.update = (dt) => { feelDt = dt; updateBase(dt); };
   const renderBase = view.render;
+  // The board intro (board/intro.js) lifts the men only for the draw itself.
+  const drawBoard = () => { if (board.intro) board.intro.render(renderBase); else renderBase(); };
   view.render = () => {
     for (const fn of feelLate) fn(feelDt);
-    if (board.juice) { board.juice.update(feelDt); board.juice.render(renderBase); }
-    else renderBase();
+    if (board.juice) { board.juice.update(feelDt); board.juice.render(drawBoard); }
+    else drawBoard();
   };
   import('./board/juice.js').then(m => {
     board.juice = m.createJuice({ bus, camera: view.camera });
     const dispose = view.dispose;
     view.dispose = () => { board.juice.dispose(); dispose(); };
   }).catch(e => console.warn('[pbp] impact camera missing', e));
+  // The clockwork rise when a new game's board comes up. Loaded late and guarded:
+  // without it the men simply stand there, as they always did.
+  import('./board/intro.js').then((m) => {
+    board.intro = m.createIntro({ view, pieces, bus, game, sfx: () => board.sfx, prefs: presentation });
+    feelLate.push((dt) => board.intro.update(dt));
+    const dispose = view.dispose;
+    view.dispose = () => { board.intro.dispose(); dispose(); };
+  }).catch((e) => console.warn('[pbp] board intro missing', e));
   import('./board/outline.js').then((m) => {
     board.outline = m.createOutline({ group: view.pieceGroup, bus });
     feelLate.push((dt) => board.outline.update(dt, view.camera, view.renderer));
@@ -238,9 +259,11 @@ function main() {
       if (saved?.iq) iq.restore(saved.iq);
     });
     bus.on('iq', () => { if (mode === 'solo') patchSoloIq(); });
+    // the stands keep nothing on the shelf (door/door.js does not save a watched game)
     const record = game.record;
     game.record = (...a) => { const r = record.apply(game, a); const fall = iq.record(); return fall ? { ...r, iq: fall } : r; };
     bus.on('gameover', () => {
+      if (mode === 'watch') return;
       const plies = game.plies(), last = game.rules.chess.history().pop(), epoch = iq.epoch();
       iq.settled().then(() => {
         // a rematch or the menu before the last grade came in: the trackers belong to the next game now
@@ -262,6 +285,12 @@ function main() {
     hudL = m.createHud({ bus, game, board, root: document.getElementById('hud'), params });
     board.hud = hudL;
   }).catch((e) => console.warn('[pbp] hud missing', e));
+  // A seat's own Distraction, written down for the stands while anybody watches (net/fxlog.js):
+  // the ramp's ramp-heat / ramp-fired, posted every ~5 s of the turn and once on the move.
+  import('./net/fxlog.js').then((m) => {
+    board.fxlog = m.createFxLog({ bus, game });
+    const dispose = view.dispose; view.dispose = () => { board.fxlog.dispose(); dispose(); };
+  }).catch((e) => console.warn('[pbp] fx log missing', e));
   // --- end L ---
   // --- M: the hand ---
   // A man waiting on his square counts as being in hand for Esc, but he is not
@@ -339,16 +368,23 @@ function main() {
   document.body.appendChild(pauseCard);
   let pausedGame = false;
   const onlineSeat = () => !!(window.PBP.game?.current && typeof window.PBP.game.current.offerDraw === 'function');
+  // The stands pause too (owner, 2026-10-14: Escape while watching is the pause card, never the way out).
+  // The watched game is not ours to hold, so nothing stops but this screen's effects and sound.
+  const watchingNow = () => !!window.PBP.game?.isWatch;
   function setGamePaused(p) {
     if (p === pausedGame) return;
     pausedGame = p;
     pauseCard.hidden = !p;
-    const online = onlineSeat();
-    pauseCard.querySelector('.pbp-pause-note').hidden = !online;
-    if (!online) { const clock = window.PBP.game?.clock; if (p) clock?.pause?.(); else clock?.resume?.(); }
+    const online = onlineSeat(), watch = watchingNow();
+    const note = pauseCard.querySelector('.pbp-pause-note');
+    note.hidden = !online && !watch;
+    note.textContent = watch ? 'The game carries on without you.' : 'Online game: the clock keeps running.';
+    pauseCard.querySelector('[data-pause="leave"]').textContent = watch ? 'Back to the tables' : 'Leave the board';
+    if (!online && !watch) { const clock = window.PBP.game?.clock; if (p) clock?.pause?.(); else clock?.resume?.(); }
     pauseHush.set(p);
     // the niche manager is one tap away on the pause card, wherever a host keeps a picture choice
-    pauseCard.querySelector('[data-pause="pictures"]').hidden = !(p && pictureChoice.available() && presentation().experience !== 'classic');
+    const fx = watch ? presentation().watchEffects !== false : presentation().experience !== 'classic';
+    pauseCard.querySelector('[data-pause="pictures"]').hidden = !(p && pictureChoice.available() && fx);
     if (p) pauseCard.querySelector('[data-pause="resume"]').focus();
   }
   const pauseHush = createPauseHush({ board, ramp: () => window.PBP.ramp, isPaused: () => pausedGame });
@@ -361,6 +397,7 @@ function main() {
     if (!b) return;
     if (b.dataset.pause === 'resume') setGamePaused(false);
     else if (b.dataset.pause === 'pictures') pictureChoice.manage({ still: presentation().reducedMotion }).then(() => { if (pausedGame) pauseCard.querySelector('[data-pause="resume"]').focus(); });
+    else if (watchingNow()) { setGamePaused(false); bus.emit('watch-leave'); }   // the stands go back to the tables
     else postToHost({ type: 'pbp:exit' });   // leave hushed, the window closes
   });
   const inGameNow = () => !window.PBP.door?.isUp() && window.PBP.game && !window.PBP.game.isOver();
@@ -371,9 +408,13 @@ function main() {
   window.addEventListener('keydown', (e) => {
     // A held Escape is one press (the panel counts it once too); its key repeats must not leave the pause.
     if (e.key !== 'Escape' || e.repeat) return;
+    // In the stands Escape never leaves: it opens the pause card, and on the card it resumes (DESK note, 2026-10-14).
+    if (pausedGame && watchingNow()) { setGamePaused(false); return; }
     if (pausedGame) { postToHost({ type: 'pbp:exit' }); return; }   // still hushed: nothing comes back on the way out
     if (drag.isDragging()) { drag.drop(); window.PBP.escapePause(); return; }
     const inGame = inGameNow();
+    // A finished watched game has nothing to pause: Esc goes back to the tables.
+    if (!window.PBP.door?.isUp() && watchingNow()) { if (inGame) setGamePaused(true); else bus.emit('watch-leave'); return; }
     if (inGame) setGamePaused(true);
     else postToHost({ type: 'pbp:exit' });
   });
@@ -400,7 +441,7 @@ function main() {
     drag.update(dt);
     jiggle.update(dt);   // last: it reads what everything else just decided
     // A paused local game holds the computer's reply too; an online seat keeps talking to the server.
-    if (window.PBP.game && window.PBP.game.update && (!pausedGame || onlineSeat())) window.PBP.game.update(dt);
+    if (window.PBP.game && window.PBP.game.update && (!pausedGame || onlineSeat() || watchingNow())) window.PBP.game.update(dt);
     view.render();
     board.director.afterRender(dt);
     requestAnimationFrame(frame);
@@ -423,6 +464,7 @@ function main() {
     // an online seat is built and switched in by net/online.js; the hotseat's
     // reset-and-start is not what it wants
     if (mode === 'online' && match) { window.PBP.startOnline(match); return; }
+    if (mode === 'watch' && match) { window.PBP.startWatch(match); return; }
     if (mode === 'solo') {
       const solo = createSolo({ bus, board, hud: dom.hud, options, restore });
       game.switchTo(solo);
