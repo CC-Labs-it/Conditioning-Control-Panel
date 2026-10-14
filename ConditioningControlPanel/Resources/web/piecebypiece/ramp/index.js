@@ -38,6 +38,7 @@ import { createMeter, createThinkClock, surgeLevel, RAMP_TUNING, clamp01, thinkR
 import { createSchedule, videoHoldMs, sustainedFor } from './schedule.js';
 import { createLayerStack } from './layers/index.js';
 import { createFixtureMedia } from './media.js';
+import { createAmbient } from './ambient.js';
 import { presentation, onPresentation } from '../game/preferences.js';
 
 const TICK_MS = 90;            // scheduling cadence; layers animate on their own
@@ -168,6 +169,10 @@ export function attachRamp(opts = {}) {
   let replayHeat = 0;         // eased toward it, so 1 s samples do not step
   let replayAcc = 0;          // the Amount dial as a running share of fires to show
   let lastHeatEmit = 0;       // ramp-heat on a player's page: once a second during their own turn
+  // Players on pages that post no fx record (older than spectate v2): the stands run a calm one of their
+  // own for that side until its first record arrives (ramp/ambient.js; Options, on by default).
+  const ambient = createAmbient();
+  let ambientOn = presentation().watchAmbient !== false;
   const REPLAY_EASE_MS = 700;
   const DEFAULT_STRENGTH = 1;   // game/preferences.js presentation().strength when nothing is saved
   const MEDIA_KINDS = new Set(['flash', 'gifRain', 'video']);
@@ -359,7 +364,18 @@ export function attachRamp(opts = {}) {
     while (replayAcc >= 1) { replayAcc -= 1; stack.oneshot(kind, { heat: replayHeat }); }
   }
 
+  /** The stands' own pictures for a side that sends no record: `n` owed, through the Amount dial. */
+  function ambientFire(n) {
+    if (!n || !enabled || !replay || !ambientOn || reducedMotion || !hasPictures()) return;
+    replayAcc += n * amountRate(watchFx.amount);
+    while (replayAcc >= 1) { replayAcc -= 1; stack.oneshot(ambient.kind, { heat: replayHeat }); }
+  }
+
   function replayTick(t, dt) {
+    if (ambientOn && ambient.active()) {
+      replayTarget = ambient.heat(t);
+      ambientFire(ambient.tick(t));
+    }
     const k = Math.min(1, Math.max(0, dt) / REPLAY_EASE_MS);
     replayHeat = clamp01(replayHeat + (replayTarget - replayHeat) * k);
     const m = overrideMeter != null ? clamp01(overrideMeter) : replayHeat;
@@ -426,6 +442,7 @@ export function attachRamp(opts = {}) {
       // the stands: nothing of ours climbs, the tape says what the turn player saw
       replay = p?.mode === 'watch';
       replayTarget = replayHeat = replayAcc = 0;
+      ambient.reset(now());
       paintStrength();
       resetMatch();
     },
@@ -433,14 +450,17 @@ export function attachRamp(opts = {}) {
     'watch-leave'() { leaveReplay(); },
     'watch-closed'() { leaveReplay(); },
     // THE STANDS, off the tape (net/watch.js). Only the turn player's record counts.
+    // Any record from a side, current or not, means that side's page posts them: its ambient ends.
     'fx-heat'(p) {
       if (!replay || !p) return;
+      ambient.noteFx(p.side);
       if ((p.side === 'w' || p.side === 'b') && p.side !== replayTurn) return;
       replayTarget = clamp01(Number(p.heat));
     },
-    'fx-fire'(p) { replayFire(p); },
+    'fx-fire'(p) { if (replay && p) ambient.noteFx(p.side); replayFire(p); },
     // an effect still ahead on the tape: let a host pool that is running low ask for more now
     'fx-soon'(p) {
+      if (replay && p) ambient.noteFx(p.side);
       if (!replay || !enabled || !p || !MEDIA_KINDS.has(String(p.kind || ''))) return;
       try { if (media && typeof media.request === 'function') media.request(); } catch { /* best effort */ }
     },
@@ -478,15 +498,18 @@ export function attachRamp(opts = {}) {
       // The board's seeding `turn` at start() is not a move, so it never rests.
       lastBeat = now();
       if (p && (p.side === 'w' || p.side === 'b')) replayTurn = p.side;
-      if (seeding) { think.reset(); return; }
+      if (seeding) { think.reset(); if (replay) ambient.reset(now(), replayTurn); return; }
       if (surge || meter.over) return;   // the fall owns the screen now
-      if (replay) { replayRest(); return; }
+      // the stands: the breath, then what the ambient owes the move (it pops after the fade)
+      if (replay) { replayRest(); ambientFire(ambient.move(replayTurn, now())); return; }
       rest();
     },
     // A capture still counts (it makes the next climb faster) but no longer
     // bursts: it lands on a move, and a move is the breath. The capture replay
     // owns that moment. A check no longer flashes for the same reason.
-    capture(p) { meter.noteCapture(p, now()); },
+    // (The stands' ambient owes the move a picture for either; it shows after the breath.)
+    capture(p) { meter.noteCapture(p, now()); if (replay) ambient.capture(p && p.by); },
+    check(p) { if (replay) ambient.check(p && p.side); },
     grab(p) { if (enabled) stack.grab(p); },
     dragmove(p) { if (enabled) stack.dragmove(p); },
     drop(p) { if (enabled) stack.drop(p); },
@@ -566,6 +589,9 @@ export function attachRamp(opts = {}) {
       for (const k of Object.keys(applied)) applied[k] = UNSET;
       if (enabled) applySustained(susFor(liveMeter()));
     }
+    const wasAmbient = ambientOn;
+    ambientOn = p.watchAmbient !== false;
+    if (wasAmbient && !ambientOn && replay && ambient.active()) replayTarget = 0;
     const wasReduced = reducedMotion;
     reducedMotion = p.reducedMotion;
     if (reducedMotion && !wasReduced) {
@@ -599,7 +625,8 @@ export function attachRamp(opts = {}) {
       heat: liveHeat(t),
       think: { ms: think.ms, lift: think.lift(), fullMs: think.fullMs, counting: thinking() && !resting },
       resting,
-      replay: replay ? { heat: replayHeat, target: replayTarget, turn: replayTurn, effects: { ...watchFx }, pictures: hasPictures(), strength: strengthNow() } : null,
+      replay: replay ? { heat: replayHeat, target: replayTarget, turn: replayTurn, effects: { ...watchFx }, pictures: hasPictures(), strength: strengthNow(),
+        ambient: { on: ambientOn, active: ambient.active(), ...ambient.debug() } } : null,
       dials: { ...dials },
       surge: surge ? { ms: t - surge.at } : null,
       override: overrideMeter,

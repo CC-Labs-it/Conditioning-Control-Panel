@@ -27,6 +27,8 @@ globalThis.window = { PBP: { game, isPaused: () => false, door: { isUp: () => fa
 const { attachRamp } = await import('../ramp/index.js');
 const { createFixtureMedia } = await import('../ramp/media.js');
 const { setPresentation } = await import('../game/preferences.js');
+// These checks are about the players' own records; the stands' ambient for older pages has its own smoke.
+setPresentation({ watchAmbient: false });
 
 let passed = 0;
 const failures = [];

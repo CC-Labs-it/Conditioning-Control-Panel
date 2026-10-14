@@ -562,6 +562,10 @@ export function createHud(opts = {}) {
   const watchableChange = () => setPresentation({ letPeopleWatch: watchable.checked });
   watchable?.addEventListener('change', watchableChange);
   undom.push(() => watchable?.removeEventListener('change', watchableChange));
+  const watchAmbient = pick('game-watch-ambient');
+  const watchAmbientChange = () => setPresentation({ watchAmbient: watchAmbient.checked });
+  watchAmbient?.addEventListener('change', watchAmbientChange);
+  undom.push(() => watchAmbient?.removeEventListener('change', watchAmbientChange));
   const soundChange = () => setPresentation({ volume: sound.checked ? .6 : 0 });
   const motionChange = () => setPresentation({ reducedMotion: motion.checked });
   const follow = pick('game-follow');
@@ -644,6 +648,7 @@ export function createHud(opts = {}) {
     if (follow) { follow.checked = p.followCam && !p.reducedMotion; follow.disabled = p.reducedMotion; }
     if (replays) { replays.checked = p.replays && !p.reducedMotion; replays.disabled = p.reducedMotion; }
     if (watchable) watchable.checked = p.letPeopleWatch !== false;
+    if (watchAmbient) watchAmbient.checked = p.watchAmbient !== false;
     if (boardIntro) boardIntro.checked = p.boardIntro;
     if (openIntro) openIntro.checked = p.openIntro;
     if (invertX) invertX.checked = p.invertX;

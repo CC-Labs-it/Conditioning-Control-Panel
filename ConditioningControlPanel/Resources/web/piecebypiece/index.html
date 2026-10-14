@@ -84,6 +84,8 @@
               <button type="button" class="hud-btn" data-amount="normal" aria-pressed="true">Normal</button>
               <button type="button" class="hud-btn" data-amount="more" aria-pressed="false">More</button>
             </div>
+            <!-- The stands only (ramp/ambient.js): players whose page sends no effects get calm pictures of ours. -->
+            <label data-watch-only><input type="checkbox" id="game-watch-ambient" checked> Players on older versions: ambient pictures</label>
             <label class="dial-slider" for="game-strength" data-seat-only><span>Strength</span>
               <input type="range" id="game-strength" min="10" max="200" step="5" value="100" aria-describedby="game-strength-out">
               <output id="game-strength-out">100%</output></label>
