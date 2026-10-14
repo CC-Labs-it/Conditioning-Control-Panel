@@ -23,6 +23,10 @@ public readonly record struct LeashGateWorld(
 /// </summary>
 public static class LeashUiRules
 {
+    /// <summary>The own card counts gate tasks; Chaster bookings already land on the tab.</summary>
+    public static int PendingGateCount(IReadOnlyList<Punishment> pending) =>
+        pending.Count(p => p.Kind != PunishKind.Chaster);
+
     // ---- the grammar the sheets offer (CONTRACT "Grammar") ------------------------------
 
     /// <summary>Every punishment kind in the order the sheet lists them.</summary>
