@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Threading;
 using ConditioningControlPanel.Services.Chaos;
 using Microsoft.Web.WebView2.Core;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Models;
@@ -567,7 +568,9 @@ internal static partial class PieceByPieceHostService
                 ? ""
                 : o["body"]!.ToString(Newtonsoft.Json.Formatting.None));
 
-        if (!path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal))
+        // Judged on the BUILT Uri, not the raw string: "/v2/pbp/../user/me" starts with the
+        // prefix and still lands on /v2/user/me once System.Uri collapses it (HostNetPathRule).
+        if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out var target) || target is null)
         {
             App.Logger?.Warning("PieceByPiece: net REJECTED for path '{Path}'", path);
             ReplyNet(id, 0, "forbidden_path");
@@ -589,7 +592,7 @@ internal static partial class PieceByPieceHostService
             try
             {
                 var verb = method == "POST" ? HttpMethod.Post : HttpMethod.Get;
-                using var request = new HttpRequestMessage(verb, ProxyBaseUrl + path);
+                using var request = new HttpRequestMessage(verb, target);
                 if (method == "POST")
                 {
                     request.Content = new StringContent(body, Encoding.UTF8, "application/json");

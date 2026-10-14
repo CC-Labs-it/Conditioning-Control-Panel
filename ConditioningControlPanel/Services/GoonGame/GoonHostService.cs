@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Stakes;
 
 namespace ConditioningControlPanel.Services.GoonGame
@@ -1005,7 +1006,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                 ? (string?)o["body"] ?? ""
                 : o["body"]?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
 
-            if (!path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal))
+            // Judged on the BUILT Uri, not the raw string: "/v2/goon/../user/me" starts with the
+            // prefix and still lands on /v2/user/me once System.Uri collapses it (HostNetPathRule).
+            if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out var target) || target is null)
             {
                 App.Logger?.Warning("GoonHostService: net-post REJECTED for path '{Path}'", path);
                 ReplyNetPost(id, 0, "forbidden_path");
@@ -1018,7 +1021,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 string responseBody = "";
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, ProxyBaseUrl + path)
+                    using var request = new HttpRequestMessage(HttpMethod.Post, target)
                     {
                         Content = new StringContent(body, Encoding.UTF8, "application/json")
                     };
