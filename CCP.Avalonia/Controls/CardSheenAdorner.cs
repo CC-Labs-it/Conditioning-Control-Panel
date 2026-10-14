@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     {
         private const double TravelSeconds = 1.3;
         private const double CycleSeconds = 12.0;
-        private const int AmbientFrameRate = 24;
+        private const int AmbientFrameRate = 30;   // WPF Controls/CardSheenAdorner.cs:43; the shared beat
         private const byte PeakAlpha = 0x4A;
 
         // The whole band rests before the brush's 0 mark, so the card renders as it shipped.

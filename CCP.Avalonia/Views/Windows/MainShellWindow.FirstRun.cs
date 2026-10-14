@@ -91,6 +91,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }, DispatcherPriority.Normal);
         }
 
+        /// <summary>Test seam: stands in for <see cref="WelcomeShow.FirstShowService.Open"/>.</summary>
+        internal Func<MainShellWindow, bool> OpenWelcomeShow = shell => WelcomeShow.FirstShowService.Open(shell);
+
+        /// <summary>WPF MainWindow.xaml.cs:546-553: the far side of the first-run wizard opens EMI's welcome
+        /// show, only once the age gate was accepted and the shell is still up. Once per install: the wizard
+        /// only runs when <see cref="FirstRunWizard.ShouldRunAndClaim"/> latches the Welcomed flag.</summary>
+        internal void OfferWelcomeShowAfterFirstRun()
+        {
+            try
+            {
+                if (CoreSettings.Current?.HasAcceptedAgeVerification != true || !IsVisible) return;
+                OpenWelcomeShow(this);
+            }
+            catch (Exception ex) { Log.Warning(ex, "[FirstShow] first-run show failed to open"); }
+        }
+
         private void OnFirstRunShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnFirstRunShellOpened;   // one launch, one wizard
@@ -111,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
 
                     await FirstRunWizard.Run(this);
+                    OfferWelcomeShowAfterFirstRun();
                 }
                 catch (Exception ex)
                 {
