@@ -22,7 +22,7 @@
        x:FieldModifier="internal"    ->  dropped; x:Names kept (nothing on this head pokes them yet)
        SnapsToDevicePixels           ->  dropped (no equivalent, no visual effect here)
        Button.Resources Style-for-Border -> CornerRadius straight on the Button
-       feat:AdaptiveSideArt.CollapseBelow -> dropped; the attached behaviour is not ported
+       feat:AdaptiveSideArt.CollapseBelow -> fx:AdaptiveSideArt.CollapseBelow (same Core decision)
        MediaElement                  ->  Image fed by a VlcFrameSink (muted, looped)
        Image / ImageBrush art        ->  named plate Borders painted by ModArt.BindFeaturePlates -->
 <UserControl xmlns="https://github.com/avaloniaui"
@@ -154,9 +154,8 @@
         <!-- ═══ WIDE LAYOUT ═══
              Row 0 is the "look" band: the live stage on the left, the feature plate on the
              right (both 288 tall). Row 1 is the settings, spanning both columns and capped at
-             940. ponytail: the WPF root carries feat:AdaptiveSideArt.CollapseBelow="860" to
-             collapse the art column on a narrow host; that attached behaviour is not ported. -->
-        <Grid>
+             940. Below 860 DIP the art collapses, returning at 908 DIP to avoid scrollbar flicker. -->
+        <Grid fx:AdaptiveSideArt.CollapseBelow="860">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="3*" MaxWidth="780"/>
             <ColumnDefinition Width="2*"/>
