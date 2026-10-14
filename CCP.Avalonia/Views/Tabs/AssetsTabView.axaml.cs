@@ -432,9 +432,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF GetForegroundWindow + GetWindowThreadProcessId == our pid. Read as the preview closes
         /// (ponytail: WPF reads it after Closed; at Closing the foreground is the same window or another
         /// app's). Off Windows there is no portable foreground query: one of our windows being active
-        /// is the same answer. Tests swap it.</summary>
+        /// is the same answer. No foreground window at all counts as ours, as in WPF. Tests swap it.</summary>
         internal static Func<bool> AppInFront = () => OperatingSystem.IsWindows()
-            ? Platform.EscapeClaim.CcpInFront()
+            ? Platform.EscapeClaim.CcpInFront(noForegroundCounts: true)
             : Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d && d.Windows.Any(w => w.IsActive);
 
         /// <summary>WPF InvalidateAssetPoolsAfterSelectionChange (MainWindow.Assets.cs:1318, #130). Flash
