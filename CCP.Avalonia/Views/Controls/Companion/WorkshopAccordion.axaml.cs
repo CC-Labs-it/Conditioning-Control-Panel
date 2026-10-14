@@ -1,4 +1,8 @@
 using System;
+using System.Linq;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
@@ -38,6 +42,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            // WPF CompanionCard_Click: the cell supplies the same 0..4 Tag index.
+            parts.Roster.CompanionCardClicked += (_, index) =>
+            {
+                try
+                {
+                    if (CompanionCore.SwitchCompanion((CompanionId)index))
+                        TopLevel.GetTopLevel(this)?.GetLogicalDescendants().OfType<CompanionHeroCard>()
+                            .FirstOrDefault()?.ApplyAvatarArt();
+                    // ponytail: the tube's SwitchToCompanionAvatar still needs its head port.
+                }
+                catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }
+            };
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
@@ -48,9 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
             //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
             //    that flips with nothing behind it would report a paused browser that is playing.
-            //  · Roster.CompanionCardClicked / PersonalityAssignRequested — MainWindow's
-            //    CompanionCard_Click / BtnCompanionPersonality_Click (MainWindow.Patreon.cs), which
-            //    switch the active companion through App.Companion. No seam on this head.
+            //  · Roster.PersonalityAssignRequested — BtnCompanionPersonality_Click needs the
+            //    CommunityPromptService import/assignment path, still in the WPF head.
             //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
             //    service, still in the WPF head.
         }
