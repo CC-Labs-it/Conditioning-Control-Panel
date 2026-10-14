@@ -204,6 +204,10 @@ public class PbpWatchV2Tests
     [Fact]
     public void Settings_frame_carries_exactly_the_fields_the_page_reads()
     {
+        Assert.Equal(0.5, PbpWatchRules.GentleIntroSpeed(true, MotionLevel.Full, 0.25), 6);   // floored at 0.5
+        Assert.Equal(0.75, PbpWatchRules.GentleIntroSpeed(true, MotionLevel.Full, 0.75), 6);
+        Assert.Equal(0.0, PbpWatchRules.GentleIntroSpeed(true, MotionLevel.Reduced, 0.75), 6); // player's choice wins
+        Assert.Equal(0.0, PbpWatchRules.GentleIntroSpeed(false, MotionLevel.Full, 0.25), 6);
         var s = new AppSettings { PbpWatchEffects = false, PbpWatchAmount = "less", PbpLetPeopleWatch = false };
         var f = PbpWatchRules.SettingsFrame(15, true, new[] { "a.mp3" }, s, false, Mid);
         Assert.Equal(new[]
