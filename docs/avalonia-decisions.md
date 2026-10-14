@@ -1160,3 +1160,17 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   steps). WPE suspect: frame_complete is only dispatched when the compositor consumes a buffer (WpeWebViewAdapter.cs:421).
   The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
+
+## 2026-10-14: The user's max video length also ends app-started web videos (avalonia-port/video-max-cap-links)
+- Bug BUG-7NAKK79CZ2: a 25-minute web video played under a 20m 3s "Duration filter" max. Every mandatory-video path
+  already armed the cap; the uncapped path was the browser web-video takeover (autonomy WebVideo, AI effect, chaos HT link,
+  remote `play_hypnotube`), whose hard stop was only clip length + 15 s (max 1 h).
+- Answer (advised by: supervisor, from user bug BUG-7NAKK79CZ2): Core `VideoMaxCap.TakeoverStopAfter` bounds every takeover
+  the user did not start by `VideoMaxDurationSeconds`, counted from the takeover start (a site auto-advancing to the next
+  clip cannot restart it), also when the page never reports a length. Remote is included (the cap is the user's own limit).
+  User-started playback and avatar speech-bubble links are excluded, and leaving fullscreen (ownership passes to User)
+  stands the stop down, as before. A replay of the same mandatory clip (vout heal, browser->LibVLC fallback) continues the
+  clip's cap via `VideoMaxCap.CapLeft` instead of restarting it, on both heads.
+- Avalonia has no web-video takeover yet; when it is ported it must use `VideoMaxCap.TakeoverStopAfter`.
+- Tests: `Tests/CCP.Core.Tests/VideoMaxCapTests.cs`, `Tests/CCP.Avalonia.Tests/MandatoryVideoOverlayTests.cs` (heal replay
+  ends at the cap), each fail-proven. Live tester step: ~/ccp-port/evidence/live-queue/media.md.

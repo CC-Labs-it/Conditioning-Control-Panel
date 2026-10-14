@@ -59,6 +59,9 @@ public sealed class BrowserMediaService
     /// <summary>Whether the CURRENT session has ever reported playback. Distinguishes "still
     /// loading" from "was playing and stopped", which the navigated/heartbeat paths both need.</summary>
     private bool _hasEverPlayed;
+    /// <summary>When the current takeover began: the user's max video length counts from here,
+    /// so a site auto-advancing to the next clip cannot restart it (BUG-7NAKK79CZ2).</summary>
+    private DateTime _takeoverStartUtc;
 
     private DispatcherTimer? _heartbeatTimer;
 
@@ -73,10 +76,10 @@ public sealed class BrowserMediaService
     private const double LoadWindowTimeoutSeconds = 60;
 
     /// <summary>Grace added on top of a takeover clip's reported length before the hard stop.</summary>
-    private const double TakeoverGraceSeconds = 15;
+    private const double TakeoverGraceSeconds = VideoMaxCap.TakeoverGraceSeconds;
 
     /// <summary>Sanity ceiling for a single takeover, in case a page reports nonsense.</summary>
-    private const double TakeoverMaxSeconds = 3600;
+    private const double TakeoverMaxSeconds = VideoMaxCap.TakeoverMaxSeconds;
 
     /// <summary>True while any web media (video or audio) is playing in the embedded browser.</summary>
     public bool IsPlaying { get { lock (_lock) return _isPlaying; } }
@@ -153,6 +156,7 @@ public sealed class BrowserMediaService
     /// </summary>
     public bool BeginTakeover(MediaOwner owner)
     {
+        int gen;
         if (App.InteractionQueue != null && !App.InteractionQueue.TryStart(
                 InteractionQueueService.InteractionType.WebVideo, () => { }, queue: false))
         {
@@ -172,9 +176,12 @@ public sealed class BrowserMediaService
             // Not _isPlaying yet — that waits for the page to actually report playback. The
             // heartbeat timer covers the load window so a page that never plays still releases.
             _lastHeartbeatUtc = DateTime.UtcNow;
+            _takeoverStartUtc = _lastHeartbeatUtc;
+            gen = _sessionGeneration;
         }
 
         StartHeartbeatTimer();
+        ScheduleTakeoverHardStop(gen, 0);   // the user's max holds even if the page never reports a length
         App.Logger?.Information("BrowserMedia: {Owner} takeover claimed the fullscreen slot", owner);
         return true;
     }
@@ -188,6 +195,7 @@ public sealed class BrowserMediaService
     public void ReplaceSession(MediaOwner owner, bool takeover)
     {
         bool hadSession;
+        int gen;
         lock (_lock)
         {
             hadSession = _isPlaying || _owner.HasValue;
@@ -197,6 +205,8 @@ public sealed class BrowserMediaService
             _durationSeconds = 0;
             _hasEverPlayed = false;
             _lastHeartbeatUtc = DateTime.UtcNow;
+            _takeoverStartUtc = _lastHeartbeatUtc;
+            gen = _sessionGeneration;
 
             if (!_holdsQueueSlot && App.InteractionQueue != null)
             {
@@ -207,6 +217,7 @@ public sealed class BrowserMediaService
         }
 
         StartHeartbeatTimer();
+        if (takeover) ScheduleTakeoverHardStop(gen, 0);
         App.Logger?.Information("BrowserMedia: session replaced by {Owner} (takeover={Takeover}, had session={Had})",
             owner, takeover, hadSession);
     }
@@ -422,7 +433,18 @@ public sealed class BrowserMediaService
     /// </summary>
     private void ScheduleTakeoverHardStop(int generation, double durationSeconds)
     {
-        var cap = TimeSpan.FromSeconds(Math.Min(durationSeconds + TakeoverGraceSeconds, TakeoverMaxSeconds));
+        // The user's max video length also bounds every takeover they did not start themselves
+        // (BUG-7NAKK79CZ2): User and AvatarLink are clicks; once fullscreen is left the session is
+        // User-owned and the !_isTakeover check below stands the stop down.
+        double? stopAfter;
+        lock (_lock)
+        {
+            stopAfter = VideoMaxCap.TakeoverStopAfter(durationSeconds, (DateTime.UtcNow - _takeoverStartUtc).TotalSeconds,
+                App.Settings?.Current?.VideoMaxDurationSeconds ?? 0,
+                userStarted: _owner is MediaOwner.User or MediaOwner.AvatarLink);
+        }
+        if (stopAfter is not double stopSeconds) return;
+        var cap = TimeSpan.FromSeconds(stopSeconds);
         App.Logger?.Information("BrowserMedia: takeover clip reports {Seconds:F0}s - hard stop at +{Cap:F0}s",
             durationSeconds, cap.TotalSeconds);
 

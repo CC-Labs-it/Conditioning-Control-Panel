@@ -3087,6 +3087,7 @@ namespace ConditioningControlPanel.Services
             _safetyTimer?.Stop();
             _fallbackSafetyTimer?.Stop();
             _fallbackSafetyTimer = null;
+            CarryMaxLenCap(replay: isVoutRetry);   // a vout heal replays the clip on what is left of its cap
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
 
@@ -6785,10 +6786,12 @@ namespace ConditioningControlPanel.Services
             _maxLenCapTimer = null;
 
             var maxSec = App.Settings?.Current?.VideoMaxDurationSeconds ?? 0;
-            if (maxSec <= 0) return;
+            var left = VideoMaxCap.CapLeft(maxSec, _maxLenSpentSec);
+            _maxLenSpentSec = 0;
+            if (left is not double leftSec) return;
 
             var capRun = _videoRunId;
-            var capTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(maxSec) };
+            var capTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(leftSec) };
             _maxLenCapTimer = capTimer;
             _maxLenCapTimer.Tick += (s, e) =>
             {
@@ -6806,7 +6809,20 @@ namespace ConditioningControlPanel.Services
             _maxLenArm.Interval = _maxLenCapTimer.Interval;
             _maxLenArm.Remaining = TimeSpan.Zero;
 
-            App.Logger?.Debug("VideoService: Max video-length cap timer started for {Max}s", maxSec);
+            App.Logger?.Debug("VideoService: Max video-length cap timer started for {Left:F0}s of {Max}s", leftSec, maxSec);
+        }
+
+        /// <summary>Cap seconds the current clip already spent on screen before a replay (vout heal,
+        /// browser-to-LibVLC fallback), consumed by the next <see cref="StartMaxLengthCapTimer"/> so the
+        /// replay gets only what is left of the user's max, not a fresh full interval (BUG-7NAKK79CZ2).</summary>
+        private double _maxLenSpentSec;
+
+        private void CarryMaxLenCap(bool replay)
+        {
+            var maxSec = App.Settings?.Current?.VideoMaxDurationSeconds ?? 0;
+            _maxLenSpentSec = replay && maxSec > 0 && _maxLenCapTimer?.IsEnabled == true
+                ? maxSec - RemainingTimerInterval(_maxLenArm.ArmedUtc, _maxLenArm.Interval, DateTime.UtcNow).TotalSeconds
+                : 0;
         }
 
         /// <summary>

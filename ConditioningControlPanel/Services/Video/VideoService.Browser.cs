@@ -418,6 +418,7 @@ namespace ConditioningControlPanel.Services
             _creditedWatchSeconds = 0;
             _startTime = DateTime.Now;
 
+            CarryMaxLenCap(replay: true);   // the LibVLC replay continues the clip's max-length cap
             StartVideoPlayback(path, strict, forceLibVlc: true);
         }
 

@@ -232,10 +232,10 @@ namespace ConditioningControlPanel.Services
         /// <see cref="GuardHeals"/>. "max length" (VideoMaxDurationSeconds cap), "overran" (length + 5 s
         /// safety timer, or 600 s with no length) end the clip. Null = fine.</summary>
         public static string? Guard(double sinceShow, double played, bool framed, bool hasVideo, double lengthSeconds,
-            double sinceFrame, int maxSeconds)
+            double sinceFrame, int maxSeconds, double capSpentBefore = 0)
         {
             if (!framed && hasVideo) return sinceShow >= NoFrameSeconds ? "no frame" : null;
-            if (maxSeconds > 0 && played >= maxSeconds) return "max length";
+            if (VideoMaxCap.CapLeft(maxSeconds, capSpentBefore + played) <= 0) return "max length";
             if (lengthSeconds > 0 ? played >= lengthSeconds + 5 : played >= FallbackSeconds) return "overran";
             return framed && sinceFrame >= OutputLostSeconds ? "output lost" : null;
         }
