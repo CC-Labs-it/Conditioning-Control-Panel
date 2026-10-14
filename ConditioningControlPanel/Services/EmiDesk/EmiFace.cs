@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -62,61 +61,8 @@ public sealed class EmiFace : FrameworkElement
         PinkPen.Freeze();
     }
 
-    // ---------------------------------------------------------------- canon sets
-
-    // Duplicated here (not read from EmiChains) so the renderer stays standalone: IsKao has to
-    // answer for arbitrary caller text, not just chain frames. Same lists as face.js.
-    private static readonly string[] FlatSet =
-    {
-        "._.", "^_^", "^_~", ">.<", "@_@", "-_-", "o_o", "T_T", ">_<", "=_=", "\u00AC_\u00AC",
-        "^___^", "x_x", "*_*", "0_0", ";_;", "(\u25C9_\u25C9)", "(\u2299_\u2299)", "(\u25D4_\u25D4)"
-    };
-
-    private static readonly string[] SideSet =
-    {
-        ":)", ":D", ";)", ":'(", ">:(", ":O", ":P", ":|", "<3", "XD", ":3", ">:)", ":/", "B)"
-    };
-
-    private static readonly string[] KaoSet =
-    {
-        "( \u0361\u00B0 \u035C\u0296 \u0361\u00B0)", "(\u00AC\u203F\u00AC)", "(\u25E0\u203F\u25E0)",
-        "(\u2310\u25A0_\u25A0)", "(\u0CA0\u203F\u0CA0)", "(\u2716\u256D\u256E\u2716)",
-        "(\u273F\u25E1\u203F\u25E1)", "(\u25D5\u203F\u25D5)", "(\u0CA5_\u0CA5)",
-        "(\uFF61\u2665\u203F\u2665\uFF61)", "(\u2267\u25E1\u2266)"
-    };
-
-    private static readonly string[] SpecialSet =
-    {
-        "\\o/", "GG", "#ERR", "ZzZ", "!!!", "???", "LV UP", "6.7", "\u2665\u2665\u2665",
-        "\u2605\u2605\u2605", "404", "brb"
-    };
-
-    // Short classic ASCII faces rotate 90 degrees; everything else stays flat.
-    private static readonly Regex SideRe =
-        new(@"^[>]?[:;=8xXB][-'^]?[)(DPOop|/\\3]$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    private static readonly Regex NonAsciiRe =
-        new(@"[^\x00-\x7F]", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    /// <summary>True when the text is a short classic ASCII face that must be rotated 90 degrees.</summary>
-    public static bool IsSide(string? t) =>
-        !string.IsNullOrEmpty(t) && t!.Length <= 4 && SideRe.IsMatch(t);
-
-    /// <summary>
-    /// Anything outside the FLAT / SIDE / SPECIAL canon that carries exotic glyphs is a kaomoji:
-    /// +10 % size and +10 % lift. The promoted round-eye faces live in the flat set, so they count
-    /// as flat. Verbatim from face.js.
-    /// </summary>
-    public static bool IsKao(string? t)
-    {
-        if (string.IsNullOrEmpty(t)) return false;
-        if (Array.IndexOf(KaoSet, t) >= 0) return true;
-        return Array.IndexOf(FlatSet, t) < 0
-            && Array.IndexOf(SideSet, t) < 0
-            && Array.IndexOf(SpecialSet, t) < 0
-            && NonAsciiRe.IsMatch(t!)
-            && t!.Replace("\u00AC", string.Empty).Length >= 5;
-    }
+    public static bool IsSide(string? text) => EmiFaceRules.IsSide(text);
+    public static bool IsKao(string? text) => EmiFaceRules.IsKao(text);
 
     // ---------------------------------------------------------------- the font
 
