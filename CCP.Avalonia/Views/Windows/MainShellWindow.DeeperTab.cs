@@ -25,7 +25,7 @@
 //   OpenInDeeperPlayer, OpenDeeperEditorFromPlayer, OpenInDeeperEditorForMedia,
 //   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher),
 //   BtnDeeperImport_Click / ImportEnhancementFiles (EnhancementLibrary.FindDuplicateOf /
-//   PromoteToLibrary are WPF-only).
+//   PromoteToLibrary are in Core now; this head has no EnhancementLibrary instance yet).
 //   The browser half - OnDeeperBrowserBound/Unbound, RefreshBrowserWebcamButton,
 //   BtnWebcamTracking_Click, MaybePromptBrowserWebcamForEnhancement, OnBrowserEnhanceMatchChanged,
 //   ChkForceShowBambiCloud_Changed, ToggleEnhanceIfPossible_Changed. WebView2 plus WebcamTrackingState.
@@ -45,7 +45,7 @@
 // NOT BLOCKED, RESTORED: BtnDeeperNewEnhancement_Click. It used to be listed on the line above with
 // the other library relays and that was wrong - the only thing it takes from EnhancementLibrary is
 // CreateBlank, which is a three-line construction of Core types
-// (ConditioningControlPanel/Services/Deeper/EnhancementLibrary.cs:396), and both windows it needs
+// (CCP.Core/Services/Deeper/EnhancementLibrary.cs:400), and both windows it needs
 // are already on this head (Views/Deeper/NewEnhancementDialog, Views/Deeper/DeeperEditorWindow).
 
 using System;
@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// "New enhancement": ask for a media type and a source, then open the editor on a blank
         /// project. WPF (MainWindow.DeeperTab.cs:194) sends the dialog's answer through
         /// <c>App.EnhancementLibrary.CreateBlank</c>; that method builds an <c>Enhancement</c> and
-        /// nothing else (Services/Deeper/EnhancementLibrary.cs:396), so it is inlined here rather
+        /// nothing else (CCP.Core/Services/Deeper/EnhancementLibrary.cs:400), so it is inlined here rather
         /// than holding the door shut on a service move. Everything the editor then does with the
         /// project - the timeline, validation, save, the recent-files write - is already ported
         /// (Views/Deeper/DeeperEditorWindow.axaml.cs and its inlined file-ops region).

@@ -36,6 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 Platform.AccountSeed.Sync?.StopHeartbeat();
+                // WPF MainWindow.UiUpdates.cs:2818: drop the Discord RPC IPC connection.
+                if (App.DiscordRpc?.IsEnabled == true) App.DiscordRpc.IsEnabled = false;
                 Log.Debug("Network services disconnected for offline mode");
             }
             catch (Exception ex) { Log.Warning(ex, "Error disconnecting network services"); }

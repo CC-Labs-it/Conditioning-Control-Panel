@@ -89,8 +89,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// BlinkDetector + GazeEngine, the same pipeline WebcamTrackingService.ProcessFrame runs on WPF:
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
-    /// ponytail: no mouth/tongue, long stare or gaze lock-on yet (the MAR/HSV detectors are still
-    /// WPF-only), so calibration's mouth prompts time out to "moving on", as WPF does on a miss.
+    /// ponytail: no mouth/tongue yet (the MAR/HSV detectors are still WPF-only), so calibration's
+    /// mouth prompts time out to "moving on", as WPF does on a miss. Long stare and gaze lock-on
+    /// are in Core (LongStareDetector, GazeLock) but not consumed here yet (webcam-avalonia-lock).
     /// </summary>
     internal sealed class WebcamTracker
     {
