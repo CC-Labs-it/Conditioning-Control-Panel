@@ -22,3 +22,23 @@ Commands used .NET 10.0.402, Release configuration, `DiffEngine_Disabled=true`, 
 - All tests/render paths used sandbox profiles. Native desktop input, audible thud playback, and a Windows desktop review remain unrun.
 
 The shell git transport rejected the initial claim with HTTP 403 as ClearlyNotMich. The connected Personal account was the sole account with repository push permission. An empty claim commit/atomic branch creation and final fast-forward-only ref update used that authorized connection; no PR, merge, force-push or queue-branch write was used.
+
+## Changed files
+
+- `CCP.Avalonia/Controls/AmbientFxCanvas.cs`
+- `CCP.Avalonia/Helpers/FxTrack.cs`
+- `CCP.Avalonia/Views/Windows/MainShellWindow.BankFx.cs`
+- `CCP.Avalonia/Views/Windows/MainShellWindow.HeroFx.cs`
+- `CCP.Avalonia/Views/Windows/PanicSurfaces.cs`
+- `CCP.Core/CoreProgression.cs`
+- `CCP.Core/Services/BankAccumulator.cs`
+- `CCP.Core/Services/Progression/ProgressionBank.cs`
+- `CCP.Core/Services/XPSource.cs`
+- `ConditioningControlPanel/Services/BankAccumulator.cs` (moved into CCP.Core)
+- `ConditioningControlPanel/Services/Companion/CompanionService.cs`
+- `Tests/CCP.Avalonia.Tests/BankFxTests.cs`
+- `Tests/CCP.Avalonia.Tests/PanicSurfacesTests.cs`
+- `Tests/CCP.Core.Tests/BankAwardTests.cs`
+- `Tests/CCP.Core.Tests/CCP.Core.Tests.csproj`
+- `docs/avalonia-parity.md`
+- `docs/cloud/wire-shell-bank-fx.md`
