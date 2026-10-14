@@ -9,7 +9,8 @@
 // STILL MISSING (each a WPF member of MainWindow.DashboardFx.cs):
 //   the "? box" doorbell + hover flip - ApplyMysteryFx/ApplyMysteryBreath/ApplyMysteryBadgeVisibility/
 //     EnsureMysteryTileFx/RequestMysteryFace/RunMysteryFlip/Open/SettleMysteryPlate/StartMysteryPop;
-//   the centre wordmark's drift and sheen - ApplyLogoDrift/ApplyLogoSheenTimer/SweepLogoSheen;
+//   the centre wordmark's sheen - ApplyLogoSheenTimer/SweepLogoSheen (ApplyLogoDrift is LIVE for the logo's
+//     AmbientAllowed gate; its Ken Burns drift only runs for a mod's still logo in WPF, and is not ported);
 //   the browser card's frame sweep and status pulse - ApplyBrowserFrameSweep/ApplyBrowserStatusPulse.
 // Not to port: PrepareRailArtNudge/ApplyRailHover/ApplyRailDotPulse were retired with the premium
 // quick-toggle rail on WPF (2026-09-11); the dashboard column is the favorites rail now
@@ -53,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // The favorites drawer's motes (the view starts them itself; this parks them).
                 RegisterTabFx("settings", tab?.FindControl<AmbientFxCanvas>("FavoritesDrawerFx"));
 
+                LoadLogo();
                 Activated += OnDashboardFxWindowStateish;
                 Deactivated += OnDashboardFxWindowStateish;
                 PropertyChanged += OnDashboardFxWindowProperty;
@@ -86,6 +88,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var card in tab.GetLogicalDescendants().OfType<FeatureCard>()) card.RefreshFx();
                 foreach (var combo in tab.GetLogicalDescendants().OfType<SplitFeatureCard>()) combo.RefreshFx();
                 ApplyVaultCtaBreath();
+                // WPF ApplyLogoDrift (:753): the logo animates under the chrome gate; BeatLoop parks it hidden.
+                if (tab.FindControl<AnimatedLogoImage>("ImgLogo") is { } logo)
+                    logo.AmbientAllowed = Env.AllowAmbientLoops && IsActive && WindowState != WindowState.Minimized;
                 tab.ApplyHostShown(WindowState != WindowState.Minimized);   // drawer + fold breaths
             }
             catch (Exception ex) { Log.Debug("ApplyDashboardFxLoops: {E}", ex.Message); }
@@ -114,6 +119,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _vaultCtaBreath.Start();
             }
             catch (Exception ex) { Log.Debug("ApplyVaultCtaBreath: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF LoadLogo (MainWindow.xaml.cs:2277): a mod's own logo.png / logo2.png stays still;
+        /// the built-in wordmark becomes the animated CCP logo.</summary>
+        private void LoadLogo()
+        {
+            try
+            {
+                var logo = Named<Tabs.SettingsTabView>("SettingsTab")?.FindControl<AnimatedLogoImage>("ImgLogo");
+                if (logo == null) return;
+                var file = CoreMods.IsCCPDefault || CoreSettings.Current.IsSissyMode ? "logo2.png" : "logo.png";
+                var custom = CoreModArt.OverridePath(file);
+                logo.SetArtwork(custom == null ? null : new global::Avalonia.Media.Imaging.Bitmap(custom));
+            }
+            catch (Exception ex) { Log.Warning("Failed to load logo: {Error}", ex.Message); }
         }
 
         private void StopVaultCtaBreath()
