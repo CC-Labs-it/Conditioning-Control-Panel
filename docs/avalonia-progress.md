@@ -2275,3 +2275,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/game-race-d: +487
 - Racing Thoughts plays and charts local tracks through LibVLC (RaceTrackPlayer + TrackDecoder seed), like WPF TrackPlayer/NAudioTrackDecode.
 - Load is non-blocking, and a Brake right after track-play is held until playback starts (fail-proven test).
+
+## avalonia-port/backroom-core-a: +231
+- Back Room rules (bridge, API relay, fx plan/queue, tab ledger, overlay math) moved into CCP.Core with two small WPF seams; the 10 test classes now run on Linux CI.
+- Fix round: stale comments are fixed, and the two bridge/ledger tests call SetResult off the test thread before asserting. Remote gate GATE-OK.
