@@ -12,7 +12,8 @@
  * ==========================================================================*/
 
 import * as api from '../net/api.js';
-import { normMe, normTop, chipText, rankText, markMine, endPlan, rollValue, tickTimes, LADDER_TUNING } from '../ui/ladder-plan.js';
+import { normMe, normTop, chipText, rankText, markMine, endPlan, rollValue, tickTimes, LADDER_TUNING,
+  BOARD_TUNING, podiumOf, podiumAt, rowAt, youRoll } from '../ui/ladder-plan.js';
 import { createLadder } from '../ui/ladder.js';
 
 let passed = 0;
@@ -96,8 +97,10 @@ const eq = (what, got, want) => ok(`${what} (got ${JSON.stringify(got)}, wanted 
   await lad.refreshMe();
   const html = lad.screenHtml('Mo');
   ok('names are escaped', html.includes('&lt;b&gt;Rose&lt;/b&gt;') && !html.includes('<b>Rose</b>'));
-  ok('your row is marked', /ladder-row mine[^]*Mo/.test(html));
-  ok('your stats: rating, rank, best', html.includes('>1248<') && html.includes('>1262<'));
+  ok('your place is marked (on the podium here)', /class="ladder-step p2 mine"[^]*?Mo/.test(html));
+  ok('your stats: rating, rank, best', html.includes('>1248<') && html.includes('rank 2 of 2') && html.includes('best 1262'));
+  ok('a real Back button, no "esc" small print', html.includes('data-back') && !/esc\s*-/i.test(html));
+  ok('the top three stand on a podium', (html.match(/class="ladder-step /g) || []).length === 2 && !html.includes('ladder-list'));
   ok('one game reads singular', html.includes('1 game<'));
   ok('the chip carries the rating', lad.chipHtml().includes('>1248<'));
   ok('snapshot is a copy', lad.snapshot() !== lad.me() && lad.snapshot().rating === 1248);
@@ -109,6 +112,33 @@ const eq = (what, got, want) => ok(`${what} (got ${JSON.stringify(got)}, wanted 
   await empty.loadTop();
   ok('an empty ladder invites', empty.screenHtml('x').includes('nobody rated yet'));
   ok('no copy shouts', !/[!]/.test(html + off.screenHtml('x') + empty.screenHtml('x')));
+}
+
+/* ---------------------------------------------------------------- the board */
+{
+  const rows = Array.from({ length: 12 }, (_, i) => ({ rank: i + 1, name: 'p' + (i + 1), rating: 1400 - i * 10, games: 3 }));
+  const { podium, rest } = podiumOf(rows);
+  eq('podium stands 2nd, 1st, 3rd', podium.map((r) => r.place), [2, 1, 3]);
+  eq('the rest start at rank 4', [rest.length, rest[0].rank], [9, 4]);
+  eq('a ladder of two has a podium of two', podiumOf(rows.slice(0, 2)).podium.map((r) => r.place), [2, 1]);
+  ok('third rises first, the winner last', podiumAt(3) < podiumAt(2) && podiumAt(2) < podiumAt(1));
+  ok('rows land behind the podium, in order, capped', rowAt(0) >= podiumAt(1) && rowAt(1) > rowAt(0) && rowAt(40) === rowAt(BOARD_TUNING.rowCap));
+  eq('your card rolls up from the start the first time', youRoll(normMe({ rated: true, rating: 1248 })), { from: LADDER_TUNING.start, to: 1248 });
+  eq('and from what was last shown after that', youRoll(normMe({ rated: true, rating: 1248 }), 1236), { from: 1236, to: 1248 });
+  ok('nothing to roll when unchanged or unrated', youRoll(normMe({ rated: true, rating: 1248 }), 1248) === null && youRoll(normMe({ rated: false })) === null && youRoll(null) === null);
+
+  // rated but out of the top: your row is pinned under the list
+  const lad = createLadder({
+    fetchTop: async () => ({ ok: true, data: { rows: rows.map((r) => ({ ...r, display_name: r.name })), total: 300 } }),
+    fetchMe: async () => ({ ok: true, data: { rated: true, rating: 1201, rank: 117, games: 4, best: 1210, total: 300 } }),
+  });
+  await lad.loadTop(); await lad.refreshMe();
+  const html = lad.screenHtml('Mo');
+  ok('out of the top: your row is pinned under the list', /ladder-pinned[^]*ladder-row mine[^]*>117<[^]*Mo/.test(html));
+  ok('the list starts at 4 and counts the whole ladder', html.includes('start="4"') && html.includes('top 12 of 300'));
+  const un = createLadder({ fetchTop: async () => ({ ok: true, data: { rows: [], total: 0 } }), fetchMe: async () => ({ ok: true, data: { rated: false, games: 0 } }) });
+  await un.refreshMe();
+  ok('unrated: a stamp and the one line on how', /ladder-you-stamp">unrated</.test(un.screenHtml('x')) && un.screenHtml('x').includes('5 moves each'));
 }
 
 if (failures.length) {
