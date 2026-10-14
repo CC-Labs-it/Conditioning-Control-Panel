@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Control;
 using Serilog;
@@ -26,128 +25,40 @@ namespace ConditioningControlPanel.Services.Awareness
     public sealed class SmtcMediaWatcher : IMediaWatcher
     {
         /// <summary>How often the current session is re-read. Media does not need 1.5s resolution.</summary>
-        public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
+        public static readonly TimeSpan PollInterval = MediaSessionWatcher.PollInterval;
 
-        private readonly object _lock = new();
         private GlobalSystemMediaTransportControlsSessionManager? _manager;
-        private Timer? _timer;
-        private MediaSample? _current;
-        private volatile bool _available;
-        private int _reading;
-        private bool _started;
-        private bool _disposed;
+        private readonly MediaSessionWatcher _watcher;
+        private volatile bool _disposed;
 
-        /// <inheritdoc />
-        public MediaSample? Current
-        {
-            get { lock (_lock) return _current; }
-        }
+        public SmtcMediaWatcher() => _watcher = new MediaSessionWatcher(InitializeAsync, ReadAsync);
+        public MediaSample? Current => _watcher.Current;
+        public bool IsAvailable => _watcher.IsAvailable;
+        public void Start() => _watcher.Start();
+        public void Stop() => _watcher.Stop();
 
-        /// <inheritdoc />
-        public bool IsAvailable => _available;
-
-        /// <inheritdoc />
-        public void Start()
-        {
-            if (_disposed || _started) return;
-            _started = true;
-
-            // Restart, not first start: the manager was already resolved, so re-arm the poll instead
-            // of asking WinRT for a second session manager. Stop/Start is a mainline UX cycle (the
-            // privacy card's pause button and the awareness dial both do it).
-            if (_manager != null)
-            {
-                _available = true;
-                if (_timer != null)
-                {
-                    try { _timer.Change(TimeSpan.Zero, PollInterval); return; }
-                    catch (ObjectDisposedException) { _timer = null; }
-                }
-                _timer = new Timer(_ => Poll(), null, TimeSpan.Zero, PollInterval);
-                return;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-                    if (_disposed) return;
-
-                    _manager = manager;
-
-                    // Stopped while WinRT was thinking. Keep the manager (a later Start() re-arms from
-                    // it) but do not start polling for a watcher nobody asked for any more.
-                    if (!_started) return;
-                    _available = manager != null;
-
-                    if (!_available)
-                    {
-                        Log.Debug("AwarenessObserver: SMTC returned no session manager - media signal off");
-                        return;
-                    }
-
-                    _timer = new Timer(_ => Poll(), null, TimeSpan.Zero, PollInterval);
-                    Log.Debug("AwarenessObserver: SMTC media watcher armed");
-                }
-                catch (Exception ex)
-                {
-                    // Denied, unsupported, or the WinRT activation failed. Feature-off, not a crash.
-                    _available = false;
-                    Log.Debug("AwarenessObserver: SMTC unavailable - {Error}", ex.Message);
-                }
-            });
-        }
-
-        /// <inheritdoc />
-        public void Stop()
-        {
-            // Clearing _started is the whole point: Start() guards on it, so leaving it set turns the
-            // first Stop() into a permanent one and the media signal never comes back for the rest of
-            // the session.
-            _started = false;
-            try { _timer?.Change(Timeout.Infinite, Timeout.Infinite); } catch (ObjectDisposedException) { }
-            lock (_lock) _current = null;
-        }
-
-        /// <inheritdoc />
         public void Dispose()
         {
-            if (_disposed) return;
             _disposed = true;
-
-            try { _timer?.Dispose(); } catch { }
-            _timer = null;
+            _watcher.Dispose();
             _manager = null;
-            _available = false;
-            lock (_lock) _current = null;
         }
 
-        private void Poll()
+        private async Task<bool> InitializeAsync()
         {
-            if (_disposed) return;
-
-            // One read in flight at a time: TryGetMediaPropertiesAsync can outlive a 3s tick when the
-            // owning app is busy, and a backlog of overlapping reads would fight over _current.
-            if (Interlocked.Exchange(ref _reading, 1) == 1) return;
-
-            _ = Task.Run(async () =>
+            if (_manager != null) return true;
+            try
             {
-                try
-                {
-                    var sample = await ReadAsync().ConfigureAwait(false);
-                    if (_disposed) return;
-                    lock (_lock) _current = sample;
-                }
-                catch (Exception ex)
-                {
-                    Log.Debug("AwarenessObserver: SMTC read failed - {Error}", ex.Message);
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref _reading, 0);
-                }
-            });
+                var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+                if (_disposed) return false;
+                _manager = manager;
+                return manager != null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("AwarenessObserver: SMTC unavailable - {Error}", ex.Message);
+                return false;
+            }
         }
 
         private async Task<MediaSample?> ReadAsync()
@@ -168,11 +79,12 @@ namespace ConditioningControlPanel.Services.Awareness
                 var props = await session.TryGetMediaPropertiesAsync();
                 if (props == null) return null;
                 title = props.Title ?? "";
-                artist = string.IsNullOrWhiteSpace(props.Artist) ? null : props.Artist;
+                artist = props.Artist;
             }
             catch { return null; }
 
-            if (string.IsNullOrWhiteSpace(title)) return null;
+            var sample = MediaSample.FromSession(title, artist, null, TimeSpan.Zero);
+            if (sample == null) return null;
 
             string state = "Unknown";
             try { state = session.GetPlaybackInfo()?.PlaybackStatus.ToString() ?? "Unknown"; }
@@ -182,7 +94,7 @@ namespace ConditioningControlPanel.Services.Awareness
             try { position = session.GetTimelineProperties()?.Position ?? TimeSpan.Zero; }
             catch { }
 
-            return new MediaSample(title, artist, state, position);
+            return sample with { PlaybackState = state, Position = position };
         }
     }
 }
