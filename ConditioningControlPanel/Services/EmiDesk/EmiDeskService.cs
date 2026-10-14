@@ -816,7 +816,7 @@ public sealed partial class EmiDeskService : IDisposable
     private string? _pendingMuteMoment;
 
     /// <summary>The CRT power-on plus the wake chain, plus a beat of air after it.</summary>
-    private const int SummonGreetDelayMs = 2600;
+    private const int SummonGreetDelayMs = EmiSpeechCadence.SummonGreetingMs;
 
     /// <summary>How long she has been out this time, in whole minutes. Never negative.</summary>
     private int MinutesOut()
@@ -849,8 +849,7 @@ public sealed partial class EmiDeskService : IDisposable
         try
         {
             var engine = EmiLineEngine.Instance;
-            if (!engine.EverSpent("firstContact")) return "firstContact";
-            if (!engine.EverSpent("desktopFirstBoot")) return "desktopFirstBoot";
+            return EmiSpeechCadence.Greeting(engine.EverSpent("firstContact"), engine.EverSpent("desktopFirstBoot"));
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] greeting choice fell back to summoned"); }
         return "summoned";
