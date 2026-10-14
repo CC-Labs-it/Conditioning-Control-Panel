@@ -130,7 +130,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         /// <summary>WPF OnCompanionFxModChanged's UpdateCompanionCardsUI half: the roster's names,
         /// accent ring and supported set follow a mod switch made while the tab is open.</summary>
-        internal void RefreshRoster() => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
+        internal Runtime.WorkshopShelfParts? WorkshopParts => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts;
+
+        internal void RefreshRoster() => WorkshopParts?.Roster.Refresh();
+
+        /// <summary>WPF UpdateCompanionCardsUI also refreshes the visible room after switching.</summary>
+        internal void RefreshCompanionIdentity()
+        {
+            HeroZone.ApplyAvatarArt();
+            HeroZone.RefreshAmbientState();
+            RefreshRoster();
+        }
 
         // ponytail: ICompanionRoomVm (zone interfaces) lives in the WPF head; hero, chat and memory are
         // live, the other zones seed their own viewmodels until their runtime crosses.
