@@ -78,6 +78,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Deeper drift is not a canvas at all and is not in the registry.
             EnsureTabFx(tab);
             ApplyDeeperGlyphDrift(tab);
+            // WPF TabNavigation stops the outgoing pulse and starts it on Lockdown entry.
+            if (tab == "lockdown") StartLockdownPulse();
+            else StopLockdownPulse();
 
             if (_tabFxCanvases.Count == 0) return;
             try
