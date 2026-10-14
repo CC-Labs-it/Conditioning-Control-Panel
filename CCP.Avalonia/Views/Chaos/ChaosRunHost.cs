@@ -43,7 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off); every
     /// chaos bark (run started/completed, gold-first, defuse/detonate) waits for chaos-payout-fallin-c;
-    /// the fuse ring is a two-phase ring (no flash phase, no danger breathing).</para>
+    /// the fuse ring is a two-phase ring (no flash phase, no danger breathing); the SNAP and NO FOCUS
+    /// bubble labels (WPF BubbleService.cs:4500,4574) are not drawn. The hold and the Snap Chain window
+    /// run on wall time (<c>BubbleOverlay.Field.Clock</c>), as WPF does (:4531, ChaosModeService :2000).</para>
     ///
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
     /// it directly. It does nothing while the overlay is hidden (P01).</para>
@@ -55,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosOverlayWindow? _overlay;
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
-        private static double _invulnUntilSec = double.MinValue;
+        private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
 
@@ -105,7 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _hud?.SetClockVisible(_state.ShowWaveTimer);
             _state.StartShields = _state.Shields;
             _waveDetonatedAt = _state.Detonated;
-            _invulnUntilSec = double.MinValue;
+            _invulnUntilUtc = DateTime.MinValue;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark -> chaos-payout-fallin-c.
             _spawning = true;
@@ -200,7 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused) return;
             double fuseSecLeft = b.DefuseJudgeFuseSec;
-            if (_state.DefuseInvulnMs > 0) _invulnUntilSec = _state.ElapsedSec + _state.DefuseInvulnMs / 1000.0;
+            if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
             ShowPopScore(pts);
@@ -236,7 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             FireScaledPayload(spec.Payload);
             ChaosRunLessons.OnDetonation();   // silk_touch: the loop is no longer clean
             string name = spec.Payload.DisplayName;
-            switch (ChaosFieldMath.ApplyDetonation(_state, _state.ElapsedSec < _invulnUntilSec))
+            switch (ChaosFieldMath.ApplyDetonation(_state, BubbleOverlay.Field.Clock() < _invulnUntilUtc))
             {
                 case ChaosFieldMath.Detonation.SnapChainHeld: _state.PushEvent($"⛓ snap chain holds ({name})"); break;
                 case ChaosFieldMath.Detonation.ShieldAbsorbed: _state.PushEvent($"♥ resistance crumbles ({name})"); break;

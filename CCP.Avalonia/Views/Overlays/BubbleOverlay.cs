@@ -379,6 +379,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             PointerPressed += OnPressed;
             PointerMoved += (_, e) => OnHold(e, true);
             PointerReleased += (_, e) => OnHold(e, false);
+            // WPF polls the physical button (BubbleService.cs:545): a release the window never saw
+            // (alt-tab, compositor grab) still breaks the hold.
+            PointerCaptureLost += (_, _) =>
+            {
+                if (BubbleOverlay.Field.Held) BubbleOverlay.PointerHold(false, BubbleOverlay.Field.CursorX, BubbleOverlay.Field.CursorY);
+            };
         }
 
         /// <summary>Global bubble DIPs (screen px / scaling) to this window's DIPs.</summary>

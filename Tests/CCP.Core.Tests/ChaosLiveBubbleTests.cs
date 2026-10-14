@@ -16,7 +16,8 @@ public class ChaosLiveBubbleTests
 
     private static (AmbientBubbleField F, AmbientBubble B, List<string> Log) Field(EffectBubbleSpec spec)
     {
-        var f = new AmbientBubbleField();
+        var t = DateTime.UnixEpoch;
+        var f = new AmbientBubbleField { Clock = () => t = t.AddMilliseconds(32) };   // 32 ms of wall time a read
         var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec);
         f.Bubbles.Add(b);
         var log = new List<string>();
@@ -83,6 +84,23 @@ public class ChaosLiveBubbleTests
         if (!onBubble) f.CursorX = b.X - 500;
         f.Step();
         Assert.Equal(new[] { expected }, log);
+    }
+
+    /// <summary>WPF TickChannel (:4531) measures the hold on the wall clock: one late step after a
+    /// full second snaps it, however few steps ran.</summary>
+    [Fact]
+    public void The_hold_is_wall_time_not_steps()
+    {
+        var (f, b, log) = Field(Live(5000));
+        var t = DateTime.UnixEpoch;
+        f.Clock = () => t;
+        f.PressLive(b, canChannel: true, b.CenterX, b.CenterY);
+        t = t.AddMilliseconds(ChaosTuning.DEFUSE_HOLD_MS - 1);
+        f.Step();
+        Assert.Empty(log);
+        t = t.AddMilliseconds(1);
+        f.Step();
+        Assert.Equal(new[] { "snap:held" }, log);
     }
 
     [Fact]

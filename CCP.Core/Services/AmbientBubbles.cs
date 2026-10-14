@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>The bubble deflates (a snap) instead of bursting.</summary>
         public bool Deflating { get; private set; }
         private double _channelMs, _channelStartFuseSec;
+        private DateTime _channelStartUtc;
 
         public enum Result { Alive, Missed, Done, Detonated, Defused }
 
@@ -90,12 +91,13 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF OnPlayerPress on a live bubble: start the channel, or trigger it in the grip when
         /// the focus cannot pay ("nofocus"). Returns what the field reports.</summary>
-        public Result Press(bool canChannel)
+        public Result Press(bool canChannel, DateTime nowUtc)
         {
             if (Popping || Channeling || !IsLiveThreat) return Result.Alive;
             if (!canChannel) return GoOff("nofocus");
             Channeling = true;
             _channelMs = 0;
+            _channelStartUtc = nowUtc;
             _channelStartFuseSec = FuseSecLeft;
             return Result.Alive;
         }
@@ -121,12 +123,13 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF TickChannel: the hold must stay pressed and on the bubble for DEFUSE_HOLD_MS;
-        /// letting go under CLICK_THRESHOLD_MS reads as a click, later as a release; both trigger.</summary>
-        private Result TickChannel(bool held, double cursorX, double cursorY)
+        /// letting go under CLICK_THRESHOLD_MS reads as a click, later as a release; both trigger.
+        /// The hold is wall time since the press (WPF :4531), not steps.</summary>
+        private Result TickChannel(bool held, double cursorX, double cursorY, DateTime nowUtc)
         {
+            _channelMs = Math.Max(0, (nowUtc - _channelStartUtc).TotalMilliseconds);
             if (!held || !Contains(cursorX, cursorY))
                 return GoOff(!held && _channelMs < Chaos.ChaosTuning.CLICK_THRESHOLD_MS ? "click" : "release");
-            _channelMs += FuseStepMs;
             if (_channelMs < Chaos.ChaosTuning.DEFUSE_HOLD_MS) return Result.Alive;
             Channeling = false;
             DefusedViaChannel = true;
@@ -186,7 +189,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One logical step. <paramref name="held"/> and the cursor (global DIPs) feed a
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
-        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0)
+        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default)
         {
             if (Popping)
             {
@@ -196,7 +199,7 @@ namespace ConditioningControlPanel.Services
                 Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
-            if (Channeling) return TickChannel(held, cursorX, cursorY);
+            if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
@@ -243,6 +246,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
+        /// <summary>The wall clock a defuse hold is measured on (WPF DateTime.UtcNow); tests step it.</summary>
+        public Func<DateTime> Clock = () => DateTime.UtcNow;
         /// <summary>A live chaos bubble went off (fuse-out, escape, or a broken hold: see BrokenReason).</summary>
         public Action<AmbientBubble>? ChaosDetonated;
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
@@ -253,7 +258,7 @@ namespace ConditioningControlPanel.Services
         {
             if (HoldChaos) return;   // manual pause swallows every press
             Held = true; CursorX = cursorX; CursorY = cursorY;
-            if (b.Press(canChannel) == AmbientBubble.Result.Detonated) ChaosDetonated?.Invoke(b);
+            if (b.Press(canChannel, Clock()) == AmbientBubble.Result.Detonated) ChaosDetonated?.Invoke(b);
         }
 
         /// <summary>WPF DefuseAllLive: snap every live chaos bubble on the field (full pay).</summary>
@@ -294,12 +299,13 @@ namespace ConditioningControlPanel.Services
         public int Step()
         {
             var missed = 0;
+            var now = Clock();
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
-                var r = b.Step(Held, CursorX, CursorY);
+                var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }

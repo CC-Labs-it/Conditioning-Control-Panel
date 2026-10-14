@@ -401,6 +401,8 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var state = ChaosRunHost.State!;
                 state.Focus = 100;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
                 var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
                     { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
@@ -414,7 +416,80 @@ public sealed class ChaosRunHostTests
                 BubbleOverlay.Press(c, c.CenterX, c.CenterY);
                 Assert.Equal((1, "nofocus"), (state.Detonated, c.BrokenReason));
             }
-            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    private static EffectBubbleSpec LiveSpec() => new()
+        { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() };
+
+    /// <summary>WPF polls the physical button (BubbleService.cs:545): a release the window never saw
+    /// (capture lost: alt-tab, compositor grab) still breaks the hold and sets the bubble off.</summary>
+    [Fact]
+    public async Task A_lost_pointer_capture_breaks_the_hold()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t;
+                var b = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.True(b.Channeling);
+                t = t.AddMilliseconds(500);   // held past a click, short of the snap
+                var w = new BubbleOverlayWindow();
+                w.RaiseEvent(new global::Avalonia.Input.PointerCaptureLostEventArgs(w,
+                    new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), global::Avalonia.Input.PointerType.Mouse, true)));
+                BubbleOverlay.Field.Step();
+                Assert.Equal((1, "release"), (state.Detonated, b.BrokenReason));
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF Snap Chain (ChaosModeService.cs:2000, :2079) is a wall-clock window after a snap:
+    /// a detonation inside it holds the combo, one after it breaks it, with the run clock standing still.</summary>
+    [Fact]
+    public async Task The_snap_chain_window_runs_on_wall_time()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100;
+                state.DefuseInvulnMs = 900;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t;
+                BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Field.DefuseAllLive();
+                Assert.Equal(1, state.Combo);
+
+                t = t.AddMilliseconds(500);
+                state.Focus = 0;
+                var c = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(c, c.CenterX, c.CenterY);
+                Assert.Equal((1, 1), (state.Detonated, state.Combo));   // inside the window: held
+
+                t = t.AddMilliseconds(500);
+                var d = BubbleOverlay.SpawnChaos(LiveSpec());
+                BubbleOverlay.Press(d, d.CenterX, d.CenterY);
+                Assert.Equal((2, 0), (state.Detonated, state.Combo));   // past it: the combo breaks
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
             return Task.CompletedTask;
         });
     }
