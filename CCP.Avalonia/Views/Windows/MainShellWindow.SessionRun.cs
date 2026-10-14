@@ -174,10 +174,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
+            if (_windowClosed || _exitRequested) return;
             if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
             var log = e.Log;
             Dispatcher.UIThread.Post(() =>
             {
+                if (_windowClosed || _exitRequested) return;
                 try
                 {
                     var dialog = new SessionCompleteWindow(log);

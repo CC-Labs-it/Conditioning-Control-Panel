@@ -428,19 +428,16 @@ namespace ConditioningControlPanel
                 }
 
                 // Restore autonomy and avatar mute state if we paused them on minimize
-                if (_autonomyWasPausedOnMinimize && _wasAutonomyRunningBeforeMinimize)
+                var recovery = _windowMinimizeRecovery.Restored();
+                if (recovery.ResumeAutonomy)
                 {
                     App.Autonomy?.Start();
-                    _autonomyWasPausedOnMinimize = false;
-                    _wasAutonomyRunningBeforeMinimize = false;
                     App.Logger?.Debug("MainWindow: Restored autonomy mode after restore from minimize");
                 }
 
-                if (_avatarWasMutedOnMinimize && _wasAvatarUnmutedBeforeMinimize)
+                if (recovery.UnmuteAvatar)
                 {
                     _avatarTubeWindow?.SetMuteAvatar(false);
-                    _avatarWasMutedOnMinimize = false;
-                    _wasAvatarUnmutedBeforeMinimize = false;
                     App.Logger?.Debug("MainWindow: Restored avatar unmuted state after restore from minimize");
                 }
 
@@ -469,19 +466,17 @@ namespace ConditioningControlPanel
                 {
                     // Pause autonomy if it's running — but never during Lockdown: minimize
                     // would otherwise be a silent escape from Takeover (#514).
-                    if (App.Autonomy?.IsEnabled == true && App.Lockdown?.IsActive != true)
+                    var recovery = _windowMinimizeRecovery.Minimized(true, App.Autonomy?.IsEnabled == true,
+                        App.Lockdown?.IsActive == true, _avatarTubeWindow.IsMuted);
+                    if (recovery.PauseAutonomy)
                     {
-                        _wasAutonomyRunningBeforeMinimize = true;
-                        _autonomyWasPausedOnMinimize = true;
                         App.Autonomy.Stop();
                         App.Logger?.Debug("MainWindow: Auto-paused autonomy mode on minimize (attached avatar)");
                     }
 
                     // Mute avatar if it's not already muted
-                    if (_avatarTubeWindow.IsMuted == false)
+                    if (recovery.MuteAvatar)
                     {
-                        _wasAvatarUnmutedBeforeMinimize = true;
-                        _avatarWasMutedOnMinimize = true;
                         _avatarTubeWindow.SetMuteAvatar(true);
                         App.Logger?.Debug("MainWindow: Auto-muted avatar on minimize (attached avatar)");
                     }

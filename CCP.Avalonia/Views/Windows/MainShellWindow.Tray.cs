@@ -49,7 +49,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
-            Closed += (_, _) => _windowClosed = true;
             return Tray;
         }
 
@@ -125,7 +124,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                 e.Cancel = true;
-                base.OnClosing(e);
                 return;
             }
             // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
@@ -142,6 +140,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
                 }
             }
+            // A tray hide is not an exit: preserve the session and public Closing subscriptions.
+            if (e.Cancel) return;
+            EnsureSessionRestoredForExit();
             // WPF WindowChrome.cs:180: a confirmed library delete still in its undo grace is honoured.
             if (!e.Cancel) try { CommitPendingDeeperDeletesOnExit(); } catch { }
             // WPF WindowChrome.cs:176: the Companion drawers' state, when quitting from that tab.
