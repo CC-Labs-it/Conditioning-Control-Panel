@@ -41,10 +41,12 @@ public sealed class HoverBubbleBarTests
             EnsureApp();
             var s = CoreSettings.Current;
             var motionBefore = s.MotionLevel;
+            var (linkedBefore, rpBefore) = (s.HasLinkedDiscord, s.DiscordRichPresenceEnabled);
             MainShellWindow? w = null;
             try
             {
                 s.MotionLevel = MotionLevel.Off;   // instant states: widths are assertable
+                s.HasLinkedDiscord = true;         // the RP switch refuses an unlinked account (WPF AccountShell.cs:279)
                 w = new MainShellWindow();
                 w.Show();
                 Dispatcher.UIThread.RunJobs();
@@ -103,7 +105,8 @@ public sealed class HoverBubbleBarTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(bar.IsExpanded(cat));
 
-                // The Rich Presence switch is lit only while checked.
+                // The Rich Presence switch is lit only while checked (it arms only with a linked Discord).
+                s.HasLinkedDiscord = true;
                 var rp = dash.FindControl<CheckBox>("ChkQuickDiscordRichPresence")!;
                 rp.IsChecked = false;
                 Assert.False(bar.IsLit(rp));
@@ -116,6 +119,7 @@ public sealed class HoverBubbleBarTests
             {
                 w?.Close();
                 s.MotionLevel = motionBefore;
+                (s.HasLinkedDiscord, s.DiscordRichPresenceEnabled) = (linkedBefore, rpBefore);
             }
         }
     }

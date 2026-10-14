@@ -21,7 +21,7 @@ namespace ConditioningControlPanel
     /// director's - a host that also picked effects would have to be re-implemented for every other
     /// room we haunt later (dashboard wall, Settings palette, Lock Card).</para>
     /// </summary>
-    public partial class MainWindow : IPossessionHost
+    public partial class MainWindow : IWpfPossessionHost
     {
         // ==== the stage =================================================================
         // Both canvases hang off RootGrid, which is the ONE element in this window with no rows,
@@ -169,9 +169,9 @@ namespace ConditioningControlPanel
 
         // ==== IPossessionHost ===========================================================
 
-        Window IPossessionHost.Window => this;
+        Window IWpfPossessionHost.Window => this;
 
-        Canvas IPossessionHost.GhostLayer
+        Canvas IWpfPossessionHost.GhostLayer
         {
             get
             {
@@ -180,7 +180,7 @@ namespace ConditioningControlPanel
             }
         }
 
-        Canvas IPossessionHost.RubbleFloor
+        Canvas IWpfPossessionHost.RubbleFloor
         {
             get
             {
@@ -436,7 +436,7 @@ namespace ConditioningControlPanel
                 if (_possessionTargets.TryGetValue(fe, out var existing)) return existing;
                 var target = new PossessionTarget
                 {
-                    Element = fe,
+                    Visual = fe,
                     Role = role,
                     // x:Name first: stable across rebuilds AND across a layout change that reorders
                     // siblings. The path hash is the fallback and only has to hold for one lockdown.
@@ -620,7 +620,7 @@ namespace ConditioningControlPanel
             _ => "something",
         };
 
-        Point IPossessionHost.PointOf(FrameworkElement element)
+        Point IWpfPossessionHost.PointOf(FrameworkElement element)
         {
             if (element == null) return new Point(0, 0);
 
