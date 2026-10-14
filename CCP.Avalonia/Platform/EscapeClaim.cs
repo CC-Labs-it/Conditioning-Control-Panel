@@ -118,7 +118,7 @@ internal static class EscapeClaim
         }
     }
 
-    private static bool CcpInFront()
+    internal static bool CcpInFront()
     {
         if (!OperatingSystem.IsWindows()) return false;
         var fg = GetForegroundWindow();
