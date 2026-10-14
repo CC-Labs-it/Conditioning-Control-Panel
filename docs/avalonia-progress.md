@@ -2301,3 +2301,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/arcademy-core-a: +249
 - Cloud session (Opus), local review + gate.
 - Fix round: the meta-store debounce runs on a TimeProvider and its timer is disposed; the test uses a stepped clock and cleans up its temp folders; every test store runs on a fake clock.
+
+## avalonia-port/quiz-core-a: +178
+- AI quiz (`QuizService`) moved into CCP.Core (git mv, Core seams); WPF now honours a loopback `CCP_AI_BASE_URL` like Core `AiService`.
+- 8 Core tests against a loopback fake proxy; cloud session, local review + remote gate.
