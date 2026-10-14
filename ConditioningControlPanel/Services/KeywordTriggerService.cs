@@ -683,43 +683,11 @@ namespace ConditioningControlPanel.Services
         /// have to mean the same thing or the list silently fails to match.
         /// </summary>
         public static bool MatchesAppList(IEnumerable<string>? list, string processName)
-        {
-            if (list == null || string.IsNullOrWhiteSpace(processName)) return false;
+            => Awareness.AwarenessAppList.MatchesAppList(list, processName);
 
-            foreach (var raw in list)
-            {
-                if (string.IsNullOrWhiteSpace(raw)) continue;
-                var entry = raw.Trim();
-                if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    entry = entry.Substring(0, entry.Length - 4);
-                if (entry.Length == 0) continue;
-                if (string.Equals(entry, processName, StringComparison.OrdinalIgnoreCase)) return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Splits the comma / semicolon / newline separated text the Awareness tab collects into a
-        /// clean list of process names, de-duplicated and with any ".exe" dropped.
-        /// </summary>
+        /// <summary>The same parser the Avalonia app-scope editor uses.</summary>
         public static List<string> ParseAppList(string? text)
-        {
-            var result = new List<string>();
-            if (string.IsNullOrWhiteSpace(text)) return result;
-
-            foreach (var part in text.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var entry = part.Trim();
-                if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    entry = entry.Substring(0, entry.Length - 4);
-                if (entry.Length == 0) continue;
-                if (result.Any(e => string.Equals(e, entry, StringComparison.OrdinalIgnoreCase))) continue;
-                result.Add(entry);
-            }
-
-            return result;
-        }
+            => Awareness.AwarenessAppList.ParseAppList(text);
 
         private DateTime _lastSampleAt = DateTime.MinValue;
 

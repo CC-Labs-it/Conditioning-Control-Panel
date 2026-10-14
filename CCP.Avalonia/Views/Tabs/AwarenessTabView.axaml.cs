@@ -336,17 +336,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void TxtAwarenessAppList_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter) CommitAppList();
+            if (e.Key != Key.Enter) return;
+            CommitAppList();
+            TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
         }
 
         private void CommitAppList()
         {
-            // ponytail: BLOCKED on KeywordTriggerService.ParseAppList, which canonicalises the box
-            // (split on , ; newline, strip a trailing ".exe", de-duplicate case-insensitively).
-            // That is a pure static with no platform dependency and belongs in Core, but the
-            // service is not this layer's file and copying the parse here would give the two heads
-            // two definitions of what "chrome.exe" means. The box is seeded and readable; commit
-            // lands with the service.
+            if (_isLoading) return;
+            var settings = CoreSettings.Current;
+            var parsed = AwarenessAppList.ParseAppList(TxtAwarenessAppList.Text);
+            if (parsed.SequenceEqual(settings.KeywordTriggerApps, StringComparer.OrdinalIgnoreCase)) return;
+            settings.KeywordTriggerApps = parsed;
+            CoreSettings.Save();
+            TxtAwarenessAppList.Text = string.Join(", ", parsed);
         }
 
         // ------------------------------------------------------------------ highlight colour
