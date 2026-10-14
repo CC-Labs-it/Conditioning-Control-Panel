@@ -352,7 +352,8 @@ namespace ConditioningControlPanel.Views.Deeper
                 if (App.Tutorial?.IsActive == true) return;
 
                 var settings = App.Settings?.Current;
-                if (settings != null && !settings.HasSeenDeeperEditorIntro)
+                if (settings != null && DeeperEditorIntroRules.ShouldStart(settings.HasSeenDeeperEditorIntro,
+                        App.Tutorial?.IsActive == true, TutorialEventBus.PendingPart2Tutorial != null))
                 {
                     settings.HasSeenDeeperEditorIntro = true;
                     App.Settings?.Save();

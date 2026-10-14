@@ -1,0 +1,20 @@
+# Deeper editor help, coachmarks and tutorial producers
+
+- The editor Help button starts the existing eight-card manual editor tour. Its overlay is owned by the editor; repeated Help clicks reuse it. The metadata step opens its drawer before the overlay measures the target. Closing the editor abandons the tour.
+- First-run coachmarks persist the existing seen flag and defer until layout. Core `DeeperEditorIntroRules` preserves an active tutorial or pending Part 2 hand-off; both heads call that rule. Panic cancels deferred editor coachmarks and closes a live overlay through `deeper-editor-tour`, alongside the existing `tour` abandon route.
+- Loaded, effect-added, rule-added and successful-save moments now publish into `CoreTutorialEvents`; a saved file sets the walkthrough's last-saved path. WPF's `TutorialEventBus` is an adapter over the same Core bus.
+- Three regressions failed before implementation: Help had no overlay, first-run had no overlay, and Loaded emitted nothing. New headless tests use production font setup and the existing sandboxed profile; additional checks cover metadata preparation, panic, active/pending tour guards, add/save events, and editor close.
+- WPF is the behavior source. `parity/trunk` was fetched read-only; no trunk code was imported, so no imported commit requires credit.
+
+The ledger remains **stub**. Follow-up **wire-views-deeper-editor-window-b** must finish waveform peaks (`AudioWaveformCache`), dark titlebar platform treatment, interactive Part 2 dispatch and automatic control/event advance hooks, preview fullscreen/zoom and isolated browser profile, haptics test-fire, and Preview-in-player. The current slice deliberately preserves a pending Part 2 hand-off rather than starting a walkthrough whose automatic advance hooks are absent.
+
+## Verification limits
+
+- `dotnet build` passed for CCP.Core, CCP.Avalonia and all 11 Linux test csproj files in `.github/workflows/build.yml` (13 builds total). Release, `-m:1`, `UseSharedCompilation=false` and all four built-in copy hardlink properties kept concurrent resource use bounded. The final head-test fixture changes also rebuilt the main Avalonia test project successfully.
+- WPF app + test cross-build passed with `-p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`, serialized by `/workspace/shared/ccp-wpf-build.lock`: 512 warnings, **0 errors**. Windows tests were compiled, not run.
+- `DiffEngine_Disabled=true CCP_VOSK_MODEL=/workspace/shared/vosk/vosk-model-small-en-us-0.15 dotnet test Tests/CCP.Core.Tests -c Release --no-build`: **2821 passed, 0 failed, 0 skipped**; includes the five first-run predicate cases.
+- `dotnet test Tests/CCP.Avalonia.Tests -c Release --filter ...`: original three regression tests **3 failed / 0 passed** before the fix; new editor + existing rows batch **8 passed**; broader editor/tour/panic batch **20 passed**; final six-class batch (`DeeperEditorTutorialTests`, `DeeperRowsTests`, `TutorialTourTests`, `PanicSurfacesTests`, `DeeperHubTests`, `DeeperOverlayOpacityLabelTests`) **23 passed, 0 failed, 0 skipped**. Existing fixture setup now uses the production font builder; all assertions remain intact.
+- `bash .github/scripts/core-guards.sh`: **all guards passed**.
+- Sandboxed `dotnet run --project CCP.Avalonia -c Release --no-build -- --render-all /tmp/ccp-worker-3/deeper-editor/render-all`: **224/224 views rendered**. Inspected `DeeperEditorWindow.png` (Help button/editor layout) and `TutorialOverlay.png` (shared overlay/card rendering). These are sample render constructions; live Help and first-run ownership/navigation are proved by the headless behavior tests. Auto-coachmarks are suppressed during render proof.
+
+Logs remain in `/tmp/ccp-worker-3/deeper-editor/` in this session. Windows execution, native webview interaction, real audio/device hardware and live desktop appearance were not run in this headless Linux environment. The full Avalonia test suite was not run; the relevant classes above were.
