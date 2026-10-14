@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\ConditioningControlPanel\ConditioningControlPanel.csproj" />
+    <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
   </ItemGroup>
 
 </Project>

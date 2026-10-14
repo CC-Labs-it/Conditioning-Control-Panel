@@ -119,6 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)
+            InitializeServerBanners(); // MainShellWindow.ServerBanners.cs (WPF MainWindow.Marquee.cs:649-826)
+            InitializeJustDropDoor(); // MainShellWindow.JustDrop.cs (WPF MainWindow.xaml.cs:3793)
             InitializeLockdownGreys(); // MainShellWindow.Lockdown.cs (WPF Lab.cs:612/707)
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
@@ -326,7 +328,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   internal void SyncNoPanicState(…)
 //   internal void SyncOfflineModeState(…)
 //   internal bool RequestToggleWindowsStartup(…)
-//   private void LoadLogo(…)
 //   private void LoadTakeoverImage(…)
 //   private void RefreshThemeAwareElements(…)
 //   private static Color LightenColor(…)

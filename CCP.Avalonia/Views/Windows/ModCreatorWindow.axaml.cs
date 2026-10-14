@@ -320,9 +320,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <see cref="TutorialOverlay"/> is the ported overlay, which reads that seam itself.
         ///
         /// <para>The overlay is only shown once the seam confirms a tour is actually running.
-        /// Unseeded, <c>Start</c> is a silent no-op and <c>IsActive</c> stays false, so this does
-        /// nothing rather than putting an empty coach-mark card on screen - a tour that looks
-        /// started while nothing tracks is worse than no tour.</para>
+        /// <c>Tours.TutorialHead.Seed</c> backs the seam; if <c>Start</c> is refused (another tour
+        /// running) <c>IsActive</c> answers for that tour, never an empty coach-mark card.</para>
         ///
         /// <para>ponytail: the step-rewriting half cannot be done through the seam. WPF walks
         /// <c>App.Tutorial.CurrentSteps</c> and replaces each <c>step.OnActivate</c> so a step

@@ -91,4 +91,21 @@ public class RemoteHudRulesTests
         Assert.True(RemoteHudRules.LocalPanicAllowed(panicKeyEnabled: true));
         Assert.False(RemoteHudRules.LocalPanicAllowed(panicKeyEnabled: false));
     }
+
+    [Fact]
+    public void Signals_post_kind_signal_and_stop_takes_the_panic_path()
+    {
+        var src = StripComments(SourceRoots.ReadProductFile("Services", "Remote", "RemoteControlService.V2.cs"));
+        Assert.Contains("kind = \"signal\"", src);
+        Assert.Contains("StopAllRemoteEffects(force: true)", src);
+        Assert.Contains("\"more\", \"easy\", \"stop\"", src);
+    }
+
+    // Drops // and /* */ comments but keeps string literals (the asserts match literals),
+    // so a call that survives only in a comment no longer passes (PLAYBOOK P23).
+    internal static string StripComments(string src) =>
+        System.Text.RegularExpressions.Regex.Replace(src,
+            @"@""(?:""""|[^""])*""|""(?:\\.|[^""\\\n])*""|//[^\n]*|/\*.*?\*/",
+            m => m.Value.StartsWith("/", StringComparison.Ordinal) ? "" : m.Value,
+            System.Text.RegularExpressions.RegexOptions.Singleline);
 }
