@@ -2313,3 +2313,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/mine-settings-rows: +72
 - Settings > Notifications banner pool switch (`ChkBannerPool`, WPF parity) with a fail-proven paint/write test.
 - Parity row views-settings-notifications -> stub: banner pool and intake nudge readers are still missing (shell-marquee).
+
+## avalonia-port/leash-punish: +999
+- Leash task runner host + caged punish video window: the gate action starts the task, panic/Cut park it and close a locked window.
+- A palette-closing Escape is not a panic (WPF MainWindow.Leash.cs:382).

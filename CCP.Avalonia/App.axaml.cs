@@ -634,6 +634,9 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
                 Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
+                // WPF App.xaml.cs:3010-3013: the task runner the gate's action starts.
+                try { Platform.LeashTaskHost.Start(Platform.LeashHead.Service as ConditioningControlPanel.Services.Leash.LeashService); }
+                catch (Exception exRunner) { Serilog.Log.Warning(exRunner, "[Leash] task runner could not be built"); }
                 // WPF App.xaml.cs:2940-2968. EnsureBaselineAsync keeps WPF's rules: no-op on a full
                 // install, under a debugger, in offline mode, or when nothing is missing. A Linux dev
                 // build never reads as a full install (flashes_audio is not shipped here), so an
@@ -1174,6 +1177,7 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
