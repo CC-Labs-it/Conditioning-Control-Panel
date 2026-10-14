@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using File = System.IO.File;
+using IOPath = System.IO.Path;
+using ConditioningControlPanel.Services;
 using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
@@ -49,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///   <item><c>SpiralEmbedView</c> (WebView2, Windows-only) becomes
     ///     <see cref="WebHost"/>, whose <c>Navigated</c>/<c>Failed</c>/<c>Ready</c>/<c>PostState</c>
     ///     have no twin yet — see <see cref="EnsureEmbed"/>.</item>
-    ///   <item><c>MotionFx</c>, <c>DescentRoomSfx</c> and <c>DescentBarkWatcher</c> are
+    ///   <item><c>MotionFx</c> and <c>DescentBarkWatcher</c> are
     ///     WPF-head services; each is a stub at its call site. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
@@ -197,6 +200,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>True while the splash owns the surface — set the instant the spiral era is
         /// painted, cleared when the embed is revealed, when it fails, or on leaving the tab.</summary>
         private bool _splashUp;
+        private bool _entrySfxSpent, _splashChimed;
+
+        // The head resolves assets; Core owns the cue ladder and mix.
+        internal Func<string, string> SoundResolver { get; set; } = ResolveRoomSound;
+
+        private static string ResolveRoomSound(string name)
+        {
+            var relative = $"chaos/{name}.mp3";
+            var path = CoreModArt.AudioOverridePath(relative) ??
+                ContentLocator.Resolve(IOPath.Combine("Resources", "sounds", relative));
+            return File.Exists(path) ? path : "";
+        }
+
+        private void PlayRoomSound(DescentRoomCue cue) => DescentRoomAudio.Play(
+            cue, App.DescentCountdown?.AudioEnabled ?? true,
+            CoreSettings.Current.MasterVolume, SoundResolver);
 
         /// <summary>The embed, for as long as this tab is the one on screen in the spiral state.</summary>
         private WebHost? _embed;
@@ -331,6 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             HideSplash(fade: false);
             StopWaitingAmbience();
             TeardownEmbed();
+            _entrySfxSpent = _splashChimed = false;
         }
 
         // ============================== the state ==============================
@@ -389,8 +409,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _fogCopy.IsVisible = true;
                     ApplyFogReadout();
                     StartFogFx();
-                    // ponytail: needs DescentRoomSfx.PlayFogEntry() (WPF head), one door sound per
-                    // entry. Audio is decoration; the room paints without it.
+                    if (!_entrySfxSpent)
+                    {
+                        _entrySfxSpent = true;
+                        PlayRoomSound(DescentRoomCue.FogEntry);
+                    }
                     break;
 
                 case SpiralRoomState.Spiral:
@@ -793,9 +816,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _spiralSplash.Opacity = 1;
                 _spiralSplash.IsVisible = true;
 
-                // ponytail: needs DescentRoomSfx.PlaySplashOpen() (WPF head), one chime per ENTRY
-                // and never per retry: a cue that repeated while a browser struggled would sound
-                // exactly like the thing being stuck.
+                if (!_splashChimed)
+                {
+                    _splashChimed = true;
+                    PlayRoomSound(DescentRoomCue.SplashOpen);
+                }
 
                 if (!AllowAmbientLoops)
                 {
