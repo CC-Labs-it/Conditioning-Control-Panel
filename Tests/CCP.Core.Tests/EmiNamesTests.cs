@@ -1,3 +1,4 @@
+using System;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
@@ -6,9 +7,14 @@ namespace CCP.Core.Tests;
 
 /// <summary><see cref="EmiNames"/>, moved from WPF: a machine key becomes a lowercase display name
 /// or null, never the raw key (LINES-SCHEMA 5.3).</summary>
-public sealed class EmiNamesTests
+public sealed class EmiNamesTests : IDisposable
 {
+    // The language is process-wide: restore it so later tests see what they set (PLAYBOOK P02).
+    private readonly string _prevLanguage = LocalizationManager.Instance.CurrentLanguage;
+
     public EmiNamesTests() => LocalizationManager.Instance.Initialize("en");
+
+    public void Dispose() => LocalizationManager.Instance.Initialize(_prevLanguage);
 
     private static string Lower(string key)
     {
@@ -31,6 +37,8 @@ public sealed class EmiNamesTests
         Assert.Equal(Lower("emi_desk_target_remote"), EmiNames.Feature("remotecontrol"));
         Assert.Equal(Lower("emi_desk_target_vault"), EmiNames.Feature("exclusives"));
         Assert.Equal(Lower("emi_desk_target_settings"), EmiNames.Feature("appsettings"));
+        Assert.Equal(Lower("emi_desk_target_sessions"), EmiNames.Feature("presets"));
+        Assert.Equal(Lower("emi_desk_target_videos"), EmiNames.Feature("video")); // a Studio rack key
         // As shipped in WPF: "settings" is also a ring door id, and the ring is asked first, so the
         // tab_dashboard row (MOMENTS 4.E "settings is HOME") is never reached. Pinned, not fixed here.
         Assert.Equal(Lower("emi_desk_target_settings"), EmiNames.Feature("settings"));

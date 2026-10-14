@@ -59,25 +59,6 @@ internal static class EmiNames
     };
 
     /// <summary>
-    /// Tab keys that ARE a ring target under a different name. The ring already owns this map
-    /// privately for its usage scoring; this is the display-name half of the same idea, kept here
-    /// so <see cref="Feature"/> can answer for a tab key without the ring having to expose it.
-    /// </summary>
-    private static readonly Dictionary<string, string> _tabTargets = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["presets"] = "sessions",
-        ["remotecontrol"] = "remote",
-        ["bambitakeover"] = "takeover",
-        ["exclusives"] = "vault",
-        ["premium"] = "vault",
-        ["discord"] = "profile",
-        ["appsettings"] = "settings",
-        ["flash"] = "flashes",
-        ["video"] = "videos",
-        ["subliminal"] = "subliminals",
-    };
-
-    /// <summary>
     /// A tab key, rack key, ring target id or feature key as a lowercase display name, or null when
     /// nothing in the app knows a human name for it. Never throws and never returns the raw key.
     /// </summary>
@@ -93,7 +74,12 @@ internal static class EmiNames
             if (name != null) return name;
 
             // 2. a tab or rack key that IS a ring target under another id.
-            if (_tabTargets.TryGetValue(k, out var mapped))
+            //    EmiDoors' scoring maps, plus "exclusives", which redirects to the vault page
+            //    before the usage counter so it is not in TabTargets.
+            var mapped = k.Equals("exclusives", StringComparison.OrdinalIgnoreCase) ? "vault"
+                : EmiDoors.TabTargets.TryGetValue(k, out var tab) ? tab
+                : EmiDoors.RackTargets.TryGetValue(k, out var rack) ? rack : null;
+            if (mapped != null)
             {
                 name = FromTarget(mapped);
                 if (name != null) return name;
