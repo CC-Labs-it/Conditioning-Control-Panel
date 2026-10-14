@@ -16,7 +16,8 @@ namespace ConditioningControlPanel.Services.GoonGame
     /// what makes the loopback transport usable from a plain test. A callback that throws is logged
     /// here, never raised into the transport or the dispatcher.
     /// ponytail: the WPF original dropped work once the dispatcher began shutting down; the WPF
-    /// CoreDispatch seed runs it inline instead, which on an exiting app is equally harmless.
+    /// CoreDispatch seed runs it inline instead, so during shutdown a callback now runs off the UI
+    /// thread; one that touches WPF throws, and the catch below logs it instead of dropping it.
     /// </summary>
     internal static class GoonDispatch
     {

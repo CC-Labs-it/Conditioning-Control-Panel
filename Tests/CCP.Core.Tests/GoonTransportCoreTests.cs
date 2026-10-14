@@ -43,10 +43,16 @@ public sealed class GoonTransportCoreTests
     [Fact]
     public void GoonDispatch_ContainsAThrowingCallback_AndKeepsDelivering()
     {
-        var ran = false;
-        GoonDispatch.Post(() => throw new InvalidOperationException("boom"));
-        GoonDispatch.Post(() => ran = true);
-        Assert.True(ran);
+        var oldPost = CoreDispatch.PostProvider;
+        CoreDispatch.PostProvider = null;   // inline: no head attached
+        try
+        {
+            var ran = false;
+            GoonDispatch.Post(() => throw new InvalidOperationException("boom"));
+            GoonDispatch.Post(() => ran = true);
+            Assert.True(ran);
+        }
+        finally { CoreDispatch.PostProvider = oldPost; }
     }
 
     [Fact]
