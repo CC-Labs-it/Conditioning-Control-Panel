@@ -104,10 +104,14 @@ public sealed class WebcamTrackerTests
             WebcamTracker.Instance.FrameErrors = 0;
             Assert.True(WebcamTracker.Instance.Start(), WebcamTracker.Instance.LastError);
             Assert.True(WebcamTracker.Instance.IsRunning);
+            Assert.True(WebcamStatus.IsLive(WebcamTracker.Instance.State));
+            WebcamTracker.Instance.SetTrackingState(WebcamTrackingState.Error); // an old session's failure cannot hide a live capture
+            Assert.True(WebcamStatus.IsLive(WebcamTracker.Instance.State));
             WaitFor(() => Volatile.Read(ref src.Reads) >= 5);
             Assert.Equal(0, WebcamTracker.Instance.FrameErrors); // the loop swallows; nothing may have thrown
             WebcamTracker.Instance.Stop();
             Assert.False(WebcamTracker.Instance.IsRunning);
+            Assert.Equal(WebcamTrackingState.Stopped, WebcamTracker.Instance.State);
             Assert.True(src.Disposed);
         });
     }
