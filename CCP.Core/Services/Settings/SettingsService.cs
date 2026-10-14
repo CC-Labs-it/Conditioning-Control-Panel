@@ -710,6 +710,24 @@ namespace ConditioningControlPanel.Services
         /// fields are copied unconditionally, <c>MasterEnabled</c> is user state and is preserved, and
         /// only a strict version bump touches <paramref name="pendingReinstalls"/>.
         /// </summary>
+        /// <summary>Bundled preset JSON carries no action ids, so every load minted new ones and
+        /// rewrote settings.json. Keep the stored id where the trigger id and the action's position
+        /// and type match (found by the real-profile migration test).</summary>
+        private static void KeepActionIds(List<KeywordTrigger>? stored, List<KeywordTrigger>? bundled)
+        {
+            if (stored == null || bundled == null) return;
+            foreach (var trigger in bundled)
+            {
+                var old = trigger == null ? null : stored.FirstOrDefault(t => t?.Id == trigger.Id);
+                if (old == null) continue;
+                for (var i = 0; i < Math.Min(old.Actions.Count, trigger!.Actions.Count); i++)
+                {
+                    var (was, now) = (old.Actions[i], trigger.Actions[i]);
+                    if (was != null && now != null && was.Type == now.Type) now.Id = was.Id;
+                }
+            }
+        }
+
         internal static BuiltInPresetMergeResult MergeBuiltInPresetInto(
             AppSettings settings,
             KeywordTriggerPreset preset,
@@ -749,6 +767,7 @@ namespace ConditioningControlPanel.Services
             existing.AvatarPromptTemplate = preset.AvatarPromptTemplate;
             existing.PhrasePools = preset.PhrasePools;
             existing.CannedPhrases = preset.CannedPhrases;
+            KeepActionIds(existing.Triggers, preset.Triggers);
             existing.Triggers = preset.Triggers;
             existing.Version = preset.Version;
 

@@ -109,4 +109,45 @@ public sealed class CompanionTabVisibilityTests
             CoreSettings.ServiceProvider = null;
         }
     });
+
+    /// <summary>Found by the real-profile migration test: quitting without ever opening the
+    /// Companion tab wrote the room's default (closed) drawers over the saved ones. WPF restores
+    /// the drawers at load, so its exit write is the saved state.</summary>
+    [Fact]
+    public Task ExitWithoutOpeningCompanionKeepsSavedDrawers() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);   // P52
+        s.CompanionSectionOpen.Clear();
+        s.CompanionSectionOpen["Workshop"] = true;
+        s.CompanionSectionOpen["EngineRoom"] = true;
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(s.CompanionSectionOpen["Workshop"]);
+            Assert.True(s.CompanionSectionOpen["EngineRoom"]);
+        }
+        finally
+        {
+            s.CompanionSectionOpen.Clear();
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
 }
