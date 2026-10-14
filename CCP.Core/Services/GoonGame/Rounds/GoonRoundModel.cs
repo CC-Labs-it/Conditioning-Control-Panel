@@ -379,12 +379,16 @@ namespace ConditioningControlPanel.Services.GoonGame
         public static void Invoke(Action action, string what)
         {
             if (GoonDispatch.ShuttingDown) return;
-            CoreDispatch.Invoke(() =>
+            var (completed, _) = CoreDispatch.Invoke(() =>
             {
                 try { action(); }
                 catch (Exception ex) { Log.Warning("GoonSuddenDeath: presenter call {What} failed: {Error}", what, ex.Message); }
                 return true;
             }, SyncInvokeTimeout);
+            // [WATCHDOG]-tagged like WPF RunOnUISync so the bug-report marker rescue keeps it.
+            if (!completed)
+                Log.Warning("[WATCHDOG] GoonUi: gave up after {Timeout}s waiting for the UI thread (presenter call {What}) - UI work abandoned",
+                    SyncInvokeTimeout.TotalSeconds, what);
         }
     }
 

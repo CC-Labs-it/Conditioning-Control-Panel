@@ -1978,9 +1978,6 @@ namespace ConditioningControlPanel.Services.GoonGame
             });
         }
 
-        /// <summary>The consent rule for the peer pool: on unless the player switched online
-        /// pictures off for the Goon Game. Pure, for the tests.</summary>
-
         private static void PostPeerMedia(GoonOnlineMedia.Snapshot snap)
         {
             PostFrame(new
