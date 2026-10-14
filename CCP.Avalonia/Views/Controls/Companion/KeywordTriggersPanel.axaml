@@ -48,6 +48,11 @@
       (CompanionTheme.xaml:22), and the Awareness status dot keeps its existing
       SetStatusPulse mechanism untouched.
     -->
+    <Grid>
+    <!-- Sibling shadow: animate opacity, never an Effect on the drawer content. -->
+    <Border x:Name="KeywordDrawerGlow" Background="Transparent" CornerRadius="10"
+            Margin="0,0,0,10" BoxShadow="0 0 22 0 #FF69B4"
+            Opacity="0" IsHitTestVisible="False"/>
     <Expander x:Name="KeywordTriggersExpander"
               Theme="{StaticResource CollapsibleCard}" IsExpanded="True">
         <Expander.Header>
@@ -227,4 +232,5 @@
             </StackPanel>
         </StackPanel>
     </Expander>
+    </Grid>
 </UserControl>

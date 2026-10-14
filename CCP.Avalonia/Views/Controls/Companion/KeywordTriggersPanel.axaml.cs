@@ -1,4 +1,9 @@
 using System;
+using System.Linq;
+using Avalonia;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Markup.Xaml;
@@ -28,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     public partial class KeywordTriggersPanel : UserControl
     {
         private readonly Expander _expander;
+        private readonly Border _drawerGlow;
+        private BeatLoop? _drawerPulse;
         private readonly TextBlock _txtScreenOcrOffHint;
         private readonly StackPanel _screenOcrIntervalPanel;
         private readonly TextBlock _txtHighlightOffHint;
@@ -41,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AvaloniaXamlLoader.Load(this);
 
             _expander = this.FindControl<Expander>("KeywordTriggersExpander")!;
+            _drawerGlow = this.FindControl<Border>("KeywordDrawerGlow")!;
             _txtScreenOcrOffHint = this.FindControl<TextBlock>("TxtScreenOcrOffHint")!;
             _screenOcrIntervalPanel = this.FindControl<StackPanel>("ScreenOcrIntervalPanel")!;
             _txtHighlightOffHint = this.FindControl<TextBlock>("TxtHighlightOffHint")!;
@@ -86,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {
+            StopDrawerPulse();
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             base.OnDetachedFromVisualTree(e);
@@ -192,26 +201,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             _txtHighlightOffHint.IsVisible = !masterOn;
         }
 
-        /// <summary>
-        /// Opens the drawer and scrolls it into view. Used by the Awareness tab's "advanced editor"
-        /// hyperlink. The WPF version also drives the ancestor ScrollViewer by hand and pulses a
-        /// DropShadowEffect; Avalonia's <see cref="Control.BringIntoView"/> resolves against the
-        /// post-layout geometry, and the pulse is dropped (decorative; no bitmap-effect animation
-        /// budget on this head yet).
-        /// </summary>
+        /// <summary>WPF KeywordTriggersPanel: expand, align the header 24px below the
+        /// viewport top, and pulse on every reveal, including an already-expanded drawer.</summary>
         internal void RevealTriggerEditor()
         {
             try
             {
                 _expander.IsExpanded = true;
                 UpdateLayout();
-                this.BringIntoView();
+                var scroll = this.GetVisualAncestors().OfType<ScrollViewer>().FirstOrDefault();
+                if (scroll != null && this.TranslatePoint(default, scroll) is { } top)
+                {
+                    var target = scroll.Offset.Y + top.Y - 24;
+                    var maximum = Math.Max(0, scroll.Extent.Height - scroll.Viewport.Height);
+                    scroll.Offset = new Vector(scroll.Offset.X, Math.Clamp(target, 0, maximum));
+                }
+                else this.BringIntoView();
+                PulseDrawer();
             }
             catch (InvalidOperationException)
             {
-                // Layout torn down mid-navigation - the drawer is still expanded, which is the
-                // part that matters.
+                // Layout torn down mid-navigation; expansion has already landed.
             }
+        }
+
+        private void PulseDrawer()
+        {
+            StopDrawerPulse();
+            if (!AmbientFxCanvas.Env.AllowTransitions) return;
+            // WPF: 220ms QuadraticEase InOut, auto-reverse, twice, peak opacity 0.9.
+            // ponytail: a sibling BoxShadow replaces the animated bitmap Effect, on the
+            // existing shared beat. This finite interaction leaves no clock at rest.
+            _drawerPulse ??= new BeatLoop(this, seconds =>
+            {
+                if (seconds >= 0.88 || !AmbientFxCanvas.Env.AllowTransitions)
+                {
+                    StopDrawerPulse();
+                    return;
+                }
+                double phase = seconds % 0.44 / 0.22;
+                double k = phase <= 1 ? phase : 2 - phase;
+                double eased = k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
+                _drawerGlow.Opacity = Math.Clamp(0.9 * eased, 0, 1);
+            });
+            _drawerPulse.Start();
+        }
+
+        private void StopDrawerPulse()
+        {
+            _drawerPulse?.Stop();
+            _drawerGlow.Opacity = 0;
         }
 
         /// <summary>Value labels; formats copied from MainWindow.KeywordTriggers.cs, which owns

@@ -8,6 +8,8 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -38,7 +40,7 @@ public sealed class KeywordTriggersPanelTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers.ToList(), s.CustomTriggers.ToList(), s.ScreenOcrEnabled, s.OcrConfirmationScans,
@@ -176,4 +178,93 @@ public sealed class KeywordTriggersPanelTests
         Assert.False(s.ScreenOcrEnabled);
         Assert.False(detail.IsVisible);
     });
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    public Task RevealPulsesTwiceAndReclickRestartsThenDetachStops(MotionLevel motion) => Run((_, panel, s) =>
+    {
+        var saved = (s.MotionLevel, BeatLoop.Time);
+        var time = new SteppedTime();
+        try
+        {
+            s.MotionLevel = motion;
+            BeatLoop.Time = time;
+            panel.RevealTriggerEditor();
+            var glow = panel.FindControl<Border>("KeywordDrawerGlow");
+            Assert.NotNull(glow);
+            Assert.True(Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded);
+            Assert.False(glow.IsHitTestVisible);
+            Assert.Null(Find<Expander>(panel, "KeywordTriggersExpander").Effect);
+            var beat = Assert.Single(BeatLoop.Running, b => ReferenceEquals(b.Owner, panel));
+            Assert.Equal(0, glow.Opacity);
+            time.Advance(TimeSpan.FromMilliseconds(110)); BeatLoop.StepAll();
+            Assert.Equal(0.45, glow.Opacity, 5);
+            time.Advance(TimeSpan.FromMilliseconds(110)); BeatLoop.StepAll();
+            Assert.Equal(0.9, glow.Opacity, 5);
+            time.Advance(TimeSpan.FromMilliseconds(220)); BeatLoop.StepAll();
+            Assert.Equal(0, glow.Opacity, 5);
+            time.Advance(TimeSpan.FromMilliseconds(220)); BeatLoop.StepAll();
+            Assert.Equal(0.9, glow.Opacity, 5);
+            panel.RevealTriggerEditor();
+            Assert.Equal(0, glow.Opacity);
+            time.Advance(TimeSpan.FromMilliseconds(880)); BeatLoop.StepAll();
+            Assert.Equal(0, glow.Opacity);
+            Assert.False(beat.IsRunning);
+            panel.RevealTriggerEditor();
+            ((Window)TopLevel.GetTopLevel(panel)!).Content = null;
+            Assert.False(beat.IsRunning);
+            Assert.Equal(0, glow.Opacity);
+        }
+        finally { (s.MotionLevel, BeatLoop.Time) = saved; }
+    });
+
+    [Fact]
+    public Task RevealUnderMotionOffStillExpandsAndDoesNotStartAClock() => Run((view, panel, s) =>
+    {
+        var saved = s.MotionLevel;
+        var presets = s.KeywordTriggerPresets.ToList();
+        try
+        {
+            s.MotionLevel = MotionLevel.Off;
+            s.KeywordTriggerPresets.Clear();
+            Click(Find<Button>(view, "LnkAwarenessAdvanced"));
+            Assert.True(Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded);
+            Assert.Equal(0, Find<Border>(panel, "KeywordDrawerGlow").Opacity);
+            Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, panel));
+        }
+        finally
+        {
+            s.MotionLevel = saved;
+            s.KeywordTriggerPresets.Clear(); s.KeywordTriggerPresets.AddRange(presets);
+        }
+    });
+
+    [Fact]
+    public Task RevealScrollsTheHeaderTo24PixelsEvenWhenAlreadyExpanded() => Run((_, _, s) =>
+    {
+        var saved = s.MotionLevel;
+        var panel = new KeywordTriggersPanel();
+        var content = new StackPanel();
+        content.Children.Add(new Border { Height = 600 });
+        content.Children.Add(panel);
+        content.Children.Add(new Border { Height = 900 });
+        var scroll = new ScrollViewer { Content = content };
+        var host = new Window { Width = 900, Height = 500, Content = scroll };
+        try
+        {
+            s.MotionLevel = MotionLevel.Off;
+            host.Show(); Dispatcher.UIThread.RunJobs();
+            scroll.Offset = new Vector(0, 400);
+            host.UpdateLayout();
+            panel.RevealTriggerEditor();
+            host.UpdateLayout();
+            Assert.Equal(576, scroll.Offset.Y, 1);
+            Assert.Equal(24, panel.TranslatePoint(default, scroll)!.Value.Y, 1);
+            scroll.Offset = new Vector(0, 200); host.UpdateLayout();
+            panel.RevealTriggerEditor(); host.UpdateLayout();
+            Assert.Equal(576, scroll.Offset.Y, 1);
+        }
+        finally { host.Close(); s.MotionLevel = saved; }
+    });
+
 }
