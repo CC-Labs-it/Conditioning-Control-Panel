@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -97,7 +97,7 @@ public partial class EmiDeskWindow
     /// </summary>
     private static readonly EmiChain PetFlickChain = new(
         "petFlick", "PAT (cooling down)",
-        new[] { new EmiFrame("^_~", 320), new EmiFrame(EmiChains.RestFace, 180) },
+        EmiChains.PatFrames(EmiPatFeedback.Flick),
         Move: "bounce", BodyFrame: "pet");
 
     /// <summary>

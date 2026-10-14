@@ -106,6 +106,14 @@ public static class EmiChains
         "\u2665\u2665\u2665", "\u2605\u2605\u2605", "404", "brb"
     };
 
+    /// <summary>Adapt shared wordless frames to this head's chain player.</summary>
+    internal static IReadOnlyList<EmiFrame> PatFrames(IReadOnlyList<EmiPatFrame> frames)
+    {
+        var result = new EmiFrame[frames.Count];
+        for (int i = 0; i < result.Length; i++) result[i] = new EmiFrame(frames[i].Text, frames[i].Ms);
+        return result;
+    }
+
     /// <summary>The settled, pleased face a wordless positive beat lands on.</summary>
     public const string SettleFace = "^_^";
 
@@ -386,7 +394,7 @@ public static class EmiChains
     public static readonly IReadOnlyDictionary<string, EmiChain> Chains =
         new Dictionary<string, EmiChain>(StringComparer.Ordinal)
         {
-            ["wink"] = new("wink", "WINK", new[] { F("^_^", 420), F("^_~", 260), F("^_^", 600) },
+            ["wink"] = new("wink", "WINK", PatFrames(EmiPatFeedback.Wink),
                 BodyFrame: "idle"),
 
             ["blink"] = new("blink", "BLINK (idle)", new[] { F("0_0", 1400), F("-_-", 110), F("0_0", 1200) },
@@ -459,7 +467,7 @@ public static class EmiChains
 
             // GLEE is the lock's "three pets in a row" and "a streak stamp lands" beat: the
             // squeezed-eye kaomoji, not the lovestruck one.
-            ["glee"] = new("glee", "GLEE", new[] { F("^_^", 300), F("(\u2267\u25E1\u2266)", 1400) },
+            ["glee"] = new("glee", "GLEE", PatFrames(EmiPatFeedback.Glee),
                 Fx: "hearts", Move: "bounce", BodyFrame: "celebration"),
 
             ["cool"] = new("cool", "COOL", new[] { F("-_-", 300), F("(\u2310\u25A0_\u25A0)", 1400) },
@@ -482,13 +490,13 @@ public static class EmiChains
             // them by id. The frames are the ones widget.js raws, unchanged.
 
             // A single head-pat: the settled face, hearts, a bounce, the pet pose.
-            ["pet"] = new("pet", "PET", new[] { F(SettleFace, 900) },
+            ["pet"] = new("pet", "PET", PatFrames(EmiPatFeedback.Pet),
                 Fx: "hearts", Move: "bounce", BodyFrame: "pet"),
 
             // The third pat inside the window: `glee`'s frames wearing the PET pose, which is what
             // widget.js does with its call-site bodyFrame override.
             ["petStreak"] = new("petStreak", "PET STREAK",
-                new[] { F("^_^", 300), F("(\u2267\u25E1\u2266)", 1400) },
+                PatFrames(EmiPatFeedback.Glee),
                 Fx: "hearts", Move: "bounce", BodyFrame: "pet"),
 
             // Nobody has touched her in a long while. No line, no guilt: she just dozes.

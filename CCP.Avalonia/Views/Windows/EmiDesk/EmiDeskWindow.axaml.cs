@@ -907,6 +907,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
+            StopPatFeedback();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -1610,14 +1611,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 PlayPatSfx();   // the hover half of the one gesture - see PetFromClick
 
                 // Inside the cooldown she only winks, so spam cannot loop the show (widget.js pet()).
-                if (DateTime.UtcNow < _petCooldownUntil)
+                if (PatClock.GetUtcNow().UtcDateTime < _petCooldownUntil)
                 {
-                    PlayChain("wink", bodyFrameOverride: "pet");
+                    StartPatFeedback(EmiPatFeedback.Wink);
                 }
                 else
                 {
-                    _petCooldownUntil = DateTime.UtcNow.AddMilliseconds(PetCooldownMs);
-                    PlayChain("pet");
+                    _petCooldownUntil = PatClock.GetUtcNow().UtcDateTime.AddMilliseconds(PetCooldownMs);
+                    StartPatFeedback(EmiPatFeedback.Pet);
                     CountPat();
                 }
                 FireDeskEvent("petted");
@@ -2543,18 +2544,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // React.cs and Fx.cs are no longer among them: both are real, above.
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - the 100 ms gaze/idle poll. Starts with her.</summary>
-        private void StartAlive() { }
+        private void StartAlive() { _patPokes.Reset(); }
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - stops the poll when she goes.</summary>
-        private void StopAlive() { }
+        private void StopAlive() { StopPatFeedback(); _patPokes.Reset(); }
 
-        /// <summary>
-        /// The click pat (WPF EmiDeskWindow.React.cs:119): disarms the hover pet so one gesture
-        /// cannot pat twice, plays the pat cue on every touch (EmiSfx's 130 ms floor stops a
-        /// double click machine-gunning it), and past the 6 s cooldown plays the pet chain and
-        /// counts the pat. ponytail: WPF's ChainLive guard, summon-cut, poke ladder (NotePoke /
-        /// PlayPokeFlick / glee streak) and the flick inside the cooldown are not on this head.
-        /// </summary>
+        /// <summary>WPF React.cs:119: the click pat shares the hover cooldown and books each poke.</summary>
         private void PetFromClick()
         {
             try
@@ -2564,9 +2559,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _petArmed = true;
                 RaiseActivity();
                 PlayPatSfx();
-                if (DateTime.UtcNow < _petCooldownUntil) return;
-                _petCooldownUntil = DateTime.UtcNow.AddMilliseconds(PetCooldownMs);
-                PlayChain("pet");
+                var now = PatClock.GetUtcNow().UtcDateTime;
+                var step = _patPokes.Note(now);
+                if (step == EmiPokeStep.Glee)
+                {
+                    _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
+                    EmiSfx.Chime();
+                    StartPatFeedback(EmiPatFeedback.Glee);
+                    return;
+                }
+                if (now < _petCooldownUntil)
+                {
+                    StartPatFeedback(step == EmiPokeStep.Rage ? EmiPatFeedback.Rage
+                        : step == EmiPokeStep.Annoyed ? EmiPatFeedback.Annoyed : EmiPatFeedback.Flick);
+                    return;
+                }
+                _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
+                StartPatFeedback(EmiPatFeedback.Pet);
                 CountPat();
                 FireDeskEvent("petted");
             }

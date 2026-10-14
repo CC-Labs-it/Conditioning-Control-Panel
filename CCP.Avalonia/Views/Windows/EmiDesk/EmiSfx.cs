@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// Files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
     /// mod's replacement cue, the .wav/.mp3 swap) has no Core sounds seam yet, so a mod cannot
     /// re-voice these here; a stock install sounds right.
-    /// The toss cues (Lift/Bump/Thud/Chime) come with the toss port (row win-emi-desk-extras).</para>
+    /// The toss cues (Lift/Bump/Thud) come with the toss port (row win-emi-desk-extras).</para>
     /// </summary>
     internal static class EmiSfx
     {
@@ -30,12 +30,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private static readonly object Gate = new();
         private static DateTimeOffset _lastPat = DateTimeOffset.MinValue;
+        private static DateTimeOffset _lastChime = DateTimeOffset.MinValue;
         private static DateTimeOffset _lastRing = DateTimeOffset.MinValue;
 
         public static void Pat()
         {
             if (Throttle(ref _lastPat))
                 Play(new[] { "emi/pat.mp3", "chaos/chip_pop.mp3", "bubbles/Pop3.mp3" }, PatScale, "emi-sfx-pat");
+        }
+
+        public static void Chime()
+        {
+            if (Throttle(ref _lastChime))
+                Play(new[] { "emi/chime.mp3", "chaos/reveal_chime.mp3", "chime1.mp3" }, 0.15f, "emi-sfx-chime");
         }
 
         public static void RingOpen()
