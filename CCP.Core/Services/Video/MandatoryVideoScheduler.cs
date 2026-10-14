@@ -329,6 +329,7 @@ namespace ConditioningControlPanel.Services
                 if (!ReferenceEquals(mine, _preroll) || !_playing) return;
                 Dispose(ref _preroll);
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
+                CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 try { _host.Show(path, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;
@@ -358,6 +359,7 @@ namespace ConditioningControlPanel.Services
             Penalties = 0;
             CoreBubbles.Resume();   // WPF Cleanup: App.Bubbles?.Resume() - not before a verdict replay
             if (_running && CoreSettings.Current.FlashEnabled) CoreFlash.Start();
+            else CoreDiscord.Service?.SetIdleActivity(); // WPF Cleanup:7962
             if (_running) ScheduleNext();
         }
 
@@ -413,6 +415,7 @@ namespace ConditioningControlPanel.Services
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
+            CoreDiscord.Service?.SetIdleActivity(); // every live cleanup, including fall-open panic
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();

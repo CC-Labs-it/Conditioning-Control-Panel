@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Services
     ///
     /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
     /// corner GIF, ducking, phase events,
-    /// EMI Desk, Discord, friends, season recap and achievement tracking. No settings are written for them,
+    /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
     public sealed class SessionRunner
@@ -107,6 +107,7 @@ namespace ConditioningControlPanel.Services
 
             _timer = new Timer(_ => CoreDispatch.Post(() => Tick(Elapsed)), null, 1000, 1000);
             SessionLog.BeginSession(session);
+            CoreDiscord.Service?.SetSessionActivity(session.Name); // WPF SessionEngine:260, after feature starts
             Log.Information("Session started: {Name}", session.Name);
         }
 
@@ -326,6 +327,7 @@ namespace ConditioningControlPanel.Services
 
             try { SessionLog.EndSession(completed, elapsed, xp); }
             catch (Exception ex) { Log.Error(ex, "SessionLog.EndSession failed"); }
+            CoreDiscord.Service?.SetIdleActivity(); // WPF SessionEngine:390, after restored services
             CurrentSession = null;
             // WPF SessionEngine.SessionStopped + SessionCompleted, as one call (ProgramEngineBridge).
             try { Stopped?.Invoke(session, completed); }

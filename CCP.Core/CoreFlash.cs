@@ -61,6 +61,7 @@ namespace ConditioningControlPanel
                 _timer ??= new Timer(OnTick, null, Timeout.Infinite, Timeout.Infinite);
                 ArmLocked();
             }
+            CoreDiscord.Service?.SetFlashActivity(); // WPF FlashService.Start:543
             Log.Information("Flash schedule started");
         }
 
@@ -69,10 +70,10 @@ namespace ConditioningControlPanel
         {
             lock (Gate)
             {
-                if (!_isRunning) return;
                 _isRunning = false;
                 try { _timer?.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
             }
+            CoreDiscord.Service?.SetIdleActivity(); // WPF FlashService.Stop:580 (even when already stopped)
             Log.Information("Flash schedule stopped");
         }
 

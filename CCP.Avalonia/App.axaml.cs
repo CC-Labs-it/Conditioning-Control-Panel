@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             Services.DiscordRichPresenceService.PostToUi = a => Dispatcher.UIThread.Post(a);
             DiscordRpc = new Services.DiscordRichPresenceService();
+            CoreDiscord.ServiceProvider = () => DiscordRpc;
             ApplyRichPresence();
         }
 

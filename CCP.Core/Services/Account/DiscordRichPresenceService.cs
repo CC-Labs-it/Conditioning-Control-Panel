@@ -55,6 +55,7 @@ public class DiscordRichPresenceService : IDisposable
 
     /// <summary>The activity line the next refresh sends (test seam: which feature owns the presence).</summary>
     internal string CurrentState => _currentState;
+    internal string CurrentDetails => _currentDetails;
 
     /// <summary>A CCP_USERDATA_DIR sandbox (like SecretStore.Sandboxed). Test seam: a test swaps it to reach a FAKE
     /// discord-ipc socket, or to prove the refusal.</summary>
