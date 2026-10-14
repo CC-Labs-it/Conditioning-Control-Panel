@@ -247,7 +247,8 @@ public sealed class MantraWindowSessionTests
             Dispatcher.UIThread.RunJobs();
 
             shell.StartMantraSession(3);
-            for (var i = 0; i < 250 && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>().Any(); i++)
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>().Any())
             {
                 Dispatcher.UIThread.RunJobs();
                 await Task.Yield();
