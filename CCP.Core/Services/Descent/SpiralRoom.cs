@@ -65,6 +65,15 @@ namespace ConditioningControlPanel.Services.Descent
         /// <summary>The tab key. One string, spelled once, because it is asserted in five files.</summary>
         public const string TabKey = "spiral";
 
+        /// <summary>WPF DescentMigrationService's withhold rule: an acknowledged migration or a
+        /// valid pending answer wins over every outstanding-offer signal. Null settings hold nothing.</summary>
+        public static bool SpiralWithheldFor(AppSettings? settings, bool offerInHand, bool ceremonyOpen)
+        {
+            if (settings is null || settings.DescentMigrationCompleted) return false;
+            if (DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) return false;
+            return offerInHand || ceremonyOpen || settings.DescentMigrationOffered;
+        }
+
         // ==================== the fog era ====================
 
         /// <summary>

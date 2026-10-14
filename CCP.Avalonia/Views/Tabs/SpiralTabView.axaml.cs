@@ -292,6 +292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// (DescentService is WPF-only).</summary>
         private void Wire()
         {
+            WireMigrationGate();
             if (_wiredFuse != null || App.DescentCountdown is not { } fuse) return;
             _wiredFuse = fuse;
             fuse.PhaseChanged += OnPhaseChanged;
@@ -301,6 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Unwire from the fuse that was wired, even if the static has been swapped since.</summary>
         private void Unwire()
         {
+            UnwireMigrationGate();
             if (_wiredFuse is not { } fuse) return;
             _wiredFuse = null;
             fuse.PhaseChanged -= OnPhaseChanged;
@@ -351,10 +353,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
-                    // ponytail: DescentMigrationService.SpiralWithheld and DescentService.Current
-                    // (the block) are WPF-head network services, so this head can reach Fog and
-                    // Waiting but never Spiral; the embed seam below waits for them.
-                    spiralWithheld: false,
+                    // ponytail: the persisted unanswered-offer gate is shared with WPF. Live offers,
+                    // ceremony ownership and server blocks still need the Descent service lane.
+                    spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false),
                     hasBlock: false));
             }
             catch (Exception ex)
