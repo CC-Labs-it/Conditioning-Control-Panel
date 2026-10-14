@@ -15,10 +15,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>A thing a panic must stop. <paramref name="OwnsTheScreen"/> marks a game-like host:
         /// a press that ends it does not advance the double-press exit ladder (P30, WPF
         /// AnyGameSurfaceOwnsTheScreen). <paramref name="Stop"/> gets the shell the route ran on
-        /// (null off the desktop path) and must be idempotent and safe when idle.</summary>
-        internal sealed record Surface(string Id, Action<MainShellWindow?> Stop, Func<bool>? OwnsTheScreen = null);
+        /// (null off the desktop path) and must be idempotent and safe when idle. <paramref name="After"/>
+        /// names the surfaces that must stop before this one (a contract, cite WPF or the decision next to it);
+        /// PanicSurfacesTests enforces it.</summary>
+        internal sealed record Surface(string Id, Action<MainShellWindow?> Stop, Func<bool>? OwnsTheScreen = null, string[]? After = null);
 
-        /// <summary>In stop order; order matters where noted. Add a surface with one line. Tests swap it.</summary>
+        /// <summary>In stop order; order matters where an entry names <c>After</c>. Add a surface with one
+        /// line (and its id to PanicSurfacesTests.SafetyCritical). WPF refs are
+        /// ConditioningControlPanel/MainWindow/MainWindow.xaml.cs unless named otherwise. Tests swap it.</summary>
         internal static IReadOnlyList<Surface> All { get; set; } = new Surface[]
         {
             // Mic first (decisions "Panic ↔ mic"): the capture and command chain in flight end before
@@ -30,8 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
-            new("voice-capture", sh => sh?.CancelVoicePrompt()),
-            new("ai-followups", _ => MainShellWindow.CancelPendingAi()),
+            new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
+            // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
+            new("ai-followups", _ => MainShellWindow.CancelPendingAi(), After: ["voice-capture", "first-show"]),
             // WPF MainWindow.xaml.cs:1726: standalone Lab minigames first; the engine stop never reaches them.
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
@@ -48,17 +53,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // programs 3a (P06, docs/avalonia-decisions.md): today's program session ENDS, not pauses, so
             // a panic never leaves a program run holding the screen; foreign sessions stay paused below.
             new("program-session", sh => { if (sh != null) sh.EndProgramSessionQuietly("panic"); else App.Programs?.StopProgramSessionIfRunning("panic"); }),
-            new("engine", _ => MainShellWindow.StopEngine()),
-            new("pink-rush", _ => PinkRushHost.Stop()),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
-            // WPF :1967 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel.
-            new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll()),
+            // WPF :1543 CancelPendingAi is the first stop, long before StopEngine (:1827); :1714-1721 game surfaces and Lab
+            // minigames (GameSurfaces.cs:50 'chaos') close before RunPanicStopTail (:1722); :1808 KillAllAudio (App.xaml.cs:1780
+            // Mantra.Dispose), :1786/:1992 haptics PanicStop and :1811 Autonomy.CancelActivePulses all precede StopEngine.
+            new("engine", _ => MainShellWindow.StopEngine(),
+                After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover"]),
+            // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
+            new("pink-rush", _ => PinkRushHost.Stop(), After: ["engine"]),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
+            // WPF :1967 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel;
+            // :1963-1967 the engine-owned session GIF goes first, these standalone slots after it.
+            new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll(), After: ["engine"]),
             // WPF :1980-1981 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
-            new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence()),
-            new("lock-cards", _ => MainShellWindow.StopLockCards()),      // WPF LockCardService.Stop(dismissOpenCards: true)
+            // WPF :1977-1981: after the corner GIFs.
+            new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence(), After: ["corner-gif"]),
+            // WPF LockCardService.Stop(dismissOpenCards: true); :2030 StopAdHocEffects closes lock cards after the engine/media stop.
+            new("lock-cards", _ => MainShellWindow.StopLockCards(), After: ["engine"]),
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
-            new("camera", _ => MainShellWindow.StopCameraForPanic()),     // decision C: last, fire-and-forget
+            new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 
         /// <summary>WPF AnyGameSurfaceOwnsTheScreen. Sample BEFORE <see cref="StopAll"/>.</summary>
