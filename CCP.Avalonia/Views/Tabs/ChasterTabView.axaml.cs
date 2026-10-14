@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) => { _attached = true; Subscribe(IsVisible); };
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Subscribe(_attached && IsVisible); };
+            InitializeHeroSheen();
             LadderInit();
             NumbersInit();
             KeysInit();
@@ -67,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Refresh();
             LadderOnShown();
+            RefreshHeroSheen();
             _ = LoadLocksAsync();
             _ = ChasterHead.Service?.RefreshLockAsync();
         }

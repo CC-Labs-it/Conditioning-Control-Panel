@@ -174,7 +174,7 @@
             </Grid>
 
             <!-- 1. THE LOCK -->
-            <Border Grid.Row="1" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
+            <Border x:Name="HeroCard" Grid.Row="1" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
                     BorderThickness="1" CornerRadius="18" MinHeight="368" Margin="0,0,0,10">
                 <Panel>
                 <!-- CIRCE'S MOOD: the heat row drawn, bottom right. Hidden with heat off (WPF :495). -->

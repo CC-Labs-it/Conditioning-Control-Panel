@@ -31,8 +31,8 @@
 //     reuse it, do not define a second gate.
 //   * Presets, the tab's only ambient clock - the three _cardSheen* fields, RefreshCardSheen,
 //     DetachCardSheen, FindSelectedCard, InitializePresetsFx, StaggerPresetCards.
-//     Controls/CardSheenAdorner.cs is ported now; what is missing is which preset card is selected -
-//     MainWindow.Presets.cs's list, and MainShellWindow.Presets.cs is still a stub.
+//     Selected card sheen is now hosted by PresetsTabView.Sheen.cs, beside the real preset/session
+//     builders and selection state. The rest of this partial remains a note.
 //   * the session rack rows - the three _rowSweep* fields, PrepareSessionRowFx,
 //     SessionRow_MouseEnter/MouseLeave, Attach/Release/DetachRowSweep, LiftSessionRow,
 //     SessionRowLiftPx, SessionCardCornerRadius. Attached by

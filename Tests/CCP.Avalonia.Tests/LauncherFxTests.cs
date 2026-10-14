@@ -31,7 +31,7 @@ public sealed class LauncherFxTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -78,6 +78,32 @@ public sealed class LauncherFxTests
     {
         for (double t = 0; t < seconds; t += 0.02) w.StepFx(0.02);
     }
+
+    [Fact]
+    public void CtaAndWanderingTileSheensParkOnHideAndMotionGate() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        Dispatcher.UIThread.RunJobs(); launcher.UpdateLayout();
+        var cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        Assert.True(cta.IsTicking);
+        Assert.True(launcher.WanderTicking);
+        launcher.WanderSheenPass();
+        var wander = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.WanderSheen);
+        Assert.True(wander.IsTicking);
+        launcher.BuildTiles(); Dispatcher.UIThread.RunJobs(); launcher.UpdateLayout();
+        Assert.False(wander.IsTicking); Assert.Null(launcher.WanderSheen);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        launcher.OnFxActivated(false);
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+        launcher.OnFxActivated(true);
+        cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        launcher.Hide();
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+    });
 
     [Fact]
     public void Clock_RunsOnlyWhileShownAndNotMinimised() => Run(MotionLevel.Full, (_, launcher, _) =>
@@ -135,7 +161,8 @@ public sealed class LauncherFxTests
         Assert.Contains("launcher-hover", cues);
         Step(launcher, 0.5);
         Assert.Equal(1.02, scale.ScaleX, 3);
-        Assert.Equal(0.7, ((DropShadowEffect)tile.Effect!).Opacity, 3);
+        Assert.Null(tile.Effect);
+        Assert.Equal(0.7, launcher.TileGlow(tile)!.Opacity, 3);
         Assert.Equal(0.45, glow.Opacity, 3);
 
         launcher.TileHover(tile, false);
@@ -158,6 +185,9 @@ public sealed class LauncherFxTests
         Assert.NotEqual(0, launcher.ShakeSlide.X);
         Step(launcher, 0.3);
         Assert.Equal(0.55, card.Opacity, 2);             // the rest stepped back
+        var other = launcher.FindControl<UniformGrid>("GamesGrid")!.Children.OfType<Border>().First();
+        Assert.Equal(0.55, other.Opacity, 2);
+        Assert.Equal(0.35 * other.Opacity, launcher.TileGlow(other)!.Opacity, 3);
         Assert.True(launcher.IsVisible);
 
         Step(launcher, 0.3);                             // FadeLeadMs + FadeOutMs = 450 ms

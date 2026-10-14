@@ -33,8 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// all named in the XAML, are:
     ///   BtnSelectCornerGif / ChkCornerGifEnabled / RbCornerTL..BR /
     ///   SliderCornerGifSize + SliderCornerGifOpacity / CmbRackSort.SelectionChanged /
-    ///   preset chip clicks and IsVisibleChanged -> OnPresetsTabVisibilityChanged (the card-sheen
-    ///   clock, started on show, dropped on hide).
+    /// Selected preset/session card sheen lives in PresetsTabView.Sheen.cs; selection, visibility,
+    /// motion gates and window activation refresh it.
     ///
     /// Two handlers that look view-only are NOT wired on purpose. SliderCornerGif*_ValueChanged
     /// stamps "{n}px" / "{n}%" into TxtCornerGifSize / TxtCornerGifOpacity, but it also writes
@@ -93,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionXP.Text = Loc.Get("label_50_xp");
             TxtSessionDifficulty.Text = Loc.Get("label_easy_2");
             SeedRailRackAndTakeaway();
+            InitializeCardSheen();
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -355,6 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             int at = 0;
             foreach (var preset in presets)
                 PresetCardsPanel.Children.Insert(at++, PresetChip(preset));
+            RefreshCardSheen();
         }
 
         /// <summary>WPF's SelectPreset (MainWindow.Presets.cs:461).</summary>
@@ -391,6 +393,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnSharePreset.IsEnabled = !preset.IsDefault;
             UpdatePresetShareStatusBadge(preset);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF UpdatePresetShareStatusBadge (MainWindow.PresetIO.cs:332).</summary>
@@ -832,6 +835,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             UpdateRackCount(shown.Count);
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         private Border RackRow(Session session)
@@ -1081,6 +1085,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionTimeline.Text = session.GetSpoilerTimeline();
 
             RefreshSessionRackSelection();
+            RefreshCardSheen();
         }
 
         /// <summary>WPF GenerateSessionTimelineDescription (MainWindow.SessionIO.cs:984), localized.</summary>
