@@ -307,7 +307,7 @@ public sealed class HomeMarqueeTests
     {
         var canvas = dash.FindControl<Canvas>("MarqueeCanvas")!;
         var stage = dash.FindControl<Grid>("MarqueeRead")!;
-        var sheen = dash.FindControl<Border>("MarqueeSheen")!;
+        var sheen = w.Named<Border>("BannerSheen")!;
         PlayAct(reads, wall, act);
         double now = 0, end = MarqueeInterlude.FadeStepMs + reads.ActMs;
         At(time, ref now, MarqueeInterlude.FadeStepMs + 1);
@@ -332,11 +332,11 @@ public sealed class HomeMarqueeTests
         Assert.Empty(stage.Children);
         Assert.Equal(1, canvas.Opacity);
         Assert.True(dash.Marquee.IsScrolling);
-        Assert.True(reads.Sweeping);
-        At(time, ref now, now + MarqueeInterlude.SheenMs * 0.5);
-        Assert.Equal(MarqueeInterlude.SheenPeak, sheen.Opacity, 3);
-        At(time, ref now, now + MarqueeInterlude.SheenMs);
-        Assert.False(reads.Sweeping);
+        Assert.True(w.BannerSheenSweeping);   // over the support banner, as WPF RestoreTicker
+        At(time, ref now, now + MainShellWindow.BannerSheenMs * 0.5);
+        Assert.Equal(MainShellWindow.BannerSheenPeak, sheen.Opacity, 3);
+        At(time, ref now, now + MainShellWindow.BannerSheenMs);
+        Assert.False(w.BannerSheenSweeping);
         Assert.Equal(0, sheen.Opacity);
         return Task.CompletedTask;
     });

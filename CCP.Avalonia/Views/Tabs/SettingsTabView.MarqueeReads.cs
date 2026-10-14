@@ -5,7 +5,7 @@
 // comes from the Core BannerPoolService "reads" bucket, is split by MarqueeReadSplit and an act is drawn by
 // MarqueeReadActs.PickId over MarqueeReadActs.CanPlay; the ticker pauses and fades out 280 ms, the act plays (glitch heal,
 // number first, teletype, neon warm-up, redaction - WPF's timings, fonts and colours), the stage fades out 280 ms, the
-// ticker resumes where it stopped and one banner sheen sweeps it. Flicker and jitter frames need motion + ambient loops
+// ticker resumes where it stopped and the shell's support-banner sheen sweeps once (MainShellWindow.SweepBannerSheen). Flicker and jitter frames need motion + ambient loops
 // and not Photosafe (WPF MarqueeReadStage.AllowFlicker). A rebuild, a hide or a detach cancels the act.
 // Differs: every act is a pure function of elapsed time on a BeatLoop (P08/P82), not Storyboards and Task.Delay; the
 // strip glow is a baked blur per word (GlowBake), not a DropShadowEffect on the Viewbox (P82: no live Effect), so the
@@ -38,9 +38,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF ParkedLoopSeconds: the loop clock while the strip is parked static.</summary>
         internal const double ParkedLoopSeconds = 45;
 
-        /// <summary>WPF BannerSheenSeconds (MainWindow.ChromeFx.cs:47) and SweepBannerSheen's peak opacity.</summary>
-        internal const double SheenMs = 750, SheenPeak = 0.22;
-
         // WPF PossAnim.ToAsync waits the fade plus 20 ms of slack before the next step.
         internal const double FadeStepMs = ReadFadeMs + 20;
 
@@ -48,8 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Control _canvas;
         private readonly Panel _host;
         private readonly TranslateTransform _slide;
-        private readonly Border _sheen;
-        private readonly BeatLoop _act, _sweep;
+        private readonly BeatLoop _act;
         private readonly DispatcherTimer _loopTimer;
         private readonly BannerPoolService _pool = new();
         private readonly Random _rng = new();
@@ -57,12 +53,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private string? _lastAct;
         private bool _armed;
 
-        public MarqueeInterlude(MarqueeScroller ticker, Control canvas, Panel host, Border sheen)
+        public MarqueeInterlude(MarqueeScroller ticker, Control canvas, Panel host)
         {
             _ticker = ticker;
             _canvas = canvas;
             _host = host;
-            _sheen = sheen;
             _slide = host.RenderTransform as TranslateTransform ?? new TranslateTransform();
             host.RenderTransform = _slide;
             bool fast = CoreSettings.Current.MarqueeReadDebugFast
@@ -70,7 +65,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Cadence = new MarqueeReadCadence { Fast = fast };
             if (fast) Serilog.Log.Information("[MarqueeReads] fast cadence armed (desk mode)");
             _act = new BeatLoop(host, Step) { OnParked = Cancel };
-            _sweep = new BeatLoop(sheen, SheenStep) { OnParked = EndSheen };
             _loopTimer = new DispatcherTimer(DispatcherPriority.Background);
             _loopTimer.Tick += (_, _) => OnLoop();
             // WPF MarqueeRead_IsVisibleChanged stops the loop clock on hide and restarts it on show. Avalonia's
@@ -119,9 +113,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal string? ActId => _play?.Id;
         internal double ActMs => _play?.Ms ?? 0;
 
-        /// <summary>The return sheen is crossing the strip (tests).</summary>
-        internal bool Sweeping => _sweep.IsRunning;
-
         /// <summary>The armed loop period, or null while the clock is stopped (tests).</summary>
         internal TimeSpan? LoopInterval => _loopTimer.IsEnabled ? _loopTimer.Interval : null;
 
@@ -142,7 +133,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _armed = false;
             _loopTimer.Stop();
-            EndSheen();
         }
 
         /// <summary>WPF MarqueeReadLoop_Tick. A hidden strip counts no loops (WPF stops the timer on hide).</summary>
@@ -176,7 +166,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Cadence.NotePlayed();
             _lastAct = chosen;
             _loopTimer.Stop();
-            EndSheen();
             Serilog.Log.Debug("[MarqueeReads] act {Act} (tag={HasTag})", chosen, beats.HasTag);
 
             ClearStage();
@@ -228,7 +217,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _host.Opacity = 0;
                 _canvas.Opacity = 1;
                 _ticker.Resume();
-                SweepSheen();
+                // WPF RestoreTicker: one sheen pass over the support banner as the ticker comes back.
+                (TopLevel.GetTopLevel(_host) as Windows.MainShellWindow)?.SweepBannerSheen(force: true);
                 SyncLoop();
             }
             catch (Exception ex) { Serilog.Log.Debug("[MarqueeReads] restore: {E}", ex.Message); }
@@ -245,34 +235,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 image.Source = null;
             }
             _host.Children.Clear();
-        }
-
-        /// <summary>WPF SweepBannerSheen(force: true) -> SweepSheen (MainWindow.ChromeFx.cs:610): one band crossing
-        /// -110 -> width + 27.5 in 0.75 s (SineEase InOut), alpha 0 -> 0.22 at 20 %, held to 75 %, 0 at the end.</summary>
-        private void SweepSheen()
-        {
-            if (!AmbientFxCanvas.Env.AllowTransitions || !_sheen.IsEffectivelyVisible || !_sheen.IsAttachedToVisualTree()) return;
-            if (_sheen.Parent is not Control band || band.Bounds.Width <= 0) return;
-            _sweep.Stop();
-            _sweep.Start();
-        }
-
-        private TranslateTransform? SheenSlide =>
-            (_sheen.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault();
-
-        private void SheenStep(double t)
-        {
-            double ms = t * 1000, width = (_sheen.Parent as Control)?.Bounds.Width ?? 0, bandW = _sheen.Width;
-            if (SheenSlide is { } slide)
-                slide.X = -bandW + (width + bandW * 1.25) * BeatLoop.Keys(Math.Min(1, ms / SheenMs), new[] { (0.0, 0.0), (1.0, 1.0) }, sine: true);
-            _sheen.Opacity = BeatLoop.Keys(ms / SheenMs, new[] { (0.0, 0.0), (0.20, SheenPeak), (0.75, SheenPeak), (1.0, 0.0) });
-            if (ms >= SheenMs) EndSheen();
-        }
-
-        private void EndSheen()
-        {
-            _sweep.Stop();
-            _sheen.Opacity = 0;
         }
     }
 
@@ -361,12 +323,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public Image? GlowImage { get; set; }
         public Rectangle? Bar { get; set; }
 
-        /// <summary>Show <paramref name="text"/>, re-baking the glow under it when it changed.</summary>
-        public void Show(string text)
+        /// <summary>Show <paramref name="text"/>, re-baking the glow under it when it changed and <paramref name="bake"/>
+        /// (rolling and typing re-bake only now and then: each bake is a RenderTargetBitmap).</summary>
+        public void Show(string text, bool bake = true)
         {
             if (Block.Text == text) return;
             Block.Text = text;
-            Bake();
+            if (bake) Bake();
         }
 
         public void Bake()
@@ -537,7 +500,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             double roll = 1 - Math.Pow(1 - P(ms, 0, RollMs), 2);
-            _big.Show(string.Format(CultureInfo.CurrentCulture, "{0:0}", _value * roll));
+            var figure = string.Format(CultureInfo.CurrentCulture, "{0:0}", _value * roll);
+            _big.Show(figure, bake: roll >= 1 || figure.Length != _big.Block.Text?.Length);   // a new digit, or landed
             double settleAt = RollMs + 260;
             if (ms < settleAt) return;
 
@@ -614,7 +578,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             int shown = Math.Min(_body.Length, ((int)(ms / (PerCharMs * _step)) + 1) * _step);
             double tagAt = _typeMs + StopMs;
             bool tag = ms >= tagAt && !string.IsNullOrWhiteSpace(_tag);
-            _typed.Show(tag ? _body + " " + _tag : _body[..shown]);
+            _typed.Show(tag ? _body + " " + _tag : _body[..shown], bake: tag || shown == _body.Length || shown % 8 < _step);
             _stage.Slide.X = tag && _stage.AllowFlicker && ms < tagAt + 180 ? 3 * (1 - EaseOut(P(ms, tagAt, 180))) : 0;
         }
     }

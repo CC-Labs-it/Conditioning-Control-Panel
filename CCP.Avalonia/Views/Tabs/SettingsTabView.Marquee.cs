@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void InitializeMarqueeStrip()
         {
             var strip = Marquee;
-            var reads = strip.Reads = new MarqueeInterlude(strip, MarqueeCanvas, MarqueeRead, MarqueeSheen);
+            var reads = strip.Reads = new MarqueeInterlude(strip, MarqueeCanvas, MarqueeRead);
             EventHandler onLanguage = (_, _) => strip.Start();
             Action onGate = strip.Start;
             MarqueeText.AttachedToVisualTree += (_, _) =>

@@ -1493,25 +1493,6 @@
             <TranslateTransform/>
           </Grid.RenderTransform>
         </Grid>
-        <!-- WPF MainWindow.xaml:1184 BannerSheenHost: the sheen pass as the ticker comes back from an interlude
-             (WPF RestoreTicker -> SweepBannerSheen(force: true)); driven from SettingsTabView.MarqueeReads.cs. -->
-        <Grid IsHitTestVisible="False" ClipToBounds="True">
-          <Border x:Name="MarqueeSheen" Width="110" HorizontalAlignment="Left" Opacity="0" RenderTransformOrigin="0.5,0.5">
-            <Border.Background>
-              <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                <GradientStop Offset="0" Color="#00FFFFFF"/>
-                <GradientStop Offset="0.5" Color="{DynamicResource FxGlowColor}"/>
-                <GradientStop Offset="1" Color="#00FFFFFF"/>
-              </LinearGradientBrush>
-            </Border.Background>
-            <Border.RenderTransform>
-              <TransformGroup>
-                <SkewTransform AngleX="-20"/>
-                <TranslateTransform/>
-              </TransformGroup>
-            </Border.RenderTransform>
-          </Border>
-        </Grid>
       </Grid>
     </Border>
   </Grid>
