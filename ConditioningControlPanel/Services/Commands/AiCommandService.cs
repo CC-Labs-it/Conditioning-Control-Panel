@@ -165,7 +165,7 @@ namespace ConditioningControlPanel.Services.Commands
                 case AICommandType.mantra_lockscreen when d is MantraLockscreen m:
                     var mt = (m.Mantra ?? "").Trim();
                     if (mt.Length > 30) mt = mt.Substring(0, 30) + "…";
-                    return $"🔒 Lock card · \"{mt}\" ×{Math.Clamp(m.Amount, 0, 5)}";
+                    return $"🔒 Lock card · \"{mt}\" ×{MantraLockScreenCommand.Repeats(m.Amount)}";
                 case AICommandType.spiral when d is SpiralPinkFiler sp:
                     return sp.On ? $"🌀 Spiral on ({Math.Clamp(sp.Intensity, 0, 30)}%)" : "🌀 Spiral off";
                 case AICommandType.pink when d is SpiralPinkFiler pp:

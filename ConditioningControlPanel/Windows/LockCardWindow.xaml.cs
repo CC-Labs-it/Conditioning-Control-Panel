@@ -346,7 +346,8 @@ namespace ConditioningControlPanel
             ResetKeystrokeGate();   // a pooled window still carries the previous card's typing credit
 
             _phrase = phrase;
-            _requiredRepeats = repeats;
+            // Never a card with nothing to type: 0 repeats read "0 / 0" (done) yet never closed (#1444).
+            _requiredRepeats = Math.Max(1, repeats);
             _strictMode = strictMode;
             _isPrimary = isPrimary;
             _screen = screen;
