@@ -141,6 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal GifCascade Cascade => _cascade;
         internal Canvas Surface => _canvas;
         internal bool IsAnimating => _frames.IsEnabled;
+        internal TimeSpan FrameInterval => _frames.Interval;
+        internal double Scale => _scale;
         internal bool IsHideGraceArmed => _hideGrace.IsEnabled;
 
         public ChaosGifCascadeOverlay()
@@ -158,14 +160,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             // WPF sizes to the whole virtual screen once and confines only where clips spawn.
             var all = Screens?.All ?? Array.Empty<Screen>();
-            var primary = Screens?.Primary ?? all.FirstOrDefault();
-            _scale = primary is { Scaling: > 0 } ? primary.Scaling : 1;
+            // The window's own DesktopScaling, the factor X11Overlay.SetOverrideRedirect sizes it with,
+            // so the spawn band and the window agree on mixed-DPI desktops.
+            _scale = DesktopScaling > 0 ? DesktopScaling : 1;
             _bounds = all.Count == 0 ? new PixelRect(0, 0, 1280, 720) : all.Select(x => x.Bounds).Aggregate((a, b) => a.Union(b));
             Width = _bounds.Width / _scale;
             Height = _bounds.Height / _scale;
             Content = _canvas;
 
-            _frames = new FrameClock(this) { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+            // Every composed frame, like WPF CompositionTarget.Rendering; dt is real elapsed time.
+            _frames = new FrameClock(this) { Interval = TimeSpan.Zero };
             _frames.Tick += (_, _) => Frame();
             _hideGrace.Tick += (_, _) =>
             {

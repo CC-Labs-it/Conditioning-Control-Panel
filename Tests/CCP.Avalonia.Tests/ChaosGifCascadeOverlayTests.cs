@@ -58,6 +58,8 @@ public sealed class ChaosGifCascadeOverlayTests
 
                 var w = ChaosGifCascadeOverlay.Active!;
                 Assert.NotNull(w);
+                Assert.Equal(TimeSpan.Zero, w.FrameInterval);  // every composed frame, as WPF Rendering
+                Assert.Equal(w.DesktopScaling, w.Scale);       // the factor SetOverrideRedirect sizes with
                 Assert.True(w.IsVisible);
                 Assert.True(ChaosGifCascadeOverlay.IsRaining);
                 var first = Assert.IsType<Image>(Assert.Single(w.Surface.Children));
