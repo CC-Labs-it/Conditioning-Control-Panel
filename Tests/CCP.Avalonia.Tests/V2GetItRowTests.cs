@@ -176,6 +176,11 @@ public sealed class V2GetItRowTests
                 Assert.True(await row.LastBuy!.WaitAsync(TimeSpan.FromSeconds(10)));
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(row.IsVisible);
+                // WPF rebuilds the motion picker on GrantsChanged: the bought Drift & Bounce shows at once.
+                Assert.True(card.FindControl<Border>("BoxFlashV2")!.IsVisible);
+                Assert.True(card.FindControl<Control>("RowMotion")!.IsVisible);
+                Assert.Contains(card.FindControl<ComboBox>("CmbMotion")!.Items.OfType<ComboBoxItem>(),
+                    i => i.Tag is ConditioningControlPanel.Models.FlashMotionStyle.DriftBounce);
                 Assert.Equal(20, s.SkillPoints);
                 Assert.Contains(toasts.GetLogicalDescendants().OfType<TextBlock>(),
                     t => t.Text == Loc.GetF("v2_get_toast_done", Loc.Get("section_flash_v2")));

@@ -167,8 +167,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
             var body = Loc.GetF("v2_get_confirm_body", row.PriceSp, Loc.Get(_nameKey));
             var title = Loc.Get("v2_get_confirm_title");
-            var confirm = Confirm ?? ((t, b) => TopLevel.GetTopLevel(this) is Window owner
-                ? MessageDialog.ConfirmAsync(owner, t, b, okText: Loc.Get("label_yes"))   // no "No" key: Cancel, as AssetsTabView.MediaPicker
+            // WPF MessageBox YesNo, owned by the row's window or (as WPF's ownerless box) the main window.
+            var confirm = Confirm ?? ((t, b) => (TopLevel.GetTopLevel(this) as Window
+                    ?? (Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow) is { } owner
+                ? MessageDialog.ConfirmAsync(owner, t, b, okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"))
                 : Task.FromResult(false));
             if (!await confirm(title, body)) return;
 
