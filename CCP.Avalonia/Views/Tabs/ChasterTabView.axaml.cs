@@ -4,7 +4,7 @@
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
 // ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
-// LockTitle letters, limits, menu, trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs) and keys (Keys.cs) are partials.
+// LockTitle letters, trailer and most Fx. Menu/help/price editing and limits are separate partials. The numbers + receipt (Numbers.cs), calendar (Calendar.cs) and keys (Keys.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
 // bursts included) are later slices. Unlink, the switch + consent and pause are real (slice 2).
 using System;
@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Subscribe(_attached && IsVisible); };
             LadderInit();
             NumbersInit();
+            MenuInit();
             KeysInit();
             Refresh();
             LadderRenderSample();
@@ -102,6 +103,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var chaster = ChasterHead.Service;
             var linked = chaster?.IsLinked == true;
+            ApplyPriceToggles();
+            RefreshLimits();
             UnlinkedPanel.IsVisible = !linked;
             FactRow.IsVisible = !linked;
             AccountStrip.IsVisible = linked;
@@ -217,6 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var linked = chaster?.IsLinked == true;
             PaintChasterChip(chaster);
             RefreshMood(chaster);
+            PaintStamps();
             HeroTitle.IsVisible = linked;
             HeroPills.Children.Clear();
             if (!linked)
