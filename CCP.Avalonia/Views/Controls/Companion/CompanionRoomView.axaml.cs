@@ -52,6 +52,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AttentionZone.ViewModel?.Sync();
         }
 
+        internal void SetPreviewChatAndMemory(ChatThresholdViewModel chat, MemoryDiaryViewModel memory)
+        {
+            // The replacement detaches the old live chat VM from its session before seating
+            // the mock. Wire the navigator now: Loaded does not repeat on a state-strip click.
+            chat.OpenEngineRoom = RevealEngineRoom;
+            ChatZone.ViewModel = chat;
+            MemoryZone.ForgetConfirm.Disarm();
+            MemoryZone.ViewModel = memory;
+            ChatZone.ScrollThreadToEnd();
+            ChatZone.PlayDormantShimmer();
+        }
+
         // =====================================================================================
         //  effective-visibility watch
         // =====================================================================================

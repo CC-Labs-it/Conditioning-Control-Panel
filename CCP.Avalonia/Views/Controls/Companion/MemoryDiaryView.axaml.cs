@@ -348,6 +348,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         public MemoryDiaryViewModel() : this(ArtboardFacts(), ArtboardStats()) { }
 
+        // WPF MockMemoryDiaryVm: the profile remains readable in empty/dormant/free-tier states.
+        internal static MemoryDiaryViewModel PreviewEmpty() => new(new List<MemoryFact>(),
+            new[] { "Level 1", "Streak 1 day", "1 session" });
+
+        internal static MemoryDiaryViewModel PreviewDormant() => new(new List<MemoryFact>
+        {
+            new("First trance: 2026-03-02 — “the day we met.”", "moment",
+                Loc.Get("companion_memory_card_moment"),
+                "from the app · she brings this up on anniversaries", isPinned: true),
+            new(Loc.Get("companion_memory_dormant_promise"), "all",
+                Loc.Get("companion_memory_card_dormant"), isDormant: true)
+        }, ArtboardStats());
+
         // ---- live (WPF MemoryDiaryRuntimeVm over App.Brain.Memory) ----
         /// <summary>The tube's on-screen bubble log the wipe clears. A seam only because a headless test
         /// has no desktop lifetime for <c>AvatarTubeWindow.Live</c> to find.</summary>
