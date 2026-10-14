@@ -17,14 +17,12 @@ namespace ConditioningControlPanel.Services.Bark
     /// <summary>
     /// The bark decision engine: condition match, gate (one-shot latch, safety hold, chat suppression,
     /// global min-gap, per-rule cooldown, chance), no-repeat variant/idle rotation and commit. A
-    /// faithful extraction of ConditioningControlPanel/Services/Companion/BarkService.cs (Raise :1097,
-    /// DispatchIdle :1178, ConditionPass :1379, EvaluateGate :1645, CommitFire :1793, PickVariant :1867):
+    /// faithful extraction of WPF BarkService (Raise, DispatchIdle, ConditionPass, EvaluateGate,
+    /// CommitFire, PickVariant as of companion-barks):
     /// same order of checks, same constants. Everything the head owns (the avatar, whisper audio,
     /// the narrator, live service reads) comes in through the Func seams below; unseeded they answer
     /// "not busy / unknown", and settings come from <see cref="CoreSettings"/>.
-    /// <para>ponytail: lane barks-wpf - WPF BarkService still carries its own copy of this logic and
-    /// should delegate here (its tests only run on the Windows rgate job). Until then both copies are
-    /// pinned to the same behaviour by Tests/CCP.Core.Tests/BarkEngineTests.cs.</para>
+    /// Both heads delegate here: WPF BarkService and Avalonia BarkHost.
     /// </summary>
     public sealed class BarkEngine
     {
