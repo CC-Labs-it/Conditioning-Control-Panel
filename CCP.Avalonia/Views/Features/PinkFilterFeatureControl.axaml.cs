@@ -233,10 +233,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
     /// </summary>
     internal static class ScreenList
     {
+        // OS enumeration seam: headless tests supply a topology without reading the real desktop.
+        internal static Func<Visual, IReadOnlyList<Screen>>? QueryOverride;
+
         public static IReadOnlyList<Screen> Enumerate(Visual host)
         {
             try
             {
+                if (QueryOverride is { } query) return query(host);
                 var screens = TopLevel.GetTopLevel(host)?.Screens;
                 if (screens?.All is { } all) return all;
             }

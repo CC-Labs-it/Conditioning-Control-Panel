@@ -123,9 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // only populated once the window has a platform impl, hence Opened rather than the ctor.
             Opened += (_, _) =>
             {
-                var target = _screen ?? Screens?.Primary;
-                if (target is not null)
-                    Position = new PixelPoint(target.Bounds.X + 100, target.Bounds.Y + 100);
+                PositionOnScreen(_screen ?? Screens?.Primary);
             };
 
             // Focus input on primary
@@ -169,11 +167,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _sharedInput = "";
 
             var primaryWindow = new BubbleCountResultWindow(correctAnswer, strictMode, onComplete, null, true);
+            // Some backends report topology only after mapping a TopLevel. Open the typist first,
+            // then place it using the same primary/fallback chosen for the mirror set.
+            primaryWindow.Show();
+            var all = Features.ScreenList.Enumerate(primaryWindow);
+            var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
+            primaryWindow.PositionOnScreen(primary);
 
             if (CoreSettings.Current.DualMonitorEnabled)
             {
-                var all = Features.ScreenList.Enumerate(primaryWindow);
-                var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
                 foreach (var screen in all.Where(s => s != primary))
                 {
                     var window = new BubbleCountResultWindow(correctAnswer, strictMode, onComplete, screen, false);
@@ -181,8 +183,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
             }
 
-            primaryWindow.Show();
             primaryWindow.Activate();   // WPF SetForegroundWindow equivalent
+        }
+
+        private void PositionOnScreen(Screen? target)
+        {
+            if (target is null) return;
+            // Position is physical pixels (WPF divided these coordinates by per-screen DPI).
+            // Reposition while normal: maximized windows may ignore a monitor move on X11.
+            var state = WindowState;
+            WindowState = WindowState.Normal;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(target.Bounds.X + 100, target.Bounds.Y + 100);
+            WindowState = state;
         }
 
         private void OnTextChanged(object? sender, TextChangedEventArgs e)
