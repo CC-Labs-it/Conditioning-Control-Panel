@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Windows;
 using Serilog;
 
 namespace ConditioningControlPanel.Services.EmiDesk;
@@ -235,7 +234,7 @@ public sealed class EmiNudgeMachine
 /// <summary>
 /// Everything <see cref="EmiNudgeMachine"/> needs to know about the world, behind an interface so
 /// the machine can be driven by a fake in a headless test. The live implementation is
-/// <see cref="EmiNudgeWorld"/>; it reads <see cref="EmiState"/> and asks the service whether the
+/// <see cref="EmiNudgeWorld"/>; it reads <see cref="EmiState"/> and asks the head whether the
 /// desktop is calm enough to speak into.
 /// </summary>
 public interface IEmiNudgeWorld
@@ -270,12 +269,15 @@ public interface IEmiNudgeWorld
 }
 
 /// <summary>
-/// The live world: <see cref="EmiState"/> for the counters and <c>App.EmiDesk</c> for the
-/// situation. Every property is wrapped, because a nudge is the least important thing in the app
-/// and must never be the thing that throws.
+/// The live world: <see cref="EmiState"/> for the counters and the head's <see cref="QuietProbe"/>
+/// for the situation. Every property is wrapped, because a nudge is the least important thing in
+/// the app and must never be the thing that throws.
 /// </summary>
 public sealed class EmiNudgeWorld : IEmiNudgeWorld
 {
+    /// <summary>The situation half only the head can see. Set by the head at startup.</summary>
+    public static Func<bool>? QuietProbe { get; set; }
+
     /// <inheritdoc/>
     public int PetsTotal { get { try { return EmiState.Current.PetsTotal; } catch { return 0; } } }
 
@@ -308,24 +310,9 @@ public sealed class EmiNudgeWorld : IEmiNudgeWorld
         {
             try
             {
-                var desk = App.EmiDesk;
-                if (desk == null || !desk.IsOut) return false;
-
-                // AskSituationOk is already the app's answer to "is anything owning the screen or
-                // the user's attention right now": a live ask, a mandatory video, a running
-                // session, a tube bubble, a minimised app. Reusing it means the nudge cannot
-                // develop its own idea of quiet and drift away from the offers'.
-                if (!desk.AskSituationOk()) return false;
-
-                var win = desk.Window;
-                if (win == null || win.Visibility != Visibility.Visible) return false;
-                if (win.ChainLive) return false;
-
-                // A hold is the safety silence: panic pressed, attention check up, lockdown
-                // counting down. Nothing tutorial-shaped speaks through one.
-                if (EmiLineEngine.Instance.HoldActive) return false;
-
-                return true;
+                // The head's answer (WPF: App.EmiDesk out, AskSituationOk, no live chain, no hold).
+                // No head, no nudge: unset reads as "not quiet", never as "nag".
+                return QuietProbe?.Invoke() == true;
             }
             catch (Exception ex)
             {

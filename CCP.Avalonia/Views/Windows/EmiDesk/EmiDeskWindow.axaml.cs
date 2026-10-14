@@ -116,8 +116,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // crept across the desktop instead (QA 2026-08-29). One constant, one space.
         private const double DragThresholdDip = 6.0;   // widget.js DIALS.DRAG_PX
 
-        /// <summary>The face string she rests on. <c>EmiChains.RestFace</c> in the WPF head.</summary>
-        private const string RestFace = "0_0";
+        /// <summary>The face string she rests on.</summary>
+        private const string RestFace = EmiChains.RestFace;
 
         // ---------------------------------------------------------------- seams (B2 / B3)
 

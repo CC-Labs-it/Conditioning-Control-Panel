@@ -205,7 +205,7 @@ public partial class EmiDeskWindow : Window
 
     // ---------------------------------------------------------------- state
 
-    private readonly EmiChains.Player _player;
+    private readonly EmiChainPlayer _player;
 
     // ONE OUTFIT'S TEN FRAMES, never four outfits' forty. Each pose PNG decodes to ~3 MB of pixels,
     // so a cache that kept every sheet she has ever worn would be a hundred-megabyte souvenir of a
@@ -275,7 +275,7 @@ public partial class EmiDeskWindow : Window
     public EmiDeskWindow()
     {
         InitializeComponent();
-        _player = new EmiChains.Player(Dispatcher);
+        _player = new EmiChainPlayer(Dispatcher);
 
         SourceInitialized += OnSourceInitialized;
         Closed += OnClosedCleanup;
