@@ -106,6 +106,15 @@ public sealed class ShellTrayTests
             var shell = new MainShellWindow();
             shell.Show();
             shell.CreateTray();
+            // WPF FriendsFeedTray: the tooltip adds the unread friends-feed count, and drops it once read.
+            var feed = new global::ConditioningControlPanel.Services.Friends.FriendsFeed(() => "u_me");
+            shell.AttachFeedTooltip(feed);
+            Assert.Equal("Conditioning Control Panel", shell.Tray!.ToolTipText);
+            feed.Add(new global::ConditioningControlPanel.Services.Friends.FriendEvent(
+                global::ConditioningControlPanel.Services.Friends.FriendEventKind.RequestReceived, "u_a", "Ann", System.DateTime.UtcNow, "k1"));
+            Assert.Contains(Loc.GetF("friends_feed_tray", 1), shell.Tray.ToolTipText);
+            feed.MarkAllRead();
+            Assert.Equal("Conditioning Control Panel", shell.Tray.ToolTipText);
             shell.TrayHostPresent = () => false;   // Avalonia's tray fell back silently: nothing to hide behind
             var closed = false;
             shell.Closed += (_, _) => closed = true;

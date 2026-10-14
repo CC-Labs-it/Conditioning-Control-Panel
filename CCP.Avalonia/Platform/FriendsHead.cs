@@ -16,6 +16,9 @@ internal static class FriendsHead
     /// <summary>WPF App.Friends. Null until startup built it.</summary>
     internal static IFriendsService? Service { get; set; }
 
+    /// <summary>WPF App.FriendsFeed: the "What happened" lines, built with the service at startup.</summary>
+    internal static FriendsFeed? Feed { get; set; }
+
     /// <summary>WPF BackRoomApi.AppIdentity: null offline or without an id and a token.</summary>
     internal static (string UnifiedId, string Token)? Identity()
     {
