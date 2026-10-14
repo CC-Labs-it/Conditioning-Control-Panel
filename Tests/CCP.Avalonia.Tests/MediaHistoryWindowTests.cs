@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -111,5 +112,97 @@ public sealed class MediaHistoryWindowTests
             Directory.Delete(dir, true);
         }
         return Task.CompletedTask;
+    });
+
+    /// <summary>WPF ExplorerLauncher (the file selected; its folder when gone or when the desktop cannot
+    /// select) and WPF Load preview (only with remote-media consent, only stills, retry after a failed draw).</summary>
+    [Fact]
+    public Task MediaLog_reveals_the_file_and_loads_an_online_still_only_with_consent() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-mhw-").FullName;
+        var png = Path.Combine(dir, "still.png");
+        using (var rt = new RenderTargetBitmap(new PixelSize(8, 8))) rt.Save(png);
+        var history = new MediaHistoryService(Path.Combine(dir, "media_history.json"));
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var (before, source, consent) = (App.MediaHistory, s.MediaSource, s.RemoteMediaConsented);
+        var (shell, select, fetch) = (ExternalOpener.Shell, ExternalOpener.SelectInFileManager, MediaHistoryWindow.FetchRemote);
+        var opened = new System.Collections.Generic.List<string>();
+        var selected = new System.Collections.Generic.List<string>();
+        var selects = true;
+        byte[]? served = null;
+        MediaHistoryWindow? w = null;
+        try
+        {
+            ExternalOpener.Shell = t => { opened.Add(t); return true; };
+            ExternalOpener.SelectInFileManager = p => { selected.Add(p); return selects; };
+            MediaHistoryWindow.FetchRemote = (_, _) => Task.FromResult(served);
+            App.MediaHistory = history;
+            history.RecordImages(new[] { png });
+            history.RecordVideo(Path.Combine(dir, "gone.mp4"));
+            history.RecordVideo("https://cdn.example.com/v.mp4");
+            history.RecordImages(new[] { "https://cdn.example.com/x.jpg" });
+            (s.MediaSource, s.RemoteMediaConsented) = ("mixed", false);
+
+            w = new MediaHistoryWindow();
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var list = w.FindControl<ListBox>("MediaList")!;
+            bool Shown(string name) => w.FindControl<Control>(name)!.IsVisible;
+            string Missing() => w.FindControl<TextBlock>("PreviewMissing")!.Text ?? "";
+            void Click(string name) { w.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+
+            list.SelectedIndex = 3;                                          // the still on disk: selected, not just its folder
+            Click("BtnPreviewOpenFolder");
+            Assert.Equal(new[] { png }, selected);
+            Assert.Empty(opened);
+            selects = false;                                                 // no FileManager1 on this desktop
+            Click("BtnPreviewOpenFolder");
+            Assert.Equal(new[] { dir }, opened);
+            list.SelectedIndex = 2;                                          // the clip is gone: its folder (#998)
+            Click("BtnPreviewOpenFolder");
+            Assert.Equal(2, selected.Count);
+            Assert.Equal(new[] { dir, dir }, opened);
+
+            list.SelectedIndex = 0;                                          // online still, no consent: no fetch button
+            Assert.False(Shown("BtnPreviewLoad"));
+            s.RemoteMediaConsented = true;
+            list.SelectedIndex = 1;                                          // an online clip never gets one
+            Assert.False(Shown("BtnPreviewLoad"));
+            list.SelectedIndex = 0;
+            Assert.True(Shown("BtnPreviewLoad"));
+            Assert.Equal(Loc.Get("label_media_streamed_only"), Missing());
+
+            served = new byte[] { 1, 2, 3 };                                  // bytes came, none readable
+            await w.LoadPreviewAsync();
+            Assert.Equal(Loc.Get("label_no_preview"), Missing());
+            Assert.True(Shown("BtnPreviewLoad"));                            // the retry is back
+
+            served = File.ReadAllBytes(png);
+            await w.LoadPreviewAsync();
+            Assert.True(Shown("PreviewImage"));
+            Assert.NotNull(w.FindControl<Image>("PreviewImage")!.Source);
+            Assert.False(Shown("PreviewMissing"));
+            Assert.False(Shown("BtnPreviewLoad"));
+
+            s.RemoteMediaConsented = false;                                  // consent withdrawn: the press is refused too
+            list.SelectedIndex = 1;
+            list.SelectedIndex = 0;
+            served = File.ReadAllBytes(png);
+            await w.LoadPreviewAsync();
+            Assert.False(Shown("PreviewImage"));
+        }
+        finally
+        {
+            w?.Close();
+            (ExternalOpener.Shell, ExternalOpener.SelectInFileManager, MediaHistoryWindow.FetchRemote) = (shell, select, fetch);
+            (App.MediaHistory, s.MediaSource, s.RemoteMediaConsented) = (before, source, consent);
+            history.Dispose();
+            Dispatcher.UIThread.RunJobs();
+            Directory.Delete(dir, true);
+        }
     });
 }
