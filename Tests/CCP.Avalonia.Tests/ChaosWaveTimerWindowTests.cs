@@ -42,6 +42,7 @@ public sealed class ChaosWaveTimerWindowTests
             var s = CoreSettings.Current;
             s.PanicKeyEnabled = true;
             s.PanicKey = "F8";
+            ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
             var shell = new MainShellWindow();
             shell.Show();
             try
@@ -84,8 +85,35 @@ public sealed class ChaosWaveTimerWindowTests
                 shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
                 Assert.Null(ChaosWaveTimerWindow.Active);
                 Assert.False(w.IsVisible);
+
+                // A run that ends on its own (Ticks to RunOver -> EndRun) also takes the watch down.
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.State!.ShowWaveTimer = true;
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var w2 = ChaosWaveTimerWindow.Active!;
+                Ticks(260);
+                Assert.Null(ChaosWaveTimerWindow.Active);
+                Assert.False(w2.IsVisible);
             }
-            finally { ChaosRunHost.ForceShutdown(); ChaosWaveTimerWindow.CloseActive(); shell.Close(); }
+            finally { ChaosWaveTimerWindow.SkipPlatformChecksForTests = false; ChaosRunHost.ForceShutdown(); ChaosWaveTimerWindow.CloseActive(); shell.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task No_compositor_refuses_the_watch_for_the_whole_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();   // headless: no X server, so SetClickThrough fails like a compositor-less desktop
+            try
+            {
+                ChaosWaveTimerWindow.EnsureCreated();
+                Assert.Null(ChaosWaveTimerWindow.Active);
+                ChaosWaveTimerWindow.Update(1, 3, 15, 0);   // the next tick does not re-create it
+                Assert.Null(ChaosWaveTimerWindow.Active);
+            }
+            finally { ChaosWaveTimerWindow.CloseActive(); }
             return Task.CompletedTask;
         });
     }

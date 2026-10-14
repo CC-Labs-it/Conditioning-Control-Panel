@@ -32,10 +32,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         internal static ChaosWaveTimerWindow? Active { get; private set; }
 
+        /// <summary>Headless has no X server: tests that drive the pill skip the compositor check.</summary>
+        internal static bool SkipPlatformChecksForTests;
+
+        // Set when the platform refused click-through or transparency: no re-creation every tick
+        // until the run ends (CloseActive).
+        private static bool _refused;
+
         /// <summary>WPF EnsureCreated: birth the (empty, hidden-pill) window at run start.</summary>
         internal static void EnsureCreated()
         {
-            if (Active != null) return;
+            if (Active != null || _refused) return;
             try { Active = new ChaosWaveTimerWindow(live: true); Active.Show(); }
             catch (Exception ex) { Log.Debug("ChaosWaveTimer.EnsureCreated: {E}", ex.Message); }
         }
@@ -52,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var w = Active;
             Active = null;
+            _refused = false;   // the next run may try again
             try { w?.Close(); } catch (Exception ex) { Log.Debug("ChaosWaveTimer close: {E}", ex.Message); }
         }
 
@@ -123,7 +131,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Closed += (_, _) => { _blink.Stop(); if (ReferenceEquals(Active, this)) Active = null; };
 
             if (!live) return;
-            Opened += (_, _) => { X11Overlay.SetClickThrough(this, true); PlaceTopRight(); };
+            Opened += (_, _) =>
+            {
+                // No compositor / no input shape: an opaque box that eats clicks would sit top-right
+                // (BlinkTrainerSession's guard). Refuse it for the rest of the run.
+                if ((!X11Overlay.SetClickThrough(this, true) || ActualTransparencyLevel == WindowTransparencyLevel.None)
+                    && !SkipPlatformChecksForTests)
+                {
+                    Log.Warning("ChaosWaveTimer: overlay refused (no click-through or no transparency)");
+                    _refused = true;
+                    if (ReferenceEquals(Active, this)) Active = null;
+                    Close();
+                    return;
+                }
+                PlaceTopRight();
+            };
             SizeChanged += (_, _) => PlaceTopRight();
         }
 
