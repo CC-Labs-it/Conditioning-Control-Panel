@@ -364,6 +364,26 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Warning(ex, "Corner GIF close failed"); }
         }
 
+        private bool _refreshingCornerGifPolicy;
+
+        /// <summary>WPF RefreshCornerGifPolicy (SessionEngine.cs:1759): admission re-asked now, for
+        /// the Spiral card's session switch, a standalone slot change and the fullscreen spiral
+        /// leaving. Takes it down when refused; brings a minute-0 one back when allowed again.</summary>
+        public void RefreshCornerGifPolicy()
+        {
+            if (_refreshingCornerGifPolicy || CurrentSession is not { } session) return;
+            _refreshingCornerGifPolicy = true;   // the handback re-enters through the head's refresh
+            try
+            {
+                var ss = session.Settings;
+                if (CornerGifShown && !CanRaiseCornerGif(ss)) { CloseCornerGif(handBack: true); return; }
+                if (!CornerGifShown && IsRunning && !IsPaused && CanRaiseCornerGif(ss) && ss.CornerGifStartMinute == 0
+                    && (ss.CornerGifEndMinute <= 0 || Elapsed.TotalMinutes < ss.CornerGifEndMinute))
+                    ShowCornerGif(ss);
+            }
+            finally { _refreshingCornerGifPolicy = false; }
+        }
+
         /// <summary>WPF UpdateCornerGifPath/Size/Position/Opacity (#474): the session's own
         /// settings take the edit, and a shown overlay is re-shown with it (hide-only close).</summary>
         public void UpdateCornerGif(Action<SessionSettings> edit)

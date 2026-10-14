@@ -77,17 +77,28 @@ public sealed class SessionRunnerCornerGifTests : IDisposable
     }
 
     [Fact]
-    public void AStandaloneOverlayKeepsTheCorner_ThenTheDelayedStartRaisesIt_StopHandsBack()
+    public void AStandaloneOverlayKeepsTheCorner_ThenTheDelayedStartRaisesIt_UntilItsEndMinute()
     {
         _standalone = true;
-        _runner.Start(Gamer(start: 2));
+        _runner.Start(Gamer(start: 2, end: 4));
         Assert.False(_runner.CornerGifShown);
         _standalone = false;
         _runner.Tick(TimeSpan.FromMinutes(1));
         Assert.False(_runner.CornerGifShown);   // not before its minute
         _runner.Tick(TimeSpan.FromMinutes(2));
         Assert.True(_runner.CornerGifShown);
+        _runner.Tick(TimeSpan.FromMinutes(4));
+        _runner.Tick(TimeSpan.FromMinutes(5));
+        Assert.False(_runner.CornerGifShown);   // the delayed start does not re-raise it past its end
 
+        _runner.Stop();   // the handback was paid at the end minute
+        Assert.Equal(new[] { "show TopRight 250 40", "close+handback" }, _events);
+    }
+
+    [Fact]
+    public void StopHandsTheCornerBack()
+    {
+        _runner.Start(Gamer());
         _runner.Stop();
         Assert.Equal(new[] { "show TopRight 250 40", "close+handback" }, _events);
     }
@@ -108,6 +119,23 @@ public sealed class SessionRunnerCornerGifTests : IDisposable
         _runner.Start(Gamer());
         Assert.False(_runner.CornerGifShown);
         Assert.Empty(_events);
+    }
+
+    [Fact]
+    public void ThePolicyRefresh_TakesItDownAtOnce_AndBringsAMinuteZeroOneBack()
+    {
+        _runner.Start(Gamer());
+        CoreSettings.Current.SessionCornerGifAllowed = false;   // the Spiral card's switch, no tick
+        _runner.RefreshCornerGifPolicy();
+        Assert.False(_runner.CornerGifShown);
+        CoreSettings.Current.SessionCornerGifAllowed = true;
+        _runner.RefreshCornerGifPolicy();
+        Assert.True(_runner.CornerGifShown);
+        Assert.Equal(new[] { "show TopRight 250 40", "close+handback", "show TopRight 250 40" }, _events);
+
+        _runner.Pause();
+        _runner.RefreshCornerGifPolicy();   // paused: stays hidden until Resume
+        Assert.False(_runner.CornerGifShown);
     }
 
     [Fact]

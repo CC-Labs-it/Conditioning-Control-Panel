@@ -123,6 +123,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF RefreshOverlays (index &lt; 0) / RefreshSlot (index &gt;= 0). UI thread.</summary>
         public static void Refresh(Visual host, int index = -1)
         {
+            RefreshSlots(host, index);
+            // WPF CornerGifService.RefreshOverlays :172: the session side re-resolves when this side changes.
+            App.Sessions?.RefreshCornerGifPolicy();
+        }
+
+        private static void RefreshSlots(Visual host, int index)
+        {
             _host = host;
             var overlays = CoreSettings.Current.CornerGifOverlays;
             if (index < 0)
