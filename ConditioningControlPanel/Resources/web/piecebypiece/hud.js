@@ -493,6 +493,10 @@ export function createHud(opts = {}) {
   follow?.addEventListener('change', followChange);
   replays?.addEventListener('change', replaysChange);
   undom.push(() => { follow?.removeEventListener('change', followChange); replays?.removeEventListener('change', replaysChange); });
+  const boardIntro = pick('game-board-intro');
+  const boardIntroChange = () => setPresentation({ boardIntro: boardIntro.checked });
+  boardIntro?.addEventListener('change', boardIntroChange);
+  undom.push(() => boardIntro?.removeEventListener('change', boardIntroChange));
   const invertX = pick('game-invert-x');
   const invertY = pick('game-invert-y');
   const invertXChange = () => setPresentation({ invertX: invertX.checked });
@@ -538,6 +542,7 @@ export function createHud(opts = {}) {
     // Reduced motion keeps the camera at the seat and drops the replay; the boxes say so.
     if (follow) { follow.checked = p.followCam && !p.reducedMotion; follow.disabled = p.reducedMotion; }
     if (replays) { replays.checked = p.replays && !p.reducedMotion; replays.disabled = p.reducedMotion; }
+    if (boardIntro) boardIntro.checked = p.boardIntro;
     if (invertX) invertX.checked = p.invertX;
     if (invertY) invertY.checked = p.invertY;
     for (const button of root.querySelectorAll('[data-turncard]')) button.setAttribute('aria-pressed', String(button.dataset.turncard === p.turnCard));

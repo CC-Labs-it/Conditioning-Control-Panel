@@ -168,16 +168,26 @@ function main() {
   const updateBase = view.update;
   view.update = (dt) => { feelDt = dt; updateBase(dt); };
   const renderBase = view.render;
+  // The board intro (board/intro.js) lifts the men only for the draw itself.
+  const drawBoard = () => { if (board.intro) board.intro.render(renderBase); else renderBase(); };
   view.render = () => {
     for (const fn of feelLate) fn(feelDt);
-    if (board.juice) { board.juice.update(feelDt); board.juice.render(renderBase); }
-    else renderBase();
+    if (board.juice) { board.juice.update(feelDt); board.juice.render(drawBoard); }
+    else drawBoard();
   };
   import('./board/juice.js').then(m => {
     board.juice = m.createJuice({ bus, camera: view.camera });
     const dispose = view.dispose;
     view.dispose = () => { board.juice.dispose(); dispose(); };
   }).catch(e => console.warn('[pbp] impact camera missing', e));
+  // The clockwork rise when a new game's board comes up. Loaded late and guarded:
+  // without it the men simply stand there, as they always did.
+  import('./board/intro.js').then((m) => {
+    board.intro = m.createIntro({ view, pieces, bus, game, sfx: () => board.sfx, prefs: presentation });
+    feelLate.push((dt) => board.intro.update(dt));
+    const dispose = view.dispose;
+    view.dispose = () => { board.intro.dispose(); dispose(); };
+  }).catch((e) => console.warn('[pbp] board intro missing', e));
   import('./board/outline.js').then((m) => {
     board.outline = m.createOutline({ group: view.pieceGroup, bus });
     feelLate.push((dt) => board.outline.update(dt, view.camera, view.renderer));

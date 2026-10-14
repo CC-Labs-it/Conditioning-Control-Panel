@@ -26,6 +26,8 @@ export function presentation() {
     // Camera (owner, 2026-09-28): follow the move, replay captures, and the turn card's look.
     followCam: saved.followCam !== false,
     replays: saved.replays !== false,
+    // The clockwork rise when a new game's board comes up (board/intro.js), on by default.
+    boardIntro: saved.boardIntro !== false,
     turnCard: ['slam', 'ribbon', 'tag'].includes(saved.turnCard) ? saved.turnCard : 'slam',
     // Camera drag direction (ccp-bugs #1329), off by default.
     invertX: saved.invertX === true,
@@ -50,6 +52,7 @@ export function setPresentation(patch) {
   if (Number.isFinite(patch.volume)) saved.volume = clamp(patch.volume);
   if (typeof patch.followCam === 'boolean') saved.followCam = patch.followCam;
   if (typeof patch.replays === 'boolean') saved.replays = patch.replays;
+  if (typeof patch.boardIntro === 'boolean') saved.boardIntro = patch.boardIntro;
   if (['slam', 'ribbon', 'tag'].includes(patch.turnCard)) saved.turnCard = patch.turnCard;
   if (typeof patch.invertX === 'boolean') saved.invertX = patch.invertX;
   if (typeof patch.invertY === 'boolean') saved.invertY = patch.invertY;
