@@ -5469,7 +5469,9 @@ namespace ConditioningControlPanel.Services
                     if (MandatoryVideoScheduler.GraceKey(false, key, set.PanicKeyEnabled, set.PanicKey) is bool fromPanicKey
                         && TryGracePauseFromPanic(fromPanicKey))
                     {
-                        VideoDiag.Log("PANIC", $"'{key}' consumed by the video window as a grace pause");
+                        VideoDiag.Log("PANIC", key == "Escape"
+                            ? "ESC consumed as video grace pause"
+                            : $"panic key '{key}' consumed by the video window as a grace pause");
                         return;
                     }
                     if (action == VideoKeyAction.Dismiss)
@@ -6249,7 +6251,7 @@ namespace ConditioningControlPanel.Services
 
                 // Same order as the window handler, so a press behaves identically whether or not the
                 // video happened to hold focus. If the window handler already turned this keystroke
-                // into a grace pause, EvaluateGraceRequest returns ConsumedDedup (true) and we stop —
+                // into a grace pause, MandatoryVideoScheduler.EvaluateGrace returns ConsumedDedup (true) and we stop —
                 // exactly the mechanism that keeps the queued panic handler from stopping the engine a
                 // few ms after a pause.
                 if (TryGracePauseFromPanic(fromPanicKey: Services.Safety.PanicPolicy.EscapeIsThePanicKey(

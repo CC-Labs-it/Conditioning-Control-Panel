@@ -15,8 +15,8 @@ namespace ConditioningControlPanel.Services
     /// <summary>
     /// One live attention-check target, whatever it happens to be made of. VideoService's
     /// <c>_targets</c> list is the authority on which checks are outstanding - it drives the
-    /// pass/fail tally AND <c>EvaluateGraceRequest(attentionTargetLive:)</c>, which refuses a grace
-    /// pause while a target is up - so every representation must add/remove itself through exactly
+    /// pass/fail tally AND the grace-pause log in <c>TryGracePauseFromPanic</c> (a live target pauses
+    /// with the video, it no longer refuses the pause) - so every representation must add/remove itself through exactly
     /// the same bookkeeping. A target counts as live from spawn until click, timeout or teardown.
     ///
     /// Three implementations, chosen per SCREEN at spawn time (see VideoService.CreateAttentionTarget):
