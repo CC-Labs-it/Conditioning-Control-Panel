@@ -19,3 +19,4 @@
 - No Windows desktop capture, OCR service, keyword dispatch, or highlight-overlay runtime executed. Those services remain the named follow-up, not an implemented path in this slice.
 
 - `CCP_USERDATA_DIR=/workspace/ccp-worker-5-render-profile dotnet run --no-build --project CCP.Avalonia -- --render-all /workspace/ccp-worker-5-render`: **exit 0, 224/224 views rendered**. Inspected `/workspace/ccp-worker-5-render/KeywordTriggersPanel.png`: drawer layout at rest; the transient pulse phases are proved by the deterministic tests rather than this still frame.
+- Publication blocked: `git push origin avalonia-port/cloud-wire-views-companion-keyword-triggers` returned **HTTP 403**, "Permission to CodeBambi/Conditioning-Control-Panel---CSharp-WPF.git denied to ClearlyNotMich." The complete slice is committed locally; origin still holds claim `e668322d7303dbc99e10f0b79a7e873d41d100b4`. An authorized write identity is required to publish the fast-forward.
