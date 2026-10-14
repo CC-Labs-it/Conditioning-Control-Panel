@@ -2289,3 +2289,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/possession-core-b2: +291
 - PossessionAudio (ember tick + rung/tripwire dip) git mv'd to CCP.Core behind CoreAudio (+IsOutputSuppressed seam), stacked on possession-core-b; Install takes the Core director directly (App.WirePossessionAudio gone).
 - Tests/CCP.Core.Tests/PossessionAudioTests.cs: 7 facts, each fail-proven (evidence/review-possession-core-b2/failproof.log); no Avalonia caller yet (no director on this head).
+
+## avalonia-port/friend-toast-knock: +856
+- Friend invites now show a WPF knock card (countdown ring, tuck, stack, Not now / Later -> Inbox; Join only for Ramp, which opens the panel on Studio), driven by the Core landing router from startup; panic folds the cards into the Inbox.
+- win-friend-toast set to n/a (WPF removed FriendToast in 17213d9bf); win-knock-card and feat-friends-landing set to stub; feat-friends-open-tables names the folded notices.
