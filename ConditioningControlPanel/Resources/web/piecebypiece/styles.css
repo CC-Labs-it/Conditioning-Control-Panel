@@ -445,6 +445,7 @@ body.pbp-replay-corner .game-settings:not(:has(.game-options-panel:not([hidden])
    turn player's lit), the rows that cannot apply to a watcher go, the crowd
    gets six round buttons where the piece hint sits and a lane up the right edge. */
 .hud.watching [data-seat-only] { display: none !important; }
+.hud:not(.watching) [data-watch-only] { display: none !important; }
 .game-settings { z-index: 2; }   /* an open Options panel stays over the crowd */
 .player-heat { height: 6px; border-radius: 3px; background: #4b3a57; overflow: hidden; opacity: .45; transition: opacity 200ms ease; }
 .player-heat i { display: block; height: 100%; width: 0; border-radius: 3px; background: #ff91c9; transition: width 600ms ease; }

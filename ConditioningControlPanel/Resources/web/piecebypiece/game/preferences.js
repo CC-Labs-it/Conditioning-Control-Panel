@@ -58,6 +58,9 @@ export function presentation() {
     // Watching a game: the turn player's effects replayed with the watcher's own pictures, on by default.
     watchEffects: hostWatchFx.on !== null ? hostWatchFx.on : saved.watchEffects !== false,
     watchAmount: hostWatchFx.amount || (AMOUNTS.includes(saved.watchAmount) ? saved.watchAmount : 'normal'),
+    // Players whose page sends no effects record (older versions): the stands run calm pictures of their
+    // own instead (ramp/ambient.js), on by default. Kept by the page only.
+    watchAmbient: saved.watchAmbient !== false,
   };
 }
 function apply() {
@@ -93,6 +96,7 @@ export function setPresentation(patch) {
     if (hostWatchFx.on !== null) hostWatchFx.on = patch.watchEffects;
     postToHost({ type: 'pbp:setting', key: 'watchEffects', value: patch.watchEffects });
   }
+  if (typeof patch.watchAmbient === 'boolean') saved.watchAmbient = patch.watchAmbient;
   if (AMOUNTS.includes(patch.watchAmount)) {
     saved.watchAmount = patch.watchAmount;
     if (hostWatchFx.amount !== null) hostWatchFx.amount = patch.watchAmount;
