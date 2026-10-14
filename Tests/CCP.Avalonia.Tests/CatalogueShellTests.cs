@@ -210,6 +210,9 @@ public sealed class CatalogueShellTests
                 Assert.Contains("✅ " + Loc.Get("catalogue_status_approved"), Texts(pill));
                 var toast = Loc.GetF("catalogue_submission_accepted_toast_fmt", preset.Id);
                 Assert.Single(Texts(host), t => t == toast);
+                // WPF accepted notifications persist until dismissed: no expiry timer.
+                var accepted = host.Children.OfType<Border>().Single(b => Texts(b).Contains(toast));
+                Assert.Null(accepted.Tag);
 
                 // Nothing left open: the next forced poll makes no request and no second toast.
                 var before = fake.Seen.Count;
@@ -221,6 +224,7 @@ public sealed class CatalogueShellTests
             {
                 shell.Close();
                 s.CataloguePresetSubmissions.Remove(preset.Id);
+                AppA.Notifications.Dismiss("catalogue_submission_accepted_c1");
                 (AppA.Catalogue, CoreSecrets.RetrieveProvider) = (oldClient, oldGet);
             }
         });

@@ -445,8 +445,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // Can't uninstall built-in mods or active mod
             _btnUninstall.IsVisible = !mod.IsBuiltIn && !isActive;
 
-            // ponytail: Share needs the catalogue client (not ported); hidden rather than a dead button.
-            _btnShare.IsVisible = false;
+            // WPF: custom installed mods can share their creator-hosted archive.
+            _btnShare.IsVisible = !mod.IsBuiltIn;
 
             // Built-in mods whose media still has to come down off the release.
             UpdatePackPanel(mod);
@@ -557,12 +557,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             return cut > 0 ? relative[..cut] : "root";
         }
 
-        private void BtnShare_Click()
+        private async void BtnShare_Click()
         {
-            if (_selectedMod == null) return;
-
-            // ponytail: needs MainWindow.ShareModToCatalogueAsync (catalogue client), wired when it
-            // moves to Core. WPF disabled the button for the upload and refreshed the status badge.
+            if (_selectedMod == null || Owner is not MainShellWindow shell) return;
+            _btnShare.IsEnabled = false;
+            try
+            {
+                await shell.ShareModToCatalogueAsync(_selectedMod, this);
+                RefreshModList();
+            }
+            finally { _btnShare.IsEnabled = true; }
         }
 
         private void BtnActivate_Click()
