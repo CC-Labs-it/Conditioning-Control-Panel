@@ -444,6 +444,9 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   fail at 7 of 417 with the complement dropped). Peak 6.0 GB, suite 12 min -> ~4.5 min.
 - Follow-up branch: find what a closed `MainShellWindow` keeps alive (static event subscriptions, Skia/WebView natives);
   a real app builds one shell, so it matters for tests and for any head that rebuilds the shell.
+- Resolved 2026-10-12 (avalonia-port/suite-memory): BeatLoop kept frame-clocking closed windows, and static
+  subscriptions made in `Opened` (fires on every Hide/Show) outlived the window; plus a GC after each window
+  test for finalizer-owned Skia memory. Shard peaks 8.4-12.1 GB -> 1.6-2.9 GB (per-shard peak VmHWM, Release, gate shards).
 - Advisor: worker.
 ## 2026-10-01: Her Room chat and memory diary over the brain (avalonia-port/her-room-chat)
 - Question: how to put Z2 (ChatThresholdRuntimeVm) and Z3 (MemoryDiaryRuntimeVm) on the Avalonia brain without a second copy of their logic.

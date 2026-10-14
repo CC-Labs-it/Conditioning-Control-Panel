@@ -2252,3 +2252,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/webview-probe-fix: +213
 - WebHost's probe now follows Avalonia.Controls.WebView 12.1 on Linux (WPE = OffscreenRenderer, WebKitGTK = NativeDialog). Linux web views stay off by default (fallback panel). `CCP_LINUX_WEBVIEW=wpe|gtk` opts in; gtk sets PreferWebKitGtkInstead.
 - Live runs 4-5 (unlocked, intake window active): WPE froze after one frame and GTK drew only the background. Neither sent a rAF heartbeat, so the default stays off (evidence/webview-probe-fix/live-run4-5.md).
+
+## avalonia-port/suite-memory: +112
+- CCP.Avalonia.Tests shard peak RSS 8.4-12.1 GB -> 1.6-2.9 GB: BeatLoop stops on window close (even parked), Opened-time static subscriptions no longer re-added on each Hide/Show, GC after window tests.
+- Regression tests: ClosedShellsReleaseMemory with a tray round trip; AnAmbientLoopDoesNotKeepItsClosedWindow (ticking + parked).
