@@ -18,6 +18,14 @@ namespace ConditioningControlPanel.Tests;
 /// </summary>
 public class FlashShatterTests
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void Shatter_only_decides_the_click_while_enabled_and_owned(bool enabled, bool ownsMotion, bool expected)
+        => Assert.Equal(expected, FlashShatter.DecidesClick(enabled, ownsMotion));
+
     private const double BW = 1920, BH = 1080;
     private const double RX = 760, RY = 390, RW = 400, RH = 300;
 

@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderMaxOnScreen.ValueChanged += SliderMaxOnScreen_Changed;
             ChkClickable.IsCheckedChanged += ChkClickable_Changed;
             ChkStayUntilPopped.IsCheckedChanged += ChkStayUntilPopped_Changed;
+            ChkFlashShatter.IsCheckedChanged += ChkFlashShatter_Changed;
             CmbExit.SelectionChanged += CmbExit_Changed;
             ChkCorruption.IsCheckedChanged += ChkCorruption_Changed;
             ChkHydraLinked.IsCheckedChanged += ChkHydraLinked_Changed;
@@ -121,6 +122,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkClickable.IsChecked = s.FlashClickable;
                 ChkStayUntilPopped.IsChecked = s.FlashStayUntilPopped;
                 BuildExitPicker(s.FlashExitStyle);
+                ChkFlashShatter.IsChecked = s.FlashShatterEnabled;
+                RefreshExitRow();
                 ChkCorruption.IsChecked = s.CorruptionMode;
                 ChkHydraLinked.IsChecked = s.HydraLinkedTiming;
                 ChkGlow.IsChecked = s.FlashGlowEnabled;
@@ -149,7 +152,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private void BuildMotionPicker()
         {
             var drift = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce);
-            BoxFlashV2.IsVisible = RowMotion.IsVisible = drift;
+            BoxFlashV2.IsVisible = RowShatter.IsVisible = Platform.PrizeOwnership.OwnsFlashV2();
+            RowMotion.IsVisible = drift;
             CmbMotion.Items.Clear();
             AddMotionChoice(FlashMotionStyle.Still, "option_flash_motion_still", v2: false);
             if (drift)
@@ -226,6 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.FlashClickable) ||
                 e.PropertyName == nameof(AppSettings.FlashStayUntilPopped) ||
                 e.PropertyName == nameof(AppSettings.FlashExitStyle) ||
+                e.PropertyName == nameof(AppSettings.FlashShatterEnabled) ||
                 e.PropertyName == nameof(AppSettings.CorruptionMode) ||
                 e.PropertyName == nameof(AppSettings.HydraLinkedTiming) ||
                 e.PropertyName == nameof(AppSettings.FlashGlowEnabled) ||
@@ -358,6 +363,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CoreSettings.Save();
         }
 
+        private void RefreshExitRow()
+        {
+            var shatter = ConditioningControlPanel.Services.Flash.FlashShatter.DecidesClick(
+                CoreSettings.Current.FlashShatterEnabled, Platform.PrizeOwnership.OwnsFlashV2());
+            CmbExit.IsEnabled = !shatter;
+            TxtExitShatterNote.IsVisible = shatter;
+        }
+
+        private void ChkFlashShatter_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.FlashShatterEnabled = ChkFlashShatter.IsChecked ?? false;
+            CoreSettings.Save();
+            RefreshExitRow();
+        }
+
         private void ChkStayUntilPopped_Changed(object? sender, RoutedEventArgs e)
         {
             if (_isLoading) return;
@@ -366,8 +387,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // WPF FlashFeatureControl.xaml.cs:498-539. Rebuilt on every load so a language switch
-        // re-reads the row text (P09). ponytail: WPF greys this picker and shows TxtExitShatterNote
-        // while an owned Shatter decides the leave (#1386); this head plays no Shatter yet.
+        // re-reads the row text (P09). RefreshExitRow explains when owned Shatter decides the leave.
         private static readonly (FlashExitStyle Style, string Key)[] ExitChoices =
         {
             (FlashExitStyle.Mix, "option_flash_exit_mix"),
