@@ -59,13 +59,6 @@ public sealed class TextOverlayTests
     }
 
     [Fact]
-    public void SubliminalHold_IsFramesTimes17_Min100()
-    {
-        Assert.Equal(100, SubliminalOverlay.HoldMs(2));
-        Assert.Equal(85 * 17, SubliminalOverlay.HoldMs(85));
-    }
-
-    [Fact]
     public async Task SubliminalCard_ClosesOnTime_EvenWithoutAFirstFrame()
     {
         // A first frame that never comes (measured on XWayland: up to 2 s late). The card must
@@ -81,7 +74,7 @@ public sealed class TextOverlayTests
             var closed = false;
             w.Closed += (_, _) => closed = true;
             w.Show();
-            w.Run(1, TimeSpan.FromMilliseconds(SubliminalOverlay.HoldMs(2)));
+            w.Run(1, TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.SubliminalCard.HoldMs(2)));
             Assert.Equal(TimeSpan.FromMilliseconds(300), SubliminalOverlayWindow.MaxLifetime(TimeSpan.FromMilliseconds(100)));
             await Task.Delay(600);
             Assert.True(closed);
