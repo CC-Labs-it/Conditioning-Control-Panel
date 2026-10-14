@@ -951,8 +951,7 @@ namespace ConditioningControlPanel
                 CompanionTab.AiPermissions?.ApplyTierGate();
 
                 // Bambi Takeover: Requires Patreon (any tier), or its ? box free day.
-                var autonomyUnlocked = App.Patreon?.HasPremiumAccess == true
-                                       || App.DailyFree?.IsFreeToday("takeover") == true;
+                var autonomyUnlocked = TierGate.RequiresPremium(Loc.Get("tab_takeover"), "takeover").Allowed;
                 if (BambiTakeoverTab.AutonomyLocked != null) BambiTakeoverTab.AutonomyLocked.Visibility = autonomyUnlocked ? Visibility.Collapsed : Visibility.Visible;
                 if (BambiTakeoverTab.AutonomyUnlocked != null) BambiTakeoverTab.AutonomyUnlocked.Visibility = autonomyUnlocked ? Visibility.Visible : Visibility.Collapsed;
 

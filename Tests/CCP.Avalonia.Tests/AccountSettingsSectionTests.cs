@@ -33,10 +33,10 @@ public sealed class AccountSettingsSectionTests
     private static void Run(Action<MainShellWindow, AccountSettingsSection, AppSettings, Dictionary<string, string?>> body) =>
         AvaloniaTestDispatcher.Run(() =>
         {
+            var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            else builder.AfterSetupCallback(builder); // use the shipped fonts regardless of test order
             var oldGet = CoreSecrets.RetrieveProvider;
             var oldSet = CoreSecrets.StoreProvider;
             var oldSettings = CoreSettings.ServiceProvider;
