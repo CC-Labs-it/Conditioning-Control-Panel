@@ -80,6 +80,46 @@ public sealed class ChaosDvdOverlayTests
     }
 
     [Fact]
+    public async Task LastLogoRetiringDropsTheFrameSubscriptionAndARefusedWindowStaysNull()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var (can, prep, frames, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx);
+            var src = new SteppedFrames();
+            var host = new Window();
+            host.Show();
+            try
+            {
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.FrameSourceFor = _ => src;
+                ChaosDvdOverlay.PlaySfx = (_, _) => { };
+
+                ChaosDvdOverlay.PrepareWindow = (_, _) => false;   // the platform refuses click-through/override-redirect
+                ChaosDvdOverlay.Launch(host, 1, 1, 1);
+                Assert.Null(ChaosDvdOverlay.Window);
+                Assert.False(ChaosDvdOverlay.AnyActive);
+                Assert.Empty(src.Subs);
+
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.Launch(host, 1, 1, 1);   // 1 s flight + 240 ms fade
+                Assert.Single(src.Subs);
+                for (var t = 0.0; t <= 2.0 && src.Subs.Count > 0; t += 0.05) src.Frame(t);
+                Assert.False(ChaosDvdOverlay.AnyActive);
+                Assert.Empty(src.Subs);
+                Assert.Empty(Assert.IsType<Canvas>(ChaosDvdOverlay.Window!.Content).Children);
+            }
+            finally
+            {
+                ChaosDvdOverlay.CloseActive();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx) = (can, prep, frames, sfx);
+                host.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task NoCompositorMeansNoWindowAndNoLogo()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

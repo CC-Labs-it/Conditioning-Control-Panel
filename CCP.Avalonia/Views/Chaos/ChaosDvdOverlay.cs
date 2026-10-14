@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using IFrameSource = ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -55,6 +56,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void Launch(Visual host, double durationSec, double speedMult, double scale, int count = 1,
                                   string? text = null, int splitBounces = 0)
         {
+            // WPF Launch (:98) always hands off to the UI thread.
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(() => Launch(host, durationSec, speedMult, scale, count, text, splitBounces));
+                return;
+            }
             try
             {
                 if (!CanOverlay())
@@ -187,6 +194,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CloseActive (run teardown, panic): every logo and the host window go now. Idempotent.</summary>
         public static void CloseActive()
         {
+            // WPF CloseActive (:131) hands off too; panic can arrive off the UI thread (P29: Post, idempotent).
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(CloseActive); return; }
             StopLoop();
             Flock.Clear();
             Labels.Clear();
