@@ -436,7 +436,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// settings tab is the next best door. "Open asset browser" brings the panel up on Assets.</summary>
         private async void BtnGear_Click(object? sender, RoutedEventArgs e)
         {
-            // ponytail: no LockdownVeil on this head yet; this refusal stands in for it.
+            // The veil (LauncherWindow.Veil.cs) already covers the gear; this refusal backs it up.
             if (MainShellWindow.LockdownActive) return;
             LauncherSfx.Click();
             try

@@ -1,7 +1,7 @@
 // PORTED from WPF 7.1.5 Windows/Launcher/LauncherMediaDialog.xaml(.cs) (imported from parity/trunk
 // 687a604cc, adapted): "Media and sound", opened by the launcher's Media pill. Built in code (the WPF
 // layout numbers, one for one) so the dialog is one file. The rules are Core's
-// LauncherMediaSettings.Apply; the consent ask is the Assets page's, word for word, awaited before
+// LauncherMediaSettings.Apply; the consent ask is the Assets page's (Yes/Cancel, Cancel default), awaited before
 // anything is written.
 using System;
 using System.Collections.Generic;
@@ -18,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -80,6 +81,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Styles.Add(ChipState(":checked", ChipOn, ChipOnRim));
 
             var copy = Res("TextSecondaryBrush");
+            // Done and the link keep their paint under the pointer (Fluent repaints the part on hover
+            // and press); WPF fades Done to 0.92 and underlines the link.
+            foreach (var state in new[] { ":pointerover", ":pressed" })
+            {
+                Styles.Add(ButtonPart("mediaDone", state, Res("AccentGradientBrush"), Brushes.White));
+                Styles.Add(ButtonPart("mediaLink", state, Brushes.Transparent, copy));
+            }
+            Styles.Add(new Style(x => x.OfType<Button>().Class("mediaDone").Class(":pointerover")) { Setters = { new Setter(OpacityProperty, 0.92) } });
+            Styles.Add(new Style(x => x.OfType<Button>().Class("mediaLink").Class(":pointerover").Child().OfType<TextBlock>())
+            { Setters = { new Setter(TextBlock.TextDecorationsProperty, TextDecorations.Underline) } });
             var muted = Res("TextMutedBrush");
             var light = Res("TextLightBrush");
 
@@ -148,7 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _presetCombo.SelectionChanged += (_, _) => PresetCombo_Changed();
             var browser = new Button
             {
-                Content = Loc.Get("launcher_media_open_browser"), Margin = new Thickness(12, 0, 0, 0), Padding = new Thickness(4, 2),
+                Classes = { "mediaLink" }, Content = new TextBlock { Text = Loc.Get("launcher_media_open_browser") }, Margin = new Thickness(12, 0, 0, 0), Padding = new Thickness(4, 2),
                 VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, BorderThickness = new Thickness(0),
                 Foreground = copy, FontSize = 13, Cursor = new Cursor(StandardCursorType.Hand),
             };
@@ -206,7 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             footnote.VerticalAlignment = VerticalAlignment.Center;
             var done = new Button
             {
-                Content = Loc.Get("launcher_media_done"), HorizontalAlignment = HorizontalAlignment.Right, Width = 104, Height = 38,
+                Classes = { "mediaDone" }, Content = Loc.Get("launcher_media_done"), HorizontalAlignment = HorizontalAlignment.Right, Width = 104, Height = 38,
                 FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, Background = Res("AccentGradientBrush"),
                 BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(10), Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
@@ -238,6 +249,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CornerRadius = new CornerRadius(15), FontSize = 13, FontWeight = FontWeight.SemiBold,
             Foreground = Res("TextLightBrush"), Background = ChipOff, BorderBrush = Res("GlassBorderBrush"),
             BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+        };
+
+        private static Style ButtonPart(string cls, string state, IBrush background, IBrush foreground) => new(x =>
+            x.OfType<Button>().Class(cls).Class(state).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.BackgroundProperty, background),
+                new Setter(ContentPresenter.ForegroundProperty, foreground),
+            },
         };
 
         private static Style ChipState(string state, IBrush background, IBrush? rim) => new(x =>
@@ -389,8 +410,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 int level = LauncherMediaSettings.ApplyMasterVolume(s, (int)Math.Round(_masterSlider.Value));
                 _masterLabel.Text = $"{level}%";
-                // Same two lines the Settings page's master slider runs (AudioSettingsBinder).
+                // What the Settings page's master slider runs (AudioSettingsBinder).
                 LayeredAudio.Instance?.SetMasterVolumeLive();
+                MandatoryVideoOverlay.Instance.UpdateVolume();
                 CoreSettings.Save();   // debounced: a whole drag is one write
             }
             catch (Exception ex) { Log.Debug("[Launcher] master volume change failed: {E}", ex.Message); }
@@ -417,7 +439,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("[Launcher] asset pools reload: {E}", ex.Message); CoreSettings.Save(); }
         }
 
-        /// <summary>The same one-time ask the Assets page makes, word for word, over this dialog.</summary>
+        /// <summary>The Assets page's one-time ask (same copy, Yes button) over this dialog, Cancel as default.</summary>
         private async Task<bool> AskRemoteMediaConsentAsync(AppSettings s)
         {
             _asking = true;
@@ -432,7 +454,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     "Turn it on?");
                 bool yes = ConsentOverride != null
                     ? await ConsentOverride(title, message)
-                    : await Dialogs.MessageDialog.ConfirmAsync(this, title, message, defaultToCancel: true);
+                    : await Dialogs.MessageDialog.ConfirmAsync(this, title, message, okText: Loc.Get("label_yes"), defaultToCancel: true);
                 if (!yes) return false;
                 s.RemoteMediaConsented = true;
                 CoreSettings.Save();

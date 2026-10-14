@@ -127,4 +127,24 @@ public sealed class LauncherMediaDialogTests
         Assert.Contains("40%", d.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
         return Task.CompletedTask;
     }));
+
+    [Fact]
+    public Task DoneAndTheLinkKeepTheirPaintUnderThePointer() => AvaloniaTestDispatcher.RunAsync(() => WithDialog((d, s) =>
+    {
+        var buttons = d.GetVisualDescendants().OfType<Button>().ToList();
+        var done = buttons.Single(b => b.Content as string == "Done");
+        var link = buttons.Single(b => (b.Content as TextBlock)?.Text == "Open asset browser");
+        foreach (var b in new[] { done, link }) ((IPseudoClasses)b.Classes).Set(":pointerover", true);
+        Dispatcher.UIThread.RunJobs();
+
+        static global::Avalonia.Controls.Presenters.ContentPresenter Part(Button b) =>
+            b.GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
+        Application.Current!.TryFindResource("AccentGradientBrush", Application.Current.ActualThemeVariant, out var accent);
+        Assert.Same(accent, Part(done).Background);
+        Assert.Equal(global::Avalonia.Media.Colors.White, ((global::Avalonia.Media.ISolidColorBrush)Part(done).Foreground!).Color);
+        Assert.Equal(0.92, done.Opacity);
+        Assert.Equal(global::Avalonia.Media.Colors.Transparent, ((global::Avalonia.Media.ISolidColorBrush)Part(link).Background!).Color);
+        Assert.Equal(global::Avalonia.Media.TextDecorations.Underline, ((TextBlock)link.Content!).TextDecorations);
+        return Task.CompletedTask;
+    }));
 }
