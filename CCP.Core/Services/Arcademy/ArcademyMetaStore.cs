@@ -4,15 +4,14 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Windows;
-using System.Windows.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Arcademy;
 
 /// <summary>
-/// The Arcademy's persisted meta blob (<c>arcademy_meta.json</c> in <see cref="App.UserDataPath"/>):
+/// The Arcademy's persisted meta blob (<c>arcademy_meta.json</c> in <see cref="CorePaths.UserData"/>):
 /// attendance streak, per-class grade history, per-game progression (grade tiers, baselines) and
 /// the shell's seen-once flags.
 ///
@@ -124,13 +123,22 @@ internal sealed class ArcademyMetaStore
     private readonly Action<object> _broadcast;
     private readonly string _path;
     private JObject _state;
-    private DispatcherTimer? _saveDebounce;
+    // Core has no dispatcher: the 500 ms debounce is a thread-pool timer, so FlushSave can now run
+    // on the timer and on the UI thread at once; _writeGate keeps their two writes from sharing the .tmp.
+    private System.Threading.ITimer? _saveDebounce;
+    private readonly TimeProvider _time;
+    private readonly object _writeGate = new();
     private bool _dirty;
 
     public ArcademyMetaStore(Action<object> broadcast)
+        : this(broadcast, Path.Combine(CorePaths.UserData, "arcademy_meta.json")) { }
+
+    /// <summary>A named file (tests; CorePaths.UserData is fixed for the process).</summary>
+    internal ArcademyMetaStore(Action<object> broadcast, string path, TimeProvider? time = null)
     {
         _broadcast = broadcast;
-        _path = Path.Combine(App.UserDataPath, "arcademy_meta.json");
+        _path = path;
+        _time = time ?? TimeProvider.System;
         _state = Load(_path);
     }
 
@@ -164,7 +172,7 @@ internal sealed class ArcademyMetaStore
         var key = NormalizeKey((string?)o["key"]);
         if (key == null)
         {
-            App.Logger?.Debug("ArcademyMetaStore: command '{Op}' with a missing/oversized key - ignored", op);
+            Log.Debug("ArcademyMetaStore: command '{Op}' with a missing/oversized key - ignored", op);
             return;
         }
 
@@ -181,7 +189,7 @@ internal sealed class ArcademyMetaStore
                     if (Guard(key) && SizeGuard(key, o["value"])) Merge(key, o["value"]);
                     break;
                 default:
-                    App.Logger?.Debug("ArcademyMetaStore: unknown op '{Op}' - ignored", op);
+                    Log.Debug("ArcademyMetaStore: unknown op '{Op}' - ignored", op);
                     return;
             }
 
@@ -189,7 +197,7 @@ internal sealed class ArcademyMetaStore
             lock (_lock) value = _state[key]?.DeepClone();
             _broadcast(new { type = "meta", key, value });
         }
-        catch (Exception ex) { App.Logger?.Warning("ArcademyMetaStore.Handle({Op}): {E}", op, ex.Message); }
+        catch (Exception ex) { Log.Warning("ArcademyMetaStore.Handle({Op}): {E}", op, ex.Message); }
     }
 
     /// <summary>Replace one key outright.</summary>
@@ -277,7 +285,7 @@ internal sealed class ArcademyMetaStore
                 {
                     streak += 1;
                     slipsSpent = spent;
-                    App.Logger?.Information(
+                    Log.Information(
                         "ArcademyMetaStore: {Spent} tardy slip(s) covered {Missed} missed night(s) after {Last} - streak carries on at {N}",
                         spent, missed, last, streak);
                 }
@@ -336,7 +344,7 @@ internal sealed class ArcademyMetaStore
             if (mint.Minted)
             {
                 Touch();
-                App.Logger?.Information("ArcademyMetaStore: punch card '{Key}' stamped for {Date} (+{Got}, {N}/{Holes}){Unlock}",
+                Log.Information("ArcademyMetaStore: punch card '{Key}' stamped for {Date} (+{Got}, {N}/{Holes}){Unlock}",
                     gameKey, localDate, mint.Punches,
                     (int?)mint.Card[ArcademyPunchCards.PunchesField] ?? 0,
                     ArcademyPunchCards.Holes, mint.JustUnlocked ? " - ROOM UNLOCKED" : "");
@@ -364,7 +372,7 @@ internal sealed class ArcademyMetaStore
             if (mint.Minted)
             {
                 Touch();
-                App.Logger?.Information("ArcademyMetaStore: enrolled in '{Key}' on {Date} - {N} punches",
+                Log.Information("ArcademyMetaStore: enrolled in '{Key}' on {Date} - {N} punches",
                     gameKey, localDate, mint.Punches);
             }
             return new ArcademyPunchCards.PunchMint(
@@ -411,7 +419,7 @@ internal sealed class ArcademyMetaStore
             if (changed.Count > 0)
             {
                 Touch();
-                App.Logger?.Information(
+                Log.Information(
                     "ArcademyMetaStore: mirror restored/updated {N} punch card(s): {Keys}",
                     changed.Count, string.Join(", ", changed));
             }
@@ -544,7 +552,7 @@ internal sealed class ArcademyMetaStore
         {
             if (!ArcademyEconomy.TryMintToken(WalletUnlocked(), localDate)) return false;
             Touch();
-            App.Logger?.Information("ArcademyMetaStore: first S of {Date} - a token in the case", localDate);
+            Log.Information("ArcademyMetaStore: first S of {Date} - a token in the case", localDate);
             return true;
         }
     }
@@ -556,7 +564,7 @@ internal sealed class ArcademyMetaStore
         {
             if (!ArcademyEconomy.TryUnlockExtraCredit(WalletUnlocked(), grade)) return false;
             Touch();
-            App.Logger?.Information("ArcademyMetaStore: Extra Credit unlocked (first {Grade})", grade);
+            Log.Information("ArcademyMetaStore: Extra Credit unlocked (first {Grade})", grade);
             return true;
         }
     }
@@ -571,7 +579,7 @@ internal sealed class ArcademyMetaStore
             if (result.Ok)
             {
                 Touch();
-                App.Logger?.Information("ArcademyMetaStore: bought '{Sku}' for {Cost}{Cur}",
+                Log.Information("ArcademyMetaStore: bought '{Sku}' for {Cost}{Cur}",
                     result.Item?.Sku, result.Item?.Cost, result.Item?.Cur);
             }
             return result;
@@ -602,7 +610,7 @@ internal sealed class ArcademyMetaStore
             var minted = Guid.NewGuid().ToString("N");
             _state[WalletDeviceKey] = minted;
             Touch();
-            App.Logger?.Information("ArcademyMetaStore: minted this install's wallet device id");
+            Log.Information("ArcademyMetaStore: minted this install's wallet device id");
             return minted;
         }
     }
@@ -706,7 +714,7 @@ internal sealed class ArcademyMetaStore
             parked.Add(frame.DeepClone());
             while (parked.Count > PendingMintCap) parked.RemoveAt(0);
             Touch();
-            App.Logger?.Information("ArcademyMetaStore: parked a mint for {Game} on {Day} ({N} waiting)",
+            Log.Information("ArcademyMetaStore: parked a mint for {Game} on {Day} ({N} waiting)",
                 (string?)frame["game"], (string?)frame["localDay"], parked.Count);
         }
     }
@@ -752,15 +760,19 @@ internal sealed class ArcademyMetaStore
     /// <summary>Flush any debounced write now (teardown / app exit).</summary>
     public void FlushSave()
     {
-        try { _saveDebounce?.Stop(); } catch { }
-        JObject snapshot;
-        lock (_lock)
+        // Disposed, not just stopped: the next Touch arms a fresh one, so nothing is left behind at exit.
+        lock (_lock) { _saveDebounce?.Dispose(); _saveDebounce = null; }
+        lock (_writeGate)
         {
-            if (!_dirty) return;
-            _dirty = false;
-            snapshot = (JObject)_state.DeepClone();
+            JObject snapshot;
+            lock (_lock)
+            {
+                if (!_dirty) return;
+                _dirty = false;
+                snapshot = (JObject)_state.DeepClone();
+            }
+            WriteAtomic(snapshot);
         }
-        WriteAtomic(snapshot);
     }
 
     // ============================ internals ============================
@@ -776,26 +788,11 @@ internal sealed class ArcademyMetaStore
 
     private void DebounceSave()
     {
-        var disp = Application.Current?.Dispatcher;
-        if (disp == null || disp.HasShutdownStarted)
+        _saveDebounce ??= _time.CreateTimer(_ =>
         {
-            // No dispatcher to debounce on (unit host / shutting down): write through instead of
-            // silently dropping the mutation.
-            _dirty = true;
-            var snapshot = (JObject)_state.DeepClone();
-            if (WriteAtomic(snapshot)) _dirty = false;
-            return;
-        }
-        disp.BeginInvoke(() =>
-        {
-            if (_saveDebounce == null)
-            {
-                _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-                _saveDebounce.Tick += (_, _) => { try { _saveDebounce?.Stop(); } catch { } FlushSave(); };
-            }
-            _saveDebounce.Stop();
-            _saveDebounce.Start();
-        });
+            try { FlushSave(); } catch (Exception ex) { Log.Debug("ArcademyMetaStore: debounced save failed: {E}", ex.Message); }
+        }, null, System.Threading.Timeout.InfiniteTimeSpan, System.Threading.Timeout.InfiniteTimeSpan);
+        _saveDebounce.Change(TimeSpan.FromMilliseconds(500), System.Threading.Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>False (and logged) for a key the host owns. The page gets a reply either way, so a
@@ -803,7 +800,7 @@ internal sealed class ArcademyMetaStore
     private static bool Guard(string key)
     {
         if (!HostOwnedKeys.Contains(key)) return true;
-        App.Logger?.Debug("ArcademyMetaStore: page tried to write host-owned key '{Key}' - refused", key);
+        Log.Debug("ArcademyMetaStore: page tried to write host-owned key '{Key}' - refused", key);
         return false;
     }
 
@@ -819,11 +816,11 @@ internal sealed class ArcademyMetaStore
         try { len = value.ToString(Formatting.None).Length; }
         catch (Exception ex)
         {
-            App.Logger?.Warning("ArcademyMetaStore: could not size '{Key}' ({E}) - refused", key, ex.Message);
+            Log.Warning("ArcademyMetaStore: could not size '{Key}' ({E}) - refused", key, ex.Message);
             return false;
         }
         if (len <= MaxValueChars) return true;
-        App.Logger?.Warning("ArcademyMetaStore: '{Key}' is {N} chars (cap {Cap}) - refused", key, len, MaxValueChars);
+        Log.Warning("ArcademyMetaStore: '{Key}' is {N} chars (cap {Cap}) - refused", key, len, MaxValueChars);
         return false;
     }
 
@@ -832,7 +829,7 @@ internal sealed class ArcademyMetaStore
     private bool AcceptNewKey(string key)
     {
         if (_state[key] != null || _state.Count < MaxTopLevelKeys) return true;
-        App.Logger?.Warning("ArcademyMetaStore: {N} top-level keys already - new key '{Key}' dropped",
+        Log.Warning("ArcademyMetaStore: {N} top-level keys already - new key '{Key}' dropped",
             _state.Count, key);
         return false;
     }
@@ -885,7 +882,7 @@ internal sealed class ArcademyMetaStore
     {
         try
         {
-            Directory.CreateDirectory(App.UserDataPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             var text = snapshot.ToString(Formatting.Indented);
             var tmp = _path + ".tmp";
             File.WriteAllText(tmp, text);
@@ -903,7 +900,7 @@ internal sealed class ArcademyMetaStore
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("ArcademyMetaStore.WriteAtomic: {E}", ex.Message);
+            Log.Warning("ArcademyMetaStore.WriteAtomic: {E}", ex.Message);
             try { if (File.Exists(_path + ".tmp")) File.Delete(_path + ".tmp"); } catch { }
             return false;
         }
@@ -927,11 +924,11 @@ internal sealed class ArcademyMetaStore
         var bak = TryLoadOne(path + ".bak", salvage: true);
         if (bak != null)
         {
-            App.Logger?.Warning("ArcademyMetaStore: recovered from {Path}.bak - the main file was unreadable", path);
+            Log.Warning("ArcademyMetaStore: recovered from {Path}.bak - the main file was unreadable", path);
             return bak;
         }
 
-        App.Logger?.Warning("ArcademyMetaStore: no readable meta blob - starting fresh");
+        Log.Warning("ArcademyMetaStore: no readable meta blob - starting fresh");
         return new JObject();
     }
 
@@ -943,14 +940,14 @@ internal sealed class ArcademyMetaStore
             var raw = File.ReadAllText(path);
             if (raw.Length > MaxBlobChars)
             {
-                App.Logger?.Warning("ArcademyMetaStore: {Path} is {N} chars - attempting salvage", path, raw.Length);
+                Log.Warning("ArcademyMetaStore: {Path} is {N} chars - attempting salvage", path, raw.Length);
                 PreserveCorrupt(path);
                 if (!salvage) return null;
                 JObject over;
                 try { over = JObject.Parse(raw); }
                 catch (Exception ex)
                 {
-                    App.Logger?.Warning("ArcademyMetaStore: over-cap blob does not parse either ({E})", ex.Message);
+                    Log.Warning("ArcademyMetaStore: over-cap blob does not parse either ({E})", ex.Message);
                     return null;
                 }
                 return Salvage(over);
@@ -959,7 +956,7 @@ internal sealed class ArcademyMetaStore
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("ArcademyMetaStore: load of {Path} failed ({E})", path, ex.Message);
+            Log.Warning("ArcademyMetaStore: load of {Path} failed ({E})", path, ex.Message);
             return null;
         }
     }
@@ -973,7 +970,7 @@ internal sealed class ArcademyMetaStore
         if (over[DaysKey] is JObject days && days.Count > 0)
         {
             days.RemoveAll();
-            App.Logger?.Warning("ArcademyMetaStore: salvage dropped the 'days' transcript");
+            Log.Warning("ArcademyMetaStore: salvage dropped the 'days' transcript");
             if (over.ToString(Formatting.None).Length <= MaxBlobChars) return over;
         }
         if (over[GamesKey] is JObject games)
@@ -984,7 +981,7 @@ internal sealed class ArcademyMetaStore
             {
                 if (over.ToString(Formatting.None).Length <= MaxBlobChars) break;
                 games.Remove(name);
-                App.Logger?.Warning("ArcademyMetaStore: salvage dropped games['{Key}']", name);
+                Log.Warning("ArcademyMetaStore: salvage dropped games['{Key}']", name);
             }
             if (over.ToString(Formatting.None).Length <= MaxBlobChars) return over;
         }
@@ -994,7 +991,7 @@ internal sealed class ArcademyMetaStore
         {
             if (over[k] != null) kept[k] = over[k]!.DeepClone();
         }
-        App.Logger?.Warning("ArcademyMetaStore: salvage kept the host-owned keys only");
+        Log.Warning("ArcademyMetaStore: salvage kept the host-owned keys only");
         return kept;
     }
 
@@ -1004,6 +1001,6 @@ internal sealed class ArcademyMetaStore
     private static void PreserveCorrupt(string path)
     {
         try { File.Copy(path, path + ".corrupt", overwrite: true); }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyMetaStore: .corrupt sidecar failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademyMetaStore: .corrupt sidecar failed: {E}", ex.Message); }
     }
 }

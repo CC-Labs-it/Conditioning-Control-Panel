@@ -377,6 +377,7 @@ namespace ConditioningControlPanel
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
             Services.MergedAccountRecoveryHead.Seed();
+            Services.Arcademy.ArcademySyncService.MergedRecovery = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
             Services.ProviderSubscription.PrizesSink = Services.ProfileSyncService.ApplyValidatePrizes;
             // BugReportService stays head-side in this layer, but its report assembly is portable.

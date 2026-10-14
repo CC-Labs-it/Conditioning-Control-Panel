@@ -3,7 +3,7 @@ using ConditioningControlPanel.Services.Arcademy;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// THE TARDY SLIP (owner ruling 2026-09-04). The Prize Counter's one consumable, repriced to the
@@ -14,8 +14,8 @@ namespace ConditioningControlPanel.Tests;
 /// <para>Everything here runs for real. <see cref="ArcademyEconomy"/> is deliberately free of WPF
 /// and of <c>App</c>, so the whole till is exercisable without a window — which is the reason the
 /// money was put in that file in the first place. The attendance path itself
-/// (<c>ArcademyMetaStore.RecordAttendance</c>) needs a user-data folder and a dispatcher, so its
-/// half is covered by the gap arithmetic below plus a source tripwire.</para>
+/// (<c>ArcademyMetaStore.RecordAttendance</c>) moved to Core with it and is driven for real in
+/// <see cref="ArcademyMetaStoreTests"/>; the gap arithmetic it reads is pinned below.</para>
 /// </summary>
 public class ArcademyTardySlipTests
 {
