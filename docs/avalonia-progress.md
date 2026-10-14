@@ -2326,3 +2326,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Root cause of "no Linux web view keeps drawing": the web process aborts on a page's first WebAudio sound when GStreamer's autoaudiosink (gst-plugins-good) is missing. The engines are fine: WebKitGTK draws at ~62 fps. In addition, wpewebkit 2.54 dropped the libwpe API, so 12.1's WPE adapter crashed the app (upstream #88).
 - WebKitGTK is now the Linux default (`CCP_LINUX_WEBVIEW=wpe` only where the export exists, `=off` for the panel). A missing autoaudiosink shows the panel with the distro install command. PKGBUILD depends on gst-plugins-good, and WPE moved to optdepends. Evidence: evidence/webview-render/findings.md.
 - oracle-deep review adopted: the gate stays, with no fake sink. An explicit `CCP_LINUX_WEBVIEW=gtk` overrides the gate. The probe follows the GStreamer path rules: GST_PLUGIN_SYSTEM_PATH replaces the distro dirs, and the user dir counts. The panel and the startup toast now tell the user to restart CCP after installing.
+
+## avalonia-port/goongame-core-c: +208
+- Cloud session unit (goongame-core-c); reviewed and gated locally.

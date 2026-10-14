@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 // ============================================================================
 // GOON GAME — Phase D. Sudden-death round model: the *specs* a round generates
@@ -366,30 +367,26 @@ namespace ConditioningControlPanel.Services.GoonGame
     }
 
     /// <summary>
-    /// Presenter dispatch. Uses <see cref="ConditioningControlPanel.Helpers.DispatcherHelper"/> when a WPF
-    /// application is running (so shutdown/null-dispatcher are handled the codebase way), and runs inline
-    /// when there is none — that keeps rounds runnable headlessly in tests. Presenter exceptions are
-    /// swallowed and logged: a broken render must never take the match down mid-round.
+    /// Presenter dispatch. A bounded synchronous hop through <see cref="CoreDispatch.Invoke{T}"/>, which
+    /// runs inline when no head is attached; that keeps rounds runnable headlessly in tests. Presenter exceptions are swallowed and logged: a broken render must
+    /// never take the match down mid-round.
     /// </summary>
     internal static class GoonUi
     {
+        // Matches the WPF DispatcherHelper.RunOnUISync bound this used before the Core move.
+        private static readonly TimeSpan HopTimeout = TimeSpan.FromSeconds(5);
+
         public static void Invoke(Action action, string what)
         {
-            try
+            var (completed, _) = CoreDispatch.Invoke<object?>(() =>
             {
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher == null)
-                {
-                    action();   // headless (unit tests / no WPF app)
-                    return;
-                }
-                if (app.Dispatcher.HasShutdownStarted) return;
-                ConditioningControlPanel.Helpers.DispatcherHelper.RunOnUISync(action);
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning("GoonSuddenDeath: presenter call {What} failed: {Error}", what, ex.Message);
-            }
+                try { action(); }
+                catch (Exception ex) { Log.Warning("GoonSuddenDeath: presenter call {What} failed: {Error}", what, ex.Message); }
+                return null;
+            }, HopTimeout);
+            // [WATCHDOG]-tagged like the WPF DispatcherHelper.LogSyncTimeout it replaces, so the
+            // bug-report marker rescue keeps it after the log tail has scrolled past the hang.
+            if (!completed) Log.Warning("[WATCHDOG] GoonSuddenDeath: presenter call {What} timed out on the UI thread", what);
         }
     }
 
