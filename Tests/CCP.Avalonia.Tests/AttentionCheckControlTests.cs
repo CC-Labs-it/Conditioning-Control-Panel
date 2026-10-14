@@ -43,7 +43,10 @@ public sealed class AttentionCheckControlTests
         Assert.False(control.IsHitTestVisible);
         var visuals = Assert.IsType<Grid>(control.Content).Children;
         Assert.DoesNotContain(visuals, visual => visual.Effect != null);
-        Assert.Equal(2, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0));
+        Assert.Equal(2, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0)
+            + visuals.OfType<Image>().Count(image => image.Name == "DotRingGlow"));
+        Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(control.FindControl<Image>("DotRingGlow")!.Source);
+        Assert.Same(group, control.FindControl<Image>("DotRingGlow")!.RenderTransform);
     });
 
     [Fact]

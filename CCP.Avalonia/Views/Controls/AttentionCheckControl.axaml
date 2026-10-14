@@ -13,8 +13,8 @@
        RenderTransformOrigin="0.5,0.5" ->  "50%,50%"                (Avalonia parses bare numbers as
                                            ABSOLUTE pixels; only a % is relative. Same origin, and
                                            it is also Avalonia's default)
-       DropShadowEffect                ->  sibling rounded Border BoxShadow layers (no live
-                                           blur under the animated ring)
+       DropShadowEffect                ->  an immutable raster arc glow + center BoxShadow (no
+                                           live Effect under the animated ring)
        Storyboard (StartPulse)         ->  the shared 30 Hz BeatLoop in the code-behind -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -29,8 +29,9 @@
     <Grid>
         <Ellipse x:Name="DotRingBg" Width="84" Height="84"
                  Stroke="#33FFFFFF" StrokeThickness="3"/>
-        <Border Width="84" Height="84" CornerRadius="42" Background="Transparent"
-                BoxShadow="0 0 14 0 #B3FF69B4"/>
+        <Image x:Name="DotRingGlow" Width="112" Height="112"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               RenderTransformOrigin="50%,50%" Stretch="Fill"/>
         <Ellipse x:Name="DotRingFg" Width="84" Height="84"
                  Stroke="#FFFF69B4" StrokeThickness="4"
                  StrokeDashArray="0,10000" StrokeLineCap="Round"
