@@ -66,10 +66,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OnLockdownActivated/Deactivated (Lab.cs:612/707): the CC Labs door is greyed
         /// as well as refused. Bound to the service current at construction (App seeds it first).</summary>
+        private bool _lockdownVisualsClosed;
+
         private void InitializeLockdownGreys()
         {
             void Refresh() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
+                if (_lockdownVisualsClosed) return;
                 if (Named<global::Avalonia.Controls.Button>("BtnBackToLauncher") is { } door) door.IsEnabled = !LockdownActive;
                 // WPF SetLockdownBadge (Lab.cs:672/753/794): the badge shows for the whole run, seeded.
                 if (Named<global::Avalonia.Controls.Border>("LockdownBadge") is { } badge) badge.IsVisible = LockdownActive;
@@ -95,6 +98,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ld.CountdownTick -= Tick; ld.TimerRestarted -= Restarted;
                 };
             }
+            Closed += (_, _) =>
+            {
+                _lockdownVisualsClosed = true;
+                PaintLockdownFlash(double.MaxValue);
+                ApplyLockdownTheme(false);
+            };
             Refresh();
         }
 
@@ -129,6 +138,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         (global::Avalonia.Media.IBrush?)new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#8B0000")));
                     Hold(Named<global::Avalonia.Controls.TextBlock>("TxtPlayerTitle")?.Effect as global::Avalonia.Media.DropShadowEffect,
                         global::Avalonia.Media.DropShadowEffect.ColorProperty, LockdownCrimson);
+                    // WPF PaintLevelChip: its fill follows PinkBrush, but the glow follows PinkColor.
+                    Hold(Named<global::Avalonia.Controls.Border>("LevelChip")?.Effect as global::Avalonia.Media.DropShadowEffect,
+                        global::Avalonia.Media.DropShadowEffect.ColorProperty, LockdownCrimson);
                     // PinkBrush also repaints TxtPlayerTitle, XPBar (TxtHeaderVersion is gone, eac44ef9f) and both banner lines.
                     res["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(LockdownCrimson);
                     res["DarkPinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#8B0000"));
@@ -162,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                if (_lockdownVisualsClosed) return;
                 if (Named<global::Avalonia.Controls.Grid>("RootGrid") is not { } root) return;
                 PaintLockdownFlash(double.MaxValue);   // a second activation restarts it
                 _lockdownFlash = new global::Avalonia.Controls.Border

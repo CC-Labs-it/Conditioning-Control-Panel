@@ -12,8 +12,9 @@
 //   THE LOCKDOWN LIFECYCLE lives on this head in LockdownTabView.axaml.cs (Activate, panel swap,
 //   clock, exit phrase) and MainShellWindow.Lockdown.cs (refusals), driven by Core LockdownService.
 //   The title-bar badge's visibility and clock live in MainShellWindow.Lockdown.cs.
-//   Still absent: Apply/RestoreLockdownTheme,
-//   PlayLockdownActivationAnimation and the system-key hook (Win32 WH_KEYBOARD_LL, bucket E).
+//   Theme, activation flash and the system-key hook now live in MainShellWindow.Lockdown.cs +
+//   Platform/Win32Input.cs; the card theme lives in LockdownTabView. The level-chip glow and
+//   temporary visual cleanup on close are covered by LabLockdownThemeTests.
 //
 //   THE POP-QUIZ AND GRADED-INTAKE EDITORS ARE NOT THIS FILE'S ANY MORE. WPF's MainWindow owned
 //   ChkPopQuizEnabled_Changed / SliderPopQuizFrequency_ValueChanged / BtnTestPopQuiz_Click because
