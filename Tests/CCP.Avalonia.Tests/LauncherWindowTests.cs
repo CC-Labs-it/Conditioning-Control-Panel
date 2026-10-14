@@ -75,8 +75,8 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // Only the destinations this head has: the Breakout demo's game host, then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "intake" }, Tiles(launcher));
+        // Only the destinations this head has: the Breakout demo and Piece by Piece game hosts, then the intake tab.
+        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
@@ -145,7 +145,7 @@ public sealed class LauncherWindowTests
     });
 
     private static void ClickPlay(Control tile) =>
-        tile.GetVisualDescendants().OfType<Button>().Single()
+        tile.GetVisualDescendants().OfType<Button>().Single(b => !Equals(b.Tag, "tile-shortcut"))
             .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
     [Fact]

@@ -35,13 +35,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                               panel => panel.ShowTab("gradedintake")),
                 // WPF BreakoutHostService.LaunchDemo: free, no account; Play opens it via LaunchGameWindow.
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
+                // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
+                [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
+                // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
+                ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
             };
+
+        /// <summary>WPF LauncherEntry.IsRevealed: a race without a track is WPF's mystery card pointing at the
+        /// Back Room counter. Neither exists on this head, so the unrevealed tile is left out.</summary>
+        private static bool Revealed(string id) =>
+            !string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) || Services.Race.RacingAccess.CanLaunch;
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>
         internal static bool CanStartGame(string id) => Destinations.ContainsKey(id);
 
-        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id));
+        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id) && Revealed(c.Id));
 
         private static LauncherWindow? _window;
 
@@ -81,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildTiles();
             HookVeil();
             HookFx();
+            HookLinks();
             PaintSoundButton();
         }
 
@@ -640,6 +650,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 new SolidColorBrush(Color.FromRgb(0x2A, 0x1C, 0x08)), 10));
             if (card.IsNew) plate.Children.Add(Pill("exclusives_badge_new", null, Res("AccentGradientBrush"), Brushes.White,
                 needsAccount || locked ? 40 : 10));
+            plate.Children.Add(ShortcutButton(tile, card.Id));
             body.Children.Add(plate);
 
             // --- title, blurb, play: fixed heights so every title sits on the same line ---

@@ -102,7 +102,15 @@ public sealed class AvatarTubeWindowingTests
         Assert.Equal(new PixelPoint(123, 45), tube.Position);
     });
 
-    private static Task Run(bool detached, Action<Window, AvatarTubeWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
+    /// <summary>WPF RestoreSavedPlacement (Windowing.cs:2715-2720): a free tube comes back at its saved size.</summary>
+    [Fact]
+    public Task DetachedRestoresSavedScale() => Run(detached: true, (main, tube) =>
+    {
+        Assert.Equal(0.75, tube.CurrentScale);
+        Assert.Equal(0.75, CoreSettings.Current.AvatarTubeScale);
+    }, scale: 0.75);
+
+    private static Task Run(bool detached, Action<Window, AvatarTubeWindow> body, double scale = 1.0) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -113,6 +121,7 @@ public sealed class AvatarTubeWindowingTests
         CoreSettings.Current.AvatarTubeDetached = detached;
         CoreSettings.Current.AvatarTubeLeft = 123;
         CoreSettings.Current.AvatarTubeTop = 45;
+        CoreSettings.Current.AvatarTubeScale = scale;
         var main = new Window { Width = 1000, Height = 700, Position = new PixelPoint(2000, 200) };
         AvatarTubeWindow? tube = null;
         try
@@ -128,6 +137,7 @@ public sealed class AvatarTubeWindowingTests
             tube?.Close();
             main.Close();
             Dispatcher.UIThread.RunJobs();
+            CoreSettings.Current.AvatarTubeScale = 1.0;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
         }

@@ -76,12 +76,12 @@ namespace ConditioningControlPanel
             try
             {
                 Dispatcher.BeginInvoke(DispatcherPriority.Normal,
-                    new Action(() => ShowBookedFlash(eventId, booking.AppliedSeconds, originPx is { } o ? new Point(o.X, o.Y) : null)));
+                    new Action(() => ShowBookedFlash(eventId, booking.AppliedSeconds, originPx)));
             }
             catch (Exception ex) { App.Logger?.Debug("[Chaster] booked flash marshal: {E}", ex.Message); }
         }
 
-        private void ShowBookedFlash(string eventId, int seconds, Point? causePx)
+        private void ShowBookedFlash(string eventId, int seconds, ScreenPoint? causePx)
         {
             try
             {
@@ -139,12 +139,12 @@ namespace ConditioningControlPanel
             try
             {
                 Dispatcher.BeginInvoke(DispatcherPriority.Normal,
-                    new Action(() => ShowCapNotice(refusal, originPx is { } o ? new Point(o.X, o.Y) : null)));
+                    new Action(() => ShowCapNotice(refusal, originPx)));
             }
             catch (Exception ex) { App.Logger?.Debug("[Chaster] cap tag marshal: {E}", ex.Message); }
         }
 
-        private void ShowCapNotice(TabRefusal refusal, Point? causePx)
+        private void ShowCapNotice(TabRefusal refusal, ScreenPoint? causePx)
         {
             try
             {
@@ -158,13 +158,13 @@ namespace ConditioningControlPanel
             catch (Exception ex) { App.Logger?.Debug("[Chaster] cap tag: {E}", ex.Message); }
         }
 
-        private static Point? Valid(Point? p) =>
+        private static ScreenPoint? Valid(ScreenPoint? p) =>
             p is { } v && !double.IsNaN(v.X) && !double.IsNaN(v.Y) && !double.IsInfinity(v.X) && !double.IsInfinity(v.Y) ? v : null;
 
         /// <summary>The cursor in physical desktop px (the process is per-monitor aware).</summary>
-        private static Point? CursorPx()
+        private static ScreenPoint? CursorPx()
         {
-            try { return GetCursorPos(out var p) ? new Point(p.X, p.Y) : null; }
+            try { return GetCursorPos(out var p) ? new ScreenPoint(p.X, p.Y) : null; }
             catch (Exception ex) { Diag.Swallowed(ex); return null; }
         }
 

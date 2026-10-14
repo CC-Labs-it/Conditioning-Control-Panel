@@ -23,7 +23,7 @@
  * same rule that keeps dtrh/hostMedia.js's two pools apart).
  * ==========================================================================*/
 
-import { lastHostFrame } from '../bridge.js';
+import { lastHostFrame, hostCarrier } from '../bridge.js';
 
 const KINDS = ['image', 'gif', 'video'];
 const NO_ECHO = 6;   // a reshuffled deck avoids repeating the last N draws
@@ -253,8 +253,7 @@ function entriesFromFrame(frame) {
  * <img>/<video>/background-image is the only road those can travel.
  */
 export function createHostMedia(entries, opts = {}) {
-  const bridge = opts.bridge
-    || (typeof window !== 'undefined' && window.chrome && window.chrome.webview) || null;
+  const bridge = opts.bridge || hostCarrier;   // chrome.webview, or the WebKitGTK string carrier (bridge.js)
 
   let pool = null;
   const requestNow = () => { if (pool) pool.request(); };
