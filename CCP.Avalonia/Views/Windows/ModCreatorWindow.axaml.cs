@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// Stubbed, all with a ponytail marker at the call site: everything reaching App.*, a service,
     /// or one of the remaining per-panel partial classes
-    /// (Pools and Personalities are ported partials here; .Advanced.cs, .Barks.cs, .Mantras.cs,
+    /// (Pools, Personalities and Advanced are ported partials here; .Barks.cs, .Mantras.cs,
     /// .EventAudio.cs, .Portraits.cs, .Emotes.cs, .UiArt.cs, .ArtFraming.cs), which are their own
     /// port layers. Their sidebar entries stay - they are part of this view's chrome - and each
     /// draws a "ported in a later layer" panel rather than a dead click.
@@ -438,7 +438,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildDeferredSection("uiart", "UI Art", "ModCreatorWindow.UiArt.cs / .ArtFraming.cs");
             BuildPoolsSection();
             BuildPersonalitiesSection();
-            BuildDeferredSection("advanced", "Advanced", "ModCreatorWindow.Advanced.cs");
+            BuildAdvancedSection();
             BuildDeferredSection("barks", "Barks", "ModCreatorWindow.Barks.cs");
             BuildDeferredSection("mantras", "Mantras", "ModCreatorWindow.Mantras.cs");
             BuildDeferredSection("eventaudio", "Event Audio", "ModCreatorWindow.EventAudio.cs");
@@ -470,35 +470,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void LoadSideFilesFrom(string resourcesDir) { }
         private void ClearSideFileState() { }
 
-        // WPF BuildManifestFromForm ends with ApplyPools/Personalities/Advanced/ArtFraming
-        // (ModCreatorWindow.xaml.cs:2475-2478). Pools and Personalities are ported partials.
-        // ponytail: Advanced (ModCreatorWindow.Advanced.cs) is not ported yet, so its three
-        // manifest sections are carried through from the loaded mod unchanged - a load + export
-        // writes what WPF writes when the author does not touch the Advanced panel, instead of
-        // silently dropping them. Reset clears the carry like WPF's ClearAdvancedSection.
-        private ModManifest? _carriedAdvanced;
-
         private void ApplyPanelSectionsToManifest(ModManifest manifest)
         {
             ApplyPoolsToManifest(manifest);
             ApplyPersonalitiesToManifest(manifest);
-            manifest.TubeLayout = _carriedAdvanced?.TubeLayout;
-            manifest.BubbleScale = _carriedAdvanced?.BubbleScale;
-            manifest.EnhancementOverrides = _carriedAdvanced?.EnhancementOverrides;
+            ApplyAdvancedToManifest(manifest);
         }
 
         private void PopulatePanelSectionsFromManifest(ModManifest manifest)
         {
             PopulatePoolsFromManifest(manifest);
             PopulatePersonalitiesFromManifest(manifest);
-            _carriedAdvanced = manifest;
+            PopulateAdvancedFromManifest(manifest);
         }
 
         private void ClearPanelSections()
         {
             ClearPoolsSection();
             ClearPersonalitiesSection();
-            _carriedAdvanced = null;
+            ClearAdvancedSection();
         }
 
         private Border CreateSectionPanel(string key)
