@@ -34,26 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    head and the Core timelines get the flag they expect.
     ///  - <c>Application.Current.MainWindow</c> is the desktop lifetime's <c>MainWindow</c>, and
     ///    Avalonia has no settable <c>Owner</c>, so ownership is <c>Show(parent)</c>.
-    ///  - <c>DescentRoomSfx</c>, <c>App.DescentMigration</c>, <c>App.DescentCountdown</c> and
-    ///    <c>App.ProfileSync</c> are still in the WPF head, so each is a stub below.
+    ///  - Room sounds remain a follow-up; the existing CoreAudio backend is the playback seam.
     ///
-    /// <para><b>STILL UNREACHABLE — blocked on unported callers, not on this window.</b>
-    /// <see cref="Open"/> is complete and takes its owner correctly; what is missing is everything
-    /// that would call it. All four WPF call sites were checked:</para>
-    /// <list type="bullet">
-    ///   <item><c>DescentShowDirector</c>
-    ///   (ConditioningControlPanel/Services/Descent/DescentShowDirector.cs:156/233/406) opens the
-    ///   Live, CatchUp and Ignition shows. CCP.Core/Services/Descent/ carries the SHOW — the
-    ///   timelines and the handoff this file already uses — but not the director. The Live open
-    ///   is now MainShellWindow.DescentFuse.cs on Core <c>DescentCountdownService.ZeroReached</c>;
-    ///   CatchUp and Ignition remain unreached.</item>
-    ///   <item><see cref="ForceCloseAll"/> is the panic path's
-    ///   (MainWindow.StartStop.cs:525), and this head has no <c>StopEngine</c> to call it from.</item>
-    /// </list>
-    /// <para>The gate is the director's, not this window's: it opens the Live show only when the
-    /// countdown phase reaches Zero. Opening the show from anywhere else would put a fullscreen
-    /// topmost surface over the user with no countdown behind it, so no substitute entry point
-    /// was invented.</para>
+    /// <para>Live and CatchUp enter through MainShellWindow.DescentFuseShows and the Core
+    /// countdown. The ceremony/Year One Ignition entry was retired in WPF; no replacement door
+    /// is invented. PanicSurfaces closes the show and cancels an opener queued behind startup.</para>
     /// </summary>
     public partial class DescentFuseWindow : Window
     {
@@ -289,7 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // ---------------------------------------------------------- crack + handoff
 
-        private void FrameCrack(double elapsed)
+        internal void FrameCrack(double elapsed)
         {
             var frame = DescentFuseTimeline.FrameAt(_kind, elapsed, _reduced);
             _visual.SetFrame(frame);
@@ -338,16 +323,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (frame.SinceBloom < 0) return;
 
-            // ponytail: needs DescentMigrationService.IsCeremonyOpen
-            // (ConditioningControlPanel/Services/Descent/DescentMigrationService.cs) — false here,
-            // so this head always walks the timeout branch and shows the standing line rather than
-            // crossfading. That is the contract's own no-offer path, not a fake one: the ceremony
-            // really is still coming on the next sync, so nothing is written and nothing loops.
+            // WPF IsCeremonyOpen is constant false since the ceremony retired. Keep its honest
+            // timeout line; sync attempts can still settle the silent migration acknowledgment.
             switch (_handoff.Advance(frame.SinceBloom, ceremonyOpen: false))
             {
                 case DescentHandoffAction.Resync:
-                    // ponytail: needs ProfileSyncService.SyncProfileAsync from
-                    // ConditioningControlPanel/Services/Settings/ProfileSyncService.cs. No Core seam.
+                    _ = MainShellWindow.RequestFuseSync();
                     break;
 
                 case DescentHandoffAction.CrossfadeToCeremony:
