@@ -3,8 +3,9 @@
 // The decision is the same Core PanicPolicy; the listener is Platform/X11PanicKey (XInput2 raw keys,
 // non-consuming like the WH_KEYBOARD_LL hook - docs/avalonia-decisions.md, panic key row).
 // The stop pass is PanicSurfaces.StopAll (one registry shared with the tray and the safe word); a new
-// surface registers there, never here. ponytail: no bark on this head yet. The #919b off-thread watchdog is omitted: the listener is its own thread,
-// so a wedged UI thread cannot drop the hook, but the queued stop still waits for the UI thread.
+// surface registers there, never here. ponytail: no bark on this head yet. The #919b watchdog is Platform/PanicWatchdog:
+// a queued stop the UI thread never runs is torn down off-thread after 2 s.
+// The optional Pause key and the EscapeClaim surfaces ride Platform/Win32Input (Windows only).
 // Windows: Platform/Win32PanicKey (WH_KEYBOARD_LL on its own thread) feeds the same HandlePanicKeyPress.
 // ponytail: a rebind while a portal session is open keeps the OLD trigger until the effects stop and
 // the next effect re-binds; re-bind on PanicKey change if that matters.
@@ -36,12 +37,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool StartPanicKey()
         {
             _portalAllowed = true;
+            // WPF EscapeClaim surfaces (TAB-8 / DESK-3): the focus snapshot the hook thread reads.
+            EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
+            EscapeClaim.StartTracking();
             if (OperatingSystem.IsWindows()) return Win32Input.Start(() => HandlePanicKeyPress(DateTime.Now));   // WH_KEYBOARD_LL twin
             return X11PanicKey.Start(() => CoreSettings.Current.PanicKey,
                 () =>
                 {
                     Serilog.Log.Information("Panic trigger: XInput2 key press");
-                    Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
+                    var s = CoreSettings.Current;
+                    if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
+                        Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
+                    else
+                        PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
                 });
         }
 
@@ -50,12 +58,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void HandlePanicKeyPress(DateTime now)
         {
             var s = CoreSettings.Current;
-            if (CapturingPanicKey || !s.PanicKeyEnabled) return;
+            // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
+            // Escape that unbinds Pause (the default panic key) is never also a panic.
+            if (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey || !s.PanicKeyEnabled) return;
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
+            // or a Lines task reopens the card the press just dismissed.
+            try { Platform.LeashTaskHost.OnPanicPress(this); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
 
             // Same evaluation order as WPF: asking the palette closes it, so never ask with a card up.
             bool lockCardOpen = LockCardWindow.IsAnyOpen();
@@ -80,6 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StopCameraForPanic();
                 return;
             }
+            // WPF MainWindow.xaml.cs:1755: ladder mode only (the override rung and game hand-offs return first),
+            // after the grace pause and before the stop pass: her calm safety line, then 6 s of no other bark.
+            if (rung == PanicPolicy.Rung.RunLadder && !gameOwnedTheScreen) Platform.BarkHead.Engine?.Raise("Panic");
             bool wasRunning = CoreEngine.IsRunning;
             PanicSurfaces.StopAll("panic key", this);
             if (wasRunning) ShowFromTray();   // WPF: Show + Activate the main window after a running stop

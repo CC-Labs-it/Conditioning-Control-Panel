@@ -58,7 +58,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>The proxy's hard per-message reject size; PromptAssembler.ProxyHardRejectCap reads this.</summary>
         public const int ProxyHardRejectCap = 9900;
 
-        /// <summary>Contract D: WPF seeds MergedAccountRecovery.TryHandleAsync (it is App-bound); unseeded is a no-op.</summary>
+        /// <summary>Contract D: WPF seeds MergedAccountRecovery.TryHandleAsync (Core, but its swap seams are seeded only by the WPF head); unseeded is a no-op.</summary>
         public static Func<HttpResponseMessage, Task>? MergedAccountHook;
 
         private const int MaxTokensHardCap = 100; // Hard cap on response tokens to control costs (~50 words, enough for video names)

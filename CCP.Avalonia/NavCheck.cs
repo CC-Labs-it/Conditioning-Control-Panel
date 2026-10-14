@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia
             w.ShowTab("no-such-tab");
             Check(Vis("StudioTab"), "unknown key keeps the current tab, never a blank page");
 
-            w.ShowTab("fyp");
+            w.ShowTab("justdrop");
             Check(Vis("StudioTab") && w.CurrentTab == "haptics", "a window key leaves the tab alone");
 
             // ---- the entry points every "Configure in Settings" button calls -------------------
