@@ -12,17 +12,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// <summary>
     /// The one owner of whether EMI is out: summon, dismiss, toggle, and the mute prompt.
     ///
-    /// <para>PORTED (the summon/dismiss half only) from
+    /// <para>PORTED (summon/dismiss and the ring moment half) from
     /// <c>ConditioningControlPanel/Services/EmiDesk/EmiDeskService.cs</c>: Toggle :236, Summon :263,
     /// Dismiss :420, EnsureWindow :607, MaybeAskAboutMuting :1541, AvatarMuted :80. The dock chip,
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
-    /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
+    /// <para>ponytail: not here yet, each a named WPF member: greeting,
+    /// backSoon/weekend/bedtime beats, ambient pet/ring nudges, the
     /// knock (<c>TryKnock</c>) and the tube hand-off (<c>TubeDeskVisibility</c>). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>
-    internal sealed class EmiDeskService
+    internal sealed partial class EmiDeskService
     {
         public static EmiDeskService Instance { get; } = new();
 
@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.RunSummon();
                 bool first = !EmiState.Current.FirstBootSeen;
                 int summons = EmiState.NoteSummon();
+                _nudges.NoteSummon(summons);
                 RaiseOutChanged();
                 Log.Information("[EmiDesk] summoned ({Why}), firstBoot={First}, summon #{N}", why ?? "user", first, summons);
             }
@@ -110,6 +111,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 // Invalidate a summon parked behind the mute prompt before anything else.
                 _summonGen++;
+                StopRingNudges();
+                _window?.CancelChain();
                 // WPF EmiDeskService.cs:422: sending her away ends the welcome show she is presenting.
                 if (_window?.PresentationActive == true) _window.StopPresentation();
 
@@ -157,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Closed += (_, _) =>
                 {
                     if (!ReferenceEquals(_window, win)) return;
+                    StopRingNudges();
                     _window = null;
                     IsOut = false;
                     RaiseOutChanged();

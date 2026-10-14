@@ -21,7 +21,7 @@ public sealed class PanicSurfacesTests
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -79,8 +79,33 @@ public sealed class PanicSurfacesTests
     /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
+        "ai-followups",
+        "attention-test",
+        "blink-trainer",
+        "camera",
+        "chaos",
+        "chaos-intro",
+        "corner-gif",
+        "deeper-editor-audio",
+        "emi-ring-speech",
+        "engine",
+        "first-show",
+        "games",
+        "gaze-minigame",
+        "haptics",
+        "intake",
+        "knock-cards",
+        "leash-task",
+        "lock-cards",
+        "mantra",
+        "pink-rush",
+        "possession",
+        "program-session",
+        "remote-haptics",
+        "takeover",
+        "tour",
+        "tube-speech",
+        "voice-capture",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
