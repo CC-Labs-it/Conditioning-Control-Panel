@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -74,8 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         //
         // Owner verdict on the live demo, 2026-08-16: "could use some FX, a bolder text, maybe some
         // little animation and flair." Everything below is opacity and transform ONLY — the two
-        // BlurEffects in the XAML are set once and never touched by a clock, which is the app's
-        // standing rule (an animated Effect property re-runs the shader graph every frame).
+        // glows are blurred once per text change into bitmaps (BakeGlows), because a live Effect under
+        // the pulse or the breath re-runs its shader on every frame (P82 rule 3).
 
         /// <summary>The hero digits, at their own size. The "any moment now" phrase shares the
         /// TextBlock and gets <see cref="ImminentFontSize"/> instead: it is a sentence, not a
@@ -170,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Grid _fogHost;
         private readonly Grid _fogDigitsHost;
         private readonly TextBlock _fogDigits;
-        private readonly TextBlock _fogDigitsGlow;
+        private readonly Image _fogDigitsGlow;
         private readonly Rectangle _fogHairline;
         private readonly Grid _embedHost;
         private readonly Grid _spiralSplash;
@@ -178,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Path _splashGlyph;
         private readonly TextBlock _splashDot1, _splashDot2, _splashDot3;
         private readonly Border _waitingPanel;
-        private readonly TextBlock _waitingGlow;
+        private readonly Image _waitingGlow;
         private readonly Canvas _waitingMotes;
         private readonly Button _btnSpiralHelp;
         private bool _helpAttached;
@@ -216,7 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _emberHost = this.FindControl<Canvas>("EmberHost")!;
             _fogCopy = this.FindControl<StackPanel>("FogCopy")!;
             _fogDigits = this.FindControl<TextBlock>("FogDigits")!;
-            _fogDigitsGlow = this.FindControl<TextBlock>("FogDigitsGlow")!;
+            _fogDigitsGlow = this.FindControl<Image>("FogDigitsGlow")!;
             _fogHairline = this.FindControl<Rectangle>("FogHairline")!;
             _embedHost = this.FindControl<Grid>("EmbedHost")!;
             _spiralSplash = this.FindControl<Grid>("SpiralSplash")!;
@@ -226,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _splashDot2 = this.FindControl<TextBlock>("SplashDot2")!;
             _splashDot3 = this.FindControl<TextBlock>("SplashDot3")!;
             _waitingPanel = this.FindControl<Border>("WaitingPanel")!;
-            _waitingGlow = this.FindControl<TextBlock>("WaitingGlow")!;
+            _waitingGlow = this.FindControl<Image>("WaitingGlow")!;
             _waitingMotes = this.FindControl<Canvas>("WaitingMotes")!;
             _btnSpiralHelp = this.FindControl<Button>("BtnSpiralHelp")!;
 
@@ -239,6 +240,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             this.FindControl<TextBlock>("SplashLine")!.Text = SplashCopy;
 
             _splashGlyph.Data = BuildSpiralGeometry();
+
+            // The glows follow their text; baked only while attached, when Font.Mono has resolved.
+            var waitingLine = this.FindControl<TextBlock>("WaitingLine")!;
+            _fogDigits.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == TextBlock.TextProperty || e.Property == TextBlock.FontSizeProperty) BakeGlows(fog: true);
+            };
+            waitingLine.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) BakeGlows(fog: false); };
+            AttachedToVisualTree += (_, _) => { BakeGlows(fog: true); BakeGlows(fog: false); };
 
             _embers = new DriftField(_emberHost, EmberSeeds);
             _motes = new DriftField(_waitingMotes, MoteSeeds);
@@ -801,18 +811,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _splashFx = new CancellationTokenSource();
                 var token = _splashFx.Token;
 
-                // One turn every 4.6s, about the glyph's own centre (Avalonia's default origin).
-                var spin = new Animation
-                {
-                    Duration = TimeSpan.FromSeconds(4.6),
-                    IterationCount = IterationCount.Infinite,
-                    Children =
-                    {
-                        new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(RotateTransform.AngleProperty, 0d) } },
-                        new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(RotateTransform.AngleProperty, 360d) } },
-                    },
-                };
-                _ = spin.RunAsync(_splashGlyph, token);
+                // One turn every 4.6s, about the glyph's own centre (Avalonia's default origin;
+                // WPF SpiralTabView.xaml:148 RenderTransformOrigin 0.5,0.5; spin at .xaml.cs:1151).
+                var spin = new RotateTransform();
+                _splashGlyph.RenderTransform = spin;
+                Loop(_splashGlyph, t => spin.Angle = 360 * (t % 4.6) / 4.6, token);
 
                 Breathe(_splashHalo, OpacityProperty, 0.08, 0.30, 2.2, token);
                 Breathe(_splashGlyph, OpacityProperty, 0.58, 0.96, 1.7, token);
@@ -826,23 +829,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             catch (Exception ex) { Log.Debug("[Spiral] splash up: {E}", ex.Message); }
         }
 
+        /// <summary>WPF SpiralTabView.xaml.cs:1168-1184: BeginTime offset, then 0.15 -> 0.95 at 34% -> 0.15,
+        /// each key SineEase InOut, forever, at AmbientFrameRate 30.</summary>
         private static void BeginDot(Visual dot, double offsetSeconds, CancellationToken token)
         {
             const double cycle = 1.45;
-            var anim = new Animation
+            (double, double)[] keys = { (0, 0.15), (cycle * 0.34, 0.95), (cycle, 0.15) };
+            Loop(dot, t =>
             {
-                Duration = TimeSpan.FromSeconds(cycle),
-                IterationCount = IterationCount.Infinite,
-                Delay = TimeSpan.FromSeconds(offsetSeconds),
-                Easing = new SineEaseInOut(),
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(OpacityProperty, 0.15) } },
-                    new KeyFrame { Cue = new Cue(0.34d), Setters = { new Setter(OpacityProperty, 0.95) } },
-                    new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(OpacityProperty, 0.15) } },
-                },
-            };
-            _ = anim.RunAsync(dot, token);
+                if (t >= offsetSeconds) dot.Opacity = BeatLoop.Keys((t - offsetSeconds) % cycle, keys, sine: true);
+            }, token);
         }
 
         /// <summary>
@@ -974,6 +970,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             catch (Exception ex) { Log.Debug("[Spiral] waiting ambience stop: {E}", ex.Message); }
         }
 
+        /// <summary>Blur radii 16 (digits, WPF FogDigitsGlow) and 9 (waiting line), baked once per text change.</summary>
+        private const double FogGlowBlur = 16, WaitingGlowBlur = 9;
+        private static readonly IBrush FuseGold = new ImmutableSolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0x52));
+
+        private void BakeGlows(bool fog)
+        {
+            if (VisualRoot == null) return;
+            try
+            {
+                var (source, image, blur) = fog
+                    ? (_fogDigits, _fogDigitsGlow, FogGlowBlur)
+                    : (this.FindControl<TextBlock>("WaitingLine")!, _waitingGlow, WaitingGlowBlur);
+                double pad = blur * 2;
+                GlowBake.Swap(image, GlowBake.Text(source, FuseGold, new BlurEffect { Radius = blur }, pad), pad);
+            }
+            catch (Exception ex) { Log.Debug("[Spiral] glow bake: {E}", ex.Message); }
+        }
+
         // ============================== the loop helpers ==============================
 
         /// <summary>
@@ -982,23 +996,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// WPF's AutoReverse did — which is why the number is HALF the breath, exactly as it is in
         /// the original's call sites.
         /// </summary>
-        private static void Breathe(Animatable target, AvaloniaProperty property,
+        private static void Breathe(Visual target, AvaloniaProperty property,
                                     double min, double max, double halfCycleSeconds,
                                     CancellationToken token)
+            => Loop(target, t => target.SetValue(property, min + (max - min) * BeatLoop.Breath(t, halfCycleSeconds)), token);
+
+        /// <summary>An endless loop on the window's 30 fps beat (WPF AmbientFrameRate 30, :102), parked
+        /// while hidden or minimised, and stopped by the clock group's token (P82 rule 2).</summary>
+        private static void Loop(Visual owner, Action<double> step, CancellationToken token)
         {
-            var anim = new Animation
-            {
-                Duration = TimeSpan.FromSeconds(halfCycleSeconds),
-                IterationCount = IterationCount.Infinite,
-                PlaybackDirection = PlaybackDirection.Alternate,
-                Easing = new SineEaseInOut(),
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(property, min) } },
-                    new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(property, max) } },
-                },
-            };
-            _ = anim.RunAsync(target, token);
+            var loop = new BeatLoop(owner, step);
+            loop.Start();
+            token.Register(loop.Stop);
         }
 
         /// <summary>
@@ -1015,38 +1024,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <para>The resting state is <c>RenderTransform = null</c>, which is what the stop paths
         /// set: the animator's own group goes with it.</para>
         /// </summary>
-        private static void Pulse(Animatable target, double halfCycleSeconds, double scale,
+        private static void Pulse(Visual target, double halfCycleSeconds, double scale,
                                   CancellationToken token)
         {
-            var anim = new Animation
-            {
-                Duration = TimeSpan.FromSeconds(halfCycleSeconds),
-                IterationCount = IterationCount.Infinite,
-                PlaybackDirection = PlaybackDirection.Alternate,
-                Easing = new SineEaseInOut(),
-                Children =
-                {
-                    new KeyFrame
-                    {
-                        Cue = new Cue(0d),
-                        Setters =
-                        {
-                            new Setter(ScaleTransform.ScaleXProperty, 1.0),
-                            new Setter(ScaleTransform.ScaleYProperty, 1.0),
-                        },
-                    },
-                    new KeyFrame
-                    {
-                        Cue = new Cue(1d),
-                        Setters =
-                        {
-                            new Setter(ScaleTransform.ScaleXProperty, scale),
-                            new Setter(ScaleTransform.ScaleYProperty, scale),
-                        },
-                    },
-                },
-            };
-            _ = anim.RunAsync(target, token);
+            // WPF :1033-1042: 1.0 -> scale, AutoReverse, SineEase InOut, both axes on one clock.
+            var s = new ScaleTransform();
+            target.RenderTransform = s;
+            Loop(target, t => s.ScaleX = s.ScaleY = 1 + (scale - 1) * BeatLoop.Breath(t, halfCycleSeconds), token);
         }
 
         /// <summary>Cancel and clear one clock group. The resting values are the caller's job.</summary>
@@ -1153,45 +1137,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 Reflow();
 
+                // WPF SpiralTabView.xaml.cs:1407-1438: per speck a linear rise 0 -> -RiseDistance and a
+                // fade 0 -> Peak at 42% -> 0 (each key SineEase InOut), both forever from a BeginTime of
+                // i/n of its own cycle (so the field never breathes as one animal). One beat drives
+                // every speck (WPF ran them at 20 fps; the shared beat is 30).
+                var moves = new TranslateTransform[_dots.Count];
+                var fades = new (double, double)[_dots.Count][];
                 for (int i = 0; i < _dots.Count; i++)
                 {
-                    var seed = _seeds[i];
-                    var dot = _dots[i];
-                    var duration = TimeSpan.FromSeconds(seed.Seconds);
-
-                    // Each speck starts a fraction of its own cycle later, which is what keeps the
-                    // field from breathing as one animal.
-                    var offset = TimeSpan.FromSeconds(seed.Seconds * (i / (double)Math.Max(1, _dots.Count)));
-
-                    var rise = new Animation
-                    {
-                        Duration = duration,
-                        IterationCount = IterationCount.Infinite,
-                        Delay = offset,
-                        Children =
-                        {
-                            new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(TranslateTransform.YProperty, 0d) } },
-                            new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(TranslateTransform.YProperty, -RiseDistance) } },
-                        },
-                    };
-
-                    var fade = new Animation
-                    {
-                        Duration = duration,
-                        IterationCount = IterationCount.Infinite,
-                        Delay = offset,
-                        Easing = new SineEaseInOut(),
-                        Children =
-                        {
-                            new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(OpacityProperty, 0d) } },
-                            new KeyFrame { Cue = new Cue(0.42d), Setters = { new Setter(OpacityProperty, seed.Peak) } },
-                            new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(OpacityProperty, 0d) } },
-                        },
-                    };
-
-                    _ = rise.RunAsync(dot, token);
-                    _ = fade.RunAsync(dot, token);
+                    _dots[i].RenderTransform = moves[i] = new TranslateTransform();
+                    fades[i] = new[] { (0d, 0d), (_seeds[i].Seconds * 0.42, _seeds[i].Peak), (_seeds[i].Seconds, 0d) };
                 }
+                Loop(_host, t =>
+                {
+                    for (int i = 0; i < _dots.Count; i++)
+                    {
+                        var seed = _seeds[i];
+                        double off = seed.Seconds * (i / (double)Math.Max(1, _dots.Count));
+                        if (t < off) continue;
+                        double p = (t - off) % seed.Seconds;
+                        moves[i].Y = -RiseDistance * p / seed.Seconds;
+                        _dots[i].Opacity = BeatLoop.Keys(p, fades[i], sine: true);
+                    }
+                }, token);
             }
 
             /// <summary>Park the field invisible. The clocks themselves are cancelled by the token

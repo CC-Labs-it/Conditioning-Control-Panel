@@ -46,6 +46,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // #627: one shuffled walk of the folder (WPF FlashService DiskBag), so every image comes up
         // before any repeats. Not thread-safe: LoadPictures draws under the bag's own lock.
         internal static readonly ShuffleBag<string> DiskBag = new(p => p, Rng);
+
+        /// <summary>WPF FlashService _packImageList + PackBag + _tempPackFiles (:173-191).</summary>
+        internal static readonly ConditioningControlPanel.Services.PackMediaPool PackImages =
+            new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static int _generation;
 
@@ -78,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-                var targets = PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+                var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
                 if (flashes.Count == 0)
@@ -429,6 +433,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             lock (DiskBag) return DiskBag.TryNext(files, out var p) ? p : null;
         }
 
+        /// <summary>WPF GetNextImages (FlashService.cs:3553-3583): active content-pack images are the second
+        /// local source, weighted by count; a pack pick decrypts to a temp file kept on PackImages'
+        /// record, and a failed decrypt falls back to the folder.</summary>
+        internal static string? NextFlashPath(IReadOnlyList<string> files) => PackImages.TryDraw(files.Count) ?? NextPath(files);
+
         private static string ImagesPath() => Path.Combine(CorePaths.EffectiveAssets, "images");
 
         /// <summary>
@@ -444,17 +453,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var root = CorePaths.EffectiveAssets;
             var dir = Path.Combine(root, "images");
             var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
-            if (!Directory.Exists(dir) || targets.Length == 0) return result;
+            if (targets.Length == 0) return result;
 
-            var files = Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
-                .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                .ToList();
-            files = AssetFolderExclusion.Enabled(files, root, s);
-            if (files.Count == 0) return result;
+            var files = Directory.Exists(dir)
+                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    .ToList(), root, s)
+                : new List<string>();
 
             for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
             {
-                if (NextPath(files) is not { } path) break;
+                if (NextFlashPath(files) is not { } path) break;
                 try
                 {
                     SkiaSharp.SKImageInfo info;

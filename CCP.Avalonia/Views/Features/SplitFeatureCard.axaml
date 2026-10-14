@@ -19,6 +19,12 @@
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.SplitFeatureCard"
              Cursor="Hand">
 
+    <Panel>
+    <!-- The on glow (lag fix, P82): a sibling BoxShadow layer whose Opacity breathes on the
+         30 fps beat, never a DropShadowEffect on RootBorder - an Effect makes the whole tile an
+         offscreen layer re-blurred on every breath frame. Shadow colour = FxGlowColor (CardGlow). -->
+    <Border x:Name="GlowLayer" Margin="6" CornerRadius="12" Opacity="0" IsHitTestVisible="False"
+            RenderTransformOrigin="50%,50%"/>
     <Border x:Name="RootBorder"
             Background="{DynamicResource ElevatedSurfaceBrush}"
             BorderBrush="{DynamicResource GlassBorderBrush}"
@@ -27,12 +33,6 @@
             ClipToBounds="True"
             Margin="6"
             RenderTransformOrigin="50%,50%">
-        <Border.Effect>
-            <DropShadowEffect Color="{DynamicResource FxGlowColor}"
-                              BlurRadius="18"
-                              OffsetX="0" OffsetY="0"
-                              Opacity="0"/>
-        </Border.Effect>
 
         <Grid x:Name="ContentRoot">
             <!-- The two art halves. Full-bleed brushes, polygon-clipped in code. -->
@@ -119,4 +119,5 @@
                     Margin="0,0,8,32" ZIndex="10" IsVisible="False"/>
         </Grid>
     </Border>
+    </Panel>
 </UserControl>

@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Services.Packs
     /// The NETWORK half of WPF 7.1.5 Services/Content/ContentPackService.cs on Core: the server pack
     /// manifest (with the built-in list as fallback), the Patreon-gated signed-URL install with HTTP
     /// Range resume and the extract -> per-file encrypt step, the local-zip install, the external
-    /// (V2 auth) download link and pack status. The preview picks follow in content-packs-wire. The installed half (discovery, activation, decrypt) is
+    /// (V2 auth) download link and pack status. The preview picks are here too (bytes; the head decodes). The installed half (discovery, activation, decrypt) is
     /// <see cref="ContentPackStore"/>; an install writes the same layout and then rescans it.
     ///
     /// <para>Every server call goes through <see cref="BaseUrl"/>: null (a CCP_USERDATA_DIR sandbox
@@ -83,6 +83,10 @@ namespace ConditioningControlPanel.Services.Packs
         private readonly Func<string?> _patreonToken;
         private readonly Func<(string UnifiedId, string Token)?> _identity;
         private readonly Func<TimeSpan, Task> _delay;
+        private readonly Func<string> _previewCacheRoot;
+
+        /// <summary>WPF's per-pack pick of preview faces (ContentPackService.cs:1266).</summary>
+        public const string PreviewCacheFileName = ".preview-cache.json";
 
         public event EventHandler<ContentPack>? PackDownloadStarted;
         public event EventHandler<ContentPack>? PackDownloadCompleted;
@@ -100,7 +104,8 @@ namespace ConditioningControlPanel.Services.Packs
             Action? save = null,
             Func<string?>? patreonToken = null,
             Func<(string UnifiedId, string Token)?>? identity = null,
-            Func<TimeSpan, Task>? delay = null)
+            Func<TimeSpan, Task>? delay = null,
+            Func<string>? previewCacheRoot = null)
         {
             _store = store;
             _http = http ?? SharedHttp;
@@ -110,6 +115,8 @@ namespace ConditioningControlPanel.Services.Packs
             _patreonToken = patreonToken ?? (() => CoreAccount.PatreonAccessToken);
             _identity = identity ?? DefaultIdentity;
             _delay = delay ?? (t => Task.Delay(t));
+            // WPF MainWindow.Assets.cs:216-218: <user data>/pack-previews/<id>.
+            _previewCacheRoot = previewCacheRoot ?? (() => Path.Combine(CorePaths.UserData, "pack-previews"));
         }
 
         private static (string UnifiedId, string Token)? DefaultIdentity()
@@ -471,7 +478,8 @@ namespace ConditioningControlPanel.Services.Packs
             request.Headers.Add("X-Auth-Token", id.Value.Token);
             using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
             var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            // ponytail: no Contract D (MergedAccountRecovery) hook on this head yet; a merged account reads as 401/refusal.
+            // ponytail: Contract D (MergedAccountRecovery) is in Core now but not called here; the Avalonia head seeds none of
+            // its seams yet (WPF calls it in its own ContentPackService), so a merged account reads as 401/refusal.
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 AuthenticationRequired?.Invoke(this, "Your session has expired. Please log in again.");
@@ -509,6 +517,115 @@ namespace ConditioningControlPanel.Services.Packs
         private static T? TryRead<T>(string json) where T : class
         {
             try { return JsonConvert.DeserializeObject<T>(json); } catch { return null; }
+        }
+
+        // ---- previews ----
+
+        /// <summary>
+        /// WPF GetPackPreviewImages (ContentPackService.cs:1252-1352) without the decode: up to
+        /// <paramref name="count"/> random images of an installed pack, the pick kept in
+        /// <c>&lt;pack&gt;/.preview-cache.json</c> (obfuscated names) so the card shows the same faces
+        /// every visit, decrypted to bytes for the head.
+        /// </summary>
+        public List<byte[]> GetPackPreviewBytes(string packId, int count = 10)
+        {
+            var result = new List<byte[]>();
+            var folder = _store.GetPackFolder(packId);
+            if (folder == null || !_store.IsPackInstalled(packId)) return result;
+            var all = _store.GetPackFiles(packId, ContentPackStore.ImageType);
+            if (all.Count == 0) return result;
+
+            var cacheFile = Path.Combine(folder, PreviewCacheFileName);
+            List<PackFileEntry> picked = new();
+            try
+            {
+                if (File.Exists(cacheFile) && JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(cacheFile)) is { Count: > 0 } names)
+                    picked = all.Where(f => names.Contains(f.ObfuscatedName)).ToList();
+            }
+            catch { }   // WPF: a corrupt cache is regenerated
+            if (picked.Count == 0)
+            {
+                picked = all.OrderBy(_ => Random.Shared.Next()).Take(count).ToList();
+                try { File.WriteAllText(cacheFile, JsonConvert.SerializeObject(picked.Select(f => f.ObfuscatedName).ToList())); }
+                catch (Exception ex) { Log.Debug("Failed to cache preview selection: {Error}", ex.Message); }
+            }
+            foreach (var f in picked)
+            {
+                try { using var ms = _store.GetPackFileStream(packId, f); if (ms != null) result.Add(ms.ToArray()); }
+                catch (Exception ex) { Log.Debug("Failed to load preview image {Name}: {Error}", f.OriginalName, ex.Message); }
+            }
+            return result;
+        }
+
+        /// <summary>WPF ClearPreviewCache (ContentPackService.cs:1355): forget the pick only, never pack files.</summary>
+        public void ClearPreviewCache(string packId)
+        {
+            try
+            {
+                if (_store.GetPackFolder(packId) is { } folder)
+                {
+                    var f = Path.Combine(folder, PreviewCacheFileName);
+                    if (File.Exists(f)) File.Delete(f);
+                }
+            }
+            catch (Exception ex) { Log.Debug("Failed to clear preview cache: {Error}", ex.Message); }
+        }
+
+        /// <summary>
+        /// WPF MainWindow.Assets.cs:213-275 LoadPreviewImagesFromUrlsAsync without the decode: a
+        /// not-installed pack's server preview URLs, each cached as
+        /// <c>pack-previews/&lt;id&gt;/&lt;stem&gt;.&lt;sniffed ext&gt;</c>; a url that fails is skipped. Cached
+        /// files are served always; a fetch happens only when <see cref="BaseUrl"/> is set (not offline,
+        /// not a sandbox) and only over https, with WPF's 10 s budget.
+        /// </summary>
+        public async Task<List<byte[]>> GetPreviewBytesFromUrlsAsync(string packId, IEnumerable<string> urls, CancellationToken ct = default)
+        {
+            var result = new List<byte[]>();
+            string dir;
+            try
+            {
+                var safeId = string.Concat(packId.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+                dir = Path.Combine(_previewCacheRoot(), safeId);
+                Directory.CreateDirectory(dir);
+            }
+            catch (Exception ex) { Log.Debug("Pack preview cache unavailable: {Error}", ex.Message); return result; }
+
+            var mayFetch = BaseUrl != null;
+            foreach (var url in urls)
+            {
+                try
+                {
+                    var stem = PreviewFileStem(url);
+                    var cached = Directory.GetFiles(dir, stem + ".*");
+                    if (cached.Length > 0) { result.Add(await File.ReadAllBytesAsync(cached[0], ct).ConfigureAwait(false)); continue; }
+                    if (!mayFetch || !Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps) continue;
+                    using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    budget.CancelAfter(TimeSpan.FromSeconds(10));
+                    using var response = await _http.GetAsync(u, budget.Token).ConfigureAwait(false);
+                    response.EnsureSuccessStatusCode();
+                    var bytes = await response.Content.ReadAsByteArrayAsync(budget.Token).ConfigureAwait(false);
+                    var ext = Helpers.MediaTypeSniffer.ResolveExtension(response.Content.Headers.ContentType?.ToString(), bytes, url,
+                        Helpers.MediaTypeSniffer.DefaultImageExtension, "PackPreviewCache");
+                    await File.WriteAllBytesAsync(Path.Combine(dir, stem + ext), bytes, ct).ConfigureAwait(false);
+                    result.Add(bytes);
+                }
+                catch (Exception ex) { Log.Debug("Failed to load preview image from {Host}: {Error}", Logging.UrlLog.Host(url), ex.Message); }
+            }
+            return result;
+        }
+
+        /// <summary>WPF GetPackPreviewFileStem (MainWindow.Assets.cs:283): last segment without extension, folded safe, 64 chars max.</summary>
+        internal static string PreviewFileStem(string url)
+        {
+            try
+            {
+                var stem = Path.GetFileNameWithoutExtension(new Uri(url).LocalPath);
+                foreach (var c in Path.GetInvalidFileNameChars()) stem = stem.Replace(c, '_');
+                stem = stem.Trim();
+                if (stem.Length > 64) stem = stem[..64];
+                return stem.Length > 0 ? stem : "preview";
+            }
+            catch { return "preview"; }
         }
     }
 

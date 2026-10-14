@@ -86,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return null;
             }
             // Only installed users can self-update on Windows (UpdateService.cs:316); Linux notifies.
-            if (OperatingSystem.IsWindows() && RunningInstallDir() is null && RegistryInstallPath() is null)
+            if (OperatingSystem.IsWindows() && ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath) is null && RegistryInstallPath() is null)
             {
                 Log.Information("App not installed via installer (running from source/dev), skipping update check");
                 return null;
@@ -344,7 +344,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     }
                     return path;
                 }
-                catch (Exception ex) when (IsTransientNetworkError(ex))
+                catch (Exception ex) when (ReleaseFeed.IsTransientNetworkError(ex))
                 {
                     if (attempt >= 3)
                         throw new InvalidOperationException($"Failed to download installer after 3 attempts: {ex.Message}", ex);
@@ -362,13 +362,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static bool RunInstallerSilentlyAndExit(string installerPath, string version)
         {
             var registry = RegistryInstallPath();
-            var installPath = RunningInstallDir()
+            var installPath = ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath)
                 ?? (string.IsNullOrEmpty(registry) ? Path.GetDirectoryName(Environment.ProcessPath) : registry);
             var appExe = !string.IsNullOrEmpty(installPath)
                 ? Path.Combine(installPath, "ConditioningControlPanel.exe")
                 : Environment.ProcessPath ?? "";
             var logPath = Path.Combine(UserData, "logs", "update-helper.log");
-            var elevate = NeedsElevation(installPath);
+            var elevate = ReleaseFeed.NeedsElevationToInstall(installPath);
             try { Directory.CreateDirectory(Path.GetDirectoryName(logPath)!); } catch { }
 
             var helper = Path.Combine(Path.GetDirectoryName(installerPath)!, "update-helper.cmd");
@@ -391,34 +391,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
             Log.Information("Exiting for silent update (helper will install + relaunch)");
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
             return true;
-        }
-
-        /// <summary>WPF UpdateService.IsTransientNetworkError (:1387).</summary>
-        internal static bool IsTransientNetworkError(Exception ex)
-        {
-            if (ex is HttpRequestException or IOException or System.Net.Sockets.SocketException or TaskCanceledException)
-                return true;
-            if (ex.InnerException != null) return IsTransientNetworkError(ex.InnerException);
-            var m = ex.Message.ToLowerInvariant();
-            return m.Contains("forcibly closed") || m.Contains("connection was closed") || m.Contains("network")
-                || m.Contains("timeout") || m.Contains("transport");
-        }
-
-        private static bool NeedsElevation(string? installPath)
-        {
-            if (string.IsNullOrEmpty(installPath) || !Directory.Exists(installPath)) return false;
-            try
-            {
-                using (File.Create(Path.Combine(installPath, $".ccp-write-probe-{Guid.NewGuid():N}.tmp"), 1, FileOptions.DeleteOnClose)) { }
-                return false;
-            }
-            catch { return true; }
-        }
-
-        private static string? RunningInstallDir()
-        {
-            var dir = Path.GetDirectoryName(Environment.ProcessPath);
-            return !string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir, "unins000.exe")) ? dir : null;
         }
 
         private static string? RegistryInstallPath()
