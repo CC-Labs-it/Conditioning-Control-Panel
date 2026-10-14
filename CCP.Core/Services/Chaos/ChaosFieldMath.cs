@@ -89,4 +89,54 @@ public static class ChaosFieldMath
         s.Score += pts;
         return pts;
     }
+    /// <summary>
+    /// WPF OnDefused (:1984), the state change in WPF order: a held snap pays its focus cost
+    /// (DEFUSE_COST; a freeze makes it free, <paramref name="free"/>), Defused and combo count,
+    /// heat, then the snap pays base points times Last Breath (a brink snap inside the level's
+    /// window), Slowburner (maxed: a snap in the final 1.5 s pays x3), the pendulum, the chance flip
+    /// and every pay multiplier; then the Drip Feed trickle. Returns the points and both bonuses.
+    /// </summary>
+    public static (double Points, double LastBreath, double Slowburn) ApplyDefuse(ChaosRunState s,
+        EffectBubbleSpec spec, double fuseSecLeft, bool viaChannel, bool free, double pendulum, double chanceFlip)
+    {
+        if (viaChannel && !free) s.Focus -= ChaosTuning.DEFUSE_COST;
+        s.Defused++;
+        s.Combo++;
+        s.Heat = Math.Min(1.0, s.Heat + 0.07);
+        double lastBreath = s.LastBreathWindowSec > 0 && fuseSecLeft <= s.LastBreathWindowSec ? s.LastBreathPayMult : 1.0;
+        double slowburn = fuseSecLeft <= 1.5 && s.MaxedBoons.Contains("slowburner") ? 3.0 : 1.0;
+        double pts = ChaosRunEngine.BasePoints(spec.Strength) * lastBreath * slowburn * pendulum
+                     * chanceFlip * s.TotalMult * s.BlindfoldPayMult;
+        s.Score += pts;
+        if (s.DropPerPop > 0)
+            s.TrickleDrops = Math.Min(ChaosLifetimeBoons.DripFeedCap(s.DropPerPop),
+                                      s.TrickleDrops + ChaosRunEngine.DropsPerPop(s));
+        return (pts, lastBreath, slowburn);
+    }
+
+    /// <summary>What a detonation cost (WPF OnDetonated's branches).</summary>
+    public enum Detonation { SnapChainHeld, ShieldAbsorbed, CollarHeld, Hit }
+
+    /// <summary>
+    /// WPF OnDetonated (:2055), the state change: the payload counts as fired, Detonated counts
+    /// (the loop is no longer clean), then the cheapest protection pays: a Snap Chain window
+    /// (<paramref name="invulnerable"/>) holds everything, else one resistance (heat -0.2), else
+    /// a collar save holds the streak, else the combo and heat break.
+    /// </summary>
+    public static Detonation ApplyDetonation(ChaosRunState s, bool invulnerable)
+    {
+        s.EffectsFired++;
+        s.Detonated++;
+        if (invulnerable) return Detonation.SnapChainHeld;
+        if (s.Shields >= 1)
+        {
+            s.Shields -= 1;
+            s.Heat = Math.Max(0, s.Heat - 0.2);
+            return Detonation.ShieldAbsorbed;
+        }
+        if (s.CollarSaves > 0) { s.CollarSaves--; return Detonation.CollarHeld; }
+        s.Combo = 0;
+        s.Heat = 0;
+        return Detonation.Hit;
+    }
 }
