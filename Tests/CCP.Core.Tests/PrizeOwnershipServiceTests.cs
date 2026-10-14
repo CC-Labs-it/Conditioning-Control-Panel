@@ -280,6 +280,9 @@ public class OwnershipServiceHeadSeamTests
     public void PublicCtor_ReadsCoreAccount_AndRaisesThroughTheHeadMarshal()
     {
         var saved = ConditioningControlPanel.CoreAccount.UnifiedUserId;
+        // The public ctor reads the real DEBUG override; a developer's CCP_PRIZE_GRANTS would grant everything.
+        var savedOverride = Environment.GetEnvironmentVariable(OwnershipService.OverrideEnvVar);
+        Environment.SetEnvironmentVariable(OwnershipService.OverrideEnvVar, null);
         try
         {
             ConditioningControlPanel.CoreAccount.UnifiedUserId = "uid-core";
@@ -301,6 +304,10 @@ public class OwnershipServiceHeadSeamTests
             ConditioningControlPanel.CoreAccount.UnifiedUserId = "uid-next";
             Assert.False(svc.IsGranted(PrizeGrants.BubbleRain)); // grants are bound to the account
         }
-        finally { ConditioningControlPanel.CoreAccount.UnifiedUserId = saved; }
+        finally
+        {
+            ConditioningControlPanel.CoreAccount.UnifiedUserId = saved;
+            Environment.SetEnvironmentVariable(OwnershipService.OverrideEnvVar, savedOverride);
+        }
     }
 }

@@ -5,11 +5,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
     /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi; both are in Core now but nothing feeds them here yet (parity row
-    /// svc-prize-ownership), so every account is unowned - exactly what WPF shows an account that
+    /// OwnershipService snapshots from WPF's BackRoomApi. OwnershipService and the relay contract are
+    /// in Core; BackRoomApi is still WPF-only, so nothing feeds snapshots here yet (parity row
+    /// svc-prize-ownership) and every account is unowned - exactly what WPF shows an account that
     /// bought nothing. The one exception is WPF's DEBUG-only <c>CCP_PRIZE_GRANTS</c> override
     /// (Core OwnershipService.ReadDebugOverride): same variable, same patterns (exact id,
-    /// <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
+    /// <c>prefix.*</c>, <c>*</c>), and a Release build never reads it. Parsing is Core's, so an
+    /// empty id never matches and a pattern holding whitespace or a misplaced <c>*</c> is dropped.
     /// </summary>
     internal static class PrizeOwnership
     {
