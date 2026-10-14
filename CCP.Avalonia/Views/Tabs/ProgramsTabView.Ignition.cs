@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// ProgramsFx.cs:818; focus loss only parks the particle canvas, which watches IsActive itself) (P01); all of them hang off one
     /// CancellationTokenSource, stopped on hide and on detach (P65). Display only: nothing is written.
     /// ponytail: FireBurstAt sparks (task tick, seal, graduation), the rail-node ignite, today's pip
-    /// pulse, the banner spring and the live session sheen have no Avalonia twin yet.
+    /// pulse and the banner spring have no Avalonia twin yet. The live session sheen rides BeatLoop.
     /// </summary>
     public partial class ProgramsTabView
     {
@@ -112,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// unchanged gate costs one string compare.</summary>
         private void SyncIgnition()
         {
+            RefreshLiveSessionProgress();
             if (!IsVisible || VisualRoot is null) { StopIgnitionLoops(); StopMoments(); return; }
             if (_ignitionEnrollment != null && Find<StackPanel>("ProgramsRunPanel").IsVisible)
                 ApplyIgnition(_ignitionEnrollment);
@@ -206,6 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     panel.BorderBrush = _borderBrush;
                     panel.BorderThickness = new Thickness(2);
                 }
+                RefreshLiveSessionProgress();
                 if (!rearm) return;
 
                 // Clocks only exist when ambient motion is allowed; otherwise every surface below is static.
@@ -368,6 +370,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// the signature re-arms it on the next pass.</summary>
         private void StopIgnitionLoops()
         {
+            StopSessionSheen();
             _fxSignature = null;
             _cometAttempts = 0;
             _particles?.Stop();
