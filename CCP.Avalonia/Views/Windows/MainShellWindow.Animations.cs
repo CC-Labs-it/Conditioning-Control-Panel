@@ -5,12 +5,10 @@
 // the window's 30 fps beat (BeatLoop) instead of an infinite Animation (lag fix, P82), which also
 // parks it while the plate is hidden or the window minimised. Durations, amplitudes and colours verbatim.
 //
-// Avalonia cannot put an x:Name on a brush or an effect (AVLN2000), so LockdownImageBorderBrush and
-// LockdownImageGlow are reached as LockdownImageBorder's own BorderBrush and Effect. A XAML attribute
-// brush is immutable, so the start swaps in a mutable SolidColorBrush and the stop puts the original back.
-//
-// NOTHING CALLS THE PULSE YET. On WPF it is started from the tab transition
-// (MainWindow.TabNavigation.cs:677); on this head that funnel is SwitchTabFx in MainShellWindow.AmbientFx.cs.
+// ShowTab starts the pulse on Lockdown arrival and stops it on departure, as WPF does. The
+// glow lives on a sibling Border: an animated Effect would re-render the plate's contents.
+// A XAML attribute brush is immutable, so the start swaps in a mutable SolidColorBrush;
+// stop restores the original brush and shadow. The shared beat parks while minimised.
 //
 // Dropped, with the reason:
 //   StartSeasonTitleShimmer / StopSeasonTitleShimmer (WPF :35-83)
@@ -36,8 +34,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The brush the Lockdown plate shipped with, kept so the stop puts back the
         /// exact object rather than a colour that happens to match.</summary>
         private IBrush? _lockdownRestingBrush;
+        private BoxShadows _lockdownRestingShadow;
 
         internal bool LockdownPulsing => _lockdownPulseClock?.IsRunning == true;
+
+        private void ApplyLockdownPulse(string tab)
+        {
+            if (tab == "lockdown" && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops)
+                StartLockdownPulse();
+            else StopLockdownPulse();
+        }
 
         internal void StartLockdownPulse()
         {
@@ -50,17 +56,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (plate == null) return;
 
                 // See the header: the XAML brush is immutable, so the loop needs one of its own.
-                _lockdownRestingBrush ??= plate.BorderBrush;
+                _lockdownRestingBrush = plate.BorderBrush;
                 var brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x14, 0x93));
                 plate.BorderBrush = brush;
-                var glow = plate.Effect as DropShadowEffect;
+                var glow = Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageGlow");
+                if (glow != null) _lockdownRestingShadow = glow.BoxShadow;
 
                 _lockdownPulseClock = new BeatLoop(plate, t =>
                 {
                     // Linear AutoReverse: 0 -> 1 over 1.5 s, back over the next 1.5 s.
                     double p = t / LockdownPulseSeconds % 2, k = p <= 1 ? p : 2 - p;
                     brush.Color = Color.FromRgb(0xFF, (byte)Math.Round(0x14 + (0x69 - 0x14) * k), (byte)Math.Round(0x93 + (0xB4 - 0x93) * k));
-                    if (glow != null) { glow.BlurRadius = 12 + 10 * k; glow.Opacity = 0.7 + 0.3 * k; }
+                    if (glow != null) glow.BoxShadow = new BoxShadows(new BoxShadow
+                    {
+                        Blur = 12 + 10 * k,
+                        Color = Color.FromArgb((byte)Math.Round(255 * (0.7 + 0.3 * k)), 0xFF, 0x14, 0x93),
+                    });
                 });
                 _lockdownPulseClock.Start();
             }
@@ -78,7 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var plate = Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageBorder");
                 if (plate == null) return;
                 if (_lockdownRestingBrush != null) plate.BorderBrush = _lockdownRestingBrush;
-                if (plate.Effect is DropShadowEffect glow) { glow.BlurRadius = 14; glow.Opacity = 0.7; }
+                var glow = Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageGlow");
+                if (glow != null) glow.BoxShadow = _lockdownRestingShadow;
             }
             catch (Exception ex) { Log.Debug("StopLockdownPulse: {E}", ex.Message); }
         }
