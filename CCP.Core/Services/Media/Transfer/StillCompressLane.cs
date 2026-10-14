@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Serilog;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Transfer
@@ -8,7 +9,7 @@ namespace ConditioningControlPanel.Services.Transfer
     /// <summary>
     /// Lane A: stills, host side, SkiaSharp only (the app already ships it and already decodes
     /// every image format the pool can contain through SKCodec — see
-    /// <see cref="ConditioningControlPanel.Services.AnimatedWebp"/>).
+    /// the WPF head's AnimatedWebp).
     ///
     /// Downscale the long edge to 1920 and re-encode WebP q80; JPEG q82 if the WebP encoder hands
     /// back nothing (it can, for exotic colour types). Because this is a full decode → re-encode,
@@ -43,12 +44,12 @@ namespace ConditioningControlPanel.Services.Transfer
                 src = SKBitmap.Decode(srcPath);
                 if (src == null || src.Width <= 0 || src.Height <= 0)
                 {
-                    App.Logger?.Debug("StillCompressLane: undecodable {Path}", srcPath);
+                    Log.Debug("StillCompressLane: undecodable {Path}", srcPath);
                     return null;
                 }
                 if ((long)src.Width * src.Height > MaxSourcePixels)
                 {
-                    App.Logger?.Debug("StillCompressLane: {Path} is {W}x{H}, past the decode guard",
+                    Log.Debug("StillCompressLane: {Path} is {W}x{H}, past the decode guard",
                         srcPath, src.Width, src.Height);
                     return null;
                 }
@@ -68,7 +69,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 var (data, ext, codec) = Encode(bmp);
                 if (data == null)
                 {
-                    App.Logger?.Debug("StillCompressLane: both encoders refused {Path}", srcPath);
+                    Log.Debug("StillCompressLane: both encoders refused {Path}", srcPath);
                     return null;
                 }
                 using (data)
@@ -83,7 +84,7 @@ namespace ConditioningControlPanel.Services.Transfer
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                App.Logger?.Warning("StillCompressLane({Path}) failed: {E}", srcPath, ex.Message);
+                Log.Warning("StillCompressLane({Path}) failed: {E}", srcPath, ex.Message);
                 return null;
             }
             finally
@@ -104,7 +105,7 @@ namespace ConditioningControlPanel.Services.Transfer
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("StillCompressLane: webp encode threw: {E}", ex.Message);
+                Log.Debug("StillCompressLane: webp encode threw: {E}", ex.Message);
             }
 
             // JPEG has no alpha, so flatten first - otherwise transparent regions come out as
@@ -125,7 +126,7 @@ namespace ConditioningControlPanel.Services.Transfer
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("StillCompressLane: jpeg fallback threw: {E}", ex.Message);
+                Log.Debug("StillCompressLane: jpeg fallback threw: {E}", ex.Message);
             }
             finally { flat?.Dispose(); }
 

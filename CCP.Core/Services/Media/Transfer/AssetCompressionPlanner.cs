@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.Chaos;
+using Serilog;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Transfer
@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Services.Transfer
 
     /// <summary>
     /// Turns the user's active asset pool into a job list, using the SAME enumeration the DtRH
-    /// manifest uses (<see cref="DtrhAssetManifest.EnumerateActive"/>) so "the pool" can never mean
+    /// manifest uses (<see cref="ActivePool"/>, WPF DtrhAssetManifest.EnumerateActive) so "the pool" can never mean
     /// two different things in one app.
     ///
     /// Lane matrix (see the plan):
@@ -75,6 +75,13 @@ namespace ConditioningControlPanel.Services.Transfer
         /// <summary>path|size -> "is this an animated container?". Same reasoning, cheaper key.</summary>
         private static readonly ConcurrentDictionary<string, bool> _animatedCache = new();
 
+        /// <summary>The user's ACTIVE local library: full path, assets-relative path, bytes, picture or
+        /// video (WPF seeds <c>DtrhAssetManifest.EnumerateActive</c>). Unseeded = an empty pool.</summary>
+        public static volatile Func<IEnumerable<(string Full, string Rel, long Bytes, bool IsImage)>>? ActivePool;
+
+        /// <summary>A webp's animation flag (WPF seeds <c>AnimatedWebp.IsAnimated</c>). Unseeded = still.</summary>
+        public static volatile Func<string, bool>? IsAnimatedWebp;
+
         /// <summary>
         /// Walk the active pool and classify everything the cache doesn't already know about.
         /// Never throws; a file that disappears mid-walk is simply absent from the plan.
@@ -85,7 +92,7 @@ namespace ConditioningControlPanel.Services.Transfer
             var plan = new CompressionPlan();
             try
             {
-                foreach (var (full, rel, bytes, isImage) in DtrhAssetManifest.EnumerateActive())
+                foreach (var (full, rel, bytes, isImage) in ActivePool?.Invoke() ?? Array.Empty<(string, string, long, bool)>())
                 {
                     ct.ThrowIfCancellationRequested();
                     plan.PoolCount++;
@@ -111,7 +118,7 @@ namespace ConditioningControlPanel.Services.Transfer
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                App.Logger?.Warning("AssetCompressionPlanner.PlanAsync failed: {E}", ex.Message);
+                Log.Warning("AssetCompressionPlanner.PlanAsync failed: {E}", ex.Message);
             }
             return plan;
         }
@@ -182,7 +189,7 @@ namespace ConditioningControlPanel.Services.Transfer
             bool animated;
             if (ext == ".webp")
             {
-                animated = AnimatedWebp.IsAnimated(full);
+                animated = IsAnimatedWebp?.Invoke(full) == true;
             }
             else
             {
@@ -193,7 +200,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Debug("AssetCompressionPlanner: gif probe {Path}: {E}", full, ex.Message);
+                    Log.Debug("AssetCompressionPlanner: gif probe {Path}: {E}", full, ex.Message);
                     animated = true;   // a gif we can't open is far more likely animated than not
                 }
             }

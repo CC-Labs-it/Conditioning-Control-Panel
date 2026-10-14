@@ -1,4 +1,5 @@
 using System;
+using Serilog;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -26,6 +27,16 @@ namespace ConditioningControlPanel.Services.GoonGame
     /// </summary>
     internal static class GoonAvatarCache
     {
+        /// <summary>The linked Discord account as this head knows it (WPF App.Discord: IsAuthenticated,
+        /// Avatar hash, GetAvatarUrl(128)). Unseeded = not linked: nothing is ever fetched.</summary>
+        public static volatile Func<(bool Linked, string? AvatarHash, string? AvatarUrl128)>? OwnDiscordProvider;
+
+        public static (bool Linked, string? AvatarHash, string? AvatarUrl128) OwnDiscord()
+        {
+            try { return OwnDiscordProvider?.Invoke() ?? (false, null, null); }
+            catch { return (false, null, null); }
+        }
+
         /// <summary>Bare filenames — the ONLY names this cache will read or write. See the class
         /// remark: the last-opponent record persists one of these strings, never a path.</summary>
         public const string OwnFile = "own.img";
@@ -55,7 +66,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             try
             {
                 c.DefaultRequestHeaders.UserAgent.ParseAdd(
-                    $"ConditioningControlPanel/{UpdateService.AppVersion}");
+                    $"ConditioningControlPanel/{CoreReleaseContent.AppVersion}");
             }
             catch { }
             return c;
@@ -77,7 +88,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("GoonAvatarCache.PathFor: {E}", ex.Message);
+                Log.Debug("GoonAvatarCache.PathFor: {E}", ex.Message);
                 return null;
             }
         }
@@ -96,7 +107,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("GoonAvatarCache.Write({F}): {E}", bare, ex.Message);
+                Log.Debug("GoonAvatarCache.Write({F}): {E}", bare, ex.Message);
                 return false;
             }
         }
@@ -113,7 +124,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("GoonAvatarCache.Read({F}): {E}", bare, ex.Message);
+                Log.Debug("GoonAvatarCache.Read({F}): {E}", bare, ex.Message);
                 return null;
             }
         }
@@ -130,7 +141,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     if (tag != null && File.Exists(tag)) File.Delete(tag);
                 }
             }
-            catch (Exception ex) { App.Logger?.Debug("GoonAvatarCache.Delete({F}): {E}", bare, ex.Message); }
+            catch (Exception ex) { Log.Debug("GoonAvatarCache.Delete({F}): {E}", bare, ex.Message); }
         }
 
         /// <summary>Read a cached avatar as a data URI, or null when there isn't a usable one.
@@ -158,7 +169,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("GoonAvatarCache.PromotePeerToLastOpponent: {E}", ex.Message);
+                Log.Debug("GoonAvatarCache.PromotePeerToLastOpponent: {E}", ex.Message);
                 return null;
             }
         }
@@ -197,7 +208,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("GoonAvatarCache.ReadOwnDataUriIfFresh: {E}", ex.Message);
+                Log.Debug("GoonAvatarCache.ReadOwnDataUriIfFresh: {E}", ex.Message);
                 return null;
             }
         }
@@ -212,15 +223,15 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             try
             {
-                var d = App.Discord;
-                if (d == null || !d.IsAuthenticated) return null;
-                var hash = d.Avatar;
+                var d = OwnDiscord();
+                if (!d.Linked) return null;
+                var hash = d.AvatarHash;
                 if (string.IsNullOrEmpty(hash)) return null;   // default avatar -> nothing to fetch
 
                 var fresh = ReadOwnDataUriIfFresh(hash);
                 if (fresh != null) return fresh;
 
-                var url = d.GetAvatarUrl(128);
+                var url = d.AvatarUrl128;
                 if (string.IsNullOrEmpty(url)) return null;
                 // Animated avatars come back as .gif from GetAvatarUrl; the duel wants the still.
                 url = url!.Replace(".gif?", ".png?");
@@ -252,7 +263,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             catch (Exception ex)
             {
                 // NEVER the URL: a Discord CDN avatar URL contains the snowflake (contract §6).
-                App.Logger?.Debug("GoonAvatarCache.RefreshOwnAvatarAsync failed: {E}", ex.Message);
+                Log.Debug("GoonAvatarCache.RefreshOwnAvatarAsync failed: {E}", ex.Message);
                 return null;
             }
         }

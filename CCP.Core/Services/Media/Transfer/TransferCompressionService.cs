@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Transfer
 {
@@ -136,11 +137,11 @@ namespace ConditioningControlPanel.Services.Transfer
                 _store.EnsureRoot();
                 _store.Load();
                 _store.SweepTmp(TimeSpan.FromHours(6));
-                _presetId = App.Settings?.Current?.CurrentAssetPresetId;
+                _presetId = CoreSettings.Service?.Current?.CurrentAssetPresetId;
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning("TransferCompressionService.Initialize: {E}", ex.Message);
+                Log.Warning("TransferCompressionService.Initialize: {E}", ex.Message);
             }
 
             var token = _shutdown!.Token;
@@ -148,7 +149,7 @@ namespace ConditioningControlPanel.Services.Transfer
             for (int i = 0; i < WorkerCount; i++)
                 workers[i] = Task.Run(() => WorkerLoopAsync(token), CancellationToken.None);
             _workers = workers;
-            App.Logger?.Information("TransferCompressionService: started ({W} workers, cap {CapGB:F1} GB)",
+            Log.Information("TransferCompressionService: started ({W} workers, cap {CapGB:F1} GB)",
                 WorkerCount, _store.CapBytes / 1073741824.0);
         }
 
@@ -199,16 +200,16 @@ namespace ConditioningControlPanel.Services.Transfer
                         return true;
                     });
                 }
-                App.Logger?.Information(
+                Log.Information(
                     "TransferCompressionService: plan = {N} to do / {Done} done / {Failed} failed of {Pool} pool files",
                     plan.Jobs.Count, plan.AlreadyDone, plan.PreviouslyFailed, plan.PoolCount);
                 RaiseChanged();
-                if (App.Settings?.Current?.TransferCacheAutoCompress == true) CompressAll();
+                if (CoreSettings.Service?.Current?.TransferCacheAutoCompress == true) CompressAll();
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                App.Logger?.Warning("TransferCompressionService.RefreshAsync: {E}", ex.Message);
+                Log.Warning("TransferCompressionService.RefreshAsync: {E}", ex.Message);
             }
             finally { _planGate.Release(); }
         }
@@ -220,12 +221,12 @@ namespace ConditioningControlPanel.Services.Transfer
         public void OnPresetChanged(string? presetId)
         {
             _presetId = presetId;
-            try { if (App.Settings?.Current != null) App.Settings.Current.LastSeenAssetPresetId = presetId; }
+            try { if (CoreSettings.Service?.Current is { } cs) cs.LastSeenAssetPresetId = presetId; }
             catch { }
             _ = Task.Run(async () =>
             {
                 try { await RefreshAsync().ConfigureAwait(false); }
-                catch (Exception ex) { App.Logger?.Debug("TransferCompressionService.OnPresetChanged: {E}", ex.Message); }
+                catch (Exception ex) { Log.Debug("TransferCompressionService.OnPresetChanged: {E}", ex.Message); }
             });
         }
 
@@ -257,7 +258,7 @@ namespace ConditioningControlPanel.Services.Transfer
                     Kick();
                     RaiseChanged();
                 }
-                catch (Exception ex) { App.Logger?.Warning("TransferCompressionService.CompressAll: {E}", ex.Message); }
+                catch (Exception ex) { Log.Warning("TransferCompressionService.CompressAll: {E}", ex.Message); }
             });
         }
 
@@ -325,10 +326,10 @@ namespace ConditioningControlPanel.Services.Transfer
             try
             {
                 var clamped = Math.Clamp(bytes, TransferCacheStore.MinCapBytes, TransferCacheStore.MaxCapBytes);
-                if (App.Settings?.Current != null) App.Settings.Current.TransferCacheCapBytes = clamped;
+                if (CoreSettings.Service?.Current is { } cs) cs.TransferCacheCapBytes = clamped;
                 _store.EnforceCap();
             }
-            catch (Exception ex) { App.Logger?.Warning("TransferCompressionService.SetCapBytes: {E}", ex.Message); }
+            catch (Exception ex) { Log.Warning("TransferCompressionService.SetCapBytes: {E}", ex.Message); }
             RaiseChanged();
         }
 
@@ -476,7 +477,7 @@ namespace ConditioningControlPanel.Services.Transfer
             }
             if (job == null)
             {
-                App.Logger?.Warning("TransferCompressionService: page completed unknown job {Id} - ignored", jobId);
+                Log.Warning("TransferCompressionService: page completed unknown job {Id} - ignored", jobId);
                 return;
             }
 
@@ -497,7 +498,7 @@ namespace ConditioningControlPanel.Services.Transfer
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning("TransferCompressionService.CompletePageJob({Id}): {E}", jobId, ex.Message);
+                Log.Warning("TransferCompressionService.CompletePageJob({Id}): {E}", jobId, ex.Message);
                 RecordFailure(job, TransferFailReasons.IoFailed);
             }
             finally
@@ -523,7 +524,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 _pageOut.Remove(key);
                 _store.SetBusy(key, false);
                 _queue.Add(d.Job);   // the page died mid-encode; try again later
-                App.Logger?.Information("TransferCompressionService: page job {Id} went stale, requeued", key);
+                Log.Information("TransferCompressionService: page job {Id} went stale, requeued", key);
             }
         }
 
@@ -552,7 +553,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { return; }
                 catch (Exception ex)
                 {
-                    App.Logger?.Warning("TransferCompressionService worker: {E}", ex.Message);
+                    Log.Warning("TransferCompressionService worker: {E}", ex.Message);
                     if (job != null) { try { RecordFailure(job, TransferFailReasons.IoFailed); } catch { } }
                     try { await Task.Delay(250, shutdown).ConfigureAwait(false); } catch { return; }
                 }
@@ -609,7 +610,7 @@ namespace ConditioningControlPanel.Services.Transfer
                     case TransferLanes.HostSkia: RunStill(job, ct); break;
                     case TransferLanes.HostMt: await RunVideoAsync(job, ct).ConfigureAwait(false); break;
                     default:
-                        App.Logger?.Warning("TransferCompressionService: job {Key} has lane {Lane}?", job.SrcKey, job.Lane);
+                        Log.Warning("TransferCompressionService: job {Key} has lane {Lane}?", job.SrcKey, job.Lane);
                         break;
                 }
                 RecordRate(job, started);
@@ -617,7 +618,7 @@ namespace ConditioningControlPanel.Services.Transfer
             catch (OperationCanceledException)
             {
                 CleanTemp(job);
-                App.Logger?.Debug("TransferCompressionService: {Rel} cancelled", job.Rel);
+                Log.Debug("TransferCompressionService: {Rel} cancelled", job.Rel);
             }
             catch (TranscodeUnsupportedException ex)
             {
@@ -627,7 +628,7 @@ namespace ConditioningControlPanel.Services.Transfer
             catch (Exception ex)
             {
                 CleanTemp(job);
-                App.Logger?.Warning("TransferCompressionService: {Rel} failed: {E}", job.Rel, ex.Message);
+                Log.Warning("TransferCompressionService: {Rel} failed: {E}", job.Rel, ex.Message);
                 RecordFailure(job, TransferFailReasons.EncodeFailed);
             }
             finally
@@ -736,7 +737,7 @@ namespace ConditioningControlPanel.Services.Transfer
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning("TransferCompressionService.Commit({Rel}): {E}", job.Rel, ex.Message);
+                Log.Warning("TransferCompressionService.Commit({Rel}): {E}", job.Rel, ex.Message);
                 RecordFailure(job, TransferFailReasons.IoFailed);
                 return;
             }
@@ -754,7 +755,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Debug("TransferCompressionService: page preview for {Sha} failed: {E}",
+                    Log.Debug("TransferCompressionService: page preview for {Sha} failed: {E}",
                         sha, ex.Message);
                 }
             }
@@ -782,7 +783,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 DurMs = durMs,
                 Codec = codec,
             });
-            App.Logger?.Information("TransferCompressionService: {Rel} {SrcKB} KB -> {OutKB} KB via {Lane}",
+            Log.Information("TransferCompressionService: {Rel} {SrcKB} KB -> {OutKB} KB via {Lane}",
                 job.Rel, job.Size / 1024, bytes / 1024, job.Lane);
             _store.EnforceCap();
         }
@@ -803,7 +804,7 @@ namespace ConditioningControlPanel.Services.Transfer
             catch (Exception ex)
             {
                 // A missing preview is cosmetic - the artifact itself is already committed.
-                App.Logger?.Debug("TransferCompressionService: preview for {Sha} failed: {E}", sha, ex.Message);
+                Log.Debug("TransferCompressionService: preview for {Sha} failed: {E}", sha, ex.Message);
                 try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
                 return 0;
             }
@@ -824,7 +825,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 Ext = "",
                 Fail = reason,
             });
-            App.Logger?.Information("TransferCompressionService: {Rel} failed ({Reason})", job.Rel, reason);
+            Log.Information("TransferCompressionService: {Rel} failed ({Reason})", job.Rel, reason);
         }
 
         private string TempPathFor(CompressionJob job, string ext) =>
@@ -888,13 +889,13 @@ namespace ConditioningControlPanel.Services.Transfer
         private void RaiseChanged()
         {
             try { Changed?.Invoke(); }
-            catch (Exception ex) { App.Logger?.Debug("TransferCompressionService.Changed subscriber threw: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("TransferCompressionService.Changed subscriber threw: {E}", ex.Message); }
         }
 
         private void RaiseProgress(JobProgress p)
         {
             try { Progress?.Invoke(p); }
-            catch (Exception ex) { App.Logger?.Debug("TransferCompressionService.Progress subscriber threw: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("TransferCompressionService.Progress subscriber threw: {E}", ex.Message); }
         }
 
 #if DEBUG

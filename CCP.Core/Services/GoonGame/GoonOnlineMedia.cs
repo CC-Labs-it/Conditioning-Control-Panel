@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Fyp;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.GoonGame
 {
@@ -176,7 +177,7 @@ namespace ConditioningControlPanel.Services.GoonGame
     /// <summary>
     /// Scrolller pictures for the Goon Game, fetched through the shared online stack
     /// (<see cref="FypOnlineCoordinator"/> tenants <c>goon-stills</c> / <c>goon-clips</c>) and
-    /// materialised by <see cref="RemoteMediaCache"/> under <c>App.GetMediaTempPath()</c>, which
+    /// materialised by the head's <see cref="Materialize"/> (WPF RemoteMediaCache) under <c>{assets}/.temp</c>, which
     /// <c>ccp.assets</c> already maps. One instance per open game window.
     ///
     /// A <see cref="Start"/> with a new niche list cancels the wave in flight and releases every
@@ -186,6 +187,21 @@ namespace ConditioningControlPanel.Services.GoonGame
     internal sealed class GoonOnlineMedia : IDisposable
     {
         public sealed record Item(string Name, string Url, string Path);
+
+        /// <summary>PORT SEAM (WPF RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true)): the head's
+        /// downloader into {assets}/.temp. Unseeded = nothing materialises and the page is told 'empty'.</summary>
+        public static volatile Func<string, CancellationToken, Task<string?>>? Materialize;
+
+        /// <summary>PORT SEAM (WPF RemoteMediaCache.ReleaseTempFile).</summary>
+        public static volatile Action<string>? ReleaseTempFile;
+
+        private static Task<string?> MaterializeAsync(string url, CancellationToken ct)
+            => Materialize is { } m ? m(url, ct) : Task.FromResult<string?>(null);
+
+        private static void ReleaseFile(string path)
+        {
+            try { ReleaseTempFile?.Invoke(path); } catch (Exception ex) { Diag.Swallowed(ex); }
+        }
 
         public sealed record Snapshot(string State, IReadOnlyList<string> Subs,
             IReadOnlyList<Item> Images, IReadOnlyList<Item> Videos, int Have, int Want);
@@ -343,7 +359,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 FypOnlineCoordinator.For(StillTenant, Channels, FeedMediaKind.GifStill).ResetChannels();
                 FypOnlineCoordinator.For(ClipTenant, Channels, FeedMediaKind.GifClip).ResetChannels();
             }
-            catch (Exception ex) { App.Logger?.Debug("GoonOnlineMedia: reset channels: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("GoonOnlineMedia: reset channels: {E}", ex.Message); }
 
             Emit(gen);
             if (clean.Count == 0) return;
@@ -389,7 +405,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     await Task.WhenAll(stills, clips).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { }
-                catch (Exception ex) { App.Logger?.Warning("GoonOnlineMedia: wave threw: {E}", ex.Message); }
+                catch (Exception ex) { Log.Warning("GoonOnlineMedia: wave threw: {E}", ex.Message); }
                 finally
                 {
                     bool mine;
@@ -442,12 +458,12 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (ct.IsCancellationRequested || Added(isImage) >= target) return;
             // ownerReleases: the pool holds these for the whole game and releases every one on a
             // niche change or close, so the app-wide 50-file sweep must not take them mid-match.
-            var path = await RemoteMediaCache.MaterializeAsync(e.Url, ct, ownerReleases: true).ConfigureAwait(false);
+            var path = await MaterializeAsync(e.Url, ct).ConfigureAwait(false);
             if (path == null) return;
-            var url = GoonOnlineMediaRules.UrlFor(path, App.EffectiveAssetsPath);
+            var url = GoonOnlineMediaRules.UrlFor(path, CorePaths.EffectiveAssets);
             if (url == null)
             {
-                RemoteMediaCache.ReleaseTempFile(path);
+                ReleaseFile(path);
                 return;
             }
             bool kept = false;
@@ -470,7 +486,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     kept = true;
                 }
             }
-            if (!kept) { RemoteMediaCache.ReleaseTempFile(path); return; }
+            if (!kept) { ReleaseFile(path); return; }
             if (retired != null) ReleaseLater(retired);
             Emit(gen);
         }
@@ -513,7 +529,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         private void Raise(Snapshot s)
         {
             try { _onSnapshot(s); }
-            catch (Exception ex) { App.Logger?.Debug("GoonOnlineMedia: snapshot sink threw: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("GoonOnlineMedia: snapshot sink threw: {E}", ex.Message); }
         }
 
         private Snapshot SnapshotLocked()
@@ -547,7 +563,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             foreach (var i in items)
             {
-                try { RemoteMediaCache.ReleaseTempFile(i.Path); } catch { }
+                try { ReleaseFile(i.Path); } catch { }
             }
         }
 
