@@ -2267,3 +2267,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-intro: +393
 - ChaosIntroWindow ported: the hub shows it on its first open, sets and saves SeenIntroGuide, the `?` button shows it again, and panic closes it (fail-first tests, render-all).
 - Ledger row chaos-intro-window goes from missing to stub, because nothing a user can reach opens the hub yet.
+
+## avalonia-port/flake-stackcapture: +173
+- Root-caused 4 flakes: parked-thread stack snapshot; SettingsService disarm waits for in-flight debounce writes + TestIsolation late-write guard; hit test renders the live tree before each probe; voice baseline read before panic.
+- Each reproduced or mechanism-proven fail-before/pass-after (evidence/flake-stackcapture/proof.md); no assertion loosened.
