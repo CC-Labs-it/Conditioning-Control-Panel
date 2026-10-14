@@ -94,7 +94,12 @@ namespace ConditioningControlPanel.Services.Deeper
         public void Pause() => _video.PausePrimary();
         public void Play() => _video.PlayPrimary();
 
-        public Rect GetVideoRect()
+        public PlaybackRect GetVideoRect() => ToPlaybackRect(GetVideoRectDips());
+
+        internal static PlaybackRect ToPlaybackRect(Rect r) =>
+            r.IsEmpty ? PlaybackRect.Empty : new PlaybackRect(r.X, r.Y, r.Width, r.Height);
+
+        private Rect GetVideoRectDips()
         {
             try
             {

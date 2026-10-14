@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Services.Deeper
         public string? LoadedFilePath { get; private set; }
 
         private EnhancementEngine? _engine;
+        private WebcamEnhancementEvents? _webcamEvents;
         private RecordingActionDispatcher? _activeRecorder;
         private IPlaybackTimeSource? _activeSource;
         private Action? _detachActiveSource;
@@ -186,8 +187,8 @@ namespace ConditioningControlPanel.Services.Deeper
                 // BlinkDetected/GazeTarget/etc. rules silently when playback started
                 // before the webcam did, even though the user later started tracking
                 // mid-session and saw the events register everywhere else.
-                var webcam = App.Webcam;
-                _engine = new EnhancementEngine(LoadedEnhancement, source, _activeRecorder, webcam, EmitDiagnostic);
+                _webcamEvents = App.Webcam != null ? new WebcamEnhancementEvents(App.Webcam) : null;
+                _engine = new EnhancementEngine(LoadedEnhancement, source, _activeRecorder, _webcamEvents, EmitDiagnostic);
                 _engine.PlaybackCompleted += OnEnginePlaybackCompleted;
                 _engine.Start();
                 App.Logger?.Information("Deeper engine bound and started");
@@ -239,6 +240,8 @@ namespace ConditioningControlPanel.Services.Deeper
                 App.Logger?.Debug("EnhancementHostService.UnbindEngine error: {Error}", ex.Message);
             }
             _engine = null;
+            _webcamEvents?.Dispose();
+            _webcamEvents = null;
             if (_activeRecorder != null)
             {
                 try { _activeRecorder.ActionLogged -= OnRecorderActionLogged; } catch { }

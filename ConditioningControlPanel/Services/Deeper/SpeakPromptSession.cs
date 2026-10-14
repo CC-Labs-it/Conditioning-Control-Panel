@@ -5,7 +5,6 @@ using System.Windows;
 using System.Windows.Threading;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Speech;
-using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
@@ -23,22 +22,8 @@ namespace ConditioningControlPanel.Services.Deeper
         // Asked for mic consent at most once per app run, even across many prompts.
         private static bool _promptedConsentThisRun;
 
-        private readonly string _target;
-        private readonly string _cue;
-        private readonly SpeakCueMode _cueMode;
-        private readonly int _cueIntervalMs;
-        private readonly int _requiredReps;
-        private readonly SpeakCompletion _completion;
-        private readonly SpeakHoldMode _holdMode;
-        private readonly string _correctMsg;
-        private readonly string _incorrectMsg;
+        private readonly SpeakPromptPlan _plan;
         private readonly IPlaybackTimeSource? _source;
-        private readonly double? _regionStart;
-        private readonly double? _regionEnd;
-
-        // When set, every prompt is given a wall-clock deadline (Duration completion or a
-        // one-shot rule fire with no region to hold). Null => listen until satisfied/stopped.
-        private readonly DateTime? _hardDeadline;
 
         private CancellationTokenSource? _cts;
         private DispatcherTimer? _cueTimer;
@@ -49,40 +34,10 @@ namespace ConditioningControlPanel.Services.Deeper
         private volatile bool _completed;
         private volatile bool _stopped;
 
-        // Loop/pause this far (seconds) before the exact region end so the engine doesn't
-        // flag a band exit on the same tick we try to hold.
-        private const double HoldLookaheadSec = 0.30;
-
         public SpeakPromptSession(TriggerEffectAction effect, IPlaybackTimeSource? source)
         {
-            _target = (effect.SpeakTarget ?? "").Trim();
-            var cue = (effect.SpeakCue ?? "").Trim();
-            _cue = string.IsNullOrWhiteSpace(cue)
-                ? (string.IsNullOrWhiteSpace(_target) ? "Say it" : $"Say {_target}")
-                : cue;
-            _cueMode = effect.SpeakCueMode;
-            _cueIntervalMs = Math.Max(80, effect.SpeakCueIntervalMs);
-            _requiredReps = Math.Clamp(effect.SpeakRequiredReps, 1, 5);
-            _completion = effect.SpeakCompletion;
-            _holdMode = effect.SpeakHoldMode;
-            _correctMsg = string.IsNullOrWhiteSpace(effect.SpeakCorrectMessage) ? $"that's it, {VocabTokens.PetName}" : effect.SpeakCorrectMessage!.Trim();
-            _incorrectMsg = string.IsNullOrWhiteSpace(effect.SpeakIncorrectMessage) ? "try again" : effect.SpeakIncorrectMessage!.Trim();
+            _plan = new SpeakPromptPlan(effect, DateTime.UtcNow);
             _source = source;
-            _regionStart = effect.SpeakRegionStartSec;
-            _regionEnd = effect.SpeakRegionEndSec;
-
-            // Duration completion (or a non-band one-shot with bounds) caps the prompt at the
-            // band's wall-clock width; UntilSatisfied with a region runs open-ended (held).
-            if (_completion == SpeakCompletion.Duration && _regionStart.HasValue && _regionEnd.HasValue)
-            {
-                var widthMs = Math.Max(500, (_regionEnd.Value - _regionStart.Value) * 1000.0);
-                _hardDeadline = DateTime.UtcNow.AddMilliseconds(widthMs);
-            }
-            else if (!_regionStart.HasValue || !_regionEnd.HasValue)
-            {
-                // One-shot rule fire with no band: give it a bounded default so it can't listen forever.
-                _hardDeadline = DateTime.UtcNow.AddSeconds(30);
-            }
         }
 
         /// <summary>Begin the prompt. Returns immediately; the cue + listen loop run async.</summary>
@@ -100,7 +55,7 @@ namespace ConditioningControlPanel.Services.Deeper
             try
             {
                 if (_stopped) return;
-                if (string.IsNullOrWhiteSpace(_target))
+                if (string.IsNullOrWhiteSpace(_plan.Target))
                 {
                     App.Logger?.Debug("SpeakPromptSession: empty target — skipped");
                     return;
@@ -152,7 +107,7 @@ namespace ConditioningControlPanel.Services.Deeper
 
                 _cts = new CancellationTokenSource();
                 App.Logger?.Information("SpeakPromptSession: prompt started — target='{Target}' reps={Reps} cue={Cue} completion={Comp} hold={Hold}",
-                    _target, _requiredReps, _cueMode, _completion, _holdMode);
+                    _plan.Target, _plan.RequiredReps, _plan.CueMode, _plan.Completion, _plan.HoldMode);
                 StartCue();
                 StartHoldWatch();
                 _ = RunLoopAsync(_cts.Token);
@@ -167,16 +122,16 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private void StartCue()
         {
-            if (_cueMode == SpeakCueMode.Persistent)
+            if (_plan.CueMode == SpeakCueMode.Persistent)
             {
-                SpeakCueOverlay.ShowCue(_cue);
+                SpeakCueOverlay.ShowCue(_plan.Cue);
                 return;
             }
             // Intermittent: flash once now, then on a timer.
             FlashCue();
             _cueTimer = new DispatcherTimer(DispatcherPriority.Background)
             {
-                Interval = TimeSpan.FromMilliseconds(_cueIntervalMs)
+                Interval = TimeSpan.FromMilliseconds(_plan.CueIntervalMs)
             };
             _cueTimer.Tick += (_, _) => FlashCue();
             _cueTimer.Start();
@@ -184,7 +139,7 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private void FlashCue()
         {
-            try { App.Subliminal?.FlashSubliminalCustom(_cue, suppressHaptic: true); }
+            try { App.Subliminal?.FlashSubliminalCustom(_plan.Cue, suppressHaptic: true); }
             catch (Exception ex) { App.Logger?.Debug("SpeakPromptSession.FlashCue: {E}", ex.Message); }
         }
 
@@ -192,7 +147,7 @@ namespace ConditioningControlPanel.Services.Deeper
         {
             try { _cueTimer?.Stop(); } catch { }
             _cueTimer = null;
-            if (_cueMode == SpeakCueMode.Persistent)
+            if (_plan.CueMode == SpeakCueMode.Persistent)
                 SpeakCueOverlay.HideCue();
         }
 
@@ -211,25 +166,13 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private void StartHoldWatch()
         {
-            // Only UntilSatisfied with a non-passive hold mode holds playback at all; Duration
-            // mode just lets the band end normally.
-            if (_completion != SpeakCompletion.UntilSatisfied) return;
-            if (_holdMode == SpeakHoldMode.KeepPlaying) return;
+            if (!_plan.HoldsPlayback) return;
             if (_source == null) return;
 
-            // #1221: a rule-fired speak has no authored width, so EnhancementEngine hands it a
-            // null region end (`item.Duration > 0 ? ... : null`) - and the old guard returned
-            // right here, which is why "Pause the video" put its cue on screen and then let the
-            // video play straight on. There is no region end to police in that case: the hold IS
-            // the effect, so take it at cue time instead of watching a playhead for a boundary
-            // that does not exist. The prompt's 30s hard deadline still bounds it, and every exit
-            // path (reps met, deadline, band stop, engine teardown) runs ReleaseHold.
-            //
-            // LoopRegion genuinely needs bounds - there is nowhere to seek back to without them -
-            // so it stays a no-op, same as before.
-            if (!_regionStart.HasValue || !_regionEnd.HasValue)
+            // #1221: no region end to police on a rule-fired speak - SpeakPromptPlan.PausesAtCue.
+            if (!_plan.HasRegion)
             {
-                if (_holdMode == SpeakHoldMode.Pause && !_paused)
+                if (_plan.PausesAtCue && !_paused)
                 {
                     try
                     {
@@ -254,19 +197,17 @@ namespace ConditioningControlPanel.Services.Deeper
             try
             {
                 if (_completed || _stopped) return;
-                if (_source == null || !_regionStart.HasValue || !_regionEnd.HasValue) return;
+                if (_source == null) return;
 
-                double t = _source.GetCurrentTimeSeconds();
-                if (t < _regionEnd.Value - HoldLookaheadSec) return;
-
-                if (_holdMode == SpeakHoldMode.LoopRegion)
+                switch (_plan.HoldStepAt(_source.GetCurrentTimeSeconds(), _paused))
                 {
-                    _source.Seek(_regionStart.Value);
-                }
-                else if (_holdMode == SpeakHoldMode.Pause && !_paused)
-                {
-                    _source.Pause();
-                    _paused = true;
+                    case SpeakHoldStep.SeekToRegionStart:
+                        _source.Seek(_plan.RegionStart!.Value);
+                        break;
+                    case SpeakHoldStep.Pause:
+                        _source.Pause();
+                        _paused = true;
+                        break;
                 }
             }
             catch (Exception ex) { App.Logger?.Debug("SpeakPromptSession.HoldTick: {E}", ex.Message); }
@@ -306,9 +247,9 @@ namespace ConditioningControlPanel.Services.Deeper
                         await Task.Delay(25, ct).ConfigureAwait(false);
                 }
 
-                while (!ct.IsCancellationRequested && _reps < _requiredReps)
+                while (!ct.IsCancellationRequested && _reps < _plan.RequiredReps)
                 {
-                    if (_hardDeadline.HasValue && DateTime.UtcNow >= _hardDeadline.Value) break;
+                    if (_plan.HardDeadline.HasValue && DateTime.UtcNow >= _plan.HardDeadline.Value) break;
 
                     if (App.Speech?.IsAvailable != true)
                     {
@@ -321,7 +262,7 @@ namespace ConditioningControlPanel.Services.Deeper
                     try
                     {
                         res = await App.Speech.RecognizePhraseAsync(
-                            _target, new RecognizeOptions { Timeout = TimeSpan.FromSeconds(10) }, ct).ConfigureAwait(false);
+                            _plan.Target, new RecognizeOptions { Timeout = TimeSpan.FromSeconds(10) }, ct).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) { break; }
                     catch { res = PhraseResult.NotAvailable; }
@@ -331,7 +272,8 @@ namespace ConditioningControlPanel.Services.Deeper
                     App.Logger?.Debug("SpeakPromptSession: heard {Chars} chars matched={M} score={S:0.00} loud={L} timedOut={T} unavail={U}",
                         (res.Transcript ?? "").Length, res.Matched, res.Score, res.LoudEnough, res.TimedOut, res.Unavailable);
 
-                    if (res.Unavailable)
+                    var heard = SpeakPromptPlan.Classify(res);
+                    if (heard == SpeakHeard.Retry)
                     {
                         // Mic briefly held by another session — retry (rare now we evict Autonomy).
                         await Task.Delay(200, ct).ConfigureAwait(false);
@@ -339,22 +281,18 @@ namespace ConditioningControlPanel.Services.Deeper
                     }
                     consecutiveUnavailable = 0;
 
-                    if (res.Matched)
+                    if (heard == SpeakHeard.Correct)
                     {
                         _reps++;
-                        FlashFeedback(_correctMsg);
-                        Giggle(_correctMsg);
-                        App.Logger?.Information("SpeakPromptSession: correct ({Reps}/{Need}, {Chars} chars heard)", _reps, _requiredReps, (res.Transcript ?? "").Length);
-                        if (_reps >= _requiredReps) break;
+                        FlashFeedback(_plan.CorrectMessage);
+                        Giggle(_plan.CorrectMessage);
+                        App.Logger?.Information("SpeakPromptSession: correct ({Reps}/{Need}, {Chars} chars heard)", _reps, _plan.RequiredReps, (res.Transcript ?? "").Length);
+                        if (_reps >= _plan.RequiredReps) break;
                         await Task.Delay(600, ct).ConfigureAwait(false);
                     }
-                    else if (res.TimedOut && string.IsNullOrWhiteSpace(res.Transcript))
+                    else if (heard == SpeakHeard.Incorrect)
                     {
-                        // Pure silence — keep listening without nagging.
-                    }
-                    else
-                    {
-                        FlashFeedback(_incorrectMsg);
+                        FlashFeedback(_plan.IncorrectMessage);
                         await Task.Delay(700, ct).ConfigureAwait(false);
                     }
                 }
