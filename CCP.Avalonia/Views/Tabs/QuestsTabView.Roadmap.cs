@@ -385,7 +385,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
-        private async Task ShowPhotoConfirmation(string stepId, RoadmapStepDefinition stepDef,
+        /// <summary>WPF :411, the leg after the OS file picker (internal: tests enter here).</summary>
+        internal async Task ShowPhotoConfirmation(string stepId, RoadmapStepDefinition stepDef,
             string photoPath, Window owner)
         {
             var confirm = new RoadmapConfirmDialog(stepDef.Title, stepDef.PhotoRequirement);

@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Skia;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
@@ -73,6 +74,93 @@ public sealed class RoadmapNodeTests
         finally
         {
             foreach (var w in opened.ToArray()) w.Close();
+            host.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    private static T Opened<T>(List<Window> opened) where T : Window
+    {
+        Dispatcher.UIThread.RunJobs();
+        return Assert.Single(opened.OfType<T>(), w => w.IsVisible);
+    }
+
+    private static void Click(Control w, string name) =>
+        w.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [Fact]
+    public void PhotoConfirmGatesSubmitAndTheNoteLandsOnTheRepaintedNode() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var opened = new List<Window>();
+        using var hook = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => opened.Add(w));
+        var host = new Window { Width = 1200, Height = 900, Content = new QuestsTabView() };
+        var photo = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"roadmap-{System.Guid.NewGuid():N}.png");
+        try
+        {
+            host.Show();
+            var view = (QuestsTabView)host.Content!;
+            Click(view, "BtnQuestSubRoadmap");
+            new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(4, 4)).Save(photo);
+
+            var roadmap = MainShellWindow.Roadmap;
+            var stepId = RoadmapStepDefinition.GetStepsForTrack(RoadmapTrack.EmptyDoll).First(s => roadmap.IsStepActive(s.Id)).Id;
+            var stepDef = RoadmapStepDefinition.GetById(stepId)!;
+            int before = roadmap.Progress.TotalStepsCompleted;
+
+            // WPF :416: "No" on the confirm dialog ends the flow, nothing is submitted and no note is asked.
+            var declined = view.ShowPhotoConfirmation(stepId, stepDef, photo, host);
+            Click(Opened<RoadmapConfirmDialog>(opened), "BtnNo");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(declined.IsCompleted);
+            Assert.Empty(opened.OfType<InputDialog>());
+            Assert.False(roadmap.IsStepCompleted(stepId));
+
+            // "Yes", then the optional note (WPF :420-428) -> SubmitPhoto -> RefreshRoadmapUI (:429).
+            var accepted = view.ShowPhotoConfirmation(stepId, stepDef, photo, host);
+            Click(Opened<RoadmapConfirmDialog>(opened), "BtnYes");
+            var note = Opened<InputDialog>(opened);
+            note.FindControl<TextBox>("TxtInput")!.Text = "felt calm";
+            Click(note, "BtnOK");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(accepted.IsCompleted);
+
+            Assert.True(roadmap.IsStepCompleted(stepId));
+            Assert.Equal("felt calm", roadmap.GetStepProgress(stepId)!.UserNote);
+            Assert.Equal($"{before + 1} / 21", view.FindControl<TextBlock>("TxtRoadmapTotalSteps")!.Text);
+            var node = view.FindControl<StackPanel>("RoadmapNodesPanel")!.Children.OfType<Border>()
+                .Single(n => (string)n.Tag! == stepId);
+            Assert.Contains(node.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "\"felt calm\"");
+        }
+        finally
+        {
+            foreach (var w in opened.ToArray()) w.Close();
+            host.Close();
+            Dispatcher.UIThread.RunJobs();
+            System.IO.File.Delete(photo);
+        }
+    });
+
+    [Fact]
+    public void LockedTrackShowsTheOverlayAndItsReason() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var host = new Window { Width = 1200, Height = 900, Content = new QuestsTabView() };
+        try
+        {
+            host.Show();
+            var view = (QuestsTabView)host.Content!;
+            Click(view, "BtnQuestSubRoadmap");
+            Assert.False(MainShellWindow.Roadmap.IsTrackUnlocked(RoadmapTrack.SluttyBlowdoll));   // a fresh sandbox
+            Click(view, "BtnTrack3");
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(view.FindControl<Border>("TrackLockedOverlay")!.IsVisible);
+            Assert.False(view.FindControl<Control>("RoadmapScrollContainer")!.IsVisible);
+            Assert.Equal("Complete Track 2 Boss to unlock", view.FindControl<TextBlock>("TxtLockReason")!.Text);
+        }
+        finally
+        {
             host.Close();
             Dispatcher.UIThread.RunJobs();
         }
