@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 // ============================================================================
 // GOON GAME — Phase D. Sudden-death round model: the *specs* a round generates
@@ -366,30 +367,24 @@ namespace ConditioningControlPanel.Services.GoonGame
     }
 
     /// <summary>
-    /// Presenter dispatch. Uses <see cref="ConditioningControlPanel.Helpers.DispatcherHelper"/> when a WPF
-    /// application is running (so shutdown/null-dispatcher are handled the codebase way), and runs inline
-    /// when there is none — that keeps rounds runnable headlessly in tests. Presenter exceptions are
-    /// swallowed and logged: a broken render must never take the match down mid-round.
+    /// Presenter dispatch. Runs on the head's UI thread through <see cref="CoreDispatch.Invoke{T}"/>
+    /// (bounded wait, inline when already there), drops the call once the head is shutting down, and
+    /// runs inline when there is no head — that keeps rounds runnable headlessly in tests. Presenter
+    /// exceptions are swallowed and logged: a broken render must never take the match down mid-round.
     /// </summary>
     internal static class GoonUi
     {
+        private static readonly TimeSpan SyncInvokeTimeout = TimeSpan.FromSeconds(5); // WPF DispatcherHelper.RunOnUISync
+
         public static void Invoke(Action action, string what)
         {
-            try
+            if (GoonDispatch.ShuttingDown) return;
+            CoreDispatch.Invoke(() =>
             {
-                var app = System.Windows.Application.Current;
-                if (app?.Dispatcher == null)
-                {
-                    action();   // headless (unit tests / no WPF app)
-                    return;
-                }
-                if (app.Dispatcher.HasShutdownStarted) return;
-                ConditioningControlPanel.Helpers.DispatcherHelper.RunOnUISync(action);
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning("GoonSuddenDeath: presenter call {What} failed: {Error}", what, ex.Message);
-            }
+                try { action(); }
+                catch (Exception ex) { Log.Warning("GoonSuddenDeath: presenter call {What} failed: {Error}", what, ex.Message); }
+                return true;
+            }, SyncInvokeTimeout);
         }
     }
 

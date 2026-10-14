@@ -1,63 +1,40 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.GoonGame
 {
     /// <summary>
-    /// Marshals Goon Game callbacks onto the WPF dispatcher.
+    /// Marshals Goon Game callbacks onto the head's UI thread through <see cref="CoreDispatch"/>.
     ///
     /// Every transport raises its events from somewhere else — a SIPSorcery SCTP thread, an
-    /// HttpClient continuation, a Task.Delay timer — and the match engine and HUD both touch WPF
+    /// HttpClient continuation, a Task.Delay timer — and the match engine and HUD both touch UI
     /// objects, so nothing may surface on those threads.
     ///
-    /// Two guards from CLAUDE.md are non-negotiable here: a null Application (we are inside a
-    /// console harness or the app is already gone) and a dispatcher that has begun shutting down
-    /// (a queued BeginInvoke on a dying dispatcher is a classic shutdown crash in this codebase).
-    /// With no Application at all we run inline, which is what makes the loopback transport usable
-    /// from a plain test harness.
+    /// A dispatcher that has begun shutting down drops the callback (a queued BeginInvoke on a
+    /// dying dispatcher is a classic shutdown crash in this codebase); the head says so through
+    /// <see cref="ShutdownStarted"/>. With no head at all CoreDispatch runs inline, which is what
+    /// makes the loopback transport usable from a plain test harness.
     /// </summary>
     internal static class GoonDispatch
     {
+        /// <summary>True once the head's UI thread is shutting down. Unseeded = never.</summary>
+        public static volatile Func<bool>? ShutdownStarted;
+
+        public static bool ShuttingDown
+        {
+            get { try { return ShutdownStarted?.Invoke() == true; } catch { return true; } }
+        }
+
         public static void Post(Action action)
         {
-            if (action == null) return;
-
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null)
-            {
-                // No WPF app (headless harness). Inline is correct AND keeps ordering.
-                try { action(); }
-                catch (Exception ex) { App.Logger?.Error(ex, "[Goon] Inline dispatch failed"); }
-                return;
-            }
-
-            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
-
-            if (dispatcher.CheckAccess())
+            if (action == null || ShuttingDown) return;
+            CoreDispatch.Post(() =>
             {
                 try { action(); }
-                catch (Exception ex) { App.Logger?.Error(ex, "[Goon] Dispatch failed"); }
-                return;
-            }
-
-            try
-            {
-                // Normal, never Loaded — Loaded-priority work is starved in this app
-                // (see CLAUDE.md / memory: dispatcher-loaded-priority-starved).
-                dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
-                {
-                    try { action(); }
-                    catch (Exception ex) { App.Logger?.Error(ex, "[Goon] Dispatched callback failed"); }
-                }));
-            }
-            catch (Exception ex)
-            {
-                // BeginInvoke itself throws if the dispatcher shut down between the check and here.
-                App.Logger?.Warning(ex, "[Goon] BeginInvoke rejected (dispatcher shutting down?)");
-            }
+                catch (Exception ex) { Log.Error(ex, "[Goon] Dispatched callback failed"); }
+            });
         }
     }
 
@@ -119,7 +96,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (System.Text.Encoding.UTF8.GetByteCount(json) > GoonWire.MaxWireBytes)
             {
                 // Our own bug, not the peer's. Dropping beats wedging the channel.
-                App.Logger?.Error("[{Tag}] Refusing to send oversize {Type} ({Chars} chars)",
+                Log.Error("[{Tag}] Refusing to send oversize {Type} ({Chars} chars)",
                     Tag, message.Type, json.Length);
                 return;
             }
@@ -152,9 +129,9 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
 
             if (reason != null)
-                App.Logger?.Information("[{Tag}] State -> {State} ({Reason})", Tag, next, reason);
+                Log.Information("[{Tag}] State -> {State} ({Reason})", Tag, next, reason);
             else
-                App.Logger?.Information("[{Tag}] State -> {State}", Tag, next);
+                Log.Information("[{Tag}] State -> {State}", Tag, next);
 
             GoonDispatch.Post(() => StateChanged?.Invoke(this, next));
         }
@@ -168,7 +145,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 {
                     var ok = await MatchClock.SyncAsync(ct).ConfigureAwait(false);
                     if (!ok)
-                        App.Logger?.Warning("[{Tag}] Initial clock sync did not converge — retrying once", Tag);
+                        Log.Warning("[{Tag}] Initial clock sync did not converge — retrying once", Tag);
                     else
                         return;
 
@@ -178,7 +155,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    App.Logger?.Error(ex, "[{Tag}] Clock sync threw", Tag);
+                    Log.Error(ex, "[{Tag}] Clock sync threw", Tag);
                 }
             }, ct);
         }
@@ -192,7 +169,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (_disposed) return;
             _disposed = true;
             try { DisposeCore(); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[{Tag}] Dispose failed", Tag); }
+            catch (Exception ex) { Log.Warning(ex, "[{Tag}] Dispose failed", Tag); }
             try { MatchClock.Dispose(); } catch { }
             MessageReceived = null;
             StateChanged = null;

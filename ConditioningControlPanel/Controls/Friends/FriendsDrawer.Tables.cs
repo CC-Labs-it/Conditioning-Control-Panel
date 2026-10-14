@@ -33,7 +33,7 @@ public sealed partial class FriendsDrawer
     /// <summary>Test seam: "may this account sit down" (signed in). Fails closed.</summary>
     internal Func<bool> CanJoinTables { get; set; } = () =>
     {
-        try { return GoonHostService.JoiningAllowed(); } catch { return false; }
+        try { return GoonHostRules.JoiningAllowed(); } catch { return false; }
     };
 
     /// <summary>Test seam: what a Join press does once the bar is cleared.</summary>

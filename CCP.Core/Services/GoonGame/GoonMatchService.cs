@@ -6,8 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
+using Serilog;
 
 // ============================================================================
 // GOON GAME — Phase B. The match state machine:
@@ -60,7 +59,6 @@ namespace ConditioningControlPanel.Services.GoonGame
         private const int EmoteIconMaxChars = 8;
 
         private readonly IGoonTransport _transport;
-        private readonly Dispatcher _dispatcher;
         private readonly Func<ulong, IGoonRng> _rngFactory;
 
         private readonly Stopwatch _liveWatch = new();      // monotonic; survives clock re-sync
@@ -74,8 +72,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         private List<GoonElement> _sharedPool = new();
         private bool _draftResolved;
 
-        private DispatcherTimer? _liveTimer;    // 1 s, SessionEngine idiom
-        private DispatcherTimer? _phaseTimer;   // 200 ms, countdown + handshake deadlines
+        // Ticks land on the head UI thread via GoonDispatch (was DispatcherTimer, Normal priority).
+        private ITimer? _liveTimer;    // 1 s, SessionEngine idiom
+        private ITimer? _phaseTimer;   // 200 ms, countdown + handshake deadlines
 
         private HelloMsg? _remoteHello;
         private bool _helloSent;
@@ -119,7 +118,6 @@ namespace ConditioningControlPanel.Services.GoonGame
             // Phase A owns the real xoshiro256** helper; until it is wired the engine falls
             // back to a local splitmix64 so it is runnable/testable standalone.
             _rngFactory = rngFactory ?? (seed => new FallbackRng(seed));
-            _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
             _transport.MessageReceived += OnMessageReceived;
             _transport.StateChanged += OnTransportStateChanged;
@@ -278,14 +276,14 @@ namespace ConditioningControlPanel.Services.GoonGame
                 var code = await _transport.CreateInviteAsync(ct).ConfigureAwait(true);
                 if (string.IsNullOrEmpty(code))
                 {
-                    App.Logger?.Warning("[GG] invite creation returned no code");
+                    Log.Warning("[GG] invite creation returned no code");
                     ResetToIdle();
                 }
                 return code;
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[GG] invite creation failed");
+                Log.Error(ex, "[GG] invite creation failed");
                 ResetToIdle();
                 return null;
             }
@@ -305,7 +303,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[GG] join failed");
+                Log.Error(ex, "[GG] join failed");
                 ResetToIdle();
                 return false;
             }
@@ -470,7 +468,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             _sharedPool = pool;
             _draftResolved = true;
             Scoring.Configure(LocalAttentionMode, GoonDraft.MatchRiskTier(pool));
-            App.Logger?.Information("[GG] draft agreed: pool {Pool} (+ always-on {AlwaysOn})",
+            Log.Information("[GG] draft agreed: pool {Pool} (+ always-on {AlwaysOn})",
                 string.Join("+", pool), GoonDraft.AlwaysOnElement);
         }
 
@@ -483,7 +481,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         public void ReportInteractionCheck(bool passed)
         {
             Scoring.ReportInteractionCheck(passed);
-            if (!passed) App.Logger?.Information("[GG] interaction check failed ({Count} total)", Scoring.FailedChecks);
+            if (!passed) Log.Information("[GG] interaction check failed ({Count} total)", Scoring.FailedChecks);
         }
 
         public void SetCloseness(int? closeness)
@@ -573,7 +571,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             _outboundCosts[id] = cost;
             Send(msg);
-            App.Logger?.Information("[GG] payload out {Id} {Kind} cost {Cost}", id, request.Kind, cost);
+            Log.Information("[GG] payload out {Id} {Kind} cost {Cost}", id, request.Kind, cost);
             return true;
         }
 
@@ -594,7 +592,7 @@ namespace ConditioningControlPanel.Services.GoonGame
 
             int before = Scoring.Charges;
             for (int i = 0; i < count; i++) Scoring.AwardEventWon();   // caps at GoonConsts.ChargeCap
-            App.Logger?.Information("[GG] charges +{Count} ({Reason}) -> {Now} (was {Before})",
+            Log.Information("[GG] charges +{Count} ({Reason}) -> {Now} (was {Before})",
                 count, string.IsNullOrEmpty(reason) ? "unspecified" : reason, Scoring.Charges, before);
             return true;
         }
@@ -633,7 +631,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                                  or GoonMatchPhase.Draft or GoonMatchPhase.Countdown;
             bool draw = _remoteMercyMatchMs.HasValue && Math.Abs(atMs - _remoteMercyMatchMs.Value) <= DrawWindowMs;
 
-            App.Logger?.Information("[GG] local mercy at {At} (preLive={PreLive}, draw={Draw})", atMs, preLive, draw);
+            Log.Information("[GG] local mercy at {At} (preLive={PreLive}, draw={Draw})", atMs, preLive, draw);
             EndMatch(draw ? GoonEndReason.Draw : GoonEndReason.Mercy, localLost: !draw, countsForLedger: !preLive);
         }
 
@@ -644,14 +642,14 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// </summary>
         private void FailLobby(string reason)
         {
-            App.Logger?.Warning("[GG] lobby failed: {Reason}", reason);
+            Log.Warning("[GG] lobby failed: {Reason}", reason);
             LobbyFailureReason = reason;
 
             var handler = LobbyFailed;
-            if (handler != null && !_dispatcher.HasShutdownStarted)
+            if (handler != null && !GoonDispatch.ShuttingDown)
             {
                 try { handler(this, reason); }
-                catch (Exception ex) { App.Logger?.Warning(ex, "[GG] LobbyFailed handler threw"); }
+                catch (Exception ex) { Log.Warning(ex, "[GG] LobbyFailed handler threw"); }
             }
 
             // No dedicated teardown verb in the protocol: a pre-live mercy is the clean exit
@@ -671,7 +669,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 ResetToIdle();
                 return;
             }
-            App.Logger?.Information("[GG] match cancelled: {Reason}", reason);
+            Log.Information("[GG] match cancelled: {Reason}", reason);
             if (Phase is GoonMatchPhase.Live or GoonMatchPhase.SuddenDeath)
             {
                 DeclareMercy();
@@ -686,7 +684,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         private void OnMessageReceived(object? sender, GoonMessage message)
         {
             if (_disposed || message == null) return;
-            if (_dispatcher.HasShutdownStarted) return;
+            if (GoonDispatch.ShuttingDown) return;
 
             try
             {
@@ -713,14 +711,14 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[GG] message handling failed for {Type}", message.Type);
+                Log.Error(ex, "[GG] message handling failed for {Type}", message.Type);
             }
         }
 
         private void OnTransportStateChanged(object? sender, GoonTransportState state)
         {
-            if (_disposed || _dispatcher.HasShutdownStarted) return;
-            App.Logger?.Information("[GG] transport state {State}", state);
+            if (_disposed || GoonDispatch.ShuttingDown) return;
+            Log.Information("[GG] transport state {State}", state);
 
             if (state is GoonTransportState.ConnectedP2P or GoonTransportState.ConnectedRelay)
             {
@@ -734,10 +732,10 @@ namespace ConditioningControlPanel.Services.GoonGame
             _helloSent = true;
             Send(new HelloMsg
             {
-                DisplayName = App.Settings?.Current?.UserDisplayName ?? "Player",
+                DisplayName = CoreSettings.Service?.Current?.UserDisplayName ?? "Player",
                 AttentionMode = LocalAttentionMode,
                 ToyConnected = LocalToyConnected,
-                AppVersion = UpdateService.AppVersion,
+                AppVersion = CoreReleaseContent.AppVersion,
                 Caps = LocalCaps,
             });
         }
@@ -784,7 +782,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 return;
             }
 
-            App.Logger?.Information("[GG] caps: peer {Platform} v{Version}, pool {Pool}, payloads {Payloads}, rounds {Rounds}",
+            Log.Information("[GG] caps: peer {Platform} v{Version}, pool {Pool}, payloads {Payloads}, rounds {Rounds}",
                 Opponent.Platform, hello.Version, AvailableDraftPool.Count, AvailablePayloadKinds.Count, AllowedRoundKinds.Count);
 
             if (Phase == GoonMatchPhase.Lobby)
@@ -916,7 +914,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             {
                 // Peer contribution never arrived — degrade to our own rather than stall the match.
                 MatchSeed = _localSeedContribution.Value;
-                App.Logger?.Warning("[GG] starting Live without a peer seed contribution");
+                Log.Warning("[GG] starting Live without a peer seed contribution");
             }
 
             // The pool is the agreement's intersection, and the ramp is rolled from it — one
@@ -937,21 +935,17 @@ namespace ConditioningControlPanel.Services.GoonGame
             Opponent.LastTickLocalMs = Environment.TickCount64;
             _nextInteractionCheckMs = NoCamCheckIntervalMs;
 
-            _liveTimer = new DispatcherTimer(DispatcherPriority.Normal, _dispatcher)
-            {
-                Interval = TimeSpan.FromSeconds(1),
-            };
-            _liveTimer.Tick += LiveTimer_Tick;
-            _liveTimer.Start();
+            _liveTimer = Every(TimeSpan.FromSeconds(1), LiveTimer_Tick);
 
-            App.Logger?.Information("[GG] Live phase: seed {Seed:X16}, {Sec}s, pool {Pool} (+always-on bubbles), risk {Risk}, {Cues} cues",
+            Log.Information("[GG] Live phase: seed {Seed:X16}, {Sec}s, pool {Pool} (+always-on bubbles), risk {Risk}, {Cues} cues",
                 MatchSeed, ConsentSheet.LiveDurationSec, string.Join("+", pool), Scoring.RiskTier, _ramp.Count);
 
             SetPhase(GoonMatchPhase.Live);
         }
 
-        private void LiveTimer_Tick(object? sender, EventArgs e)
+        private void LiveTimer_Tick(ITimer? firedBy)
         {
+            if (firedBy == null || firedBy != _liveTimer) return;   // a tick queued before StopTimers
             if (_disposed || _ended) return;
             if (Phase is not (GoonMatchPhase.Live or GoonMatchPhase.SuddenDeath)) return;
 
@@ -977,7 +971,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[GG] live tick failed");
+                Log.Error(ex, "[GG] live tick failed");
             }
         }
 
@@ -1049,7 +1043,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (health != Opponent.Health)
             {
                 Opponent.Health = health;
-                App.Logger?.Information("[GG] opponent connection {Health} (age {Age}ms)", health, age);
+                Log.Information("[GG] opponent connection {Health} (age {Age}ms)", health, age);
                 RaiseHealth(health);
             }
 
@@ -1176,13 +1170,13 @@ namespace ConditioningControlPanel.Services.GoonGame
             try { fireAtLocal = _transport.Clock.MatchMsToLocalMs(payload.FireAtMatchMs); }
             catch { fireAtLocal = Environment.TickCount64 + GoonConsts.MinScheduleBufferMs; }
 
-            App.Logger?.Information("[GG] payload in {Id} {Kind} accepted, fires in {Ms}ms",
+            Log.Information("[GG] payload in {Id} {Kind} accepted, fires in {Ms}ms",
                 payload.Id, payload.Kind, fireAtLocal - Environment.TickCount64);
 
             var handler = PayloadAccepted;
             if (handler == null) return;
             try { handler(this, new GoonInboundPayloadEventArgs { Payload = payload, FireAtLocalMs = fireAtLocal }); }
-            catch (Exception ex) { App.Logger?.Error(ex, "[GG] PayloadAccepted handler threw"); }
+            catch (Exception ex) { Log.Error(ex, "[GG] PayloadAccepted handler threw"); }
         }
 
         /// <summary>
@@ -1207,13 +1201,13 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         private void RejectPayload(PayloadMsg payload, string status, string reason)
         {
-            App.Logger?.Information("[GG] payload in {Id} {Kind} rejected: {Reason}", payload.Id, payload.Kind, reason);
+            Log.Information("[GG] payload in {Id} {Kind} rejected: {Reason}", payload.Id, payload.Kind, reason);
             var receipt = new PayloadReceiptMsg { Id = payload.Id, Status = status };
             Send(receipt);
             var handler = PayloadRejected;
             if (handler == null) return;
             try { handler(this, receipt); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[GG] PayloadRejected handler threw"); }
+            catch (Exception ex) { Log.Warning(ex, "[GG] PayloadRejected handler threw"); }
         }
 
         private void HandleReceipt(PayloadReceiptMsg receipt)
@@ -1230,7 +1224,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     _localHeavyPayloadId = null;
                     _localHeavyUsed = false;
                 }
-                App.Logger?.Information("[GG] payload {Id} rejected ({Status}) - {Cost} charge(s) refunded",
+                Log.Information("[GG] payload {Id} rejected ({Status}) - {Cost} charge(s) refunded",
                     receipt.Id, receipt.Status, cost);
             }
             else if (!string.IsNullOrEmpty(receipt.Id) &&
@@ -1242,7 +1236,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             var handler = PayloadReceiptReceived;
             if (handler == null) return;
             try { handler(this, receipt); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[GG] PayloadReceiptReceived handler threw"); }
+            catch (Exception ex) { Log.Warning(ex, "[GG] PayloadReceiptReceived handler threw"); }
         }
 
         private void HandleEmote(EmoteMsg emote)
@@ -1252,7 +1246,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             var handler = EmoteReceived;
             if (handler == null) return;
             try { handler(this, emote); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[GG] EmoteReceived handler threw"); }
+            catch (Exception ex) { Log.Warning(ex, "[GG] EmoteReceived handler threw"); }
         }
 
         private void HandleRemoteMercy(MercyMsg mercy)
@@ -1265,7 +1259,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                                  or GoonMatchPhase.Draft or GoonMatchPhase.Countdown;
             bool draw = _localMercyMatchMs.HasValue && Math.Abs(mercy.AtMatchMs - _localMercyMatchMs.Value) <= DrawWindowMs;
 
-            App.Logger?.Information("[GG] opponent mercy at {At} (draw={Draw})", mercy.AtMatchMs, draw);
+            Log.Information("[GG] opponent mercy at {At} (draw={Draw})", mercy.AtMatchMs, draw);
             EndMatch(draw ? GoonEndReason.Draw : GoonEndReason.Mercy, localLost: false, countsForLedger: !preLive);
         }
 
@@ -1282,7 +1276,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (runner == null)
             {
                 // Phase D not attached: degrade to the score comparison rather than hanging.
-                App.Logger?.Warning("[GG] no sudden-death runner attached — settling on score");
+                Log.Warning("[GG] no sudden-death runner attached — settling on score");
                 int mine = Scoring.Score, theirs = Opponent.Score;
                 if (mine == theirs) EndMatch(GoonEndReason.Draw, localLost: false, countsForLedger: true);
                 else EndMatch(GoonEndReason.SuddenDeathLoss, localLost: mine < theirs, countsForLedger: true);
@@ -1323,40 +1317,35 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[GG] sudden-death runner failed");
-                if (Application.Current?.Dispatcher == null) return;
-                try
+                Log.Error(ex, "[GG] sudden-death runner failed");
+                GoonDispatch.Post(() =>
                 {
-                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    try
                     {
-                        try
-                        {
-                            if (_disposed || _ended) return;
-                            EndMatch(GoonEndReason.Draw, localLost: false, countsForLedger: true);
-                        }
-                        catch (Exception inner) { App.Logger?.Error(inner, "[GG] sudden-death failure handling threw"); }
-                    });
-                }
-                catch (Exception dispatchEx) { App.Logger?.Warning(dispatchEx, "[GG] could not dispatch sudden-death failure"); }
+                        if (_disposed || _ended) return;
+                        EndMatch(GoonEndReason.Draw, localLost: false, countsForLedger: true);
+                    }
+                    catch (Exception inner) { Log.Error(inner, "[GG] sudden-death failure handling threw"); }
+                });
             }
         }
 
         private void OnRoundWon(object? sender, int roundNo)
         {
-            if (_disposed || _dispatcher.HasShutdownStarted) return;
-            App.Logger?.Information("[GG] sudden-death round {Round} won", roundNo);
+            if (_disposed || GoonDispatch.ShuttingDown) return;
+            Log.Information("[GG] sudden-death round {Round} won", roundNo);
             Scoring.AwardEventWon();
         }
 
         private void OnRoundLost(object? sender, int roundNo)
         {
-            if (_disposed || _dispatcher.HasShutdownStarted) return;
-            App.Logger?.Information("[GG] sudden-death round {Round} lost", roundNo);
+            if (_disposed || GoonDispatch.ShuttingDown) return;
+            Log.Information("[GG] sudden-death round {Round} lost", roundNo);
         }
 
         private void OnNetLossReached(object? sender, bool localLost)
         {
-            if (_disposed || _dispatcher.HasShutdownStarted) return;
+            if (_disposed || GoonDispatch.ShuttingDown) return;
             EndMatch(GoonEndReason.SuddenDeathLoss, localLost, countsForLedger: true);
         }
 
@@ -1379,7 +1368,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         private static async Task StopRunnerAsync(IGoonSuddenDeathRunner runner)
         {
             try { await runner.StopAsync().ConfigureAwait(false); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[GG] sudden-death StopAsync threw"); }
+            catch (Exception ex) { Log.Warning(ex, "[GG] sudden-death StopAsync threw"); }
         }
 
         // ------------------------------------------------- end + result sign
@@ -1423,13 +1412,13 @@ namespace ConditioningControlPanel.Services.GoonGame
             });
 
             _resultDeadlineLocalMs = Environment.TickCount64 + ResultHandshakeTimeoutMs;
-            App.Logger?.Information("[GG] match ended: {Reason}, localLost={Lost}, survived {Sec}s, {H}-{G}",
+            Log.Information("[GG] match ended: {Reason}, localLost={Lost}, survived {Sec}s, {H}-{G}",
                 reason, localLost, survivedMs / 1000, result.HostScore, result.GuestScore);
 
             var handler = MatchEnded;
             if (handler == null) return;
             try { handler(this, result); }
-            catch (Exception ex) { App.Logger?.Error(ex, "[GG] MatchEnded handler threw"); }
+            catch (Exception ex) { Log.Error(ex, "[GG] MatchEnded handler threw"); }
         }
 
         /// <summary>
@@ -1457,7 +1446,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             if (Phase is not (GoonMatchPhase.Live or GoonMatchPhase.SuddenDeath or GoonMatchPhase.Recap))
             {
-                App.Logger?.Warning("[GG] ignoring a result frame in phase {Phase} - no match to end", Phase);
+                Log.Warning("[GG] ignoring a result frame in phase {Phase} - no match to end", Phase);
                 return;
             }
 
@@ -1468,7 +1457,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 bool localLost = remote.WinnerIsHost.HasValue && remote.WinnerIsHost.Value != IsHost;
                 if (localLost)
                 {
-                    App.Logger?.Warning("[GG] REFUSED a result that declares us the loser while our side "
+                    Log.Warning("[GG] REFUSED a result that declares us the loser while our side "
                         + "is still running - not ending, not recording");
                     return;
                 }
@@ -1518,7 +1507,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 // uncontested cosmetics (survival time, payload counts) are still granted.
                 result.Disputed = true;
                 result.RemoteClaim = remote;
-                App.Logger?.Warning("[GG] result DISPUTED - local {LocalReason}/{LocalWinner} vs remote {RemoteReason}/{RemoteWinner}",
+                Log.Warning("[GG] result DISPUTED - local {LocalReason}/{LocalWinner} vs remote {RemoteReason}/{RemoteWinner}",
                     result.EndReason, result.WinnerIsHost, remote.EndReason, remote.WinnerIsHost);
             }
 
@@ -1535,7 +1524,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             var handler = ResultFinalized;
             if (handler == null) return;
             try { handler(this, result); }
-            catch (Exception ex) { App.Logger?.Error(ex, "[GG] ResultFinalized handler threw"); }
+            catch (Exception ex) { Log.Error(ex, "[GG] ResultFinalized handler threw"); }
         }
 
         // ------------------------------------------------------ phase plumbing
@@ -1544,27 +1533,42 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             if (Phase == phase) return;
             Phase = phase;
-            App.Logger?.Information("[GG] phase -> {Phase}", phase);
+            Log.Information("[GG] phase -> {Phase}", phase);
 
             var handler = PhaseChanged;
             if (handler == null) return;
             try { handler(this, phase); }
-            catch (Exception ex) { App.Logger?.Error(ex, "[GG] PhaseChanged handler threw"); }
+            catch (Exception ex) { Log.Error(ex, "[GG] PhaseChanged handler threw"); }
         }
 
         private void StartPhaseTimer()
         {
             if (_phaseTimer != null) return;
-            _phaseTimer = new DispatcherTimer(DispatcherPriority.Normal, _dispatcher)
-            {
-                Interval = TimeSpan.FromMilliseconds(PhaseTimerIntervalMs),
-            };
-            _phaseTimer.Tick += PhaseTimer_Tick;
-            _phaseTimer.Start();
+            _phaseTimer = Every(TimeSpan.FromMilliseconds(PhaseTimerIntervalMs), PhaseTimer_Tick);
         }
 
-        private void PhaseTimer_Tick(object? sender, EventArgs e)
+        /// <summary>A periodic timer whose ticks hop to the UI thread; the tick is handed the timer
+        /// that fired it so a tick queued before a Stop can recognise itself as stale. At most one
+        /// tick waits on the UI thread at a time, as with DispatcherTimer: a stalled UI thread loses
+        /// ticks instead of replaying them (each live tick scores a full second).</summary>
+        private static ITimer Every(TimeSpan period, Action<ITimer?> tick)
         {
+            ITimer? created = null;
+            var pending = 0;
+            created = TimeProvider.System.CreateTimer(_ =>
+                {
+                    if (Interlocked.Exchange(ref pending, 1) == 1) return;
+                    var mine = created;
+                    GoonDispatch.Post(() => { Volatile.Write(ref pending, 0); tick(mine); });
+                },
+                null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            created.Change(period, period);
+            return created;
+        }
+
+        private void PhaseTimer_Tick(ITimer? firedBy)
+        {
+            if (firedBy == null || firedBy != _phaseTimer) return;
             if (_disposed) return;
             try
             {
@@ -1584,7 +1588,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                             if (Result != null && !Result.Agreed)
                             {
                                 Result.Disputed = true;
-                                App.Logger?.Warning("[GG] result handshake timed out — recorded as disputed");
+                                Log.Warning("[GG] result handshake timed out — recorded as disputed");
                             }
                             FinalizeResult();
                         }
@@ -1593,15 +1597,14 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[GG] phase tick failed");
+                Log.Error(ex, "[GG] phase tick failed");
             }
         }
 
         private void StopPhaseTimer()
         {
             if (_phaseTimer == null) return;
-            _phaseTimer.Stop();
-            _phaseTimer.Tick -= PhaseTimer_Tick;
+            _phaseTimer.Dispose();
             _phaseTimer = null;
         }
 
@@ -1609,8 +1612,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         {
             if (_liveTimer != null)
             {
-                _liveTimer.Stop();
-                _liveTimer.Tick -= LiveTimer_Tick;
+                _liveTimer.Dispose();
                 _liveTimer = null;
             }
             // The phase timer keeps running through Recap for the handshake deadline.
@@ -1663,32 +1665,32 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "[GG] send failed for {Type}", message.Type);
+                Log.Warning(ex, "[GG] send failed for {Type}", message.Type);
             }
         }
 
         private void RaiseCue(EventHandler<GoonElementCueEventArgs>? handler, GoonElementCueEventArgs args)
         {
             if (handler == null) return;
-            if (_dispatcher.HasShutdownStarted) return;
+            if (GoonDispatch.ShuttingDown) return;
             try { handler(this, args); }
-            catch (Exception ex) { App.Logger?.Error(ex, "[GG] element cue handler threw for {Element}", args.Element); }
+            catch (Exception ex) { Log.Error(ex, "[GG] element cue handler threw for {Element}", args.Element); }
         }
 
         private void RaiseSafe(EventHandler? handler)
         {
             if (handler == null) return;
-            if (_dispatcher.HasShutdownStarted) return;
+            if (GoonDispatch.ShuttingDown) return;
             try { handler(this, EventArgs.Empty); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[GG] handler threw"); }
+            catch (Exception ex) { Log.Warning(ex, "[GG] handler threw"); }
         }
 
         private void RaiseHealth(GoonConnectionHealth health)
         {
             var handler = ConnectionHealthChanged;
-            if (handler == null || _dispatcher.HasShutdownStarted) return;
+            if (handler == null || GoonDispatch.ShuttingDown) return;
             try { handler(this, health); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[GG] ConnectionHealthChanged handler threw"); }
+            catch (Exception ex) { Log.Warning(ex, "[GG] ConnectionHealthChanged handler threw"); }
         }
 
         private static ConsentSheetMsg CloneSheet(ConsentSheetMsg sheet, bool confirmed) => new()
@@ -1742,7 +1744,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 _transport.MessageReceived -= OnMessageReceived;
                 _transport.StateChanged -= OnTransportStateChanged;
             }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[GG] transport unsubscribe failed"); }
+            catch (Exception ex) { Log.Warning(ex, "[GG] transport unsubscribe failed"); }
 
             StopTimers();
             StopPhaseTimer();
