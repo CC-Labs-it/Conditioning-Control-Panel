@@ -51,6 +51,10 @@
              d:DesignHeight="620" d:DesignWidth="1460">
 
     <UserControl.Resources>
+        <Color x:Key="VaultAccentColor">#FF69B4</Color>
+        <Color x:Key="VaultPartnerColor">#B478FF</Color>
+        <Color x:Key="VaultVeilAccentColor">#E6FF69B4</Color>
+        <Color x:Key="VaultVeilPartnerColor">#D9B478FF</Color>
         <!-- Velvet Kit 2 · round 4 — the vault's hue identity. LOCAL literals only:
              a Theme dictionary may not resolve a StaticResource from another dictionary
              (deferred-BAML EndOfStreamException), and these three keys are wanted by
@@ -220,8 +224,8 @@
                                             <!-- Authored in the Bambi accent pair; re-tinted from
                                                  the active mod's accent by RefreshExclusivesTab. -->
                                             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                                <GradientStop Color="#FF69B4" Offset="0"/>
-                                                <GradientStop Color="#B478FF" Offset="1"/>
+                                                <GradientStop Color="{DynamicResource VaultAccentColor}" Offset="0"/>
+                                                <GradientStop Color="{DynamicResource VaultPartnerColor}" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <TextBlock x:Name="TxtSpotBadge"
@@ -292,8 +296,8 @@
                                             <!-- Same accent pair as the shelf cards' unlock pill;
                                                  re-tinted by RefreshExclusivesTab on a mod switch. -->
                                             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                                <GradientStop Color="#E6FF69B4" Offset="0"/>
-                                                <GradientStop Color="#D9B478FF" Offset="1"/>
+                                                <GradientStop Color="{DynamicResource VaultVeilAccentColor}" Offset="0"/>
+                                                <GradientStop Color="{DynamicResource VaultVeilPartnerColor}" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <fx:IconLabel TextElement.FontSize="11" TextElement.FontWeight="Bold" TextElement.Foreground="White"
@@ -405,8 +409,8 @@
                                                 Margin="8,8,0,0" CornerRadius="10" Padding="8,2">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                                    <GradientStop Color="#FF69B4" Offset="0"/>
-                                                    <GradientStop Color="#B478FF" Offset="1"/>
+                                                    <GradientStop Color="{DynamicResource VaultAccentColor}" Offset="0"/>
+                                                    <GradientStop Color="{DynamicResource VaultPartnerColor}" Offset="1"/>
                                                 </LinearGradientBrush>
                                             </Border.Background>
                                             <TextBlock Text="{Binding BadgeText}" Foreground="White"
@@ -433,8 +437,8 @@
                                                         HorizontalAlignment="Center">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                                            <GradientStop Color="#E6FF69B4" Offset="0"/>
-                                                            <GradientStop Color="#D9B478FF" Offset="1"/>
+                                                            <GradientStop Color="{DynamicResource VaultVeilAccentColor}" Offset="0"/>
+                                                            <GradientStop Color="{DynamicResource VaultVeilPartnerColor}" Offset="1"/>
                                                         </LinearGradientBrush>
                                                     </Border.Background>
                                                     <fx:IconLabel Key="exclusives_chip_lab"
