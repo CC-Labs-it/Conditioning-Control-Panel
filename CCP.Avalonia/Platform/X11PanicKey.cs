@@ -76,6 +76,31 @@ internal static class X11PanicKey
         return true;
     }
 
+    [DllImport(LibX11)] private static extern int XQueryKeymap(IntPtr display, byte[] keys);
+    private static IntPtr _queryDisplay;
+    private static readonly object QueryGate = new();
+
+    /// <summary>Is the panic key physically down right now (XQueryKeymap on its own connection, never
+    /// the listener's)? Null = unknown (listener not up, no X). XWayland releases its keys when focus
+    /// leaves for a native Wayland window, so a lost key-up reads as up here.</summary>
+    internal static bool? IsPanicKeyDown()
+    {
+        var code = _boundCode;
+        if (!IsListening || code is <= 0 or > 255) return null;
+        lock (QueryGate)
+        {
+            try
+            {
+                if (_queryDisplay == IntPtr.Zero) _queryDisplay = XOpenDisplay(IntPtr.Zero);
+                if (_queryDisplay == IntPtr.Zero) return null;
+                var keys = new byte[32];
+                XQueryKeymap(_queryDisplay, keys);
+                return (keys[code >> 3] & (1 << (code & 7))) != 0;
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
+        }
+    }
+
     /// <summary>Test seam: the keycode a test routes as the panic key.</summary>
     internal static void BindKeycodeForTest(int code) => _boundCode = code;
 

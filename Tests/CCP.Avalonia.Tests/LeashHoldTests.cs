@@ -46,7 +46,8 @@ public sealed class LeashHoldTests
     /// <summary>Holds for <paramref name="ms"/> on the shell's 250 ms clock (the X11 path: one press, then ticks).</summary>
     private static void Hold(MainShellWindow shell, Clock clock, int ms)
     {
-        shell.LeashHoldPressed();
+        shell.OnX11PanicPress();                        // the X11 listener's press: panic (off here), then the hold
+        Dispatcher.UIThread.RunJobs();
         for (int t = 250; t <= ms; t += 250)
         {
             clock.Now = clock.Now.AddMilliseconds(250);
@@ -77,8 +78,11 @@ public sealed class LeashHoldTests
                 .SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
-        (CoreSettings.Current.Welcomed, CoreSettings.Current.HasAcceptedAgeVerification) = (true, true);
+        (CoreSettings.Current.Welcomed, CoreSettings.Current.HasAcceptedAgeVerification, CoreSettings.Current.PanicKeyEnabled) = (true, true, false);
         var (oldSvc, oldTime, oldReleased) = (LeashHead.Service, MainShellWindow.LeashHoldTime, X11PanicKey.PanicReleased);
+        var oldKeyDown = MainShellWindow.LeashHoldKeyDown;
+        bool keyDown = true;
+        MainShellWindow.LeashHoldKeyDown = () => keyDown;
         var (oldTargets, oldUi) = (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi);
         var clock = new Clock();
         var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
@@ -101,6 +105,17 @@ public sealed class LeashHoldTests
             Assert.False(LeashHoldRing.IsShown);
             Assert.Null(LeashCutConfirmWindow.Current);
             Assert.NotNull(svc.Snapshot.Me);
+
+            // A lost key-up (focus left for a native Wayland window): the next tick reads the key as up,
+            // the hold ends, and six seconds later nothing has asked.
+            Hold(shell, clock, 2000);
+            Assert.True(LeashHoldRing.IsShown);
+            keyDown = false;
+            Hold2(shell, clock);
+            Assert.False(LeashHoldRing.IsShown);
+            Assert.Null(LeashCutConfirmWindow.Current);
+            keyDown = true;
+            clock.Now = clock.Now.AddSeconds(5);
 
             // Five seconds: the question, ring gone. No keeps the leash.
             Hold(shell, clock, 5000);
@@ -131,6 +146,7 @@ public sealed class LeashHoldTests
             shell.Close();
             (LeashHead.Service, MainShellWindow.LeashHoldTime) = (oldSvc, oldTime);
             X11PanicKey.PanicReleased = oldReleased;
+            MainShellWindow.LeashHoldKeyDown = oldKeyDown;
             (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldTargets, oldUi);
             CoreSettings.ServiceProvider = null;
         }
