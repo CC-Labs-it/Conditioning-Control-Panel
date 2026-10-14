@@ -1,8 +1,9 @@
 using System.Collections.Generic;
+using ConditioningControlPanel.Services;
 using Xunit;
-using static ConditioningControlPanel.Services.VideoService;
+using static ConditioningControlPanel.Services.VideoRenderMath;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// #687 (the parked #632/#636 cluster) — the blurred-background surface froze the app because the
@@ -226,17 +227,17 @@ public class BlurSurfaceFrameTests
     public void BlurFill_ArmsOnlyWhenBarsWouldShow()
     {
         double screen = 16.0 / 9.0;
-        Assert.False(NeedsBlurFill(1.778, screen));           // exact match
-        Assert.False(NeedsBlurFill(640.0 / 368.0, screen));   // 1.739, inside the 3% tolerance
-        Assert.True(NeedsBlurFill(640.0 / 386.0, screen));    // 1.658, outside it
-        Assert.True(NeedsBlurFill(9.0 / 16.0, screen));       // vertical clip
+        Assert.False(MandatoryVideoScheduler.NeedsBlurFill(1.778, screen));           // exact match
+        Assert.False(MandatoryVideoScheduler.NeedsBlurFill(640.0 / 368.0, screen));   // 1.739, inside the 3% tolerance
+        Assert.True(MandatoryVideoScheduler.NeedsBlurFill(640.0 / 386.0, screen));    // 1.658, outside it
+        Assert.True(MandatoryVideoScheduler.NeedsBlurFill(9.0 / 16.0, screen));       // vertical clip
     }
 
     [Fact]
     public void BlurFill_UnknownAspectDoesNotArmTheGaussian()
     {
-        Assert.False(NeedsBlurFill(0, 16.0 / 9.0));
-        Assert.False(NeedsBlurFill(1.778, 0));
+        Assert.False(MandatoryVideoScheduler.NeedsBlurFill(0, 16.0 / 9.0));
+        Assert.False(MandatoryVideoScheduler.NeedsBlurFill(1.778, 0));
     }
 
     [Fact]
@@ -257,7 +258,7 @@ public class BlurSurfaceFrameTests
         // And neither one is ever a stretch: both fit inside the screen at their own aspect.
         Assert.Equal(640.0 / 368.0, seen[0].W / seen[0].H, 5);
         Assert.Equal(640.0 / 386.0, seen[4].W / seen[4].H, 5);
-        Assert.False(NeedsBlurFill(640.0 / 368.0, screen));
-        Assert.True(NeedsBlurFill(640.0 / 386.0, screen));
+        Assert.False(MandatoryVideoScheduler.NeedsBlurFill(640.0 / 368.0, screen));
+        Assert.True(MandatoryVideoScheduler.NeedsBlurFill(640.0 / 386.0, screen));
     }
 }
