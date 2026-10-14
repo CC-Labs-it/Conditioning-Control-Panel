@@ -28,13 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// honest read-only slice restored here, including pointer and keyboard selection.
     ///
     /// Preset Load / New / Save-over / Delete are wired (WPF MainWindow.Presets.cs:2202-2381).
-    /// ponytail: needs JustDropOrdersService and the tab FX clock, wired when those move to
-    /// Core. Reveal spoilers and the Catalogue chip are wired. The remaining wiring points,
+    /// ponytail: needs JustDropOrdersService. The focal tab FX now live in PresetsTabView.Fx.cs. Reveal spoilers and the Catalogue chip are wired. The remaining wiring points,
     /// all named in the XAML, are:
     ///   BtnSelectCornerGif / ChkCornerGifEnabled / RbCornerTL..BR /
     ///   SliderCornerGifSize + SliderCornerGifOpacity / CmbRackSort.SelectionChanged /
-    ///   preset chip clicks and IsVisibleChanged -> OnPresetsTabVisibilityChanged (the card-sheen
-    ///   clock, started on show, dropped on hide).
     ///
     /// Two handlers that look view-only are NOT wired on purpose. SliderCornerGif*_ValueChanged
     /// stamps "{n}px" / "{n}%" into TxtCornerGifSize / TxtCornerGifOpacity, but it also writes
@@ -92,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionDuration.Text = Loc.Get("label_30_minutes");
             TxtSessionXP.Text = Loc.Get("label_50_xp");
             TxtSessionDifficulty.Text = Loc.Get("label_easy_2");
+            InitializeFocalFx();
             SeedRailRackAndTakeaway();
         }
 
@@ -100,11 +98,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             RefreshLocalizedDetails();
+            AttachFocalFx();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            DetachFocalFx();
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -345,6 +345,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// ahead of the fixed "+ New" chip.</summary>
         internal void RefreshPresetsList()
         {
+            DetachCardSheen();
             var presets = Preset.GetDefaultPresets();
             presets.AddRange(CoreSettings.Current.UserPresets);
 
@@ -355,6 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             int at = 0;
             foreach (var preset in presets)
                 PresetCardsPanel.Children.Insert(at++, PresetChip(preset));
+            RefreshCardSheen();
         }
 
         /// <summary>WPF's SelectPreset (MainWindow.Presets.cs:461).</summary>
@@ -627,6 +629,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Theme = TabTheme(selected ? "SdPresetChipSelected" : "SdPresetChip"),
                 Child = line,
             };
+            PrepareChipFx(chip);
             chip.PointerPressed += (_, e) => { SelectPreset(preset); e.Handled = true; };
             return chip;
         }
@@ -808,6 +811,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Rebuild only the filtered rows; details and selected model remain view state.</summary>
         private void RepaintSessionRack()
         {
+            DetachCardSheen();
             SessionRackPanel.Children.Clear();
             SeedSessionRack();
         }
@@ -945,8 +949,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             row.PointerPressed += SessionRow_PointerPressed;
             row.KeyDown += SessionRow_KeyDown;
-            row.PointerEntered += (_, _) => AttachRowSweep(row);
-            row.PointerExited += (_, _) => { if (ReferenceEquals(row, _rowSweepHost)) _rowSweep?.Leave(); };
+            CardTransforms(row);
+            row.PointerEntered += (_, _) => { LiftSessionRow(row, true); AttachRowSweep(row); };
+            row.PointerExited += (_, _) => { LiftSessionRow(row, false); if (ReferenceEquals(row, _rowSweepHost)) _rowSweep?.Leave(); };
             return row;
         }
 
@@ -1167,6 +1172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var selected = row.Tag is Session session && session.Id == _selectedSession?.Id;
                 row.Theme = selected ? selectedStyle : normalStyle;
             }
+            RefreshCardSheen();
         }
 
         /// <summary>WPF MainWindow.Presets.cs BtnSessionHistory_Click.</summary>
