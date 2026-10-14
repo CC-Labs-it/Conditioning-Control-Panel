@@ -21,16 +21,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// <summary>
     /// Fullscreen 16-point gaze calibration (4×4 grid), PORTED from
     /// ConditioningControlPanel/Windows/WebcamCalibrationWindow.xaml.cs over Platform/WebcamTracker
-    /// (OnRawIris / OnHeadPose / OnBlink / StateChanged / SetCalibrationLive / ApplyCalibration). The
+    /// (OnRawIris / OnHeadPose / OnBlink / OnMouthOpen / StateChanged / SetCalibrationLive / ApplyCalibration). The
     /// fit is Core WebcamCalibrationFit, which the WPF window calls too; the result is saved to the
     /// same profile file in the same format (WebcamCalibrationData.Save).
     ///
     /// Same timing, retries, messages and gesture checks as WPF. Deviations: Escape, a tracker stop
     /// (panic, revoke) or the X before the save restores the previously live calibration (WPF leaves the
-    /// unsaved candidate live); the mouth prompts always time out (no MAR detector yet); the redo prompt
+    /// unsaved candidate live); the redo prompt
     /// is ConfirmAsync (Yes / Cancel); Close(bool) for DialogResult; Screens.ScreenFromWindow for the monitor.
     /// Verify's and the bubble test's live cursor is a pink dot in this window (WPF: GazeDebugCursorService's
-    /// overlay, minus its trail). The bubble test's rules are Core BubbleAccuracyTest, shared with WPF.
+    /// overlay, with shared Core trail rules). The bubble test's rules are Core BubbleAccuracyTest, shared with WPF.
     /// The ring pulse and the bubble pop are stepped on the window clock: Avalonia's Animation cannot target a Transform.
     /// </summary>
     public partial class WebcamCalibrationWindow : Window
@@ -72,6 +72,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtVerifyStatus;
         private readonly Button _btnVerifyAccuracy;
         private readonly Ellipse _verifyCursor;
+        private readonly GazeCursorTrailControl _verifyTrail;
+        private int _trailToken;
+        private Action? _gestureUnsubscribe;
+        private bool _trailRunning;
+        private Point? _trailPosition;
 
         private DispatcherTimer? _ringPulse;
         private int _verifyCountdownSecondsLeft, _verifyToken;
@@ -126,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtVerifyStatus = this.FindControl<TextBlock>("TxtVerifyStatus")!;
             _btnVerifyAccuracy = this.FindControl<Button>("BtnVerifyAccuracy")!;
             _verifyCursor = this.FindControl<Ellipse>("VerifyCursor")!;
+            _verifyTrail = this.FindControl<GazeCursorTrailControl>("VerifyTrail")!;
 
             // FindControl is constrained to Control, so the named ScaleTransform is reached through
             // its owner's RenderTransform (authored in this file, so Single() is deterministic).
@@ -188,6 +194,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             IsShowing = false;
             _cancelled = true;
+            _gestureUnsubscribe?.Invoke();
+            _gestureUnsubscribe = null;
             _collecting = false;
             _introDone.TrySetResult(false);
             StopRingPulse();
@@ -380,12 +388,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             await RunGestureCheckAsync(IconKind.Eye, "Blink a couple of times", 2, h => Tracker.OnBlink += h, h => Tracker.OnBlink -= h);
             if (_cancelled) return;
-            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide", 1, h => Tracker.OnMouthOpen += h, h => Tracker.OnMouthOpen -= h);
             if (_cancelled) return;
             _txtValidationDetail.Text = "Good — close, and once more in a moment…";
             await Delay(1000);
             if (_cancelled) return;
-            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide again", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide again", 1, h => Tracker.OnMouthOpen += h, h => Tracker.OnMouthOpen -= h);
         }
 
         /// <summary>WPF RunGestureCheckAsync + WaitFor*Async: up to 5 s for <paramref name="needed"/>
@@ -403,14 +411,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             int count = 0;
             void Handler()
             {
+                if (_cancelled) return;
                 count++;
                 _txtValidationDetail.Text = $"Detected: {count} / {needed}";
                 if (count >= needed) tcs.TrySetResult(true);
             }
             add?.Invoke(Handler);
+            _gestureUnsubscribe = () => remove?.Invoke(Handler);
             bool got;
             try { got = await Task.WhenAny(tcs.Task, Delay(TimeoutMs)) == tcs.Task; }
-            finally { remove?.Invoke(Handler); }
+            finally { remove?.Invoke(Handler); _gestureUnsubscribe = null; }
             if (_cancelled) return;
 
             if (got)
@@ -480,9 +490,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnVerifyGaze(Point p)
         {
+            if (_cancelled || (!_verifyGazeSubscribed && !_bubbleTestRunning)) return;
+            _trailPosition = p;
+            _verifyTrail.History.Tick(0, (p.X, p.Y));
+            _verifyTrail.InvalidateVisual();
+            if (!_trailRunning) { _trailRunning = true; Tracker.OnFaceLost += HideCursor; RunTrail(++_trailToken); }
             Canvas.SetLeft(_verifyCursor, p.X - _verifyCursor.Width / 2);
             Canvas.SetTop(_verifyCursor, p.Y - _verifyCursor.Height / 2);
             _verifyCursor.IsVisible = true;
+        }
+
+        private async void RunTrail(int token)
+        {
+            long last = Time.GetTimestamp();
+            while (token == _trailToken)
+            {
+                await Delay(16);
+                if (token != _trailToken) return;
+                long now = Time.GetTimestamp();
+                _verifyTrail.History.Tick(Time.GetElapsedTime(last, now).TotalSeconds,
+                    _trailPosition is { } p ? (p.X, p.Y) : null);
+                last = now;
+                _verifyTrail.InvalidateVisual();
+            }
+        }
+
+        private void HideCursor()
+        {
+            _trailPosition = null;
+            _verifyTrail.History.Clear();
+            _verifyTrail.InvalidateVisual();
+            _verifyCursor.IsVisible = false;
+        }
+
+        private void StopTrail()
+        {
+            _trailToken++;
+            _trailRunning = false;
+            Tracker.OnFaceLost -= HideCursor;
+            HideCursor();
         }
 
         private void UpdateVerifyCountdownUi() =>
@@ -492,7 +538,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _verifyToken++;
             if (_verifyGazeSubscribed) { Tracker.OnGazeMove -= OnVerifyGaze; _verifyGazeSubscribed = false; }
-            _verifyCursor.IsVisible = false;
+            StopTrail();
             _btnVerifyAccuracy.IsEnabled = true;
             _txtVerifyStatus.Text = "Click Verify to preview accuracy with a live gaze cursor, or close when ready.";
         }
@@ -529,7 +575,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Tracker.OnGazeMove -= OnBubbleTestGaze;
                 Tracker.ClearGazeAttractor();
-                _verifyCursor.IsVisible = false;
+                StopTrail();
                 _bubbleTestPanel.IsVisible = false;
                 _bubbleTestRunning = false;
             }

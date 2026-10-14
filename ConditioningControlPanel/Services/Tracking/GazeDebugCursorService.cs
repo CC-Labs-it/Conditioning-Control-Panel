@@ -33,9 +33,7 @@ namespace ConditioningControlPanel.Services;
 public class GazeDebugCursorService : IDisposable
 {
     private const float DotRadius = 8f;          // core dot radius (DIPs)
-    private const float TrailLifeSec = 0.55f;    // trail node lifetime
-    private const int MaxTrailNodes = 64;
-    private const float TrailMinStepDips = 3f;   // new node only after this much travel
+    private const float TrailLifeSec = GazeCursorTrail.LifeSeconds;    // trail node lifetime
 
     // Idle pink / locked warm gold — same palette the old Ellipse fills used.
     private static readonly SKColor IdleBody = new(0xFF, 0x69, 0xB4);
@@ -60,8 +58,7 @@ public class GazeDebugCursorService : IDisposable
     private Point _lastPaintedPos;
     private bool _needsPaint;
 
-    private struct TrailNode { public float X, Y, Age; }
-    private readonly List<TrailNode> _trail = new(MaxTrailNodes);
+    private readonly GazeCursorTrail _trail = new();
 
     // Soft radial sprite for the dot bloom (shared, built once) + cached
     // tint filters so the paint path never allocates per frame.
@@ -318,32 +315,8 @@ public class GazeDebugCursorService : IDisposable
                 }
             }
 
-            // Age + cull trail nodes.
-            for (int i = _trail.Count - 1; i >= 0; i--)
-            {
-                var n = _trail[i];
-                n.Age += dt;
-                if (n.Age >= TrailLifeSec) _trail.RemoveAt(i);
-                else _trail[i] = n;
-            }
-
-            // Feed the trail from the latest cursor position (overlay-local).
-            if (_hasPos && !_faceLost && TryOverlayLocal(out float lx, out float ly))
-            {
-                bool add = _trail.Count == 0;
-                if (!add)
-                {
-                    var last = _trail[_trail.Count - 1];
-                    float dx = lx - last.X, dy = ly - last.Y;
-                    add = dx * dx + dy * dy >= TrailMinStepDips * TrailMinStepDips;
-                }
-                if (add)
-                {
-                    if (_trail.Count >= MaxTrailNodes) _trail.RemoveAt(0);
-                    _trail.Add(new TrailNode { X = lx, Y = ly, Age = 0f });
-                    _needsPaint = true;
-                }
-            }
+            (double X, double Y)? local = _hasPos && !_faceLost && TryOverlayLocal(out float lx, out float ly) ? (lx, ly) : null;
+            _needsPaint |= _trail.Tick(dt, local);
 
             // Repaint only when something changed — a static dot with a dead
             // trail costs nothing while the user fixates.
