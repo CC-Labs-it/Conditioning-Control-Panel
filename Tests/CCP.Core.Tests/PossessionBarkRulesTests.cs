@@ -6,7 +6,7 @@ using ConditioningControlPanel.Services.Possession;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Possession's warden only speaks through the bark packs (Services/Possession/POSSESSION.md - Barks),
@@ -126,7 +126,6 @@ public class PossessionBarkRulesTests
         // StareAsync leans on the bark system for its one line and only falls back to a hardcoded
         // string when there is no BarkService at all, so a missing 'stare' rule leaves the warden
         // gliding to the middle of the window in complete silence.
-        string[] verbs = { "knock", "stare", "leave", "return" };
         foreach (var pack in Packs)
         {
             var have = LoadRules(pack)
@@ -136,7 +135,7 @@ public class PossessionBarkRulesTests
                 .Select(v => v!.ToLowerInvariant())
                 .ToHashSet();
 
-            foreach (var verb in verbs)
+            foreach (var verb in WardenRules.Verbs)
                 Assert.True(have.Contains(verb),
                     $"{pack}/bark_rules.json has no PossessionWarden rule for verb_eq '{verb}'");
         }
@@ -206,7 +205,7 @@ public class PossessionBarkRulesTests
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "Assets", "sounds", "companion_audio")))
             dir = dir.Parent;
         Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
         return dir!.FullName;
