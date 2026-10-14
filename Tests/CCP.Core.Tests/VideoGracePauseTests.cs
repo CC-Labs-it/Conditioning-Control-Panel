@@ -1,19 +1,20 @@
 ﻿using System;
 using ConditioningControlPanel.Services;
 using Xunit;
-using static ConditioningControlPanel.Services.VideoService;
+using static ConditioningControlPanel.Services.MandatoryVideoScheduler;
+using static ConditioningControlPanel.Services.VideoCooldownRules;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// #735 "grace pause" — the first panic press while a mandatory video is really on screen pauses it
 /// behind a Paused/Resume card instead of stopping the engine. Three pieces of pure logic carry the
 /// feature and all three have sharp edges:
 ///
-///   1. <see cref="VideoService.EvaluateGraceRequest"/> — the ladder decision, including the 200ms
+///   1. <see cref="MandatoryVideoScheduler.EvaluateGrace"/> — the ladder decision, including the 200ms
 ///      dedup that stops ONE physical keystroke from both pausing (window PreviewKeyDown) and then
 ///      stopping the engine (the global hook's queued handler).
-///   2. <see cref="VideoService.RemainingTimerInterval"/> — a 60s pause must not make the duration
+///   2. <see cref="VideoCooldownRules.RemainingTimerInterval"/> — a 60s pause must not make the duration
 ///      guillotine or the max-length cap fire 60s early.
 ///   3. The countdown arithmetic + auto-resume trigger.
 /// </summary>
@@ -24,7 +25,7 @@ public class VideoGracePauseTests
     [Fact]
     public void PlayingVideo_FirstPress_Pauses()
     {
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
             consumed: false, msSinceLastGraceAction: double.MaxValue);
         Assert.Equal(GraceDecision.Pause, d);
     }
@@ -32,7 +33,7 @@ public class VideoGracePauseTests
     [Fact]
     public void NoVideoPlaying_FallsThroughToNormalPanic()
     {
-        var d = EvaluateGraceRequest(videoPlaying: false, cleaningUp: false, alreadyPaused: false,
+        var d = EvaluateGrace(videoPlaying: false, cleaningUp: false, alreadyPaused: false,
             consumed: false, msSinceLastGraceAction: double.MaxValue);
         Assert.Equal(GraceDecision.FallThrough, d);
     }
@@ -42,7 +43,7 @@ public class VideoGracePauseTests
     {
         // A video already being torn down has nothing to pause, and swallowing the press would
         // strand the user staring at a dying fullscreen.
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: true, alreadyPaused: false,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: true, alreadyPaused: false,
             consumed: false, msSinceLastGraceAction: double.MaxValue);
         Assert.Equal(GraceDecision.FallThrough, d);
     }
@@ -50,7 +51,7 @@ public class VideoGracePauseTests
     [Fact]
     public void AlreadyPaused_SecondPress_IsTodaysNormalPanicPress()
     {
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
             consumed: false, msSinceLastGraceAction: 5000);
         Assert.Equal(GraceDecision.FallThrough, d);
     }
@@ -62,7 +63,7 @@ public class VideoGracePauseTests
         // does: the targets freeze with the video (motion, clicks and their expiry countdown all
         // stop) and come back with the time they had left, so there is nothing left to protect. The
         // decision does not take the flag at all any more - this pins the behaviour change.
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
             consumed: false, msSinceLastGraceAction: double.MaxValue);
         Assert.Equal(GraceDecision.Pause, d);
     }
@@ -75,7 +76,7 @@ public class VideoGracePauseTests
         // The global hook's queued HandlePanicKeyPress arriving a few ms after the window handler
         // already paused. Note alreadyPaused is TRUE by then — without the dedup this exact call
         // would return FallThrough and stop the engine.
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
             consumed: false, msSinceLastGraceAction: 12);
         Assert.Equal(GraceDecision.ConsumedDedup, d);
     }
@@ -85,7 +86,7 @@ public class VideoGracePauseTests
     [InlineData(199)]
     public void InsideDedupBoundary_IsConsumed(double sinceMs)
     {
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
             consumed: false, msSinceLastGraceAction: sinceMs);
         Assert.Equal(GraceDecision.ConsumedDedup, d);
     }
@@ -97,7 +98,7 @@ public class VideoGracePauseTests
     public void AtOrPastDedupBoundary_IsARealSecondPress(double sinceMs)
     {
         Assert.Equal(GraceDedupMs, 200);
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: true,
             consumed: false, msSinceLastGraceAction: sinceMs);
         Assert.Equal(GraceDecision.FallThrough, d);
     }
@@ -108,7 +109,7 @@ public class VideoGracePauseTests
         // The window handler paused; by the time the queued global handler runs the video could
         // already be gone (a racing natural end). The duplicate must STILL be swallowed — resurrecting
         // it as a normal panic press would stop the engine off one keystroke.
-        var d = EvaluateGraceRequest(videoPlaying: false, cleaningUp: true, alreadyPaused: false,
+        var d = EvaluateGrace(videoPlaying: false, cleaningUp: true, alreadyPaused: false,
             consumed: true, msSinceLastGraceAction: 30);
         Assert.Equal(GraceDecision.ConsumedDedup, d);
     }
@@ -118,7 +119,7 @@ public class VideoGracePauseTests
     [Fact]
     public void ConsumedGrace_FallsThroughForTheRestOfTheRun()
     {
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
             consumed: true, msSinceLastGraceAction: double.MaxValue);
         Assert.Equal(GraceDecision.FallThrough, d);
     }
@@ -130,7 +131,7 @@ public class VideoGracePauseTests
         // which is a fresh GetNextVideo through the same method), so the very next press pauses again.
         var consumed = true;
         consumed = false;   // what PlayVideo does
-        var d = EvaluateGraceRequest(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
+        var d = EvaluateGrace(videoPlaying: true, cleaningUp: false, alreadyPaused: false,
             consumed: consumed, msSinceLastGraceAction: double.MaxValue);
         Assert.Equal(GraceDecision.Pause, d);
     }
