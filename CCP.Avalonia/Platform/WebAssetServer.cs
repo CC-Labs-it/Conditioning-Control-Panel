@@ -10,6 +10,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 using ConditioningControlPanel;
@@ -82,6 +84,17 @@ public sealed class WebAssetServer : IDisposable
     /// same origin as the page, so the token cookie covers it; each path segment escaped.</summary>
     public string AssetUrl(string rel) =>
         $"http://127.0.0.1:{Port}/{AssetsPrefix}" + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+
+    /// <summary>WPF's whisper virtual hosts, served behind the same token/cookie as the board.</summary>
+    public Func<string?> SubAudioRoot { get; init; } = () => ContentLocator.ResolveDirectory("Resources/sub_audio");
+    public Func<string?> WordsRoot { get; init; } = () => SubliminalWhisper.WordsRoot();
+
+    /// <summary>Translate the shared whisper selector's virtual URL into this server's origin.</summary>
+    internal string WhisperUrl(string url)
+    {
+        var uri = new Uri(url);
+        return $"http://127.0.0.1:{Port}/{uri.Host}{uri.AbsolutePath}";
+    }
 
     /// <summary>Per-port so two runs on 127.0.0.1 (cookies ignore the port) never overwrite each other.</summary>
     string CookieName => $"ccp_t_{Port}";
@@ -196,6 +209,19 @@ public sealed class WebAssetServer : IDisposable
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
+        bool whisper = rel.StartsWith(PbpWhisperClips.SubAudioHost + "/", StringComparison.Ordinal)
+            || rel.StartsWith(PbpWhisperClips.WordsHost + "/", StringComparison.Ordinal);
+        if (whisper)
+        {
+            int slash = rel.IndexOf('/');
+            string? folder = rel[..slash] == PbpWhisperClips.SubAudioHost ? SubAudioRoot() : WordsRoot();
+            if (string.IsNullOrEmpty(folder)) return null;
+            root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            rel = rel[(slash + 1)..];
+            // Only the bare audio files selected by PbpWhisperClips, never a manifest or another tree.
+            if (rel.Contains('/') || rel.Contains('\\') || rel.StartsWith('.') || !PbpWhisperClips.IsClip(rel)
+                || HoldsUserData(root)) return null;
+        }
         if (asset)
         {
             if (AssetsRoot?.Invoke() is not { Length: > 0 } assets) return null;

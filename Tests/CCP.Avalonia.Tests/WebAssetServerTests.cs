@@ -123,6 +123,39 @@ public class WebAssetServerTests
     }
 
     [Fact]
+    public async Task WhisperHosts_ServeOnlyAudioWithToken_AndRefuseTraversalAndLinks()
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-audio-").FullName;
+        try
+        {
+            var audio = Directory.CreateDirectory(Path.Combine(dir, "audio")).FullName;
+            File.WriteAllText(Path.Combine(audio, "a one.mp3"), "clip");
+            File.WriteAllText(Path.Combine(audio, "words.json"), "manifest");
+            File.WriteAllText(Path.Combine(dir, "outside.mp3"), "outside");
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => audio, WordsRoot = () => audio };
+            using var http = Client();
+            foreach (var host in new[] { "ccp.subaudio", "ccp.words" })
+            {
+                var url = server.WhisperUrl($"https://{host}/a%20one.mp3");
+                using var first = Client();
+                Assert.Equal(HttpStatusCode.Forbidden, (await first.GetAsync(url)).StatusCode);
+                var response = await http.GetAsync(url + "?ccp_t=" + server.Token);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.Equal("audio/mpeg", response.Content.Headers.ContentType!.MediaType);
+                Assert.Equal("clip", await response.Content.ReadAsStringAsync());
+                Assert.Null(server.ResolveFile($"/{host}/words.json"));
+                Assert.Null(server.ResolveFile($"/{host}/%2e%2e/outside.mp3"));
+                // A new client proves each host still needs authentication after a cookie-bearing request.
+                using var unauth = Client();
+                Assert.Equal(HttpStatusCode.Forbidden, (await unauth.GetAsync(url)).StatusCode);
+            }
+            File.CreateSymbolicLink(Path.Combine(audio, "link.mp3"), Path.Combine(dir, "outside.mp3"));
+            Assert.Null(server.ResolveFile("/ccp.words/link.mp3"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public async Task SharedServer_ServesTheShippedIntakePage()
     {
         using var http = Client();

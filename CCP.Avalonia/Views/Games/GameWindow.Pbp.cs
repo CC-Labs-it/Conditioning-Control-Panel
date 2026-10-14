@@ -1,14 +1,14 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
-// ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (no Core
+// media-flavour / media-more / online-media), PvP stakes (no Core
 // StakeBridge on this head), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -147,13 +147,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>()));
+                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, PbpWhispers()));
             }
             if (!_pbpIdentityPosted)
             {
                 _pbpIdentityPosted = true;
                 Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                     CoreSettings.Current.UserDisplayName, CoreReleaseContent.AppVersion));
+            }
+        }
+
+        /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
+        private IReadOnlyList<string> PbpWhispers()
+        {
+            if (_server == null) return Array.Empty<string>();
+            try
+            {
+                static IEnumerable<string>? Names(string? folder) =>
+                    !string.IsNullOrEmpty(folder) && Directory.Exists(folder)
+                        ? Directory.GetFiles(folder).Select(f => Path.GetFileName(f)) : null;
+                bool shared = CoreSettings.Current.SubAudioAudible && ModAudioPolicy.UsesSharedSubAudio(CoreMods.ActiveModId);
+                return PbpWhisperClips.Build(Names(Path.Combine(CorePaths.EffectiveAssets, PbpWhisperClips.BrainDrainFolder)),
+                    shared, Names(_server.SubAudioRoot()), Names(_server.WordsRoot())).Select(_server.WhisperUrl).ToArray();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("PieceByPiece: whisper clips failed: {E}", ex.Message);
+                return Array.Empty<string>();
             }
         }
 
