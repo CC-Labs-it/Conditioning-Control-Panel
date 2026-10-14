@@ -27,8 +27,8 @@ Remaining Linux project attempts used `dotnet build <project> -c Release -m:1 -p
 | CCP.Avalonia.Snapshot.Tests | CS0006: Avalonia reference assembly missing |
 | CCP.Avalonia.Tests | full filtered attempt above did not finish; no assembly emitted |
 | CCP.Core.Tests | assembly compiled; focused 5 passed, full suite not completed |
-| CCP.Core.Content.Tests | not reached after the graph stalled; no standalone build result |
-| CCP.Core.Settings.Tests | not reached after the graph stalled; no standalone build result |
+| CCP.Core.Content.Tests | standalone 60-second build timed out (exit 124); no completed build result |
+| CCP.Core.Settings.Tests | standalone 60-second build succeeded (exit 0); tests not run |
 
 SDK 10.0.111 was used for the final bounded attempts with `DOTNET_PROCESSOR_COUNT=2`, `DOTNET_TieredCompilation=1`, and `DiffEngine_Disabled=true`. The graph/initial component/Core build attempts used a 1 GB GC heap limit; later head/Core runtime attempts used 2 GB. Earlier SDK 10.0.402 and unconstrained SDK 10.0.111 Release/Debug attempts stalled or were stopped without completed results. Full Core tests were attempted with `CCP_REQUIRE_VOSK=1` and `CCP_VOSK_MODEL=/workspace/shared/vosk/vosk-model-small-en-us-0.15`.
 
