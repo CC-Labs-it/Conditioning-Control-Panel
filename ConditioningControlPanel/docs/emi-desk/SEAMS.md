@@ -152,7 +152,7 @@ public void StopIdleBeats();
 the shortcut. Dwell is `EmiChains.SayHoldMs(len)` = `max(4050, 1890 + 61 * len)` ms, ported verbatim
 from `chains.js`. Chain ids live in `EmiChains.Chains`; `EmiChains.Get(id)` is the lookup.
 
-Do not touch `EmiChains.Player` directly - the window owns exactly one and cancels it on teardown.
+Do not touch `EmiChainPlayer` directly - the window owns exactly one and cancels it on teardown.
 
 ---
 
