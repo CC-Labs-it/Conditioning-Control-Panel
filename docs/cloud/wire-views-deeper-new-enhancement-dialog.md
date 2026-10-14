@@ -6,6 +6,16 @@
 - Ledger row stays **stub**. Removed misleading comments that claimed CoreTutorial was unseeded or had no event bus: both exist on BASE. Full walkthrough work includes native partial input regions and automatic control/event advancement in the legacy overlay, plus editor continuation; porting that with focused coverage exceeds this lane's 1000-line budget. Merely opening that legacy overlay would obscure Browse/Create, so tutorials remain unwired.
 - Read-only `parity/trunk` inspected at `a4ee52d40cd347d288dcf7fdaa8445b79f8e5038`; no trunk files imported. WPF reference behavior was adapted from BASE `0e1aa0473e7a5b6120544923e94bb04cc62a7e50`.
 
+## Changed files
+
+- `CCP.Avalonia/Views/Deeper/NewEnhancementDialog.axaml.cs`
+- `CCP.Core/Services/HypnotubeDefaultLinks.cs`
+- `ConditioningControlPanel/Views/Deeper/NewEnhancementDialog.xaml.cs`
+- `Tests/CCP.Avalonia.Tests/NewEnhancementSourceTests.cs`
+- `Tests/CCP.Core.Tests/HypnotubeTutorialSampleTests.cs`
+- `docs/avalonia-parity.md`
+- `docs/cloud/wire-views-deeper-new-enhancement-dialog.md`
+
 ## Verification limits
 
 Commands used SDK 10.0.402 via `PATH=/workspace/.dotnet:$PATH`, `DiffEngine_Disabled=true`. Headless tests/rendering used the temporary fontconfig selecting system DejaVu/Liberation/Noto fonts because this host's normal fallback chose an unsupported WOFF2 font. Repository test sandboxes and a scoped proxy of Avalonia's existing native-storage interface protect real profiles and the desktop.
