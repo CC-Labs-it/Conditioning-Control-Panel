@@ -23,7 +23,7 @@
                                             Avalonia does not have.
        <Slider> (unstyled)               -> Theme="{StaticResource PinkSlider}" (the WPF theme applies
                                             PinkSlider implicitly to every Slider: Resources/Theme/MainWindow.xaml:341)
-       feat:AdaptiveSideArt.CollapseBelow-> dropped (ponytail: WPF-head attached property)
+       feat:AdaptiveSideArt.CollapseBelow-> SizeChanged + shared Core hysteresis rule
        x:FieldModifier="internal"        -> dropped; x:Names kept
        Click= / ValueChanged= / Checked= -> wired in the constructor
 
@@ -101,7 +101,7 @@
                                     BorderThickness="0" Foreground="#90EE90"
                                     FontWeight="Bold" FontSize="13" Padding="14,6"
                                     ToolTip.Tip="Turn the offline mic on or off — wake word (&quot;Hey Bambi&quot;) + voice commands. Works whether or not Takeover is running.">
-                                <TextBlock Text="▶  Start listening"/>
+                                <fx:IconLabel Classes="filled" Kind="Play" Text="Start listening"/>
                             </Button>
                         </Border>
                     </Grid>
@@ -111,7 +111,7 @@
                      slider is not a 1100px runway, and the width that buys back becomes one art
                      plate instead of dead margin. Every instructional card lives in column 0, not
                      the rail, because the rail is the half that collapses on a narrow window. -->
-                <Grid>
+                <Grid x:Name="SL_SettingsColumns">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" MaxWidth="780"/>
                         <ColumnDefinition Width="2*"/>
@@ -496,8 +496,8 @@
                                     <fx:IconLabel Classes="vhead" Kind="BubbleMultiple" Text="Bubbles" Tag="voice:bubbles_on|bubbles_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“show me some bubbles” · “bubbles on” · “give me bubbles”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“stop the bubbles” · “no more bubbles” · “bubbles off”"/></TextBlock>
 
-                                    <fx:IconLabel Classes="vhead" Kind="Tv" Text="Video" Tag="voice:video_on|video_off|video_pause"/>
-                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="play "/><Run Text="“show me a video” · “play a video” · “put on a video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="stop "/><Run Text="“stop the video” · “no more videos” · “video off”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="pause "/><Run Text="“pause the video” · “resume the video” · “keep playing”"/></TextBlock>
+                                    <fx:IconLabel Classes="vhead" Kind="Tv" Text="Video" Tag="voice:video_on|video_off|video_pause|video_resume"/>
+                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="play "/><Run Text="“show me a video” · “play a video” · “put on a video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="stop "/><Run Text="“stop the video” · “no more videos” · “video off”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="pause "/><Run Text="“pause the video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="resume "/><Run Text="“resume the video” · “keep playing”"/></TextBlock>
 
                                     <fx:IconLabel Classes="vhead filled" Kind="Sparkle" Text="Flash" Tag="voice:flash_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
@@ -550,6 +550,7 @@
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,16,0,14"/>
 
+                            <!-- ponytail: split mixed WPF phrase lines by intent so unsupported alternatives can be hidden. -->
                             <!-- Session, audio and handy verbs -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -559,13 +560,11 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0">
-                                    <fx:IconLabel Classes="vhead filled" Kind="Pause" Text="Session" Tag="voice:pause"/>
-                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
-                                               Text="“pause” · “resume” · “keep going”"/>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Pause" Text="Session" Tag="voice:pause|resume"/>
+                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Text="“pause”"/><LineBreak/><Run Text="“resume” · “keep going”"/></TextBlock>
 
-                                    <fx:IconLabel Classes="vhead" Kind="Speaker2" Text="Volume" Tag="voice:louder"/>
-                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
-                                               Text="“louder” · “quieter” · “mute”"/>
+                                    <fx:IconLabel Classes="vhead" Kind="Speaker2" Text="Volume" Tag="voice:louder|quieter|mute"/>
+                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Text="“louder”"/><LineBreak/><Run Text="“quieter”"/><LineBreak/><Run Text="“mute”"/></TextBlock>
 
                                     <fx:IconLabel Classes="vhead heart" Kind="Heart" Text="Mantra" Tag="voice:mantra"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21"
