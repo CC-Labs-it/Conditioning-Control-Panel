@@ -1,0 +1,64 @@
+/* Piece by Piece - the ladder (ui/ladder.js): the rating chip, the Ladder
+   screen, and the end card's rating beat. Every effect has an IN and an OUT:
+   the number's glow breathes in as it lands and fades back out; the stamps
+   slam in once and stay as ink. Reduced motion (.door.still) shows the state:
+   final number, stamps already down. */
+
+:root { --pbp-up: #6BE39A; --pbp-down: #FF6B7D; }
+
+/* --- the chip beside your name --- */
+.ladder-chip { font-variant-numeric: tabular-nums; letter-spacing: 0.08em; opacity: 0.7; }
+.ladder-chip:empty { display: none; }
+.ladder-chip.rated { color: var(--pbp-pink); opacity: 1; }
+.door-foot .ladder-chip { margin-left: 8px; }
+.ladder-me { display: flex; align-items: center; gap: 10px; }
+.ladder-me .ladder-chip { font-size: 13px; }
+.ladder-me .door-link { padding: 2px; }
+
+/* --- the Ladder screen --- */
+.ladder-mine .door-stat .n { color: var(--pbp-pink); }
+.ladder-scroll { max-height: 46vh; overflow-y: auto; scrollbar-width: thin; margin: 0 -6px; padding: 0 6px; }
+.ladder-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ladder-row {
+  display: grid; grid-template-columns: 34px 1fr auto 52px; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px; background: rgba(245, 230, 200, 0.04);
+  border: 1px solid transparent; font-size: 13px;
+  animation: ladder-row-in 260ms cubic-bezier(.2, 1.5, .4, 1) calc(var(--i, 0) * 28ms) both;
+}
+@keyframes ladder-row-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.ladder-rk { font-variant-numeric: tabular-nums; opacity: 0.5; text-align: right; }
+.ladder-row:nth-child(-n+3) .ladder-rk { color: var(--pbp-pink); opacity: 1; }
+.ladder-name { color: var(--pbp-cream); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ladder-games { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.4; }
+.ladder-rating { font-variant-numeric: tabular-nums; text-align: right; color: var(--pbp-cream); }
+.ladder-row.mine { border-color: rgba(255, 105, 180, 0.6); background: rgba(255, 105, 180, 0.12); }
+.ladder-row.mine .ladder-rating, .ladder-row.mine .ladder-name { color: var(--pbp-pink); }
+
+/* --- the end card's rating beat --- */
+.rating-slot:empty { display: none; }
+.rating-end { position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 52px; }
+.rating-num { font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--pbp-cream); }
+.rating-stamp, .rating-best {
+  display: inline-block; padding: 4px 10px; border-radius: 8px; border: 2px solid currentColor;
+  font: 600 15px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.06em; font-variant-numeric: tabular-nums;
+  opacity: 0; transform: scale(1.9) rotate(-12deg);
+}
+.rating-best { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pbp-pink); transform: scale(1.9) rotate(9deg); }
+.rating-end.up .rating-stamp { color: var(--pbp-up); }
+.rating-end.down .rating-stamp { color: var(--pbp-down); }
+.rating-end.flat .rating-stamp { color: var(--pbp-cream); }
+/* landed: the stamp slams in, the number glows in and back out */
+.rating-end.landed .rating-stamp { animation: ladder-stamp 300ms cubic-bezier(.2, 1.5, .4, 1) both; }
+.rating-end.landed .rating-best { animation: ladder-stamp-b 300ms cubic-bezier(.2, 1.5, .4, 1) 520ms both; }
+.rating-end.up.landed .rating-num { animation: ladder-glow-up 1100ms ease-out both; }
+.rating-end.down.landed .rating-num { animation: ladder-glow-down 1100ms ease-out both, door-shiver 250ms ease-in-out both; }
+@keyframes ladder-stamp { from { opacity: 0; transform: scale(1.9) rotate(-12deg); } to { opacity: 1; transform: rotate(-4deg); } }
+@keyframes ladder-stamp-b { from { opacity: 0; transform: scale(1.9) rotate(9deg); } to { opacity: 1; transform: rotate(3deg); } }
+@keyframes ladder-glow-up { 0% { text-shadow: none; } 25% { text-shadow: 0 0 18px rgba(107, 227, 154, 0.9); color: var(--pbp-up); } 100% { text-shadow: none; } }
+@keyframes ladder-glow-down { 0% { text-shadow: none; } 25% { text-shadow: 0 0 18px rgba(255, 107, 125, 0.8); color: var(--pbp-down); } 100% { text-shadow: none; } }
+.rating-note { margin: 0; font-size: 11px; letter-spacing: 0.14em; text-transform: lowercase; opacity: 0.5; }
+.rating-note.rank { opacity: 0.7; }
+
+/* reduced motion: the state, not the travel */
+.door.still .ladder-row, .door.still .rating-end .rating-num { animation: none; }
+.door.still .rating-end .rating-stamp, .door.still .rating-end .rating-best { animation: none; opacity: 1; transform: rotate(-4deg); }

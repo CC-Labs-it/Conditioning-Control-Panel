@@ -58,6 +58,8 @@ import { saveFallCard, copyFallCard } from './fall-card.js';
 import { pictureChoice } from '../ui/pictures.js';
 import { watchHead as watchRoute } from '../net/api.js';
 import { watchLine } from '../net/watch.js';
+import { createLadder } from '../ui/ladder.js';
+import { endPlan } from '../ui/ladder-plan.js';
 
 /** Every number the door decides with. */
 export const TUNING = Object.freeze({
@@ -153,6 +155,15 @@ export function createDoor(opts = {}) {
   // Where Distraction's pictures come from (ui/pictures.js). Every start asks first while no
   // choice is saved, once (owner, 2026-09-30); after that the manager is the only way in.
   const pictures = opts.pictures || pictureChoice;
+  // The rating ladder (ui/ladder.js): the chip, the Ladder screen, the end card's beat.
+  const ladder = opts.ladder || createLadder();
+  let ladderFrom = 'menu';      // where Esc goes back to from the Ladder screen
+  let ratingBefore = null;      // ladder/me when the online game was dealt
+  let endRating = null;         // { plan, played } for the end card of the last online game
+  function freshMe() {
+    return askHost().then(() => ((host.isHosted && !signedOut) ? ladder.refreshMe() : null))
+      .then(() => ladder.paintChips(card)).catch(() => {});
+  }
   /** Run a start, after the one-time picture ask if it is still owed. Backing out starts nothing. */
   function gate(start, backedOut = () => {}) {
     let owed = false;
@@ -208,6 +219,7 @@ export function createDoor(opts = {}) {
     board.drag?.suspend?.(true);
     root.hidden = false;
     root.className = 'door up screen-' + name + (still() ? ' still' : '') + (looking ? ' looking' : '');
+    if (name === 'menu' || name === 'lobby') freshMe();
     for (const el of [hudEl(), camEl()]) if (el) el.classList.add('parked');
     try { board.setCameraSway(name === 'replay' ? 0 : T.menuSway); } catch { /* no rig */ }
     render();
@@ -231,8 +243,10 @@ export function createDoor(opts = {}) {
     const top = kept ? kept.scrollTop : 0;
     card.innerHTML = '';
     const body = document.createElement('div'); body.className = 'door-body';
-    body.innerHTML = ({ menu, lobby: lobbyScreen, found, games, profile, replay: replayScreen, end }[screen] || menu)();
+    body.innerHTML = ({ menu, lobby: lobbyScreen, found, games, profile, replay: replayScreen, end, ladder: () => ladder.screenHtml(me()) }[screen] || menu)();
     card.append(body);
+    if (screen === 'end' && endRating) ladder.mountEnd(body.querySelector('.rating-slot'), endRating, { still: still(), sfx });
+    ladder.paintChips(body);
     const sc = body.querySelector('.tables-scroll'); if (sc && top) sc.scrollTop = top;
     if (screen === 'menu') countTables();
     if (screen === 'profile') { const inp = body.querySelector('input'); if (inp && !inp.readOnly) inp.addEventListener('change', () => setPlayerName(inp.value)); }
@@ -310,9 +324,10 @@ export function createDoor(opts = {}) {
       <div class="door-links">
         <button type="button" class="door-link" data-act="games">Past games</button>
         <button type="button" class="door-link" data-act="profile">Profile</button>
+        <button type="button" class="door-link" data-act="ladder">Ladder</button>
         ${pictures.available() ? '<button type="button" class="door-link" data-act="pictures">Pictures</button>' : ''}
       </div>
-      <div class="door-foot"><span>esc leaves the board</span><span class="name">at the board as <b>${esc(me())}</b></span></div>`;
+      <div class="door-foot"><span>esc leaves the board</span><span class="name">at the board as <b>${esc(me())}</b>${ladder.chipHtml()}</span></div>`;
   }
 
   const countWord = () => (tableCount ? `${tableCount} open` : 'online');
@@ -349,6 +364,7 @@ export function createDoor(opts = {}) {
         <div class="tables-side">
           <h1 class="door-title">open tables</h1>
           <p class="door-sub tables-sub">${subHtml()}</p>
+          ${canPlay ? `<p class="door-sub ladder-me">${ladder.chipHtml()}<span class="ladder-rank"></span><button type="button" class="door-link" data-act="ladder">ladder</button></p>` : ''}
           ${canPlay ? '<div class="stake-slot">' + stakeHtml() + '</div>' : ''}
           ${askRow}
           <div class="door-row tables-actions">
@@ -503,6 +519,7 @@ export function createDoor(opts = {}) {
       <div class="door-end">
         <p class="result ${o || ''}">${esc(line)}</p>
         <p class="tally">${esc(fmtMoves(g.plies))} &middot; ${esc(fmtDuration(g.durationMs))}</p>
+        ${g.mode === 'online' ? ladder.endSlotHtml() : ''}
         ${g.mode === 'online' ? '<p class="stake-result">' + esc(stake.resultLine() || '') + '</p>' : ''}
         <div id="door-recap">${recap()}</div>
       </div>
@@ -650,6 +667,7 @@ export function createDoor(opts = {}) {
     current = { mode, match, options: restore?.options || setup, startedAt: Date.now() - (restore?.durationMs || 0), captures: { w: 0, b: 0 } };
     if (restore) for (const [i, san] of restore.moves.entries()) if (san.includes('x')) current.captures[i % 2 ? 'b' : 'w']++;
     if (mode === 'online' && match && match.id) { stake.begin(match.id); stake.play?.(); }
+    if (mode === 'online') ratingBefore = ladder.snapshot();
     hide();
     startGame({ mode, match, options: setup, restore });
   }
@@ -680,11 +698,34 @@ export function createDoor(opts = {}) {
       iq: plainIq(rec.iq),   // the fall so far; settleIq() brings in the last grade
     });
     settleIq(lastEnd, rec.iq);
+    endRating = current.mode === 'online' ? rateEnd(seat, rec) : null;
     if (current.mode === 'online' && m && m.id) stake.end(m.id);
     const finished = current;
     current = null;
     // the board's own end beat first, then the card
     later(() => { if (!current && screen === null) { lastEnd.rematchOf = finished; show('end'); } }, still() ? 0 : T.endCardDelayMs);
+  }
+
+  /**
+   * The end card's rating beat: the server's rating_delta for our seat off the
+   * result, then ladder/me again for the new number, rank and best. A read that
+   * lands after the beat played only fills in the rank line.
+   */
+  function rateEnd(seat, rec) {
+    let res = null;
+    try { res = game.result ? game.result() : null; } catch { res = null; }
+    const rd = res && res.ratingDelta;
+    const args = { delta: rd && seat ? rd[seat] : null, before: ratingBefore, plies: rec.plies || 0, reason: res && res.reason };
+    const er = { plan: endPlan(args), played: false };
+    ladder.refreshMe().then((after) => {
+      if (endRating !== er || !after) return;
+      const next = endPlan({ ...args, after });
+      if (!er.played) { er.plan = next; return; }
+      er.plan = { ...er.plan, note: next.note || er.plan.note };
+      const n = screen === 'end' && card.querySelector('.rating-note.rank');
+      if (n) n.textContent = er.plan.note; else if (screen === 'end' && er.plan.rated) render();
+    }).catch(() => {});
+    return er;
   }
 
   // ---------------------------------------------------------------- the fall (IQ recap)
@@ -900,6 +941,7 @@ export function createDoor(opts = {}) {
       case 'lobby': show('lobby'); break;
       case 'games': show('games'); break;
       case 'profile': show('profile'); break;
+      case 'ladder': ladderFrom = screen === 'lobby' ? 'lobby' : 'menu'; show('ladder'); Promise.all([ladder.loadTop(), freshMe()]).then(() => { if (screen === 'ladder') render(); }); break;
       case 'pictures': Promise.resolve(pictures.manage({ still: still() })).then(() => { if (screen === 'menu') render(); }).catch(() => {}); break;
       case 'challenge': if (lobby) gate(() => look(afterHost(() => lobby.challenge(id)))); break;
       case 'cancel': try { if (lobby) lobby.cancel(); } catch { /* fine */ } break;
@@ -946,6 +988,7 @@ export function createDoor(opts = {}) {
     if (screen === 'found') { if (countTimer) { clearTimeout(countTimer); timers.delete(countTimer); countTimer = null; } current = null; stake.withdraw(); stake.clear(); show('lobby'); return; }
     if (screen === 'end') { toMenu(); return; }
     if (screen === 'replay') { if (replay && replay.fall) backToEnd(); else show('games'); return; }
+    if (screen === 'ladder') { show(ladderFrom); return; }
     show('menu');
   }
   // a tap on the board during the countdown means "now"
@@ -1018,6 +1061,13 @@ export function createDoor(opts = {}) {
       leaveWatch,
       stake,
       shelf: { save: saveGame, list: listGames },
+      ladder,
+      /** Harness: an online end card with a rating beat, without a server. */
+      fakeEnd(g, rating) {
+        lastEnd = Object.assign({ mode: 'online', me: 'w', opponent: 'Rose', moves: [], plies: 30, durationMs: 300000, result: { result: 'checkmate', winner: 'w', reason: 'checkmate' } }, g || {});
+        endRating = { plan: endPlan(rating || {}), played: false };
+        show('end');
+      },
       /**
        * Stand in for the desktop host: { isHosted, identity(), whenIdentity() },
        * any subset. What lets a plain browser photograph the hosted states
