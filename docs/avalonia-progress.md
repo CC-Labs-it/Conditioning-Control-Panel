@@ -2279,3 +2279,9 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/backroom-core-a: +231
 - Back Room rules (bridge, API relay, fx plan/queue, tab ledger, overlay math) moved into CCP.Core with two small WPF seams; the 10 test classes now run on Linux CI.
 - Fix round: stale comments are fixed, and the two bridge/ledger tests call SetResult off the test thread before asserting. Remote gate GATE-OK.
+
+## avalonia-port/emidesk-core-b: +291
+- Cloud session (Opus), local review + gate. Merges avalonia-port/emi-line-engine (P19): EmiLineEngine/EmiKnock
+  moves, ask probes and ask test are that branch's; this one moves EmiNames, EmiBarkBridge, EmiBubblePlacement,
+  EmiTopmostRule, TubeDeskVisibility to Core with three head seams. +291 includes emi-line-engine's two commits.
+  rgate GATE-OK (run 38344989624). Land emi-line-engine first.
