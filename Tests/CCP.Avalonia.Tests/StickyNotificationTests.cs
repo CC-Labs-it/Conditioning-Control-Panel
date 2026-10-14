@@ -5,7 +5,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -18,10 +17,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class StickyNotificationTests
 {
     [Fact]
-    public Task StickyQueueDeduplicatesNeverExpiresAndManualDismissalPersists() => Run(async () =>
+    public Task StickyQueueDeduplicatesNeverExpiresAndManualDismissalPersists() => Run(() =>
     {
         var key = "sticky-" + Guid.NewGuid();
-        var service = new NotificationService();
+        var service = new NotificationService { ScheduleRemoval = (remove, _) => remove() };
         var host = new StackPanel();
         using var cleanup = new KeyCleanup(key);
         service.ShowSticky(key, "accepted", NotificationType.Success);
@@ -33,24 +32,22 @@ public sealed class StickyNotificationTests
         Assert.Single(host.Children);
         toast.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ToastDismiss")
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        await Task.Delay(400);
-        Dispatcher.UIThread.RunJobs();
         Assert.Empty(host.Children);
         Assert.Contains(key, CoreSettings.Current.DismissedNotificationKeys);
         service.ShowSticky(key, "should stay dismissed");
         Assert.Empty(host.Children);
-        var nextSession = new NotificationService();
+        var nextSession = new NotificationService { ScheduleRemoval = (remove, _) => remove() };
         nextSession.ShowSticky(key, "still dismissed");
         nextSession.AttachHost(host);
         Assert.Empty(host.Children);
     });
 
     [Fact]
-    public Task ProgrammaticAndActionDismissalsAllowTheConditionToRecur() => Run(async () =>
+    public Task ProgrammaticAndActionDismissalsAllowTheConditionToRecur() => Run(() =>
     {
         var key = "sticky-" + Guid.NewGuid();
         using var cleanup = new KeyCleanup(key);
-        var service = new NotificationService();
+        var service = new NotificationService { ScheduleRemoval = (remove, _) => remove() };
         var host = new StackPanel();
         service.ShowSticky(key, "queued");
         service.Dismiss(key);
@@ -58,15 +55,11 @@ public sealed class StickyNotificationTests
         Assert.Empty(host.Children);
         service.ShowSticky(key, "visible");
         service.Dismiss(key);
-        await Task.Delay(400);
-        Dispatcher.UIThread.RunJobs();
         Assert.Empty(host.Children);
         var invoked = 0;
         service.ShowSticky(key, "action", actionLabel: "View", action: () => invoked++);
         host.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ToastAction")
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        await Task.Delay(400);
-        Dispatcher.UIThread.RunJobs();
         Assert.Equal(1, invoked);
         Assert.Empty(host.Children);
         Assert.DoesNotContain(key, CoreSettings.Current.DismissedNotificationKeys);
@@ -75,12 +68,13 @@ public sealed class StickyNotificationTests
         service.Dismiss(key);
     });
 
-    private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(Action body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        await body();
+        body();
+        return Task.CompletedTask;
     });
 
     private sealed class KeyCleanup(string key) : IDisposable

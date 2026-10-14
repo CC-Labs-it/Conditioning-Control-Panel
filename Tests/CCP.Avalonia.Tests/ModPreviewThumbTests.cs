@@ -33,6 +33,15 @@ public sealed class ModPreviewThumbTests
             using var decoded = SKBitmap.Decode(bytes);
             Assert.Equal(160, decoded.Width);
             Assert.Equal(80, decoded.Height);
+            using (var small = new SKBitmap(80, 40))   // WPF DecodePixelWidth=160 scales small previews up
+            {
+                small.Erase(SKColors.HotPink);
+                using var image = SKImage.FromBitmap(small);
+                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                File.WriteAllBytes(path, data.ToArray());
+            }
+            using (var upscaled = SKBitmap.Decode(Convert.FromBase64String(MainShellWindow.TryBuildModPreviewThumb(mod)!)))
+                Assert.Equal((160, 80), (upscaled.Width, upscaled.Height));
             File.WriteAllText(path, "corrupt image");
             Assert.Null(MainShellWindow.TryBuildModPreviewThumb(mod));
         }

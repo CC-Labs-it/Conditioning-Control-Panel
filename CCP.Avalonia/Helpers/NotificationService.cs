@@ -183,7 +183,10 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(220), Easing = new QuadraticEaseIn() },
             };
             border.Opacity = 0;
-            DispatcherTimer.RunOnce(() => _host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
+            ScheduleRemoval(() => _host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
         }
+
+        /// <summary>Test seam: runs the post-fade removal (a real one-shot timer in the app).</summary>
+        internal Action<Action, TimeSpan> ScheduleRemoval = (remove, delay) => DispatcherTimer.RunOnce(remove, delay);
     }
 }

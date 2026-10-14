@@ -56,8 +56,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var size = codec.GetScaledDimensions(scale);
                 using var decoded = new SKBitmap(size.Width, size.Height);
                 if (codec.GetPixels(decoded.Info, decoded.GetPixels()) != SKCodecResult.Success) return null;
-                var height = Math.Max(1, (int)Math.Round(codec.Info.Height * Math.Min(1d, 160d / codec.Info.Width)));
-                using var thumb = decoded.Resize(new SKImageInfo(Math.Min(160, codec.Info.Width), height),
+                // WPF DecodePixelWidth=160 always yields 160 px wide, scaling small previews up too.
+                var height = Math.Max(1, (int)Math.Round(codec.Info.Height * 160d / codec.Info.Width));
+                using var thumb = decoded.Resize(new SKImageInfo(160, height),
                     new SKSamplingOptions(SKFilterMode.Linear));
                 if (thumb == null) return null;
                 using var image = SKImage.FromBitmap(thumb);

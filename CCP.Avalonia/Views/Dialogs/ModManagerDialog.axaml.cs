@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<Button>("BtnCreate")!.Click += (_, _) => BtnCreate_Click();
             _btnDownloadPack.Click += (_, _) => _ = BtnDownloadPack_Click();
             _btnActivate.Click += (_, _) => BtnActivate_Click();
-            _btnShare.Click += (_, _) => BtnShare_Click();
+            _btnShare.Click += (_, _) => ShareTask = BtnShare_Click();
             _btnTubeFit.Click += (_, _) => BtnTubeFit_Click();
             _btnUninstall.Click += (_, _) => BtnUninstall_Click();
             _btnInstall.Click += (_, _) => BtnInstall_Click();
@@ -445,8 +445,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // Can't uninstall built-in mods or active mod
             _btnUninstall.IsVisible = !mod.IsBuiltIn && !isActive;
 
-            // WPF: custom installed mods can share their creator-hosted archive.
-            _btnShare.IsVisible = !mod.IsBuiltIn;
+            // WPF ModManagerDialog.xaml.cs:459: custom installed mods can share their creator-hosted archive.
+            _btnShare.IsVisible = !mod.IsBuiltIn && !string.IsNullOrEmpty(mod.InstalledPath);
 
             // Built-in mods whose media still has to come down off the release.
             UpdatePackPanel(mod);
@@ -557,7 +557,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             return cut > 0 ? relative[..cut] : "root";
         }
 
-        private async void BtnShare_Click()
+        /// <summary>The share started by the last click, so tests await it instead of polling.</summary>
+        internal Task? ShareTask { get; private set; }
+
+        private async Task BtnShare_Click()
         {
             if (_selectedMod == null || Owner is not MainShellWindow shell) return;
             _btnShare.IsEnabled = false;

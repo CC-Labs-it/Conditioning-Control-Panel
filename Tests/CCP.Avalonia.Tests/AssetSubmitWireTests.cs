@@ -145,8 +145,9 @@ public sealed class AssetSubmitWireTests
         var root = Directory.CreateTempSubdirectory("ccp-mod-share-").FullName;
         var mod = new ModPackage(new ModManifest { Id = "share-mod", Name = "Share Mod", Tags = new() { "soft" } }, root, false);
         var builtIn = new ModPackage(new ModManifest { Id = "builtin", Name = "Built In" }, null, true);
+        var noPath = new ModPackage(new ModManifest { Id = "no-path", Name = "No Path" }, null, false);
         var oldProvider = CoreMods.InstalledModsProvider;
-        CoreMods.InstalledModsProvider = () => new Dictionary<string, ModPackage> { [mod.Id] = mod, [builtIn.Id] = builtIn };
+        CoreMods.InstalledModsProvider = () => new Dictionary<string, ModPackage> { [mod.Id] = mod, [builtIn.Id] = builtIn, [noPath.Id] = noPath };
         var manager = new ModManagerDialog();
         manager.Show(shell);
         try
@@ -155,6 +156,8 @@ public sealed class AssetSubmitWireTests
             var button = manager.FindControl<Button>("BtnShare")!;
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, builtIn.Id));
             Assert.False(button.IsVisible);
+            list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, noPath.Id));
+            Assert.False(button.IsVisible);   // WPF also needs an InstalledPath
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, mod.Id));
             Assert.True(button.IsVisible);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -162,7 +165,7 @@ public sealed class AssetSubmitWireTests
             Assert.False(button.IsEnabled);
             var cancelled = manager.OwnedWindows.OfType<AssetSubmitDialog>().Single();
             cancelled.Close(false);
-            for (var i = 0; i < 100 && !button.IsEnabled; i++) await Task.Delay(10);
+            await manager.ShareTask!;
             Assert.True(button.IsEnabled);
             Assert.Empty(fake.Paths);
 
@@ -183,7 +186,7 @@ public sealed class AssetSubmitWireTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(submit.IsEnabled);
             submit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            for (var i = 0; i < 100 && !button.IsEnabled; i++) await Task.Delay(10);
+            await manager.ShareTask!;
             Assert.True(button.IsEnabled);
             Assert.Equal(new[] { "/api/auth/token-exchange", "/api/catalogue/mods" }, fake.Paths);
             var bundle = JObject.Parse(fake.Body!)["bundle"]!;
