@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// PORTED from ConditioningControlPanel/Windows/HelpVideoWindow.xaml.cs. Deviations:
     ///  - LibVLCSharp.WPF's VideoView -> this head's video path, a VlcFrameSink copying frames into
     ///    an Image; VideoService.SharedLibVLC -> LibVlcAudio.Shared. Load / loop / mute / dispose
-    ///    are WPF's; StartClip runs from the constructor (no HwndHost to wait for).
+    ///    are WPF's; StartClip runs on Opened (WPF Loaded), so a Show that throws starts no player.
     ///  - The drawn help loop (TryShowLoop) is ported as-is and wins over the clip, as in WPF.
     ///  - App.Logger becomes Serilog's static Log, as everywhere else on this head.
     ///  - DragMove() -> BeginMoveDrag(e); PreviewKeyDown -> KeyDown (tunnelling has no twin, and
@@ -54,6 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The clip's frame sink and player while one plays (test seams).</summary>
         internal VlcFrameSink? Sink => _sink;
         internal MediaPlayer? Player => _mediaPlayer;
+        /// <summary>UI thread: a clip frame was blitted into the Image (test seam; tests wait on it, not on a sleep).</summary>
+        internal event Action? FrameShown;
 
         /// <summary>Render/design constructor: sample data so --render-view can draw the window.</summary>
         internal HelpVideoWindow() : this(SampleContent()) { }
@@ -132,7 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<Border>("Titlebar")!.PointerPressed += Titlebar_PointerPressed;
             KeyDown += OnKeyDown;
 
-            StartClip();
+            Opened += (_, _) => StartClip();
         }
 
         /// <summary>
@@ -247,7 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _mediaPlayer = new MediaPlayer(libVLC) { EnableHardwareDecoding = true };
                 _sink = new VlcFrameSink(_mediaPlayer, () => _media,
                     bmp => { if (_video != null) _video.Source = bmp; },
-                    () => _video?.InvalidateVisual());
+                    () => { _video?.InvalidateVisual(); FrameShown?.Invoke(); });
                 _mediaPlayer.EndReached += (_, _) =>
                 {
                     // Loop playback - must detach from LibVLC thread

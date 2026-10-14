@@ -98,7 +98,8 @@ public sealed class HelpVideoWindowTests
         var dir = Path.Combine(AppContext.BaseDirectory, "Resources", "tutorial_videos");
         Directory.CreateDirectory(dir);
         var clip = Path.Combine(dir, "help-test-clip.mp4");
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), clip, overwrite: true);
+        // bubblecount-2s.mp4 plus a silent AAC track, so the mute assert has an audio track to drop.
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "help-clip-audio-2s.mp4"), clip, overwrite: true);
         try
         {
             try { _ = new LibVlcAudio("--aout=dummy"); }
@@ -112,6 +113,8 @@ public sealed class HelpVideoWindowTests
             {
                 var content = new HelpContent { SectionId = "HelpClipTest", Title = "Clip", ClipFile = "help-test-clip.mp4", WhatItDoes = "blurb" };
                 Assert.False(HelpLoopRegistry.Has(content.SectionId));
+                // WPF starts the clip on Loaded: a window that is never shown never starts a player.
+                Assert.Null(new HelpVideoWindow(content).Player);
                 HelpVideoWindow.Show(content, null);
                 var win = Current()!;
                 try
@@ -121,11 +124,13 @@ public sealed class HelpVideoWindowTests
                     Assert.False(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);   // a playing clip needs no blurb
                     var sink = win.Sink!;
                     // The 2 s, 24-frame clip runs past its end: frames keep coming (WPF EndReached -> Play loop;
-                    // without it one pass stops near 33 displays).
-                    for (var i = 0; i < 200 && sink.FrameCount < 50; i++) await Task.Delay(50);
-                    Assert.True(sink.FrameCount >= 50, $"looped past the 2 s end ({sink.FrameCount} frames)");
+                    // without it one pass stops below 50 displays). Event-driven wait, no sleep (P08).
+                    var looped = new TaskCompletionSource();
+                    win.FrameShown += () => { if (sink.FrameCount >= 70) looped.TrySetResult(); };
+                    try { await looped.Task.WaitAsync(TimeSpan.FromSeconds(10)); } catch (TimeoutException) { }
+                    Assert.True(sink.FrameCount >= 70, $"looped past the 2 s end ({sink.FrameCount} frames)");
                     Assert.Same(sink.Bitmap, Assert.IsType<Image>(container.Child).Source);
-                    Assert.True(win.Player!.AudioTrackCount <= 0, "muted tutorial loop: no audio track decoded");
+                    Assert.Equal(-1, win.Player!.AudioTrack);   // muted tutorial loop: the clip's audio track is never selected
                     win.Close();
                     Assert.Null(Current());
                     Assert.Null(win.Player);
