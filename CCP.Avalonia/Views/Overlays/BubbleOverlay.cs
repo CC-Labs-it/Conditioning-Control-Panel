@@ -77,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             LoadBubbleImage();
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
+            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
                 var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
@@ -99,11 +99,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _spawnTimer.Start();
             Spawn();   // WPF: first bubble immediately (and wakes the frame loop)
             if (Stats) StatClock.Restart();
+            App.DiscordRpc?.SetBubbleActivity();   // WPF BubbleService.cs:244
             Log.Information("BubbleService started - {Freq} bubbles/min", frequency ?? s.BubblesFrequency);
         }
 
         public static void Stop()
         {
+            var wasRunning = _running;
             _running = false;
             _pending = false;
             _spawnTimer?.Stop();
@@ -112,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Close();
             Windows.Clear();
             Targets.Clear();
+            if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:827 (WPF Stop returns early when idle)
         }
 
         public static void RefreshFrequency()

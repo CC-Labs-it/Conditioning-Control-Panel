@@ -153,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BtnDeeperCatalogue_Click(object? sender, RoutedEventArgs e)
             => _ = Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), MainShellWindow.DeeperCatalogueUrl);
-        // ponytail: import needs EnhancementLibrary.FindDuplicateOf/PromoteToLibrary, still WPF-only.
+        // ponytail: import needs EnhancementLibrary.FindDuplicateOf/PromoteToLibrary (Core); no head instance yet.
         private void BtnDeeperImport_Click(object? sender, RoutedEventArgs e) { }
         private void BtnDeeperNewEnhancement_Click(object? sender, RoutedEventArgs e)
             => Owner?.BtnDeeperNewEnhancement_Click(sender, e);
@@ -254,8 +254,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void RefreshSortDirection()
         {
-            if (ViewModel is { } model && BtnDeeperSortDir is { } button)
-                button.Content = model.SortDirectionGlyph;
+            if (ViewModel is { } model && DeeperSortDirGlyph is { } glyph)
+                glyph.Kind = model.SortDirectionGlyph;
         }
     }
 
@@ -295,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public int PillHapticsCount => CurrentPillCounts.Haptics;
         public int PillWebcamCount => CurrentPillCounts.Webcam;
         public bool ShowWelcomeCard => true;
-        public string SortDirectionGlyph => _descending ? "▼" : "▲";
+        public IconKind SortDirectionGlyph => _descending ? IconKind.ChevronDown : IconKind.ChevronUp;
 
         private DeeperFilter.Criteria CurrentCriteria()
             => new((_search ?? "").Trim(), _mediaType, _haptics, _webcam);
@@ -424,7 +424,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var isAudio = string.Equals(entry.MediaType, MediaTypes.Audio, StringComparison.OrdinalIgnoreCase);
             var tags = entry.AutoTags.Select(tag => new DeeperAutoTagVm
             {
-                Glyph = tag.Equals(EnhancementAutoTagger.TagHaptics, StringComparison.OrdinalIgnoreCase) ? "📳" : "📷",
+                Glyph = tag.Equals(EnhancementAutoTagger.TagHaptics, StringComparison.OrdinalIgnoreCase) ? IconKind.PhoneVibrate : IconKind.Camera,
                 Label = tag,
                 Background = new SolidColorBrush(Color.FromArgb(0x33, 0x7B, 0x5C, 0xFF)),
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB8, 0xA6, 0xFF)),
@@ -449,7 +449,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     : "deeper_library_submit_button_disabled_tooltip"),
                 Entry = entry,
                 Name = entry.Name,
-                MediaTypeIcon = isAudio ? "🎵" : "🎬",
+                MediaTypeIcon = isAudio ? IconKind.MusicNote2 : IconKind.Video,
                 MediaTypeBadgeBg = new SolidColorBrush(Color.FromArgb(0x33,
                     isAudio ? (byte)0xFF : (byte)0x7B,
                     isAudio ? (byte)0x69 : (byte)0x5C,
@@ -477,34 +477,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The row's catalogue-submission pill from AppSettings.DeeperSubmissions, keyed by
         /// canonical path; hidden when this file was never submitted.</summary>
-        internal static (bool Show, string Glyph, string Label, IBrush Bg, IBrush Fg, string Tip)
+        internal static (bool Show, IconKind Glyph, string Label, IBrush Bg, IBrush Fg, string Tip)
             ResolveSubmissionBadge(EnhancementLibraryEntry entry)
         {
             var subs = CoreSettings.Current.DeeperSubmissions;
             if (subs == null || !subs.TryGetValue(MainShellWindow.CanonicalCataloguePathKey(entry.FilePath), out var rec) || rec == null)
-                return (false, "", "", Brushes.Transparent, Brushes.White, "");
+                return (false, IconKind.Info, "", Brushes.Transparent, Brushes.White, "");
             return (rec.Status ?? "").ToLowerInvariant() switch
             {
-                "approved" or "published" => (true, "✅", Loc.Get("deeper_submission_badge_published"),
+                "approved" or "published" => (true, IconKind.CheckmarkCircle, Loc.Get("deeper_submission_badge_published"),
                     SubPublishedBg, SubPublishedFg, Loc.Get("deeper_submission_badge_published_tip")),
-                "rejected" => (true, "⚠", Loc.Get("deeper_submission_badge_rejected"),
+                "rejected" => (true, IconKind.Warning, Loc.Get("deeper_submission_badge_rejected"),
                     SubRejectedBg, SubRejectedFg, Loc.Get("deeper_submission_badge_rejected_tip")),
-                _ => (true, "⏳", Loc.Get("deeper_submission_badge_pending"),
+                _ => (true, IconKind.HourglassHalf, Loc.Get("deeper_submission_badge_pending"),
                     SubPendingBg, SubPendingFg, Loc.Get("deeper_submission_badge_pending_tip")),
             };
         }
 
-        private static (string Label, string Glyph, bool Exists) DescribeSource(string source)
+        private static (string Label, IconKind Glyph, bool Exists) DescribeSource(string source)
         {
-            if (string.IsNullOrWhiteSpace(source)) return ("", "", false);
+            if (string.IsNullOrWhiteSpace(source)) return ("", IconKind.Info, false);
             if (Uri.TryCreate(source, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-                return (uri.Host, "🌐", true);
+                return (uri.Host, IconKind.Globe, true);
             var name = Path.GetFileName(source);
             if (string.IsNullOrEmpty(name)) name = source;
             var exists = false;
             try { exists = File.Exists(source); } catch { }
-            return (name, exists ? "✓" : "⚠", exists);
+            return (name, exists ? IconKind.Checkmark : IconKind.Warning, exists);
         }
 
         private static string FormatRelativeTime(DateTime when)
@@ -559,7 +559,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         public EnhancementLibraryEntry Entry { get; init; } = new();
         public string Name { get; init; } = "";
-        public string MediaTypeIcon { get; init; } = "🎬";
+        public IconKind MediaTypeIcon { get; init; } = IconKind.Video;
         public IBrush MediaTypeBadgeBg { get; init; } = Brushes.Transparent;
         public IBrush MediaTypeBadgeFg { get; init; } = Brushes.White;
 
@@ -567,7 +567,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public bool ShowCreator { get; init; }
 
         public string MediaSourceLabel { get; init; } = "";
-        public string MediaSourceGlyph { get; init; } = "";
+        public IconKind MediaSourceGlyph { get; init; } = IconKind.Info;
         public IBrush MediaSourceBrush { get; init; } = Brushes.Gray;
         public bool ShowMediaSource { get; init; }
 
@@ -578,9 +578,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public bool ShowTags { get; init; }
 
         public bool ShowSubmissionBadge { get; init; }
-        public string SubmissionBadgeGlyph { get; init; } = "";
+        public IconKind SubmissionBadgeGlyph { get; init; } = IconKind.Info;
         public string SubmissionBadgeLabel { get; init; } = "";
-        public string SubmissionBadgeText => $"{SubmissionBadgeGlyph} {SubmissionBadgeLabel}";
         public IBrush SubmissionBadgeBg { get; init; } = Brushes.Transparent;
         public IBrush SubmissionBadgeFg { get; init; } = Brushes.White;
         public string SubmissionBadgeTooltip { get; init; } = "";
@@ -592,9 +591,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
     public sealed class DeeperAutoTagVm
     {
-        public string Glyph { get; init; } = "";
+        public IconKind Glyph { get; init; } = IconKind.Camera;
         public string Label { get; init; } = "";
-        public string Display => $"{Glyph} {Label}";
         public IBrush Background { get; init; } = Brushes.Transparent;
         public IBrush Foreground { get; init; } = Brushes.White;
     }

@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -25,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private DispatcherTimer? _bounceTimer;
         private string? _askCardId;
         private string? _askQuestion;
-        private bool _askHooked;
+        private Action<AskCard>? _askHook;
 
         /// <summary>WPF StartThinkingAnimation: phrase + 0-3 dots every 500ms until the reply lands.</summary>
         internal void StartThinkingAnimation()
@@ -119,15 +121,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF ShowAskCard (Asks.cs): says the card's question and puts its answers under it.</summary>
         internal void ShowAskCard(AskCard card)
         {
-            if (!_askHooked)
+            if (_askHook == null)
             {
-                _askHooked = true;
-                CompanionAskService.Instance.CardChanged += c => RunOnAvatar(() => { if (c.Id == _askCardId) RenderAskButtons(c); });
+                _askHook = c => RunOnAvatar(() => { if (c.Id == _askCardId) RenderAskButtons(c); });
+                CompanionAskService.Instance.CardChanged += _askHook;
             }
             _askCardId = card.Id;
             _askQuestion = card.Question;
             RenderAskButtons(card);
             GigglePriority(card.Question, playSound: true, aiGenerated: false);
+        }
+
+        /// <summary>OnClosed: the singleton must not keep a closed tube alive (P41).</summary>
+        private void UnhookAskCards()
+        {
+            if (_askHook != null) CompanionAskService.Instance.CardChanged -= _askHook;
+            _askHook = null;
         }
 
         /// <summary>Any other line taking the bubble drops the buttons; the card lives on in the chat log.</summary>
@@ -162,12 +171,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     Cursor = new Cursor(open ? StandardCursorType.Hand : StandardCursorType.Arrow),
                     Opacity = open || chosen ? 1 : 0.4,
                     VerticalAlignment = VerticalAlignment.Top,
-                    Child = new TextBlock
+                    Child = new IconLabel
                     {
-                        Text = chosen ? "✓ " + choice.Label : choice.Label,
-                        Foreground = Brush.Parse(fg),
-                        FontSize = 13,
-                        FontWeight = FontWeight.SemiBold,
+                        Text = choice.Label,
+                        Kind = chosen ? IconKind.Checkmark : null,
+                        Spacing = 4,
+                        [TextElement.ForegroundProperty] = Brush.Parse(fg),
+                        [TextElement.FontSizeProperty] = 13.0,
+                        [TextElement.FontWeightProperty] = FontWeight.SemiBold,
                     },
                 };
                 if (card.Kind == AskKind.Watch && choice.Action == AskAction.Watch) ToolTip.SetTip(chip, card.Subject);

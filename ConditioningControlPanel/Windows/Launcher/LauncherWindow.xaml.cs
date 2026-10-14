@@ -498,7 +498,7 @@ public partial class LauncherWindow : Window
     private void ShortcutLink_Click(object sender, RoutedEventArgs e)
     {
         LauncherSfx.Click();
-        ShowShortcutResult(LauncherShortcuts.TryCreateDesktopShortcut(null));
+        ShowShortcutResult(LauncherShortcutWriter.TryCreateDesktopShortcut(null));
     }
 
     private void ShowShortcutResult(bool ok)

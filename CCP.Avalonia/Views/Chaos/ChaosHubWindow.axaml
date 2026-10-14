@@ -48,6 +48,7 @@
      never localized — so there is no {loc:Str} here and no key has been invented for one. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow"
         Title="the Dollhouse"
         SystemDecorations="None"
@@ -281,13 +282,16 @@
                 <Image x:Name="BannerImage" Stretch="Uniform" HorizontalAlignment="Right"
                        Opacity="0.30" IsVisible="False" MaxHeight="120"/>
                 <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top">
-                    <Button x:Name="BtnBackToMenu" Content="‹ Menu" Click="Back_To_Menu_Click"
+                    <Button x:Name="BtnBackToMenu" Click="Back_To_Menu_Click"
                             HorizontalAlignment="Left" Margin="0,0,0,8" Padding="10,3"
                             Background="#22FFFFFF" Foreground="{StaticResource TextDim}" FontSize="12"
                             BorderThickness="0" Cursor="Hand" CornerRadius="7"
-                            ToolTip.Tip="back to the main menu"/>
+                            ToolTip.Tip="back to the main menu">
+                        <fx:IconLabel Text="Menu" Kind="ChevronLeft" Spacing="4"/>
+                    </Button>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🐇 DOWN THE RABBIT HOLE" Foreground="White" FontSize="22" FontWeight="Bold">
+                        <fx:IconGlyph Kind="AnimalRabbit" Variant="Filled" Foreground="White" Size="24" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="DOWN THE RABBIT HOLE" Foreground="White" FontSize="22" FontWeight="Bold">
                             <TextBlock.Effect><DropShadowEffect Color="#FFE84393" BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="0.7"/></TextBlock.Effect>
                         </TextBlock>
                         <TextBlock Text="the dollhouse" Foreground="{StaticResource Pink}" FontFamily="Consolas, Courier New" FontWeight="Bold" FontSize="12" VerticalAlignment="Bottom" Margin="10,0,0,4"/>
@@ -302,14 +306,14 @@
                         </Border>
                         <Border Background="{StaticResource Card2}" CornerRadius="9" Padding="12,5" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="✦" Foreground="{StaticResource Purple}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <fx:IconGlyph Kind="Sparkle" Variant="Filled" Foreground="{StaticResource Purple}" Size="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                 <TextBlock x:Name="TxtSparks" Text="0" Foreground="White" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
                                 <TextBlock Text="emotes" Foreground="{StaticResource TextMut}" FontSize="11" VerticalAlignment="Bottom" Margin="5,0,0,1"/>
                             </StackPanel>
                         </Border>
                         <Border Background="{StaticResource Card2}" CornerRadius="9" Padding="12,5" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🪙" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <fx:IconGlyph Kind="CoinMultiple" Variant="Filled" Foreground="{DynamicResource IconGoldBrush}" Size="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                 <TextBlock x:Name="TxtGold" Text="0" Foreground="White" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
                                 <TextBlock Text="gold" Foreground="{StaticResource TextMut}" FontSize="11" VerticalAlignment="Bottom" Margin="5,0,0,1"/>
                             </StackPanel>
@@ -439,7 +443,7 @@
                                         <ToggleButton Theme="{StaticResource Seg}" Tag="Easy" Content="Gentle" Click="Segment_Click"/>
                                         <ToggleButton x:Name="SegMedium" Theme="{StaticResource Seg}" Tag="Medium" Content="Teasing" Click="Segment_Click"/>
                                         <ToggleButton x:Name="SegHard" Theme="{StaticResource Seg}" Tag="Hard" Content="Relentless" Click="Segment_Click"/>
-                                        <ToggleButton x:Name="SegExtreme" Theme="{StaticResource Seg}" Tag="Extreme" Content="Inescapable 🔒" Click="Segment_Click"/>
+                                        <ToggleButton x:Name="SegExtreme" Theme="{StaticResource Seg}" Tag="Extreme" Content="Inescapable" Click="Segment_Click"/>
                                     </StackPanel>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -510,7 +514,7 @@
                         <!-- TESTING OPTIONS: dev/test knobs the descent normally tunes itself
                              (bubble pool, mantra/sin toggles, loop count). Collapsed by default
                              so the casual read is just difficulty + length + feel. -->
-                        <ToggleButton x:Name="TglTesting" Theme="{StaticResource Seg}" Content="🧪 testing options ▸"
+                        <ToggleButton x:Name="TglTesting" Theme="{StaticResource Seg}" 
                                       Click="TestingToggle_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
                         <StackPanel x:Name="TestingBody" IsVisible="False">
 
@@ -544,15 +548,21 @@
                                     <CheckBox x:Name="ChkCurses" Theme="{StaticResource Chk}" Content="Allow sins"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                         <TextBlock Text="Loops" Foreground="{StaticResource TextDim}" FontSize="12" VerticalAlignment="Center" Width="50"/>
-                                        <Button Theme="{StaticResource Stepper}" Content="−" Tag="waves-" Click="Stepper_Click"/>
+                                        <Button AutomationProperties.Name="fewer waves" Theme="{StaticResource Stepper}" Tag="waves-" Click="Stepper_Click">
+                                            <fx:IconGlyph Kind="Subtract" Size="14"/>
+                                        </Button>
                                         <TextBlock x:Name="TxtWaves" Foreground="White" FontWeight="Bold" FontSize="14" Width="34" TextAlignment="Center" VerticalAlignment="Center"/>
-                                        <Button Theme="{StaticResource Stepper}" Content="+" Tag="waves+" Click="Stepper_Click"/>
+                                        <Button AutomationProperties.Name="more waves" Theme="{StaticResource Stepper}" Tag="waves+" Click="Stepper_Click">
+                                            <fx:IconGlyph Kind="Add" Size="14"/>
+                                        </Button>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <Button Content="↻ Randomize" Click="BtnRandomize_Click" Theme="{StaticResource Stepper}" Width="NaN" Height="NaN" Padding="12,8" Margin="0,0,8,0"/>
+                                <Button Click="BtnRandomize_Click" Theme="{StaticResource Stepper}" Width="NaN" Height="NaN" Padding="12,8" Margin="0,0,8,0">
+                                    <fx:IconLabel Text="Randomize" Kind="ArrowClockwise"/>
+                                </Button>
                                 <Button Content="Defaults" Click="BtnDefaults_Click" Theme="{StaticResource Stepper}" Width="NaN" Height="NaN" Padding="12,8"/>
                             </StackPanel>
                         </StackPanel><!-- /TestingBody -->
@@ -630,20 +640,23 @@
                     <!-- The play-mode pick moved to the Lab card (ChaosModeService.SelectedPlayMode);
                          this separate Free Desktop button is retired. Kept (collapsed) so it can be
                          restored if the pick ever returns to the hub. -->
-                    <Button x:Name="BtnBeginDesktop" Content="🖥 FREE DESKTOP" Tag="FreeDesktop" Click="BtnBegin_Click"
+                    <Button x:Name="BtnBeginDesktop" Tag="FreeDesktop" Click="BtnBegin_Click"
                             IsVisible="False"
                             ToolTip.Tip="Pop bubbles over your real desktop — no story or backdrop, and other windows can stay in front. Your companion floats along."
                             Background="#332A2A4A" Foreground="{StaticResource TextMut}" FontWeight="SemiBold" FontSize="14"
                             BorderBrush="#55E84393" BorderThickness="1" Padding="22,12" Margin="0,0,12,0" Cursor="Hand"
-                            CornerRadius="14"/>
+                            CornerRadius="14">
+                        <fx:IconLabel Text="FREE DESKTOP" Kind="Desktop"/>
+                    </Button>
                     <!-- Single launcher. Mode is decided on the Lab card, so this is mode-neutral
                          ("FALL IN — STORY" label + Story tag removed). StartRun resolves the actual
                          mode from ChaosModeService.SelectedPlayMode. -->
-                    <Button x:Name="BtnBegin" Content="▶ FALL IN" Click="BtnBegin_Click"
+                    <Button x:Name="BtnBegin" Click="BtnBegin_Click"
                             ToolTip.Tip="Begin the descent."
                             Background="{StaticResource Brand}" Foreground="White" FontWeight="Bold" FontSize="16"
                             BorderThickness="0" Padding="32,13" Cursor="Hand" CornerRadius="14">
                         <Button.Effect><DropShadowEffect Color="#FFE84393" BlurRadius="18" OffsetX="0" OffsetY="0" Opacity="0.6"/></Button.Effect>
+                        <fx:IconLabel Text="FALL IN" Kind="Play"/>
                     </Button>
                 </StackPanel>
             </Grid>
@@ -716,7 +729,7 @@
                                        HorizontalAlignment="Center" Margin="0,2,0,0">
                                 <TextBlock.Effect><DropShadowEffect Color="#FF8B5CF6" BlurRadius="26" OffsetX="0" OffsetY="0" Opacity="0.9"/></TextBlock.Effect>
                             </TextBlock>
-                            <TextBlock Text="🐇" FontSize="34" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            <fx:IconGlyph Kind="AnimalRabbit" Variant="Filled" Size="36" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                         </StackPanel>
                     </Border>
                     <TextBlock Text="· the dollhouse ·" Foreground="{StaticResource Pink}" FontFamily="Consolas, Courier New"
@@ -726,21 +739,32 @@
                 <!-- center: the menu list (options now lives full-width — see MenuOptions below) -->
                 <Grid Grid.Row="1" VerticalAlignment="Center" Margin="0,18,0,18">
                     <StackPanel x:Name="MenuButtons">
-                        <Button x:Name="BtnMenuFallIn" Content="▶  FALL IN" Click="Menu_FallIn_Click"
+                        <Button x:Name="BtnMenuFallIn" Click="Menu_FallIn_Click"
                                 Height="64" Margin="0,0,0,14" FontSize="22" FontWeight="Bold" Foreground="White"
                                 Background="{StaticResource Brand}" BorderThickness="0" Cursor="Hand"
                                 HorizontalContentAlignment="Left" Padding="22,0" CornerRadius="12"
                                 ToolTip.Tip="you were always going to.">
                             <Button.Effect><DropShadowEffect Color="#FFE84393" BlurRadius="18" OffsetX="0" OffsetY="0" Opacity="0.6"/></Button.Effect>
+                            <fx:IconLabel Text="FALL IN" Kind="Play" Spacing="12"/>
                         </Button>
-                        <Button x:Name="BtnMenuHowTo" Theme="{StaticResource MenuBtn}" Content="📖  HOW TO PLAY"
-                                Click="Menu_HowTo_Click" ToolTip.Tip="new here? thirty seconds and you'll have it."/>
-                        <Button x:Name="BtnMenuDollhouse" Theme="{StaticResource MenuBtn}" Content="🏠  THE DOLL HOUSE"
-                                Click="Menu_Dollhouse_Click" ToolTip.Tip="pockets, toys, the bench — dress the fall."/>
-                        <Button x:Name="BtnMenuStory" Theme="{StaticResource MenuBtn}" Content="📖  STORY MODE  🔒"
-                                Click="Menu_Story_Click" ToolTip.Tip="the Madam's narrated descent — coming soon."/>
-                        <Button x:Name="BtnMenuOptions" Theme="{StaticResource MenuBtn}" Content="⚙  OPTIONS" Click="Menu_Options_Click"/>
-                        <Button x:Name="BtnMenuExit" Theme="{StaticResource MenuBtn}" Content="✕  EXIT" Click="Menu_Exit_Click"/>
+                        <Button x:Name="BtnMenuHowTo" Theme="{StaticResource MenuBtn}"
+                                Click="Menu_HowTo_Click" ToolTip.Tip="new here? thirty seconds and you'll have it.">
+                            <fx:IconLabel Text="HOW TO PLAY" Kind="BookOpen" Spacing="12"/>
+                        </Button>
+                        <Button x:Name="BtnMenuDollhouse" Theme="{StaticResource MenuBtn}"
+                                Click="Menu_Dollhouse_Click" ToolTip.Tip="pockets, toys, the bench — dress the fall.">
+                            <fx:IconLabel Text="THE DOLL HOUSE" Kind="Home" Spacing="12"/>
+                        </Button>
+                        <Button x:Name="BtnMenuStory" Theme="{StaticResource MenuBtn}"
+                                Click="Menu_Story_Click" ToolTip.Tip="the Madam's narrated descent — coming soon.">
+                            <StackPanel Orientation="Horizontal" Spacing="12"><fx:IconGlyph Kind="BookOpen" VerticalAlignment="Center"/><TextBlock Text="STORY MODE" VerticalAlignment="Center"/><fx:IconGlyph Kind="LockClosed" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                        <Button x:Name="BtnMenuOptions" Theme="{StaticResource MenuBtn}" Click="Menu_Options_Click">
+                            <fx:IconLabel Text="OPTIONS" Kind="Settings" Spacing="12"/>
+                        </Button>
+                        <Button x:Name="BtnMenuExit" Theme="{StaticResource MenuBtn}" Click="Menu_Exit_Click">
+                            <fx:IconLabel Text="EXIT" Kind="Dismiss" Spacing="12"/>
+                        </Button>
                     </StackPanel>
                 </Grid>
 
@@ -754,21 +778,21 @@
                     </Border>
                     <Border Background="{StaticResource Card2}" CornerRadius="9" Padding="10,5" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="✦" Foreground="{StaticResource Purple}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <fx:IconGlyph Kind="Sparkle" Variant="Filled" Foreground="{StaticResource Purple}" Size="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock x:Name="MenuSparks" Text="0" Foreground="White" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border Background="{StaticResource Card2}" CornerRadius="9" Padding="10,5">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🪙" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <fx:IconGlyph Kind="CoinMultiple" Variant="Filled" Foreground="{DynamicResource IconGoldBrush}" Size="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock x:Name="MenuGold" Text="0" Foreground="White" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <!-- soundtrack mute toggle (icon swaps 🔊/🔇 in code-behind) -->
                     <Button x:Name="BtnMenuMute" Click="BtnMenuMute_Click" Cursor="Hand"
-                            ToolTip.Tip="Mute / unmute the menu music" Background="{StaticResource Card2}"
+                            ToolTip.Tip="Mute / unmute the menu music" AutomationProperties.Name="Mute / unmute the menu music" Background="{StaticResource Card2}"
                             BorderThickness="0" Padding="10,5" Margin="8,0,0,0" CornerRadius="9">
-                        <TextBlock x:Name="MenuMuteIcon" Text="🔊" FontSize="15" VerticalAlignment="Center"/>
+                        <fx:IconGlyph x:Name="MenuMuteIcon" Kind="Speaker2" Size="16" VerticalAlignment="Center"/>
                     </Button>
                 </StackPanel>
             </Grid>
@@ -782,7 +806,7 @@
                 <Grid RowDefinitions="Auto,*,Auto">
 
                     <StackPanel Grid.Row="0">
-                        <TextBlock Text="⚙  OPTIONS" Foreground="{StaticResource Pink}" FontFamily="Consolas, Courier New" FontWeight="Bold" FontSize="28"/>
+                        <fx:IconLabel Text="OPTIONS" Kind="Settings" Spacing="10" TextElement.Foreground="{StaticResource Pink}" TextElement.FontFamily="Consolas, Courier New" TextElement.FontWeight="Bold" TextElement.FontSize="28"/>
                         <TextBlock Text="display &amp; comfort — these stick between descents." Foreground="{StaticResource TextMut}" FontSize="13" Margin="2,6,0,0"/>
                     </StackPanel>
 
@@ -814,8 +838,10 @@
                         </StackPanel>
                     </Grid>
 
-                    <Button Grid.Row="2" Content="‹ back" Click="Options_Back_Click" Theme="{StaticResource MenuBtn}"
-                            HorizontalAlignment="Left" Width="170" Height="52" Margin="0,16,0,0"/>
+                    <Button Grid.Row="2" Click="Options_Back_Click" Theme="{StaticResource MenuBtn}"
+                            HorizontalAlignment="Left" Width="170" Height="52" Margin="0,16,0,0">
+                        <fx:IconLabel Text="back" Kind="ChevronLeft" Spacing="8"/>
+                    </Button>
                 </Grid>
             </Border>
 
@@ -859,10 +885,12 @@
 
                         <!-- footer: back · dots · next -->
                         <Grid Grid.Row="3" Margin="24,8,24,22">
-                            <Button x:Name="HowToBack" Content="‹  BACK" Click="HowTo_Back_Click" Theme="{StaticResource MenuBtn}"
-                                    HorizontalAlignment="Left" Width="140" Height="46"/>
+                            <Button x:Name="HowToBack" Click="HowTo_Back_Click" Theme="{StaticResource MenuBtn}"
+                                    HorizontalAlignment="Left" Width="140" Height="46">
+                                <fx:IconLabel Text="BACK" Kind="ChevronLeft" Spacing="8"/>
+                            </Button>
                             <StackPanel x:Name="HowToDots" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            <Button x:Name="HowToNext" Content="NEXT  ›" Click="HowTo_Next_Click"
+                            <Button x:Name="HowToNext" Click="HowTo_Next_Click"
                                     HorizontalAlignment="Right" Width="140" Height="46" FontWeight="Bold" FontSize="14"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                     Foreground="White" Background="{StaticResource Brand}" BorderThickness="0"
@@ -870,11 +898,13 @@
                         </Grid>
 
                         <!-- close X -->
-                        <Button x:Name="HowToClose" Grid.Row="0" Content="✕" Click="HowTo_Close_Click"
+                        <Button x:Name="HowToClose" Grid.Row="0" Click="HowTo_Close_Click" AutomationProperties.Name="Close"
                                 HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,12,0" ZIndex="5"
                                 Width="34" Height="34" Padding="0" FontSize="14" Foreground="White" Cursor="Hand"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                Background="#66000000" BorderThickness="0" CornerRadius="17" ToolTip.Tip="Close"/>
+                                Background="#66000000" BorderThickness="0" CornerRadius="17" ToolTip.Tip="Close">
+                            <fx:IconGlyph Kind="Dismiss" Size="14"/>
+                        </Button>
                     </Grid>
                 </Border>
             </Border>
@@ -887,8 +917,12 @@
         <StackPanel x:Name="WinChrome" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,10,12,0" ZIndex="50">
             <Button x:Name="BtnMin" Theme="{StaticResource WinBtn}" Content="—" Click="BtnMin_Click" ToolTip.Tip="Minimize"/>
-            <Button x:Name="BtnFull" Theme="{StaticResource WinBtn}" Content="⛶" Click="BtnFull_Click" ToolTip.Tip="Fullscreen (maximize)"/>
-            <Button x:Name="BtnCloseWin" Theme="{StaticResource WinBtn}" Content="✕" Click="BtnClose_Click" ToolTip.Tip="Close"/>
+            <Button AutomationProperties.Name="Fullscreen (maximize)" x:Name="BtnFull" Theme="{StaticResource WinBtn}" Click="BtnFull_Click" ToolTip.Tip="Fullscreen (maximize)">
+                <fx:IconGlyph Kind="FullScreenMaximize" Size="14"/>
+            </Button>
+            <Button x:Name="BtnCloseWin" Theme="{StaticResource WinBtn}" Click="BtnClose_Click" ToolTip.Tip="Close" AutomationProperties.Name="Close">
+                <fx:IconGlyph Kind="Dismiss" Size="14"/>
+            </Button>
         </StackPanel>
         </Grid>
     </Border>

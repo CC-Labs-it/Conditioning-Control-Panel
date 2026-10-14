@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Presenters;
@@ -13,6 +14,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -97,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _fineTuneOpen = open;
             RemoteFineTuneScroll.IsVisible = open;
             AssetBrowserSection.IsVisible = !open;
-            TxtRemoteFineTuneChevron.Text = open ? "▴" : "▾";
+            TxtRemoteFineTuneChevron.Kind = open ? IconKind.ChevronUp : IconKind.ChevronDown;
         }
 
         private void BuildSourceChips()
@@ -205,6 +207,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The one-time ask before anything remote is fetched (WPF AskRemoteMediaConsent :2380).</summary>
         private Task<bool> AskRemoteMediaConsentAsync()
         {
+            var (title, message) = RemoteMediaConsentText();
+            if (ConsentOverride is { } o) return o(title, message);
+            if (TopLevel.GetTopLevel(this) is not Window owner) return Task.FromResult(false);
+            // WPF YesNo; there is no "No" key in the language files, so the second button keeps the
+            // dialog's localized Cancel. Close/Cancel both answer false, as No does.
+            return Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: Loc.Get("label_yes"));
+        }
+
+        /// <summary>The ask's title and text, shared with the launcher's media dialog (WPF asks the same, word for word).</summary>
+        internal static (string Title, string Message) RemoteMediaConsentText()
+        {
             var title = LocOr("title_remote_media_consent", "Use Reddit media?");
             var message = LocOr("msg_remote_media_consent",
                 "Pull media from Reddit?\n\n" +
@@ -212,11 +225,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
                 "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
                 "Turn it on?");
-            if (ConsentOverride is { } o) return o(title, message);
-            if (TopLevel.GetTopLevel(this) is not Window owner) return Task.FromResult(false);
-            // WPF YesNo; there is no "No" key in the language files, so the second button keeps the
-            // dialog's localized Cancel. Close/Cancel both answer false, as No does.
-            return Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: Loc.Get("label_yes"));
+            return (title, message);
         }
 
         private void RemoteNicheChip_Changed()
@@ -430,8 +439,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             grid.Children.Add(text);
             if (onRemove != null)
             {
-                var close = new Button { Content = "✕", Theme = this.FindResource("RemoteChipCloseButton") as ControlTheme };
+                var close = new Button { Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 10 }, Theme = this.FindResource("RemoteChipCloseButton") as ControlTheme };
                 ToolTip.SetTip(close, LocOr("tooltip_remote_library_remove", "Forget this subreddit everywhere"));
+                AutomationProperties.SetName(close, LocOr("tooltip_remote_library_remove", "Forget this subreddit everywhere"));
                 close.Click += (_, e) => { e.Handled = true; onRemove(); };
                 Grid.SetColumn(close, 2);
                 grid.Children.Add(close);
@@ -501,9 +511,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             stack.Children.Add(new TextBlock { Text = mine ? LocOr("label_remote_flavour_mine", "Your own mix") : f.Line, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Muted });
             stack.Children.Add(new TextBlock { Tag = "count", Text = mine ? "" : CommunitiesText(FlavourPoolCount(f)), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Muted });
             grid.Children.Add(stack);
-            grid.Children.Add(new TextBlock
+            grid.Children.Add(new IconGlyph
             {
-                Tag = "check", Text = "✓", FontSize = 12, Margin = new Thickness(0, 9, 10, 0),
+                Tag = "check", Kind = IconKind.Checkmark, Size = 12, Margin = new Thickness(0, 9, 10, 0),
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
                 Foreground = new SolidColorBrush(tint), IsVisible = false
             });
@@ -575,7 +585,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 tile.BorderBrush = on ? new SolidColorBrush(tint) : Tint(Colors.White, 0x22 / 255.0);
                 tile.BorderThickness = new Thickness(on ? 1.5 : 1);
                 if (tile.Content is not Grid g) continue;
-                foreach (var tb in g.Children.OfType<TextBlock>().Where(t => (string?)t.Tag == "check")) tb.IsVisible = on;
+                foreach (var tb in g.Children.OfType<IconGlyph>().Where(t => (string?)t.Tag == "check")) tb.IsVisible = on;
                 if (f.Id == FlavourPresets.MineId && on)
                     foreach (var tb in g.Children.OfType<StackPanel>().SelectMany(p => p.Children.OfType<TextBlock>()).Where(t => (string?)t.Tag == "count"))
                         tb.Text = CommunitiesText(SelectionCounts(nicheList, subList).Subs);

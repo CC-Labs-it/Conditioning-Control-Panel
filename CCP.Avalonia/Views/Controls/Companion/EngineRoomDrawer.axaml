@@ -18,8 +18,7 @@
        CmpBoolToVisInverse          ->  IsVisible="{Binding !X}"
        CmpHasContentToVis           ->  ObjectConverters.IsNotNull
        Style.Triggers / DataTrigger ->  Classes.healthy="{Binding IsHealthy}" + a class selector
-       Image + CmpEmojiToImage      ->  <TextBlock Text="⚙"/>: Avalonia renders colour emoji
-                                        natively, so the Twemoji image pipeline is not needed
+       Image + CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
        PasswordBox + PasswordChanged->  TextBox with PasswordChar, bound OneWayToSource. Avalonia
                                         has no PasswordBox; see the comment at the field.
        Content="{...}" on a button  ->  a <TextBlock> child (Avalonia reads "_" in Content as an
@@ -27,6 +26,7 @@
        pack:// merged dictionary    ->  avares:// ResourceInclude -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:conv="clr-namespace:Avalonia.Data.Converters;assembly=Avalonia.Base"
@@ -79,7 +79,7 @@
               IsExpanded="{ReflectionBinding IsExpanded, Mode=TwoWay}">
         <Expander.Header>
             <StackPanel Orientation="Horizontal">
-                <TextBlock FontSize="14" Margin="0,0,10,0" VerticalAlignment="Center" Text="⚙"/>
+                <fx:IconGlyph Kind="Settings" Size="14" Margin="0,0,10,0" VerticalAlignment="Center"/>
                 <TextBlock Text="{ReflectionBinding #Root.Strings.LocHeader}"
                            Theme="{StaticResource CmpDrawerHeaderTextStyle}"/>
             </StackPanel>
@@ -119,21 +119,25 @@
             </Border>
 
             <!-- ========== status line (always — it is the "is she thinking?" readout) ========== -->
-            <TextBlock Text="{ReflectionBinding StatusLine}" FontSize="11" Margin="2,0,0,12" TextWrapping="Wrap"
-                       Classes.healthy="{ReflectionBinding IsHealthy}">
+            <Grid ColumnDefinitions="Auto,*" Margin="2,0,0,12" TextElement.FontSize="11"
+                  Classes.healthy="{ReflectionBinding IsHealthy}">
                 <!-- WPF used a Style with a DataTrigger on IsHealthy. Avalonia has no data
                      triggers; a bound style class is the equivalent. Both foregrounds live in
                      styles rather than on the element, because a local value would outrank the
-                     class setter. -->
-                <TextBlock.Styles>
-                    <Style Selector="TextBlock">
-                        <Setter Property="Foreground" Value="{StaticResource CmpMutedBrush}"/>
+                     class setter. The status string's leading glyph is a Fluent icon
+                     (fluent-icons 2026-10-10); the text wraps as in WPF (EngineRoomDrawer.xaml:89). -->
+                <Grid.Styles>
+                    <Style Selector="Grid">
+                        <Setter Property="TextElement.Foreground" Value="{StaticResource CmpMutedBrush}"/>
                     </Style>
-                    <Style Selector="TextBlock.healthy">
-                        <Setter Property="Foreground" Value="#FF8FD9A8"/>
+                    <Style Selector="Grid.healthy">
+                        <Setter Property="TextElement.Foreground" Value="#FF8FD9A8"/>
                     </Style>
-                </TextBlock.Styles>
-            </TextBlock>
+                </Grid.Styles>
+                <fx:IconGlyph Emoji="{ReflectionBinding StatusGlyph}" Size="11" Margin="0,1,5,0" VerticalAlignment="Top"
+                              IsVisible="{ReflectionBinding StatusGlyph, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                <TextBlock Grid.Column="1" Text="{ReflectionBinding StatusText}" TextWrapping="Wrap"/>
+            </Grid>
 
             <!-- ========== OFF ========== -->
             <TextBlock Text="{ReflectionBinding #Root.Strings.LocOffNote}" Theme="{StaticResource CmpDrawerNoteStyle}"

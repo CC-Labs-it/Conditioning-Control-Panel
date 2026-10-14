@@ -19,6 +19,8 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -75,12 +77,17 @@ public sealed class WorkshopCellsTests
             Click(cell.FindControl<Button>("BtnAddVideoLink")!);       // the user's add
             Assert.Equal(2, cell.Rows.Count);
             var added = cell.Rows[1];
+            // The row's open button swaps WPF's ↗ / ⚠ glyph: Fluent Open / Warning (fluent-icons 2026-10-10).
+            IconKind OpenGlyph() => ((IconGlyph)((Grid)added.UrlBox.Parent!).Children.OfType<Button>().First().Content!).Kind;
+            Assert.Equal(IconKind.Open, OpenGlyph());
             added.UrlBox.Text = "not a link";
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0.55, ((Control)added.UrlBox.Parent!).Opacity); // greyed, dropped on save
+            Assert.Equal(IconKind.Warning, OpenGlyph());
             added.UrlBox.Text = "https://hypnotube.com/video/new-one-22.html";
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1.0, ((Control)added.UrlBox.Parent!).Opacity);
+            Assert.Equal(IconKind.Open, OpenGlyph());
             added.UrlBox.Focus();
             added.NameBox.Focus();                                      // leaving the box saves
             Dispatcher.UIThread.RunJobs();

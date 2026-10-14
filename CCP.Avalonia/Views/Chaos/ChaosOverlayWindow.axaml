@@ -36,6 +36,7 @@
      localized - so there is no {loc:Str} in this view and no key has been invented for one. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Chaos.ChaosOverlayWindow"
         Title="Down the Rabbit Hole"
         SystemDecorations="None"
@@ -100,7 +101,7 @@
                         <!-- Taking Chances: re-draw the options; visible only while rerolls remain. -->
                         <Button x:Name="BtnReroll" IsVisible="False"
                                 Margin="10,0,0,0" Padding="12,6" Background="#338B5CF6" Foreground="White" BorderThickness="0">
-                            <TextBlock x:Name="BtnRerollText" Text="🎲 tempt fate again"/>
+                            <fx:IconLabel x:Name="BtnRerollText" Text="tempt fate again" Kind="ArrowShuffle"/>
                         </Button>
                     </StackPanel>
                     <TextBlock x:Name="DraftCountdown" Foreground="{StaticResource TextDim}" FontSize="13"
@@ -153,7 +154,7 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
                         <Button x:Name="BtnRunAgain"
                                 Padding="18,10" Margin="0,0,12,0" Background="{StaticResource Pink}" Foreground="White" FontWeight="Bold" BorderThickness="0">
-                            <TextBlock x:Name="BtnRunAgainText" Text="▸ FALL DEEPER"/>
+                            <fx:IconLabel x:Name="BtnRunAgainText" Text="FALL DEEPER" Kind="ChevronRight"/>
                         </Button>
                         <Button x:Name="BtnClose"
                                 Padding="18,10" Background="#33FFFFFF" Foreground="White" BorderThickness="0">
@@ -225,13 +226,13 @@
                     <TextBlock x:Name="StoryText" Text="" Foreground="White" FontSize="24"
                                TextWrapping="Wrap" LineHeight="34"/>
                     <!-- press-forward chevron (user-driven only) -->
-                    <TextBlock x:Name="StoryAdvance" Text="▸" Foreground="{StaticResource Pink}" FontSize="26"
-                               FontWeight="Bold" HorizontalAlignment="Right" Margin="0,10,0,0"
-                               RenderTransformOrigin="50%,50%">
-                        <TextBlock.RenderTransform>
+                    <fx:IconGlyph x:Name="StoryAdvance" Kind="ChevronRight" Variant="Filled" Foreground="{StaticResource Pink}" Size="26"
+                                  HorizontalAlignment="Right" Margin="0,10,0,0"
+                                  RenderTransformOrigin="50%,50%">
+                        <fx:IconGlyph.RenderTransform>
                             <TranslateTransform X="0"/>
-                        </TextBlock.RenderTransform>
-                    </TextBlock>
+                        </fx:IconGlyph.RenderTransform>
+                    </fx:IconGlyph>
                 </StackPanel>
             </Border>
         </Grid>

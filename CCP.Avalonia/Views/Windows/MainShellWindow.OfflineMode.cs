@@ -36,6 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 Platform.AccountSeed.Sync?.StopHeartbeat();
+                // WPF MainWindow.UiUpdates.cs:2818: drop the Discord RPC IPC connection.
+                if (App.DiscordRpc?.IsEnabled == true) App.DiscordRpc.IsEnabled = false;
                 Log.Debug("Network services disconnected for offline mode");
             }
             catch (Exception ex) { Log.Warning(ex, "Error disconnecting network services"); }
@@ -68,6 +70,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                 // Browser card.
                 var page = BrowserPage;
+                // WPF UiUpdates.cs:2701: Home's unified login button greys too.
+                SetOfflineDisabled(page?.FindControl<Button>("BtnUnifiedLogin"), isOffline);
                 SetOfflineDisabled(page?.FindControl<RadioButton>("RbBambiCloud"), isOffline);
                 SetOfflineDisabled(page?.FindControl<RadioButton>("RbHypnoTube"), isOffline);
                 SetOfflineDisabled(page?.FindControl<Button>("BtnPopOutBrowser"), isOffline);

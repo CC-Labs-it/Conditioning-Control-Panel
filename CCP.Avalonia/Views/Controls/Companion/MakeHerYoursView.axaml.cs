@@ -143,7 +143,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public bool IsInterviewed => false;
         public bool IsInterviewSpotlightShown =>
             !IsInterviewed && !ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled;
-        public string InterviewTitle => Loc.Get("companion_personality_interview_title");
         public string InterviewBody => Loc.Get("companion_personality_interview_body_1");
         public string InterviewCtaLabel => Loc.Get("companion_personality_interview_cta");
         public string InterviewedLine => string.Empty;

@@ -12,12 +12,15 @@ using System.Collections.Generic;
 using Avalonia.Input.Platform;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
@@ -212,8 +215,9 @@ public sealed partial class FriendsDrawer : Border
     internal void TogglePresence()
     {
         if (_svc?.Available != true) return;
-        try { _svc.PresenceShared = !_svc.PresenceShared; } catch (Exception ex) { Serilog.Log.Debug("[Friends] presence write failed: {E}", ex.Message); }
-        PresenceAsk.MarkAsked(); // WPF FriendsPresenceSetting.Write: answering here counts as answering the ask
+        // WPF FriendsDrawer.Presence.cs:76-81, same Core rule; answering here counts as answering the ask
+        var next = !FriendsPresenceSetting.Read(_svc, () => false);
+        FriendsPresenceSetting.Write(next, _svc, _ => { }, () => PresenceAsk.MarkAsked());
         Render();
     }
     private void RenderList(FriendsSnapshot snap)
@@ -320,7 +324,9 @@ public sealed partial class FriendsDrawer : Border
         var t = new TextBlock { FontSize = 11.5, Foreground = Muted, TextTrimming = TextTrimming.CharacterEllipsis, Tag = "friends-activity" };
         if (f.Online)
         {
-            t.Inlines!.Add(new global::Avalonia.Controls.Documents.Run("● ") { Foreground = Mint });
+            // WPF "● " presence pip, a Fluent circle here (fluent-icons 2026-10-10).
+            t.Inlines!.Add(new InlineUIContainer(new IconGlyph { Kind = IconKind.Circle, Variant = IconVariant.Filled, Size = 8, Foreground = Mint, Margin = new Thickness(0, 0, 5, 0) })
+                { BaselineAlignment = BaselineAlignment.Center });
             t.Inlines.Add(new global::Avalonia.Controls.Documents.Run(Loc.Get(FriendsDrawerRules.ActivityKey(f.Presence.Activity))));
         }
         else
@@ -366,7 +372,7 @@ public sealed partial class FriendsDrawer : Border
             return card;
         }
         card.Children.Add(CardActions(f));
-        var more = Pill(Loc.Get("friends_action_more"), Brushes.Transparent, Muted, "friends-action:more", Line2);
+        var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
         more.HorizontalAlignment = HorizontalAlignment.Stretch;
         more.HorizontalContentAlignment = HorizontalAlignment.Center;
         more.Click += (_, _) => Menu(f).Open(more);
@@ -536,13 +542,14 @@ public sealed partial class FriendsDrawer : Border
     internal void ToggleBlocked() { _showBlocked = !_showBlocked; Render(); }
     private void RenderFoot(FriendsSnapshot snap)
     {
-        var settings = Pill(Loc.Get("friends_settings"), Brushes.Transparent, Muted, "friends-settings");
+        var settings = Pill(GlyphContent(IconKind.Settings, Loc.Get("friends_settings"), glyphFg: null), Brushes.Transparent, Muted, "friends-settings");   // WPF E713
         settings.Click += (_, _) => { SettingsRequested?.Invoke(); CloseRequested?.Invoke(); };
-        var blocked = Pill("\u26D4", Brushes.Transparent, _showBlocked ? Lilac : Dim, "friends-blocked-toggle");
+        var blocked = Pill(new IconGlyph { Kind = IconKind.PersonProhibited, Size = 13 }, Brushes.Transparent, _showBlocked ? Lilac : Dim, "friends-blocked-toggle");   // WPF E8F8
         ToolTip.SetTip(blocked, Loc.Get("friends_blocked_title"));
+        AutomationProperties.SetName(blocked, Loc.Get("friends_blocked_title"));
         blocked.IsEnabled = _svc?.Available == true;
         blocked.Click += (_, _) => ToggleBlocked();
-        var add = Pill("+ " + Loc.Get("friends_add_title"), Brushes.Transparent, Muted, "friends-add-open");
+        var add = Pill(GlyphContent(IconKind.PersonAdd, Loc.Get("friends_add_title"), glyphFg: null), Brushes.Transparent, Muted, "friends-add-open");   // WPF E8FA
         add.HorizontalAlignment = HorizontalAlignment.Right;
         add.IsEnabled = _svc?.Available == true;
         add.Click += (_, _) => ToggleAddBox(!_addBox.IsVisible);
@@ -559,8 +566,9 @@ public sealed partial class FriendsDrawer : Border
             var code = snap.MyCode;
             var copied = Label(Loc.Get("friends_my_code"), 9, Dim, Mono);
             copied.VerticalAlignment = VerticalAlignment.Center;
-            var copy = Pill("\u2398", Brushes.Transparent, Muted, "friends-copy");
+            var copy = Pill(new IconGlyph { Kind = IconKind.Copy, Size = 11 }, Brushes.Transparent, Muted, "friends-copy");   // WPF E8C8
             ToolTip.SetTip(copy, Loc.Get("friends_copy"));
+            AutomationProperties.SetName(copy, Loc.Get("friends_copy"));
             copy.Click += async (_, _) =>
             {
                 try { await (TopLevel.GetTopLevel(this)?.Clipboard?.SetTextAsync(code) ?? Task.CompletedTask); } catch { return; }
@@ -652,6 +660,24 @@ public sealed partial class FriendsDrawer : Border
         Background = bg, Foreground = fg, BorderBrush = border ?? Brushes.Transparent, BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 3), Tag = tag, VerticalAlignment = VerticalAlignment.Center,
     };
+
+    /// <summary>WPF ButtonContent/FootButton: the action's MDL2 glyph (a Fluent icon here, fluent-icons 2026-10-10)
+    /// before its label. Action buttons (WPF ButtonContent: glyph 14 lilac, gap 8, text 13 Medium) pass glyphFg;
+    /// foot buttons (WPF FootButton: glyph 13, gap 6, text 12.5) pass null and inherit the pill's ink.</summary>
+    internal static StackPanel GlyphContent(IconKind kind, string text, bool center = false, IBrush? glyphFg = null)
+    {
+        bool action = glyphFg != null;
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = center ? HorizontalAlignment.Center : HorizontalAlignment.Left };
+        var g = new IconGlyph { Kind = kind, Size = action ? 14 : 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, action ? 8 : 6, 0) };
+        if (glyphFg != null) g.Foreground = glyphFg;
+        sp.Children.Add(g);
+        sp.Children.Add(new TextBlock
+        {
+            Text = text, FontFamily = Display, FontSize = action ? 13 : 12.5, FontWeight = action ? FontWeight.Medium : FontWeight.Normal,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return sp;
+    }
 
     /// <summary>Initials on a lilac disc, with a presence dot (mint on, grey off, none for null).</summary>
     internal static Control Avatar(string name, double size, bool? dot)

@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var k = screens[primary].Scaling > 0 ? screens[primary].Scaling : 1.0;
-            var targets = PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary)
+            var targets = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary)
                 .Select(i => screens[i]).ToList();
 
             var (minX, minY, maxX, maxY) = Bounds(targets.Select(t => t.Bounds), k);

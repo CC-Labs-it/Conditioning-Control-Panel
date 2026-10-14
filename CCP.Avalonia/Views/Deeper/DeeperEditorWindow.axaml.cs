@@ -37,7 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// </summary>
     public sealed class ValidationIssueRow
     {
-        public string Glyph { get; init; } = "";
+        public IconKind Glyph { get; init; } = IconKind.Warning;
+        public IconVariant Variant => Glyph == IconKind.Warning ? IconVariant.Filled : IconVariant.Regular;
         public IBrush Brush { get; init; } = Brushes.Gray;
         public string Message { get; init; } = "";
     }
@@ -832,7 +833,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (playing != _isPlaying)
                 {
                     _isPlaying = playing;
-                    BtnPlayPause.Content = playing ? "⏸" : "▶";
+                    PlayPauseGlyph.Kind = playing ? IconKind.Pause : IconKind.Play;
                 }
 
                 if (double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var cur))
@@ -862,7 +863,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // The page owned _isPlaying while it was up. Leaving it true would make the next press
             // of a local-media transport toggle straight to "paused" and do nothing visible.
             _isPlaying = false;
-            BtnPlayPause.Content = "▶";
+            PlayPauseGlyph.Kind = IconKind.Play;
             try
             {
                 BrowserPreview.AllowNavigation = u => u.Scheme == "about";
@@ -972,7 +973,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _currentSeconds = 0;
                 TxtCurrentTime.Text = FormatTime(_currentSeconds);
                 UpdatePlayheadPosition();
-                BtnPlayPause.Content = "\u25b6";
+                PlayPauseGlyph.Kind = IconKind.Play;
             });
             _totalSeconds = audio.DurationSeconds;
             TxtTotalTime.Text = FormatTime(_totalSeconds);
@@ -991,7 +992,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _localAudio = null;
             if (a == null) return;
             _isPlaying = false;
-            BtnPlayPause.Content = "\u25b6";
+            PlayPauseGlyph.Kind = IconKind.Play;
             a.Dispose();
         }
 
@@ -1005,7 +1006,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 ed._localAudio.Pause();
                 ed._isPlaying = false;
                 ed._playheadTimer?.Stop();
-                ed.BtnPlayPause.Content = "\u25b6";
+                ed.PlayPauseGlyph.Kind = IconKind.Play;
             }
         }
 
@@ -1021,12 +1022,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // preview a wildcard because there is no media file - the project is still valid.
             if (string.IsNullOrWhiteSpace(src) || src.Contains('*'))
             {
-                TxtPlaceholderIcon.Text = "✱";
+                TxtPlaceholderIcon.Kind = IconKind.TextAsterisk;
                 TxtPlaceholderTitle.Text = Loc.Get("deeper_editor_wildcard_preview_unavailable");
             }
             else
             {
-                TxtPlaceholderIcon.Text = "🌐";
+                TxtPlaceholderIcon.Kind = IconKind.Globe;
                 TxtPlaceholderTitle.Text = Loc.Get("deeper_editor_remote_preview_unavailable");
             }
             TxtPlaceholderSource.Text = src;
@@ -1106,7 +1107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (_localAudio == null || _totalSeconds <= 0) return;
             _isPlaying = !_isPlaying;
             if (_isPlaying) _localAudio.Play(); else _localAudio.Pause();
-            BtnPlayPause.Content = _isPlaying ? "⏸" : "▶";
+            PlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
             if (_isPlaying) _playheadTimer?.Start(); else _playheadTimer?.Stop();
         }
 
@@ -2291,9 +2292,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _lastValidationIssues = EnhancementValidator.Validate(_enhancement);
             int errorCount = _lastValidationIssues.Count(x => x.Severity == ValidationSeverity.Error);
             int warningCount = _lastValidationIssues.Count(x => x.Severity == ValidationSeverity.Warning);
-            if (errorCount == 0 && warningCount == 0)
+            bool clean = errorCount == 0 && warningCount == 0;
+            TxtValidationClean.IsVisible = clean;
+            TxtValidationSummary.IsVisible = !clean;
+            if (clean)
             {
-                TxtValidationSummary.Text = Loc.Get("deeper_editor_validation_clean");
+                TxtValidationSummary.Text = "";
                 TxtValidationSummary.Foreground = Res("TextLightBrush");
                 TxtValidationSummary.Cursor = null;
                 TxtValidationSummary.TextDecorations = null;
@@ -2349,7 +2353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 .OrderBy(i => i.Severity == ValidationSeverity.Error ? 0 : 1)
                 .Select(i => new ValidationIssueRow
                 {
-                    Glyph = i.Severity == ValidationSeverity.Error ? "✕" : "⚠",
+                    Glyph = i.Severity == ValidationSeverity.Error ? IconKind.Dismiss : IconKind.Warning,
                     Brush = Res(i.Severity == ValidationSeverity.Error ? "DangerBrush" : "PinkSoftBrush"),
                     Message = i.Message ?? "",
                 })
@@ -2360,20 +2364,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // File ops
         //
         // The library's file conventions are inlined below rather than taken from
-        // ConditioningControlPanel/Services/Deeper/EnhancementLibrary.cs, which is head-only
-        // (App.UserDataPath, App.Settings, App.Logger, FileSystemWatcher, DispatcherTimer). Only
+        // CCP.Core/Services/Deeper/EnhancementLibrary.cs. It reached Core in deeper-core-a, but
+        // this head does not construct one yet (it owns a FileSystemWatcher and seeds demos, so it
+        // wants one app-level instance, not one per window). Only
         // five of its members matter to this window - FileSuffix, LibraryFolder, LastDirectory,
         // SuggestedFileName and Save - and every one of them reduces to CorePaths, CoreSettings and
         // Core's EnhancementSerializer.
         //
         // ponytail: five inlined members beats blocking the whole file-ops group on a service move
-        // this layer does not own. When EnhancementLibrary reaches Core, delete this region and
-        // call it. Deliberately NOT inlined: LibraryChanged (nothing on this head listens - the
+        // this layer does not own. Once the head holds an EnhancementLibrary instance (listed
+        // as the next deeper-core unit), delete this region and call it. Deliberately NOT inlined: LibraryChanged (nothing on this head listens - the
         // catalogue browser is not ported), the demo seeding, and ScanLibrary/FindMatch, whose
         // absence is visible in exactly one place and noted there.
         // ---------------------------------------------------------------------------------
 
-        private const string EnhancementFileSuffix = ".ccpenh.json";
+        private const string EnhancementFileSuffix = ConditioningControlPanel.Services.Deeper.EnhancementLibrary.FileSuffix;
         private const int MaxRecentFiles = 10;
 
         private static readonly string[] AudioPatterns = { "*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg" };
@@ -2663,11 +2668,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var isUrl = src.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
                      || src.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
-            TxtLinkedMediaIcon.Text = _enhancement?.MediaType == MediaTypes.Audio ? "🎵" : "🎬";
+            TxtLinkedMediaIcon.Kind = _enhancement?.MediaType == MediaTypes.Audio ? IconKind.MusicNote2 : IconKind.Video;
 
             if (string.IsNullOrEmpty(src))
             {
-                TxtLinkedMediaStatus.Text = "⚠";
+                TxtLinkedMediaStatus.Kind = IconKind.Warning;
                 ToolTip.SetTip(TxtLinkedMediaStatus, Loc.Get("deeper_editor_linked_status_local_missing"));
                 TxtLinkedMediaName.Text = Loc.Get("deeper_editor_linked_no_media");
                 TxtLinkedMediaPath.Text = "";
@@ -2675,7 +2680,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
             else if (isUrl)
             {
-                TxtLinkedMediaStatus.Text = "🌐";
+                TxtLinkedMediaStatus.Kind = IconKind.Globe;
                 ToolTip.SetTip(TxtLinkedMediaStatus, Loc.Get("deeper_editor_linked_status_url"));
                 string display;
                 try { display = new Uri(src).Host; } catch { display = src; }
@@ -2688,7 +2693,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 var exists = false;
                 try { exists = File.Exists(src); } catch { }
-                TxtLinkedMediaStatus.Text = exists ? "✓" : "⚠";
+                TxtLinkedMediaStatus.Kind = exists ? IconKind.Checkmark : IconKind.Warning;
                 ToolTip.SetTip(TxtLinkedMediaStatus, exists
                     ? Loc.Get("deeper_editor_linked_status_local_ok")
                     : Loc.Get("deeper_editor_linked_status_local_missing"));

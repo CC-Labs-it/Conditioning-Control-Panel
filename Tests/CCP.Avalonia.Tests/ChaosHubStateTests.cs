@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -43,7 +44,10 @@ public sealed class ChaosHubStateTests
                 Assert.Contains("Slipping", text);        // ChaosRanks over slot 1's 10 descents
                 Assert.Contains("New Journey", text);     // slot 2 opened by the ragdoll
                 Assert.Contains("Stitched Shut", text);   // slot 3: nobody owns the porcelain
-                Assert.Contains("✦ 321", text);
+                // WPF "✦ 321": the drops glyph is a filled Sparkle icon beside the number (fluent-icons L8).
+                var drops = picker.GetLogicalDescendants().OfType<StackPanel>()
+                    .Single(p => p.Children.OfType<TextBlock>().Any(t => t.Text == "321"));
+                Assert.Equal(FluentIcons.Common.Symbol.Sparkle, Assert.IsType<IconGlyph>(drops.Children[0]).Kind);
 
                 // Erasing Save 2 warns it closes again only when no OTHER save owns the ragdoll (WPF copy).
                 Assert.Contains("Save 2 is Stitched Shut again",
@@ -57,8 +61,8 @@ public sealed class ChaosHubStateTests
                 Assert.Equal("321", hub.FindControl<TextBlock>("MenuSparks")!.Text);
 
                 // The shelves are the real catalogue and their buttons spend the real save.
-                Click(hub, "blank_eyes", "Unlock  \u2726120");
-                Click(hub, BenchIds.ToyPocket1, "buy  \U0001FA99 50");
+                Click(hub, "blank_eyes", "Unlock|Sparkle|120");      // WPF "Unlock  ✦120"
+                Click(hub, BenchIds.ToyPocket1, "buy|CoinMultiple|50");   // WPF "buy  🪙 50"
                 var disk = ChaosMetaStore.Load(1);
                 Assert.Equal((201, 1), (disk.Sparks, disk.LifetimeBoonLevels["blank_eyes"]));
                 Assert.Equal((5, 1), (disk.Gold, disk.ToyPockets));
@@ -123,9 +127,14 @@ public sealed class ChaosHubStateTests
     private static void Click(Control root, string tag, string label)
     {
         var button = root.GetLogicalDescendants().OfType<Button>()
-            .First(b => b.Tag as string == tag && (b.Content as TextBlock)?.Text == label);
+            .First(b => b.Tag as string == tag && Label(b.Content) == label);
         button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
     }
+
+    /// <summary>A buy button's caption as "word|Icon|amount": the currency glyph is an IconGlyph (fluent-icons L8).</summary>
+    private static string Label(object? content) => content is StackPanel p
+        ? string.Join("|", p.Children.Select(c => c is IconGlyph g ? g.Kind.ToString() : (c as TextBlock)?.Text))
+        : (content as TextBlock)?.Text ?? "";
 
     private static List<string> Texts(Control root) =>
         root.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
