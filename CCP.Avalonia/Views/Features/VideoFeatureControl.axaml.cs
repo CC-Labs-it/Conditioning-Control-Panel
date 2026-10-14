@@ -423,7 +423,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
                 if (!await Dialogs.MessageDialog.ConfirmAsync(owner, "Video Playing",
                         "A video appears to be playing.\n\nIf you don't see a video, it may be stuck. Click Yes to force reset and try again.",
-                        okText: "Yes")) return;
+                        okText: "Yes", cancelText: "No")) return;
                 Serilog.Log.Warning("User requested force reset of stuck video state");
                 video.ForceCleanup();
             }
