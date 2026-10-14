@@ -356,7 +356,22 @@ namespace ConditioningControlPanel.Services.Chaos
 
         // ------------------------------------------------- the copy on this machine (Avalonia) -------------------------------------------------
 
-        private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(30) };
+        private static readonly HttpClient Http = CreateClient();
+
+        /// <summary>WPF RemoteMediaCache.CreateClient: the browser-ish headers the CDN's own site sends, and redirects
+        /// followed. Each hop still connects through the guarded handler's connect-time check.</summary>
+        private static HttpClient CreateClient()
+        {
+            var handler = UrlSafety.CreateGuardedHandler();
+            handler.AllowAutoRedirect = true;
+            handler.MaxAutomaticRedirections = 5;
+            var c = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+            c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
+            c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
+            c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
+            return c;
+        }
 
         /// <summary>The Avalonia head's copier (WPF uses RemoteMediaCache.MaterializeAsync(ownerReleases: true)):
         /// provider -> <c>&lt;assets&gt;/.temp/ccp_temp_remote_&lt;guid&gt;&lt;ext&gt;</c>, a remote image/video url only,

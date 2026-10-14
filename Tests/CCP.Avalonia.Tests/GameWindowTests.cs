@@ -749,6 +749,7 @@ public sealed class GameWindowTests
             (s.MediaSource, s.RemoteMediaConsented, s.RemoteMediaRatio, DtrhRemoteMedia.Fetch, GameWindow.DtrhCopier) = old;
             DtrhRemoteMedia.ResetForTests();
             File.Delete(cachePath);
+            File.Delete(Path.Combine(CorePaths.EffectiveAssets, ".temp", DtrhRemoteMedia.CopyPrefix + "7.webp"));
         }
     });
 
