@@ -70,4 +70,4 @@ Run here (Linux container, .NET SDK 10.0.112 from the Ubuntu archive; dot.net wa
 - Mutation check: flipping `KnockShove` to `>=` and dropping the `LockdownWarden` exemption made the new
   tests fail (2 failures), then both were restored.
 - `dotnet test Tests/CCP.Avalonia.Tests --filter "Possession|Bark"`: 8/8 passed (no Avalonia code changed).
-- Added lines vs `origin/avalonia-port/quiz-core-a`: 268.
+- Added lines vs `origin/avalonia-port/quiz-core-a`: 282 (this doc included).
