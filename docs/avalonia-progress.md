@@ -2309,3 +2309,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaster-trailer-pop: +519
 - ctrl-chaster-booked-pop missing -> wired: the "+N:NN" pops at its cause/cursor in an X11 click-through window on a FrameClock (rail flash fallback on Wayland), and the day/tab-full CapRefused tag; BookedPopLayout + CapNotice git-mv to Core.
 - ctrl-chaster-trailer-view stays missing: it needs the views-chaster-help-price-edit menu rows (its only WPF host), so it should be ported with them.
+
+## avalonia-port/mine-settings-rows: +72
+- Settings > Notifications banner pool switch (`ChkBannerPool`, WPF parity) with a fail-proven paint/write test.
+- Parity row views-settings-notifications -> stub: banner pool and intake nudge readers are still missing (shell-marquee).
