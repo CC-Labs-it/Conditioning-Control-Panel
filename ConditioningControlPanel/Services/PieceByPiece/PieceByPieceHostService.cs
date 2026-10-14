@@ -356,11 +356,14 @@ internal static partial class PieceByPieceHostService
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: identity post failed: {E}", ex.Message); }
     }
 
-    /// <summary>The one host -&gt; page settings frame, sent once per boot.</summary>
+    /// <summary>The one host -&gt; page settings frame, sent once per boot. <c>letPeopleWatch</c>
+    /// is the "Let people watch my games" switch (<see cref="PbpWatchRules"/>); <c>spectateMatchId</c>
+    /// rides only on a board opened straight into a spectate, and only on that one boot.</summary>
     private static void PostSettings()
     {
         if (_settingsPosted) return;
         _settingsPosted = true;
+        var spectate = TakeSpectateInit();
         try
         {
             _host?.Post(new
@@ -369,6 +372,8 @@ internal static partial class PieceByPieceHostService
                 videoHoldSec = SafeVideoHoldSec(),
                 reducedMotion = SafeReducedMotion(),
                 whispers = SafeWhisperClips(),
+                letPeopleWatch = PbpWatchRules.LetPeopleWatch(App.Settings?.Current),
+                spectateMatchId = spectate,
             });
         }
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: settings post failed: {E}", ex.Message); }
@@ -418,6 +423,10 @@ internal static partial class PieceByPieceHostService
 
                 case "pbp:friend-challenge":
                     OnFriendChallenge(o);
+                    break;
+
+                case PbpWatchRules.SettingFrame:
+                    OnPageSetting(o);
                     break;
 
                 case "pbp:exit":
