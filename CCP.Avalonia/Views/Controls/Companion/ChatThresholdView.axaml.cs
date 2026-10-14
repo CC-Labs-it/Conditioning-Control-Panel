@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.Companion.Brain;
 using ConditioningControlPanel.Services.Moderation;
 using ConditioningControlPanel.Views.Controls.Companion;
@@ -32,13 +33,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// here; the shimmer is a <see cref="DoubleTransition"/> exactly as <see cref="MakeHerYoursView"/>
     /// does it.</para>
     ///
-    /// <para>Not done, and not stubbed: <c>CompanionWheelRelay.Attach(ThreadList)</c> - a WPF helper
-    /// on the routed MouseWheel event that has not been ported, so a wheel notch over the capped
-    /// thread may be eaten by it instead of reaching the page.</para>
+    /// <para>The bounded thread forwards spent wheel notches to its page using the shared Core
+    /// edge rule. Live assistant turns resolve sanctioned watch chips through the Core index.</para>
     ///
     /// <para>Sending is the viewmodel's. The WPF <c>IChatThresholdVm</c> is routed through
-    /// <c>CompanionBrain.SendChatAsync</c>; here <see cref="ChatThresholdViewModel"/> is the mock's
-    /// artboard (append your line, raise IsThinking) with no transport behind it.</para>
+    /// <c>CompanionBrain.ChatAsync</c>; <see cref="ChatThresholdViewModel.CreateLive"/> sends through
+    /// the same brain, while the default viewmodel remains an isolated artboard.</para>
     /// </summary>
     public partial class ChatThresholdView : UserControl
     {
@@ -58,7 +58,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 WatchTurns(_vm?.Turns);
             };
             Loaded += OnLoaded;
-            Unloaded += (_, _) => WatchTurns(null);
+            Unloaded += (_, _) =>
+            {
+                WatchTurns(null);
+                if (this.FindControl<ItemsControl>("ThreadList") is { } thread) CompanionWheelRelay.Detach(thread);
+            };
         }
 
         /// <summary>Convenience for hosts that hand in a viewmodel rather than setting DataContext.</summary>
@@ -70,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            if (this.FindControl<ItemsControl>("ThreadList") is { } thread) CompanionWheelRelay.Attach(thread);
             WatchTurns(ViewModel?.Turns);
             ScrollThreadToEnd();
             PlayDormantShimmer();
@@ -354,18 +359,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void RebuildThread(CompanionBrain? brain)
         {
-            // ponytail: no link chip (WPF CompanionLinkIndex + CompanionLinkLauncher) - the launcher
-            // routes to the embedded browser and the remote-control guard, neither hosted here yet.
             var projected = brain != null && CompanionBrain.ShouldRoute(brain)
-                ? CompanionRoomLogic.PickThread(brain.Session.Turns).Select(t => new ChatBubble(
+                ? CompanionRoomLogic.PickThread(brain.Session.Turns).Select(t =>
+                {
+                    var text = CompanionRoomLogic.BubbleText(t);
+                    var link = t.Kind == TurnKind.AssistantChat ? CompanionLinkIndex.FindMentionedTitle(text) : null;
+                    return new ChatBubble(
                     t.Kind switch
                     {
                         TurnKind.UserChat => ChatBubble.BubbleKind.You,
                         TurnKind.BarkEcho => ChatBubble.BubbleKind.Echo,
                         _ => ChatBubble.BubbleKind.Her
                     },
-                    CompanionRoomLogic.BubbleText(t), CompanionRoomLogic.IsAiBubble(t),
-                    CompanionRoomLogic.RelativeTime(t.Utc))).ToList()
+                    text, CompanionRoomLogic.IsAiBubble(t), CompanionRoomLogic.RelativeTime(t.Utc),
+                    linkTitle: link?.Title, openLink: link is { } hit ? CompanionLinkLauncher.CommandFor(hit.Url) : null);
+                }).ToList()
                 : new List<ChatBubble>();
 
             var signature = string.Concat(projected.Select(b => $"{b.Kind}\u001F{b.IsAiGenerated}\u001F{b.Text}\u001F{b.Timestamp}\u001F"));
