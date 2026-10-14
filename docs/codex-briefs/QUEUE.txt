@@ -130,3 +130,15 @@ wire-views-tab-play
 wire-views-tab-settings
 wire-win-descent-fuse
 wire-win-whatmoved-card
+wire-ctrl-attention-check-b
+wire-shell-awareness-b
+wire-views-tab-assets-b
+wire-views-tab-deeper-b
+wire-win-emi-book-b
+wire-win-emi-ring-b
+wire-win-tutorial-overlay-b
+wire-feat-pbp-host-b
+wire-dialogs-username-picker-b
+wire-views-settings-performance-b
+wire-views-tab-quests-b
+wire-win-webcam-calibration-b
