@@ -502,10 +502,13 @@
         <Style Selector="StackPanel.rackActions">
             <Setter Property="Opacity" Value="0"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
+            <!-- WPF Visibility=Hidden also leaves the tab order: no Tab onto an invisible Edit/Delete. -->
+            <Setter Property="KeyboardNavigation.TabNavigation" Value="None"/>
         </Style>
         <Style Selector="Border:pointerover > Grid > StackPanel.rackActions">
             <Setter Property="Opacity" Value="1"/>
             <Setter Property="IsHitTestVisible" Value="True"/>
+            <Setter Property="KeyboardNavigation.TabNavigation" Value="Continue"/>
         </Style>
     </UserControl.Styles>
 

@@ -67,7 +67,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SetCornerGifPath(string path)
         {
             _selectedCornerGifPath = path;
-            if (BtnSelectCornerGif.Content is IconLabel label) label.Text = $"📁 {Path.GetFileName(path)}";
+            if (BtnSelectCornerGif.Content is IconLabel label)
+            {
+                label.Kind = IconKind.Folder;
+                label.Text = Path.GetFileName(path);
+            }
             LiveCornerGifEdit(ss => ss.CornerGifPath = path);
         }
 

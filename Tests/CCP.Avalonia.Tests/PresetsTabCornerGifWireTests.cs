@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -144,12 +145,22 @@ public sealed class PresetsTabCornerGifWireTests
             StackPanel Actions(Border r) => ((Grid)r.Child!).Children.OfType<StackPanel>().Single(p => p.Classes.Contains("rackActions"));
             Assert.All(rows, r => Assert.Equal(0, Actions(r).Opacity));
             Assert.All(rows, r => Assert.False(Actions(r).IsHitTestVisible));
+            // WPF Hidden leaves the tab order too: Tab from a resting row never lands on its invisible Edit/Delete.
+            Visual? TabFrom(Border r)
+            {
+                Assert.True(r.Focus());
+                shell.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
+                Dispatcher.UIThread.RunJobs();
+                return shell.FocusManager?.GetFocusedElement() as Visual;
+            }
+            Assert.False(TabFrom(rows[0]) is { } v && Actions(rows[0]).IsVisualAncestorOf(v));
 
             var hovered = rows[0];
             shell.MouseMove(hovered.TranslatePoint(new Point(hovered.Bounds.Width / 2, hovered.Bounds.Height / 2), shell)!.Value, RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, Actions(hovered).Opacity);
             Assert.True(Actions(hovered).IsHitTestVisible);
+            Assert.True(TabFrom(hovered) is { } hv && Actions(hovered).IsVisualAncestorOf(hv));   // under the pointer they are reachable again
             Assert.Equal(0, Actions(rows[1]).Opacity);   // only the row under the pointer
 
             // The sheen sits on the selected rack row, then on the picked preset chip.
