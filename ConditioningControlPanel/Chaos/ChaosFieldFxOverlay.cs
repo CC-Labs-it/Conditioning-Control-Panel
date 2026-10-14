@@ -338,12 +338,22 @@ public sealed class ChaosFieldFxOverlay : Window
 
         // A crackling flicker for its whole life, then a quick fade-away at the end.
         var flicker = new DoubleAnimationUsingKeyFrames();
-        int steps = Math.Max(2, (int)(lifeMs / 90));
-        var rng = new Random();
-        for (int i = 0; i < steps; i++)
-            flicker.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.55 + rng.NextDouble() * 0.45,
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(i * 90))));
-        flicker.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(lifeMs))));
+        if (!Services.Safety.GentleVisuals.AllowFlicker)
+        {
+            // Gentle visuals: no crackle; a steady glow that rises, holds and fades over its life.
+            int rise = Services.Safety.GentleVisuals.RiseMs(0), fade = Services.Safety.GentleVisuals.FadeMs(90);
+            foreach (var (v, ms) in Services.Video.GentleWindowRules.RiseHoldFade(0.8, rise, (int)lifeMs - rise - fade, fade))
+                flicker.KeyFrames.Add(new LinearDoubleKeyFrame(v, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
+        }
+        else
+        {
+            int steps = Math.Max(2, (int)(lifeMs / 90));
+            var rng = new Random();
+            for (int i = 0; i < steps; i++)
+                flicker.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.55 + rng.NextDouble() * 0.45,
+                    KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(i * 90))));
+            flicker.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(lifeMs))));
+        }
         flicker.Completed += (_, _) => RemoveTransient(zone);
         zone.BeginAnimation(OpacityProperty, flicker);
     }

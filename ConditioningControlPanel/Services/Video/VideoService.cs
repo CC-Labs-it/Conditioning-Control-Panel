@@ -334,6 +334,9 @@ namespace ConditioningControlPanel.Services
         private string? _retryPath;
         private DateTime _startTime;
         private double _duration;
+        // Gentle visuals: the playback rate this clip was started at (1 when off). The duration
+        // guillotine and the attention schedule are wall-clock, so they stretch by it.
+        private double _playRate = 1.0;
 
         // #536: a Deeper enhancement (VideoEnhancementBridge) can loop or hold the clip past its
         // declared duration (loop_region, SpeakHoldMode.LoopRegion, speak-pauses). While one is
@@ -2746,6 +2749,7 @@ namespace ConditioningControlPanel.Services
             {
                 _videoPlaying = true;
                 _strictActive = false;
+                _playRate = Video.GentleWindowRules.PlaybackRate(Safety.GentleVisuals.On, Safety.GentleVisuals.Speed);
                 CancelPendingRetry();
 
                 // Global "Show content on" picker, not every screen: with one monitor picked
@@ -2868,7 +2872,7 @@ namespace ConditioningControlPanel.Services
                             {
                                 if (_isCleaningUp) return; // Double-check on UI thread
                                 _videoPlaying = false;
-                                CloseAll(reason: "url playback ended");
+                                CloseAll(reason: "url playback ended", softExit: true);
                             });
                         }
                         catch (Exception ex)
@@ -2952,6 +2956,7 @@ namespace ConditioningControlPanel.Services
                 };
             }
 
+            GentleBeforePlay(win, mediaPlayer);
             mediaPlayer.Play(media);
 
             if (withAudio)
@@ -3137,6 +3142,7 @@ namespace ConditioningControlPanel.Services
             // and never cleared, so a clip that died before LengthChanged inherited the previous
             // clip's length and was credited with it on the skip path (#767).
             _duration = 0;
+            _playRate = Video.GentleWindowRules.PlaybackRate(Safety.GentleVisuals.On, Safety.GentleVisuals.Speed);
             _hits = _total = 0;
             _spawnTimes.Clear();
 
@@ -3951,6 +3957,7 @@ namespace ConditioningControlPanel.Services
 
             // Play the media
             VideoDiag.Log("VIDEO", $"win[{tag}]: Play() issued +{winSw.ElapsedMilliseconds}ms");
+            GentleBeforePlay(win, mediaPlayer);
             mediaPlayer.Play(media);
             VideoDiag.Log("VIDEO", $"win[{tag}]: Play() returned +{winSw.ElapsedMilliseconds}ms");
 
@@ -5598,7 +5605,7 @@ namespace ConditioningControlPanel.Services
                         if (!_videoPlaying) return;
 
                         _spawned = 0; // Reset spawned counter
-                        var dur = _duration > 0 ? _duration : 60;
+                        var dur = Video.GentleWindowRules.WallSeconds(_duration > 0 ? _duration : 60, _playRate);
                         // Use setting directly as total count (not density)
                         var maxTargets = Math.Max(1, App.Settings.Current.AttentionDensity);
                         _total = App.Settings.Current.RandomizeAttentionTargets
@@ -6060,7 +6067,7 @@ namespace ConditioningControlPanel.Services
             {
                 _penalties++;
                 if (_penalties >= settings.MercyAfterFails && settings.MercySystemEnabled)
-                    ShowMessage(App.Mods?.GetAttentionCheckMercyMessage() ?? "BAMBI GETS MERCY", 2500, Cleanup);
+                    ShowMessage(App.Mods?.GetAttentionCheckMercyMessage() ?? "BAMBI GETS MERCY", 2500, () => Cleanup());
                 else
                 {
                     // Snapshot the strict flag NOW, while the run is still live, and keep the run
@@ -6149,7 +6156,7 @@ namespace ConditioningControlPanel.Services
             else if (_lastWatchPositionMs <= 0 && _duration > 0)
                 _lastWatchPositionMs = _duration * 1000.0;
 
-            Cleanup();
+            Cleanup(naturalEnd: !noFrameRendered);
         }
 
         /// <summary>
@@ -6757,10 +6764,12 @@ namespace ConditioningControlPanel.Services
             _fallbackSafetyTimer = null;
 
             // Extend stuck detection timeout so long videos aren't killed prematurely
-            App.InteractionQueue?.ExtendTimeout(videoDurationSeconds, InteractionQueueService.InteractionType.Video);
+            // Gentle visuals: a slowed clip runs longer on the wall clock (rate 1 = unchanged).
+            var wallSeconds = Video.GentleWindowRules.WallSeconds(videoDurationSeconds, _playRate);
+            App.InteractionQueue?.ExtendTimeout(wallSeconds, InteractionQueueService.InteractionType.Video);
 
             // Add 5 second buffer beyond video duration
-            var timeoutSeconds = videoDurationSeconds + 5;
+            var timeoutSeconds = wallSeconds + 5;
 
             _lastSafetyTimeMs = -1;
             _lastSafetyProgressUtc = DateTime.UtcNow;
@@ -7553,14 +7562,58 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>
+        /// Gentle visuals for a LibVLC window, called just before Play(): the clip's rate (only when
+        /// slowed, so nothing changes when off) and a black owned curtain that fades away once the
+        /// player reports Playing (backstop 3 s), so the clip fades in instead of popping on.
+        /// </summary>
+        private void GentleBeforePlay(Window win, LibVLCSharp.Shared.MediaPlayer player)
+        {
+            if (_playRate < 1.0)
+            {
+                try { player.SetRate((float)_playRate); }
+                catch (Exception ex) { App.Logger?.Debug("VideoService: gentle SetRate failed: {E}", ex.Message); }
+            }
+            if (!Safety.GentleVisuals.On) return;
+            var curtain = Video.GentleCurtain.CoverOwner(win);
+            if (curtain == null) return;
+            var seconds = Safety.GentleVisuals.FadeSeconds;
+            int lifted = 0;
+            void Lift()
+            {
+                if (Interlocked.Exchange(ref lifted, 1) == 0)
+                    Video.GentleCurtain.Lift(new[] { curtain }, seconds);
+            }
+            player.Playing += (_, _) => { try { curtain.Dispatcher.BeginInvoke(new Action(Lift)); } catch { } };
+            var backstop = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            backstop.Tick += (_, _) => { backstop.Stop(); Lift(); };
+            backstop.Start();
+        }
+
         /// <param name="reason">
         /// Which exit path asked for the teardown - natural end / ESC dismiss ("cleanup"), panic key
         /// or any other forced close ("force cleanup"), engine stop, app exit. Carried into the
         /// Information-level teardown lines and into ReleasePlayer so a #1196-shaped report ("libvlc
         /// is still in my sound mixer") can be answered from the log without a repro.
         /// </param>
-        private void CloseAll(bool synchronous = false, string reason = "teardown")
+        /// <param name="softExit">A natural end. With gentle visuals on, black curtains cover the
+        /// video windows for the teardown and then fade away, so the desktop fades back in instead
+        /// of snapping. Never set by panic / force / engine stop / app exit: those stay instant and
+        /// also drop any curtain still fading (<see cref="Video.GentleCurtain.DropAll"/>).</param>
+        private void CloseAll(bool synchronous = false, string reason = "teardown", bool softExit = false)
         {
+            List<Window>? softCurtains = null;
+            if (Video.GentleWindowRules.SoftExit(Safety.GentleVisuals.On, softExit) && !_isCleaningUp && _windows.Count > 0)
+            {
+                var rects = new List<Int32Rect>();
+                foreach (var w in _windows)
+                    if (w.IsVisible && Video.GentleCurtain.RectOf(w) is Int32Rect rc) rects.Add(rc);
+                softCurtains = Video.GentleCurtain.Cover(rects);
+            }
+            else if (!softExit)
+            {
+                Video.GentleCurtain.DropAll();
+            }
             // Use lock to prevent race conditions between multiple cleanup triggers
             // (panic key, EndReached, safety timer, etc.)
             // #616/#617/#621/#622/#623: everything below runs ON THE UI THREAD and blocks it for
@@ -7951,6 +8004,10 @@ namespace ConditioningControlPanel.Services
                     _isCleaningUp = false;
                 }
 
+                // Gentle soft exit: the video windows are gone, fade the black covers away.
+                if (softCurtains != null)
+                    Video.GentleCurtain.Lift(softCurtains, Safety.GentleVisuals.FadeSeconds);
+
                 // A leased player's wedge may have asked to retire the shared instance WHILE this
                 // video's per-monitor players were still decoding on it; that retire was parked
                 // rather than executed (RetireSharedLibVLC / ShouldDeferRetire). The video is down
@@ -8034,7 +8091,9 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        private void Cleanup()
+        /// <param name="naturalEnd">The clip played to its end (EndCurrentVideo): with gentle visuals
+        /// on, the desktop fades back in. Every other door (Esc, safety timers, errors) stays instant.</param>
+        private void Cleanup(bool naturalEnd = false)
         {
             App.Logger?.Information("VideoService: Cleanup() called, _videoPlaying={Playing}, _windows={WinCount}",
                 _videoPlaying, _windows.Count);
@@ -8052,7 +8111,7 @@ namespace ConditioningControlPanel.Services
             // "cleanup" covers both doors into this method: the natural end of a clip and the ESC
             // dismiss (SetupStrictHandlers / TryEscapeFromGlobalKey). The VideoDiag PANIC line
             // immediately before an ESC-driven call says which one it was.
-            CloseAll(reason: "cleanup");
+            CloseAll(reason: "cleanup", softExit: naturalEnd);
 
             App.Logger?.Information("VideoService: Cleanup() - CloseAll completed, _windows now={WinCount}", _windows.Count);
             // Audio unduck now happens inside CloseAll (above) so every teardown path releases the

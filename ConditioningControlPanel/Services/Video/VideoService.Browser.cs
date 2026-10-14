@@ -136,6 +136,9 @@ namespace ConditioningControlPanel.Services
                     // that swallows the cursor while the rest of the app still shows one reads as a
                     // frozen machine, and attention targets are clicked over this surface.
                     HideCursor = false,
+                    // Gentle visuals: slowed playback + a fade in from black inside the page.
+                    PlaybackRate = _playRate,
+                    FadeInMs = Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0,
                     // The SAME flag SetupStrictHandlers is given below, not the live IsStrictActive
                     // probe: the page wants one fixed answer at load time, and this is the value the
                     // whole run is locked to.

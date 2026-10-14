@@ -45,6 +45,11 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// <summary>Start position for the chaos random-segment mode. 0 = from the top.</summary>
         public long StartAtMs { get; init; }
 
+        /// <summary>Gentle visuals: the page's playbackRate (1 = normal) and the fade-in on the
+        /// first frame in ms (0 = none). The window itself can never fade (see BrowserVideoWindow).</summary>
+        public double PlaybackRate { get; init; } = 1.0;
+        public int FadeInMs { get; init; }
+
         /// <summary>
         /// This clip runs under a strict lock, as a FIXED fact of the session rather than the live
         /// probe <see cref="IsHostStrict"/> answers. It rides the page's <c>load</c> message, where
@@ -513,6 +518,8 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     blurBackground = req.BlurBackground,
                     hideCursor = req.HideCursor,
                     startAtMs = req.StartAtMs,
+                    rate = req.PlaybackRate,
+                    fadeMs = req.FadeInMs,
                     // Arms the page's Media Session guard (player.js setMediaKeyGuard), which is what
                     // stops an OS/Bluetooth media key from pausing a video the user must not be able
                     // to stop. Every window carries it: a mirror is just as pausable as the primary.
