@@ -45,9 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //    ToggleWebcamFromHotkey / WebcamTrackingService, and no webcam engine exists on this
             //    head, so a rebind would configure a key for a feature that cannot fire. Same
             //    refusal as DevicesSettingsSection.axaml.cs's BtnCameraShortcutDevices.
-            //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
-            //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
-            //    that flips with nothing behind it would report a paused browser that is playing.
+            // Browser pause forwards from the cell to the shell's live Home WebHost.
             //  · Roster.CompanionCardClicked / PersonalityAssignRequested — MainWindow's
             //    CompanionCard_Click / BtnCompanionPersonality_Click (MainWindow.Patreon.cs), which
             //    switch the active companion through App.Companion. No seam on this head.

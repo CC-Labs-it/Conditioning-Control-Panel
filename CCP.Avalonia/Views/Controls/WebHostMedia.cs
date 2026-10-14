@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
     /// <summary>
-    /// The WebHost mute seam. IMPORTED-AND-ADAPTED from trunk e3109afdf (the pause script is left out: nothing calls it).
+    /// The WebHost media seam. Mute IMPORTED-AND-ADAPTED from trunk e3109afdf; playback shares the WPF script.
     /// WPF mutes the Home browser with CoreWebView2.IsMuted (MainWindow.Browser.cs:2603); NativeWebView has no engine
     /// mute on either adapter, so this rides the one channel WebHost does have, <see cref="WebHost.InvokeScriptAsync"/>,
     /// and reads its answer as a plain string (both adapters; no window.chrome.webview on the page side).
@@ -38,5 +38,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var result = await host.InvokeScriptAsync(MuteScript(muted));
             return result?.Trim('"') == (muted ? "muted" : "unmuted");
         }
+
+        /// <summary>WPF's live pause switch mutes, then pauses/resumes top-document media.
+        /// It does not alter the saved Home mute preference.</summary>
+        internal static async Task<bool> SetPausedAsync(this WebHost host, bool paused)
+        {
+            if (!host.HasEngine) return false;
+            var muted = await host.SetMutedAsync(paused);
+            var result = await host.InvokeScriptAsync(Services.BrowserMediaPlaybackScript.ForPaused(paused));
+            return muted && result?.Trim('"') == (paused ? "paused" : "playing");
+        }
+
     }
 }
