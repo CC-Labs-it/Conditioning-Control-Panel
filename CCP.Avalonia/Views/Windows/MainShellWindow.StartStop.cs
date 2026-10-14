@@ -2,12 +2,15 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// ponytail: still missing, each with no service on this head: the remote-control gate,
-// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// ponytail: remaining start integration: Relapse achievements, brain-drain/autonomy starts,
+// ramp/scheduler lifecycle and hero FX. Remote gate, TotalSessions and other Core-driven services
+// are already real; empty local flash notices and the running label are now wired here.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
+using System;
 using Avalonia.Controls;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using Avalonia.Data;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Localization;
@@ -81,7 +84,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                WarnIfFlashLibraryEmpty();
             });
+        }
+
+        /// <summary>WPF StartStop.cs:225: only a deliberate UI start earns this non-blocking notice.
+        /// Core/session/remote starts stay silent, and online/mixed or audio-only starts do too.</summary>
+        internal void WarnIfFlashLibraryEmpty()
+        {
+            try
+            {
+                if (!LocalMediaLibrary.FlashIsEmpty(CoreSettings.Current, CorePaths.EffectiveAssets)) return;
+                App.Notifications.Show(
+                    string.Format(Loc.Get("msg_no_flash_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
+                    Helpers.NotificationType.Warning, TimeSpan.FromSeconds(18),
+                    actionLabel: Loc.Get("btn_open_media_manager"), action: () => ShowTab("assets"),
+                    secondaryActionLabel: Loc.Get("btn_get_packs"),
+                    secondaryAction: () => Platform.ExternalOpener.Open(DiscordLinks.PackCatalogue));
+                Serilog.Log.Information("[empty-state] Flashes started with an empty local image library");
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[empty-state] flash library check failed"); }
         }
 
         /// <summary>WPF StopEngine. Saved flags are left alone; <see cref="OnEngineStopped"/> clears the screen.
@@ -128,6 +150,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = running ? "■" : "▶";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new StrExtension(running ? "label_stop" : "label_start").ProvideValue(null!));
+            if (Named<TextBlock>("TxtPresetsStatus") is { } status)
+            {
+                if (running) status.Bind(TextBlock.TextProperty, (Binding)new StrExtension("label_running").ProvideValue(null!));
+                else status.Text = "";
+            }
         }
     }
 }

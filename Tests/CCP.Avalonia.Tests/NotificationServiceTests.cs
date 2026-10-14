@@ -22,7 +22,7 @@ public sealed class NotificationServiceTests
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -57,6 +57,35 @@ public sealed class NotificationServiceTests
             window.Close();
         });
     }
+
+    [Fact]
+    public Task QueuedSecondaryActionUsesTheWpfSecondRowAndStopsExpiry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var service = new NotificationService();
+        int primary = 0, secondary = 0;
+        DispatcherTimer? expiry = null;
+        service.Show("Empty library", NotificationType.Warning, TimeSpan.FromSeconds(18),
+            "Media Manager", () => primary++, "Get packs", () => { Assert.False(expiry!.IsEnabled); secondary++; });
+        var host = new StackPanel(); service.AttachHost(host);
+        var toast = Assert.IsType<Border>(Assert.Single(host.Children));
+        var grid = Assert.IsType<Grid>(toast.Child);
+        var actions = Assert.IsType<WrapPanel>(grid.Children.OfType<Panel>().Single());
+        Assert.Equal(1, Grid.GetRow(actions)); Assert.Equal(2, Grid.GetColumnSpan(actions));
+        Assert.Equal(new Thickness(0, 12, 0, 0), actions.Margin);
+        var timer = Assert.IsType<DispatcherTimer>(toast.Tag);
+        expiry = timer;
+        Assert.Equal(TimeSpan.FromSeconds(18), timer.Interval);
+        var packs = actions.Children.OfType<Button>().Single(b => b.Name == "ToastSecondaryAction");
+        Assert.Equal("Get packs", Assert.IsType<ConditioningControlPanel.Avalonia.Controls.IconLabel>(packs.Content).Label.Text);
+        Assert.Equal(Brushes.Transparent, packs.Background);
+        packs.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(0, primary); Assert.Equal(1, secondary);
+        Assert.False(timer.IsEnabled); Assert.False(toast.IsHitTestVisible);
+        return Task.CompletedTask;
+    });
 
     private static string Message(Control toast) =>
         ((TextBlock)((Grid)((Border)toast).Child!).Children[0]).Text!;

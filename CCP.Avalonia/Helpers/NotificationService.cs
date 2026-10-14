@@ -24,22 +24,24 @@ namespace ConditioningControlPanel.Avalonia.Helpers
     public sealed class NotificationService
     {
         private Panel? _host;
-        private readonly List<(string message, NotificationType type, TimeSpan? duration, string? actionLabel, Action? action)> _pending = new();
+        private readonly List<(string message, NotificationType type, TimeSpan? duration, string? actionLabel, Action? action, string? secondaryActionLabel, Action? secondaryAction)> _pending = new();
 
         public void AttachHost(Panel host)
         {
             _host = host;
             var queue = _pending.ToArray();
             _pending.Clear();
-            foreach (var (msg, type, dur, label, action) in queue) Show(msg, type, dur, label, action);
+            foreach (var (msg, type, dur, label, action, secondaryLabel, secondary) in queue)
+                Show(msg, type, dur, label, action, secondaryLabel, secondary);
         }
 
         public void Show(string message, NotificationType type = NotificationType.Info, TimeSpan? duration = null,
-            string? actionLabel = null, Action? action = null)
+            string? actionLabel = null, Action? action = null,
+            string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
-            if (_host == null) { _pending.Add((message, type, duration, actionLabel, action)); return; }
+            if (_host == null) { _pending.Add((message, type, duration, actionLabel, action, secondaryActionLabel, secondaryAction)); return; }
 
-            var border = BuildToast(message, type, actionLabel, action);
+            var border = BuildToast(message, type, actionLabel, action, secondaryActionLabel, secondaryAction);
             _host.Children.Add(border);
             border.Opacity = 1; // fades in through the Opacity transition (WPF AnimateIn, 180 ms)
 
@@ -49,7 +51,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             timer.Start();
         }
 
-        private Border BuildToast(string message, NotificationType type, string? actionLabel, Action? action)
+        private Border BuildToast(string message, NotificationType type, string? actionLabel, Action? action,
+            string? secondaryActionLabel, Action? secondaryAction)
         {
             var accent = new SolidColorBrush(Color.Parse(type switch
             {
@@ -76,42 +79,53 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 },
             };
 
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            bool hasSecondary = secondaryAction != null && !string.IsNullOrWhiteSpace(secondaryActionLabel);
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), RowDefinitions = new RowDefinitions(hasSecondary ? "Auto,Auto" : "Auto") };
             grid.Children.Add(new TextBlock
             {
                 Text = message,
                 Foreground = Brushes.White,
-                FontSize = 12,
+                FontSize = hasSecondary ? 13 : 12,
+                LineHeight = hasSecondary ? 20 : double.NaN,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
             });
 
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-            Grid.SetColumn(buttons, 1);
+            Panel buttons = hasSecondary
+                ? new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 0, 0) }
+                : new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+            if (hasSecondary) { Grid.SetRow(buttons, 1); Grid.SetColumnSpan(buttons, 2); }
+            else Grid.SetColumn(buttons, 1);
             grid.Children.Add(buttons);
 
-            if (!string.IsNullOrWhiteSpace(actionLabel) && action != null)
+            void AddAction(string? label, Action? callback, bool primary)
             {
-                // TextBlock content: Avalonia's Button would read '_' in a label as an access key.
+                if (string.IsNullOrWhiteSpace(label) || callback == null) return;
+                var ink = hasSecondary && primary ? Brushes.Black : Brushes.White;
                 var actionBtn = new Button
                 {
-                    Name = "ToastAction",
-                    Content = new TextBlock { Text = actionLabel, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White },
-                    Padding = new Thickness(10, 4),
-                    Margin = new Thickness(0, 0, 6, 0),
-                    Background = accent,
-                    BorderThickness = new Thickness(0),
+                    Name = primary ? "ToastAction" : "ToastSecondaryAction",
+                    Content = hasSecondary
+                        ? new ConditioningControlPanel.Avalonia.Controls.IconLabel { Text = label }
+                        : new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = ink },
+                    FontSize = hasSecondary ? 12 : 11, FontWeight = FontWeight.SemiBold, Foreground = ink,
+                    Padding = new Thickness(10, 4), Margin = new Thickness(0, 0, 6, 0),
+                    Background = primary ? accent : Brushes.Transparent,
+                    BorderBrush = accent, BorderThickness = new Thickness(hasSecondary ? 1 : 0),
                     Cursor = new Cursor(StandardCursorType.Hand),
                 };
                 actionBtn.Click += (_, _) =>
                 {
-                    try { action(); }
+                    (border.Tag as DispatcherTimer)?.Stop();
+                    try { callback(); }
                     catch (Exception ex) { Log.Warning(ex, "NotificationService: action button handler failed"); }
                     FadeOutAndRemove(border);
                 };
                 buttons.Children.Add(actionBtn);
             }
+            AddAction(actionLabel, action, primary: true);
+            AddAction(secondaryActionLabel, secondaryAction, primary: false);
 
             var dismissBtn = new Button
             {
@@ -129,7 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             };
             global::Avalonia.Automation.AutomationProperties.SetName(dismissBtn, ConditioningControlPanel.Localization.Loc.Get("btn_close"));   // icon-only: name it
             dismissBtn.Click += (_, _) => FadeOutAndRemove(border);
-            buttons.Children.Add(dismissBtn);
+            if (hasSecondary) { Grid.SetColumn(dismissBtn, 1); grid.Children.Add(dismissBtn); }
+            else buttons.Children.Add(dismissBtn);
 
             border.Child = grid;
             return border;
