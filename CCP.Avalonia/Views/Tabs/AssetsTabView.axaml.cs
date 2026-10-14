@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// ponytail: not on this head yet - the Content Packs tree node and pack cards (ContentPackService
     /// is seeded but builds no cards; the section is hidden in WPF too), video thumbnails (WPF uses the
     /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
-    /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
+    /// PacksScrollViewer wheel-to-pan. Pack-card hover FX is wired on the existing dormant template.
     /// </summary>
     public partial class AssetsTabView : UserControl
     {
@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Confirm = (title, msg) => MessageDialog.ConfirmAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             IsVisibleChanged(this);
+            Unloaded += (_, _) => DetachPackCardSheen();
             BtnPickAssetsFolder.Click += BtnPickAssetsFolder_Click;
             InitializeRemoteMediaPicker();   // AssetsTabView.MediaPicker.cs; re-syncs on every show
         }
@@ -93,7 +94,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             => view.PropertyChanged += (_, e) =>
             {
                 // MainWindow.AssetsFx.cs:OnAssetsTabVisibilityChanged: hidden stops the motion.
-                if (e.Property == IsVisibleProperty && !view.IsVisible) view.StopMediaLogPulse(resetOpacity: true);
+                if (e.Property == IsVisibleProperty && !view.IsVisible)
+                {
+                    view.StopMediaLogPulse(resetOpacity: true);
+                    view.DetachPackCardSheen();
+                }
                 if (e.Property == IsVisibleProperty && view.IsVisible) view.PaintAssetsFolder();
             };
 
@@ -600,6 +605,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             try { return AmbientFxCanvas.Env.AllowTransitions; }
             catch { return true; }
+        }
+
+        private Control? _packCardSheenHost;
+        private CardSheenAdorner? _packCardSheen;
+        private IDisposable? _packCardVisibility;
+
+        // WPF MainWindow.AssetsFx.cs:OnPackCardHover. The strip stays collapsed as on WPF;
+        // ponytail: its cards still use the seeded model, pending the content-pack browser lane.
+        private void PackCard_PointerEntered(object? sender, PointerEventArgs e) => OnPackCardHover(sender as Control, true);
+        private void PackCard_PointerExited(object? sender, PointerEventArgs e) => OnPackCardHover(sender as Control, false);
+
+        private void OnPackCardHover(Control? card, bool on)
+        {
+            try
+            {
+                if (!on)
+                {
+                    if (card == null || ReferenceEquals(card, _packCardSheenHost)) DetachPackCardSheen();
+                    return;
+                }
+                if (card == null || !card.IsEffectivelyVisible || !MotionAllowed()) return;
+                if (ReferenceEquals(card, _packCardSheenHost) && _packCardSheen != null) return;
+                DetachPackCardSheen();
+                _packCardSheen = CardSheenAdorner.Attach(card, 8);
+                if (_packCardSheen == null) return;
+                _packCardSheenHost = card;
+                _packCardVisibility = EffectiveVisibility.Watch(card, () =>
+                {
+                    if (!card.IsEffectivelyVisible) DetachPackCardSheen();
+                });
+            }
+            catch (Exception ex) { Log.Debug(ex, "Pack card hover failed"); DetachPackCardSheen(); }
+        }
+
+        private void DetachPackCardSheen()
+        {
+            _packCardVisibility?.Dispose();
+            _packCardVisibility = null;
+            _packCardSheenHost = null;
+            var sheen = _packCardSheen;
+            _packCardSheen = null;
+            CardSheenAdorner.Detach(sheen);
         }
 
         /// <summary>AssetsFx OnAssetTreeRowHover: a 3 px, 130 ms ease-out slide.</summary>
