@@ -2248,3 +2248,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/game-fyp-range: +113
 - FYP follow-up: the asset server now answers byte ranges, so the For You feed can jump into a clip window and loop it instead of playing each video from the start. Adds the carrier JS test split off game-fyp.
 - WebAssetServerTests covers 206, suffix/open ranges, 416 (with `bytes */len`, and for `bytes=-0`), ignored backward/multi ranges, HEAD and `Accept-Ranges`. Remote gate: Linux green; windows red on 2 unrelated WPF timing flakes (run 38337309579). carrier.test.js runs locally only.
+
+## avalonia-port/webview-probe-fix: +213
+- WebHost's probe now follows Avalonia.Controls.WebView 12.1 on Linux (WPE = OffscreenRenderer, WebKitGTK = NativeDialog). Linux web views stay off by default (fallback panel). `CCP_LINUX_WEBVIEW=wpe|gtk` opts in; gtk sets PreferWebKitGtkInstead.
+- Live runs 4-5 (unlocked, intake window active): WPE froze after one frame and GTK drew only the background. Neither sent a rAF heartbeat, so the default stays off (evidence/webview-probe-fix/live-run4-5.md).
