@@ -29,7 +29,9 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 ///
 /// <para>Protocol (the effects ramp codes against these shapes; do not widen them casually):
 /// <list type="bullet">
-/// <item>host -&gt; page, once after boot: <c>{ type: 'pbp:settings', videoHoldSec, reducedMotion, whispers }</c></item>
+/// <item>host -&gt; page, once after boot: <c>{ type: 'pbp:settings', videoHoldSec, reducedMotion, whispers,
+///   letPeopleWatch, watchEffects, watchAmount, mediaAvailable, spectateMatchId? }</c> (the watch
+///   fields: <see cref="PbpWatchRules"/>)</item>
 /// <item>page -&gt; host: <c>{ type: 'pbp:media-request', kinds: ['image','gif','video'], count }</c></item>
 /// <item>host -&gt; page: <c>{ type: 'pbp:media', images: [url...], gifs: [...], videos: [...] }</c></item>
 /// <item>page -&gt; host: <c>{ type: 'pbp:exit' }</c> - close the window</item>
@@ -242,6 +244,8 @@ internal static partial class PieceByPieceHostService
             });
 
             _host.Show();
+            // Spectate v2: the local half of mediaAvailable, walked once per boot off the UI thread.
+            StartLocalMediaProbe();
             // Windowed: the user can close it with the title-bar X. Tear down cleanly so the
             // heartbeat watchdog cannot misread the resulting silence as a wedged page.
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
@@ -303,9 +307,10 @@ internal static partial class PieceByPieceHostService
             _lastProgressUtc = DateTime.UtcNow;
             _pinged = false;
             _host?.FocusWeb();
+            // The saved pick first: the settings frame's mediaAvailable reads the opt-in.
+            AdoptSavedMediaChoice();
             PostSettings();
             PostIdentity();
-            AdoptSavedMediaChoice();
             PostMediaState();
             StartOnlineMedia();
             PostFriendIntent();
@@ -366,15 +371,12 @@ internal static partial class PieceByPieceHostService
         var spectate = TakeSpectateInit();
         try
         {
-            _host?.Post(new
-            {
-                type = "pbp:settings",
-                videoHoldSec = SafeVideoHoldSec(),
-                reducedMotion = SafeReducedMotion(),
-                whispers = SafeWhisperClips(),
-                letPeopleWatch = PbpWatchRules.LetPeopleWatch(App.Settings?.Current),
-                spectateMatchId = spectate,
-            });
+            // Spectate v2: the stands' effects choice and whether any media source exists ride here
+            // too; the field names live in PbpWatchRules.SettingsFrame (tested).
+            bool mediaAvailable = SafeMediaAvailable();
+            _postedMediaAvailable = mediaAvailable;
+            _host?.Post(PbpWatchRules.SettingsFrame(SafeVideoHoldSec(), SafeReducedMotion(), SafeWhisperClips(),
+                App.Settings?.Current, mediaAvailable, spectate));
         }
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: settings post failed: {E}", ex.Message); }
     }
@@ -600,15 +602,10 @@ internal static partial class PieceByPieceHostService
             string responseBody = "";
             try
             {
-                var verb = method == "POST" ? HttpMethod.Post : HttpMethod.Get;
-                using var request = new HttpRequestMessage(verb, target);
-                if (method == "POST")
-                {
-                    request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-                }
-                var token = SafeAuthToken();
-                if (!string.IsNullOrEmpty(token)) request.Headers.Add("X-Auth-Token", token);
-                request.Headers.Add("X-Client-Version", UpdateService.AppVersion);
+                // PbpNetRelay: the token on every call except the public spectate routes
+                // (shared CDN entries, never a token on them), sent to the judged Uri.
+                using var request = PbpNetRelay.Build(target, method, path, body,
+                    SafeAuthToken(), UpdateService.AppVersion);
 
                 using var response = await Http.SendAsync(request, CancellationToken.None).ConfigureAwait(false);
                 status = (int)response.StatusCode;

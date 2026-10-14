@@ -8591,6 +8591,28 @@ namespace ConditioningControlPanel.Models
             set { _pbpLetPeopleWatch = value; OnPropertyChanged(); }
         }
 
+        private bool _pbpWatchEffects = true;
+        /// <summary>Distraction effects in the stands (spectate v2, owner 2026-10-14): default on.
+        /// A spectator sees the turn player's heat and effects at the moments they fired, drawn
+        /// from the SPECTATOR's own media; nothing of the player's media ever travels. Written by
+        /// the page's watch Options (<c>pbp:setting watchEffects</c>).</summary>
+        [JsonProperty("pbpWatchEffects")]
+        public bool PbpWatchEffects
+        {
+            get => _pbpWatchEffects;
+            set { _pbpWatchEffects = value; OnPropertyChanged(); }
+        }
+
+        private string _pbpWatchAmount = "normal";
+        /// <summary>The stands' amount dial: the game's own values (less, normal, more). Anything
+        /// else reads as normal.</summary>
+        [JsonProperty("pbpWatchAmount")]
+        public string PbpWatchAmount
+        {
+            get => _pbpWatchAmount;
+            set { _pbpWatchAmount = global::ConditioningControlPanel.Services.PieceByPiece.PbpWatchRules.CleanAmount(value); OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region The Arcademy (webview mini-game hub)

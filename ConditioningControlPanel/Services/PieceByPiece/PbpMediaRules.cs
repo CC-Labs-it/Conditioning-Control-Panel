@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Services.GoonGame;
 
 namespace ConditioningControlPanel.Services.PieceByPiece;
@@ -72,5 +73,35 @@ internal static class PbpMediaRules
         if (src == "online") return 100;
         if (src == "mixed" && !sessionOptIn) return Math.Clamp(remoteRatio, 5, 95);
         return PickedSharePct;
+    }
+
+    /// <summary>
+    /// Spectate v2 (2026-10-14): does this player have ANY media source the effects can draw from
+    /// - a local library with at least one active file, or online niches the host is allowed to
+    /// fetch (<see cref="ChannelsFor"/> non-empty, so the consent rules above already applied).
+    /// False is the page's cue to say so and offer the picker; until then only the media-free
+    /// layers run. Rides <c>pbp:settings</c> and every <c>pbp:media-state</c> as <c>mediaAvailable</c>.
+    /// <paramref name="onlineState"/> is the last <c>pbp:online-media</c> state: niches whose fetch came
+    /// back <c>off</c> or <c>empty</c> are no source (loading, ready and a transient error still count).
+    /// </summary>
+    public static bool MediaAvailable(bool hasLocalMedia, IReadOnlyCollection<string>? onlineChannels,
+        string? onlineState = null)
+        => hasLocalMedia || ((onlineChannels?.Count ?? 0) > 0 && !OnlineCameBackDry(onlineState));
+
+    /// <summary>An online snapshot state that means "nothing will come": off or empty.</summary>
+    public static bool OnlineCameBackDry(string? onlineState)
+        => string.Equals(onlineState, "off", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(onlineState, "empty", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The cheap first step of the local probe: the media folder exists and holds at least
+    /// one entry. Only when it does is the active-pool walk worth starting.</summary>
+    public static bool FolderHasEntries(string? root)
+    {
+        try
+        {
+            return !string.IsNullOrEmpty(root) && System.IO.Directory.Exists(root)
+                   && System.IO.Directory.EnumerateFileSystemEntries(root).Any();
+        }
+        catch (Exception) { return false; }
     }
 }

@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.GoonGame;
 using Newtonsoft.Json.Linq;
@@ -50,6 +52,8 @@ internal static partial class PieceByPieceHostService
             var stored = GoonOnlineMediaRules.CleanFlavour(s?.PbpMediaFlavour);
             bool appWide = PbpMediaRules.AppWideOnline(s?.MediaSource, s?.HasRemoteMediaConsent == true);
             bool online = s?.PbpMediaOnline ?? true;
+            bool mediaAvailable = SafeMediaAvailable();
+            _postedMediaAvailable = mediaAvailable;
             _host?.Post(new
             {
                 type = "pbp:media-state",
@@ -61,6 +65,7 @@ internal static partial class PieceByPieceHostService
                 chosen = PbpMediaRules.HasSavedChoice(s?.PbpMediaChosen == true, online, stored),
                 library = true,
                 canOnline = true,
+                mediaAvailable,
             });
         }
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: media-state post failed: {E}", ex.Message); }
@@ -82,11 +87,85 @@ internal static partial class PieceByPieceHostService
         if (o["online"]?.Type == JTokenType.Boolean) s.PbpMediaOnline = (bool)o["online"]!;
         s.PbpMediaChosen = true;
         _sessionOptIn = GoonOnlineMediaRules.IsSessionOptIn(s.PbpMediaOnline, flavour);
+        _onlineState = null;   // a new pick starts a new fetch: the old off / empty no longer stands
         try { App.Settings?.Save(); } catch (Exception ex) { App.Logger?.Debug("PieceByPiece: media save: {E}", ex.Message); }
         App.Logger?.Information("PieceByPiece: media-flavour {F} ({N} niches, online {O})",
             flavour == "" ? "(none)" : flavour, subs.Count, s.PbpMediaOnline);
         PostMediaState();
         StartOnlineMedia();
+    }
+
+    // ---- spectate v2: is there ANY media source (mediaAvailable) ----
+
+    /// <summary>The local half, probed once per boot OFF the UI thread (<see cref="StartLocalMediaProbe"/>).
+    /// Null = not known yet, read as available so a slow disk never flashes the no-media card; a
+    /// probe that finds nothing re-sends <c>pbp:media-state</c> (<see cref="RefreshMediaAvailable"/>).</summary>
+    private static bool? _localMedia;
+    private static int _localProbeGen;
+    /// <summary>The last online snapshot's state (off | empty | loading | ready | error), null before one.</summary>
+    private static string? _onlineState;
+    /// <summary>What the page was last told, so a refresh only re-sends a CHANGE.</summary>
+    private static bool? _postedMediaAvailable;
+
+    /// <summary>At launch: walk the library on a worker thread (a cheap "folder has anything" check
+    /// first, then the first active file) and cache the answer for this boot. A result that lands
+    /// after the window closed or relaunched is dropped by its generation.</summary>
+    private static void StartLocalMediaProbe()
+    {
+        _localMedia = null;
+        _onlineState = null;
+        _postedMediaAvailable = null;
+        int gen = ++_localProbeGen;
+        string root;
+        try { root = App.EffectiveAssetsPath; }
+        catch (Exception ex) { Diag.Swallowed(ex); root = ""; }
+        _ = Task.Run(() =>
+        {
+            bool found = false;
+            try
+            {
+                found = PbpMediaRules.FolderHasEntries(root) && DtrhAssetManifest.EnumerateActive().Any();
+            }
+            catch (Exception ex) { App.Logger?.Debug("PieceByPiece: local media probe failed: {E}", ex.Message); }
+            RunOnUi(() =>
+            {
+                if (gen != _localProbeGen || _host == null) return;
+                _localMedia = found;
+                RefreshMediaAvailable();
+            });
+        });
+    }
+
+    /// <summary>Re-send <c>pbp:media-state</c> when mediaAvailable has changed since the page last
+    /// heard it: the local probe landed empty, or an online snapshot came back off or empty with no
+    /// local file (or ready again after a pick). Before ready the boot frames carry it anyway.</summary>
+    private static void RefreshMediaAvailable()
+    {
+        if (_host?.IsReady != true || _postedMediaAvailable == null) return;
+        if (SafeMediaAvailable() == _postedMediaAvailable) return;
+        PostMediaState();
+    }
+
+    /// <summary>Spectate v2: any media source at all (<see cref="PbpMediaRules.MediaAvailable"/>).
+    /// The local half is the cached per-boot probe (never a disk walk on the UI thread); the online
+    /// half is the same consent and niche rule <see cref="StartOnlineMedia"/> fetches by, minus a
+    /// fetch that came back off or empty. Never throws: a failure reads as "no media", which only
+    /// shows the picker prompt.</summary>
+    private static bool SafeMediaAvailable()
+    {
+        try
+        {
+            var s = App.Settings?.Current;
+            var channels = PbpMediaRules.ChannelsFor(s?.PbpMediaOnline ?? true, _sessionOptIn, s?.MediaSource,
+                s?.HasRemoteMediaConsent == true, s?.PbpMediaFlavour, GoonOnlineMediaRules.SplitSubs(s?.PbpMediaSubs),
+                FypOnlineCoordinator.ResolveChannels(s?.FypOnlineNiches, s?.FypOnlineCustomSubs));
+            return PbpMediaRules.MediaAvailable(_localMedia ?? true, channels, _onlineState);
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Debug("PieceByPiece: media probe failed: {E}", ex.Message);
+            return false;
+        }
     }
 
     /// <summary>page -&gt; host <c>pbp:media-more</c>: the next wave for the same niches.</summary>
@@ -139,6 +218,9 @@ internal static partial class PieceByPieceHostService
         RunOnUi(() =>
         {
             try { _host?.Post(frame); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Spectate v2: an online answer that came back off or empty may leave no media at all.
+            _onlineState = snap.State;
+            RefreshMediaAvailable();
         });
     }
 
