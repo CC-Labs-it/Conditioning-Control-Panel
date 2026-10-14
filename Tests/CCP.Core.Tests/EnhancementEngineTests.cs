@@ -102,8 +102,29 @@ public class EnhancementEngineTests
     }
 
     [Fact]
+    public void GazeTarget_MapsTheNormalizedRectOntoTheVideoRect_HitFiresMissDoesNot()
+    {
+        // Video drawn at (100,100) 200x100; target = right half -> screen x 200..300, y 100..200.
+        var source = new FakeSource { VideoRect = new PlaybackRect(100, 100, 200, 100) };
+        var dispatcher = new FakeDispatcher();
+        var target = new GazeTargetTrigger { Rect = new[] { 0.5, 0.0, 0.5, 1.0 }, MinDwellMs = 0 };
+        using var engine = new EnhancementEngine(Enh(Rule(target, Flash())), source, dispatcher);
+        engine.Start();
+
+        engine.InjectGaze(new PlaybackPoint(150, 150)); // left half: miss
+        engine.InjectGaze(new PlaybackPoint(150, 150));
+        Assert.Empty(dispatcher.Fired);
+
+        engine.InjectGaze(new PlaybackPoint(250, 150)); // dwell starts
+        engine.InjectGaze(new PlaybackPoint(250, 150)); // dwell (0 ms) met: fires
+        Assert.Single(dispatcher.Fired);
+    }
+
+    [Fact]
     public void HostBind_Unseeded_DryRunsWithoutAWebcam()
     {
+        EnhancementHostService.DispatcherFactory = null;
+        EnhancementHostService.WebcamProvider = null;
         using var host = new EnhancementHostService();
         var diag = new List<string>();
         host.Diagnostic += diag.Add;
@@ -136,7 +157,8 @@ public class EnhancementEngineTests
         public void Seek(double seconds) => _t = seconds;
         public void Pause() { }
         public void Play() { }
-        public PlaybackRect GetVideoRect() => PlaybackRect.Empty;
+        public PlaybackRect VideoRect { get; set; } = PlaybackRect.Empty;
+        public PlaybackRect GetVideoRect() => VideoRect;
     }
 
     private sealed class FakeDispatcher : IActionDispatcher, IEnhancementRunCleanup
