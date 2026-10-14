@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static MediaHistoryService? MediaHistory { get; set; }
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
+        internal static Services.Descent.DescentService? Descent { get; set; }
         /// <summary>WPF App.DiscordRpc. Null until startup built it (and in headless tests).</summary>
         internal static Services.DiscordRichPresenceService? DiscordRpc { get; set; }
 
@@ -567,6 +568,14 @@ namespace ConditioningControlPanel.Avalonia
                 // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
                 DescentCountdown = new Services.Descent.DescentCountdownService();
                 DescentCountdown.Start();
+                Descent = new Services.Descent.DescentService
+                {
+                    ProgressionReceived = (_, _, _, epoch) =>
+                    {
+                        // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
+                        if (Services.ProfileAdopt.ApplyCurveEpoch(CoreSettings.Current, epoch)) CoreSettings.Save();
+                    },
+                };
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
@@ -582,7 +591,7 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown };
+                        { Countdown = DescentCountdown, DescentReader = Descent };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
@@ -1207,6 +1216,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Views.Windows.MainShellWindow.DisposeRoadmapIfCreated(); }
             catch { /* one service cannot prevent the head from exiting */ }
 
+            Descent?.Reset();
             DescentCountdown?.Dispose();   // its pool timer outlives the dispatcher otherwise
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Stop();   // same
             _desktopDispatch?.Stop();
