@@ -5,7 +5,10 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -29,7 +32,7 @@ public sealed class QuizPastRunsReportTests
         var saved = File.Exists(historyPath) ? File.ReadAllText(historyPath) : null;
         File.Copy(Golden(), historyPath, overwrite: true);
         var tab = new GradedIntakeTabView();
-        var host = new Window { Content = tab };
+        var host = new Window { Content = tab, Width = 1400, Height = 2400 };
         host.Show();
         try
         {
@@ -39,6 +42,9 @@ public sealed class QuizPastRunsReportTests
             Assert.Empty(tab.PastQuizzesList.Children);
 
             tab.BtnStartQuiz.IsVisible = true;
+            // An entitled user's gate (WPF Lab.cs:370-374): no scrim, launch zone enabled.
+            tab.GradedIntakeGate.IsVisible = false;
+            tab.GradedIntakeGatedContent.IsEnabled = true;
             tab.RefreshPastQuizzes();
             Assert.True(tab.PastQuizzesPanel.IsVisible && tab.TxtPastQuizzesHeader.IsVisible);
             var trends = tab.PastQuizzesList.Children.OfType<TextBlock>().Select(t => t.Text).ToList();
@@ -49,7 +55,19 @@ public sealed class QuizPastRunsReportTests
             Assert.All(runs, r => Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Left, r.HorizontalContentAlignment));
             Assert.EndsWith("Obedience  ·  31/40 (78%)", ((TextBlock)runs[0].Content!).Text);
 
-            runs[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // WPF Lab.cs:567-574: a run row is transparent, #15FFFFFF under the pointer.
+            host.UpdateLayout();
+            var chrome = runs[0].GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ContentPresenter>().First();
+            Assert.Equal(Colors.Transparent, ((ISolidColorBrush)chrome.Background!).Color);
+            Assert.True(runs[0].IsEffectivelyEnabled);
+            var centre = runs[0].TranslatePoint(new Point(runs[0].Bounds.Width / 2, runs[0].Bounds.Height / 2), host)!.Value;
+            host.MouseMove(centre);
+            Assert.Equal(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF), ((ISolidColorBrush)chrome.Background!).Color);
+            host.MouseMove(new Point(-10, -10));
+            Assert.Equal(Colors.Transparent, ((ISolidColorBrush)chrome.Background!).Color);
+
+            host.MouseDown(centre, MouseButton.Left);   // a real click: the gate must not swallow it
+            host.MouseUp(centre, MouseButton.Left);
             var first = Assert.Single(host.OwnedWindows.OfType<QuizReportWindow>());
             Assert.Equal("31 / 40  (78%)", first.FindControl<TextBlock>("TxtScore")!.Text);
 
