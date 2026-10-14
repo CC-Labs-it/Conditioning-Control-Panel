@@ -5,7 +5,7 @@
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
 // ponytail: not ported (docs/avalonia-parity.md win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
-// perimeter comets, card/wordmark sheens, wordmark drift, running-dot breath, title tint, embers layer.
+// card/wordmark sheens, wordmark drift, running-dot breath, title tint, embers layer.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -75,7 +75,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public Border Tile = null!;
             public ScaleTransform Scale = new(1, 1);
             public RotateTransform Tilt = new();
-            public DropShadowEffect? Glow;
+            public Border? Glow;
+            public IDisposable? GlowWatch;
+            public double GlowOpacity = TileGlowRest;
             public Color Hue;
             public Tween Lift, Lean, Shine, Dim;
             public double PopT = -1, PopPeak;
@@ -143,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty) { if (IsVisible) FxOnShown(); else FxPark(); }
-                else if (e.Property == WindowStateProperty) { if (FxLive) EnsureFxClock(); else FxPark(); }
+                else if (e.Property == WindowStateProperty) { if (FxLive) { EnsureFxClock(); QueuePanelComet(); } else FxPark(); }
             };
             _fadeGuard.Tick += (_, _) => FinishExit();
             // Fx.cs OnFxActivated/OnFxDeactivated: the backdrop spirals park while the launcher is not active.
@@ -152,7 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // A real close (app exit, panel closed; not the user's X, which OnClosing turns into the host's
             // decision): a pending exit is dropped before the hide parks the FX, never run into ShowFromTray.
             Closing += (_, e) => { if (!e.Cancel) { _exitThen = _fadeThen = null; _fadeGuard.Stop(); } };
-            Closed += (_, _) => FxPark();
+            Closed += (_, _) => { FxPark(); ClearTileGlows(); };
         }
 
         // ------------------------------------------------------------------ show / park
@@ -190,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     BurstAt(Wordmark, Env.GlowColor, OpenBurstCount);
                     if (!first) WelcomeBack();
+                    RefreshPanelComet();
                 }, DispatcherPriority.Loaded);
                 EnsureFxClock();
             }
@@ -200,6 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// pending exit runs at once (WPF Crossfade: RootGrid never stays under 1, the hide still happens).</summary>
         private void FxPark()
         {
+            ParkComets();
             _fxClock.Stop();
             try
             {
@@ -299,6 +303,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnFxActivated(bool active)
         {
             _fxActive = active;
+            if (!active) ClearHoverComet();
+            RefreshPanelComet();
             if (active) { EnsureFxClock(); OnEdgeActivated(); }
         }
 
@@ -352,12 +358,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var fx = new TileFx { Tile = tile, Hue = hue };
             tile.RenderTransformOrigin = RelativePoint.Center;
             tile.RenderTransform = new TransformGroup { Children = { fx.Scale, fx.Tilt } };
-            if (Env.AllowGlow(Env.CurrentTier))
-                tile.Effect = fx.Glow = new DropShadowEffect
-                {
-                    Color = hue, OffsetX = 0, OffsetY = 0, Opacity = TileGlowRest,
-                    BlurRadius = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
-                };
+            tile.Loaded += (_, _) => AttachTileGlow(fx);
+            tile.DetachedFromVisualTree += (_, _) => RemoveTileGlow(fx);
+            AttachTileGlow(fx);
             _tileFx.Add(fx);
             tile.PointerEntered += (_, _) => TileHover(fx, true);
             tile.PointerExited += (_, _) => TileHover(fx, false);
@@ -373,10 +376,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                HoverComet(t.Tile, on);
                 if (on) LauncherSfx.Hover();
                 bool anim = Env.AllowTransitions;
                 t.Lift.Go(t.Scale.ScaleX, on ? HoverLiftScale : 1, anim ? HoverLiftSeconds : 0);
-                t.Shine.Go(t.Glow?.Opacity ?? 0, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
+                t.Shine.Go(t.GlowOpacity, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
                 if (!on) t.Lean.Go(t.Tilt.Angle, 0, anim ? TileHoverSeconds : 0);
                 if (!anim) StepTile(t, 0);
                 if (on) BleedGlow(t.Hue); else RestoreGlow();
@@ -395,12 +399,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EnsureFxClock();
         }
 
-        private static void StepTile(TileFx t, double dt)
+        private void StepTile(TileFx t, double dt)
         {
             if (t.Lift.On || dt == 0) t.Scale.ScaleX = t.Scale.ScaleY = t.Lift.Step(dt);
             if (t.Lean.On || dt == 0) t.Tilt.Angle = t.Lean.Step(dt);
-            if (t.Glow != null && (t.Shine.On || dt == 0)) t.Glow.Opacity = t.Shine.Step(dt);
+            if (t.Glow != null && (t.Shine.On || dt == 0)) t.GlowOpacity = t.Shine.Step(dt);
             if (t.Dim.On) t.Tile.Opacity = t.Dim.Step(dt);
+            if (t.Glow != null) t.Glow.Opacity = t.GlowOpacity * t.Tile.Opacity * RootGrid.Opacity;
             if (t.PopT >= 0)
             {
                 // Choreo.cs Pop: to the peak by 35 % (quad out), back to 1 by 100 % (quad in-out).
@@ -413,7 +418,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        private static void SettleTile(TileFx t)
+        private void SettleTile(TileFx t)
         {
             t.Lift.Go(1, 1, 0); t.Lean.Go(0, 0, 0); t.Shine.Go(TileGlowRest, TileGlowRest, 0);
             t.PopT = -1;

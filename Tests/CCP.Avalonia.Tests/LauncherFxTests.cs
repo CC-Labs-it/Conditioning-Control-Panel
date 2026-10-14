@@ -31,7 +31,7 @@ public sealed class LauncherFxTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -135,7 +135,8 @@ public sealed class LauncherFxTests
         Assert.Contains("launcher-hover", cues);
         Step(launcher, 0.5);
         Assert.Equal(1.02, scale.ScaleX, 3);
-        Assert.Equal(0.7, ((DropShadowEffect)tile.Effect!).Opacity, 3);
+        Assert.Null(tile.Effect);
+        Assert.Equal(0.7, launcher.TileGlow(tile)!.Opacity, 3);
         Assert.Equal(0.45, glow.Opacity, 3);
 
         launcher.TileHover(tile, false);
@@ -150,6 +151,7 @@ public sealed class LauncherFxTests
         Assert.Contains("launcher-open", cues);
         Step(launcher, 0.4);                             // the fade-in lands
         var card = launcher.FindControl<Border>("PanelCard")!;
+        var dimmedTile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children.OfType<Border>().First(t => t != Tile(launcher));
         Tile(launcher).GetVisualDescendants().OfType<Button>().First(b => !Equals(b.Tag, "tile-shortcut")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Contains("launcher-launch", cues);
         Assert.True(launcher.IsVisible);                 // held for the beat
@@ -158,6 +160,9 @@ public sealed class LauncherFxTests
         Assert.NotEqual(0, launcher.ShakeSlide.X);
         Step(launcher, 0.3);
         Assert.Equal(0.55, card.Opacity, 2);             // the rest stepped back
+        Assert.Equal(0.55, dimmedTile.Opacity, 2);
+        Assert.Equal(0.35 * 0.55 * launcher.FindControl<Panel>("RootGrid")!.Opacity,
+            launcher.TileGlow(dimmedTile)!.Opacity, 3); // the old Effect inherited both opacity layers
         Assert.True(launcher.IsVisible);
 
         Step(launcher, 0.3);                             // FadeLeadMs + FadeOutMs = 450 ms
