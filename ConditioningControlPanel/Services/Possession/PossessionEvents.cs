@@ -145,6 +145,7 @@ public sealed class PossessionEvents
         var name = e?.PropertyName ?? "";
         if (name.StartsWith("LockdownPossession", StringComparison.Ordinal)
             || name.StartsWith("LockdownPhotosafe", StringComparison.Ordinal)
+            || name.StartsWith("Gentle", StringComparison.Ordinal)   // Gentle visuals reads as photosafe
             || name.StartsWith("LockdownTripwires", StringComparison.Ordinal)
             || name.StartsWith("LockdownWarden", StringComparison.Ordinal))
             return;

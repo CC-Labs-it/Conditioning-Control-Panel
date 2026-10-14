@@ -220,7 +220,9 @@ public sealed class ChaosEStimOverlay : Window
         }
 
         JitterBolts();
-        _tick.Start();
+        // Gentle visuals: no re-jitter flicker; the bolt rises, holds still and fades.
+        bool gentle = !Services.Safety.GentleVisuals.AllowFlicker;
+        if (!gentle) _tick.Start();
 
         // Lifetime rides the ANIMATION clock, not the tick timer: the pops this strike triggers
         // open payload windows on the same dispatcher, which can stall timers for hundreds of ms.
@@ -228,9 +230,18 @@ public sealed class ChaosEStimOverlay : Window
         // bolt never overstays its 120ms + fade no matter how busy the UI thread is.
         int seq = ++_strikeSeq;
         var life = new DoubleAnimationUsingKeyFrames();
-        life.KeyFrames.Add(new DiscreteDoubleKeyFrame(STRIKE_OPACITY, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-        life.KeyFrames.Add(new DiscreteDoubleKeyFrame(STRIKE_OPACITY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(HOT_MS))));
-        life.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(HOT_MS + FADE_MS))));
+        if (gentle)
+        {
+            foreach (var (v, ms) in Services.Video.GentleWindowRules.RiseHoldFade(STRIKE_OPACITY,
+                         Services.Safety.GentleVisuals.RiseMs(0), HOT_MS, Services.Safety.GentleVisuals.FadeMs(FADE_MS)))
+                life.KeyFrames.Add(new LinearDoubleKeyFrame(v, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
+        }
+        else
+        {
+            life.KeyFrames.Add(new DiscreteDoubleKeyFrame(STRIKE_OPACITY, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            life.KeyFrames.Add(new DiscreteDoubleKeyFrame(STRIKE_OPACITY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(HOT_MS))));
+            life.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(HOT_MS + FADE_MS))));
+        }
         life.Completed += (_, _) =>
         {
             if (seq != _strikeSeq) return;   // a newer strike took the canvas — leave it alone

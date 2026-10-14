@@ -352,6 +352,7 @@
     setMediaKeyGuard(cur.strict);
     applyVolume();
     applySink(d.sinkLabel);
+    applyGentle(d);
 
     fg.src = url;
     if (cur.blur) startBackdrop();
@@ -785,6 +786,30 @@
       playEl(fg, 'fg');
     }
     postTime(true);
+  }
+
+  // Gentle visuals (load fields `rate` and `fadeMs`; absent or 1/0 = normal playback). The host
+  // window can never fade (WebView2 under a layered window paints black), so the stage fades in
+  // from black on the first frame instead. Runs before fg.src is set: the load algorithm copies
+  // defaultPlaybackRate into playbackRate.
+  function applyGentle(d) {
+    const rate = Number.isFinite(d.rate) && d.rate > 0 && d.rate < 1 ? d.rate : 1;
+    fg.defaultPlaybackRate = rate;
+    fg.playbackRate = rate;
+    const stage = document.getElementById('stage');
+    const fadeMs = Number.isFinite(d.fadeMs) && d.fadeMs > 0 ? d.fadeMs : 0;
+    stage.style.transition = '';
+    stage.style.opacity = fadeMs > 0 ? '0' : '';
+    if (fadeMs <= 0) return;
+    let done = false;
+    const reveal = () => {
+      if (done) return;
+      done = true;
+      stage.style.transition = 'opacity ' + fadeMs + 'ms linear';
+      stage.style.opacity = '1';
+    };
+    fg.addEventListener('playing', reveal, { once: true });
+    setTimeout(reveal, 3000); // backstop: never leave the stage dark
   }
 
   function onHostMessage(data) {

@@ -115,7 +115,7 @@ public sealed class PossessionDirector : IDisposable
         DispatcherHelper.RunOnUI(() =>
         {
             if (_hosts.Any(h => ReferenceEquals(h.Host, host))) return;
-            _hosts.Add(new HostEntry(host, new EmberAttribution(host, () => App.Settings?.Current?.LockdownPhotosafe == true)));
+            _hosts.Add(new HostEntry(host, new EmberAttribution(host, () => Services.Safety.GentleVisuals.Photosafe(App.Settings?.Current?.LockdownPhotosafe == true))));
             try { _events.Attach(this, host); } catch (Exception ex) { App.Logger?.Warning("Possession: reactive adapter attach failed: {Error}", ex.Message); }
             App.Logger?.Debug("Possession: host attached ({Host})", host.GetType().Name);
         });
@@ -274,7 +274,7 @@ public sealed class PossessionDirector : IDisposable
         var s = App.Settings?.Current;
         if (s == null) return;
         _intensity = (PossessionIntensity)Math.Clamp(s.LockdownPossessionIntensity, 0, 2);
-        _photosafe = s.LockdownPhotosafe;
+        _photosafe = Services.Safety.GentleVisuals.Photosafe(s.LockdownPhotosafe);
     }
 
     /// <summary>Phase 1 haunts the main window. It may finish loading after the lockdown starts, so we
