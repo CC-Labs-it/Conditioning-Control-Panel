@@ -28,6 +28,10 @@ namespace ConditioningControlPanel.Services
         {
             new Dependency("web views", new[] { "libwebkit2gtk-4.1.so.0|libwebkit2gtk-4.0.so.37" },
                 "webkit2gtk-4.1", "libwebkit2gtk-4.1-0", "webkit2gtk4.1"),
+            // WebKit's WebAudio output is GStreamer's autoaudiosink; without it WebKitWebProcess aborts on a page's first
+            // sound and the page freezes on its last frame (webview-render, 2026-10-13). A plugin file, probed by path.
+            new Dependency(WebViewSound, new[] { GstPluginPrefix + "libgstautodetect.so" },
+                "gst-plugins-good", "gstreamer1.0-plugins-good", "gstreamer1-plugins-good"),
             new Dependency("web views (WPE)", new[] { "libwpe-1.0.so.1", "libWPEBackend-fdo-1.0.so.1", "libWPEWebKit-2.0.so.1" },
                 // Ubuntu 24.04 / Fedora 44 ship none of the three, Debian 12 / Ubuntu 22.04 only WebKit 1.x
                 // (distro-check F2, 2026-10-10). Arch extra ships all three (pacman -Si, 2026-10-10).
@@ -39,6 +43,41 @@ namespace ConditioningControlPanel.Services
             new Dependency("overlays and panic key", new[] { "libX11.so.6", "libXi.so.6" },
                 "libx11 libxi", "libx11-6 libxi6", "libX11 libXi"),
         };
+
+        public const string WebViewSound = "web views (sound)";
+
+        /// <summary>Appended to every install message: dependencies are probed once per process.</summary>
+        public const string RestartHint = "Restart CCP after installing.";
+
+        /// <summary>Marks a <see cref="Dependency.Libraries"/> entry as a GStreamer plugin file, found by
+        /// <see cref="GstPluginPresent(string, Func{string, string?}, Func{string, bool})"/> rather than dlopen.</summary>
+        public const string GstPluginPrefix = "gstreamer-1.0/";
+
+        /// <summary>What a web view needs: WebKitGTK and the audio sink. WPE is an opt-in engine (CCP_LINUX_WEBVIEW=wpe),
+        /// so it is not here.</summary>
+        public static readonly IReadOnlyList<Dependency> WebViews = All.Where(d => d.Need is "web views" or WebViewSound).ToList();
+
+        /// <summary>Everything but the opt-in WPE engine: what the startup check names. Its WPE text ("pages need WPE")
+        /// stopped being true when WebKitGTK became the Linux engine (webview-render).</summary>
+        public static readonly IReadOnlyList<Dependency> Required = All.Where(d => d.Need != "web views (WPE)").ToList();
+
+        /// <summary>True when <paramref name="file"/> sits where GStreamer itself looks (gst_plugin_registry rules): every entry of
+        /// GST_PLUGIN_PATH(_1_0), the user dir ($XDG_DATA_HOME or ~/.local/share, /gstreamer-1.0/plugins), then GST_PLUGIN_SYSTEM_PATH(_1_0)
+        /// if set - which REPLACES the distro dirs (Arch, Fedora, Debian/Ubuntu x64 and arm64), as AppImage/Flatpak wrappers rely on.</summary>
+        public static bool GstPluginPresent(string file, Func<string, string?> env, Func<string, bool> exists)
+        {
+            string[] Dirs(params string[] vars) => vars.SelectMany(v => (env(v) ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries)).ToArray();
+            var system = Dirs("GST_PLUGIN_SYSTEM_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH");
+            var dataHome = env("XDG_DATA_HOME") is { Length: > 0 } x ? x : (env("HOME") is { Length: > 0 } h ? h + "/.local/share" : null);
+            return Dirs("GST_PLUGIN_PATH_1_0", "GST_PLUGIN_PATH")
+                .Concat(dataHome is null ? Array.Empty<string>() : new[] { dataHome + "/gstreamer-1.0/plugins" })
+                .Concat(system.Length > 0 ? system : new[] { "/usr/lib/gstreamer-1.0", "/usr/lib64/gstreamer-1.0",
+                                "/usr/lib/x86_64-linux-gnu/gstreamer-1.0", "/usr/lib/aarch64-linux-gnu/gstreamer-1.0" })
+                .Any(dir => exists(dir.TrimEnd('/') + "/" + file));   // Linux paths, not Path.Combine: the tests also run on Windows
+        }
+
+        /// <summary>This machine's answer for <paramref name="file"/>.</summary>
+        public static bool GstPluginPresent(string file) => GstPluginPresent(file, Environment.GetEnvironmentVariable, File.Exists);
 
         /// <summary>Distro family from /etc/os-release text: ID first, then each ID_LIKE token.</summary>
         public static Family FamilyOf(string? osRelease)
@@ -92,21 +131,22 @@ namespace ConditioningControlPanel.Services
             if (packaged.Count == 0) return (unavailable!, null);
             var needs = string.Join(", ", packaged.Select(d => d.Need));
             var command = InstallCommand(family, packaged);
-            var text = command != null
+            var text = (command != null
                 ? $"Missing system packages for {needs}. Install them with:\n{command}"
                 : $"Missing system packages for {needs}. Install these libraries with your package manager: "
-                  + string.Join(", ", packaged.SelectMany(d => d.Libraries).Select(l => l.Replace("|", " or ")));
+                  + string.Join(", ", packaged.SelectMany(d => d.Libraries).Select(l => l.Replace("|", " or "))))
+                + "\n" + RestartHint;
             return (unavailable is null ? text : text + "\n" + unavailable, command);
         }
 
         /// <summary>Real check for this machine: dlopen each library, read /etc/os-release.
-        /// Null off Linux or when everything is present.</summary>
+        /// Null off Linux or when everything is present. Without <paramref name="among"/>: <see cref="Required"/>.</summary>
         public static (string Text, string? Command)? Check(IEnumerable<Dependency>? among = null, bool audioFailed = false)
         {
             if (!OperatingSystem.IsLinux()) return null;
             string? osRelease = null;
             try { osRelease = File.ReadAllText("/etc/os-release"); } catch { }
-            return Message(Missing(CanLoad, among, audioFailed), osRelease);
+            return Message(Missing(CanLoad, among ?? Required, audioFailed), osRelease);
         }
 
         // Unknown family: only needs every known family packages get a library list.
@@ -125,6 +165,8 @@ namespace ConditioningControlPanel.Services
               + "on other distributions those pages are unavailable for now. Everything else works without it.";
 
         // Not freed: dlclose of GTK/WebKit is not safe, and the head loads them anyway.
-        private static bool CanLoad(string library) => NativeLibrary.TryLoad(library, out _);
+        private static bool CanLoad(string library) => library.StartsWith(GstPluginPrefix, StringComparison.Ordinal)
+            ? GstPluginPresent(library[GstPluginPrefix.Length..])
+            : NativeLibrary.TryLoad(library, out _);
     }
 }
