@@ -108,13 +108,14 @@ public sealed class ChaosFlashOverlayTests
             finally
             {
                 ChaosFlashOverlay.CloseActive();
+                ChaosFlashOverlay.ResetRefusalForTests();
                 ChaosFlashOverlay.Schedule = schedule;
                 Directory.Delete(dir, true);
             }
         });
     }
 
-    private static string WriteGif(out string dir)
+    internal static string WriteGif(out string dir)
     {
         dir = Directory.CreateTempSubdirectory("ccp-chaosflash-").FullName;
         var gif = Path.Combine(dir, "tiny.gif");

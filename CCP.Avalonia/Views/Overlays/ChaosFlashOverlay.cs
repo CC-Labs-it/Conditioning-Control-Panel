@@ -35,6 +35,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<Action, TimeSpan> Schedule = (a, t) => DispatcherTimer.RunOnce(a, t);
 
         private static bool _refused;
+        /// <summary>Tests only: forget a platform refusal so it does not leak into later tests (P02).</summary>
+        internal static void ResetRefusalForTests() => _refused = false;
         private static int _gen;
         private static readonly List<SpiralOverlayWindow> Windows = new();
         private static List<Bitmap> _frames = new();
