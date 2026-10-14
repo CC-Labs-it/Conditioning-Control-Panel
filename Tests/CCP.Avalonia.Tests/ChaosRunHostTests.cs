@@ -17,7 +17,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>The run-lifecycle slice of WPF ChaosModeService on a stepped clock: countdown -> 4 Hz
 /// ticks -> recap; nothing ticks while the overlay is hidden or paused; panic during the countdown
-/// or mid-run tears everything down; the recap never saves.</summary>
+/// or mid-run tears everything down and pays nothing; FALL IN starts a run whose end banks the payout.</summary>
 public sealed class ChaosRunHostTests
 {
     private static void Setup()

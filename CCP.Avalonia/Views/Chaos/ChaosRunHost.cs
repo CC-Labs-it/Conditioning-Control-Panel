@@ -294,7 +294,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try { sparksEarned = ChaosRunEffects.AwardRunRewards(_state); }
             catch (Exception ex) { Log.Debug("Chaos meta award: {E}", ex.Message); }
             try { RevealService.Sync("run_end"); } catch (Exception ex) { Log.Debug("Chaos reveal sync: {E}", ex.Message); }
-            var rankUp = ChaosPayout.RankUp(ChaosMeta.State.RunsCompleted, ChaosMeta.State.LastRankSeen);
+            ChaosRank? rankUp = null;
+            try { rankUp = ChaosPayout.RankUp(ChaosMeta.State.RunsCompleted, ChaosMeta.State.LastRankSeen); }
+            catch (Exception ex) { Log.Debug("Chaos rank-up: {E}", ex.Message); }
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
