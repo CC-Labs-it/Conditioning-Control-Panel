@@ -535,6 +535,10 @@ export function createHud(opts = {}) {
   const boardIntroChange = () => setPresentation({ boardIntro: boardIntro.checked });
   boardIntro?.addEventListener('change', boardIntroChange);
   undom.push(() => boardIntro?.removeEventListener('change', boardIntroChange));
+  const openIntro = pick('game-open-intro');
+  const openIntroChange = () => setPresentation({ openIntro: openIntro.checked });
+  openIntro?.addEventListener('change', openIntroChange);
+  undom.push(() => openIntro?.removeEventListener('change', openIntroChange));
   const invertX = pick('game-invert-x');
   const invertY = pick('game-invert-y');
   const invertXChange = () => setPresentation({ invertX: invertX.checked });
@@ -601,6 +605,7 @@ export function createHud(opts = {}) {
     if (replays) { replays.checked = p.replays && !p.reducedMotion; replays.disabled = p.reducedMotion; }
     if (watchable) watchable.checked = p.letPeopleWatch !== false;
     if (boardIntro) boardIntro.checked = p.boardIntro;
+    if (openIntro) openIntro.checked = p.openIntro;
     if (invertX) invertX.checked = p.invertX;
     if (invertY) invertY.checked = p.invertY;
     for (const button of root.querySelectorAll('[data-turncard]')) button.setAttribute('aria-pressed', String(button.dataset.turncard === p.turnCard));

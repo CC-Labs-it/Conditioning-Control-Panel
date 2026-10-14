@@ -51,6 +51,10 @@ function main() {
   // of keyboard focus the real key never lands here (ui/host-escape.js). Made first, so it hears every real
   // Escape before any part of the page keeps one for itself (the promotion picker, the door).
   const hostEscape = createHostEscape();
+  // The card the page opens on (ui/open-intro.js, about 3 s): over everything, holding nothing. Asked for first,
+  // so it is up before the door; its capture key listener keeps an Escape from the leave below while it is up.
+  // Harness pages that deal at once never get it; ?introAt=<s> pins it at one moment for a screenshot.
+  const openIntro = startOpenIntro();
   const bus = createBus();
   let view;
   try {
@@ -105,6 +109,7 @@ function main() {
   // reducedMotion starts from the player's saved choice: preferences.js ran before PBP existed, so its
   // own first write went nowhere, and every mover reads PBP.settings.
   window.PBP = { bus, game, board, ramp: null, settings: { videoHoldSec: 15, reducedMotion: presentation().reducedMotion } };
+  openIntro.then((intro) => { window.PBP.openIntro = intro; });   // the card's handle, once it is up
   window.PBP.pictures = pictureChoice;   // the picture choice + niche manager (ui/pictures.js)
   board.turnHandoff = createTurnHandoff({ bus, game, board, menuOpen: () => !!window.PBP.door?.isUp() });
   { const dispose = view.dispose; view.dispose = () => { board.turnHandoff.dispose(); dispose(); }; }
@@ -507,6 +512,17 @@ function main() {
   });
   window.PBP.doorReady = doorReady;
   // --- end O ---
+}
+
+function startOpenIntro() {
+  const q = new URLSearchParams(location.search);
+  const holdAt = q.has('introAt') ? Math.max(0, Number(q.get('introAt')) || 0) : null;
+  const harness = q.has('hotseat') || Number(q.get('auto')) > 0 || q.get('door') === '0' || q.get('intro') === '0';
+  if (harness && holdAt == null) return Promise.resolve(null);
+  // loaded late and guarded like the rest: without it the page simply opens on the door
+  return import('./ui/open-intro.js')
+    .then((m) => m.createOpenIntro({ prefs: presentation, sfx: () => window.PBP?.board?.sfx, holdAt }))
+    .catch((e) => { console.warn('[pbp] opening intro missing', e); return null; });
 }
 
 /**
