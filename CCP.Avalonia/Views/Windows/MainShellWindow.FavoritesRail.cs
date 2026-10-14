@@ -68,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (dash?.FavoritesList == null || dash.RecentList == null || s == null) return;
             try
             {
+                dash.RefreshClickPreference(); // WPF RefreshFavoritesRail also refreshes the gesture caption
                 var byId = SettingsPaletteIndex.All
                     .Where(e => FavoritesRailRule.IsDestination(e.Id))
                     .ToDictionary(e => e.Id, e => e, StringComparer.Ordinal);
