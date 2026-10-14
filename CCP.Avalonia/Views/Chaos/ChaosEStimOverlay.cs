@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Charges spent (or cancelled): drop the cursor halo.</summary>
         public static void Disarm() => ChaosEStimGlow.Disarm();
 
+        /// <summary>The platform refused a click-through window this run: stop rebuilding one per strike.</summary>
+        internal static bool Refused;
         internal static Func<bool> CanShow = () => X11Overlay.IsAvailable && X11Overlay.IsCompositing;
 
         internal static void OnUi(Action a)
@@ -61,11 +63,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 try
                 {
-                    if (!CanShow()) { Log.Debug("ChaosEStim: no composited click-through overlay here, no lightning"); return; }
+                    if (Refused || !CanShow()) { Log.Debug("ChaosEStim: no composited click-through overlay here, no lightning"); return; }
                     if (_active == null)
                     {
                         var w = new ChaosEStimOverlay(sample: false);
-                        if (!w.Prepare()) { w.Close(); return; }
+                        if (!w.Prepare()) { Refused = true; w.Close(); return; }
                         _active = w;
                     }
                     if (!_active.IsVisible) _active.Show();
@@ -79,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Teardown (run end, panic): the only place these windows die. Closes the halo too.</summary>
         public static void CloseActive()
         {
+            Refused = false;   // a refusal is remembered for one run, not forever
             ChaosEStimGlow.CloseActive();
             OnUi(() =>
             {
@@ -97,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private long _start;
         private int _step;
         private double _scale = 1;
+        private double _alpha;
 
         /// <summary>--render-all: one sample strike so the PNG shows the bolt, flash and colours.</summary>
         public ChaosEStimOverlay() : this(sample: true) { }
@@ -118,17 +122,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Content = _canvas;
             _tick = new FrameClock(this) { Interval = TimeSpan.FromMilliseconds(16) };
             _tick.Tick += (_, _) => Step();
+            if (sample) _canvas.Opacity = M.StrikeOpacity;   // the render proof has no compositor alpha
             if (sample) Draw(new[] { (new Point(80, 300), new Point(300, 120)), (new Point(300, 120), new Point(560, 220)) });
         }
 
-        /// <summary>WPF StageBounds (primary screen) + WS_EX_TRANSPARENT/NOACTIVATE, before Show.</summary>
+        /// <summary>WPF StageBounds (every monitor when DualMonitorEnabled, else the primary) +
+        /// WS_EX_TRANSPARENT/NOACTIVATE, before Show. Mixed-DPI desktops use the primary's scaling.</summary>
         private bool Prepare()
         {
             var screen = Screens?.Primary ?? Screens?.All?.FirstOrDefault();
             if (screen == null) return SkipPlatformChecksForTests;
             _scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            var bounds = screen.Bounds;
+            if (CoreSettings.Current.DualMonitorEnabled)
+                foreach (var s in Screens!.All) bounds = bounds.Union(s.Bounds);
             if (SkipPlatformChecksForTests) return true;
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, screen.Bounds))
+            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds))
             {
                 Log.Warning("ChaosEStim: the platform refused a click-through topmost overlay, no lightning");
                 return false;
@@ -149,9 +158,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _tick.Start();
         }
 
+        /// <summary>Whole-window alpha through the compositor (X11Overlay.SetOpacity): fading a
+        /// screen-sized visual Opacity re-renders it every frame, which was measured stalling the UI.</summary>
+        private void SetAlpha(double a)
+        {
+            _alpha = a;
+            X11Overlay.SetOpacity(this, a);
+        }
+
         private void Draw(IReadOnlyList<(Point A, Point B)> bolts)
         {
-            _canvas.Opacity = M.StrikeOpacity;
+            SetAlpha(M.StrikeOpacity);
             _canvas.Children.Clear();
             _segments.Clear();
             _lines.Clear();
@@ -201,14 +218,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             int step = M.FlickerStep(ms);
             if (step > _step) { _step = step; Jitter(); }
             var op = M.StrikeOpacityAt(ms);
-            if (op is double o) { _canvas.Opacity = o; return; }
+            if (op is double o) { SetAlpha(o); return; }
             _tick.Stop();
             _canvas.Children.Clear();
             try { Hide(); } catch (Exception ex) { Log.Debug("ChaosEStim hide: {E}", ex.Message); }
         }
 
         internal int BoltCount => _segments.Count;
-        internal double StrikeAlpha => _canvas.Opacity;
+        internal double StrikeAlpha => _alpha;
     }
 
     /// <summary>
@@ -227,11 +244,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             try
             {
-                if (!ChaosEStimOverlay.CanShow()) { Log.Debug("ChaosEStimGlow: no composited overlay here, no halo"); return; }
+                if (ChaosEStimOverlay.Refused || !ChaosEStimOverlay.CanShow()) { Log.Debug("ChaosEStimGlow: no composited overlay here, no halo"); return; }
                 if (_active == null)
                 {
                     var w = new ChaosEStimGlow();
-                    if (!w.Prepare()) { w.Close(); return; }
+                    if (!w.Prepare()) { ChaosEStimOverlay.Refused = true; w.Close(); return; }
                     _active = w;
                 }
                 _active._start = ChaosEStimOverlay.Clock.GetTimestamp();

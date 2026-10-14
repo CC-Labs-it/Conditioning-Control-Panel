@@ -38,6 +38,14 @@ public sealed class ChaosEStimOverlayTests
             Assert.Null(ChaosEStimGlow.Active);
 
             ChaosEStimOverlay.CanShow = () => true;
+            // A refused window is remembered for the run (no rebuild per strike); run end forgets it.
+            ChaosEStimOverlay.Refused = true;
+            ChaosEStimOverlay.Strike(bolt);
+            ChaosEStimOverlay.Arm();
+            Assert.Null(ChaosEStimOverlay.Active);
+            Assert.Null(ChaosEStimGlow.Active);
+            ChaosEStimOverlay.CloseActive();
+            Assert.False(ChaosEStimOverlay.Refused);
             ChaosEStimOverlay.Strike(bolt);
             var w = ChaosEStimOverlay.Active!;
             Assert.True(w.IsVisible);
