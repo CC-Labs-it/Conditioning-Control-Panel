@@ -147,6 +147,11 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF: a pass pays (replays + 1) x 50 + 200 XP.</summary>
         public static int AttentionPassXp(int penalties) => (penalties + 1) * 50 + 200;
 
+        /// <summary>WPF VideoService.cs:3494/3861: a mandatory video decodes in software (the LibVLC
+        /// hardware path can wedge on a white frame, #533/#537/#540) unless the user opted into GPU
+        /// decode (VideoForceHardwareDecoding); this is the media option that forces it, or null.</summary>
+        public static string? SoftwareDecodeOption(bool forceHardware) => forceHardware ? null : ":avcodec-hw=none";
+
         /// <summary>WPF NeedsBlurFill: bars (and so the blurred fill) only when the clip's aspect is
         /// more than 3% off the screen's.</summary>
         public static bool NeedsBlurFill(double videoAspect, double screenAspect) =>

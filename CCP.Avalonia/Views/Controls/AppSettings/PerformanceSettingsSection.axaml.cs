@@ -22,8 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     ///
     /// A motion-level change re-evaluates the loaded ambient loops through
     /// <see cref="global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MotionGateChanged"/>, as WPF's
-    /// MainWindow.CmbMotionLevel_SelectionChanged did. The DND app picker and the guard read X11
-    /// window owners (Platform/X11Windows); the guard itself is Core DndGuard.
+    /// MainWindow.CmbMotionLevel_SelectionChanged did. The DND app picker and the guard read
+    /// Platform/Win32Windows on Windows and X11 window owners elsewhere; the guard itself is Core DndGuard.
     /// </summary>
     public partial class PerformanceSettingsSection : UserControl
     {
@@ -41,17 +41,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            HookSettings();
             SyncFromSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            UnhookSettings();
             base.OnDetachedFromVisualTree(e);
         }
 
         // A cloud restore or a factory reset swaps the instance; repaint from it, on the UI thread.
-        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(SyncFromSettings);
+        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { HookSettings(); SyncFromSettings(); });
+
+        private Models.AppSettings? _hooked;
+
+        private void HookSettings()
+        {
+            UnhookSettings();
+            _hooked = CoreSettings.Current;
+            _hooked.PropertyChanged += OnSettingsPropertyChanged;
+        }
+
+        private void UnhookSettings()
+        {
+            if (_hooked != null) _hooked.PropertyChanged -= OnSettingsPropertyChanged;
+            _hooked = null;
+        }
+
+        /// <summary>WPF :68 (7.1.5 review fix): Settings is one scrolling page, and
+        /// VideoForceHardwareDecoding has a second live editor on it (Monitors). This box follows
+        /// that one the way Monitors follows this box.</summary>
+        private void OnSettingsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Models.AppSettings.VideoForceHardwareDecoding))
+                Dispatcher.UIThread.Post(SyncFromSettings);
+        }
 
         internal void SyncFromSettings()
         {
@@ -165,8 +191,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CoreSettings.Save();
         }
 
-        /// <summary>The picker's source (X11 window owners). A seam so tests never read the desktop.</summary>
-        internal static Func<List<string>> RunningApps = Platform.X11Windows.RunningWindowedProcesses;
+        /// <summary>The picker's source (user32 main windows on Windows, X11 window owners elsewhere).
+        /// A seam so tests never read the desktop.</summary>
+        internal static Func<List<string>> RunningApps = Platform.Win32Windows.RunningAppsSource;
 
         /// <summary>
         /// WPF BtnDndPickApp_Click (:172): a menu of every process that owns a window; already-listed
