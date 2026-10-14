@@ -26,11 +26,13 @@ public sealed class StudioRackWireTests
     public Task HapticsRowRightClickGoesThroughThePageBoxAndTheDotFollows() => Run((shell, rack) =>
     {
         var s = CoreSettings.Current.Haptics;
-        var (oldEnabled, oldPremium) = (s.Enabled, CoreEntitlement.HasPremiumProvider);
+        var (oldEnabled, oldPremium, oldFree) =
+            (s.Enabled, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
         try
         {
             s.Enabled = false;
             CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;   // a free day would open the gate (P02)
             var box = rack.HapticsPanel.ChkHapticsEnabled;
             box.IsChecked = false;
             Dispatcher.UIThread.RunJobs();
@@ -57,7 +59,8 @@ public sealed class StudioRackWireTests
         finally
         {
             foreach (var w in shell.OwnedWindows.ToList()) w.Close();
-            (s.Enabled, CoreEntitlement.HasPremiumProvider) = (oldEnabled, oldPremium);
+            (s.Enabled, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) =
+                (oldEnabled, oldPremium, oldFree);
         }
     });
 
