@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -81,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (url is null) return;
             CurrentUrl = url;
+            if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
         }
 
@@ -89,6 +91,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// JSON-stringifies objects). The stand-in for WPF's <c>CoreWebView2.WebMessageReceived</c>.
         /// </summary>
         public event Action<string>? WebMessage;
+
+        /// <summary>
+        /// One extra request header for a url, or null (the usual answer). The stand-in for WPF's
+        /// <c>AddWebResourceRequestedFilter</c> + <c>Request.Headers.SetHeader</c> (JustDropHostService.AttachAuthHeader):
+        /// the caller's rule decides, per request, whether its credential rides along. Never logged.
+        /// </summary>
+        public Func<Uri, (string Name, string Value)?>? RequestHeader { get; set; }
+
+        /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>
+        internal int StampedRequests { get; private set; }
+
+        private void StampRequestHeader(WebResourceRequestedEventArgs e)
+        {
+            try
+            {
+                if (e.Request?.Uri is { } uri) Stamp(uri, e.Request.Headers.TrySet);
+            }
+            catch (Exception ex) { Log.Debug("WebHost: request header not set: {Error}", ex.Message); }
+        }
+
+        /// <summary>One request through <see cref="RequestHeader"/>; counts only a header the engine took (tests drive it).</summary>
+        internal bool Stamp(Uri uri, Func<string, string, bool> trySet)
+        {
+            if (RequestHeader?.Invoke(uri) is not { } header || !trySet(header.Name, header.Value)) return false;
+            StampedRequests++;
+            return true;
+        }
+
+        /// <summary>
+        /// The shared page carrier, for any page this head hosts (local games, remote sites). Pages
+        /// written for WebView2 talk through <c>window.chrome.webview</c> (postMessage out, a
+        /// <c>message</c> event in); WebKitGTK injects only <c>window.invokeCSharpAction</c> (strings).
+        /// <see cref="CarrierShim"/> gives such a page a <c>chrome.webview</c> over that string
+        /// channel (and <c>__ccpRnPush</c> back), and is a no-op where a real one exists (WebView2).
+        /// With <see cref="InjectCarrier"/> it runs after every completed navigation: the engine has
+        /// no document-created script seam, so a page that probes the carrier only at load misses it.
+        /// </summary>
+        internal const string CarrierShim =
+            "(function(){var w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;"
+            + "if(typeof w.invokeCSharpAction!=='function')return;var t=new EventTarget();"
+            + "t.postMessage=function(m){w.invokeCSharpAction(typeof m==='string'?m:JSON.stringify(m));};"
+            + "w.chrome=w.chrome||{};w.chrome.webview=t;"
+            + "if(typeof w.__ccpRnPush!=='function')w.__ccpRnPush=function(j){var m;try{m=JSON.parse(j);}catch(e){return;}"
+            + "t.dispatchEvent(new MessageEvent('message',{data:m}));};})();";
+
+        /// <summary>Run <see cref="CarrierShim"/> after each completed navigation (see there).</summary>
+        public bool InjectCarrier { get; set; }
+
+        /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
+        /// event on <c>chrome.webview</c>. Every hosted page shares this one carrier script.</summary>
+        public Task<string?> PostJsonAsync(string json) => InvokeScriptAsync(
+            "(function(m){try{if(typeof window.__ccpRnPush==='function'){window.__ccpRnPush(JSON.stringify(m));return;}"
+            + "var w=window.chrome&&window.chrome.webview;if(w&&w.dispatchEvent){w.dispatchEvent(new MessageEvent('message',{data:m}));}}catch(e){}})("
+            + json + ");");
 
         /// <summary>The seam the engine's WebMessageReceived routes through (headless tests drive it).</summary>
         internal void OnWebMessage(string? body)
@@ -162,12 +218,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 try
                 {
                     _web = new NativeWebView();
+                    // CCP_LINUX_WEBVIEW=gtk: skip WPE, which the package would otherwise pick first.
+                    if (LinuxOptIn == "gtk")
+                        _web.EnvironmentRequested += (_, e) =>
+                        {
+                            if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
+                        };
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
+                    _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);
                 }
                 catch (Exception ex)
@@ -272,37 +335,78 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>
         /// Walks every adapter the package knows about and returns null as soon as one is installed
-        /// and advertises <see cref="WebViewEmbeddingScenario.NativeControlHost"/>. The scenario
-        /// check is what keeps a headless render honest: the Headless adapter reports itself
-        /// installed but offers only <c>OffscreenRenderer</c>, so it never passes for an embedded
-        /// control and <c>--render-all</c> always draws the fallback.
+        /// that NativeWebView would actually host on this OS (see <see cref="DecideUnavailableReason"/>).
+        /// The Headless adapter never counts, and nothing counts outside the real desktop app, so
+        /// <c>--render-all</c>, <c>--smoke</c> and the tests always draw the fallback.
         /// </summary>
         private static string? ProbeUnavailableReason()
         {
-            string? firstReason = null;
+            var adapters = new List<DetailedWebViewAdapterInfo>();
             foreach (WebViewAdapterType type in Enum.GetValues(typeof(WebViewAdapterType)))
             {
                 if (type == WebViewAdapterType.Unknown) continue;
-                DetailedWebViewAdapterInfo info;
                 try
                 {
-                    info = WebViewAdapterInfo.GetAdapterInfo(type);
+                    adapters.Add(WebViewAdapterInfo.GetAdapterInfo(type));
                 }
                 catch (Exception)
                 {
                     // The macOS adapter's static constructor throws off macOS. An adapter that
                     // cannot even be asked about is, for our purposes, not there.
-                    continue;
                 }
-                if (!info.IsSupported) continue;
-                if (info.IsInstalled && info.SupportedScenarios.HasFlag(WebViewEmbeddingScenario.NativeControlHost))
+            }
+            // Only the real desktop app (StartWithClassicDesktopLifetime) hosts an engine. Tests (bare dispatcher or
+            // headless session) and --render-all/--smoke (SetupWithoutStarting) have no desktop lifetime, so they
+            // always draw the fallback, even on a box with WPE/WebKitGTK installed.
+            var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            return DecideUnavailableReason(adapters, OperatingSystem.IsLinux(), headless, LinuxOptIn);
+        }
+
+        /// <summary>
+        /// CCP_LINUX_WEBVIEW = <c>wpe</c> | <c>gtk</c>, else null. Linux web views stay OFF by default: in live runs on
+        /// KDE Wayland + XWayland both 12.1 engines loaded the page but requestAnimationFrame never kept running
+        /// (WPE froze after its first frame, GTK painted nothing), so every rAF-heartbeat host closed itself.
+        /// The opt-in exists to re-check that (docs/avalonia-decisions.md, 2026-10-12 webview-probe-fix).
+        /// </summary>
+        internal static string? LinuxOptIn =>
+            Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW")?.Trim().ToLowerInvariant() switch { "wpe" => "wpe", "gtk" => "gtk", _ => null };
+
+        internal const string NoEngineReason = "No native web view on this platform.";
+
+        internal const string LinuxOffReason =
+            "Web views are off on Linux by default (they stall here). Set CCP_LINUX_WEBVIEW=wpe or gtk to try one.";
+
+        /// <summary>
+        /// The availability decision. Without a Linux opt-in: an installed adapter offering NativeControlHost
+        /// (WebView2 on Windows, WKWebView on macOS); 12.1 reports none on Linux, so Linux draws the fallback.
+        /// With <paramref name="linuxOptIn"/> it mirrors the package's own choice (WebViewAdapter.CreateFactory):
+        /// <c>wpe</c> = WPE (picked first) or WebKitGTK installed; <c>gtk</c> = WebKitGTK installed (WPE skipped).
+        /// </summary>
+        internal static string? DecideUnavailableReason(IEnumerable<DetailedWebViewAdapterInfo> adapters, bool isLinux, bool headless, string? linuxOptIn = null)
+        {
+            string? firstReason = null;
+            var linuxOff = false;
+            foreach (var info in adapters)
+            {
+                if (!info.IsSupported || info.Type is WebViewAdapterType.Unknown or WebViewAdapterType.Headless) continue;
+                var hostable = (isLinux, linuxOptIn) switch
+                {
+                    (true, "wpe") => info.Type is WebViewAdapterType.WpeWebKit or WebViewAdapterType.WebKitGtk,
+                    (true, "gtk") => info.Type is WebViewAdapterType.WebKitGtk,
+                    _ => info.SupportedScenarios.HasFlag(WebViewEmbeddingScenario.NativeControlHost),
+                };
+                if (info.IsInstalled && hostable && !headless)
                     return null;
+                // An engine is installed but off by default: say so and name the opt-in, not "no web view".
+                if (isLinux && linuxOptIn is null && !headless && info.IsInstalled
+                    && info.Type is WebViewAdapterType.WpeWebKit or WebViewAdapterType.WebKitGtk)
+                    linuxOff = true;
                 // Prefer the first supported-but-missing engine's message: on Linux that is the
                 // actionable "Install webkit2gtk 4.0+ package", not "not supported on this platform".
                 if (firstReason is null && !string.IsNullOrWhiteSpace(info.UnavailableReason))
                     firstReason = info.UnavailableReason;
             }
-            return firstReason ?? "No native web view on this platform.";
+            return linuxOff ? LinuxOffReason : firstReason ?? NoEngineReason;
         }
     }
 }

@@ -82,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-                var targets = PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+                var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
                 if (flashes.Count == 0)

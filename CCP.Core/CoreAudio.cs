@@ -49,5 +49,10 @@ namespace ConditioningControlPanel
         public static void Duck(int strength = 80) { try { DuckProvider?.Invoke(strength); } catch { } }
         public static void Unduck(long generation = -1) { try { UnduckProvider?.Invoke(generation); } catch { } }
         public static long DuckGeneration { get { try { return DuckGenerationProvider?.Invoke() ?? 0; } catch { return 0; } } }
+
+        /// <summary>Optional: the head's "endpoint down, stay quiet" probe (WPF AudioService.IsOutputSuppressed).
+        /// Unseeded reads false.</summary>
+        public static volatile Func<bool>? IsOutputSuppressedProvider;
+        public static bool IsOutputSuppressed { get { try { return IsOutputSuppressedProvider?.Invoke() ?? false; } catch { return false; } } }
     }
 }

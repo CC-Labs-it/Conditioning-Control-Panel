@@ -420,8 +420,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// WPF: MainWindow.Settings.cs:660 -&gt; StartAwarenessTutorial(). A tour finished (not
-        /// skipped) pops the Puppy preset's editor (MainWindow.Settings.cs:689). This head does NOT
-        /// seed CoreTutorial.StartAction today, so no tour appears yet - the seam's documented no-op.
+        /// skipped) pops the Puppy preset's editor (MainWindow.Settings.cs:689). A start refused
+        /// because another tour runs leaves CurrentTourName on that tour, so the guard below returns.
         /// </summary>
         private void BtnAwarenessTutorial_Click(object? sender, RoutedEventArgs e)
         {

@@ -29,7 +29,7 @@ public sealed class ChaosFxLayer : BaseLayer
     private static readonly SKColor GoldCore = new(0xFF, 0xE9, 0xA0);
     private static readonly SKColor CursorPink = new(0xFF, 0x8F, 0xC8);
 
-    public ChaosFxLayer(CompositorEngine engine) : base(engine)
+    public ChaosFxLayer(CompositorEngine engine) : base(engine.Wake)
     {
         RefreshScale();
     }
