@@ -17,10 +17,10 @@ public class GentleWindowRulesTests
     }
 
     [Theory]
-    [InlineData(0.5, 0.5f)]
-    [InlineData(0.1, 0.25f)]   // never slower than the floor
-    [InlineData(3.0, 1f)]      // never faster than normal
-    public void PlaybackRate_OnFollowsTheClampedSpeed(double speed, float expected)
+    [InlineData(0.5, 1f)]      // owner, 2026-10-14: videos keep the fade but play at normal speed
+    [InlineData(0.1, 1f)]
+    [InlineData(3.0, 1f)]
+    public void PlaybackRate_VideosNeverSlow(double speed, float expected)
         => Assert.Equal(expected, GentleWindowRules.PlaybackRate(on: true, speed: speed));
 
     [Theory]

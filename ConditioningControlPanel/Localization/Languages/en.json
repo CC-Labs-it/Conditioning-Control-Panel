@@ -5269,7 +5269,7 @@
   "btn_program_enroll_confirm": "Enroll",
   "setting_motion_level": "Motion",
   "setting_gentle_visuals": "Gentle visuals",
-  "tooltip_gentle_visuals": "Softer, slower visuals for light-sensitive eyes.\nEverything fades in and out, GIFs, spirals and videos slow down,\nbrightness eases in and nothing flickers.\nAlso keeps interface motion at Reduced.",
+  "tooltip_gentle_visuals": "Softer, slower visuals for light-sensitive eyes.\nEverything fades in and out, GIFs and spirals slow down,\nbrightness eases in and nothing flickers.\nAlso keeps interface motion at Reduced.",
   "setting_gentle_fade": "Fade length",
   "setting_gentle_speed": "Playback speed",
   "tooltip_motion_level": "How much the interface is allowed to move.\nFull = everything, ambient effects included.\nReduced = fades and transitions only, no loops, particles or parallax.\nOff = nothing moves.\nWindows' own animation setting can only take this further down, never add motion back.",

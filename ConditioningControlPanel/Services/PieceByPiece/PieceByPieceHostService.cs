@@ -376,7 +376,7 @@ internal static partial class PieceByPieceHostService
             bool mediaAvailable = SafeMediaAvailable();
             _postedMediaAvailable = mediaAvailable;
             _host?.Post(PbpWatchRules.SettingsFrame(SafeVideoHoldSec(), SafeReducedMotion(), SafeWhisperClips(),
-                App.Settings?.Current, mediaAvailable, spectate));
+                App.Settings?.Current, mediaAvailable, spectate, SafeGentleIntroSpeed()));
         }
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: settings post failed: {E}", ex.Message); }
     }
@@ -809,5 +809,21 @@ internal static partial class PieceByPieceHostService
     {
         try { return MotionFx.Level != Models.MotionLevel.Full; }
         catch { return false; }
+    }
+
+    /// <summary>The intros' gentle speed (PbpWatchRules.GentleIntroSpeed): the level the player would
+    /// have without gentle visuals decides whether gentle is the only brake.</summary>
+    private static double SafeGentleIntroSpeed()
+    {
+        try
+        {
+            var s = App.Settings?.Current;
+            if (s == null) return 0;
+            bool osAnim = true;
+            try { osAnim = System.Windows.SystemParameters.ClientAreaAnimation; } catch { }
+            var withoutGentle = MotionFx.ResolveLevel(s.MotionLevel, osAnim, gentleVisuals: false);
+            return PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
+        }
+        catch { return 0; }
     }
 }

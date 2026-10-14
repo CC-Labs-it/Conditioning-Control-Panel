@@ -9,10 +9,11 @@ namespace ConditioningControlPanel.Services.Video
     /// </summary>
     internal static class GentleWindowRules
     {
-        /// <summary>The LibVLC / page playback rate for a gentle speed. 1 (no SetRate call) when
-        /// off or at full speed.</summary>
-        public static float PlaybackRate(bool on, double speed)
-            => on ? (float)Safety.GentleVisuals.ClampSpeed(speed) : 1f;
+        /// <summary>The LibVLC / page playback rate for a gentle speed. Always 1 (owner desk test,
+        /// 2026-10-14: "it should play normally"): videos keep the gentle fade in and out but play at
+        /// normal speed; the speed setting slows GIFs and spirals only. Kept as the one seam every
+        /// video path asks, so a later change is one line.</summary>
+        public static float PlaybackRate(bool on, double speed) => 1f;
 
         /// <summary>Wall-clock seconds a clip of <paramref name="clipSeconds"/> takes at
         /// <paramref name="rate"/>. A slowed clip runs longer, so the duration guillotine and the

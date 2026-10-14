@@ -3809,7 +3809,7 @@
   "label_local_ai_consent_pull_model": "Baixar o modelo de IA.",
   "setting_motion_level": "Movimento",
   "setting_gentle_visuals": "Visual suave",
-  "tooltip_gentle_visuals": "Visuais mais suaves e lentos para olhos sensíveis à luz.\nTudo entra e sai com fade, GIFs, espirais e vídeos ficam mais lentos,\no brilho sobe aos poucos e nada pisca.\nTambém mantém o movimento da interface em Reduzido.",
+  "tooltip_gentle_visuals": "Visuais mais suaves e lentos para olhos sensíveis à luz.\nTudo entra e sai com fade, GIFs e espirais ficam mais lentos,\no brilho sobe aos poucos e nada pisca.\nTambém mantém o movimento da interface em Reduzido.",
   "setting_gentle_fade": "Duração do fade",
   "setting_gentle_speed": "Velocidade de reprodução",
   "tooltip_motion_level": "O quanto a interface pode se mexer.\nCompleto = tudo, efeitos de ambiente incluídos.\nReduzido = só fades e transições, sem loops, partículas ou parallax.\nDesligado = nada se mexe.\nO ajuste de animação do próprio Windows só consegue baixar mais isso, nunca devolver movimento.",

@@ -4702,7 +4702,7 @@
   "label_local_ai_consent_pull_model": "下载 AI 模型。",
   "setting_motion_level": "动效",
   "setting_gentle_visuals": "柔和视觉",
-  "tooltip_gentle_visuals": "为对光敏感的眼睛提供更柔和、更慢的视觉效果。\n所有内容淡入淡出，GIF、螺旋和视频放慢播放，\n亮度缓缓升起，不再闪烁。\n同时将界面动效保持在“简化”。",
+  "tooltip_gentle_visuals": "为对光敏感的眼睛提供更柔和、更慢的视觉效果。\n所有内容淡入淡出，GIF 和螺旋放慢播放，\n亮度缓缓升起，不再闪烁。\n同时将界面动效保持在“简化”。",
   "setting_gentle_fade": "淡入淡出时长",
   "setting_gentle_speed": "播放速度",
   "tooltip_motion_level": "界面允许动到什么程度。\n完整 = 全部，包括环境效果。\n精简 = 只有淡入淡出和切换，没有循环、粒子和视差。\n关闭 = 什么都不动。\nWindows 自己的动画设置只能把这个再往下压，不能把动效加回来。",

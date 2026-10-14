@@ -3809,7 +3809,7 @@
   "label_local_ai_consent_pull_model": "AI 모델을 다운로드합니다.",
   "setting_motion_level": "모션",
   "setting_gentle_visuals": "부드러운 화면",
-  "tooltip_gentle_visuals": "빛에 민감한 눈을 위한 더 부드럽고 느린 화면.\n모든 것이 서서히 나타나고 사라지며, GIF·스파이럴·영상은 느리게 재생되고,\n밝기는 천천히 올라가며 깜빡임이 없습니다.\n인터페이스 모션도 '줄임'으로 유지합니다.",
+  "tooltip_gentle_visuals": "빛에 민감한 눈을 위한 더 부드럽고 느린 화면.\n모든 것이 서서히 나타나고 사라지며, GIF와 스파이럴은 느리게 재생되고,\n밝기는 천천히 올라가며 깜빡임이 없습니다.\n인터페이스 모션도 '줄임'으로 유지합니다.",
   "setting_gentle_fade": "페이드 길이",
   "setting_gentle_speed": "재생 속도",
   "tooltip_motion_level": "인터페이스가 얼마나 움직여도 되는지.\n전체 = 은은한 효과까지 전부.\n줄임 = 페이드와 전환만, 반복·파티클·패럴랙스 없음.\n끔 = 아무것도 움직이지 않음.\nWindows의 애니메이션 설정은 이걸 더 낮출 수만 있고, 움직임을 되돌리지는 못합니다.",

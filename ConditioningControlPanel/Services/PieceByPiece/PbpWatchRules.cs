@@ -146,7 +146,7 @@ internal static class PbpWatchRules
     /// </summary>
     public static JObject SettingsFrame(int videoHoldSec, bool reducedMotion,
         System.Collections.Generic.IEnumerable<string>? whispers, AppSettings? s, bool mediaAvailable,
-        string? spectateMatchId)
+        string? spectateMatchId, double gentleIntroSpeed = 0)
         => new()
         {
             ["type"] = "pbp:settings",
@@ -158,5 +158,16 @@ internal static class PbpWatchRules
             ["watchAmount"] = WatchAmount(s),
             ["mediaAvailable"] = mediaAvailable,
             ["spectateMatchId"] = spectateMatchId != null ? new JValue(spectateMatchId) : JValue.CreateNull(),
+            // Gentle visuals (owner, 2026-10-14): the clockwork intros still play, slower. 0 = no gentle
+            // override (the page follows reducedMotion as before).
+            ["gentleIntroSpeed"] = gentleIntroSpeed,
         };
+
+    /// <summary>Gentle visuals and the chess intros: when the ONLY thing holding motion below Full is
+    /// gentle visuals, the intros play their full clockwork at the gentle speed, floored at 0.5 so a
+    /// 3 s intro never drags past 6 s. 0 when gentle is off or the player reduced motion themselves.</summary>
+    public static double GentleIntroSpeed(bool gentleOn, MotionLevel levelWithoutGentle, double gentleSpeed)
+        => gentleOn && levelWithoutGentle == MotionLevel.Full
+            ? Math.Clamp(double.IsNaN(gentleSpeed) ? 0.5 : gentleSpeed, 0.5, 1.0)
+            : 0;
 }

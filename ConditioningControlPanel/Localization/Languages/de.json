@@ -3809,7 +3809,7 @@
   "label_local_ai_consent_pull_model": "Das KI-Modell herunterladen.",
   "setting_motion_level": "Bewegung",
   "setting_gentle_visuals": "Sanfte Visuals",
-  "tooltip_gentle_visuals": "Weichere, langsamere Visuals für lichtempfindliche Augen.\nAlles blendet ein und aus, GIFs, Spiralen und Videos laufen langsamer,\ndie Helligkeit steigt sanft an und nichts flackert.\nHält die Oberflächenbewegung außerdem auf Reduziert.",
+  "tooltip_gentle_visuals": "Weichere, langsamere Visuals für lichtempfindliche Augen.\nAlles blendet ein und aus, GIFs und Spiralen laufen langsamer,\ndie Helligkeit steigt sanft an und nichts flackert.\nHält die Oberflächenbewegung außerdem auf Reduziert.",
   "setting_gentle_fade": "Überblendzeit",
   "setting_gentle_speed": "Wiedergabetempo",
   "tooltip_motion_level": "Wie viel sich die Oberfläche bewegen darf.\nVoll = alles, inklusive Ambient-Effekten.\nReduziert = nur Ein- und Ausblenden, keine Schleifen, Partikel oder Parallaxe.\nAus = gar keine Bewegung.\nDie Animationseinstellung von Windows kann das nur noch weiter senken, nie wieder anheben.",

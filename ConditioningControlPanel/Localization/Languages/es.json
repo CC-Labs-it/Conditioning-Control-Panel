@@ -3809,7 +3809,7 @@
   "label_local_ai_consent_pull_model": "Descargar el modelo de IA.",
   "setting_motion_level": "Movimiento",
   "setting_gentle_visuals": "Visuales suaves",
-  "tooltip_gentle_visuals": "Visuales más suaves y lentos para ojos sensibles a la luz.\nTodo aparece y desaparece con fundido, los GIF, espirales y vídeos van más lentos,\nel brillo sube poco a poco y nada parpadea.\nTambién deja el movimiento de la interfaz en Reducido.",
+  "tooltip_gentle_visuals": "Visuales más suaves y lentos para ojos sensibles a la luz.\nTodo aparece y desaparece con fundido, los GIF y las espirales van más lentos,\nel brillo sube poco a poco y nada parpadea.\nTambién deja el movimiento de la interfaz en Reducido.",
   "setting_gentle_fade": "Duración del fundido",
   "setting_gentle_speed": "Velocidad de reproducción",
   "tooltip_motion_level": "Cuánto puede moverse la interfaz.\nCompleto = todo, incluidos los efectos ambientales.\nReducido = solo fundidos y transiciones, sin bucles, partículas ni parallax.\nApagado = nada se mueve.\nEl ajuste de animación de Windows solo puede bajar esto más, nunca devolver movimiento.",

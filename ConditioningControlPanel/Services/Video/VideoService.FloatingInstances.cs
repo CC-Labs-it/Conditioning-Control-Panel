@@ -433,7 +433,7 @@ namespace ConditioningControlPanel.Services
                     hideCursor = false,
                     startAtMs = 0L,
                     // Gentle visuals: the slow speed and the fade from black (1 and 0 when off).
-                    rate = Safety.GentleVisuals.Speed,
+                    rate = 1.0,   // videos play at normal speed under gentle visuals (owner, 2026-10-14)
                     fadeMs = Safety.GentleVisuals.On ? Safety.GentleVisuals.FadeMs(0) : 0,
                     strict = false,
                     sinkLabel = BrowserSinkLabel.Resolve(),
@@ -502,9 +502,8 @@ namespace ConditioningControlPanel.Services
                     c.PositionMs = Math.Max(c.PositionMs, (long?)o["ms"] ?? 0);
                     // The player's longest-video limit, per window: the run's own cap timer is
                     // off here (it watches one player), so each clip is cut on what it has played.
-                    // Gentle visuals: the limit is time on screen, so a slowed clip counts its wall time.
                     if (VideoLengthCap.Reached(App.Settings?.Current?.VideoMaxDurationSeconds ?? 0,
-                            (long)(c.PositionMs / Safety.GentleVisuals.Speed)))
+                            c.PositionMs))
                     {
                         PostAfterPageMessage(() => CloseInstance(c, "longest-video limit reached"));
                         break;

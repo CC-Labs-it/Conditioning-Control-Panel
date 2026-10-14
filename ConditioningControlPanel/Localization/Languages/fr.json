@@ -3809,7 +3809,7 @@
   "label_local_ai_consent_pull_model": "Télécharger le modèle d'IA.",
   "setting_motion_level": "Mouvement",
   "setting_gentle_visuals": "Visuels doux",
-  "tooltip_gentle_visuals": "Des visuels plus doux et plus lents pour les yeux sensibles à la lumière.\nTout apparaît et disparaît en fondu, les GIF, spirales et vidéos ralentissent,\nla luminosité monte en douceur et rien ne clignote.\nGarde aussi le mouvement de l'interface sur Réduit.",
+  "tooltip_gentle_visuals": "Des visuels plus doux et plus lents pour les yeux sensibles à la lumière.\nTout apparaît et disparaît en fondu, les GIF et les spirales ralentissent,\nla luminosité monte en douceur et rien ne clignote.\nGarde aussi le mouvement de l'interface sur Réduit.",
   "setting_gentle_fade": "Durée du fondu",
   "setting_gentle_speed": "Vitesse de lecture",
   "tooltip_motion_level": "Le degré de mouvement autorisé dans l'interface.\nComplet = tout, effets d'ambiance compris.\nRéduit = fondus et transitions seulement, sans boucles, particules ni parallaxe.\nDésactivé = rien ne bouge.\nLe réglage d'animation de Windows ne peut que réduire encore, jamais rendre du mouvement.",

@@ -209,7 +209,7 @@ public class PbpWatchV2Tests
         Assert.Equal(new[]
             {
                 "type", "videoHoldSec", "reducedMotion", "whispers", "letPeopleWatch",
-                "watchEffects", "watchAmount", "mediaAvailable", "spectateMatchId",
+                "watchEffects", "watchAmount", "mediaAvailable", "spectateMatchId", "gentleIntroSpeed",
             }.OrderBy(x => x, StringComparer.Ordinal),
             f.Properties().Select(p => p.Name).OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal("pbp:settings", (string?)f["type"]);
