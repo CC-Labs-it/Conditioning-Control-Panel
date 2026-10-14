@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so ModalUp /
+    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so
     /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
     /// pump when the startup modals move onto a shared ladder.
     /// </summary>
@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
+            ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
@@ -84,6 +85,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (Inbox.File(item))
                 Log.Information("[Startup] '{Key}' went to the Inbox ({Count} waiting)", item.Key, Inbox.UnreadCount);
         }
+
+        // WPF's presenter holds IsStartupDialogShowing around these surfaces. Until the full
+        // modal ladder is ported, their real open/close lifecycle provides the same guard.
+        // ponytail: registration supplies only the modal gate, not the missing startup callers.
+        private static readonly HashSet<Window> _startupModalsUp = new();
+
+        internal static void TrackStartupModal(Window window)
+        {
+            window.Opened += (_, _) => _startupModalsUp.Add(window);
+            window.Closed += (_, _) => _startupModalsUp.Remove(window);
+        }
+
+        internal static bool StartupModalWindowUp() => _startupModalsUp.Any(w => w.IsVisible);
 
         // Passive windows open right now. Tracked by class handler rather than read from the
         // desktop lifetime, so it holds for any host (and headless tests, which have none).

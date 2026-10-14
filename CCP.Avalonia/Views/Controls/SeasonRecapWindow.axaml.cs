@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public SeasonRecapWindow(SeasonRecapCardViewModel vm)
         {
             AvaloniaXamlLoader.Load(this);
+            Platform.StartupLadder.TrackStartupModal(this);
             _vm = vm ?? throw new ArgumentNullException(nameof(vm));
 
             _card = new SeasonRecapCard { AnimateReveal = true };

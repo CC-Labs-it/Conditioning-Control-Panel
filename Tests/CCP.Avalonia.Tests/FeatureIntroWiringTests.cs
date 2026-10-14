@@ -28,7 +28,7 @@ public sealed class FeatureIntroWiringTests
     private static Task Run(Action<List<Window>, MainShellWindow> body, params string[] unseen) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
@@ -143,4 +143,69 @@ public sealed class FeatureIntroWiringTests
         Assert.Equal(FeatureIntros.All["studio-rack"].Title, CardTitle(opened));
         Assert.Contains("studio-rack", CoreSettings.Current.SeenFeatureIntros);
     }, "studio-rack");
+    [Fact]
+    public Task ActualStartupDialogsHoldCardsUntilEveryDialogHasClosed() => Run((opened, shell) =>
+    {
+        var news = new ConditioningControlPanel.Avalonia.Views.Dialogs.WhatsNewDialog("Update", "Notes");
+        var recap = new ConditioningControlPanel.Avalonia.Views.Controls.SeasonRecapWindow();
+        Assert.False(MainShellWindow.IsStartupDialogShowing); // construction alone owns nothing
+        news.Show(shell);
+        recap.Show(shell);
+        Assert.True(MainShellWindow.IsStartupDialogShowing);
+        ClickLockdown(shell);
+        Assert.Empty(opened.OfType<FeatureIntroPopup>());
+        Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+
+        Assert.True(StartupLadder.Inbox.Contains("intro:lockdown"));
+        news.Close();
+        Assert.True(MainShellWindow.IsStartupDialogShowing); // recap still owns the screen
+        ClickLockdown(shell);
+        Assert.Empty(opened.OfType<FeatureIntroPopup>());
+        Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+
+        recap.Close();
+        Assert.False(MainShellWindow.IsStartupDialogShowing);
+        ClickLockdown(shell);
+        Assert.Equal(FeatureIntros.All["lockdown"].Title, CardTitle(opened));
+    }, "lockdown");
+
+    [Fact]
+    public Task WelcomeDialogDoesNotReleaseTheCallersStartupGate() => Run((opened, shell) =>
+    {
+        var welcome = new ConditioningControlPanel.Avalonia.Views.Dialogs.WelcomeDialog();
+        welcome.Show(shell);
+        Assert.True(MainShellWindow.IsStartupDialogShowing);
+        ClickLockdown(shell);
+        Assert.Empty(opened.OfType<FeatureIntroPopup>());
+        Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+
+        MainShellWindow.IsStartupDialogShowing = true;
+        welcome.Close();
+        Assert.True(MainShellWindow.IsStartupDialogShowing); // caller's wizard/offer still owns it
+        MainShellWindow.IsStartupDialogShowing = false;
+        ClickLockdown(shell);
+        Assert.Equal(FeatureIntros.All["lockdown"].Title, CardTitle(opened));
+    }, "lockdown");
+
+    [Fact]
+    public Task LongLockdownCardKeepsItsDismissButtonReachable() => Run((opened, shell) =>
+    {
+        ClickLockdown(shell);
+        var popup = opened.OfType<FeatureIntroPopup>().Single();
+        var scroll = popup.FindControl<ScrollViewer>("CardScroll");
+        Assert.NotNull(scroll);
+        // The WPF card scrolls its five long bullets instead of clipping its only exit action.
+        popup.SizeToContent = SizeToContent.Manual;
+        popup.Height = 400; // a constrained work area still leaves every action reachable
+        Dispatcher.UIThread.RunJobs();
+        popup.UpdateLayout();
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+        scroll.ScrollToEnd();
+        popup.UpdateLayout();
+        Assert.True(scroll.Offset.Y > 0);
+        var dismiss = popup.FindControl<Button>("BtnDismiss")!;
+        var at = dismiss.TranslatePoint(new Point(0, 0), scroll)!.Value;
+        Assert.InRange(at.Y, 0, scroll.Bounds.Height - dismiss.Bounds.Height);
+    }, "lockdown");
+
 }
