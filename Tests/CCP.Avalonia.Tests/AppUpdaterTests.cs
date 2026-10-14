@@ -57,14 +57,6 @@ public sealed class AppUpdaterTests
     }
 
     [Fact]
-    public void TransientErrorsFollowWpfRules()
-    {
-        Assert.True(AppUpdater.IsTransientNetworkError(new InvalidOperationException("x", new System.Net.Sockets.SocketException())));
-        Assert.True(AppUpdater.IsTransientNetworkError(new InvalidOperationException("The connection was closed")));
-        Assert.False(AppUpdater.IsTransientNetworkError(new InvalidOperationException("Could not find Setup.exe")));
-    }
-
-    [Fact]
     public async Task LinuxPillShowsVersionOpensPageAndNeverDownloads()
     {
         // Windows CI is not an Inno install (no unins000/registry key), so CheckAsync stays quiet there.

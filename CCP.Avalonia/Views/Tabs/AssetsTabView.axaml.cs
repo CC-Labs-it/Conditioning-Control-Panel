@@ -36,8 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
-    /// ponytail: not on this head yet - the Content Packs tree node and pack cards (no
-    /// ContentPackService here; the section is hidden in WPF too), video thumbnails (WPF uses the
+    /// ponytail: not on this head yet - the Content Packs tree node and pack cards (ContentPackService
+    /// is seeded but builds no cards; the section is hidden in WPF too), video thumbnails (WPF uses the
     /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
     /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
     /// </summary>
@@ -703,7 +703,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     }
 
     /// <summary>
-    /// The hidden packs strip's placeholder cards (ContentPackService is not on this head; the
+    /// The hidden packs strip's placeholder cards (no pack cards are built from the seeded ContentPackService; the
     /// section is IsVisible="False" in WPF too). The asset browser and presets are filled from
     /// code-behind, not from here.
     /// </summary>
