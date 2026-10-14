@@ -140,7 +140,7 @@ public sealed class LocalProvidersTests
     public Task EngineRoomPicksTestsAndClearsTheLocalProvider() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = FreshSettings();
@@ -185,7 +185,7 @@ public sealed class LocalProvidersTests
     public Task ClearConversationForgetsTheThreadAndKeepsMemoryOnlyWhenConfirmed() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = FreshSettings();
