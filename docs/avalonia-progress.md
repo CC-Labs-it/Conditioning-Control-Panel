@@ -2256,3 +2256,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/suite-memory: +112
 - CCP.Avalonia.Tests shard peak RSS 8.4-12.1 GB -> 1.6-2.9 GB: BeatLoop stops on window close (even parked), Opened-time static subscriptions no longer re-added on each Hide/Show, GC after window tests.
 - Regression tests: ClosedShellsReleaseMemory with a tray round trip; AnAmbientLoopDoesNotKeepItsClosedWindow (ticking + parked).
+
+## avalonia-port/possession-head-a: +770
+- Possession head A: transform lease, off-limits tree and 4 transform effects (nudge/drift/breathe/wobble) on the Core deck, with a 45 s cooldown and a panic surface that restores every touched control.
+- 5 headless tests (hidden-parent and stepped-clock cooldown fail-proven). Controller and Exclude tags come in head-b; row stays stub.
