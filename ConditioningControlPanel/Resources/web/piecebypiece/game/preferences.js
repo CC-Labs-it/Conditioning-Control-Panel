@@ -42,6 +42,8 @@ export function presentation() {
     replays: saved.replays !== false,
     // The clockwork rise when a new game's board comes up (board/intro.js), on by default.
     boardIntro: saved.boardIntro !== false,
+    // The players' floating name tags over the board (board/name-tags.js), on by default, seats and stands alike.
+    nameTags: saved.nameTags !== false,
     // The card the page opens on (ui/open-intro.js), on by default; read once, when the page opens.
     openIntro: saved.openIntro !== false,
     turnCard: ['slam', 'ribbon', 'tag'].includes(saved.turnCard) ? saved.turnCard : 'slam',
@@ -77,6 +79,7 @@ export function setPresentation(patch) {
   if (typeof patch.followCam === 'boolean') saved.followCam = patch.followCam;
   if (typeof patch.replays === 'boolean') saved.replays = patch.replays;
   if (typeof patch.boardIntro === 'boolean') saved.boardIntro = patch.boardIntro;
+  if (typeof patch.nameTags === 'boolean') saved.nameTags = patch.nameTags;
   if (typeof patch.openIntro === 'boolean') saved.openIntro = patch.openIntro;
   if (['slam', 'ribbon', 'tag'].includes(patch.turnCard)) saved.turnCard = patch.turnCard;
   if (typeof patch.invertX === 'boolean') saved.invertX = patch.invertX;
