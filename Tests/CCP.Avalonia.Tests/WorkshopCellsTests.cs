@@ -40,6 +40,7 @@ public sealed class WorkshopCellsTests
     private static T OpenCell<T>(MainShellWindow shell) where T : Control
     {
         shell.Show();
+        CollapsedRoom.Show(shell);   // the drawer itself (the pages' adoption is CompanionPagesTests)
         shell.ShowTab("companion");
         Dispatcher.UIThread.RunJobs();
         shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal();

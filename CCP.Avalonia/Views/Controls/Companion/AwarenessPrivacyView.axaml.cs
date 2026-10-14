@@ -47,7 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AvaloniaXamlLoader.Load(this);
             DataContext = new AwarenessPrivacyViewModel(
                 () => TopLevel.GetTopLevel(this) as MainShellWindow,
-                () => this.FindAncestorOfType<CompanionRoomView>()?.RevealWorkshop(CompanionRoomAnchors.WorkshopAwarenessCell));
+                // Under v2 the card sits on the Awareness tab, not in the (collapsed) room.
+                () => (TopLevel.GetTopLevel(this) as MainShellWindow)?.RoomView()?.RevealWorkshop(CompanionRoomAnchors.WorkshopAwarenessCell));
             Loaded += OnLoaded;
             DataContextChanged += (_, _) =>
             {
@@ -75,6 +76,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             get => DataContext as AwarenessPrivacyViewModel;
             set => DataContext = value;
+        }
+
+        // WPF AwarenessPrivacyView IsVisibleChanged: the refresh and the blink follow the card's own
+        // effective visibility, wherever it is hosted (the Awareness tab under v2).
+        private IDisposable? _visibilityWatch;
+        protected override void OnAttachedToVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            _visibilityWatch?.Dispose();
+            _visibilityWatch = ConditioningControlPanel.Avalonia.Controls.EffectiveVisibility.Watch(this, () =>
+            {
+                if (IsEffectivelyVisible) { StartRefresh(); SyncCursorBlink(); }
+                else { StopRefresh(); StopCursorBlink(); }
+            });
+        }
+
+        protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
+        {
+            _visibilityWatch?.Dispose();
+            _visibilityWatch = null;
+            base.OnDetachedFromVisualTree(e);
         }
 
         private void OnLoaded(object? sender, RoutedEventArgs e)

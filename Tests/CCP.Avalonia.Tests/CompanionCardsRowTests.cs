@@ -49,6 +49,7 @@ public sealed class CompanionCardsRowTests
         try
         {
             shell.Show();
+            CollapsedRoom.Show(shell);   // the hero + attention cards have no v2 page
             if (shell.CurrentTab == "companion") shell.ShowTab("achievements");
             Dispatcher.UIThread.RunJobs();
             // never swept while the Companion tab has not been shown

@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PermissionsPage">
+    <!-- PORTED from ConditioningControlPanel/Views/Controls/Companion/Pages/PermissionsPage.xaml (5681c132a):
+         the one list of what the AI may do (the room's live AiPermissionsGrid). Takeover keeps its own
+         effect list and points here; this page points back to it. The inline Hyperlink is a Button
+         in an InlineUIContainer (Avalonia has no inline Hyperlink), keyboard-reachable (P17). -->
+    <UserControl.Resources>
+        <ControlTheme x:Key="InlineLink" TargetType="Button">
+            <Setter Property="Foreground" Value="#FF69B4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"/>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+        <StackPanel Margin="24,16,24,24" MaxWidth="1240" HorizontalAlignment="Stretch">
+            <TextBlock Theme="{StaticResource Type.PageTitle}" Text="{loc:Str nav_tab_permissions}"/>
+            <TextBlock Theme="{StaticResource Type.PageSubtitle}" Text="{loc:Str companion_page_permissions_intro}" TextWrapping="Wrap" Margin="0,4,0,16"/>
+            <ContentControl x:Name="PermissionsHost" Focusable="False"/>
+            <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,14,0,0">
+                <Run Text="{loc:Str companion_page_permissions_takeover}"/><InlineUIContainer BaselineAlignment="Baseline"><Button x:Name="LinkOpenTakeover" Theme="{StaticResource InlineLink}" Click="OpenTakeover_Click"><TextBlock FontSize="12" Text="{loc:Str companion_page_open_takeover}"/></Button></InlineUIContainer>
+            </TextBlock>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

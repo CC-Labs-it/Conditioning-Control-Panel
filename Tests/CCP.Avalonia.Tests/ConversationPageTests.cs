@@ -87,7 +87,7 @@ public sealed class ConversationPageTests
             Dispatcher.UIThread.RunJobs();
             shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
-            var page = shell.GetLogicalDescendants().OfType<CompanionRoomView>().Single().FindControl<ConversationPage>("ConversationZone")!;
+            var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
 
             // The page is a projection of the brain's one conversation: chat turns only, in order.
             Assert.Equal(new[] { "hello there", "hi, cutie" }, page.Vm.Turns.Select(t => t.Text));

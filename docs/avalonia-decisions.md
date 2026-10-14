@@ -1133,3 +1133,12 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   conditioning minutes (`FeatureDayLogService.FirstConditioningDay`), and null while no such day exists. No new state:
   the earliest `cm > 0` entry is the tracker's first run. Same test: a day before the first log day is null and not
   charged (fail-first: red with `Expected null, Actual 0` before the guard).
+## 2026-10-14: Companion v2 room collapse and the Companion pages (avalonia-port/companion-v2-pages-b)
+- Supersedes the 2026-10-10 choice B above: the v2 ConversationPage is mounted now, so the head follows WPF
+  (CompanionTabView.xaml.cs:36-40): the room is collapsed, and Personality / Permissions / Links are pages that adopt the
+  live zones (`CompanionPageHost.Adopt`, no give-back; AiPage changed to match).
+- The tab owns the visibility edge (`CompanionTabView`, EffectiveVisibility); the collapsed room's own clocks stay parked,
+  as in WPF. The Awareness tab adopts the room's privacy card + Workshop Awareness cell (WPF HostCompanionPrivacy) on
+  ShowTab("awareness") rather than at Loaded; the card follows its own effective visibility (WPF IsVisibleChanged).
+- Zone tests for surfaces v2 leaves only in the room (hero, attention, roster, drawer) show the room via
+  `Tests/CCP.Avalonia.Tests/CollapsedRoom.cs`; the v2 layout itself is `CompanionPagesTests`.

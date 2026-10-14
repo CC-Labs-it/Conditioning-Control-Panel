@@ -32,7 +32,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             SizeChanged += (_, e) => { if (e.WidthChanged) ApplyShelfLayout(e.NewSize.Width); };
             // WPF CompanionRuntimeContext: the hero reaches the shell and this navigator through us.
             if (HeroZone.ViewModel is { } hero) hero.Host = this;
-            ConversationZone.Room = this;
             // Z2/Z3 over the brain (WPF CompanionRoomVm builds ChatThresholdRuntimeVm / MemoryDiaryRuntimeVm).
             ChatZone.ViewModel = ChatThresholdViewModel.CreateLive();
             MemoryZone.ViewModel = MemoryDiaryViewModel.CreateLive();
@@ -70,6 +69,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// watches the chain by hand: our own flag plus every visual ancestor's, re-reading
         /// <see cref="Visual.IsEffectivelyVisible"/> on any of them. Rebuilt on attach because the
         /// chain does not exist before it and can differ after a re-parent.
+        /// <para>Under v2 the tab collapses the room (CompanionTabView), so these clocks stay parked
+        /// as in WPF; the tab, not the room, raises the shell's visibility edge.</para>
         /// </summary>
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -98,17 +99,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 bool shown = _owner.IsEffectivelyVisible;
                 if (shown) _owner.ResumeClocks();
                 else _owner.ParkClocks();
-                // WPF CompanionTabView.IsVisibleChanged -> MainWindow.OnCompanionTabVisibilityChanged:
-                // raised on a real edge only (the chain reports every ancestor on subscribe).
-                if (shown != _owner._shown) { _owner._shown = shown; _owner.TabVisibilityChanged?.Invoke(_owner, shown); }
             }
         }
-
-        private bool _shown;
-
-        /// <summary>The page's effective visibility flipped (tab switch, tray hide). The tab
-        /// forwards it to the shell, as WPF's tab forwards IsVisibleChanged.</summary>
-        internal event EventHandler<bool>? TabVisibilityChanged;
 
         /// <summary>WPF MainWindow.Patreon.cs:1344 RestoreCompanionSectionStates: the two drawers'
         /// remembered open/closed state (keys "EngineRoom" / "Workshop"; both default closed).</summary>
@@ -156,7 +148,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             try
             {
-                ConversationZone.Resume();   // WPF ConversationPage IsVisibleChanged -> Vm.Resume
                 // WPF CompanionTabView.IsVisibleChanged -> CompanionRoom.Sync(): the hero re-reads
                 // what changed while the tab was hidden (level, mute, awareness, AI pill, mod art).
                 HeroZone.ApplyAvatarArt();
@@ -189,7 +180,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             try
             {
-                ConversationZone.Park();
                 HeroZone.StopAmbientLoop();
                 AwarenessZone.StopCursorBlink();
                 AwarenessZone.StopRefresh();
@@ -246,18 +236,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public void RevealEngineRoom() => EngineZone.ExpandAndReveal();
 
         /// <inheritdoc/>
-        public void RevealWorkshop(string? cellTitle = null) => WorkshopZone.ExpandAndReveal(cellTitle);
-
-        /// <summary>The Companion > Personality / Permissions zone pills (shell TabPanels): scroll
-        /// the room to the zone WPF's page hosts. Laid out first: the tab was hidden a moment ago.</summary>
-        internal void RevealPersonality() => RevealZone(PersonalityZone);
-        internal void RevealPermissions() => RevealZone(PermissionsZone);
-
-        private static void RevealZone(Control zone) => Dispatcher.UIThread.Post(() =>
+        public void RevealWorkshop(string? cellTitle = null)
         {
-            try { zone.UpdateLayout(); zone.BringIntoView(); }
-            catch (InvalidOperationException) { /* torn down mid-scroll */ }
-        }, DispatcherPriority.Normal);
+            // WPF CompanionRoomView.xaml.cs:274: under v2 the Awareness cell is on the Awareness tab.
+            if (cellTitle == CompanionRoomAnchors.WorkshopAwarenessCell && TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+            {
+                shell.ShowTab("awareness");
+                shell.Named<Tabs.AwarenessTabView>("AwarenessTab")?.RevealCompanionTuning(this);
+                return;
+            }
+            WorkshopZone.ExpandAndReveal(cellTitle);
+        }
 
         /// <inheritdoc/>
         /// <remarks>Scroll first, focus second, both deferred one turn at Normal priority — Loaded
