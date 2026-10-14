@@ -129,9 +129,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                 return false;
             }
-            panel.Hide();
-            panel.HideAvatarTube();
-            OpenFor(panel);
+            panel.FadeOutForLauncher(() =>
+            {
+                // Lockdown can begin during the fade: keep the panel as the live surface.
+                if (MainShellWindow.LockdownActive) return;
+                panel.Hide();
+                panel.HideAvatarTube();
+                OpenFor(panel);
+            });
             return true;
         }
 
@@ -235,7 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AfterExitBeat(() =>
             {
                 Hide();
-                panel.ShowFromTray();
+                panel.ShowFromLauncher();
                 try { then?.Invoke(panel); }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] step after OpenPanel failed"); }
             });
