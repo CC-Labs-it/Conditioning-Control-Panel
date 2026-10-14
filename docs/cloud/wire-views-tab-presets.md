@@ -33,7 +33,7 @@ Ledger row `views-tab-presets` goes from stub to wired. These are the items the 
   - `LoopbackOAuthTests.GoodState_OnEitherLoopback…("[::1]")`: the container has no IPv6 loopback.
   - `ContentPackStoreTests.Uninstall_WhenTheFolderCannotBeDeleted…`: running as root defeats the undeletable-folder setup.
 - `SessionRunner*` Core tests: 25 passed, 0 failed (the new `SessionRunnerCornerGifTests` has 6 facts plus a 7-case admission theory).
-- Avalonia headless, filtered on `CornerGif|PresetsTab|PresetsSessionCatalogue|SessionRunWire|StudioPresetsWire|CoreStandIn|PanicSurfaces|CatalogueShell|SessionIoTests|AssetSubmitWire|ProgramsRunLifecycle|Spiral|AmbientBeatLoops`: all passed. That includes the new `PresetsTabCornerGifWireTests` (2).
+- Avalonia headless, filtered on `CornerGif|PresetsTab|PresetsSessionCatalogue|SessionRunWire|StudioPresetsWire|CoreStandIn|PanicSurfaces|CatalogueShell|SessionIoTests|AssetSubmitWire|ProgramsRunLifecycle|Spiral|AmbientBeatLoops`: 75 passed, 0 failed. That includes the new `PresetsTabCornerGifWireTests` (2).
 - Fail-proven by mutation; each mutation turned a test red:
   - hover class removed;
   - sheen refresh removed;
