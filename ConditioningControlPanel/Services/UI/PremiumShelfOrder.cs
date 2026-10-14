@@ -22,17 +22,17 @@ namespace ConditioningControlPanel.Services.UI
     ///
     /// <para>The group comes from the roster's price tag (<c>ExclusiveFeature.Tier</c>), which
     /// agrees with the doors' own gates everywhere but one place: Graded Intake carries no tag
-    /// (its weekly pass is open to every account) while its unlimited runs are Prime
-    /// (<c>IntakePassService.IsPremium</c> = <c>HasLabAccess</c>, the same bar as
-    /// <c>TierGate.RequiresLab</c>). It shelves with Prime.</para>
+    /// (its weekly pass is open to every account) while its unlimited runs are Basic
+    /// (<c>IntakePassService.IsPremium</c> = <c>HasPremiumAccess</c>, owner 2026-10-14).
+    /// It shelves with Basic.</para>
     ///
     /// <para>Inside each group the doors this account can open come first, then the rest, each
     /// half in roster order.</para>
     /// </summary>
     public static class PremiumShelfOrder
     {
-        /// <summary>Untagged roster keys whose full use is sold as Prime.</summary>
-        private static readonly HashSet<string> UntaggedPrime = new(StringComparer.OrdinalIgnoreCase)
+        /// <summary>Untagged roster keys whose full use is sold as Basic.</summary>
+        private static readonly HashSet<string> UntaggedBasic = new(StringComparer.OrdinalIgnoreCase)
         {
             "gradedintake",
         };
@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Services.UI
         {
             1 => PremiumGroup.Basic,
             2 => PremiumGroup.Prime,
-            _ => UntaggedPrime.Contains(key ?? string.Empty) ? PremiumGroup.Prime : PremiumGroup.Free,
+            _ => UntaggedBasic.Contains(key ?? string.Empty) ? PremiumGroup.Basic : PremiumGroup.Free,
         };
 
         /// <summary>The roster as shelves: Basic, Prime, Free (empty ones left out); open doors

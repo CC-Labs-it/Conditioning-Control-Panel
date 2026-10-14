@@ -485,12 +485,13 @@ public sealed class VaultGateDialog : Window
     {
         "vaultgate_basic_1", "vaultgate_basic_2", "vaultgate_basic_3", "vaultgate_basic_4",
         "vaultgate_basic_5", "vaultgate_basic_6", "vaultgate_basic_7", "vaultgate_basic_8",
+        "vaultgate_basic_9",
     };
 
     private static readonly string[] PrimePerks =
     {
         "vaultgate_prime_1", "vaultgate_prime_2", "vaultgate_prime_3", "vaultgate_prime_4",
-        "vaultgate_prime_5", "vaultgate_prime_6", "vaultgate_prime_7",
+        "vaultgate_prime_6", "vaultgate_prime_7",
     };
 
     /// <summary>The tier's header line and its bullets: a small dot per row, tight spacing, so

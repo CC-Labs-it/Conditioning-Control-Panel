@@ -172,15 +172,15 @@ namespace ConditioningControlPanel
                     {
                         // Free and already ran this week - the upsell is the honest answer, but SAY
                         // it. The button opens the priced vault card (not Settings · Account): it
-                        // names the tier, the price and the checkout. Tier 2 because unlimited runs
-                        // are HasLabAccess today (IntakePassService.IsPremium); keep the two equal.
+                        // names the tier, the price and the checkout. Tier 1 because unlimited runs
+                        // are HasPremiumAccess (IntakePassService.IsPremium); keep the two equal.
                         var days = Services.IntakePassService.DaysUntilNextPass;
                         var body = days == 1
                             ? Loc.Get("intake_gate_spent_body_one_day")
                             : Loc.GetF("intake_gate_spent_body", days);
                         App.Notifications?.Show(body, Services.NotificationType.Warning,
                             TimeSpan.FromSeconds(8), Loc.Get("intake_gate_spent_cta"),
-                            () => OpenPricedCard("gradedintake", 2));
+                            () => OpenPricedCard("gradedintake", 1));
                     }
                     return;
                 }
@@ -351,12 +351,12 @@ namespace ConditioningControlPanel
             try
             {
                 // Fall back to the pre-pass behaviour if the service somehow never came up:
-                // tier 2 keeps its unlocked page, and everyone else gets the closed door.
+                // a paid tier keeps its unlocked page, and everyone else gets the closed door.
                 // "Spent" rather than "NeedsLogin" for the fallback deliberately - it matches
                 // IntakePassService's own fail-closed default, so a broken service never shows
                 // a signed-in user a sign-in prompt they can't act on.
                 var state = App.IntakePass?.State
-                            ?? (App.Patreon?.HasLabAccess == true
+                            ?? (App.Patreon?.HasPremiumAccess == true
                                 ? Services.IntakePassState.Premium
                                 : Services.IntakePassState.Spent);
 
