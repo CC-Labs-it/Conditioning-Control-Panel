@@ -181,9 +181,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnWebcamSettingsChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName?.StartsWith("Webcam", StringComparison.Ordinal) == true)
-                Dispatcher.UIThread.Post(RefreshWebcamColumn);
+            // One revoke sets ~6 Webcam* settings; coalesce them into a single refresh.
+            if (e.PropertyName?.StartsWith("Webcam", StringComparison.Ordinal) == true && !_webcamRefreshQueued)
+            {
+                _webcamRefreshQueued = true;
+                Dispatcher.UIThread.Post(() => { _webcamRefreshQueued = false; RefreshWebcamColumn(); });
+            }
         }
+        private bool _webcamRefreshQueued;
 
         internal void RefreshWebcamColumn()
         {
