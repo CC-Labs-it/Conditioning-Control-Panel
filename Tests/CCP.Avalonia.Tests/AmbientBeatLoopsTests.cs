@@ -68,7 +68,7 @@ public sealed class AmbientBeatLoopsTests
     {
         "Controls/HoverBubbleBar.cs", "Controls/PremiumGateFx.cs", "Views/Chaos/ChaosHudWindow.axaml.cs",
         "Views/Chaos/ChaosOverlayWindow.axaml.cs", "Views/Chaos/ChaosSlotPickerWindow.axaml.cs",
-        "Views/Controls/DailyQuestCard.axaml.cs", "Views/Controls/EmiDock.axaml.cs",
+        "Views/Controls/DailyQuestCard.axaml.cs",
         "Views/Dialogs/AwarenessPresetDetailDialog.axaml.cs", "Views/Dialogs/ColorEditorDialog.axaml.cs",
         "Views/Dialogs/TubeFitDialog.axaml.cs", "Views/Dialogs/WardrobeEditorDialog.axaml.cs",
         "Views/Features/FeatureCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
@@ -89,7 +89,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Chaos/ChaosSlotPickerWindow.axaml", "Views/Controls/AttentionCheckControl.axaml",
         "Views/Controls/Companion/ChatThresholdView.axaml", "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/Companion/MakeHerYoursView.axaml", "Views/Controls/Companion/RelationshipConstellation.axaml",
-        "Views/Controls/Companion/Themes/CompanionTheme.axaml", "Views/Controls/DailyQuestCard.axaml", "Views/Controls/EmiDock.axaml",
+        "Views/Controls/Companion/Themes/CompanionTheme.axaml", "Views/Controls/DailyQuestCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml", "Views/Dialogs/AttentionTargetEditorDialog.axaml",
         "Views/Dialogs/ProfilePrivacyDialog.axaml", "Views/Dialogs/RoadmapStepPopup.axaml",
         "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml", "Views/Tabs/AchievementsTabView.axaml", "Views/Tabs/ChasterTabView.axaml",

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -67,7 +68,7 @@ public sealed class EmiDockParityTests
     });
 
     [Fact]
-    public Task KnockAnimatesVisualGlowAndUnloadRestoresRestingRing() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task KnockBuildsWpfPulseTimelinesAndUnloadRestoresRestingRing() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -83,23 +84,31 @@ public sealed class EmiDockParityTests
             var ring = dock.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Ring")!;
             Assert.Null(ring.Effect);
             dock.StartKnock();
-            for (int i = 0; i < 15; i++)
+            // No clock stepping: Avalonia 12 keeps IClock internal (P08), so read the timelines.
+            Assert.True(dock.IsKnocking);
+            foreach (var anim in new[] { dock.KnockRing!, dock.KnockGlow! })
             {
-                await Task.Delay(20);
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(TimeSpan.FromSeconds(2), anim.Duration);
+                Assert.Equal(new global::Avalonia.Animation.IterationCount(3), anim.IterationCount);
+                Assert.Equal(new[] { 0.0, 0.18, 0.55, 1.0 }, anim.Children.Select(f => f.Cue.CueValue));
             }
-            Assert.True(glow.Opacity > 0);
+            var peak = dock.KnockGlow!.Children[1].Setters.Cast<global::Avalonia.Styling.Setter>().Single();
+            Assert.Equal(Visual.OpacityProperty, peak.Property);
+            Assert.Equal(0.95, peak.Value);
+            Assert.Equal(3.2, dock.KnockRing!.Children[1].Setters.Cast<global::Avalonia.Styling.Setter>().Single(x => x.Property == global::Avalonia.Controls.Shapes.Shape.StrokeThicknessProperty).Value);
+            Assert.Equal(0.0, dock.KnockGlow.Children[2].Setters.Cast<global::Avalonia.Styling.Setter>().Single().Value);
             Assert.Equal("0_0", dock.FindControl<EmiFace>("MiniFace")!.Face);
             dock.Refresh(true);
-            Assert.True(glow.Opacity > 0); // arrival does not kill the discovery pulse
+            Assert.True(dock.IsKnocking); // arrival does not kill the discovery pulse
             host.Content = null;
             Dispatcher.UIThread.RunJobs();
+            Assert.False(dock.IsKnocking);
+            Assert.Null(dock.KnockGlow);
             Assert.Equal(0, glow.Opacity);
             Assert.Equal(2, ring.StrokeThickness);
             Assert.Equal(Color.Parse("#FF69B4"), ((SolidColorBrush)ring.Stroke!).Color);
         }
         finally { host.Close(); }
+        return Task.CompletedTask;
     });
-
 }
