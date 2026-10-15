@@ -85,13 +85,13 @@ FIXES
 EVERYTHING ELSE
 every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 notes on the release page.";
 
-        private const string GitHubOwner = "CodeBambi";
-        private const string GitHubRepo = "Conditioning-Control-Panel---CSharp-WPF";
+        private const string GitHubOwner = "CC-Labs-it";
+        private const string GitHubRepo = "Conditioning-Control-Panel";
 
         /// <summary>
         /// Manual-download fallback shown whenever an automatic install could not complete.
         /// </summary>
-        public const string ReleasesPageUrl = "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest";
+        public const string ReleasesPageUrl = "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest";
 
         /// <summary>
         /// How long a skip marker suppresses re-offering the same version. The marker is written

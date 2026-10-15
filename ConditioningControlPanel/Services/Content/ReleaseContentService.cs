@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Services
             AudioPackIds.Concat(ModPackIds).ToArray();
 
         private const string ReleaseBaseUrlFormat =
-            "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/download/{0}/";
+            "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/download/{0}/";
         private const string ManifestFileName = "content-manifest.json";
 
         /// <summary>Relative path (under the app's base dir) whose presence means "full install — nothing to fetch".</summary>
