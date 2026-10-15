@@ -87,7 +87,8 @@ namespace ConditioningControlPanel.Services
         // =========================================================================================
 
         /// <summary>The per-file selection key in DisabledAssetPaths (WPF: <c>pack:{id}/{OriginalName}</c>).</summary>
-        public static string SelectionKey(string packId, PackFileEntry file) => $"pack:{packId}/{file.OriginalName}";
+        public static string SelectionKey(string packId, PackFileEntry file) => SelectionKey(packId, file.OriginalName);
+        public static string SelectionKey(string packId, string originalName) => $"pack:{packId}/{originalName}";
 
         /// <summary>
         /// The SOURCE identity of a pack file, stable across decrypts (WPF FlashService.PackEntryKey:

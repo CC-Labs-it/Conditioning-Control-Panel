@@ -249,7 +249,8 @@ public sealed class AssetsTabTests
             Files = new List<PackFileEntry>
             {
                 new() { OriginalName = "a.png", ObfuscatedName = "image.enc", FileType = "image", Extension = ".png" },
-                new() { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" }
+                new() { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" },
+                new() { OriginalName = "u.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" }
             }
         };
         PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(dir, ".manifest.enc"));
@@ -263,7 +264,7 @@ public sealed class AssetsTabTests
             var pack = Assert.Single(packs.Children);
             Assert.Equal("library-pack", pack.Name); // WPF's built-in name lookup falls back to the id
             Assert.Equal(new[] { "images", "videos" }, pack.Children.Select(n => n.Name));
-            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 4, 3), tab.TxtAssetCounts.Text);
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 4, 4), tab.TxtAssetCounts.Text);
             packs.IsExpanded = pack.IsExpanded = true;
             tab.AssetTreeView.SelectedItem = pack.Children[0];
             await tab.ThumbnailLoads;
@@ -284,7 +285,7 @@ public sealed class AssetsTabTests
             tab.ToggleFile(image);
             Assert.Empty(store.GetAllActivePackImages());
             Assert.Contains(image.RelativePath, s.DisabledAssetPaths);
-            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 3, 3), tab.TxtAssetCounts.Text);
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 3, 4), tab.TxtAssetCounts.Text);
             tab.RefreshAssetTree();
             await tab.ThumbnailLoads;
             Assert.False(Assert.Single(tab.CurrentFolderFiles).IsChecked);
@@ -296,6 +297,10 @@ public sealed class AssetsTabTests
             PressSpace(shell, cb);
             Assert.Empty(store.GetAllActivePackVideos());
             Assert.Contains("pack:library-pack/v.mp4", s.DisabledAssetPaths);
+            tab.AssetTreeView.SelectedItem = video;
+            await tab.ThumbnailLoads;
+            // WPF MainWindow.Assets.cs:724 sorts pack files by name, not manifest order.
+            Assert.Equal(new[] { "u.mp4", "v.mp4" }, tab.CurrentFolderFiles.Select(f => f.FullPath));
             store.DeactivatePack("library-pack");
             tab.RefreshAssetTree();
             Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);

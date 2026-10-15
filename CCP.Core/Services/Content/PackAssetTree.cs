@@ -11,7 +11,7 @@ public static class PackAssetTree
     {
         foreach (var name in names)
         {
-            var key = $"pack:{packId}/{name}";
+            var key = ContentPackStore.SelectionKey(packId, name);
             if (enabled) disabled.Remove(key);
             else disabled.Add(key);
         }
@@ -27,7 +27,7 @@ public static class PackAssetTree
         {
             var matching = entries.Where(f => f.Type == type).ToList();
             if (matching.Count == 0) continue;
-            var count = matching.Count(f => !disabled.Contains($"pack:{packId}/{f.Name}"));
+            var count = matching.Count(f => !disabled.Contains(ContentPackStore.SelectionKey(packId, f.Name)));
             pack.Children.Add(new AssetTreeItem
             {
                 Name = folder, IsPackFolder = true, PackId = packId, PackFileType = type,

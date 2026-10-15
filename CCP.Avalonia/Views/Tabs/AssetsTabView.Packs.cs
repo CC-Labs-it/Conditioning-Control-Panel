@@ -48,6 +48,7 @@ public partial class AssetsTabView
         _currentFolderFiles.Clear();
         var generation = ++_thumbGeneration;
         var files = ContentPackStore.Current?.GetPackFiles(folder.PackId!, folder.PackFileType) ?? new();
+        files = files.OrderBy(f => f.OriginalName).ToList();   // WPF MainWindow.Assets.cs:724
         ShowEmpty(files.Count == 0 ? "label_no_files_in_this_pack_folder" : null);
         var loads = new List<Task>();
         foreach (var file in files)
