@@ -895,15 +895,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             var cards = EmiBookCards.All;
             if (_index < 0 || _index >= cards.Count) return;
             var card = cards[_index];
-            if (card.Target != null) { EmiTargets.Find(card.Target)?.Open(); return; }
-            if (card.Tour == null || !TourReady()) return;
-            if (!Enum.TryParse<TutorialType>(card.Tour, out var type) || !Enum.IsDefined(type))
+            // WPF wraps the detour the same way (EmiBookWindow.xaml.cs:834); this head has no
+            // UI-thread exception handler, so a throw here would take the app down.
+            try
             {
-                Log.Warning("[EmiDesk] book card {Card} names an unknown tour {Tour}", card.Id, card.Tour);
-                return;
+                if (card.Target != null) { EmiTargets.Find(card.Target)?.Open(); return; }
+                if (card.Tour == null || !TourReady()) return;
+                if (!Enum.TryParse<TutorialType>(card.Tour, out var type) || !Enum.IsDefined(type))
+                {
+                    Log.Warning("[EmiDesk] book card {Card} names an unknown tour {Tour}", card.Id, card.Tour);
+                    return;
+                }
+                CloseBook();
+                CoreTutorial.Start(card.Tour);
             }
-            CloseBook();
-            CoreTutorial.Start(card.Tour);
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[EmiDesk] book detour failed for {Card}", card.Id);
+            }
             // ponytail: bookGo/bookTour moments need the desk's moment bus (wire-win-emi-book-b).
         }
 
