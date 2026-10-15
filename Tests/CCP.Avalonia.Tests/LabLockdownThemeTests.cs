@@ -106,4 +106,19 @@ public sealed class LabLockdownThemeTests
         Assert.Null(shell.LockdownFlash);
         Assert.False(shell.LockdownThemed);
     });
+
+    // Review P3: close while Lockdown is still ACTIVE, so the queued Refresh would re-theme a closed shell.
+    // The user's close is refused under Lockdown (Tray.cs OnClosing); only an OS/app shutdown gets through,
+    // which headless cannot raise, so the test stands in for it with the shutdown flag.
+    [Fact]
+    public void QueuedRefreshCannotThemeAShellClosedDuringLockdown() => Run((shell, ld) =>
+    {
+        ld.Activate(TimeSpan.FromMinutes(30));
+        typeof(MainShellWindow).GetField("_exitRequested",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(shell, true);
+        shell.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(shell.LockdownThemed);
+        Assert.Null(shell.LockdownFlash);
+    });
 }
