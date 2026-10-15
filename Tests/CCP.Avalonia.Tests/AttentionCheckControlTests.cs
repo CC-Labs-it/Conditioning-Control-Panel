@@ -45,7 +45,8 @@ public sealed class AttentionCheckControlTests
         Assert.DoesNotContain(visuals, visual => visual.Effect != null);
         Assert.Equal(2, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0)
             + visuals.OfType<Image>().Count(image => image.Name == "DotRingGlow"));
-        Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(control.FindControl<Image>("DotRingGlow")!.Source);
+        // Nothing is rasterized before attach (or SetProgress): the density is unknown until then.
+        Assert.Null(control.FindControl<Image>("DotRingGlow")!.Source);
         Assert.Same(group, control.FindControl<Image>("DotRingGlow")!.RenderTransform);
     });
 
