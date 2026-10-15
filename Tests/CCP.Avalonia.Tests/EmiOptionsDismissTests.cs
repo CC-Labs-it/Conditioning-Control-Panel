@@ -27,7 +27,7 @@ public sealed class EmiOptionsDismissTests
     }
 
     [Fact]
-    public Task EventClosesWithoutAPollAndDoesNotConsumePanelClicks() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task EventClosesWithoutAPollAndPanelClickDoesNotFold() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         using var logs = new LogCapture();
         Setup();
