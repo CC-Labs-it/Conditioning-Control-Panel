@@ -5071,7 +5071,7 @@ namespace ConditioningControlPanel
                             {
                                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                                 {
-                                    FileName = "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest",
+                                    FileName = "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest",
                                     UseShellExecute = true
                                 });
                             }
@@ -5118,7 +5118,7 @@ namespace ConditioningControlPanel
                         {
                             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                             {
-                                FileName = "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest",
+                                FileName = "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest",
                                 UseShellExecute = true
                             });
                         }

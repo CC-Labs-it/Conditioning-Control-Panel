@@ -15,7 +15,7 @@
 #define MyAppName "Conditioning Control Panel"
 #define MyAppVersion "7.1.9"
 #define MyAppPublisher "CodeBambi"
-#define MyAppURL "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF"
+#define MyAppURL "https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 #define MyAppExeName "ConditioningControlPanel.exe"
 #define MyAppDescription "A professional visual conditioning application with gamification features"
 
