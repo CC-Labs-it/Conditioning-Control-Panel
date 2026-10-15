@@ -197,6 +197,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The embed, for as long as this tab is the one on screen in the spiral state.</summary>
         private SpiralEmbedView? _embed;
 
+        /// <summary>WPF _embedGaveUp: one failure per tab ENTRY. Cleared on the way out (Suspend),
+        /// so the next entry earns a fresh attempt and a repaint in this one does not retry.</summary>
+        private bool _embedGaveUp;
+
         private SpiralRoomState _state = SpiralRoomState.Waiting;
 
         /// <summary>The fuse subscriptions are held only while the tab is on screen (P01).</summary>
@@ -327,6 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             HideSplash(fade: false);
             StopWaitingAmbience();
             TeardownEmbed();
+            _embedGaveUp = false;
         }
 
         // ============================== the state ==============================
@@ -361,7 +366,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
-        private void ApplyState(SpiralRoomState state)
+        internal void ApplyState(SpiralRoomState state)
         {
             _state = state;
 
@@ -402,6 +407,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     // canvas that had already been revealed, with no watchdog left to lift it.
                     if (_embed != null) break;
 
+                    // Same entry, embed already given up: the fallback stands until the next entry.
+                    if (_embedGaveUp) { ShowWaitingUnderSpiral(); break; }
+
                     _waitingPanel.IsVisible = false;
                     StopWaitingAmbience();
 
@@ -423,13 +431,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     }
                     else
                     {
-                        // NO ENGINE, NOTHING TO HIDE. The splash exists to cover a native surface
-                        // painting its own dark slab; WebHost with no engine paints a legible panel
-                        // naming the missing library instead, so raising a splash over it would be
-                        // covering the one honest thing on screen. Reveal at once.
+                        // NO ENGINE: no native surface to cover, so no splash. The embed fails
+                        // synchronously in Start and hands the room to the waiting panel.
                         HideSplash(fade: false);
                         EnsureEmbed();
-                        _embedHost.IsVisible = _embed != null;
+                        _embedHost.IsVisible = _embed is { HasFailed: false };
                     }
                     break;
 
@@ -560,6 +566,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ponytail: bridge wired here; the account descent feed still has no Avalonia publisher.
         private void EnsureEmbed()
         {
+            if (_embedGaveUp) { ShowWaitingUnderSpiral(); return; }
             if (_embed != null) return;
             if (!IsVisible) return;
 
@@ -575,9 +582,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _embedHost.IsVisible = true;
                     HideSplash(fade: true);
                 };
-                embed.Failed += (_, _) =>
+                embed.Failed += (_, reason) =>
                 {
                     if (_embed != embed) return;
+                    Log.Debug("[Spiral] room embed unavailable: {Reason}", reason);
+                    _embedGaveUp = true;
+                    TeardownEmbed();
                     ShowWaitingUnderSpiral();
                 };
                 // No server block exists on this head yet: never fabricate one from local XP.
@@ -590,6 +600,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // canvas's ?mode=map route has not deployed yet. That is why the fallback is a room
                 // rather than an apology.
                 Log.Debug("[Spiral] room embed could not start: {E}", ex.Message);
+                _embedGaveUp = true;
                 TeardownEmbed();
                 ShowWaitingUnderSpiral();
             }

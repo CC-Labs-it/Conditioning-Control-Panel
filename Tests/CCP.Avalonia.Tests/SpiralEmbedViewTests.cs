@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -91,6 +92,41 @@ public sealed class SpiralEmbedViewTests
         Assert.Null(view.Host);
         Assert.False(view.IsReady);
         Assert.Equal("https://app.cclabs.app/embed/spiral?mode=map", view.Url);
+        return Task.CompletedTask;
+    });
+
+    // WPF SpiralTabView.xaml.cs:881-887: a failed embed latches _embedGaveUp, tears down and shows the
+    // waiting room; a repaint in the same entry does not retry, the next entry does.
+    [Fact]
+    public Task TabFailedEmbed_ShowsWaitingRoom_NoEmptySlab_NoRetryUntilNextEntry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var tab = new global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView();
+        var window = new global::Avalonia.Controls.Window { Content = tab };
+        window.Show();
+        try
+        {
+            var embedHost = tab.FindControl<global::Avalonia.Controls.Grid>("EmbedHost")!;
+            var waiting = tab.FindControl<global::Avalonia.Controls.Border>("WaitingPanel")!;
+
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.True(waiting.IsVisible);
+            Assert.False(embedHost.IsVisible);
+            Assert.Empty(embedHost.Children);
+
+            // A repaint in the same entry keeps the waiting room and builds nothing.
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.True(waiting.IsVisible);
+            Assert.Empty(embedHost.Children);
+
+            // Leaving and coming back earns a fresh attempt (which fails again, headless has no engine).
+            tab.IsVisible = false;
+            tab.IsVisible = true;
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.True(waiting.IsVisible);
+            Assert.False(embedHost.IsVisible);
+        }
+        finally { window.Close(); }
         return Task.CompletedTask;
     });
 }
