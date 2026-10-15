@@ -349,6 +349,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (parsed.SequenceEqual(settings.KeywordTriggerApps, StringComparer.OrdinalIgnoreCase)) return;
             settings.KeywordTriggerApps = parsed;
             CoreSettings.Save();
+            Serilog.Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
+                parsed.Count, settings.KeywordTriggerAppScope);
             TxtAwarenessAppList.Text = string.Join(", ", parsed);
         }
 

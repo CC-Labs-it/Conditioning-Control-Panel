@@ -39,7 +39,8 @@ public sealed class AwarenessAppListEditorTests
             box.Focus();
             box.Text = " Chrome.exe; chrome, DISCORD.EXE, ; .exe ";
             Assert.Equal(new[] { "discord" }, s.KeywordTriggerApps); // typing must not narrow scope
-            box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+            Assert.True(box.IsFocused); // else the IsFocused=false check below proves nothing
+            host.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null); // real input path
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { "Chrome", "DISCORD" }, s.KeywordTriggerApps);
             Assert.Equal("Chrome, DISCORD", box.Text);
