@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -114,6 +115,25 @@ public sealed class TutorialAdvanceTests
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(index, CoreTutorial.CurrentStepIndex);
             Dispatcher.UIThread.RunJobs();
+            Assert.Equal(index + 1, CoreTutorial.CurrentStepIndex);
+        });
+    });
+
+    [Fact]
+    public Task PointerReleaseAdvancesEvenWhenTheButtonNeverRaisesClick() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var button = new Button { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
+        return WithCard("iht_play", button, (_, host, index) =>
+        {
+            // A press swallowed before the button means no Click; only the tunnel release handler
+            // (WPF PreviewMouseLeftButtonUp) can advance, as when a dialog closes on its own click.
+            host.AddHandler(InputElement.PointerPressedEvent, (_, e) => e.Handled = true, RoutingStrategies.Tunnel);
+            var clicked = false;
+            button.Click += (_, _) => clicked = true;
+            host.MouseDown(new Point(100, 100), MouseButton.Left);
+            host.MouseUp(new Point(100, 100), MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(clicked);
             Assert.Equal(index + 1, CoreTutorial.CurrentStepIndex);
         });
     });
