@@ -96,6 +96,11 @@ public sealed class RoadmapNodeTests
         using var hook = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => opened.Add(w));
         var host = new Window { Width = 1200, Height = 900, Content = new QuestsTabView() };
         var photo = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"roadmap-{System.Guid.NewGuid():N}.png");
+        var diary = MainShellWindow.Roadmap.DiaryFolderPath;
+        var diaryBefore = System.IO.Directory.GetFiles(diary).ToHashSet();
+        var progressFile = System.IO.Path.Combine(CorePaths.UserData, "roadmap.json");
+        var progressBefore = System.IO.File.Exists(progressFile) ? System.IO.File.ReadAllText(progressFile) : null;
+        string? stepId = null;
         try
         {
             host.Show();
@@ -104,7 +109,7 @@ public sealed class RoadmapNodeTests
             new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(4, 4)).Save(photo);
 
             var roadmap = MainShellWindow.Roadmap;
-            var stepId = RoadmapStepDefinition.GetStepsForTrack(RoadmapTrack.EmptyDoll).First(s => roadmap.IsStepActive(s.Id)).Id;
+            stepId = RoadmapStepDefinition.GetStepsForTrack(RoadmapTrack.EmptyDoll).First(s => roadmap.IsStepActive(s.Id)).Id;
             var stepDef = RoadmapStepDefinition.GetById(stepId)!;
             int before = roadmap.Progress.TotalStepsCompleted;
 
@@ -138,7 +143,16 @@ public sealed class RoadmapNodeTests
             host.Close();
             Dispatcher.UIThread.RunJobs();
             System.IO.File.Delete(photo);
+            // P02: SubmitPhoto completed a step on the static roadmap and copied the photo into
+            // roadmap_diary/; neither is covered by TestIsolation, so undo both here.
+            foreach (var f in System.IO.Directory.GetFiles(diary).Where(f => !diaryBefore.Contains(f)))
+                System.IO.File.Delete(f);
+            MainShellWindow.ResetRoadmapForTests();   // disposes (saves) first, so restore the file after it
+            if (progressBefore is null) System.IO.File.Delete(progressFile);
+            else System.IO.File.WriteAllText(progressFile, progressBefore);
         }
+        Assert.Equal(diaryBefore, System.IO.Directory.GetFiles(diary).ToHashSet());
+        Assert.False(MainShellWindow.Roadmap.IsStepCompleted(stepId!));   // the next read reloads the restored roadmap.json
     });
 
     [Fact]
