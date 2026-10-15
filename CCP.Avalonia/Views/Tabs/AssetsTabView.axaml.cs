@@ -307,6 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// and a folder switch drops the old folder's queued decodes.</summary>
         private async Task LoadThumbnailAsync(AssetThumbnailViewModel item, int generation)
         {
+            if (TryCachedPackThumb(item)) return;
             item.IsLoadingThumbnail = true;
             try
             {
@@ -326,8 +327,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 });
                 if (bmp != null) await Dispatcher.UIThread.InvokeAsync(() =>
                 {
+                    if (item.PackFile != null) CachePackThumb(item, bmp);
                     if (generation == _thumbGeneration) item.Thumbnail = bmp;
-                    else bmp.Dispose();
+                    else if (item.PackFile == null) bmp.Dispose();
                 });
             }
             finally
