@@ -78,6 +78,29 @@ public sealed class WorkshopBehaviorBrowserTests
     });
 
     [Fact]
+    public void ANavigationWhilePausedKeepsTheNewPageMutedEvenWhenTheSavedSettingIsUnmuted() => Run((cell, host) =>
+    {
+        CoreSettings.Current.BrowserVideoMuted = false;
+        var sent = new List<string>();
+        host.ScriptInvoker = script => { sent.Add(script); return Task.FromResult<string?>("muted"); };
+        var toggle = cell.FindControl<CheckBox>("ChkPauseBrowserCompanion")!;
+        toggle.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        sent.Clear();
+        var tab = host.FindLogicalAncestorOfType<SettingsTabView>()!;
+        tab.ApplyBrowserMute(); // what every NavigationCompleted runs
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(")(true)", Assert.Single(sent));
+        toggle.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+        sent.Clear();
+        tab.ApplyBrowserMute();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(")(false)", Assert.Single(sent)); // resumed: the saved preference rules again
+        Assert.False(CoreSettings.Current.BrowserVideoMuted);
+    });
+
+    [Fact]
     public void RevealDoesNotReplayThePauseCommandOrPersistIt() => Run((cell, host) =>
     {
         var sent = new List<string>();
