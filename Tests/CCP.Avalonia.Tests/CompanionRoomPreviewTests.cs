@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Views.Controls.Companion;
 using Xunit;
 
@@ -58,6 +59,56 @@ public sealed class CompanionRoomPreviewTests
             Assert.True(window.ShowVariant("default"));
             Assert.NotEmpty(chat.ViewModel.Turns);
             Assert.False(diary.ViewModel!.IsEmpty);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // WPF MockChatThresholdVm / MockAttentionGaugeVm copy per strip key, and the per-switch wiring.
+    [Fact]
+    public Task EachVariantSeatsWpfCopyAttentionAndWiring() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var window = Create();
+        try
+        {
+            var chat = window.RoomView.GetLogicalDescendants().OfType<ChatThresholdView>().Single();
+            var diary = window.RoomView.GetLogicalDescendants().OfType<MemoryDiaryView>().Single();
+            var gauge = window.RoomView.GetLogicalDescendants().OfType<AttentionGaugeView>().Single();
+            string lastHeard = Loc.GetF("companion_chat_last_heard_fmt", "2h ago");
+            var expected = new (string Key, string State, string Footer, string LastHeard, double Fraction)[]
+            {
+                ("default", "", Loc.Get("companion_chat_footer_remembers"), lastHeard, 0.72),
+                ("freeTier", "", "", "", 0.30),
+                ("dormant", Loc.Get("companion_chat_dormant_copy"), "", "", 0.72),
+                ("empty", "", Loc.Get("companion_chat_footer_first"), "", 0.72),
+                ("drained", "", Loc.Get("companion_chat_footer_remembers"), lastHeard, 0.0),
+                ("disabled", Loc.Get("companion_chat_disabled_copy"), "", "", 0.72),
+            };
+            foreach (var (key, state, footer, heard, fraction) in expected)
+            {
+                diary.ForgetConfirm.ArmCommand.Execute(null);
+                Assert.True(diary.ForgetConfirm.IsArmed, key);
+                Assert.True(window.ShowVariant(key));
+                var vm = chat.ViewModel!;
+                Assert.Equal(state, vm.StateCopy);
+                Assert.Equal(footer, vm.FooterCopy);
+                Assert.Equal(heard, vm.LastHeardCopy);
+                Assert.NotNull(vm.OpenEngineRoom); // Loaded never repeats on a strip click
+                Assert.True(vm.OpenEngineRoomCommand.CanExecute(null));
+                Assert.False(diary.ForgetConfirm.IsArmed, key);
+                window.RoomView.SyncBrain(); // a preview gauge never re-reads the live budget
+                var a = gauge.ViewModel!;
+                Assert.Equal(fraction, a.Fraction, 3);
+                Assert.Equal(Loc.Get(AttentionCopy.CopyKeyFor(fraction)), a.StateCopy);
+                Assert.Equal(AttentionCopy.ShowUpsell(fraction), a.ShowUpsell);
+            }
+            Assert.False(gauge.ViewModel!.IsSpent);
+            Assert.True(window.ShowVariant("drained"));
+            Assert.True(gauge.ViewModel!.IsSpent);
+            Assert.Equal(Loc.Get("companion_attention_detail_line_spent"), gauge.ViewModel.DetailLine);
+            Assert.True(window.ShowVariant("freeTier"));
+            Assert.True(gauge.ViewModel!.ShowUpsell);
+            Assert.Equal(Loc.Get("companion_attention_detail_line"), gauge.ViewModel.DetailLine);
         }
         finally { window.Close(); }
         return Task.CompletedTask;

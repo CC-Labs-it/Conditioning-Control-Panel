@@ -36,17 +36,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>…and the width it goes back to. Both sit clear of the hysteresis band.</summary>
         private const double WideWidth = 1240;
 
-        // ponytail: the WPF page composes eight mocks; this slice seats its chat and diary only.
-        // Factories preserve the WPF strip order and create a fresh exhibit on every switch.
-        private static readonly IReadOnlyDictionary<string, Func<(ChatThresholdViewModel Chat, MemoryDiaryViewModel Memory)>> Variants =
-            new Dictionary<string, Func<(ChatThresholdViewModel, MemoryDiaryViewModel)>>(StringComparer.OrdinalIgnoreCase)
+        // ponytail: the WPF page composes eight mocks; this slice seats chat, diary and attention.
+        // Factories preserve the WPF strip order (MockCompanionRoomVm.cs:94-161) and create a fresh
+        // exhibit on every switch. Attention: Plenty 0.72, Saving 0.30, Drained 0.0 + spent detail.
+        private static AttentionGaugeViewModel Plenty() => AttentionGaugeViewModel.CreatePreview(0.72);
+
+        private static readonly IReadOnlyDictionary<string, Func<(ChatThresholdViewModel Chat, MemoryDiaryViewModel Memory, AttentionGaugeViewModel Attention)>> Variants =
+            new Dictionary<string, Func<(ChatThresholdViewModel, MemoryDiaryViewModel, AttentionGaugeViewModel)>>(StringComparer.OrdinalIgnoreCase)
             {
-                ["default"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live), new()),
-                ["freeTier"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Locked), new()),
-                ["dormant"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Dormant), MemoryDiaryViewModel.PreviewDormant()),
-                ["empty"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live, fresh: true), MemoryDiaryViewModel.PreviewEmpty()),
-                ["drained"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live), new()),
-                ["disabled"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Disabled), new())
+                ["default"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live), new(), Plenty()),
+                ["freeTier"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Locked), new(), AttentionGaugeViewModel.CreatePreview(0.30)),
+                ["dormant"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Dormant), MemoryDiaryViewModel.PreviewDormant(), Plenty()),
+                ["empty"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live, fresh: true), MemoryDiaryViewModel.PreviewEmpty(), Plenty()),
+                ["drained"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live), new(), AttentionGaugeViewModel.CreatePreview(0.0, "companion_attention_detail_line_spent")),
+                ["disabled"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Disabled), new(), Plenty())
             };
 
         private readonly Dictionary<string, Button> _stateButtons = new(StringComparer.OrdinalIgnoreCase);
@@ -83,8 +86,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public bool ShowVariant(string? variantKey)
         {
             if (variantKey == null || !Variants.TryGetValue(variantKey, out var factory)) return false;
-            var (chat, memory) = factory();
-            Room.SetPreviewChatAndMemory(chat, memory);
+            var (chat, memory, attention) = factory();
+            Room.SetPreviewZones(chat, memory, attention);
             CurrentVariantKey = variantKey;
             CurrentLabel.Text = variantKey;
 

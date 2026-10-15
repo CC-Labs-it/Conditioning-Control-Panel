@@ -44,6 +44,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private double _fraction = 1.0;
         private int _remaining;
         private bool _unlimited;
+        private string? _previewDetailKey;
+
+        /// <summary>WPF MockAttentionGaugeVm (preview harness): a fixed fraction that Sync never re-reads.</summary>
+        internal static AttentionGaugeViewModel CreatePreview(double fraction, string detailKey = "companion_attention_detail_line") =>
+            new() { _previewDetailKey = detailKey, _fraction = FractionFor((int)Math.Round(fraction * 100), 100), _remaining = 0, _unlimited = false };
 
         public AttentionGaugeViewModel(Func<Windows.MainShellWindow?>? shell = null)
         {
@@ -67,7 +72,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string StateCopy => Loc.Get(AttentionCopy.CopyKeyFor(_fraction));
 
         /// <summary>Numeric detail, on demand only. Never says "tokens".</summary>
-        public string DetailLine => _unlimited
+        public string DetailLine => _previewDetailKey != null
+            ? Loc.Get(_previewDetailKey)
+            : _unlimited
             ? Loc.Get("companion_attention_detail_unlimited")
             : Loc.GetF("companion_attention_detail_fmt", _remaining);
 
@@ -76,12 +83,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public bool ShowFloorNote => AttentionCopy.ShowFloorNote(_fraction);
 
         /// <summary>WPF: not unlimited, under 40%, and no tier-1 AI access (App.Patreon.HasAiAccess).</summary>
-        public bool ShowUpsell => !_unlimited && AttentionCopy.ShowUpsell(_fraction) && !CoreAccount.HasPremiumAccess;
+        public bool ShowUpsell => !_unlimited && AttentionCopy.ShowUpsell(_fraction) && (_previewDetailKey != null || !CoreAccount.HasPremiumAccess);
         public string UpsellCopy => Loc.Get("companion_attention_upsell");
 
         /// <summary>Re-reads the request mirror (WPF AttentionGaugeRuntimeVm.Sync). Raises only on change.</summary>
         public void Sync()
         {
+            if (_previewDetailKey != null) return;
             try
             {
                 var (remaining, limit) = ReadBudget();
