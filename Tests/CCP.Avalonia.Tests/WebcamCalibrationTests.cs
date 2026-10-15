@@ -77,10 +77,13 @@ public sealed class WebcamCalibrationTests
         Assert.NotNull(Mouths());
         void PumpUntil(Func<bool> done)
         {
-            // Await the asynchronous TCS continuation without spending the synthetic gesture timeout.
-            var wall = System.Diagnostics.Stopwatch.StartNew();
-            while (!done() && wall.Elapsed < TimeSpan.FromSeconds(2))
-            { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+            // Await the asynchronous TCS continuation without spending the synthetic gesture timeout:
+            // run the dispatcher until a text change satisfies done() (a signal, not a sleep).
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            void Check(object? s, AvaloniaPropertyChangedEventArgs e) { if (done()) cts.Cancel(); }
+            prompt.PropertyChanged += Check; detail.PropertyChanged += Check;
+            try { if (!done()) Dispatcher.UIThread.MainLoop(cts.Token); }
+            finally { prompt.PropertyChanged -= Check; detail.PropertyChanged -= Check; }
             Assert.True(done());
         }
         Mouths()!.Invoke();
@@ -119,16 +122,18 @@ public sealed class WebcamCalibrationTests
 
     private sealed class IdleSource : IFrameSource
     {
+        public readonly ManualResetEventSlim Entered = new(), Release = new();
         public bool Open() => true;
-        // A live capture run, with no detected face allowed to race the synthetic landmark input.
-        public bool Read(Mat bgr) { Thread.Sleep(100); return false; }
+        // A live capture run, parked in Read so no detected face can race the synthetic landmark input (P67).
+        public bool Read(Mat bgr) { Entered.Set(); Release.Wait(); return false; }
         public void Dispose() { }
     }
 
     [Fact]
     public void Tracker_LiveCaptureDeliversMouthEventAndStopDropsQueuedDelivery() => WithTracker(start: false, (_, _) =>
     {
-        WebcamTracker.SourceFactory = () => new IdleSource();
+        var source = new IdleSource();
+        WebcamTracker.SourceFactory = () => source;
         var tracker = new WebcamTracker();
         var lm = Enumerable.Range(0, 468).Select(_ => new float[3]).ToArray();
         lm[308][0] = 1;
@@ -149,13 +154,15 @@ public sealed class WebcamCalibrationTests
         {
             Assert.True(tracker.Start(), tracker.LastError);
             Assert.True(tracker.IsRunning);
+            Assert.True(source.Entered.Wait(TimeSpan.FromSeconds(5))); // the capture thread is really parked
             Feed(0); Assert.Equal(0, events);
             Dispatcher.UIThread.RunJobs(); Assert.Equal(1, events);
             Feed(3000); Assert.Equal(1, events); // queued, not yet delivered
+            source.Release.Set();
             tracker.Stop();
             Dispatcher.UIThread.RunJobs(); Assert.Equal(1, events);
         }
-        finally { tracker.Stop(); }
+        finally { source.Release.Set(); tracker.Stop(); }
     });
 
     [Fact]
@@ -205,7 +212,7 @@ public sealed class WebcamCalibrationTests
     private static void WithTracker(bool start, Action<WebcamTracker, WebcamCalibrationData> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            AppBuilder.Configure<AvApp>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;

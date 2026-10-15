@@ -411,7 +411,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (r.Width < 16 || r.Height < 16) { NoFace(); return; }
             var lm = run.Mesh!.Detect(bgr, r);
             if (lm == null) { NoFace(); return; }
-            ProcessMouthLandmarks(lm, DateTime.UtcNow);
             if (_gaze.FaceSeen()) Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
             if (HeadPose(_gaze, lm, bgr.Width, bgr.Height) is { } pose)
                 Dispatcher.UIThread.Post(() => OnHeadPose?.Invoke(pose.Yaw, pose.Pitch));
@@ -426,6 +425,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (ev == BlinkEvent.Blink) Dispatcher.UIThread.Post(() => OnBlink?.Invoke());
                 else if (ev == BlinkEvent.EyesClosedLong) Dispatcher.UIThread.Post(() => OnEyesClosedLong?.Invoke());
             }
+            ProcessMouthLandmarks(lm, DateTime.UtcNow);   // WPF :1740 order: after blink, skipped when both irises are missing
             (double Dx, double Dy)? vl = left == null ? null
                 : _gaze.NormalizeIris(left.IrisCenter, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], rightEye: false);
             (double Dx, double Dy)? vr = right == null ? null

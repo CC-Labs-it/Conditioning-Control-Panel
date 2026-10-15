@@ -508,10 +508,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 await Delay(16);
                 if (token != _trailToken) return;
                 long now = Time.GetTimestamp();
-                _verifyTrail.History.Tick(Time.GetElapsedTime(last, now).TotalSeconds,
+                bool changed = _verifyTrail.History.Tick(Time.GetElapsedTime(last, now).TotalSeconds,
                     _trailPosition is { } p ? (p.X, p.Y) : null);
                 last = now;
-                _verifyTrail.InvalidateVisual();
+                if (changed) _verifyTrail.InvalidateVisual(); // an idle, empty trail costs no frame
             }
         }
 
