@@ -127,6 +127,29 @@ public sealed class QuestsDepthTests
     });
 
     [Fact]
+    public void ShellSectionWashRepaintsTheQuestsBands() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;   // restored by the isolation hook
+        global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? w = null;
+        try
+        {
+            w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            w.Show();
+            w.ShowTab("presets");   // a section other than Quests' own (You), which InitDepth paints
+            Dispatcher.UIThread.RunJobs();
+            var hue = NavStripRules.Accent(NavSections.SectionForTab("presets"));
+            Assert.NotEqual(NavStripRules.Accent(NavSections.You), hue);
+            var quests = w.Named<QuestsTabView>("QuestsTab")!;
+            var brush = Assert.IsType<LinearGradientBrush>(Named<Border>(quests, "DailySeatBand0").Background);
+            Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), DepthLaw.FloatAlpha)), brush.GradientStops[0].Color);
+        }
+        finally { w?.Close(); }
+    });
+
+    [Fact]
     public void BothPlanksPressReleaseAndStopTheirFiniteBeatOnDetach() => Run((v, w, clock) =>
     {
         foreach (var prefix in new[] { "WeeklyReroll", "FixStreak" })
