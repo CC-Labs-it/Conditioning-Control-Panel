@@ -28,16 +28,6 @@ namespace CCP.Avalonia.Tests;
 /// process (never a server), and the service's timer seam.</summary>
 public sealed class FriendsDrawerTests
 {
-    // Use the shipped font setup, including the bundled Fredoka face, when a test measures a drawer.
-    private static void EnsureHeadlessFonts()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-    }
-
     private const string State = """
         {"ok":true,"code":"CCP-ABCDE","me":{"activity":"panel","lock_day":null,"shared":false},
          "friends":[{"id":"u_on","name":"Mia","tier":0,"online":true,"activity":"session","lock_day":3,"last_seen":null,"squelched":false},
@@ -148,7 +138,9 @@ public sealed class FriendsDrawerTests
     [Fact]
     public Task ASendAnsweredAfterTheDrawerFoldsFliesOverTheChipsWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        EnsureHeadlessFonts();
+        if (global::Avalonia.Application.Current is null)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, wire) = Service();
         var chip = new FriendsRailChip(svc) { Width = 200, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom };
         var host = new Window { Width = 1000, Height = 700, Content = chip };
@@ -256,7 +248,10 @@ public sealed class FriendsDrawerTests
     [Fact]
     public Task AClickInsideTheDrawerKeepsItOpen() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        EnsureHeadlessFonts();
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         var (svc, _) = Service();
         var chip = new FriendsRailChip(svc);
         await svc.RefreshAsync();
@@ -323,7 +318,6 @@ public sealed class FriendsDrawerTests
     [InlineData(false)]
     public Task TheFriendsPageAsksOnceAndRespectsBothAnswers(bool share) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        EnsureHeadlessFonts();
         var (svc, _) = Service();
         var previousAsked = PresenceAsk.Asked;
         var previousMark = PresenceAsk.MarkAsked;
@@ -340,21 +334,6 @@ public sealed class FriendsDrawerTests
             Assert.True(ask.IsVisible);
             Assert.Contains(ask.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("friends_presence_ask"));
             Assert.Equal(1, Grid.GetRow(ask));
-            // Optional signed-in visual proof; the regular render-all sample is signed out.
-            if (share && Environment.GetEnvironmentVariable("CCP_TEST_PROOF_DIR") is { Length: > 0 } proofDir)
-            {
-                var proof = new Window { Width = 700, Height = 450, Content = page };
-                try
-                {
-                    proof.Show();
-                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                    System.IO.Directory.CreateDirectory(proofDir);
-                    using var frame = proof.CaptureRenderedFrame();
-                    frame!.Save(System.IO.Path.Combine(proofDir, "FriendsPresenceAsk.png"));
-                }
-                finally { proof.Content = null; proof.Close(); page.OnShown(); }
-            }
             Click(page, share ? "friends-presence-yes" : "friends-presence-no");
             Assert.True(asked);
             Assert.Equal(share, svc.PresenceShared);
@@ -410,7 +389,9 @@ public sealed class FriendsDrawerTests
     [Fact]
     public Task RemovingAFriendThrowsAFloatingWordOverTheWindowThatClosesItself() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        EnsureHeadlessFonts();
+        if (global::Avalonia.Application.Current is null)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsDrawer(svc);
         var host = new Window { Width = 1000, Height = 700, Content = d };
