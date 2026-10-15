@@ -20,8 +20,11 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public sealed class SectionStripChoosePressTests
+public sealed class SectionStripChoosePressTests : IDisposable
 {
+    // xUnit disposes each test's instance: put the process-wide glow clock back (PLAYBOOK P02).
+    public void Dispose() => NavGlow.Time = TimeProvider.System;
+
     private sealed class SteppedGlowClock : TimeProvider
     {
         public long Now = 1_000_000;
@@ -35,15 +38,10 @@ public sealed class SectionStripChoosePressTests
         // Holding its clock also proves removal is caused by detachment, rather than elapsed time.
         NavGlow.Time = new SteppedGlowClock();
         if (Application.Current is not null) return;
-        var options = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
-        // The shell's PremiumSpark requests Windows-only composite faces. Map those faces in
-        // this Linux headless host; navigation and transforms do not depend on those font metrics.
-        var mappings = new Dictionary<string, FontFamily>(options.FontFamilyMappings!);
-        mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
-        options.FontFamilyMappings = mappings;
-        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-            .With(options).UseSkia()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+        // The same bare builder the sibling shell tests use, so whichever class starts the app first
+        // the host is identical and the result does not depend on run order.
+        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithoutStarting();
     }
 
