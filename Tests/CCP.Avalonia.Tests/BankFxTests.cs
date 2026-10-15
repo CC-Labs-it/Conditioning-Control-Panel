@@ -72,10 +72,7 @@ public sealed class BankFxTests
         shell.BankLayer!.StepBankTokensForTests(0.15f);
         shell.BankLayer.Pause(); // freeze this frame while headless layout/render catches up
         using (var frame = shell.CaptureRenderedFrame())
-        {
             Assert.NotNull(frame);
-            frame!.Save("/tmp/ccp-bank-flight.png");
-        }
         shell.BankLayer.StepBankTokensForTests(2);
         shell.SettleXpOdometerForTests();
         Assert.False(shell.BankHolding);
