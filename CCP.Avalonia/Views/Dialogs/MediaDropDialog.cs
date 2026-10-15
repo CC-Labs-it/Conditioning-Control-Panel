@@ -29,7 +29,9 @@ internal sealed class MediaDropDialog : Window
         CanResize = false;
         WindowDecorations = WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brush("DarkerBgBrush");
+        // WPF AllowsTransparency + transparent window, so the rounded border's corners show through.
+        Background = Brushes.Transparent;
+        TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
         {
@@ -47,7 +49,7 @@ internal sealed class MediaDropDialog : Window
         AddButton(stack, "BtnCancel", "dlg_media_drop_cancel", MediaDropChoice.Cancel);
         Content = new Border
         {
-            BorderBrush = Brush("PinkBrush"), BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(12),
+            Background = Brush("DarkerBgBrush"), BorderBrush = Brush("PinkBrush"), BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(12),
             Padding = new Thickness(20), Child = stack,
         };
         KeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; Close(); } };
@@ -63,6 +65,7 @@ internal sealed class MediaDropDialog : Window
             BorderThickness = new Thickness(0), Padding = cancel ? new Thickness(8, 6) : new Thickness(20, 12),
             Margin = cancel ? new Thickness(0, 8, 0, 0) : new Thickness(0, 0, 0, 8),
             FontSize = cancel ? 11 : 13, FontWeight = cancel ? FontWeight.Normal : FontWeight.SemiBold,
+            Cursor = new Cursor(StandardCursorType.Hand),
             Opacity = cancel ? 0.7 : 1, HorizontalAlignment = cancel ? HorizontalAlignment.Center : HorizontalAlignment.Stretch,
         };
         NameScope.GetNameScope(this)!.Register(name, button);

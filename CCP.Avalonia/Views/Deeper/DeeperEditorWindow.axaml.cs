@@ -105,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// opening a duplicate.
         /// </summary>
         public string? LoadedFilePath => _filePath;
+        internal Enhancement Project => _enhancement;
 
         private bool _isDirty;
         private bool _suppressDirty;

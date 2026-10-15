@@ -151,8 +151,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Failed to open dropped media");
-                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_error"), ex.Message);
+                    // WPF MainWindow.DeeperTab.cs:612-615 (literal English there too).
+                    Log.Error(ex, "Failed to open Deeper player for {Path}", files[0]);
+                    await Dialogs.MessageDialog.ShowAsync(this, "Open Player failed",
+                        $"Couldn't open Deeper Player:\n\n{ex.GetType().Name}: {ex.Message}");
                 }
                 return;
             }
