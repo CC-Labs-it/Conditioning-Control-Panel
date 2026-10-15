@@ -5,9 +5,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -30,13 +33,11 @@ public sealed class CompanionPhraseEditorTests
         var dir = Path.Combine(root, "resources", "sounds", "flashes_audio");
         Directory.CreateDirectory(dir);
         CompanionPhraseEditorDialog? dialog = null;
-        var settings = CoreSettings.Current;
-        var savedDisabled = settings.DisabledPhraseIds.ToArray();
-        var savedRemoved = settings.RemovedPhraseIds.ToArray();
         try
         {
             File.WriteAllText(Path.Combine(dir, "Alpha.mp3"), "audio");
-            CoreSettings.ServiceProvider = () => null; // real rows, in-memory sandbox settings
+            var service = new SettingsService(); // real settings.json in the CCP_USERDATA_DIR sandbox
+            CoreSettings.ServiceProvider = () => service;
             CoreSettings.Current.DisabledPhraseIds.Clear();
             CoreSettings.Current.RemovedPhraseIds.Clear();
             CoreMods.ActiveModIdProvider = () => "test";
@@ -53,10 +54,17 @@ public sealed class CompanionPhraseEditorTests
             Click(dialog, "BtnDisableSelected");
             Assert.Contains("VoiceLine:Alpha", CoreSettings.Current.DisabledPhraseIds);
             Assert.DoesNotContain("Bark:test:hello", CoreSettings.Current.DisabledPhraseIds);
-            Click(dialog, "BtnEnableSelected");
-            Assert.DoesNotContain("VoiceLine:Alpha", CoreSettings.Current.DisabledPhraseIds);
+            Assert.True(service.HasPendingSave);  // the dialog asked to persist, not just mutate memory
+            service.SaveImmediate();
+            var reloaded = new SettingsService(); // from disk
+            Assert.Contains("VoiceLine:Alpha", reloaded.Current.DisabledPhraseIds);
+            CoreSettings.ServiceProvider = () => reloaded;
             dialog.Close();
             dialog = new CompanionPhraseEditorDialog(); // persisted model is re-read on open
+            Assert.False(Assert.Single(Rows(dialog), p => p.Id == "VoiceLine:Alpha").IsEnabled);
+            Click(dialog, "BtnSelectAll");
+            Click(dialog, "BtnEnableSelected");
+            Assert.DoesNotContain("VoiceLine:Alpha", CoreSettings.Current.DisabledPhraseIds);
             filter = dialog.FindControl<ComboBox>("CmbCategoryFilter")!;
             filter.SelectedItem = filter.Items.OfType<ComboBoxItem>().Single(x => Equals(x.Tag, "Bark"));
             Assert.Equal("Bark:test:hello", Assert.Single(Rows(dialog)).Id);
@@ -67,10 +75,6 @@ public sealed class CompanionPhraseEditorTests
         finally
         {
             dialog?.Close();
-            CoreSettings.Current.DisabledPhraseIds.Clear();
-            CoreSettings.Current.RemovedPhraseIds.Clear();
-            settings.DisabledPhraseIds.UnionWith(savedDisabled);
-            settings.RemovedPhraseIds.UnionWith(savedRemoved);
             (CoreSettings.ServiceProvider, CoreMods.ActiveModIdProvider,
                 CoreMods.ActiveModPackageProvider, CoreBark.AllLinesProvider) = old;
             Directory.Delete(root, true);
@@ -90,11 +94,17 @@ public sealed class CompanionPhraseEditorTests
         settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         settings.AwarenessModeEnabled = false;
         var shell = new MainShellWindow();
-        var cell = new WorkshopTriggersCell();
-        shell.Content = cell; // isolate the actual cell-to-shell forwarding from unrelated Home media
         try
         {
             shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            shell.ShowTab("companion"); // the user's path: Companion room -> Workshop -> Triggers cell
+            var room = shell.GetLogicalDescendants().OfType<CompanionRoomView>().Single();
+            var workshop = (WorkshopRuntimeVm)room.FindControl<WorkshopAccordion>("WorkshopZone")!.DataContext!;
+            workshop.IsExpanded = true;
+            Dispatcher.UIThread.RunJobs();
+            var cell = workshop.Parts.Triggers;
+            Assert.True(room.IsVisualAncestorOf(cell));
             cell.FindControl<Button>("BtnManagePhrases")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Single(shell.OwnedWindows.OfType<CompanionPhraseEditorDialog>());
@@ -115,7 +125,7 @@ public sealed class CompanionPhraseEditorTests
     {
         var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
         if (Application.Current == null)
-            builder.UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         else
             builder.AfterSetupCallback(builder); // a prior suite may have started headless without registering fonts
     }

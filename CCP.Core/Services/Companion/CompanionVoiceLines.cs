@@ -21,6 +21,11 @@ public static class CompanionVoiceLines
             Path.Combine(CompanionContentResolver.PerModRelativeDir(modId), "flashes_audio");
         if (perMod != null && ContentLocator.DirectoryExists(perMod))
             return (ContentLocator.ResolveDirectory(perMod), perMod);
+        // The shared folder is not a neutral fallback - it is BambiSleep's own recorded VO, and
+        // FlashService prints each clip's file name in the companion's speech bubble as it plays.
+        // Only the mods it belongs to may speak with it (see
+        // CompanionContentResolver.OwnsBaselineVoiceLines); anyone else points at their OWN
+        // (possibly empty) folder and simply has no voice lines, instead of borrowing Bambi's.
         if (CompanionContentResolver.OwnsBaselineVoiceLines(modId))
         {
             var relative = CompanionContentResolver.VoiceLinesRelativeDir;
@@ -75,7 +80,19 @@ public static class CompanionVoiceLines
     public static List<CompanionPhrase> GetRows(AppSettings settings)
     {
         var files = GetFiles();
-        if (MigrateLegacyIds(settings, files)) CoreSettings.Save();
+        try
+        {
+            if (MigrateLegacyIds(settings, files))
+            {
+                CoreSettings.Save();
+                Serilog.Log.Information(
+                    "CompanionPhraseService: migrated positional VoiceLine phrase ids to filename-based ids");
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "CompanionPhraseService: failed to migrate legacy VoiceLine phrase ids");
+        }
         return files.Where(file => !settings.RemovedPhraseIds.Contains(CompanionPhraseIds.VoiceLineId(file)))
             .Select(file => new CompanionPhrase
             {
