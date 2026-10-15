@@ -446,11 +446,12 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
-                // ponytail: WPF retention applies at launch even while awareness is off. No observer is started
-                // here: this owner only loads an existing ledger and honours its retention promise.
+                // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
+                // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 var privacyLedger = new ConditioningControlPanel.Services.Awareness.ActivityLedger();
                 ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = privacyLedger;
-                if (System.IO.File.Exists(privacyLedger.LedgerPath)) privacyLedger.Start();
+                try { privacyLedger.PruneOnDisk(); }
+                catch (Exception pruneEx) { Serilog.Log.Warning(pruneEx, "ActivityLedger: startup retention sweep failed"); }
                 WindowAwarenessService.V2Lifecycle = start =>
                 {
                     if (start && System.IO.File.Exists(privacyLedger.LedgerPath)) privacyLedger.Start();
