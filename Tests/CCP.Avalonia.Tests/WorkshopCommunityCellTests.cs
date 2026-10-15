@@ -76,15 +76,14 @@ public sealed class WorkshopCommunityCellTests
         finally { w.Close(); File.Delete(Path.Combine(folder, id + ".json")); }
         return Task.CompletedTask;
     });
+    // Completion signal (P08/P73): the dialog's own Opened event, bounded by time, never a poll.
     private static async Task<MessageDialog> Dialog(Window owner)
     {
-        for (int i = 0; i < 500; i++)
-        {
-            Dispatcher.UIThread.RunJobs();
-            if (owner.OwnedWindows.OfType<MessageDialog>().FirstOrDefault() is { } dialog) return dialog;
-            await Task.Delay(10);
-        }
-        throw new InvalidOperationException("Expected a message dialog");
+        var opened = new TaskCompletionSource<MessageDialog>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<MessageDialog>((d, _) => { if (d.Owner == owner) opened.TrySetResult(d); });
+        Dispatcher.UIThread.RunJobs();
+        if (owner.OwnedWindows.OfType<MessageDialog>().FirstOrDefault() is { } open) return open;
+        return await opened.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     [Fact]
@@ -184,6 +183,13 @@ public sealed class WorkshopCommunityCellTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        s.InstalledCommunityPromptIds.Clear(); s.ActiveCommunityPromptId = null; s.SlutModeEnabled = false;
+        var id = "room-" + Guid.NewGuid().ToString("N");
+        var file = Path.Combine(CorePaths.UserData, "community-prompts", id + ".json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, JsonConvert.SerializeObject(new CommunityPrompt { Id = id, Name = "Room persona", Author = "Test" }));
+        s.InstalledCommunityPromptIds.Add(id);
         var shell = new MainShellWindow();
         try
         {
@@ -191,8 +197,18 @@ public sealed class WorkshopCommunityCellTests
             shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal(); Dispatcher.UIThread.RunJobs();
             var cell = shell.GetLogicalDescendants().OfType<WorkshopCommunityCell>().Single();
             Assert.True(cell.IsVisible); Assert.True(cell.FindControl<Button>("BtnBrowsePrompts")!.IsVisible);
+
+            // WPF re-reads Z4 straight after Activate/Remove (MainWindow.CompanionTab.cs:184), not on the next tab show.
+            var z4 = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single().ViewModel;
+            var active = Loc.GetF("companion_personality_active_custom_fmt", id);
+            Assert.NotEqual(active, z4.ActivePersonalityLine);
+            cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ActivatePrompt").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(active, z4.ActivePersonalityLine);
+            cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "RemovePrompt").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.NotEqual(active, z4.ActivePersonalityLine);
         }
-        finally { shell.Close(); }
+        finally { shell.Close(); s.InstalledCommunityPromptIds.Remove(id); s.ActiveCommunityPromptId = null; File.Delete(file); }
         return Task.CompletedTask;
     });
 }

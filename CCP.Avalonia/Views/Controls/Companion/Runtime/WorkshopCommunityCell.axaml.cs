@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Models;
@@ -39,20 +40,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             });
             return service;
         }
-        public event EventHandler? BrowsePromptsRequested;
-        public event EventHandler? ImportPromptRequested;
-        public event EventHandler? ExportPromptRequested;
-        public event EventHandler? RefreshPromptsRequested;
-
         public WorkshopCommunityCell()
         {
             AvaloniaXamlLoader.Load(this);
             DataContext = new WorkshopCommunityCellViewModel();
 
-            this.FindControl<Button>("BtnBrowsePrompts")!.Click += async (_, _) => { BrowsePromptsRequested?.Invoke(this, EventArgs.Empty); await BrowseAsync(); };
-            this.FindControl<Button>("BtnImportPrompt")!.Click += async (_, _) => { ImportPromptRequested?.Invoke(this, EventArgs.Empty); await ImportAsync(); };
-            this.FindControl<Button>("BtnExportPrompt")!.Click += async (_, _) => { ExportPromptRequested?.Invoke(this, EventArgs.Empty); await ExportAsync(); };
-            this.FindControl<Button>("BtnRefreshPrompts")!.Click += async (_, _) => { RefreshPromptsRequested?.Invoke(this, EventArgs.Empty); await RefreshAsync(); };
+            this.FindControl<Button>("BtnBrowsePrompts")!.Click += async (_, _) => await BrowseAsync();
+            this.FindControl<Button>("BtnImportPrompt")!.Click += async (_, _) => await ImportAsync();
+            this.FindControl<Button>("BtnExportPrompt")!.Click += async (_, _) => await ExportAsync();
+            this.FindControl<Button>("BtnRefreshPrompts")!.Click += async (_, _) => await RefreshAsync();
 
             // CompanionWheelRelay.Attach(InstalledPromptsScroll) is NOT ported: it works around
             // WPF's ScrollViewer marking every wheel notch handled even when it cannot scroll.
@@ -103,6 +99,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 row.Children.Add(name); row.Children.Add(actions); panel.Children.Add(row); shown++;
             }
             placeholder.IsVisible = shown == 0;
+            // WPF UpdateCommunityPromptsUI (MainWindow.CompanionTab.cs:184) re-reads Z4's readout with the rows.
+            //FAILPROVE this.FindAncestorOfType<CompanionRoomView>()?.PersonalityZone.ViewModel.Sync();
         }
 
         private async Task ActivateAsync(string id)
