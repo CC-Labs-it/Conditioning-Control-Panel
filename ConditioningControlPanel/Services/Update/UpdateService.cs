@@ -99,9 +99,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
         // (ReleaseFeed) so every head shares one copy; this class keeps network, process and exit.
         private const double SkipMarkerLifetimeHours = ReleaseFeed.SkipMarkerLifetimeHours;
 
-        /// <summary>Exit code slot for "the helper never recorded one".</summary>
-        internal const int UnknownExitCode = ReleaseFeed.UnknownExitCode;
-
         private AppUpdateInfo? _latestUpdate;
         private bool _disposed;
 
@@ -145,28 +142,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             {
                 using var key = Registry.CurrentUser.OpenSubKey(@"Software\CodeBambi\Conditioning Control Panel");
                 return key?.GetValue("InstallPath") as string;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// The folder the running exe actually lives in, but only when that folder is a real
-        /// Inno install (its uninstaller sits next to the exe). This is the ground truth for an
-        /// in-place upgrade: unlike the HKCU InstallPath echo it cannot go stale, and it moves
-        /// with the folder when a user relocates the install by hand. Returns null for a
-        /// portable/dev run, or when the exe path can't be resolved.
-        /// </summary>
-        private static string? GetRunningInstallDir()
-        {
-            try
-            {
-                var exeDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule?.FileName);
-                if (string.IsNullOrEmpty(exeDir)) return null;
-
-                return File.Exists(Path.Combine(exeDir, "unins000.exe")) ? exeDir : null;
             }
             catch
             {
@@ -339,9 +314,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
 
         private static void ClearPendingUpdateAttempt() => ReleaseFeed.ClearPendingUpdateAttempt(App.UserDataPath);
 
-        internal static bool DidUpdateSucceed(string attemptedVersion, string currentVersion, int exitCode) =>
-            ReleaseFeed.DidUpdateSucceed(attemptedVersion, currentVersion, exitCode);
-
         /// <summary>
         /// Reads back the previous run's install attempt and clears the marker. Returns null when no
         /// attempt was pending (or it was too old to be worth reporting).
@@ -467,7 +439,7 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
                         lastException = null;
                         break;
                     }
-                    catch (Exception ex) when (attempt < maxRetries && IsTransientNetworkError(ex))
+                    catch (Exception ex) when (attempt < maxRetries && ReleaseFeed.IsTransientNetworkError(ex))
                     {
                         lastException = ex;
                         App.Logger?.Warning(ex, "Download attempt {Attempt} failed with transient error", attempt);
@@ -553,7 +525,9 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             // available (ccp-bugs#973, #849, #567, #554). Upgrading whatever copy is running
             // also self-heals an install that already drifted.
             var registryPath = GetInstalledPath();
-            var installPath = GetRunningInstallDir();
+            string? installPath;
+            try { installPath = ReleaseFeed.InnoInstallDirOf(Process.GetCurrentProcess().MainModule?.FileName); }
+            catch { installPath = null; } // the pre-move GetRunningInstallDir swallowed this too
 
             if (string.IsNullOrEmpty(installPath))
             {
@@ -613,7 +587,7 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             // Elevate the helper (not the installer) so the UAC prompt appears now, while the app
             // is still on screen and we can detect a decline; the installer then inherits the
             // elevated token and the wait-for-exit handoff is unchanged.
-            var needsElevation = NeedsElevationToInstall(installPath);
+            var needsElevation = ReleaseFeed.NeedsElevationToInstall(installPath);
 
             var helperPath = WriteUpdateHelperScript(
                 installerPath, installPath, pid, appExe, logPath, GetAttemptResultFilePath(), needsElevation);
@@ -670,37 +644,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             App.Logger?.Information("Exiting application for silent update (helper will install + relaunch)...");
             Application.Current.Shutdown();
             return true;
-        }
-
-        /// <summary>
-        /// True when the install directory cannot be written by the current token, i.e. the silent
-        /// installer needs admin rights. Per-user installs stay prompt-free.
-        /// </summary>
-        private static bool NeedsElevationToInstall(string? installPath)
-        {
-            if (string.IsNullOrEmpty(installPath)) return false;
-
-            try
-            {
-                if (!Directory.Exists(installPath)) return false;
-
-                var probe = Path.Combine(installPath, $".ccp-write-probe-{Guid.NewGuid():N}.tmp");
-                using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return true;
-            }
-            catch (IOException)
-            {
-                return true;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning(ex, "Could not probe install dir writability, assuming elevation is needed");
-                return true;
-            }
         }
 
         /// <summary>
@@ -1316,35 +1259,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
                 App.Logger?.Debug("Failed to fetch release notes from GitHub: {Error}", ex.Message);
                 return null;
             }
-        }
-
-        /// <summary>
-        /// Determines if an exception is a transient network error that should be retried.
-        /// </summary>
-        private static bool IsTransientNetworkError(Exception ex)
-        {
-            // Check for common transient network errors
-            if (ex is System.Net.Http.HttpRequestException ||
-                ex is System.IO.IOException ||
-                ex is System.Net.Sockets.SocketException ||
-                ex is TaskCanceledException)
-            {
-                return true;
-            }
-
-            // Check inner exception
-            if (ex.InnerException != null)
-            {
-                return IsTransientNetworkError(ex.InnerException);
-            }
-
-            // Check message for common transient error patterns
-            var message = ex.Message.ToLowerInvariant();
-            return message.Contains("forcibly closed") ||
-                   message.Contains("connection was closed") ||
-                   message.Contains("network") ||
-                   message.Contains("timeout") ||
-                   message.Contains("transport");
         }
 
         public void Dispose()

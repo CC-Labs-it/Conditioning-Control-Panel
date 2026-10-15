@@ -591,9 +591,6 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>The app's own card envelope: 50 ms each side of the hold.</summary>
-        private const int DefaultFadeMs = 50;
-
         private void ShowSubliminalVisuals(string text, int? opacity = null, int? overrideDurationMs = null, int? oneShotGen = null,
             int? fadeInMs = null, int? fadeOutMs = null)
         {
@@ -614,13 +611,10 @@ namespace ConditioningControlPanel.Services
             _subliminalCount++;
             SubliminalDisplayed?.Invoke(this, EventArgs.Empty);
 
-            // Duration in frames * ~16.6ms per frame, minimum 100ms.
-            // Caller may override (Deeper engine passes the timeline segment width).
-            var durationMs = overrideDurationMs.HasValue
-                ? Math.Max(100, overrideDurationMs.Value)
-                : Math.Max(100, App.Settings.Current.SubliminalDuration * 17);
-            var targetOpacity = (opacity ?? App.Settings.Current.SubliminalOpacity) / 100.0;
-            int fadeIn = Math.Max(1, fadeInMs ?? DefaultFadeMs), fadeOut = Math.Max(1, fadeOutMs ?? DefaultFadeMs);
+            // Hold, alpha and fades are Core's (SubliminalCard), shared with the Avalonia overlay.
+            var durationMs = SubliminalCard.HoldMs(App.Settings.Current.SubliminalDuration, overrideDurationMs);
+            var targetOpacity = SubliminalCard.Alpha(opacity ?? App.Settings.Current.SubliminalOpacity);
+            int fadeIn = SubliminalCard.FadeMs(fadeInMs), fadeOut = SubliminalCard.FadeMs(fadeOutMs);
 
             // Colors from settings
             var bgColor = ParseColor(App.Settings.Current.SubBackgroundColor, Colors.Black);
@@ -704,7 +698,7 @@ namespace ConditioningControlPanel.Services
 
                 if (_layer == null)
                 {
-                    _layer = new Compositor.SubliminalLayer(App.Compositor!);
+                    _layer = new Compositor.SubliminalLayer(App.Compositor!.Wake);
                     App.Compositor!.RegisterLayer(_layer);
                 }
                 _layer.Flash(placements, text,
@@ -766,15 +760,10 @@ namespace ConditioningControlPanel.Services
                 // Same outlined-text construction as BuildSubliminalContent, but positioned now:
                 // the card's size is known up front, no ActualWidth round-trip needed.
                 var textCanvas = new Canvas { IsHitTestVisible = false };
-                var fontSize = 120;
-                var offsets = new (double x, double y)[]
-                {
-                    (-3, -3), (3, -3), (-3, 3), (3, 3),
-                    (0, -4), (0, 4), (-4, 0), (4, 0)
-                };
+                var fontSize = SubliminalCard.FontDip;
                 var centerX = dipW / 2.0;
                 var centerY = dipH / 2.0;
-                foreach (var (ox, oy) in offsets)
+                foreach (var (ox, oy) in SubliminalCard.OutlineOffsets)
                 {
                     var borderText = CreateTextBlock(text, fontSize, borderColor);
                     borderText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -989,17 +978,10 @@ namespace ConditioningControlPanel.Services
                 VerticalAlignment = System.Windows.VerticalAlignment.Stretch
             };
 
-            var fontSize = 120;
-
-            // Border/outline offsets
-            var offsets = new (double x, double y)[]
-            {
-                (-3, -3), (3, -3), (-3, 3), (3, 3),
-                (0, -4), (0, 4), (-4, 0), (4, 0)
-            };
+            var fontSize = SubliminalCard.FontDip;
 
             // Draw border text (positioned by PositionSubliminalText once sizes are known)
-            foreach (var (ox, oy) in offsets)
+            foreach (var (ox, oy) in SubliminalCard.OutlineOffsets)
             {
                 var borderText = CreateTextBlock(text, fontSize, borderColor);
                 borderText.Tag = (ox, oy, true); // Store offset and isBorder flag
@@ -1280,7 +1262,7 @@ namespace ConditioningControlPanel.Services
             };
         }
 
-        private void AnimateSubliminal(Window win, double targetOpacity, int holdMs, int fadeInMs = DefaultFadeMs, int fadeOutMs = DefaultFadeMs)
+        private void AnimateSubliminal(Window win, double targetOpacity, int holdMs, int fadeInMs = SubliminalCard.DefaultFadeMs, int fadeOutMs = SubliminalCard.DefaultFadeMs)
         {
             var fadeInDuration = TimeSpan.FromMilliseconds(fadeInMs);
             var holdDuration = TimeSpan.FromMilliseconds(holdMs);

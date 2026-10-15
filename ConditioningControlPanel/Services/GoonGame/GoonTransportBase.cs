@@ -1,66 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
 
 namespace ConditioningControlPanel.Services.GoonGame
 {
-    /// <summary>
-    /// Marshals Goon Game callbacks onto the WPF dispatcher.
-    ///
-    /// Every transport raises its events from somewhere else — a SIPSorcery SCTP thread, an
-    /// HttpClient continuation, a Task.Delay timer — and the match engine and HUD both touch WPF
-    /// objects, so nothing may surface on those threads.
-    ///
-    /// Two guards from CLAUDE.md are non-negotiable here: a null Application (we are inside a
-    /// console harness or the app is already gone) and a dispatcher that has begun shutting down
-    /// (a queued BeginInvoke on a dying dispatcher is a classic shutdown crash in this codebase).
-    /// With no Application at all we run inline, which is what makes the loopback transport usable
-    /// from a plain test harness.
-    /// </summary>
-    internal static class GoonDispatch
-    {
-        public static void Post(Action action)
-        {
-            if (action == null) return;
-
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null)
-            {
-                // No WPF app (headless harness). Inline is correct AND keeps ordering.
-                try { action(); }
-                catch (Exception ex) { App.Logger?.Error(ex, "[Goon] Inline dispatch failed"); }
-                return;
-            }
-
-            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
-
-            if (dispatcher.CheckAccess())
-            {
-                try { action(); }
-                catch (Exception ex) { App.Logger?.Error(ex, "[Goon] Dispatch failed"); }
-                return;
-            }
-
-            try
-            {
-                // Normal, never Loaded — Loaded-priority work is starved in this app
-                // (see CLAUDE.md / memory: dispatcher-loaded-priority-starved).
-                dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
-                {
-                    try { action(); }
-                    catch (Exception ex) { App.Logger?.Error(ex, "[Goon] Dispatched callback failed"); }
-                }));
-            }
-            catch (Exception ex)
-            {
-                // BeginInvoke itself throws if the dispatcher shut down between the check and here.
-                App.Logger?.Warning(ex, "[Goon] BeginInvoke rejected (dispatcher shutting down?)");
-            }
-        }
-    }
-
     /// <summary>
     /// What every <see cref="IGoonTransport"/> in this folder shares: the serialize/route/raise
     /// pipeline, the clock hookup, and the state machine plumbing. Subclasses only implement

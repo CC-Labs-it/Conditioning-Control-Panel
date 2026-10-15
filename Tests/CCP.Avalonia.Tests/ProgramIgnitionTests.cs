@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Helpers;
@@ -39,7 +40,8 @@ public sealed class ProgramIgnitionTests
         Assert.True(tab.IgnitionLoopsRunning);
         Assert.IsType<LinearGradientBrush>(F<Border>("TodayPanel").BorderBrush);   // T2+ turning border
         Assert.NotNull(F<Rectangle>("ProgramsEdgeGlow").Fill);                    // T4 edge glow
-        Assert.NotNull(F<Border>("RailProgressFill").Effect);                     // T2+ rail glow
+        Assert.NotEqual(default, F<Border>("RailProgressFill").BoxShadow);        // T2+ rail glow, a BoxShadow
+        Assert.DoesNotContain(global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab), v => v.Effect != null);   // P82: no Effect under the loops
         var particles = tab.IgnitionParticles!;                                   // through the shared canvas
         Assert.Same(F<Grid>("TodayFxLayer"), particles.Parent);
         var registry = (System.Collections.IDictionary)typeof(MainShellWindow).GetField("_tabFxCanvases",
@@ -50,6 +52,23 @@ public sealed class ProgramIgnitionTests
         // frames with the loops parked (Motion Reduced, below) are the baseline.
         var edge = F<Rectangle>("ProgramsEdgeGlow");
         Assert.True(F<Grid>("RailCometHost").IsVisible);                        // T4 rail comet
+
+        // On WPF's curves, stepped (P08): edge 0.55 x peak -> peak over breath x 2.4 s sine (ProgramsFx.cs:631),
+        // the border a linear lap (:526), the comet -140 -> rail + 40 (:745).
+        var heat = ProgramHeat.Compute(program.LengthDays, program.LengthDays, svc.Today?.Intensity ?? 0, svc.Today?.IsBoss == true);
+        var (edgePeak, breath, lap) = (ProgramHeat.EdgeGlowOpacity(heat), ProgramHeat.BreathSeconds(heat), ProgramHeat.BorderLapSeconds(heat));
+        var spin = (RotateTransform)F<Border>("TodayPanel").BorderBrush!.Transform!;
+        var cometX = (TranslateTransform)F<Rectangle>("RailComet").RenderTransform!;
+        // StepAll skips the FrameClock, so prove every rig loop also rides the live window's frames.
+        var rig = BeatLoop.Running.Where(l => l.Owner == tab || global::Avalonia.VisualTree.VisualExtensions.IsVisualAncestorOf(tab, l.Owner)).ToArray();
+        Assert.True(rig.Length >= 6, $"only {rig.Length} rig loops");          // sigil x2 (if art), border, wash, shimmer, edge, comet
+        Assert.All(rig, l => Assert.True(l.OnFrameBeat, $"{l.Owner.GetType().Name}/{(l.Owner as Control)?.Name} ticking={l.IsTicking} parked={l.Parked}"));
+        Assert.Equal(edgePeak * 0.55, edge.Opacity, 3);
+        Assert.Equal(0, spin.Angle, 3);
+        Assert.Equal(-140, cometX.X, 3);
+        Step(breath * 2.4);
+        Assert.Equal(edgePeak, edge.Opacity, 3);
+        Assert.Equal(360 * (breath * 2.4 / lap % 1), spin.Angle, 1);
         var log = new StringBuilder("phase,frame,ms,edgeOpacity,borderAngle,shimmerX,cometX\n");
         var seen = Frames("ignited", log, tab);
         Assert.True(seen.Edge > 3, $"edge glow did not breathe ({seen.Edge} values)");
@@ -137,7 +156,7 @@ public sealed class ProgramIgnitionTests
             ((ISolidColorBrush)F<Border>("ProgramsGraduatedCard").BorderBrush!).Color);
     });
 
-    /// <summary>40 render ticks, time-bounded (P73); returns how many distinct values each loop showed:
+    /// <summary>40 beats of stepped time, time-bounded (P73); returns how many distinct values each loop showed:
     /// edge opacity, the border brush's rotation, the counter ink's X offset and the comet's X offset.</summary>
     private static (int Edge, int Angle, int Shimmer, int Comet) Frames(string phase, StringBuilder log, ProgramsTabView tab)
     {
@@ -151,8 +170,7 @@ public sealed class ProgramIgnitionTests
         for (var i = 0; i < 40 && watch.Elapsed < TimeSpan.FromSeconds(10); i++)
         {
             var t0 = watch.Elapsed.TotalMilliseconds;
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            Step(1.0 / 30);                                                          // one 30 fps beat
             var v = new[]
             {
                 edge.Opacity,
@@ -165,6 +183,14 @@ public sealed class ProgramIgnitionTests
                 $"{phase},{i},{watch.Elapsed.TotalMilliseconds - t0:0.00},{v[0]:0.0000},{v[1]:0.00},{v[2]:0.00},{v[3]:0.00}\n"));
         }
         return (seen[0].Count, seen[1].Count, seen[2].Count, seen[3].Count);
+    }
+
+    private static SteppedTime _time = new();
+
+    private static void Step(double seconds)
+    {
+        _time.Advance(TimeSpan.FromSeconds(seconds));
+        BeatLoop.StepAll();
     }
 
     private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body) =>
@@ -202,6 +228,7 @@ public sealed class ProgramIgnitionTests
             settings.MotionLevel = MotionLevel.Full;
             settings.PerformanceMode = false;
             MainShellWindow? shell = null;
+            BeatLoop.Time = _time = new SteppedTime();
             try
             {
                 var svc = AvApp.Programs = new ProgramService(path, readOnly: true);
@@ -225,6 +252,7 @@ public sealed class ProgramIgnitionTests
                 (settings.MotionLevel, settings.PerformanceMode) = (motion, perf);
                 (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro) = (seenTab, seenIntro);
                 Directory.Delete(dir, true);
+                BeatLoop.Time = TimeProvider.System;
             }
         });
 }

@@ -94,7 +94,7 @@ public sealed class BrainDrainLayer : BaseLayer
     private bool _dirty = true;
     private int _lastSeenFrames = -1;
 
-    public BrainDrainLayer(CompositorEngine engine) : base(engine) { }
+    public BrainDrainLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.BrainDrain;
     public override bool ExcludeFromCapture => true;

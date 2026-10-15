@@ -23,33 +23,51 @@ public sealed class PossessionRememberTests : IDisposable
     private bool _windowReady;
     private int _fired;
 
+    private readonly (Func<AppSettings?>, Func<TimeSpan, Action, IDisposable?>, Func<bool>, Func<bool>, Func<bool>, Action, Func<DateTime>) _seams;
+    private Action? _tick;
+
     public PossessionRememberTests()
     {
         _saved = (_s.LockdownPossessionEnabled, _s.LockdownPossessionIntensity, _s.LockdownPossessionRememberPending,
             _s.LockdownTripwiresEnabled, _s.StrictLockEnabled, _s.PanicKeyEnabled, _s.LockdownForceStrictLock, _s.LockdownDisablePanicKey);
         _s.LockdownForceStrictLock = _s.LockdownDisablePanicKey = false;
+        _seams = (PossessionRemember.Settings, PossessionRemember.StartTimer, PossessionRemember.WindowReady,
+            PossessionRemember.HasCompanion, PossessionRemember.ChargeDoor, PossessionRemember.SayRemembered, PossessionRemember.UtcNow);
         PossessionRemember.ResetForTests();
-        PossessionRemember.TimerEnabled = false;
+        PossessionRemember.Settings = () => _s;
         PossessionRemember.UtcNow = () => _now;
+        // The head's UI timer: Tick runs only while it is alive, as a disposed DispatcherTimer stops.
+        PossessionRemember.StartTimer = (_, t) => { _tick = t; return new StopTimer(this); };
+        PossessionRemember.WindowReady = () => _windowReady;
+        PossessionRemember.HasCompanion = () => true;
+        PossessionRemember.ChargeDoor = () => { _fired++; return true; };
+        PossessionRemember.SayRemembered = () => { };
     }
+
+    private sealed class StopTimer(PossessionRememberTests t) : IDisposable
+    {
+        public void Dispose() => t._tick = null;
+    }
+
+    private bool IsWaiting => _tick != null;
 
     public void Dispose()
     {
         _lockdown.Deactivate();
         _lockdown.Dispose();
         PossessionRemember.ResetForTests();
-        PossessionRemember.TimerEnabled = true;
-        PossessionRemember.UtcNow = () => DateTime.UtcNow;
+        (PossessionRemember.Settings, PossessionRemember.StartTimer, PossessionRemember.WindowReady,
+            PossessionRemember.HasCompanion, PossessionRemember.ChargeDoor, PossessionRemember.SayRemembered, PossessionRemember.UtcNow) = _seams;
         (_s.LockdownPossessionEnabled, _s.LockdownPossessionIntensity, _s.LockdownPossessionRememberPending,
             _s.LockdownTripwiresEnabled, _s.StrictLockEnabled, _s.PanicKeyEnabled, _s.LockdownForceStrictLock, _s.LockdownDisablePanicKey) = _saved;
     }
 
-    private void Install() => PossessionRemember.Install(_lockdown, () => _windowReady, () => _fired++);
+    private void Install() => PossessionRemember.Install(_lockdown);
 
     private void Advance(double seconds)
     {
         _now = _now.AddSeconds(seconds);
-        PossessionRemember.Tick();
+        _tick?.Invoke();
     }
 
     [Theory]
@@ -79,7 +97,7 @@ public sealed class PossessionRememberTests : IDisposable
         Install();
 
         Assert.False(_s.LockdownPossessionRememberPending);
-        Assert.False(PossessionRemember.IsWaiting);
+        Assert.False(IsWaiting);
         _windowReady = true;
         Advance(30);
         Assert.Equal(0, _fired);
@@ -105,7 +123,7 @@ public sealed class PossessionRememberTests : IDisposable
         Assert.Equal(0, _fired);
         Advance(1);
         Assert.Equal(1, _fired);
-        Assert.False(PossessionRemember.IsWaiting);
+        Assert.False(IsWaiting);
 
         Advance(30);
         Assert.Equal(1, _fired);                              // once
@@ -124,7 +142,7 @@ public sealed class PossessionRememberTests : IDisposable
         Advance(20);
 
         Assert.Equal(0, _fired);
-        Assert.False(PossessionRemember.IsWaiting);           // spent, not postponed
+        Assert.False(IsWaiting);           // spent, not postponed
     }
 
     [Fact]
@@ -134,7 +152,7 @@ public sealed class PossessionRememberTests : IDisposable
         _s.LockdownPossessionEnabled = true;
         Install();
         Advance(181);
-        Assert.False(PossessionRemember.IsWaiting);
+        Assert.False(IsWaiting);
         _windowReady = true;
         Advance(30);
         Assert.Equal(0, _fired);
