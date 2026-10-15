@@ -55,8 +55,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("pink-rush", _ => PinkRushHost.Stop()),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
             // WPF :1967 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel.
             new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll()),
+            new("emi-desk-feedback", _ => EmiDesk.EmiDeskService.Instance.Window?.CancelChain()),   // P06; WPF left it (MainWindow.xaml.cs:1934-2013 never touches the desk)
             // WPF :1980-1981 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
-            new("emi-desk-feedback", _ => EmiDesk.EmiDeskService.Instance.Window?.CancelChain()),
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence()),
             new("lock-cards", _ => MainShellWindow.StopLockCards()),      // WPF LockCardService.Stop(dismissOpenCards: true)
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)

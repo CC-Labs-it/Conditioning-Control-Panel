@@ -39,13 +39,17 @@ public sealed class EmiDeskPatFeedbackTests
             Pat();
             Assert.Equal("^_^", desk.Face);
             Assert.Equal(pets + 1, st.PetsTotal);
-            clock.Advance(1000); desk.AdvancePatFeedback();
+            int cues = played.Count;
+            clock.Advance(200); Pat(); // WPF React.cs:132: a live chain eats the click - no cue, no poke
+            Assert.Equal(cues, played.Count);
+            Assert.Equal("^_^", desk.Face);
+            clock.Advance(800); desk.AdvancePatFeedback();
             Assert.Equal("0_0", desk.Face);
             Pat();
             Assert.Equal("^_~", desk.Face);
             clock.Advance(320); desk.AdvancePatFeedback();
             Assert.Equal("0_0", desk.Face);
-            clock.Advance(680); Pat(); // third touch inside four seconds: glee
+            clock.Advance(680); desk.AdvancePatFeedback(); Pat(); // third touch inside four seconds: glee
             Assert.Contains("emi-sfx-chime", played);
             clock.Advance(300); desk.AdvancePatFeedback();
             Assert.Equal("(≧◡≦)", desk.Face);

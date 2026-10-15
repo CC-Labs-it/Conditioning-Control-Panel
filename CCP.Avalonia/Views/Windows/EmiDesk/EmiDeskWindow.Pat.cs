@@ -12,6 +12,7 @@ public partial class EmiDeskWindow
     private DispatcherTimer? _patFeedbackTimer;
     private IReadOnlyList<EmiPatFrame>? _patFeedback;
     private DateTimeOffset _patFeedbackFrom;
+    private string? _patFaceDrawn;
 
     // ponytail: wordless pat faces are live here; the full chain player, particle bursts,
     // body art/moves and its speech priority/summon-cut are wire-win-emi-desk-b.
@@ -19,6 +20,7 @@ public partial class EmiDeskWindow
     {
         StopPatFeedback();
         _patFeedback = frames;
+        _patFaceDrawn = null;
         _patFeedbackFrom = PatClock.GetUtcNow();
         AdvancePatFeedback();
         _patFeedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
@@ -33,7 +35,7 @@ public partial class EmiDeskWindow
         if (_patFeedback is null) return;
         var face = EmiPatFeedback.FaceAt(_patFeedback, (PatClock.GetUtcNow() - _patFeedbackFrom).TotalMilliseconds);
         if (face is null) StopPatFeedback();
-        else DrawFace(face);
+        else if (face != _patFaceDrawn) { _patFaceDrawn = face; DrawFace(face); }   // P07
     }
 
     private void StopPatFeedback()

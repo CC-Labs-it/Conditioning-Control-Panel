@@ -266,9 +266,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: needs EmiChains.Player (Services/EmiDesk/EmiChains.cs), wired when the chain
-        // player moves to Core. Nothing on this head can start a chain, so nothing is ever live.
-        public bool ChainLive => false;
+        // ponytail: the pat faces are the only chain this head plays; the full EmiChains.Player is wire-win-emi-desk-b.
+        public bool ChainLive => _patFeedback is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -928,10 +927,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` and is constant false on this head. It is
-            // in the expression anyway: this is the one place that decides whether an idle beat may
-            // interrupt her, and a gate that has to be REMEMBERED when the chain player lands is a
-            // gate that will be forgotten.
+            // ChainLive is the WPF gate's `_player.IsLive` (here: a pat face is running).
             if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
@@ -2555,6 +2551,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_transiting || InputLocked) return;
+                if (ChainLive) return;   // WPF React.cs:132-137: a live chain eats the click (summon-cut is -b)
                 DisarmPet();
                 _petArmed = true;
                 RaiseActivity();
