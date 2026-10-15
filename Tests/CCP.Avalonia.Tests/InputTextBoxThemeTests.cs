@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -11,6 +10,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -108,26 +108,48 @@ public sealed class InputTextBoxThemeTests
         Assert.Equal(0, Shadow(box).Color.A);
     });
 
+    [Fact]
+    public Task BorderlessTransparentBoxGetsNoFocusHalo() => Run(async window =>
+    {
+        // MantraWindow.axaml:50-53 / LockCard / MediaHistory / SettingsPalette .transparent style.
+        var style = new Style(x => x.OfType<TextBox>().Class("transparent").Template().OfType<Border>().Name("PART_BorderElement"));
+        style.Setters.Add(new Setter(Avalonia.Controls.Border.BorderThicknessProperty, new Thickness(0)));
+        window.Styles.Add(style);
+        var box = new TextBox { Width = 240, Classes = { "transparent" } };
+        window.Content = box;
+        window.Show();
+        box.Focus();
+        await Until(() => InputFx.GetGlowLevel(box) > 0.44);
+        Assert.Equal(0, Shadow(box).Color.A);
+    });
+
     private static Border Border(TextBox box) => box.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_BorderElement");
     private static BoxShadow Shadow(TextBox box) => Border(box).BoxShadow.Count > 0 ? Border(box).BoxShadow[0] : default;
     private static Color Colour(Window window, string key) => ((ISolidColorBrush)window.FindResource(key)!).Color;
-    private static async Task Until(Func<bool> condition)
+    // Virtual time (P08): the window's animation clock only advances when a test steps it.
+    private static StepClock Clock = new();
+    private sealed class StepClock : ClockBase
     {
-        var time = Stopwatch.StartNew();
-        while (!condition() && time.Elapsed < TimeSpan.FromSeconds(5))
+        private TimeSpan _now;
+        public void Step(TimeSpan by) { _now += by; Pulse(_now); }
+    }
+    private static Task Until(Func<bool> condition)
+    {
+        for (var ms = 0; !condition() && ms < 1000; ms += 16) // 1 s virtual, 5x the 200 ms fade
         {
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Clock.Step(TimeSpan.FromMilliseconds(16));
             Dispatcher.UIThread.RunJobs();
-            await Task.Delay(10);
         }
         Assert.True(condition());
+        return Task.CompletedTask;
     }
     private static Task Run(Func<Window, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var window = new Window { Width = 500, Height = 300 };
+        Clock = new StepClock();
+        var window = new Window { Width = 500, Height = 300, Clock = Clock };
         try { await body(window); }
         finally { window.Close(); Dispatcher.UIThread.RunJobs(); }
     });
