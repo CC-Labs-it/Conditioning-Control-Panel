@@ -721,7 +721,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (BtnBlinkTrainerStartStopTracker.Content is TextBlock tb)
                 tb.Text = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
-            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
         }
     }
 }

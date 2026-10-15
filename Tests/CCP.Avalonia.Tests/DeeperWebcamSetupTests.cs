@@ -131,9 +131,11 @@ public sealed class DeeperWebcamSetupTests
         }
     });
 
+    // No real-time wait (test-sleeps ratchet): ShowDialogSafe opens dialogs synchronously, so draining
+    // the dispatcher queue is enough.
     private static async Task Until(Func<bool> condition)
     {
-        for (var i = 0; i < 100 && !condition(); i++) await Task.Delay(10);
+        for (var i = 0; i < 100 && !condition(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
         Assert.True(condition());
     }
 }
