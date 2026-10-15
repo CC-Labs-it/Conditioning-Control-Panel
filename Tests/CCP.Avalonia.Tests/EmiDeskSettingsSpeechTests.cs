@@ -23,10 +23,11 @@ public sealed class EmiDeskSettingsSpeechTests
           "firstContact":{"priority":3,"pools":["greeting"],"limit":{"per":"ever","max":1}},
           "desktopFirstBoot":{"priority":3,"pools":["boot"]},
           "resized":{"priority":3,"pools":["spicy"]},
-          "panicPressed":{"hold":true,"holdMs":6000}},
+          "panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]}},
          "pools":{"greeting":[{"id":"hello","t":"hello","spice":0}],
                   "boot":[{"id":"boot","t":"desktop hello","spice":0}],
-                  "spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}]}}
+                  "spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}],
+                  "quiet":[{"id":"quiet","t":"","spice":0}]}}
         """;
 
     private static Task InDesk(Func<EmiDeskService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -107,7 +108,8 @@ public sealed class EmiDeskSettingsSpeechTests
     [Fact]
     public Task GreetingIsReachableOnSummonAndPanicCutsIt() => InDesk(desk =>
     {
-        desk.GreetNow();
+        // InDesk summoned her: the summon's greeting timer is what greets, not a direct call.
+        desk.GreetingDue();
         Assert.Equal(".", desk.Window!.BubbleText);
         Assert.True(desk.LineEngine.EverSpent("firstContact"));
         desk.GreetNow();
@@ -121,6 +123,18 @@ public sealed class EmiDeskSettingsSpeechTests
         desk.Window.AdvanceSpeech();
         desk.Fire("resized");
         Assert.Null(desk.Window.BubbleText);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HoldShowsQuietFaceThenRevertsToRest() => InDesk(desk =>
+    {
+        var window = desk.Window!;
+        desk.Fire("panicPressed");
+        Assert.Equal("-_-", window.Face);
+        Assert.Null(window.BubbleText);
+        window.ExpireHold();
+        Assert.Equal("0_0", window.Face);
         return Task.CompletedTask;
     });
 

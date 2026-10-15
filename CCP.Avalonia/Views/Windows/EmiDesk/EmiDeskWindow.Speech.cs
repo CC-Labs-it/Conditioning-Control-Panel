@@ -71,13 +71,45 @@ public partial class EmiDeskWindow
     {
         if (PresentationActive || !IsVisible) return;
         CancelChain();
+        CancelHold();
         engine.Ack(line.Id, spoke: !line.Hold);
         if (line.Hold || string.IsNullOrWhiteSpace(line.Text))
         {
-            DrawFace(line.Face);
-            // ponytail: the full hold/chain player remains in the follow-up speech lane.
+            HoldFace(line);
             return;
         }
         Say(line.Text, line.Face);
+    }
+
+    // WPF EmiDeskWindow.Bubble.cs:545-565 HoldFace: a face, held, no bubble, then back to rest.
+    private const int IgnoreFaceMs = 1400;
+    private DispatcherTimer? _holdTimer;
+
+    private void HoldFace(LineDraw line)
+    {
+        CancelHold();
+        StopIdleBeats();
+        DrawFace(string.IsNullOrEmpty(line.Face) ? "-_-" : line.Face);
+        _holdTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(line.HoldMs > 0 ? line.HoldMs : IgnoreFaceMs)
+        };
+        _holdTimer.Tick += (_, _) => ExpireHold();
+        _holdTimer.Start();
+    }
+
+    // The timer and the headless tests drive the same step.
+    internal void ExpireHold()
+    {
+        if (_holdTimer == null) return;
+        CancelHold();
+        DrawFace(RestFace);
+        RestartIdleBeats();
+    }
+
+    private void CancelHold()
+    {
+        _holdTimer?.Stop();
+        _holdTimer = null;
     }
 }
