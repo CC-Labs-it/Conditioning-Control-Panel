@@ -251,7 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void PaintMonth(QuestService quests)
         {
             double width = StreakCalendarCanvas.Bounds.Width;
-            if (width <= 0) { PaintFixButton(StreakFix.HasMissedDays(quests.Progress, DateTime.Today)); return; }   // not laid out yet
+            if (width <= 0) { PaintFixButton(StreakFix.HasMissedDays(quests.Progress, Today())); return; }   // not laid out yet
             var completed = new HashSet<DateTime>(quests.Progress.DailyQuestCompletionDates.Select(d => d.Date));
             var shielded = new HashSet<DateTime>(CoreSettings.Current.StreakShieldUsedDates.Select(d => d.Date));
             IBrush accent;
@@ -259,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             catch { accent = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4)); }
             var panel = this.TryFindResource("PanelBgBrush", out var p) && p is IBrush pb ? pb : Brushes.Transparent;
 
-            var today = DateTime.Today;
+            var today = Today();
             int days = DateTime.DaysInMonth(today.Year, today.Month);
             double spacing = width / days, centerY = 25, prevX = 0;
             bool prevDone = false, hasMissedDays = false;
