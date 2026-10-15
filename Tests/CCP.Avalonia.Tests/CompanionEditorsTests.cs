@@ -41,7 +41,9 @@ public sealed class CompanionEditorsTests
 
     private static async Task Until(Func<bool> done)
     {
-        for (var i = 0; i < 200 && !done(); i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+        // Bounded by time, not turns: turn counts pass alone and fail under gate load (PLAYBOOK P73).
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!done() && DateTime.UtcNow < deadline) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
         Assert.True(done());
     }
 
