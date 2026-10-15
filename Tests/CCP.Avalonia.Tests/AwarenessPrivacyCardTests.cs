@@ -169,7 +169,18 @@ public sealed class AwarenessPrivacyCardTests
             shell.ShowTab("settings");
             Dispatcher.UIThread.RunJobs();
             Assert.False(card.IsRefreshing);
+            // Companion -> Awareness: the collapsed room's edges must not park the adopted card.
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(card.IsRefreshing);
             shell.ShowTab("awareness");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(card.IsRefreshing);
+            // Not just an accident of the tab table's order: the Companion tab hiding AFTER the
+            // Awareness tab showed still leaves the card running.
+            var companion = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView>("CompanionTab")!;
+            companion.IsVisible = true;
+            companion.IsVisible = false;
             Dispatcher.UIThread.RunJobs();
             Assert.True(card.IsRefreshing);
         }

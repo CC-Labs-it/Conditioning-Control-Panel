@@ -155,8 +155,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // The zone re-reads its own state rather than being told what to do: it may well
                 // have changed while the tab was hidden, and a resume that restored the state at
                 // park time would be a lie.
-                AwarenessZone.StartRefresh();   // WPF IsVisibleChanged -> StartRefresh (re-reads first)
-                AwarenessZone.SyncCursorBlink();
                 ChatZone.ViewModel?.Sync();
                 MemoryZone.ViewModel?.Sync();
                 PersonalityZone.ViewModel.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> PersonalityVm.Sync
@@ -181,8 +179,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             try
             {
                 HeroZone.StopAmbientLoop();
-                AwarenessZone.StopCursorBlink();
-                AwarenessZone.StopRefresh();
+                // The privacy card parks itself off its own visibility (AwarenessPrivacyView): under v2 it
+                // lives on the Awareness tab, where the room's edges are not its edges.
             }
             catch (InvalidOperationException) { /* already torn down */ }
         }
