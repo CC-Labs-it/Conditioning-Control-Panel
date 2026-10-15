@@ -379,7 +379,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return _blurredArt[id] = baked;
         }
 
-        /// <summary>CreateSkillTreeHeader, minus the four PRO expanders (AddProSection).</summary>
+        /// <summary>CreateSkillTreeHeader, including the four PRO expanders (AddProSections).</summary>
         private Control Header()
         {
             var settings = CoreSettings.Current;

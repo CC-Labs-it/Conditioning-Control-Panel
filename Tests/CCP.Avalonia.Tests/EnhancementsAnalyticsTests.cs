@@ -18,6 +18,8 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -95,6 +97,48 @@ public sealed class EnhancementsAnalyticsTests
             CoreSettings.ServiceProvider = provider;
             property.SetValue(null, oldEngine);
             Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SeasonRewindTimeDeltasAreFluentArrowsNotTextTriangles() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null) AppBuilder.Configure<AvApp>().UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var provider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        var recaps = Path.Combine(CorePaths.UserData, "season-recaps");
+        Window? w = null;
+        try
+        {
+            if (Directory.Exists(recaps)) Directory.Delete(recaps, true);
+            CoreSettings.ServiceProvider = () => service;
+            var s = service.Current;
+            s.MotionLevel = MotionLevel.Off;
+            s.SeasonStatsSeason = "2026-10";
+            s.SeasonConditioningMinutes = 125;                 // live 125 > 50: up
+            SeasonRecapStore.Save(new SeasonRecapSnapshot { SeasonKey = "2026-09", SeasonMinutes = 50 });  // 50 < 80: down
+            SeasonRecapStore.Save(new SeasonRecapSnapshot { SeasonKey = "2026-08", SeasonMinutes = 80 });
+            s.UnlockedSkills = new List<string> { "season_rewind" };
+            var tab = new EnhancementsTabView();
+            w = new Window { Width = 1400, Height = 700, Content = tab };
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var toggle = tab.GetLogicalDescendants().OfType<Border>().Single(b => b.Name == "ProToggle_season_rewind");
+            toggle.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+            var panel = tab.GetLogicalDescendants().OfType<Border>().Single(b => b.Name == "ProPanel_season_rewind");
+            var kinds = panel.GetLogicalDescendants().OfType<IconGlyph>().Select(g => g.Kind).ToList();
+            Assert.Equal(1, kinds.Count(k => k == IconKind.ArrowUp));
+            Assert.Equal(1, kinds.Count(k => k == IconKind.ArrowDown));
+            Assert.DoesNotContain(panel.GetLogicalDescendants().OfType<TextBlock>(), t => (t.Text ?? "").Contains('\u25B2') || (t.Text ?? "").Contains('\u25BC'));
+        }
+        finally
+        {
+            w?.Close();
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = provider;
+            if (Directory.Exists(recaps)) Directory.Delete(recaps, true);
         }
         return Task.CompletedTask;
     });
