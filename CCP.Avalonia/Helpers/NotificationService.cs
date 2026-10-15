@@ -28,6 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private readonly List<(string message, NotificationType type, TimeSpan? duration, string? key,
             string? actionLabel, Action? action, string? secondaryLabel, Action? secondaryAction)> _pending = new();
         private readonly Dictionary<string, Border> _stickyByKey = new();
+        // Test seam: runs the post-fade removal; tests pass (a, _) => a() instead of waiting 220 ms.
+        internal Action<Action, TimeSpan> RemoveLater { get; set; } = (a, d) => DispatcherTimer.RunOnce(a, d);
 
         public void AttachHost(Panel host)
         {
@@ -213,7 +215,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             };
             border.Opacity = 0;
             var host = border.Parent as Panel;
-            DispatcherTimer.RunOnce(() => host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
+            RemoveLater(() => host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
         }
     }
 }

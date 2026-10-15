@@ -1,12 +1,10 @@
 using System;
 using System.Linq;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
-using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -50,15 +48,15 @@ public sealed class StickyNotificationTests
     }
 
     [Fact]
-    public async Task StickyQueueDeduplicatesAndDismissalSurvivesSettingsReload()
+    public void StickyQueueDeduplicatesAndDismissalSurvivesSettingsReload()
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        AvaloniaTestDispatcher.Run(() =>
         {
             Setup();
             var oldProvider = CoreSettings.ServiceProvider;
             var settings = new SettingsService();
             CoreSettings.ServiceProvider = () => settings;
-            var service = new NotificationService();
+            var service = new NotificationService { RemoveLater = (a, _) => a() };
             var host = new StackPanel();
             var window = new Window { Content = host };
             try
@@ -72,22 +70,16 @@ public sealed class StickyNotificationTests
                 service.AttachHost(host);
                 window.Show();
                 Assert.Single(host.Children);
-                await Task.Delay(5600, TestContext.Current.CancellationToken); // beyond the default timed toast lifetime
-                Dispatcher.UIThread.RunJobs();
-                Assert.Single(host.Children);
+                Assert.Null(((Border)host.Children.Single()).Tag); // no expiry timer: stays until answered
 
                 // A programmatic resolution does not permanently suppress a recurring condition.
                 service.Dismiss(key);
-                await Task.Delay(400, TestContext.Current.CancellationToken);
-                Dispatcher.UIThread.RunJobs();
                 Assert.Empty(host.Children);
                 Assert.DoesNotContain(key, settings.Current.DismissedNotificationKeys);
                 service.ShowSticky(key, "returned");
                 var dismissed = host.Children.Single();
                 Button(dismissed, "ToastDismiss").RaiseEvent(new RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
                 CoreSettings.SaveImmediate();
-                await Task.Delay(400, TestContext.Current.CancellationToken);
-                Dispatcher.UIThread.RunJobs();
                 Assert.Empty(host.Children);
                 var reloaded = new SettingsService();
                 Assert.Contains(key, reloaded.Current.DismissedNotificationKeys);
@@ -107,12 +99,12 @@ public sealed class StickyNotificationTests
     }
 
     [Fact]
-    public async Task StickyActionClearsOnlyThisSessionAndSecondaryActionReplays()
+    public void StickyActionClearsOnlyThisSessionAndSecondaryActionReplays()
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        AvaloniaTestDispatcher.Run(() =>
         {
             Setup();
-            var service = new NotificationService();
+            var service = new NotificationService { RemoveLater = (a, _) => a() };
             var host = new StackPanel();
             var window = new Window { Content = host };
             var key = "action_" + Guid.NewGuid().ToString("N");
@@ -129,34 +121,32 @@ public sealed class StickyNotificationTests
                 Assert.Equal(2, grid.RowDefinitions.Count);
                 Assert.Equal("secondary_2", ((TextBlock)Button(toast, "ToastSecondaryAction").Content!).Text);
                 Button(toast, "ToastSecondaryAction").RaiseEvent(new RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
-                await Task.Delay(400, TestContext.Current.CancellationToken);
-                Dispatcher.UIThread.RunJobs();
                 Assert.Empty(host.Children); // a failing action still dismisses the toast
                 Assert.Equal(0, primary);
                 Assert.Equal(1, secondary);
 
                 service.ShowSticky(key, "resolve", actionLabel: "resolve", action: () => primary++);
                 Button(host.Children.Single(), "ToastAction").RaiseEvent(new RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
-                await Task.Delay(400, TestContext.Current.CancellationToken);
-                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(host.Children);
                 Assert.Equal(1, primary);
                 Assert.DoesNotContain(key, CoreSettings.Current.DismissedNotificationKeys);
                 service.ShowSticky(key, "recurs");
                 Assert.Single(host.Children);
                 service.Dismiss(key);
-                await Task.Delay(400, TestContext.Current.CancellationToken);
+                Assert.Empty(host.Children);
             }
             finally { window.Close(); }
         });
     }
 
     [Fact]
-    public async Task FadingToastLeavesItsOriginalHostAfterAnotherHostAttaches()
+    public void FadingToastLeavesItsOriginalHostAfterAnotherHostAttaches()
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        AvaloniaTestDispatcher.Run(() =>
         {
             Setup();
-            var service = new NotificationService();
+            Action? removal = null;
+            var service = new NotificationService { RemoveLater = (a, _) => removal = a };
             var oldHost = new StackPanel();
             var newHost = new StackPanel();
             var window = new Window { Content = oldHost };
@@ -168,8 +158,7 @@ public sealed class StickyNotificationTests
                 Button(oldHost.Children.Single(), "ToastDismiss").RaiseEvent(new RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
                 service.AttachHost(newHost);
                 service.Show("new", duration: TimeSpan.FromSeconds(30));
-                await Task.Delay(400, TestContext.Current.CancellationToken);
-                Dispatcher.UIThread.RunJobs();
+                removal!(); // the fade ends after the new host attached
                 Assert.Empty(oldHost.Children);
                 Assert.Single(newHost.Children);
             }
