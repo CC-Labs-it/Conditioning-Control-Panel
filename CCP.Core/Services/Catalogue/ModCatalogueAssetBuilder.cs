@@ -53,6 +53,11 @@ public static class ModCatalogueAssetBuilder
             using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 80);
             return jpeg == null || jpeg.Size > 64 * 1024 ? null : Convert.ToBase64String(jpeg.ToArray());
         }
-        catch { return null; } // WPF omits unusable previews without blocking the metadata submission.
+        catch (Exception ex)
+        {
+            // WPF omits unusable previews without blocking the metadata submission.
+            Serilog.Log.Debug("[Catalogue] Mod preview thumb failed: {Error}", ex.Message);
+            return null;
+        }
     }
 }

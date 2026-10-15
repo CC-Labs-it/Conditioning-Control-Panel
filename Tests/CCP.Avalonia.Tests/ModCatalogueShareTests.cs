@@ -46,7 +46,8 @@ public sealed class ModCatalogueShareTests
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static async Task Until(Func<bool> done)
     {
-        for (var i = 0; i < 300 && !done(); i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!done() && DateTime.UtcNow < deadline) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
         Assert.True(done());
     }
 
@@ -69,6 +70,7 @@ public sealed class ModCatalogueShareTests
         var mod = new ModPackage(new ModManifest { Id = "custom-share", Name = "Custom", Author = "Author",
             Version = "1.2", Description = "Description", PreviewImage = "preview.png", Tags = new() { "gentle", "test" } }, folder, false);
         var settings = new SettingsService();
+        var oldProvider = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => settings;
         var secrets = new Dictionary<string, string?>();
         var oldGet = CoreSecrets.RetrieveProvider;
@@ -154,7 +156,7 @@ public sealed class ModCatalogueShareTests
         {
             manager.Close(); shell.Close();
             App.Notifications.AttachHost(new StackPanel());
-            App.Catalogue = oldCatalogue; CoreMods.InstalledModsProvider = oldMods; CoreSettings.ServiceProvider = null;
+            App.Catalogue = oldCatalogue; CoreMods.InstalledModsProvider = oldMods; CoreSettings.ServiceProvider = oldProvider;
             CoreSecrets.RetrieveProvider = oldGet; CoreSecrets.StoreProvider = oldSet;
             Directory.Delete(folder, true);
         }
