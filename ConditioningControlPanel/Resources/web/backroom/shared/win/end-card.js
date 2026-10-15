@@ -55,14 +55,15 @@ export function funnelLine(event, a = '', b = '') {
 }
 
 /** Fire and forget. Returns which road it took ('host' | 'beacon' | 'none') so a test can see it. */
-export function postFunnel(event, a = '', b = '', env = globalThis) {
+export function postFunnel(event, a = '', b = '', env = globalThis, plan = '') {
   const line = funnelLine(event, a, b);
   if (!line) return 'none';
   try {
     const wv = env && env.chrome && env.chrome.webview;
     if (wv && typeof wv.postMessage === 'function') {
       const [, , ca, cb] = line.split('|');
-      wv.postMessage({ type: 'funnel', event, a: ca, b: cb });
+      // With a plan named, the HOST opens that plan's checkout in the browser (its own links, its own throttle).
+      wv.postMessage(plan ? { type: 'funnel', event, a: ca, b: cb, plan } : { type: 'funnel', event, a: ca, b: cb });
       return 'host';
     }
     const nav = env && env.navigator, loc = env && env.location;
@@ -113,7 +114,9 @@ export function buildEndCard({ doc = globalThis.document, line = '', plan, featu
   a.className = 'br-end-card-btn';
   a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
   a.textContent = 'Get ' + p.name;
-  a.addEventListener('click', () => { postFunnel('cta_clicked', feature, 'patreon', env); });
+  // Hosted (the desktop app): the host opens the checkout. Letting the link open itself there
+  // raised a bare WebView2 popup, signed out and outside the host's throttle (review 2026-10-13).
+  a.addEventListener('click', (e) => { if (postFunnel('cta_clicked', feature, 'patreon', env, p.key) === 'host' && e && e.preventDefault) e.preventDefault(); });
   root.append(a);
   if (p.price) {
     const s = doc.createElement('span'); s.className = 'br-end-card-price'; s.textContent = p.price;

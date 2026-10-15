@@ -237,6 +237,19 @@ namespace ConditioningControlPanel.Services
         public static bool ShouldAdvance(bool pointerOver, bool onScreen, bool motionOn, bool focusWithin = false) =>
             onScreen && motionOn && !pointerOver && !focusWithin;
 
+        /// <summary>A Live card that comes in while the card on screen is under this share of its
+        /// hold goes up at once: the board just came on screen and nobody is reading yet.</summary>
+        public const double ArrivalJumpBefore = 0.25;
+
+        /// <summary>
+        /// Whether a Live card that just came in (the featured match the poll brings a moment after
+        /// Home opens) replaces the card on screen now. Only while the hold runs (no hover, no
+        /// focus, Motion not Off) and the card on screen has barely started; otherwise it lands at
+        /// the next change.
+        /// </summary>
+        public static bool JumpToArrival(double holdProgress, bool holdMayRun) =>
+            holdMayRun && holdProgress < ArrivalJumpBefore;
+
         /// <summary>
         /// Whether the card's ART plays. Owner, 2026-10-07: hover holds only the deck (the hold and
         /// the "paused while you read" pill); the art keeps moving under the pointer, or a board
@@ -383,6 +396,9 @@ namespace ConditioningControlPanel.Services
         private readonly IDictionary<string, DateTime> _snoozes;
         private readonly Action? _snoozesChanged;
         private readonly HashSet<string> _newShown = new(StringComparer.Ordinal);
+        // Live cards that came in mid-cycle and have not been on screen yet (see Refresh).
+        private readonly HashSet<string> _arrived = new(StringComparer.Ordinal);
+        private string? _resumeAfter;
         private List<DeckCard> _cards = new();
         private bool _dirty;
         private DeckCard? _cycleSlot;
@@ -449,26 +465,75 @@ namespace ConditioningControlPanel.Services
         {
             if (_cards.Count == 0) return Start();
 
-            int next = Index + 1;
+            // The walk goes on after the card on screen, or, right after an arrival, after the
+            // card the arrival cut in on.
+            string? onScreenId = Current?.Spec.Id;
+            string? anchorId = _resumeAfter ?? onScreenId;
+            _resumeAfter = null;
+            int anchor = anchorId == null ? -1 : _cards.FindIndex(c => c.Spec.Id == anchorId);
+            int next = (anchor >= 0 ? anchor : Index) + 1;
             if (_dirty && next < _cards.Count)
             {
-                string? currentId = Current?.Spec.Id;
-                int was = Index;
+                int was = next - 1;
                 Rebuild();
                 int fresh = FirstFresh();
                 if (fresh >= 0) return Land(fresh);
-                int at = currentId == null ? -1 : _cards.FindIndex(c => c.Spec.Id == currentId);
+                int at = anchorId == null ? -1 : _cards.FindIndex(c => c.Spec.Id == anchorId);
                 // The card on screen left the deck: its old place now holds the card after it.
                 next = at >= 0 ? at + 1 : was;
             }
 
+            // A Live card that came in mid-cycle ranks first, behind the walk: show it now rather
+            // than a whole cycle later (the featured match, 2026-10-14), then pick the walk up again.
+            int arrived = FirstArrived();
+            if (arrived >= 0)
+            {
+                _resumeAfter = next > 0 && next - 1 < _cards.Count ? _cards[next - 1].Spec.Id : null;
+                return Land(arrived);
+            }
+
+            // Never the card that is already on screen twice in a row.
+            if (next < _cards.Count && _cards[next].Spec.Id == onScreenId) next++;
             if (next >= _cards.Count) return NewCycle();
             return Land(next);
         }
 
+        /// <summary>
+        /// A provider moved while the board is on screen: rebuild NOW so the dots show what is in
+        /// the deck, keeping the card on screen where it is. Returns true when a Live card came in
+        /// that this cycle has not shown (it lands at the next card change). Does nothing (the
+        /// rebuild waits for the next card change) when nothing is dirty or the card on screen
+        /// would leave the deck.
+        /// </summary>
+        public bool Refresh()
+        {
+            if (!_dirty || _cards.Count == 0) return false;
+            var currentId = Current?.Spec.Id;
+            var keepCards = _cards;
+            var keepIndex = Index;
+            var keepSlot = _cycleSlot;
+            var keepArrived = _arrived.ToList();
+            Rebuild();
+            int at = currentId == null ? -1 : _cards.FindIndex(c => c.Spec.Id == currentId);
+            if (at < 0)
+            {
+                (_cards, Index, _cycleSlot) = (keepCards, keepIndex, keepSlot);
+                _arrived.Clear();
+                _arrived.UnionWith(keepArrived);
+                _dirty = true;
+                return false;
+            }
+            Index = at;
+            return HasArrival;
+        }
+
+        /// <summary>Whether a Live card came in mid-cycle and waits for its first show.</summary>
+        public bool HasArrival => FirstArrived() >= 0;
+
         /// <summary>A chip pressed: that card, rebuilding first if a provider moved.</summary>
         public DeckCard? Select(int index)
         {
+            _resumeAfter = null;
             if (index < 0 || index >= _cards.Count) return Current;
             if (_dirty)
             {
@@ -486,6 +551,7 @@ namespace ConditioningControlPanel.Services
         {
             var card = Current;
             if (card == null || !DashboardBillboard.CanSnooze(card.Spec)) return null;
+            _resumeAfter = null;
             _snoozes[card.Spec.Id] = DashboardBillboard.SnoozeUntil(nowUtc);
             DashboardBillboard.PruneSnoozes(_snoozes, nowUtc);
             try { _snoozesChanged?.Invoke(); } catch { }
@@ -507,11 +573,14 @@ namespace ConditioningControlPanel.Services
 
         private int FirstFresh() => _cards.FindIndex(c => DashboardBillboard.IsFreshNew(c.Spec, _newShown));
 
+        private int FirstArrived() => _arrived.Count == 0 ? -1 : _cards.FindIndex(c => _arrived.Contains(c.Spec.Id));
+
         private DeckCard? Land(int index)
         {
             if (_cards.Count == 0) { Index = 0; return null; }
             Index = Math.Clamp(index, 0, _cards.Count - 1);
             var card = _cards[Index];
+            _arrived.Remove(card.Spec.Id);
             bool showNew = card.Spec.Badge == BillboardBadge.New && _newShown.Add(card.Spec.Id);
             // Later visits in this run draw it without the tag.
             _cards[Index] = card with { ShowNew = false };
@@ -527,6 +596,7 @@ namespace ConditioningControlPanel.Services
         private void Rebuild(bool newCycle = false)
         {
             _dirty = false;
+            var had = new HashSet<string>(_cards.Select(c => c.Spec.Id), StringComparer.Ordinal);
             BillboardContext ctx;
             try { ctx = _context(); }
             catch { ctx = new BillboardContext(BillboardTier.Free, DateTime.UtcNow, DateTime.Now); }
@@ -569,6 +639,13 @@ namespace ConditioningControlPanel.Services
             var deck = DashboardBillboard.Build(specs, ctx.Tier, new Dictionary<string, DateTime>(_snoozes), ctx.NowUtc, Cycle, _newShown, EveryCard);
             _cards = deck.Select(s => new DeckCard(s, byId.TryGetValue(s.Id, out var p) ? p : null, false)).ToList();
             if (newCycle) _cycleSlot = _cards.FirstOrDefault(c => IsSlotKind(c.Spec));
+
+            // A new cycle starts at the top, where Live cards rank anyway. Mid-cycle, a Live card
+            // that was not in the deck is an arrival; one that left is no longer waited for.
+            if (newCycle) { _arrived.Clear(); _resumeAfter = null; return; }
+            _arrived.IntersectWith(_cards.Select(c => c.Spec.Id));
+            foreach (var c in _cards)
+                if (c.Spec.Kind == BillboardCardKind.Live && !had.Contains(c.Spec.Id)) _arrived.Add(c.Spec.Id);
         }
     }
 }

@@ -702,6 +702,23 @@ namespace ConditioningControlPanel
         public static Services.Deeper.EnhancementLibrary EnhancementLibrary { get; private set; } = null!;
         public static Services.Deeper.EnhancementAudioPlayer DeeperPlayer { get; private set; } = null!;
         public static Services.Deeper.EnhancementHostService DeeperHost { get; private set; } = null!;
+        /// <summary>The audio player with a playlist. Null until startup builds it; every call site is null-conditional.</summary>
+        public static Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; private set; }
+
+        /// <summary>
+        /// Stops the audio player with a playlist, from any thread (panic, the panic watchdog,
+        /// exit). The playlist itself stays; nothing here writes a setting.
+        /// </summary>
+        public static void StopAudioPlaylist()
+        {
+            try
+            {
+                var playlist = AudioPlaylist;
+                if (playlist is Services.AudioPlayer.AudioPlaylistService service) service.StopEmergency();
+                else if (playlist != null) Helpers.DispatcherHelper.RunOnUI(playlist.Stop);
+            }
+            catch (Exception ex) { Logger?.Debug("StopAudioPlaylist error: {Error}", ex.Message); }
+        }
         public static Services.Deeper.EnhancementFetcher DeeperFetcher { get; private set; } = null!;
         public static Services.Deeper.BrowserAutoDiscovery DeeperBrowserDiscovery { get; private set; } = null!;
         // Bridge that ties dashboard browser navigation to the local enhancement
@@ -1212,6 +1229,15 @@ namespace ConditioningControlPanel
         /// </summary>
         public static void KillAllAudio()
         {
+            // The audio player first and on its own: the pass below is one try/catch, and the
+            // player's own files are the loudest thing a panic can leave running.
+            StopAudioPlaylist();
+            // A Goon toy cue is a sound-alike: a panic or stop-all never leaves it running (ccp-bugs #1429).
+            try { Services.GoonGame.GoonToyDirector.Stop(); } catch { }
+            // The one-shot clip (the companion's Audio effect, a Deeper play-audio action). Only a
+            // session pause stopped it before, so a panic with the engine off let it play out.
+            try { Audio?.StopSound(); } catch { }
+
             try
             {
                 // Stop subliminal whispers
@@ -2624,6 +2650,12 @@ namespace ConditioningControlPanel
             // first Play / first Bind.
             DeeperPlayer = new Services.Deeper.EnhancementAudioPlayer();
             DeeperHost = new Services.Deeper.EnhancementHostService();
+            Services.Deeper.PlaylistEnhancementBridge.Install(); // waits for AudioPlaylist; a Deeper enhancement rides the playlist track
+
+            // The audio player with a playlist: its own player instance, list and level from
+            // the settings. Cheap like the two above; nothing opens until the first Play.
+            try { AudioPlaylist = new Services.AudioPlayer.AudioPlaylistService(); }
+            catch (Exception ex) { Logger?.Warning(ex, "Audio playlist player failed to start"); }
 
             // Phase 9: HT description auto-discovery. Fetcher caches in-memory
             // per session; browser discovery wires onto the WebView2 once
@@ -5841,6 +5873,7 @@ Application State:
             DeeperBrowserDiscovery?.Dispose();
             DeeperHost?.Dispose();
             DeeperPlayer?.Dispose();
+            try { (AudioPlaylist as IDisposable)?.Dispose(); } catch (Exception ex) { Logger?.Debug("AudioPlaylist dispose error: {Error}", ex.Message); }
             DeeperFetcher?.Dispose();
             EnhancementLibrary?.Dispose();
 

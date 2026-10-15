@@ -744,16 +744,30 @@ Example responses with REAL video names:
         internal static bool UsesCustomPrompt(Models.AppSettings? settings)
             => settings?.CompanionPrompt?.UseCustomPrompt == true;
 
+        /// <summary>
+        /// The custom prompt as it is sent. A hand-edited one (no community id) stores only the
+        /// boxes the user changed, so the rest follow the running persona
+        /// (<see cref="Companion.ActivePersonaPromptText.WireFields"/>). A community prompt is its
+        /// author's whole text and goes out as written.
+        /// </summary>
+        internal static Models.CompanionPromptSettings? CustomPromptOnWire(Models.AppSettings? settings)
+        {
+            var custom = settings?.CompanionPrompt;
+            if (custom == null || !string.IsNullOrEmpty(settings!.ActiveCommunityPromptId)) return custom;
+            Models.CompanionPromptSettings? persona = null;
+            try { persona = App.Personality?.GetActivePreset()?.PromptSettings; } catch { }
+            return Companion.ActivePersonaPromptText.WireFields(custom, persona);
+        }
+
         internal static PrefixInputs CaptureFingerprintInputs()
         {
             var s = App.Settings?.Current;
-            var companionPrompt = s?.CompanionPrompt;
             var useCustom = UsesCustomPrompt(s);
 
             // The sections that actually get baked in: the community prompt when one is assigned,
             // otherwise the active preset's. Hashing the TEXT (not just the id) is what makes an edit
             // in the Companion tab invalidate the prefix on the very next call.
-            var sections = Sections(useCustom ? companionPrompt : App.Personality?.GetActivePreset()?.PromptSettings);
+            var sections = Sections(useCustom ? CustomPromptOnWire(s) : App.Personality?.GetActivePreset()?.PromptSettings);
 
             return new PrefixInputs(
                 ModId: App.Mods?.ActiveModId ?? "none",
@@ -850,7 +864,6 @@ Example responses with REAL video names:
 
             // Check for an active custom prompt: a community/asset prompt assigned via the
             // Companion tab, or one hand-edited in the prompt editor (which carries no id).
-            var companionPrompt = App.Settings?.Current?.CompanionPrompt;
             if (UsesCustomPrompt(App.Settings?.Current))
             {
                 // Build a temporary preset wrapper so we can reuse BuildPromptFromPreset
@@ -858,7 +871,7 @@ Example responses with REAL video names:
                 {
                     Id = App.Settings?.Current?.ActiveCommunityPromptId ?? "custom",
                     Name = "Community Prompt",
-                    PromptSettings = companionPrompt
+                    PromptSettings = CustomPromptOnWire(App.Settings?.Current)
                 };
                 assembled = BuildPromptFromPreset(communityPreset);
             }

@@ -52,6 +52,7 @@ import {
   cleanNiches, peerNiches, SCORE_CAP_VERSION,
 } from './core/contracts.js';
 import { local as localCapsOf, UNIVERSAL_ROUND } from './core/caps.js';
+import { capToyMessage } from './exec/toys.js';
 import { GoonReceiptStatus } from './core/scoring.js';
 import { GoonSession } from './net/session.js';
 import { GoonSignalingClient, normalizeCode } from './net/signaling.js';
@@ -635,10 +636,12 @@ function stakeCode() {
   } catch (_e) { return ''; }
 }
 
-// Reserved: the host does not post this yet (caps.haptics is false until the
-// haptics-v2 overhaul merges). Wired now so the toy HUD has a seam on day one.
+// A toy connected or dropped in CCP while this window is open (ccp-bugs #1429). session.caps is
+// REPLACED, never mutated. The next match advertises it; a lobby already open keeps the hello
+// it sent, and its toy row repaints from session.caps.
 bridge.on('haptics-state', (m) => {
   session.haptics = m || null;
+  session.caps = Object.assign({}, session.caps, { haptics: !!(m && m.connected === true) });
   paintProbe();
 });
 
@@ -1287,6 +1290,8 @@ function buildMatch(transport, isHost, { withSuddenDeathUi = true, displayName =
     caps: night ? localCaps() : Object.assign({}, localCaps(), { night: 0 }),
     tag: isHost ? 'GG:host' : 'GG:guest',
   });
+  // Said in the hello, beside the ToyPatterns cap localCaps() advertises from the same flag.
+  match.localToyConnected = !!(session.caps && session.caps.haptics);
 
   if (withSuddenDeathUi) {
     let sd = null;
@@ -2843,7 +2848,15 @@ function buildApp() {
         media, layers, audio, logger,
         // The toy bridge only exists inside the app: a browser cannot reach a
         // toy, and a null bridge is how the executor knows to skip toy cues.
-        toyBridge: session.hosted ? ((m) => bridge.send(m)) : null,
+        // Every cue carries the toy cap the two players signed (exec/toys.js capToyMessage).
+        // Never in practice: the bot is not a person who signed anything. And the other
+        // player can only lower the cap: session.ownToyCap is this player's own figure.
+        toyBridge: session.hosted
+          ? ((m) => {
+            if (soloPair) return;
+            bridge.send(capToyMessage(m, currentMatch && currentMatch.consentSheet, session.ownToyCap));
+          })
+          : null,
       });
     } catch (e) {
       logger.error('createExecutor threw: ' + ((e && e.stack) || e));

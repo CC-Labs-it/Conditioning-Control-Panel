@@ -169,7 +169,7 @@ public class BouncingTextService : IDisposable
             // Random velocity in DIP/second (speed based on setting). The base is the
             // old 3-5 px/tick value scaled by 60 so the on-screen feel is unchanged at
             // 60 FPS, but motion is now delta-time driven so it stays correct at any rate.
-            var speed = settings.BouncingTextSpeed / 10.0; // 1-10 maps to 0.1-1.0 multiplier
+            var speed = settings.BouncingTextSpeed / 10.0 * Safety.GentleVisuals.Speed; // 1-10 maps to 0.1-1.0 multiplier (x gentle speed, 1 when off)
             var baseSpeed = (3.0 + _random.NextDouble() * 2.0) * 60.0; // 180-300 DIP/sec
             logo.VelX = baseSpeed * speed * (_random.Next(2) == 0 ? 1 : -1);
             logo.VelY = baseSpeed * speed * (_random.Next(2) == 0 ? 1 : -1);
@@ -265,6 +265,18 @@ public class BouncingTextService : IDisposable
         _lastRenderTime = TimeSpan.MinValue; // reset dt so the first resumed frame doesn't jump
         CompositionTarget.Rendering -= Animate;
         CompositionTarget.Rendering += Animate;
+    }
+
+    /// <summary>A Bubble Count round holding the other effects (#1418) takes the mandatory video's
+    /// pause, same rules ("show over videos" keeps the text up).</summary>
+    internal void HoldForFullscreen() => OnVideoStartedPause(null, EventArgs.Empty);
+
+    /// <summary>End of that hold: the mandatory video's resume. A video that took the screen in the
+    /// meantime keeps its own pause.</summary>
+    internal void ReleaseFullscreenHold()
+    {
+        if (App.Video?.IsPlaying == true) return;
+        OnVideoEndedResume(null, EventArgs.Empty);
     }
 
     private string SelectRandomText()
@@ -504,7 +516,8 @@ public class BouncingTextService : IDisposable
             App.Achievements?.TrackCornerHit();
             OnCornerHit?.Invoke(this, EventArgs.Empty);
 
-            if (settings.BouncingTextFxCornerBurst)
+            // Gentle visuals: no ring snapping in at 90% opacity.
+            if (settings.BouncingTextFxCornerBurst && !Safety.GentleVisuals.On)
             {
                 l.BurstTimer = 0;
                 double cx = l.PosX + l.TextWidth / 2;
@@ -517,7 +530,8 @@ public class BouncingTextService : IDisposable
         // On bounce: change color, award XP, maybe change text
         if (bounced)
         {
-            l.Color = NextColor(l, settings);
+            // Gentle visuals: no colour jump per bounce, the text keeps the colour it started with.
+            if (!Safety.GentleVisuals.On) l.Color = NextColor(l, settings);
             if (settings.BouncingTextFxSquashStretch)
             {
                 l.SquashTimer = 0;
@@ -767,7 +781,7 @@ public class BouncingTextService : IDisposable
         var settings = App.Settings.Current;
 
         // Update speed
-        var speed = settings.BouncingTextSpeed / 10.0;
+        var speed = settings.BouncingTextSpeed / 10.0 * Safety.GentleVisuals.Speed;
         foreach (var l in _logos)
         {
             var currentSpeed = Math.Sqrt(l.VelX * l.VelX + l.VelY * l.VelY);

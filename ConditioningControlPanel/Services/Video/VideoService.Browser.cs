@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>True while a browser video session owns the screen. Read by AudioService so the
         /// duck sweep never lowers the app's OWN video audio (LibVLC audio is in-process and
         /// structurally un-duckable, so this is what keeps the two engines at parity).</summary>
-        public bool IsBrowserSessionActive => _browserActive;
+        public bool IsBrowserSessionActive => _browserActive || HasFloatingInstances;   // a floating instance is WebView2 audio too
 
         /// <summary>Aspect ratio (w/h) of the clip in the live browser session, or 0 when unknown /
         /// no browser session. The page's video element is contain-fit over the full window, so this
@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Services
             {
                 // Global "Show content on" picker, not every screen: one picked monitor means
                 // one browser window, on that monitor.
-                var screens = VideoScreens().ToList();
+                var screens = PlaybackScreens().ToList();   // the one floating screen, or every target
                 if (screens.Count == 0) return false;   // LibVLC path owns the no-screens end
                 var primary = screens.FirstOrDefault(s => s.Primary) ?? screens[0];
                 var secondaries = screens.Where(s => s.DeviceName != primary.DeviceName).ToList();
@@ -128,6 +128,7 @@ namespace ConditioningControlPanel.Services
                     Path = path,
                     PrimaryScreen = primary,
                     SecondaryScreens = secondaries,
+                    FloatingBounds = IsFloating ? _floatBounds : null,
                     Volume = GetEffectiveVolume() / 100.0,
                     Muted = GetEffectiveVolume() <= 0,
                     BlurBackground = App.Settings?.Current?.VideoBlurredBackgroundEnabled == true,
@@ -135,6 +136,9 @@ namespace ConditioningControlPanel.Services
                     // that swallows the cursor while the rest of the app still shows one reads as a
                     // frozen machine, and attention targets are clicked over this surface.
                     HideCursor = false,
+                    // Gentle visuals: slowed playback + a fade in from black inside the page.
+                    PlaybackRate = _playRate,
+                    FadeInMs = Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0,
                     // The SAME flag SetupStrictHandlers is given below, not the live IsStrictActive
                     // probe: the page wants one fixed answer at load time, and this is the value the
                     // whole run is locked to.
@@ -194,7 +198,7 @@ namespace ConditioningControlPanel.Services
                 StopWedgeWatchdog();
 
                 App.Bubbles?.PauseAndClear();
-                if (App.Settings.Current.AttentionChecksEnabled) SetupAttention();
+                if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating)) SetupAttention();
 
                 VideoDiag.Log("VIDEO", $"browser session on screen ({_windows.Count} window(s)) - {Path.GetFileName(path)}");
                 return true;
@@ -582,6 +586,14 @@ namespace ConditioningControlPanel.Services
             // Window-level PreviewMouseDown never fires over a WebView2 child HWND, so this message
             // is what keeps the attention targets clickable on top of the video.
             BringTargetsToFront();
+            // The page posts this on pointerdown, so the button is still held: a floating window
+            // moves with it. Queued, never run inside the WebView2 message callback.
+            if (IsFloating)
+                Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                {
+                    if (_primarySurface != null) OnFloatingTouched(_primarySurface);   // a press takes the sound
+                    BeginFloatingDrag(_primaryVideoWindow);
+                }));
         }
 
         /// <summary>

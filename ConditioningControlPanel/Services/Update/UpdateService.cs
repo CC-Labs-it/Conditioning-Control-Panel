@@ -20,13 +20,90 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.5";
+        public const string AppVersion = "7.1.9";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.5 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.9 - Stay Tuned
+
+PIECE BY PIECE
+- watch a game: public games have a Watch button in the Lobby. you see the real board about 15 s behind, can swap sides, use the same camera and Options, and see both players' IQ. players still never see each other's. ""Let people watch my games"" sits in Options, on by default.
+- a featured game on the Home board, rotating every 20 s. Watch is one click.
+- reactions: six of them, each with its own little sound, with a cooldown so nobody can flood the board. players see them float up and can turn them off (""Play watchers' reactions"") or mute them.
+- the stands replay the turn player's Distraction with your own pictures. games between players on older versions get calm ambient pictures instead.
+- name tags: both players float at their end of the board, hop when they move, flinch when they lose a piece, and sweat and tremble in check.
+- rating and ladder: your rating sits by your name, the Ladder shows the top 50 and your rank, and the end card rolls your rating up or down. unrated games say why.
+- a short opening card when the game opens, and a clockwork board intro where the pieces rise through brass gears. both can be switched off in Options.
+- the menus are rebuilt: a Back button on every screen, clearer buttons, sounds, and things that react when you press them.
+
+NEW IN 7.1.9
+- Gentle visuals, for light-sensitive eyes: one switch in Settings > Performance. everything fades in and out (you pick 0.25 to 2 s), GIFs and spirals slow down (down to 0.25x), brightness eases in instead of snapping, nothing flickers, and subliminals lose their black card. videos fade but play at normal speed.
+- local AI setup: the first page now says plainly that the AI runs on your own graphics card and memory, shows what your PC has, and warns when it is under 16 GB memory or 8 GB graphics memory.
+- Intake: unlimited graded Intake for Basic too, not only Prime.
+
+FIXES IN 7.1.9
+- a lock card sent by the companion or Remote with no count showed 0 / 0 and never closed. it always asks for at least one now.
+- Flash ""Max on screen"" is now the ceiling in every mode. Stay mode could reach 40.
+- what the avatar says in the tube chat now shows in the Companion page history too.
+
+NEW IN 7.1.8
+- audio player: a playlist card on the Deeper page. add your own files, play, skip, seek. it has its own volume, Deeper enhancements can ride the current track, and panic or engine Stop silences it. .ogg files are not supported.
+- Goon: toys now react during matches. a cue never goes above your own slider, and the other player can only lower it. no toy cues in practice.
+- companion: a Voice Level slider.
+- CCP Default: 44 more companion lines have a recorded voice.
+- Intake: spoken answers work while the wake word is on. the card melt never lands on a timed question and scores nothing.
+- favourites drawer on every page, and Ctrl+K leads with your pinned favourites.
+- Mandatory Video: the ""Video length"" row now cuts web videos and floating videos at your max too. a video you asked for in chat plays whole.
+- plans: locked features show Basic and Prime with their price, and the button opens the right checkout.
+- invites: the app tells you when someone uses your invite code, and when a friend you invited subscribes.
+
+DOWN THE RABBIT HOLE
+- dock toys wake on their own as you play. no key, no button. grabbing a toy again takes it a level deeper for the fall, and Overload works again.
+- a calmer feel: a detonation dips the sound and the colour instead of flashing, and pops climb a little scale.
+- bubbles move, every spiral is woven live in the chamber's colours, and online gifs play instead of sitting still.
+- tube cards show pictures first, clips later. a popped flash card leaves in style.
+- Escape pauses the run.
+
+BREAKOUT
+- Endless: the board name fades once you have arrived.
+- story level 8 keeps your launch held while the finale ring forms.
+- the pendulum hint no longer sits on the ""move to play"" line.
+
+FIXES IN 7.1.8
+- content packs: a pack video is no longer loaded whole into memory. with packs active this could eat several GB and make the whole PC crawl.
+- a web video started by the companion could run past your max video length. it stops there now.
+- Mind Wipe, one-shot sounds and the Mantra drone follow the master volume.
+- Deeper and Mantra volume no longer move the app's volume in the Windows mixer.
+- subliminals show above a playing video.
+- the Audio action names the right folder, and falls back to your mod's recorded clips.
+- Presets says what a preset covers.
+- temp files that could not be deleted are retried instead of piling up.
+
+NEW IN 7.1.7
+- lines with no recorded voice on your current mod wear a small muted-speaker mark in the phrase editor, and Audio Whispers says so when some of your lines will stay silent. nothing changed in what plays: a line with no recording was always silent.
+- Awareness keyword triggers play their sound only while the engine or a session is running. the Test button still plays.
+- bug reports now say which sound started while the engine was off, and name the companion speech bubble if the app hangs there. if you get stray sounds or a freeze, send a report right after.
+
+NEW IN 7.1.6
+- mandatory videos can float. Studio > Mandatory Video > ""Shows as"" > Floating window: small bordered windows you can drag across monitors and throw around. up to four at once, with sliders for size and drift speed. the lit one has the sound; touch another to move it. floating videos have no attention checks.
+- Bubble Count: a new option pauses the other effects while a round runs.
+- the bottom bar shows the session name and the time left while a session runs.
+- Leash: ""What each level allows"" at the level picker explains Soft, Standard and Strict.
+- chess: the board explains what IQ means.
+
+FIXES IN 7.1.6
+- Library: with an online source picked, the list no longer runs under the Start bar, so the ""add your own community"" field can be reached. the Asset Browser no longer vanishes after switching back to your own assets.
+- red hold-to-pop bubbles no longer let the click through to the window behind. a bubble on top of a flash image takes the click.
+- the corner GIF shows only while the engine runs.
+- applying Her Favor no longer drops the frame rate for a few seconds.
+- detached companion: the invisible areas around it no longer block clicks.
+- companion personality: ""Fork and edit by hand"" opens the current prompt, the editor no longer cuts your text short, and Screen Awareness Reactions can be edited again.
+- ending a Remote session no longer stops your own running session.
+- a Deeper file played as a mandatory video shows all of its subliminals.
+- haptics: a test only plays the test, and says so when haptics are switched off.
+- updates: a stalled download times out and retries instead of sitting on the startup window.
 
 FIXES SINCE 7.1.0
 - new Companion > AI page: the connection (cloud, local or your own model), how often your companion talks (idle chatter, bubble time, voice lines, triggers, tube look) and its memory, all in one place and never folded away. 7.1.0 and 7.1.1 left some of them with no way in.
@@ -629,26 +706,22 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
                         using var contentStream = await downloadResponse.Content.ReadAsStreamAsync();
                         using var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
 
-                        var buffer = new byte[8192];
-                        int bytesRead;
                         var lastProgress = -1;
 
-                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
-                        {
-                            await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
-                            downloadedBytes += bytesRead;
-
-                            if (totalBytes > 0)
+                        // HttpClient.Timeout stops counting once the headers are in
+                        // (ResponseHeadersRead), so the body had no timeout at all: a connection
+                        // that went quiet left the progress window up for hours with the main
+                        // window hidden and no way out. A stalled read now fails the attempt.
+                        downloadedBytes = await CopyWithStallTimeoutAsync(contentStream, fileStream, DownloadStallTimeout,
+                            copied =>
                             {
-                                var progress = (int)(downloadedBytes * 100 / totalBytes);
-                                if (progress != lastProgress)
-                                {
-                                    lastProgress = progress;
-                                    progressCallback?.Invoke(progress);
-                                    DownloadProgressChanged?.Invoke(this, progress);
-                                }
-                            }
-                        }
+                                if (totalBytes <= 0) return;
+                                var progress = (int)(copied * 100 / totalBytes);
+                                if (progress == lastProgress) return;
+                                lastProgress = progress;
+                                progressCallback?.Invoke(progress);
+                                DownloadProgressChanged?.Invoke(this, progress);
+                            }, ct);
 
                         App.Logger?.Information("Installer downloaded successfully: {Path} ({Size:F1} MB)",
                             installerPath, downloadedBytes / (1024.0 * 1024.0));
@@ -681,6 +754,45 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             finally
             {
                 IsDownloading = false;
+            }
+        }
+
+        /// <summary>How long the installer download may receive nothing before the attempt fails.</summary>
+        internal static readonly TimeSpan DownloadStallTimeout = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// Copies <paramref name="source"/> to <paramref name="destination"/> and gives up with a
+        /// <see cref="TimeoutException"/> when a single read waits longer than
+        /// <paramref name="stallTimeout"/>. The clock restarts on every chunk, so a slow but moving
+        /// download is never cut. The caller's own cancellation still surfaces as cancellation.
+        /// Returns the bytes copied.
+        /// </summary>
+        internal static async Task<long> CopyWithStallTimeoutAsync(Stream source, Stream destination,
+            TimeSpan stallTimeout, Action<long>? onProgress, CancellationToken ct)
+        {
+            var buffer = new byte[81920];
+            long copied = 0;
+            using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            while (true)
+            {
+                stall.CancelAfter(stallTimeout);
+                int read;
+                try
+                {
+                    read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), stall.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"The download stalled: no data for {stallTimeout.TotalSeconds:F0} seconds.");
+                }
+                if (read <= 0) return copied;
+
+                // The write is local disk: it runs on the caller's token, off the stall clock.
+                stall.CancelAfter(Timeout.InfiniteTimeSpan);
+                await destination.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                copied += read;
+                onProgress?.Invoke(copied);
             }
         }
 
@@ -1574,10 +1686,11 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
         /// <summary>
         /// Determines if an exception is a transient network error that should be retried.
         /// </summary>
-        private static bool IsTransientNetworkError(Exception ex)
+        internal static bool IsTransientNetworkError(Exception ex)
         {
             // Check for common transient network errors
             if (ex is System.Net.Http.HttpRequestException ||
+                ex is TimeoutException ||
                 ex is System.IO.IOException ||
                 ex is System.Net.Sockets.SocketException ||
                 ex is TaskCanceledException)

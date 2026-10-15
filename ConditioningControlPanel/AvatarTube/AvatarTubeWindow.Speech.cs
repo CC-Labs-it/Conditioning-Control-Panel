@@ -349,6 +349,8 @@ namespace ConditioningControlPanel
 
                 // Capture AI reply for chat history
                 AddToChatHistory(text, isUser: false);
+                // ...and for the Companion page, which reads the brain's log (#1443).
+                if (aiGenerated) App.Brain?.NoteTubeLine(text);
 
                 // aiGenerated: when true, the bubble shows the "AI" badge. Most call sites that route
                 // through GigglePriority are AI replies, but the awareness keyword path can fall back
@@ -944,8 +946,25 @@ namespace ConditioningControlPanel
                     if (bx != _bubbleX || by != _bubbleY)
                     {
                         _bubbleX = bx; _bubbleY = by;
-                        SetWindowPos(_bubbleHandle, IntPtr.Zero, bx, by, 0, 0,
-                            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                        // Moving a visible WPF window waits on the render thread twice (HwndTarget
+                        // disables the render target on WM_WINDOWPOSCHANGING and flushes
+                        // synchronously, then again on re-enable). When the render thread is backed
+                        // up, this call is where the UI thread parks (ccp-bugs #1412, the same family
+                        // as the lock card's #494). Nothing here can shorten that wait; the mark and
+                        // the line below only make the next report say so. No behaviour change.
+                        long moveStart = Environment.TickCount64;
+                        using (VideoDiag.UiScope(BubbleMoveMark))
+                        {
+                            SetWindowPos(_bubbleHandle, IntPtr.Zero, bx, by, 0, 0,
+                                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                        }
+                        long moveMs = Environment.TickCount64 - moveStart;
+                        if (IsSlowBubbleMove(moveMs))
+                        {
+                            App.Logger?.Warning(
+                                "Speech bubble move waited {Ms} ms on the render thread (lockCard={LockCard}, bubbleVisible={Visible})",
+                                moveMs, LockCardWindow.IsAnyOpen(), _bubbleWindow?.IsVisible == true);
+                        }
                     }
                 }
 
@@ -1104,6 +1123,12 @@ namespace ConditioningControlPanel
             catch { /* a bubble that pops the app forward beats a bubble that never shows */ }
             return IntPtr.Zero;
         }
+
+        /// <summary>What a hang report names when the UI thread is parked in the bubble's move.</summary>
+        internal const string BubbleMoveMark = "AvatarTube.SpeechBubble.Move";
+        /// <summary>A healthy move is a few ms; past this the render thread kept the UI thread waiting.</summary>
+        internal const int SlowBubbleMoveMs = 250;
+        internal static bool IsSlowBubbleMove(long elapsedMs) => elapsedMs >= SlowBubbleMoveMs;
 
         private bool _placingSpeechBubble;
         private bool _speechBubblePlacementHooked;
@@ -1899,7 +1924,9 @@ namespace ConditioningControlPanel
             var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
             if (masterVolume <= 0f) return;
             // Idle voicelines were full-volume (×1.0); -20% so today's hotter v3 lines sit under the barks.
-            var volume = (float)Math.Pow(masterVolume, 1.5) * 0.8f;
+            // The player's Voice level rides on top (CompanionVoiceGain; its default changes nothing).
+            var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.IdleTrim);
+            if (volume <= 0f) return; // Voice level 0: the bubble still shows, the line is silent
             PlaySpokenAudio(filePath, volume);
         }
 
@@ -2511,7 +2538,10 @@ namespace ConditioningControlPanel
                 });
 
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.9f; // a touch louder — it's a once-ever moment
+                // a touch louder — it's a once-ever moment. Voice level applies here too; at 0 the
+                // clip still runs (silent), so the latch below unwinds the usual way.
+                var volume = masterVolume <= 0f ? 0f
+                    : Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.NoteTrim);
 
                 // onFinished is guaranteed to fire exactly once — including when playback is
                 // refused outright — so the uninterruptible latch can never stick on (#778).
@@ -2541,7 +2571,8 @@ namespace ConditioningControlPanel
 
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 0) / 100f;
                 if (masterVolume <= 0f) return; // muted
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.85f;
+                var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.BarkTrim);
+                if (volume <= 0f) return; // Voice level 0
                 PlaySpokenAudio(audioPath, volume); // unified channel → no overlap
             }
             catch (Exception ex)
@@ -2561,7 +2592,8 @@ namespace ConditioningControlPanel
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
                 if (masterVolume <= 0f) return;
                 // Event lines were ×0.7; -20% (→ ×0.56) so today's hotter v3 lines sit under the barks.
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.56f;
+                var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.EventTrim);
+                if (volume <= 0f) return; // Voice level 0
                 PlaySpokenAudio(audioPath, volume); // unified channel → no overlap
             }
             catch (Exception ex)
@@ -2646,7 +2678,9 @@ namespace ConditioningControlPanel
                 if (System.IO.File.Exists(audioPath))
                 {
                     var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                    var volume = (float)Math.Pow(masterVolume, 1.5);
+                    // A spoken line, so it follows the Voice level like the rest of the voice.
+                    var volume = masterVolume <= 0f ? 0f
+                        : Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.FullTrim);
 
                     App.Audio?.PlayOneShot(audioPath, volume, "cum-and-collapse");
                 }
@@ -2875,6 +2909,7 @@ namespace ConditioningControlPanel
             {
                 var s = App.Settings?.Current;
                 if (s == null || App.Patreon?.GrantLooksDead == true) return null;
+                if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return null;   // never from memory alone
                 var reading = Services.Startup.Conversion.ConversionRules.DecideLapse(s.PatreonTier, s.ServerTierSeen,
                     s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
                 if (reading.Row != Services.Startup.Conversion.LapseRow.Closed || MainWindow.LiveCovers(reading.Tier)) return null;

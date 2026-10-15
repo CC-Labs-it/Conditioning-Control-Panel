@@ -406,6 +406,10 @@ namespace ConditioningControlPanel
             App.IsEngineRunning = true;
             UpdateStartButton();
 
+            // ccp-bugs #1399: the user's own corner GIFs run with the engine, like every other
+            // effect. Each show is deferred a dispatcher pass, so this costs the start nothing.
+            try { App.CornerGif?.RefreshOverlays(); } catch (Exception ex) { App.Logger?.Debug("Corner GIF start: {E}", ex.Message); }
+
             // EMI Desk (MOMENTS 4.B). systemInitiated separates a lockdown's own restart from a
             // deliberate press, which is the only thing her lines care about here.
             _emiEngineStartedUtc = DateTime.UtcNow;
@@ -461,6 +465,10 @@ namespace ConditioningControlPanel
         {
             // Stop flash first (safe, no complex cleanup)
             App.Flash.Stop();
+
+            // Stop stops everything (owner, 7.1.8): the audio player with a playlist goes quiet
+            // with the engine. The list stays. StartEngine never touches the player.
+            App.StopAudioPlaylist();
 
             // Tear down any Deeper enhancement engine bound to the playing video.
             // App.Video.Stop() below closes windows via CloseAll, which does NOT
@@ -542,6 +550,9 @@ namespace ConditioningControlPanel
             _isRunning = false;
             App.IsEngineRunning = false;
             UpdateStartButton();
+
+            // ccp-bugs #1399: ...and stop with it. StopAll also cancels queued realizations.
+            try { App.CornerGif?.StopAll(); } catch (Exception ex) { App.Logger?.Debug("Corner GIF stop: {E}", ex.Message); }
 
             // EMI Desk (MOMENTS 4.B): how long the run lasted. Zero when nothing was running, and
             // the stamp is cleared so a second stop cannot invent a duration.
@@ -956,10 +967,8 @@ namespace ConditioningControlPanel
                 };
 
                 // Also update Presets tab button using direct reference
-                if (TxtPresetsStatus != null)
-                {
-                    TxtPresetsStatus.Text = Loc.Get("label_running");
-                }
+                // "Running...", or the session's name and clock while a session runs.
+                RefreshBarStatus();
             }
             else
             {

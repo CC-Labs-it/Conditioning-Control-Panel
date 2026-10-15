@@ -138,8 +138,11 @@ test('the row: a link to the plan, the price only with plans, a click counts', (
   assert.match(a.rel, /noopener/);
   assert.equal(a.textContent, 'Get Basic');
   assert.equal(price.textContent, 'USD 7.50 a month');
-  a.listeners.click[0]();
-  assert.deepEqual(posted, [{ type: 'funnel', event: 'cta_clicked', a: 'backroom_bank', b: 'patreon' }]);
+  let held = 0;
+  a.listeners.click[0]({ preventDefault: () => { held++; } });
+  // In the app the host is told which plan to open and the link does not open itself (it raised a bare popup).
+  assert.deepEqual(posted, [{ type: 'funnel', event: 'cta_clicked', a: 'backroom_bank', b: 'patreon', plan: 'basic' }]);
+  assert.equal(held, 1);
 
   const bare = buildEndCard({ doc: fakeDoc(), plan: planOf(undefined, 'prime'), feature: 'breakout_demo', env: {} });
   assert.equal(bare.children.length, 1, 'no line, no price: just the button');

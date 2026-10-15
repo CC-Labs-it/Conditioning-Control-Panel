@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>ConditioningControlPanel</AssemblyName>
     <RootNamespace>ConditioningControlPanel</RootNamespace>
-    <Version>7.1.5</Version>
+    <Version>7.1.9</Version>
     <Company>CodeBambi</Company>
     <Product>Conditioning Control Panel</Product>
     <Description>A professional visual conditioning application with gamification features.</Description>
@@ -583,7 +583,8 @@
       Resources\web\piecebypiece\dev\**\*;
       Resources\web\piecebypiece\**\*.md;
       Resources\web\piecebypiece\package.json;
-      Resources\web\dtrh\tests\**\*
+      Resources\web\dtrh\tests\**\*;
+      Resources\web\intake\tests\**\*
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
          flash): its node tests ride along so the vendored copy stays checkable, but they are
@@ -611,7 +612,8 @@
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\dev\**\*;
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\Resources\web\piecebypiece\package.json;
-      $(MSBuildProjectDirectory)\Resources\web\dtrh\tests\**\*
+      $(MSBuildProjectDirectory)\Resources\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\Resources\web\intake\tests\**\*
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
 

@@ -176,7 +176,9 @@ internal sealed class ConversationPageVm : CompanionObservable
         if (dispatcher == null || dispatcher.HasShutdownStarted) return;
         dispatcher.BeginInvoke(Reconcile, DispatcherPriority.Normal);
     }
-    internal static bool Shows(TurnKind kind) => kind is TurnKind.UserChat or TurnKind.AssistantChat;
+    // Every AI line the tube said shows here too (#1443): ambient replies and display-only tube lines.
+    internal static bool Shows(TurnKind kind) =>
+        kind is TurnKind.UserChat or TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine;
     private void Reconcile()
     {
         var next = (_session?.Turns ?? Array.Empty<CompanionTurn>()).Where(t => Shows(t.Kind)).ToArray();

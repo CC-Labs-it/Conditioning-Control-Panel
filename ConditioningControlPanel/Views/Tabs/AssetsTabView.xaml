@@ -76,10 +76,10 @@
              literal height cannot give the 5px back. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition x:Name="RowMediaSource" x:FieldModifier="internal" Height="Auto"/>
             <RowDefinition Height="Auto" MaxHeight="340"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*" MinHeight="260"/>
+            <RowDefinition x:Name="RowAssetBrowser" x:FieldModifier="internal" Height="*" MinHeight="260"/>
         </Grid.RowDefinitions>
     
         <!-- Header with title and actions -->
@@ -144,7 +144,7 @@
              (InitializeRemoteMediaPicker) rather than declaring Click/ValueChanged handlers:
              the chip rows are built from FypOnlineCoordinator.Catalog and from live settings
              lists, so the same code that fills them owns their events. -->
-        <Border x:Name="RemoteMediaBlock" x:FieldModifier="internal" Grid.Row="1"
+        <Border x:Name="RemoteMediaBlock" x:FieldModifier="internal" Grid.Row="1" VerticalAlignment="Top"
                 Style="{StaticResource SectionPanel}" Padding="12">
             <!-- Nav polish wave 3 (owner: "look at how many pills we got there"): ONE decision
                  visible at a time. Source as a segmented bar, flavour as six cards, everything
@@ -262,7 +262,11 @@
                     </Setter>
                 </Style>
             </Border.Resources>
-            <StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
                 <!-- Row 1, SOURCE: the header, the segmented bar (built in MainWindow.Assets.cs,
                      radio behaviour enforced there) and, in Both only, the share slider. The
                      old hint line now rides the header as a tooltip, to keep the block short. -->
@@ -292,7 +296,12 @@
                 </DockPanel>
 
                 <!-- Everything below only unfolds once remote media is in play. -->
-                <StackPanel x:Name="RemoteMediaDetails" x:FieldModifier="internal" Visibility="Collapsed">
+                <Grid x:Name="RemoteMediaDetails" x:FieldModifier="internal" Grid.Row="1" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
                     <!-- Row 2, FLAVOUR: six cards in one row (five flavours + Mine, mirrored from
                          the web pickers, FlavourPresets.cs). One click sets niches + pool. -->
@@ -301,7 +310,7 @@
 
                     <!-- Row 3, FINE-TUNE: one row says what is in the pool; a click opens the
                          niche list and your own communities. Session-only open state. -->
-                    <Button x:Name="BtnRemoteFineTune" x:FieldModifier="internal" Margin="0,8,0,0"
+                    <Button x:Name="BtnRemoteFineTune" x:FieldModifier="internal" Grid.Row="1" Margin="0,8,0,0"
                             Style="{StaticResource RemoteFineTuneRow}">
                         <DockPanel>
                             <TextBlock x:Name="TxtRemoteFineTuneChevron" x:FieldModifier="internal"
@@ -315,10 +324,10 @@
                     </Button>
 
                     <!-- Open, the list borrows the Asset Browser's room (the browser section
-                         collapses while Fine-tune is open, SetRemoteFineTuneOpen) and scrolls
-                         past 430 px: the page itself never scrolls, so an uncapped list pushed
-                         the r/ field and the browser below the window (desk run 4). -->
-                    <ScrollViewer x:Name="RemoteFineTuneScroll" x:FieldModifier="internal" MaxHeight="430"
+                         collapses while Fine-tune is open, ApplyFineTuneLayout) and takes
+                         whatever height the page has left (#1410): a fixed 430 px cap plus the
+                         browser row's 260 px floor ran the list and the r/ field under the Start bar. -->
+                    <ScrollViewer x:Name="RemoteFineTuneScroll" x:FieldModifier="internal" Grid.Row="2"
                                   Visibility="Collapsed" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="RemoteFineTuneBody" x:FieldModifier="internal"
@@ -358,8 +367,8 @@
                                    TextWrapping="Wrap" Margin="2,0,0,2" Visibility="Collapsed"/>
                     </StackPanel>
                     </ScrollViewer>
-                </StackPanel>
-            </StackPanel>
+                </Grid>
+            </Grid>
         </Border>
 
         <!-- TOP: Content Packs Section (hidden — most packs live outside the app now; use BtnGetPacks instead) -->

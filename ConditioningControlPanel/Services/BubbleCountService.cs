@@ -25,7 +25,21 @@ public class BubbleCountService : IDisposable
     private readonly Random _random = new();
     private DispatcherTimer? _schedulerTimer;
     private bool _isRunning;
-    private bool _isBusy;
+    private bool _busy;
+    /// <summary>
+    /// True from the moment a round is claimed until it is over. Every start and every one of the
+    /// many exits assigns this, so the setter is the one funnel the effects hold hangs from.
+    /// </summary>
+    private bool _isBusy
+    {
+        get => _busy;
+        set
+        {
+            if (_busy == value) return;
+            _busy = value;
+            if (value) EnterEffectsHold(); else ExitEffectsHold(resumeFlashes: true);
+        }
+    }
     private string _videosPath = "";
 
     // Pack video support
@@ -49,6 +63,92 @@ public class BubbleCountService : IDisposable
     
     public event EventHandler? GameCompleted;
     public event EventHandler? GameFailed;
+
+    // =====================================================================================
+    //  "Pause other effects during Bubble Count" (#1418, AppSettings.BubbleCountPauseEffects)
+    //
+    //  No mechanism of its own: a round takes the SAME three steps a mandatory video takes.
+    //    1. flashes  - App.Flash.Stop() going in, App.Flash.Start() coming out (what
+    //                  VideoService's prologue and Cleanup do);
+    //    2. overlays - spiral, pink filter, brain drain blur, corner GIFs and the compositor
+    //                  hosts are pinned BELOW the round's windows by the same reconciler that
+    //                  pins them below a video (OverlayService.ReassertZOrder reads
+    //                  HoldsEffects / EffectsHoldWindowHandles);
+    //    3. bouncing text - the video pause / resume pair on BouncingTextService.
+    //  Bubbles were already paused for every round. Panic, Lockdown, strict lock and the
+    //  remote rules are untouched: nothing here gates a stop.
+    // =====================================================================================
+
+    private bool _holdingEffects;
+    private bool _heldFlashes;
+
+    /// <summary>True while a round runs with the option on. Read by the overlay reconciler.</summary>
+    public bool HoldsEffects => _holdingEffects;
+
+    /// <summary>
+    /// The round's fullscreen windows (the count video, then the answer card), which the overlay
+    /// reconciler uses as its "video" anchors while <see cref="HoldsEffects"/> is true. UI thread.
+    /// </summary>
+    internal IReadOnlyList<IntPtr> EffectsHoldWindowHandles()
+    {
+        var handles = new List<IntPtr>();
+        if (!_holdingEffects) return handles;
+        try
+        {
+            var windows = Application.Current?.Windows;
+            if (windows == null) return handles;
+            foreach (Window w in windows)
+            {
+                if (w is not BubbleCountWindow && w is not BubbleCountResultWindow) continue;
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+                if (hwnd != IntPtr.Zero) handles.Add(hwnd);
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("BubbleCountService: hold handles failed: {Error}", ex.Message); }
+        return handles;
+    }
+
+    private void EnterEffectsHold()
+    {
+        if (!BubbleCountHoldRule.ShouldHold(roundRunning: true,
+                optionOn: App.Settings?.Current?.BubbleCountPauseEffects == true))
+            return;
+        _holdingEffects = true;
+        DispatcherHelper.RunOnUI(() =>
+        {
+            try
+            {
+                _heldFlashes = App.Flash?.IsRunning == true;
+                App.Flash?.Stop();
+                App.BouncingText?.HoldForFullscreen();
+                App.Logger?.Information("BubbleCountService: other effects held for the round (flashes were running: {Flashes})", _heldFlashes);
+            }
+            catch (Exception ex) { App.Logger?.Warning(ex, "BubbleCountService: effects hold failed"); }
+        });
+    }
+
+    /// <param name="resumeFlashes">False on the force-close path (engine stop, panic, exit,
+    /// remote stop): whoever closed the round is stopping things, so nothing is restarted.</param>
+    private void ExitEffectsHold(bool resumeFlashes)
+    {
+        if (!_holdingEffects) return;
+        _holdingEffects = false;
+        var heldFlashes = _heldFlashes;
+        _heldFlashes = false;
+        DispatcherHelper.RunOnUI(() =>
+        {
+            try
+            {
+                App.BouncingText?.ReleaseFullscreenHold();
+                if (BubbleCountHoldRule.ShouldResumeFlashes(heldFlashes, resumeFlashes,
+                        App.IsEngineRunning, App.Settings?.Current?.FlashEnabled == true))
+                    App.Flash?.Start();
+                // The overlays were parked under the round's windows; put them back on top.
+                App.Overlay?.NotifyTopWindowClosed();
+            }
+            catch (Exception ex) { App.Logger?.Warning(ex, "BubbleCountService: effects release failed"); }
+        });
+    }
 
     public void Start()
     {
@@ -817,6 +917,10 @@ public class BubbleCountService : IDisposable
     /// </summary>
     public void ResetBusyState()
     {
+        // Only BubbleCountWindow.ForceCloseAll lands here, and its callers are all stops (engine
+        // stop, panic exit, stop-all, remote stop) that have already stopped the flashes: release
+        // the effects hold without restarting them.
+        ExitEffectsHold(resumeFlashes: false);
         _isBusy = false;
         _retryCount = 0;
         CloseMessageWindows();
@@ -882,21 +986,8 @@ public class BubbleCountService : IDisposable
     /// </summary>
     private void CleanupTempPackFiles()
     {
-        foreach (var tempFile in _tempPackFiles)
-        {
-            try
-            {
-                if (File.Exists(tempFile))
-                {
-                    File.Delete(tempFile);
-                }
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("BubbleCountService: Failed to delete temp pack file: {Error}", ex.Message);
-            }
-        }
-        _tempPackFiles.Clear();
+        // A refused delete (the player has not let go yet) stays listed and is retried next time.
+        _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
     }
 
     public void Dispose()
@@ -904,4 +995,25 @@ public class BubbleCountService : IDisposable
         Stop();
         CleanupTempPackFiles();
     }
+}
+
+/// <summary>
+/// The two decisions behind "Pause other effects during Bubble Count" (#1418), kept pure so they
+/// can be pinned without an engine. The hold itself is the mandatory video's, see
+/// <see cref="BubbleCountService.HoldsEffects"/>.
+/// </summary>
+public static class BubbleCountHoldRule
+{
+    /// <summary>A round holds the other effects only when the player asked for it. Default off.</summary>
+    public static bool ShouldHold(bool roundRunning, bool optionOn) => roundRunning && optionOn;
+
+    /// <summary>
+    /// Flashes come back after the round only if this hold is what stopped them, the round ended
+    /// on its own (not a force-close from a stop or panic), the engine is still running and the
+    /// flash switch is still on - the same "still running and still enabled" test the mandatory
+    /// video applies in its Cleanup.
+    /// </summary>
+    public static bool ShouldResumeFlashes(bool flashesWereRunning, bool roundEndedNormally,
+                                           bool engineRunning, bool flashEnabled)
+        => flashesWereRunning && roundEndedNormally && engineRunning && flashEnabled;
 }

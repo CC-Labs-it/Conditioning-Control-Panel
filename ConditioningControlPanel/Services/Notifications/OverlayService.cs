@@ -598,6 +598,13 @@ public class OverlayService : IDisposable
 
             if (!hasPink && !hasSpiral && !hasBrainDrain) return;
 
+            // Gentle visuals: ease up and back down instead of the instant doubling + 1 s snap back.
+            if (Safety.GentleVisuals.On)
+            {
+                StartGentlePulse(hasPink, hasSpiral, hasBrainDrain);
+                return;
+            }
+
             // Double the intensity
             if (hasPink)
             {
@@ -654,32 +661,131 @@ public class OverlayService : IDisposable
             {
                 try
                 {
-                    DispatcherHelper.RunOnUISync(() =>
-                    {
-                        if (hasPink)
-                        {
-                            if (_rampPinkOpacity.HasValue) ApplyPinkOpacityDirect(_rampPinkOpacity.Value);
-                            else UpdatePinkFilterOpacity();
-                        }
-                        if (hasSpiral)
-                        {
-                            if (_rampSpiralOpacity.HasValue) ApplySpiralOpacityDirect(_rampSpiralOpacity.Value);
-                            else UpdateSpiralOpacity();
-                        }
-                        if (hasBrainDrain)
-                        {
-                            if (_rampBrainDrainOpacity.HasValue)
-                                UpdateBrainDrainBlurOpacity(Math.Max(1, (int)Math.Round(_rampBrainDrainOpacity.Value * 100)));
-                            else
-                                UpdateBrainDrainBlurOpacity(_currentBrainDrainIntensity);
-                        }
-                    });
+                    DispatcherHelper.RunOnUISync(() => RestoreAfterPulse(hasPink, hasSpiral, hasBrainDrain));
                 }
                 catch { /* Window may have closed */ }
             });
         });
 
         App.Logger?.Debug("Overlay pulse triggered");
+    }
+
+    private void RestoreAfterPulse(bool hasPink, bool hasSpiral, bool hasBrainDrain)
+    {
+        if (hasPink)
+        {
+            if (_rampPinkOpacity.HasValue) ApplyPinkOpacityDirect(_rampPinkOpacity.Value);
+            else UpdatePinkFilterOpacity();
+        }
+        if (hasSpiral)
+        {
+            if (_rampSpiralOpacity.HasValue) ApplySpiralOpacityDirect(_rampSpiralOpacity.Value);
+            else UpdateSpiralOpacity();
+        }
+        if (hasBrainDrain)
+        {
+            if (_rampBrainDrainOpacity.HasValue)
+                UpdateBrainDrainBlurOpacity(Math.Max(1, (int)Math.Round(_rampBrainDrainOpacity.Value * 100)));
+            else
+                UpdateBrainDrainBlurOpacity(_currentBrainDrainIntensity);
+        }
+    }
+
+    private DispatcherTimer? _gentlePulseTimer;
+
+    /// <summary>
+    /// Gentle visuals pulse: the same doubled peak as <see cref="PulseOverlays"/>, reached over the
+    /// gentle fade (never under the 300 ms rise floor), held to the legacy 1 s mark, then eased back
+    /// over the fade before the normal restore. UI thread.
+    /// </summary>
+    private void StartGentlePulse(bool hasPink, bool hasSpiral, bool hasBrainDrain)
+    {
+        var settings = App.Settings.Current;
+        double fadeMs = Safety.GentleVisuals.FadeMs(0);
+        double riseMs = Safety.GentleVisuals.RiseMs((int)fadeMs);
+        double totalMs = Compositor.GentleFade.PulseTotalMs(riseMs, 1000, fadeMs);
+
+        double pinkBase = _rampPinkOpacity ?? settings.PinkFilterOpacity / 100.0;
+        double pinkPeak = Math.Min(settings.PinkFilterOpacity * 2, 100) / 100.0;
+        double spiralBase = SpiralPaint(_rampSpiralOpacity ?? settings.SpiralOpacity / 100.0);
+        double spiralPeak = Math.Min(SpiralPaint(settings.SpiralOpacity / 100.0) * 2, 1.0);
+        int drainBase = _currentBrainDrainIntensity;
+        int drainPeak = Math.Min(_currentBrainDrainIntensity * 2, 200);
+
+        _gentlePulseTimer?.Stop();
+        var started = DateTime.UtcNow;
+        var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+        _gentlePulseTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            try
+            {
+                double t = (DateTime.UtcNow - started).TotalMilliseconds;
+                if (t >= totalMs || !_isRunning || timer != _gentlePulseTimer)
+                {
+                    timer.Stop();
+                    if (timer == _gentlePulseTimer) _gentlePulseTimer = null;
+                    RestoreAfterPulse(hasPink, hasSpiral, hasBrainDrain);
+                    return;
+                }
+                double k = Compositor.GentleFade.PulseEnvelope(t, riseMs, 1000, fadeMs);
+                if (hasPink && PinkShowing) ApplyPinkOpacityDirect(pinkBase + (pinkPeak - pinkBase) * k);
+                if (hasSpiral && SpiralShowing)
+                {
+                    var o = spiralBase + (spiralPeak - spiralBase) * k;
+                    _spiralLayer?.SetOpacity(o);
+                    foreach (var image in _spiralGifImages) image.Opacity = o;
+                    foreach (var media in _spiralMediaElements) media.Opacity = o;
+                    _lastAppliedSpiralOpacity = -1;
+                }
+                if (hasBrainDrain && BrainDrainShowing)
+                {
+                    int i = (int)Math.Round(drainBase + (drainPeak - drainBase) * k);
+                    if (_brainDrainLayer?.IsActive == true) _brainDrainLayer.SetIntensity(i);
+                    double r = i * Compositor.BrainDrainLayer.RadiusScale / Math.Max(1, _brainDrainDownscale);
+                    foreach (var img in _brainDrainImages.Values)
+                        if (img.Effect is System.Windows.Media.Effects.BlurEffect blur) blur.Radius = r;
+                }
+            }
+            catch (Exception ex)
+            {
+                timer.Stop();
+                App.Logger?.Debug("Gentle pulse tick failed: {Error}", ex.Message);
+            }
+        };
+        timer.Start();
+    }
+
+    /// <summary>Gentle visuals: a legacy overlay window fades in instead of popping. Call just
+    /// before Show. Off: does nothing.</summary>
+    private static void GentleFadeIn(Window window)
+    {
+        if (!Safety.GentleVisuals.On) return;
+        window.Opacity = 0;
+        window.BeginAnimation(UIElement.OpacityProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromSeconds(Safety.GentleVisuals.FadeSeconds)));
+    }
+
+    /// <summary>Gentle visuals: fade legacy overlay windows out, then run <paramref name="done"/>
+    /// (stop their media, close them) once. The caller has already dropped them from its lists,
+    /// so the overlay reads as gone at once.</summary>
+    private static void GentleFadeOutThen(IReadOnlyList<Window> windows, Action done)
+    {
+        int left = windows.Count;
+        if (left == 0) { done(); return; }
+        var length = TimeSpan.FromSeconds(Safety.GentleVisuals.FadeSeconds);
+        foreach (var w in windows)
+        {
+            var anim = new System.Windows.Media.Animation.DoubleAnimation(w.Opacity, 0, length);
+            anim.Completed += (_, _) =>
+            {
+                if (--left != 0) return;
+                try { done(); }
+                catch (Exception ex) { App.Logger?.Debug("Gentle overlay fade-out close failed: {Error}", ex.Message); }
+            };
+            try { w.BeginAnimation(UIElement.OpacityProperty, anim); }
+            catch { if (--left == 0) done(); }
+        }
     }
 
     /// <summary>
@@ -1431,6 +1537,7 @@ public class OverlayService : IDisposable
                 PositionWindowOnScreen(window, targetScreen);
             };
 
+            GentleFadeIn(window);
             window.Show();
 
             App.Logger?.Debug("Pink filter created for {Screen}", screen.DeviceName);
@@ -1447,6 +1554,13 @@ public class OverlayService : IDisposable
     internal void StopPinkFilter()
     {
         _pinkLayer?.Hide(); // both paths cleared unconditionally - the flag may have flipped mid-run
+        if (Safety.GentleVisuals.On && _pinkFilterWindows.Count > 0)
+        {
+            // Gentle visuals: the tint fades away, then its windows close.
+            var fading = _pinkFilterWindows.ToList();
+            _pinkFilterWindows.Clear();
+            GentleFadeOutThen(fading, () => { foreach (var w in fading) { try { w.Close(); } catch { } } });
+        }
         foreach (var window in _pinkFilterWindows.ToList())
         {
             try { window.Close(); }
@@ -1588,7 +1702,10 @@ public class OverlayService : IDisposable
                 {
                     _gifFrameTimer = new DispatcherTimer(DispatcherPriority.Render)
                     {
-                        Interval = _gifFrameDelay
+                        // Gentle visuals: the spiral turns at the gentle speed.
+                        Interval = Safety.GentleVisuals.On
+                            ? TimeSpan.FromMilliseconds(Safety.GentleVisuals.ScaleDelayMs(_gifFrameDelay.TotalMilliseconds))
+                            : _gifFrameDelay
                     };
                     _gifFrameTimer.Tick += GifFrameTimer_Tick;
                     _gifFrameTimer.Start();
@@ -1951,6 +2068,7 @@ public class OverlayService : IDisposable
                 PositionWindowOnScreen(window, targetScreen);
             };
 
+            GentleFadeIn(window);
             window.Show();
 
             App.Logger?.Debug("Spiral GIF window created for {Screen}", screen.DeviceName);
@@ -1991,6 +2109,13 @@ public class OverlayService : IDisposable
                 mediaElement.Position = TimeSpan.Zero;
                 mediaElement.Play();
             };
+            if (Safety.GentleVisuals.On)
+            {
+                // Gentle visuals: the video spiral plays at the gentle speed.
+                var gentleSpeed = Safety.GentleVisuals.Speed;
+                mediaElement.SpeedRatio = gentleSpeed;
+                mediaElement.MediaOpened += (s, e) => mediaElement.SpeedRatio = gentleSpeed;
+            }
 
             var container = new Grid
             {
@@ -2029,6 +2154,7 @@ public class OverlayService : IDisposable
                 PositionWindowOnScreen(window, targetScreen);
             };
 
+            GentleFadeIn(window);
             window.Show();
 
             App.Logger?.Debug("Spiral video window created for {Screen}", screen.DeviceName);
@@ -2050,6 +2176,24 @@ public class OverlayService : IDisposable
 
         _gifLoopTimer?.Stop();
         _gifLoopTimer = null;
+
+        if (Safety.GentleVisuals.On && _spiralWindows.Count > 0)
+        {
+            // Gentle visuals: the spiral fades away on its last frame, then its media stops and
+            // its windows close. The lists empty now, so the code below has nothing left to cut.
+            var fadingWindows = _spiralWindows.ToList();
+            var fadingImages = _spiralGifImages.ToList();
+            var fadingMedia = _spiralMediaElements.ToList();
+            _spiralWindows.Clear();
+            _spiralGifImages.Clear();
+            _spiralMediaElements.Clear();
+            GentleFadeOutThen(fadingWindows, () =>
+            {
+                foreach (var img in fadingImages) img.Source = null;
+                foreach (var media in fadingMedia) { try { media.Stop(); media.Close(); } catch { } }
+                foreach (var w in fadingWindows) { try { w.Close(); } catch { } }
+            });
+        }
 
         foreach (var img in _spiralGifImages)
             img.Source = null;
@@ -3008,6 +3152,18 @@ public class OverlayService : IDisposable
                     // SetWindowPos fail outright, which would silently skip the pin for that overlay.
                     if (vh == IntPtr.Zero || !IsWindow(vh)) continue;
                     videoAnchors.Add((vh, MonitorFromWindow(vh, MONITOR_DEFAULTTONEAREST)));
+                }
+            }
+            // A Bubble Count round with "Pause other effects" on (#1418) is held the same way:
+            // its fullscreen windows stand in as the video anchors, so every overlay below is
+            // pinned under the round instead of over it. Off (the default) nothing changes.
+            else if (App.BubbleCount?.HoldsEffects == true)
+            {
+                foreach (var bh in App.BubbleCount.EffectsHoldWindowHandles())
+                {
+                    if (bh == IntPtr.Zero || !IsWindow(bh)) continue;
+                    if (videoHwnd == IntPtr.Zero) videoHwnd = bh;
+                    videoAnchors.Add((bh, MonitorFromWindow(bh, MONITOR_DEFAULTTONEAREST)));
                 }
             }
         }

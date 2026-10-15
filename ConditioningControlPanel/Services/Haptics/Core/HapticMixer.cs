@@ -210,6 +210,12 @@ namespace ConditioningControlPanel.Services.Haptics.Core
         public void AllowTestWindow(int ms)
             => Interlocked.Exchange(ref _testGateUntil, Environment.TickCount64 + Math.Clamp(ms, 0, 10_000));
 
+        /// <summary>Whether a transient may be scheduled. A test window opens the gate for the
+        /// test's OWN pulses only: with the master toggle off, a bubble pop that lands while
+        /// "Test this toy" runs used to ride the same window out to every other toy.</summary>
+        internal static bool AdmitsPulse(bool masterOn, bool gateOpen, bool isTest)
+            => gateOpen && (masterOn || isTest);
+
         public double MasterCap => Math.Clamp(_settings.V2.MasterCap, 0.05, 1.0);
         /// <summary>Master intensity multiplier (the repurposed legacy <c>GlobalIntensity</c>).</summary>
         public double MasterIntensity => Math.Clamp(_settings.GlobalIntensity, 0.0, 1.0);
@@ -773,6 +779,12 @@ namespace ConditioningControlPanel.Services.Haptics.Core
         /// whatever writes the layer next is back on the rule.</summary>
         public void PlayLayerEnvelope(HapticLayer layer, IReadOnlyList<double> values, int totalMs,
                                       ToyRole? targetOverride)
+            => PlayLayerEnvelope(layer, values, totalMs, targetOverride, isTest: false);
+
+        /// <summary>As above. <paramref name="isTest"/> marks a preview's own envelope, the only
+        /// continuous source a test window lets sound while the master toggle is off.</summary>
+        public void PlayLayerEnvelope(HapticLayer layer, IReadOnlyList<double> values, int totalMs,
+                                      ToyRole? targetOverride, bool isTest)
         {
             if (_disposed || values == null || values.Count == 0 || totalMs <= 0) return;
             var copy = new double[values.Count];
@@ -785,10 +797,10 @@ namespace ConditioningControlPanel.Services.Haptics.Core
                     Values = copy,
                     StartAt = Environment.TickCount64,
                     TotalMs = totalMs,
-                    // Master toggle off AND an open test window at submit time = a preview/test
-                    // path (nothing else is audible), so this envelope alone survives the H2 mute.
-                    // An envelope submitted with no test window open stays mutable like any other.
-                    TestEligible = !_settings.Enabled && IsGateOpen
+                    // Master toggle off AND submitted by a preview/test path = this envelope alone
+                    // survives the H2 mute. A live envelope that merely lands inside someone
+                    // else's test window stays muted like any other.
+                    TestEligible = isTest && !_settings.Enabled && IsGateOpen
                 };
                 _layerAutoZeroAt[i] = 0;
                 if (_layerSplits[i] != null) { _layerSplits[i] = null; RecomputeAnySplitLocked(); }
@@ -837,10 +849,14 @@ namespace ConditioningControlPanel.Services.Haptics.Core
         /// <summary>Schedule a rendered pattern. Steps are promoted to active pulses by the output
         /// loop — no Task.Delay chains, no CancellationTokenSource per event, so none of the
         /// dispose races the old service had.</summary>
-        public HapticSequence Play(IReadOnlyList<HapticPulseStep> steps)
+        public HapticSequence Play(IReadOnlyList<HapticPulseStep> steps) => Play(steps, isTest: false);
+
+        /// <summary>As above. <paramref name="isTest"/> marks a Test button's own pulses: they are
+        /// the only transients a test window lets through while the master toggle is off.</summary>
+        public HapticSequence Play(IReadOnlyList<HapticPulseStep> steps, bool isTest)
         {
             if (_disposed || steps == null || steps.Count == 0) return HapticSequence.Completed();
-            if (!IsGateOpen) return HapticSequence.Completed();
+            if (!AdmitsPulse(_settings.Enabled, IsGateOpen, isTest)) return HapticSequence.Completed();
 
             var now = Environment.TickCount64;
             HapticSequence seq;

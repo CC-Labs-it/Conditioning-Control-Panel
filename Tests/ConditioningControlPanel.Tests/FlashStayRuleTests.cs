@@ -59,4 +59,14 @@ public class FlashStayRuleTests
         Assert.False(FlashStayRule.ScreenFull(true, 39, 40));
         Assert.False(FlashStayRule.ScreenFull(false, 99, 40));
     }
+
+    [Theory]
+    [InlineData(30, 20, 20)]   // shared host: the slider is the ceiling, not the 30 headroom
+    [InlineData(40, 20, 20)]   // stay mode: never past the slider either
+    [InlineData(30, 8, 8)]
+    [InlineData(10, 20, 10)]   // classic windows keep their lower cap
+    [InlineData(30, 99, 20)]   // a bad stored value never lifts it past 20
+    [InlineData(30, 0, 1)]
+    public void MaxOnScreenIsTheCeilingForEveryPath(int modeCap, int maxOnScreen, int expected)
+        => Assert.Equal(expected, FlashStayRule.OnScreen(modeCap, maxOnScreen));
 }

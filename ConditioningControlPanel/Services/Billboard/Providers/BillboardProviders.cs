@@ -7,7 +7,7 @@ using System.Windows.Threading;
 namespace ConditioningControlPanel.Services.Billboard.Providers
 {
     /// <summary>
-    /// The Tonight Board's app-side providers (lane 4): Live, Waiting, Resume, Event and Tip.
+    /// The Tonight Board's app-side providers (lane 4): Live, Featured, Waiting, Resume, Event and Tip.
     /// Each one is a pure decision (a static <c>*Cards</c> class, tested) plus a thin adapter
     /// over state the app already holds. None of them calls the network, and none of them blocks:
     /// what needs a disk read is read once in the background and cached.
@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
         public static IReadOnlyList<IBillboardProvider> CreateAll() => new IBillboardProvider[]
         {
             new LiveProvider(),
+            new FeaturedProvider(),
             new WaitingProvider(),
             new ResumeProvider(),
             new EventProvider(),

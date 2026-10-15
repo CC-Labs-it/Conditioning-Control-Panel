@@ -1135,6 +1135,8 @@ namespace ConditioningControlPanel
                 // #890 rewrote both of these to be reachable from this thread. Called individually
                 // rather than via App.KillAllAudio, which also touches services never audited for
                 // off-thread calls.
+                try { App.StopAudioPlaylist(); }         catch (Exception ex) { LogPanicFallbackStep("audio playlist", ex); }
+                try { Services.GoonGame.GoonToyDirector.Close(); } catch (Exception ex) { LogPanicFallbackStep("goon toys", ex); }
                 try { App.MindWipe?.Stop(); }            catch (Exception ex) { LogPanicFallbackStep("mind wipe", ex); }
                 try { App.BrainDrain?.Stop(); }          catch (Exception ex) { LogPanicFallbackStep("brain drain", ex); }
                 try { App.Audio?.ForceUnduck(); }        catch (Exception ex) { LogPanicFallbackStep("unduck", ex); }
@@ -2042,6 +2044,8 @@ namespace ConditioningControlPanel
                 // #668: a standalone Audio Layers master means the bed is the user's, not a session's.
                 if (App.Settings?.Current?.AudioLayersEnabled != true) App.LayeredAudio?.Stop();
             });
+            // The player's own files stop on panic like every other sound (the list stays).
+            Step("audio playlist", App.StopAudioPlaylist);
             Step("audio unduck", () => App.Audio?.ForceUnduck());
             // Belt and braces LAST: KillAllAudio is a single try/catch, so anything it would have
             // skipped after an early throw has already been done individually above.

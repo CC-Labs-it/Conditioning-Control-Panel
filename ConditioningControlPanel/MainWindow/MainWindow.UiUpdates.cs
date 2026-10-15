@@ -2059,6 +2059,7 @@ namespace ConditioningControlPanel
 
             var dialog = new TextEditorDialog("Subliminal Messages", App.Settings.Current.SubliminalPool);
             dialog.Owner = this;
+            dialog.MarkSilentLines(t => App.Subliminal?.HasRecordedVoice(t) ?? true);
 
             if (dialog.ShowDialog() == true && dialog.ResultData != null)
             {

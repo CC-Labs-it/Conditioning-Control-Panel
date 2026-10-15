@@ -107,23 +107,63 @@ namespace ConditioningControlPanel.Services
             set
             {
                 _volume = Math.Clamp(value, 0, 1);
-                // Update live if playing
-                if (_audioReader != null)
-                {
-                    try { _audioReader.Volume = (float)_volume; } catch { }
-                }
-                // Update loop players
-                if (_loopReaderA != null)
-                {
-                    try { _loopReaderA.Volume = (float)_volume; } catch { }
-                }
-                if (_loopReaderB != null)
-                {
-                    try { _loopReaderB.Volume = (float)_volume; } catch { }
-                }
+                ApplyGainToLivePlayers();
             }
         }
-        
+
+        /// <summary>
+        /// Master volume (0-100) times Mind Wipe's own level (0-1), as the 0-1 gain a reader gets
+        /// (ccp-bugs #1432). Until 7.1.8 every player here was handed the feature's own level
+        /// alone, so with the master dial at 0% the loop still ran at "100% volume" and no volume
+        /// control in the app could reach it. Same linear product as Brain Drain's.
+        /// </summary>
+        public static float EffectiveVolume(int masterVolume, double ownVolume)
+        {
+            if (double.IsNaN(ownVolume)) return 0f;
+            return Math.Clamp(masterVolume, 0, 100) / 100f * (float)Math.Clamp(ownVolume, 0, 1);
+        }
+
+        /// <summary>Where the master level comes from. A seam for tests; the app reads settings.</summary>
+        internal Func<int> MasterVolumeSource { get; set; } = ReadMasterVolume;
+
+        private static int ReadMasterVolume()
+        {
+            try { return App.Settings?.Current?.MasterVolume ?? 100; }
+            catch { return 100; }
+        }
+
+        /// <summary>The gain every Mind Wipe player gets right now: master x own.</summary>
+        internal float CurrentGain
+        {
+            get
+            {
+                int master;
+                try { master = MasterVolumeSource(); } catch { master = 100; }
+                return EffectiveVolume(master, _volume);
+            }
+        }
+
+        /// <summary>
+        /// Pushes the current gain to whatever is sounding: the one-shot and both loop players.
+        /// Called when Mind Wipe's own level moves and when the master dial moves
+        /// (<see cref="Audio.MasterVolumeWatch"/>). Try/catch per reader: PlaybackStopped nulls and
+        /// disposes them from the playback thread, so one can go away between test and assignment.
+        /// </summary>
+        internal void ApplyGainToLivePlayers()
+        {
+            var gain = CurrentGain;
+            var oneShot = _audioReader;
+            var loopA = _loopReaderA;
+            var loopB = _loopReaderB;
+            var parked = _pendingLoopPlayer?.Reader;
+            if (oneShot != null) { try { oneShot.Volume = gain; } catch { } }
+            if (loopA != null) { try { loopA.Volume = gain; } catch { } }
+            if (loopB != null) { try { loopB.Volume = gain; } catch { } }
+            if (parked != null) { try { parked.Volume = gain; } catch { } }
+        }
+
+        private void OnMasterVolumeChanged(int _) => ApplyGainToLivePlayers();
+
         public MindWipeService()
         {
             _timer = new DispatcherTimer
@@ -131,7 +171,11 @@ namespace ConditioningControlPanel.Services
                 Interval = TimeSpan.FromSeconds(10) // Check every 10 seconds for better high-frequency support
             };
             _timer.Tick += Timer_Tick;
-            
+
+            // Follow the master dial live, whoever moves it (#1432).
+            Audio.MasterVolumeWatch.Shared.Changed += OnMasterVolumeChanged;
+            Audio.MasterVolumeWatch.Shared.EnsureHooked();
+
             LoadAudioFiles();
         }
         
@@ -301,22 +345,7 @@ namespace ConditioningControlPanel.Services
         {
             _frequencyPerHour = frequencyPerHour;
             _volume = volume;
-            // Update live volume if playing. Try/catch like the Volume setter above: PlaybackStopped
-            // nulls _audioReader from the playback thread, so the field can go away (or the reader
-            // can already be disposed) between the test and the assignment.
-            if (_audioReader != null)
-            {
-                try { _audioReader.Volume = (float)_volume; } catch { }
-            }
-            // Update loop players
-            if (_loopReaderA != null)
-            {
-                try { _loopReaderA.Volume = (float)_volume; } catch { }
-            }
-            if (_loopReaderB != null)
-            {
-                try { _loopReaderB.Volume = (float)_volume; } catch { }
-            }
+            ApplyGainToLivePlayers();
         }
         
         /// <summary>
@@ -374,8 +403,11 @@ namespace ConditioningControlPanel.Services
             _crossfadeTimer.Tick += CrossfadeTimer_Tick;
             _crossfadeTimer.Start();
             
-            App.Logger?.Information("MindWipe: Loop started with {File} at {Vol}% volume (crossfade: {Overlap}s)", 
-                Path.GetFileName(_loopFilePath), volume * 100, CROSSFADE_OVERLAP_SECONDS);
+            // The log names the level that is HEARD. It used to print the feature's own level, which
+            // read "at 100% volume" in a report from a player whose master dial was at 0% (#1432).
+            Audio.MasterVolumeWatch.Shared.EnsureHooked();
+            App.Logger?.Information("MindWipe: Loop started with {File} at {Vol}% volume, {Heard}% after master (crossfade: {Overlap}s)",
+                Path.GetFileName(_loopFilePath), volume * 100, Math.Round(CurrentGain * 100), CROSSFADE_OVERLAP_SECONDS);
         }
         
         private void CrossfadeTimer_Tick(object? sender, EventArgs e)
@@ -450,6 +482,7 @@ namespace ConditioningControlPanel.Services
             if (started)
             {
                 App.Audio?.NoteOutputSuccess();
+                Audio.EngineOffAudioLog.Note("mindwipe-loop", prepared!.Reader?.FileName);
                 App.Logger?.Debug("MindWipe: Started player {Slot}", prepared!.IsA ? "A" : "B");
                 // Retire the OTHER player once the overlap has elapsed.
                 SchedulePlayerCleanup(!prepared.IsA);
@@ -491,7 +524,7 @@ namespace ConditioningControlPanel.Services
                 _usePlayerA = !_usePlayerA;
                 generation = _loopGeneration;
                 path = _loopFilePath!;
-                volume = (float)_volume;
+                volume = CurrentGain;
             }
 
             Task.Run(() =>
@@ -547,6 +580,8 @@ namespace ConditioningControlPanel.Services
                     {
                         discarded = _pendingLoopPlayer;   // only one build is ever in flight
                         _pendingLoopPlayer = prepared;
+                        // Either dial may have moved during the build.
+                        try { prepared.Reader.Volume = CurrentGain; } catch { }
                     }
                 }
 
@@ -556,6 +591,7 @@ namespace ConditioningControlPanel.Services
                 if (started)
                 {
                     App.Audio?.NoteOutputSuccess();
+                    Audio.EngineOffAudioLog.Note("mindwipe-loop", prepared?.Reader?.FileName);
                     SchedulePlayerCleanup(!isA);
                     // A whole clip of lead time for the next one, so its tick only has to Play().
                     PrepareNextLoopPlayer(playImmediately: false);
@@ -587,8 +623,8 @@ namespace ConditioningControlPanel.Services
                 _loopReaderB = prepared.Reader;
             }
 
-            // The volume slider may have moved while this player was being built.
-            try { prepared.Reader.Volume = (float)_volume; } catch { }
+            // Either volume dial may have moved while this player was being built or parked.
+            try { prepared.Reader.Volume = CurrentGain; } catch { }
             return (oldOut, oldReader);
         }
 
@@ -784,8 +820,8 @@ namespace ConditioningControlPanel.Services
             {
                 var audioFile = _audioFiles[_random.Next(_audioFiles.Length)];
                 PlayAudio(audioFile);
-                App.Logger?.Debug("MindWipe: Playing {File} at volume {Vol}%",
-                    Path.GetFileName(audioFile), _volume * 100);
+                App.Logger?.Debug("MindWipe: Playing {File} at volume {Vol}%, {Heard}% after master",
+                    Path.GetFileName(audioFile), _volume * 100, Math.Round(CurrentGain * 100));
 
                 // Fire event for avatar/UI notification
                 MindWipeTriggered?.Invoke(this, EventArgs.Empty);
@@ -804,7 +840,7 @@ namespace ConditioningControlPanel.Services
             long generation;
             lock (_audioLock)
             {
-                volume = (float)_volume;
+                volume = CurrentGain;
                 generation = ++_playGeneration;
             }
 
@@ -868,7 +904,7 @@ namespace ConditioningControlPanel.Services
                             _waveOut = waveOut;
                             _audioReader = reader;
                             // The volume slider may have moved while this player was being built.
-                            try { reader!.Volume = (float)_volume; } catch { }
+                            try { reader!.Volume = CurrentGain; } catch { }
                             started = true;
                         }
                         catch (Exception ex)
@@ -879,7 +915,7 @@ namespace ConditioningControlPanel.Services
                 }
 
                 DisposePair(displacedOut, displacedReader);
-                if (started) App.Audio?.NoteOutputSuccess();
+                if (started) { App.Audio?.NoteOutputSuccess(); Audio.EngineOffAudioLog.Note("mindwipe", filePath); }
                 else DisposePair(waveOut, reader);
             });
         }
@@ -942,6 +978,7 @@ namespace ConditioningControlPanel.Services
             StopCurrentAudio();
             StopLoop();
             _timer.Tick -= Timer_Tick;
+            Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged;
         }
     }
 }

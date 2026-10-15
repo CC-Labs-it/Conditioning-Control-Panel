@@ -334,6 +334,9 @@ namespace ConditioningControlPanel.Services
         private string? _retryPath;
         private DateTime _startTime;
         private double _duration;
+        // Gentle visuals: the playback rate this clip was started at (1 when off). The duration
+        // guillotine and the attention schedule are wall-clock, so they stretch by it.
+        private double _playRate = 1.0;
 
         // #536: a Deeper enhancement (VideoEnhancementBridge) can loop or hold the clip past its
         // declared duration (loop_region, SpeakHoldMode.LoopRegion, speak-pauses). While one is
@@ -1689,6 +1692,7 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Information("[VIDEO] aout live for {File}: deviceApplied={Applied} {Routing}",
                     label, applied, routing);
                 VideoDiag.Log("AOUT", $"{label} deviceApplied={applied} {routing}");
+                Audio.EngineOffAudioLog.Note("video", label);
             }
             catch (Exception ex)
             {
@@ -1706,6 +1710,7 @@ namespace ConditioningControlPanel.Services
             // Browser session: one message carries master x video volume AND the external mute
             // (GetEffectiveVolume already folds the mute in, so both halves agree).
             if (_browserActive) _browser?.SetVolume(effectiveVolume / 100.0, effectiveVolume <= 0);
+            RefreshFloatingVolumes();
 
             // Update LibVLC media players (thread-safe snapshot)
             List<LibVLCSharp.Shared.MediaPlayer> playersCopy;
@@ -1827,6 +1832,7 @@ namespace ConditioningControlPanel.Services
             _strictActive = false;
             CancelPendingRetry();
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
+            CloseFloatingInstances("engine stop");   // before CloseAll: its JIT can throw below
             try
             {
                 CloseAll(synchronous: false, reason: "engine stop");
@@ -2329,6 +2335,10 @@ namespace ConditioningControlPanel.Services
             // Check if another fullscreen interaction is active (bubble count, lock card)
             // If so, queue this video for later
             // Note: If CurrentInteraction is already Video, the queue dequeued us — proceed normally
+            // Floating windows are up: ONE trigger = ONE more window (or a quiet skip at the limit).
+            // Before the queue and the force-close below, which would take the open run down.
+            if (TryFloatingTrigger(strictOverride, userInitiated)) return;
+
             var alreadyActive = App.InteractionQueue?.CurrentInteraction == InteractionQueueService.InteractionType.Video;
             if (!alreadyActive && App.InteractionQueue != null && !App.InteractionQueue.CanStart)
             {
@@ -2702,6 +2712,7 @@ namespace ConditioningControlPanel.Services
             _strictActive = false;
             CancelPendingRetry();
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
+            CloseFloatingInstances("force cleanup");
             CloseAll(synchronous, reason: synchronous ? "app exit" : "force cleanup (panic / stuck / session switch)");
             App.Audio?.ForceUnduck();
             _penalties = 0;
@@ -2738,6 +2749,7 @@ namespace ConditioningControlPanel.Services
             {
                 _videoPlaying = true;
                 _strictActive = false;
+                _playRate = Video.GentleWindowRules.PlaybackRate(Safety.GentleVisuals.On, Safety.GentleVisuals.Speed);
                 CancelPendingRetry();
 
                 // Global "Show content on" picker, not every screen: with one monitor picked
@@ -2860,7 +2872,7 @@ namespace ConditioningControlPanel.Services
                             {
                                 if (_isCleaningUp) return; // Double-check on UI thread
                                 _videoPlaying = false;
-                                CloseAll(reason: "url playback ended");
+                                CloseAll(reason: "url playback ended", softExit: true);
                             });
                         }
                         catch (Exception ex)
@@ -2944,6 +2956,7 @@ namespace ConditioningControlPanel.Services
                 };
             }
 
+            GentleBeforePlay(win, mediaPlayer);
             mediaPlayer.Play(media);
 
             if (withAudio)
@@ -2989,7 +3002,10 @@ namespace ConditioningControlPanel.Services
                 _scheduler?.Stop();
                 try
                 {
-                    if (_isRunning && !_videoPlaying && !_triggerInProgress)
+                    // A floating run leaves room for the next video: the tick goes through and
+                    // TryFloatingTrigger opens one more window, or skips quietly at the limit.
+                    var duringFloatingRun = _videoPlaying && SchedulerMayTrigger;
+                    if (_isRunning && SchedulerMayTrigger && !_triggerInProgress)
                     {
                         if (App.BrowserMedia?.ShouldDeferInterruptions == true ||
                             App.InteractionQueue?.CurrentInteraction == InteractionQueueService.InteractionType.WebVideo)
@@ -3026,6 +3042,8 @@ namespace ConditioningControlPanel.Services
                         else
                         {
                             TriggerVideo();
+                            // Nothing ends here to re-arm the scheduler, so the tick does it.
+                            if (duringFloatingRun && _isRunning) ScheduleNext();
                         }
                     }
                     // Cleanup() will call ScheduleNext() when video ends
@@ -3081,6 +3099,11 @@ namespace ConditioningControlPanel.Services
                 return;
             }
 
+            // Floating, and the browser engine can take the clip: the run opens on an equal
+            // instance (VideoService.FloatingInstances.cs) and none of the single-player
+            // machinery below applies. Otherwise the ordinary path, one window.
+            if (!isVoutRetry && TryStartFloatingRun(path, strict)) return;
+
             // Fresh video ⇒ fresh vout-retry budget. The retry pass keeps the budget spent so a
             // machine where even the fresh LibVLC instance can't present skips on to ScheduleNext
             // instead of looping retire/retry forever.
@@ -3119,6 +3142,7 @@ namespace ConditioningControlPanel.Services
             // and never cleared, so a clip that died before LengthChanged inherited the previous
             // clip's length and was credited with it on the skip path (#767).
             _duration = 0;
+            _playRate = Video.GentleWindowRules.PlaybackRate(Safety.GentleVisuals.On, Safety.GentleVisuals.Speed);
             _hits = _total = 0;
             _spawnTimes.Clear();
 
@@ -3199,6 +3223,10 @@ namespace ConditioningControlPanel.Services
             }
             catch (Exception ex) { Diag.Swallowed(ex); }
 
+            // Full screen or the floating window: one answer per clip, before either engine builds
+            // a window. A LibVLC fallback of the same clip keeps the answer it already has.
+            if (!forceLibVlc) DecidePresentation(strict);
+
             // ---- hybrid routing (docs/BROWSER_VIDEO_ENGINE_PLAN.md §4) ----
             // The ONLY change to this path. When the browser engine takes the clip it satisfies the
             // whole parity checklist itself (see VideoService.Browser.cs) and returns; otherwise
@@ -3213,7 +3241,11 @@ namespace ConditioningControlPanel.Services
             // LibVLC's FromLocation path remains the safety net rather than the front line.
             if (!forceLibVlc && Video.Browser.BrowserVideoGate.ShouldUseBrowser(path))
             {
-                if (StartBrowserVideoPlayback(path, strict)) return;
+                if (StartBrowserVideoPlayback(path, strict))
+                {
+                    OnFloatingPrimaryUp(path);   // the floating frame; a no-op full screen
+                    return;
+                }
             }
 
             App.Logger?.Information("VideoService: StartVideoPlayback called for {File}", Path.GetFileName(path));
@@ -3273,7 +3305,9 @@ namespace ConditioningControlPanel.Services
                     try
                     {
                         // Global "Show content on" picker, not every screen (see GetGlobalScreens).
-                        var allScreens = VideoScreens().ToList();
+                        // No LibVLC means the MediaElement fallback, which only knows full screen.
+                        if (_libVLC == null) ClearFloating();
+                        var allScreens = PlaybackScreens().ToList();
                         VideoDiag.Log("VIDEO", $"screens enumerated ({allScreens.Count}) +{showSw.ElapsedMilliseconds}ms");
                         if (allScreens.Count == 0)
                         {
@@ -3364,7 +3398,7 @@ namespace ConditioningControlPanel.Services
                         App.Bubbles?.PauseAndClear();
                         VideoDiag.Log("VIDEO", $"bubbles paused +{showSw.ElapsedMilliseconds}ms");
 
-                        if (App.Settings.Current.AttentionChecksEnabled)
+                        if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating))
                         {
                             SetupAttention();
                             VideoDiag.Log("VIDEO", $"attention checks armed +{showSw.ElapsedMilliseconds}ms");
@@ -3387,6 +3421,8 @@ namespace ConditioningControlPanel.Services
                 {
                     _playbackStarted = true;
                     StartWedgeWatchdog();
+                    // The floating frame; a no-op full screen.
+                    DispatcherHelper.RunOnUISync(() => OnFloatingPrimaryUp(path));
                 }
 
                 VideoDiag.Log("VIDEO", $"show complete +{showSw.ElapsedMilliseconds}ms - {_windows.Count} window(s) on screen");
@@ -3430,12 +3466,16 @@ namespace ConditioningControlPanel.Services
             {
                 var dpiScale = BubbleCountWindow.GetDpiForScreen(screen);
                 VideoDiag.Log("VIDEO", $"win[{tag}]: dpi probed +{winSw.ElapsedMilliseconds}ms");
+                // Floating: the same window at a small rectangle, and it never takes focus from
+                // whatever is under it (panic and Esc reach a video through the global hook).
+                bool floating = IsFloating;
+                var area = BoundsFor(screen);
                 win = new Window
                 {
                     WindowStyle = WindowStyle.None,
                     ResizeMode = ResizeMode.NoResize,
                     ShowInTaskbar = false,
-                    ShowActivated = withAudio, // Only activate primary
+                    ShowActivated = withAudio && !floating, // Only activate primary
                     Topmost = true,
                     Background = Brushes.Black,
                     WindowStartupLocation = WindowStartupLocation.Manual,
@@ -3444,10 +3484,10 @@ namespace ConditioningControlPanel.Services
                     // a frame before the black background caught up — and on a secondary
                     // monitor that white frame could linger (#368). This mirrors the
                     // flash-free CreateLibVLCUrlWindow path.
-                    Left = screen.Bounds.X / dpiScale,
-                    Top = screen.Bounds.Y / dpiScale,
-                    Width = screen.Bounds.Width / dpiScale,
-                    Height = screen.Bounds.Height / dpiScale
+                    Left = area.X / dpiScale,
+                    Top = area.Y / dpiScale,
+                    Width = area.Width / dpiScale,
+                    Height = area.Height / dpiScale
                 };
 
                 // Render path for THIS screen: the blurred-background composite (WPF Image pair fed
@@ -3456,7 +3496,9 @@ namespace ConditioningControlPanel.Services
                 // the true frame size through the video-format callback (reliable on the very first
                 // play, unlike a pre-parse of the container), and the blurred fill auto-hides for a
                 // clip that already matches the screen — so a landscape video pays no blur cost.
-                bool useBlur = App.Settings?.Current?.VideoBlurredBackgroundEnabled == true;
+                // A floating window always takes the composite: it is pure WPF, so the attention
+                // targets live INSIDE the small window instead of flying over the rest of the screen.
+                bool useBlur = floating || App.Settings?.Current?.VideoBlurredBackgroundEnabled == true;
                 VideoDiag.Log("VIDEO", $"win[{tag}]: shell created (blur={useBlur}) +{winSw.ElapsedMilliseconds}ms");
 
                 // Create the video surface: either the blurred-background composite or a VideoView.
@@ -3464,7 +3506,7 @@ namespace ConditioningControlPanel.Services
                 BlurVmemSurface? blurSurface = null;
                 if (useBlur)
                 {
-                    double screenAspect = (double)screen.Bounds.Width / Math.Max(1, screen.Bounds.Height);
+                    double screenAspect = (double)area.Width / Math.Max(1, area.Height);
                     // Every BLUR: line carries the surface tag so a report says WHICH screen died
                     // instead of leaving it to be inferred from thread counts (#767).
                     blurSurface = new BlurVmemSurface(screenAspect, $"{tag} {screen.DeviceName}");
@@ -3722,6 +3764,12 @@ namespace ConditioningControlPanel.Services
                 // Don't let the video window activate - keeps targets on top
                 e.Handled = true;
                 BringTargetsToFront();
+                // A floating window moves with the mouse (no-op on a full-screen one).
+                if (e.ChangedButton == MouseButton.Left)
+                {
+                    if (_primarySurface != null) OnFloatingTouched(_primarySurface);   // a press takes the sound
+                    BeginFloatingDrag(win);
+                }
             };
 
             // Window is already sized to the full screen bounds, so we don't start small
@@ -3729,11 +3777,11 @@ namespace ConditioningControlPanel.Services
             // Topmost window at full bounds covers the taskbar just like the maximized one did.
             // Pin to the monitor's true physical bounds so a secondary monitor with different DPI
             // scaling gets the full screen instead of a part-width window (see ForceFullScreenBounds).
-            ForceFullScreenBounds(win, screen);
+            ForceFullScreenBounds(win, screen, floating ? area : null);
             VideoDiag.Log("VIDEO", $"win[{tag}]: Show() begin +{winSw.ElapsedMilliseconds}ms");
             win.Show();
             VideoDiag.Log("VIDEO", $"win[{tag}]: Show() end +{winSw.ElapsedMilliseconds}ms");
-            if (withAudio) win.Activate();
+            if (withAudio && !floating) win.Activate();
             DisableChildWindowInput(win);
             VideoDiag.Log("VIDEO", $"win[{tag}]: activated +{winSw.ElapsedMilliseconds}ms");
 
@@ -3896,11 +3944,20 @@ namespace ConditioningControlPanel.Services
                     // Anything heavier than a property set goes off the LibVLC event thread.
                     if (System.Threading.Interlocked.Exchange(ref audioRouted, 1) == 0)
                         Task.Run(() => RouteAndProbeAudio(mediaPlayer!, Path.GetFileName(path)));
+                    // A companion has the sound: this player's own track stays off (never Mute).
+                    if (_primaryFocusMuted) Task.Run(() => ApplyPrimaryAudioTrack(mediaPlayer!));
                 };
+                if (floating)
+                    mediaPlayer.ESSelected += (s, e) =>
+                    {
+                        // LibVLC picks the audio track on its own once the clip is parsed.
+                        if (_primaryFocusMuted && e.Type == TrackType.Audio) Task.Run(() => ApplyPrimaryAudioTrack(mediaPlayer!));
+                    };
             }
 
             // Play the media
             VideoDiag.Log("VIDEO", $"win[{tag}]: Play() issued +{winSw.ElapsedMilliseconds}ms");
+            GentleBeforePlay(win, mediaPlayer);
             mediaPlayer.Play(media);
             VideoDiag.Log("VIDEO", $"win[{tag}]: Play() returned +{winSw.ElapsedMilliseconds}ms");
 
@@ -5548,7 +5605,7 @@ namespace ConditioningControlPanel.Services
                         if (!_videoPlaying) return;
 
                         _spawned = 0; // Reset spawned counter
-                        var dur = _duration > 0 ? _duration : 60;
+                        var dur = Video.GentleWindowRules.WallSeconds(_duration > 0 ? _duration : 60, _playRate);
                         // Use setting directly as total count (not density)
                         var maxTargets = Math.Max(1, App.Settings.Current.AttentionDensity);
                         _total = App.Settings.Current.RandomizeAttentionTargets
@@ -5728,7 +5785,7 @@ namespace ConditioningControlPanel.Services
                 var pool = settings.AttentionPool.Where(p => p.Value).Select(p => p.Key).ToList();
                 var text = pool.Count > 0 ? pool[_random.Next(pool.Count)] : "CLICK ME";
 
-                var screens = VideoScreens();
+                var screens = PlaybackScreens();
                 // Safety check: ensure we have at least one screen
                 if (screens == null || screens.Length == 0 || screens[0] == null)
                 {
@@ -5765,7 +5822,8 @@ namespace ConditioningControlPanel.Services
                     if (screen == null) continue;
 
                     IAttentionTarget? target = null;
-                    target = CreateAttentionTarget(text, screen, settings.AttentionSize, style, () =>
+                    target = CreateAttentionTarget(text, screen,
+                        settings.AttentionSize, style, () =>
                     {
                         // Only count as a hit once per spawn (user clicked any target from this batch)
                         if (hitRegistered) return;
@@ -5974,7 +6032,7 @@ namespace ConditioningControlPanel.Services
             var settings = App.Settings.Current;
             bool loop = false, troll = false;
 
-            if (settings.AttentionChecksEnabled && _spawned > 0)
+            if (Video.MandatoryVideoPresentation.AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && _spawned > 0)
             {
                 bool passed = _hits >= _spawned;
                 App.Logger.Information("Attention result: {Hits}/{Spawned} (of {Total} scheduled) = {Result}", _hits, _spawned, _total, passed ? "PASS" : "FAIL");
@@ -6009,7 +6067,7 @@ namespace ConditioningControlPanel.Services
             {
                 _penalties++;
                 if (_penalties >= settings.MercyAfterFails && settings.MercySystemEnabled)
-                    ShowMessage(App.Mods?.GetAttentionCheckMercyMessage() ?? "BAMBI GETS MERCY", 2500, Cleanup);
+                    ShowMessage(App.Mods?.GetAttentionCheckMercyMessage() ?? "BAMBI GETS MERCY", 2500, () => Cleanup());
                 else
                 {
                     // Snapshot the strict flag NOW, while the run is still live, and keep the run
@@ -6098,7 +6156,7 @@ namespace ConditioningControlPanel.Services
             else if (_lastWatchPositionMs <= 0 && _duration > 0)
                 _lastWatchPositionMs = _duration * 1000.0;
 
-            Cleanup();
+            Cleanup(naturalEnd: !noFrameRendered);
         }
 
         /// <summary>
@@ -6133,9 +6191,14 @@ namespace ConditioningControlPanel.Services
             _fallbackSafetyTimer = null;
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
+            // Floating: the verdict stays as small as the clip was, where the clip was (the player
+            // may have dragged it), and the replay comes back to the same spot.
+            CaptureFloatBounds();
+            var floatBox = IsFloating ? _floatBounds : null;
+            _floatReuse = floatBox != null;
             CloseAll(reason: "attention-check message");
 
-            var screens = VideoScreens();
+            var screens = PlaybackScreens();
             // Safety check: ensure we have at least one screen
             if (screens == null || screens.Length == 0 || screens[0] == null)
             {
@@ -6155,15 +6218,16 @@ namespace ConditioningControlPanel.Services
                     ShowInTaskbar = false,
                     ShowActivated = false,
                     WindowStartupLocation = WindowStartupLocation.Manual,
-                    Left = (screen.Bounds.X + 100) / msgDpi,
-                    Top = (screen.Bounds.Y + 100) / msgDpi,
-                    Width = 400,
-                    Height = 300,
+                    Left = (floatBox?.X ?? screen.Bounds.X + 100) / msgDpi,
+                    Top = (floatBox?.Y ?? screen.Bounds.Y + 100) / msgDpi,
+                    Width = floatBox != null ? floatBox.Value.Width / msgDpi : 400,
+                    Height = floatBox != null ? floatBox.Value.Height / msgDpi : 300,
                     Content = new TextBlock
                     {
                         Text = text,
                         Foreground = Brushes.Magenta,
-                        FontSize = 64,
+                        TextWrapping = floatBox != null ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                        FontSize = floatBox != null ? 26 : 64,
                         FontWeight = FontWeights.Bold,
                         FontFamily = new FontFamily("Impact, Arial Black, Segoe UI"),
                         TextAlignment = TextAlignment.Center,
@@ -6171,8 +6235,9 @@ namespace ConditioningControlPanel.Services
                         VerticalAlignment = VerticalAlignment.Center
                     }
                 };
+                if (floatBox != null) { win.ResizeMode = ResizeMode.NoResize; ForceFullScreenBounds(win, screen, floatBox); }
                 win.Show();
-                win.WindowState = WindowState.Maximized;
+                if (floatBox == null) win.WindowState = WindowState.Maximized;
                 _messageWindows.Add(win);  // Track for cleanup
             }
 
@@ -6428,6 +6493,7 @@ namespace ConditioningControlPanel.Services
             _lastGracePauseActionUtc = nowUtc;
 
             PausePrimary();
+            SetFloatingPaused(true);   // every floating window holds with it
 
             // The attention mini-game pauses WITH the video: motion frozen, clicks off. Its expiry
             // clock stops on its own — the deadlines are held against _startTime, which
@@ -6491,6 +6557,7 @@ namespace ConditioningControlPanel.Services
 
             ResumeGuardTimers(DateTime.UtcNow);
             PlayPrimary();
+            SetFloatingPaused(false);
 
             App.Logger?.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, pausedFor.TotalSeconds);
             VideoDiag.Log("PANIC", $"grace pause RELEASED ({reason}) after {pausedFor.TotalSeconds:F1}s - playback resumed");
@@ -6575,6 +6642,21 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex)
                 {
                     App.Logger?.Warning("VideoService: per-screen grace overlay failed - {Error}", ex.Message);
+                }
+
+                // Floating instances are not in _windows: the card goes where they opened.
+                if (_graceOverlays.Count == 0)
+                {
+                    foreach (var screen in FloatingScreens())
+                    {
+                        try
+                        {
+                            var overlay = new GracePauseOverlayWindow(screen, () => ResumeFromGrace("resume button"));
+                            overlay.SetRemainingSeconds(GraceWindowSeconds);
+                            _graceOverlays.Add(overlay);
+                        }
+                        catch (Exception ex) { Diag.Swallowed(ex); }
+                    }
                 }
 
                 if (_graceOverlays.Count == 0)
@@ -6682,10 +6764,12 @@ namespace ConditioningControlPanel.Services
             _fallbackSafetyTimer = null;
 
             // Extend stuck detection timeout so long videos aren't killed prematurely
-            App.InteractionQueue?.ExtendTimeout(videoDurationSeconds, InteractionQueueService.InteractionType.Video);
+            // Gentle visuals: a slowed clip runs longer on the wall clock (rate 1 = unchanged).
+            var wallSeconds = Video.GentleWindowRules.WallSeconds(videoDurationSeconds, _playRate);
+            App.InteractionQueue?.ExtendTimeout(wallSeconds, InteractionQueueService.InteractionType.Video);
 
             // Add 5 second buffer beyond video duration
-            var timeoutSeconds = videoDurationSeconds + 5;
+            var timeoutSeconds = wallSeconds + 5;
 
             _lastSafetyTimeMs = -1;
             _lastSafetyProgressUtc = DateTime.UtcNow;
@@ -7478,14 +7562,58 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>
+        /// Gentle visuals for a LibVLC window, called just before Play(): the clip's rate (only when
+        /// slowed, so nothing changes when off) and a black owned curtain that fades away once the
+        /// player reports Playing (backstop 3 s), so the clip fades in instead of popping on.
+        /// </summary>
+        private void GentleBeforePlay(Window win, LibVLCSharp.Shared.MediaPlayer player)
+        {
+            if (_playRate < 1.0)
+            {
+                try { player.SetRate((float)_playRate); }
+                catch (Exception ex) { App.Logger?.Debug("VideoService: gentle SetRate failed: {E}", ex.Message); }
+            }
+            if (!Safety.GentleVisuals.On) return;
+            var curtain = Video.GentleCurtain.CoverOwner(win);
+            if (curtain == null) return;
+            var seconds = Safety.GentleVisuals.FadeSeconds;
+            int lifted = 0;
+            void Lift()
+            {
+                if (Interlocked.Exchange(ref lifted, 1) == 0)
+                    Video.GentleCurtain.Lift(new[] { curtain }, seconds);
+            }
+            player.Playing += (_, _) => { try { curtain.Dispatcher.BeginInvoke(new Action(Lift)); } catch { } };
+            var backstop = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            backstop.Tick += (_, _) => { backstop.Stop(); Lift(); };
+            backstop.Start();
+        }
+
         /// <param name="reason">
         /// Which exit path asked for the teardown - natural end / ESC dismiss ("cleanup"), panic key
         /// or any other forced close ("force cleanup"), engine stop, app exit. Carried into the
         /// Information-level teardown lines and into ReleasePlayer so a #1196-shaped report ("libvlc
         /// is still in my sound mixer") can be answered from the log without a repro.
         /// </param>
-        private void CloseAll(bool synchronous = false, string reason = "teardown")
+        /// <param name="softExit">A natural end. With gentle visuals on, black curtains cover the
+        /// video windows for the teardown and then fade away, so the desktop fades back in instead
+        /// of snapping. Never set by panic / force / engine stop / app exit: those stay instant and
+        /// also drop any curtain still fading (<see cref="Video.GentleCurtain.DropAll"/>).</param>
+        private void CloseAll(bool synchronous = false, string reason = "teardown", bool softExit = false)
         {
+            List<Window>? softCurtains = null;
+            if (Video.GentleWindowRules.SoftExit(Safety.GentleVisuals.On, softExit) && !_isCleaningUp && _windows.Count > 0)
+            {
+                var rects = new List<Int32Rect>();
+                foreach (var w in _windows)
+                    if (w.IsVisible && Video.GentleCurtain.RectOf(w) is Int32Rect rc) rects.Add(rc);
+                softCurtains = Video.GentleCurtain.Cover(rects);
+            }
+            else if (!softExit)
+            {
+                Video.GentleCurtain.DropAll();
+            }
             // Use lock to prevent race conditions between multiple cleanup triggers
             // (panic key, EndReached, safety timer, etc.)
             // #616/#617/#621/#622/#623: everything below runs ON THE UI THREAD and blocks it for
@@ -7497,6 +7625,9 @@ namespace ConditioningControlPanel.Services
             // "the panic key did nothing". Every phase is timestamped so the next report tells us
             // which phase the teardown died in instead of just going quiet.
             var closeSw = System.Diagnostics.Stopwatch.StartNew();
+            // Floating companions and frames go FIRST and on every call, a declined duplicate
+            // included: no floating window outlives a stop, whichever door the stop came through.
+            CloseFloatingLayer(reason);
             // A teardown with no windows open is the common case (every panic press, every engine
             // stop, every session end funnels here) and it produced the same four CLOSE lines as a
             // real teardown - four lines of "nothing happened" per event, in the one trace whose
@@ -7873,6 +8004,10 @@ namespace ConditioningControlPanel.Services
                     _isCleaningUp = false;
                 }
 
+                // Gentle soft exit: the video windows are gone, fade the black covers away.
+                if (softCurtains != null)
+                    Video.GentleCurtain.Lift(softCurtains, Safety.GentleVisuals.FadeSeconds);
+
                 // A leased player's wedge may have asked to retire the shared instance WHILE this
                 // video's per-monitor players were still decoding on it; that retire was parked
                 // rather than executed (RetireSharedLibVLC / ShouldDeferRetire). The video is down
@@ -7956,7 +8091,9 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        private void Cleanup()
+        /// <param name="naturalEnd">The clip played to its end (EndCurrentVideo): with gentle visuals
+        /// on, the desktop fades back in. Every other door (Esc, safety timers, errors) stays instant.</param>
+        private void Cleanup(bool naturalEnd = false)
         {
             App.Logger?.Information("VideoService: Cleanup() called, _videoPlaying={Playing}, _windows={WinCount}",
                 _videoPlaying, _windows.Count);
@@ -7970,10 +8107,11 @@ namespace ConditioningControlPanel.Services
             _videoPlaying = false;
             _triggerInProgress = false;
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
+            CloseFloatingInstances("cleanup");
             // "cleanup" covers both doors into this method: the natural end of a clip and the ESC
             // dismiss (SetupStrictHandlers / TryEscapeFromGlobalKey). The VideoDiag PANIC line
             // immediately before an ESC-driven call says which one it was.
-            CloseAll(reason: "cleanup");
+            CloseAll(reason: "cleanup", softExit: naturalEnd);
 
             App.Logger?.Information("VideoService: Cleanup() - CloseAll completed, _windows now={WinCount}", _windows.Count);
             // Audio unduck now happens inside CloseAll (above) so every teardown path releases the
@@ -8566,21 +8704,8 @@ namespace ConditioningControlPanel.Services
 
         private void CleanupTempPackFiles()
         {
-            foreach (var tempFile in _tempPackFiles)
-            {
-                try
-                {
-                    if (File.Exists(tempFile))
-                    {
-                        File.Delete(tempFile);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Debug("Failed to delete temp pack file: {Error}", ex.Message);
-                }
-            }
-            _tempPackFiles.Clear();
+            // A refused delete (the player has not let go yet) stays listed and is retried next time.
+            _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
         }
 
         #region LibVLC Child Window Input Blocking
@@ -8636,7 +8761,9 @@ namespace ConditioningControlPanel.Services
         /// creation-DPI size, so the second pass re-pins it after layout settles. On uniform-DPI
         /// setups both passes set the rect the window already has (harmless no-op).
         /// </summary>
-        private void ForceFullScreenBounds(Window win, Screen screen)
+        /// <param name="floatBounds">The floating window's rectangle (physical pixels) when the clip
+        /// is not full screen; pinned the same way, for the same mixed-DPI reason.</param>
+        private void ForceFullScreenBounds(Window win, Screen screen, System.Drawing.Rectangle? floatBounds = null)
         {
             void Apply()
             {
@@ -8644,7 +8771,7 @@ namespace ConditioningControlPanel.Services
                 {
                     var hwnd = new WindowInteropHelper(win).Handle;
                     if (hwnd == IntPtr.Zero) return;
-                    var b = screen.Bounds; // physical pixels
+                    var b = floatBounds ?? screen.Bounds; // physical pixels
                     SetWindowPos(hwnd, IntPtr.Zero, b.X, b.Y, b.Width, b.Height,
                         SWP_NOZORDER | SWP_NOACTIVATE);
                 }

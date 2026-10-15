@@ -208,7 +208,7 @@ public static class PossessionRemember
             // (see EmberAttribution.StartCharge / Finish), so there is nothing to release afterwards.
             if (window is IPossessionHost host)
             {
-                var attribution = new EmberAttribution(host, () => App.Settings?.Current?.LockdownPhotosafe == true);
+                var attribution = new EmberAttribution(host, () => Services.Safety.GentleVisuals.Photosafe(App.Settings?.Current?.LockdownPhotosafe == true));
                 _ = attribution.ChargeAsync(door, CancellationToken.None, 600);
             }
 

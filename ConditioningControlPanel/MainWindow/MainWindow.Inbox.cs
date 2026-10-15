@@ -174,6 +174,8 @@ namespace ConditioningControlPanel
         /// Reconnect copy instead, never a lapse row. True when a stamp changed.</summary>
         private bool MaybePostLapseRow(Models.AppSettings settings)
         {
+            // Never from memory alone: the server must have answered this run (it may have just cleared the reading).
+            if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return false;
             var reading = Services.Startup.Conversion.ConversionRules.DecideLapse(settings.PatreonTier, settings.ServerTierSeen,
                 settings.PatreonPremiumValidUntil, settings.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
             if (reading.Row == Services.Startup.Conversion.LapseRow.None || LiveCovers(reading.Tier)) return false;

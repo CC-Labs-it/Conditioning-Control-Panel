@@ -80,7 +80,9 @@ internal static class RemoteMediaCache
     /// image once per flash.</summary>
     private static readonly Dictionary<string, Task<byte[]?>> InFlight = new(StringComparer.Ordinal);
 
-    private static readonly List<string> TempFiles = new();
+    /// <summary>A refused delete (a clip LibVLC still has open) stays on these books and is
+    /// retried on the next sweep; it used to be dropped and left on disk until the next launch.</summary>
+    private static readonly MediaTempFileLedger Temps = new(MaxTrackedTempFiles);
 
     private static long _bytes;
     private static long _tick;
@@ -184,8 +186,7 @@ internal static class RemoteMediaCache
         // release bookkeeping must not be able to delete the user's own file through us.
         if (!IsOurTempFile(path)) return;
 
-        lock (Gate) TempFiles.Remove(path);
-        TryDelete(path);
+        Temps.Release(path);
     }
 
     /// <summary>
@@ -397,26 +398,11 @@ internal static class RemoteMediaCache
 
     // ---- temp bookkeeping ----------------------------------------------------------
 
-    private static void TrackTempFile(string path)
-    {
-        List<string>? sweep = null;
-        lock (Gate)
-        {
-            TempFiles.Add(path);
-            int over = TempFiles.Count - MaxTrackedTempFiles;
-            if (over > 0)
-            {
-                // Oldest-first, never the ones just handed out: those are the likeliest to be
-                // open in a player right now. A delete that fails is dropped from tracking
-                // anyway — retrying it every call would burn I/O on a file we cannot have, and
-                // the ccp_temp_ prefix means the next launch sweeps it regardless.
-                sweep = TempFiles.GetRange(0, over);
-                TempFiles.RemoveRange(0, over);
-            }
-        }
-        if (sweep == null) return;
-        foreach (var stale in sweep) TryDelete(stale);
-    }
+    // Oldest-first, never the ones just handed out: those are the likeliest to be open in a
+    // player right now. A delete that is refused is HELD and retried on the next sweep
+    // (ccp-bugs #1433 review): dropping it left every clip that was still on screen at sweep
+    // time on disk for the rest of the session.
+    private static void TrackTempFile(string path) => Temps.Track(path);
 
     private static void TryDelete(string? path)
     {

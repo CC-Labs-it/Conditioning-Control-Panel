@@ -2611,6 +2611,59 @@ namespace ConditioningControlPanel.Models
             set { _videoTargetMonitor = value; OnPropertyChanged(); }
         }
 
+        private bool _mandatoryVideoFloating;
+        /// <summary>How a mandatory video appears: false (default) = full screen, as always; true = a
+        /// floating topmost window about a third of the screen, placed like a flash image, with its own
+        /// sound (player request 2026-10-10: usable while gaming). Every stop rule is the same, and a
+        /// strict video, a Lockdown and a Chaos run stay full screen
+        /// (Services/Video/MandatoryVideoPresentation.ShouldFloat).</summary>
+        public bool MandatoryVideoFloating
+        {
+            get => _mandatoryVideoFloating;
+            set { _mandatoryVideoFloating = value; OnPropertyChanged(); }
+        }
+
+        private int _mandatoryVideoFloatingSizePercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.DefaultSizePercent;
+        /// <summary>Floating window WIDTH as a percent of the work-area width of the monitor it
+        /// opens on, 15 to 60, default 33. Read when the next window opens.</summary>
+        public int MandatoryVideoFloatingSizePercent
+        {
+            get => _mandatoryVideoFloatingSizePercent;
+            set { _mandatoryVideoFloatingSizePercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampSizePercent(value); OnPropertyChanged(); }
+        }
+
+        /// <summary>RETIRED small / medium / large choice. Read once from an old settings file and
+        /// carried into <see cref="MandatoryVideoFloatingSizePercent"/> (25 / 33 / 50); it reads
+        /// back as null, so it is never the source again.</summary>
+        public string? MandatoryVideoFloatingSize
+        {
+            get => null;
+            set
+            {
+                var carried = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.LegacySizePercent(value);
+                if (carried.HasValue) MandatoryVideoFloatingSizePercent = carried.Value;
+            }
+        }
+
+        private int _mandatoryVideoFloatingSpeedPercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.DefaultSpeedPercent;
+        /// <summary>How fast a thrown floating window travels, 10 to 100 percent of flash-image
+        /// speed, default 35 (a lazy drift). Live: IFloatingVideoSurface.MotionSpeed = value / 100.</summary>
+        public int MandatoryVideoFloatingSpeedPercent
+        {
+            get => _mandatoryVideoFloatingSpeedPercent;
+            set { _mandatoryVideoFloatingSpeedPercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampSpeedPercent(value); OnPropertyChanged(); }
+        }
+
+        private int _mandatoryVideoFloatingCount = 1;
+        /// <summary>The MOST floating windows that may be on screen at once, 1 (default) to 4.
+        /// One trigger opens one window; at the limit a trigger is skipped. Only one window
+        /// carries the sound (Services/Video/FloatingAudioFocus).</summary>
+        public int MandatoryVideoFloatingCount
+        {
+            get => _mandatoryVideoFloatingCount;
+            set { _mandatoryVideoFloatingCount = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampCount(value); OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC
@@ -4956,6 +5009,18 @@ namespace ConditioningControlPanel.Models
             set { _bubbleCountStrictLock = value; OnPropertyChanged(); }
         }
 
+        /// <summary>
+        /// "Pause other effects during Bubble Count" (#1418). Off by default. On: while a round
+        /// runs, flashes, spirals, the pink overlay and the bouncing text hold the way they do
+        /// during a mandatory video (BubbleCountService.EnterEffectsHold) and come back after.
+        /// </summary>
+        private bool _bubbleCountPauseEffects = false;
+        public bool BubbleCountPauseEffects
+        {
+            get => _bubbleCountPauseEffects;
+            set { _bubbleCountPauseEffects = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Bouncing Text
@@ -5338,6 +5403,34 @@ namespace ConditioningControlPanel.Models
         {
             get => _motionLevel;
             set { _motionLevel = value; OnPropertyChanged(); }
+        }
+
+        private bool _gentleVisuals;
+        /// <summary>
+        /// Gentle visuals (renardeau's photosensitivity ask, 2026-10-14): every overlay fades in and
+        /// out over <see cref="GentleFadeSeconds"/>, GIFs / spirals / videos play at
+        /// <see cref="GentleSpeed"/>, brightness jumps ease in and flicker becomes a fade. A pure
+        /// global preference like the motion level: never in SessionSettings, Preset or the remote
+        /// generators, so no session can switch it off. Read through Services/Safety/GentleVisuals.
+        /// </summary>
+        public bool GentleVisuals
+        {
+            get => _gentleVisuals;
+            set { _gentleVisuals = value; OnPropertyChanged(); }
+        }
+
+        private double _gentleFadeSeconds = Services.Safety.GentleVisuals.DefaultFadeSeconds;
+        public double GentleFadeSeconds
+        {
+            get => _gentleFadeSeconds;
+            set { _gentleFadeSeconds = Services.Safety.GentleVisuals.ClampFade(value); OnPropertyChanged(); }
+        }
+
+        private double _gentleSpeed = Services.Safety.GentleVisuals.DefaultSpeed;
+        public double GentleSpeed
+        {
+            get => _gentleSpeed;
+            set { _gentleSpeed = Services.Safety.GentleVisuals.ClampSpeed(value); OnPropertyChanged(); }
         }
 
         private Services.BackRoom.BackRoomFxIntensity _backRoomFxIntensity = Services.BackRoom.BackRoomFxIntensity.Normal;
@@ -5911,6 +6004,19 @@ namespace ConditioningControlPanel.Models
         {
             get => _companionVoiceLinesMuted;
             set { _companionVoiceLinesMuted = value; OnPropertyChanged(); }
+        }
+
+        private int _companionVoiceLevel = Services.CompanionVoiceGain.DefaultLevel;
+        /// <summary>
+        /// The companion's own voice level (0-100), on top of MasterVolume. The default reproduces
+        /// the loudness from before the slider existed; higher lifts the voice over the engine,
+        /// 0 is silent (the mute flags still work on their own). Math: CompanionVoiceGain.
+        /// </summary>
+        [JsonProperty]
+        public int CompanionVoiceLevel
+        {
+            get => _companionVoiceLevel;
+            set { _companionVoiceLevel = Math.Clamp(value, 0, 100); OnPropertyChanged(); }
         }
 
         // Persisted avatar-tube (companion window) placement (#669). Restored on startup so a
@@ -8580,6 +8686,39 @@ namespace ConditioningControlPanel.Models
             set { _pbpMediaChosen = value; OnPropertyChanged(); }
         }
 
+        private bool _pbpLetPeopleWatch = true;
+        /// <summary>"Let people watch my games" (owner, 2026-10-05): default on. Off = this player's
+        /// public matches are never watchable (the page sends <c>watchable:false</c> on lobby enter,
+        /// quick and join). Friend-invite matches are never watchable either way.</summary>
+        [JsonProperty("pbpLetPeopleWatch")]
+        public bool PbpLetPeopleWatch
+        {
+            get => _pbpLetPeopleWatch;
+            set { _pbpLetPeopleWatch = value; OnPropertyChanged(); }
+        }
+
+        private bool _pbpWatchEffects = true;
+        /// <summary>Distraction effects in the stands (spectate v2, owner 2026-10-14): default on.
+        /// A spectator sees the turn player's heat and effects at the moments they fired, drawn
+        /// from the SPECTATOR's own media; nothing of the player's media ever travels. Written by
+        /// the page's watch Options (<c>pbp:setting watchEffects</c>).</summary>
+        [JsonProperty("pbpWatchEffects")]
+        public bool PbpWatchEffects
+        {
+            get => _pbpWatchEffects;
+            set { _pbpWatchEffects = value; OnPropertyChanged(); }
+        }
+
+        private string _pbpWatchAmount = "normal";
+        /// <summary>The stands' amount dial: the game's own values (less, normal, more). Anything
+        /// else reads as normal.</summary>
+        [JsonProperty("pbpWatchAmount")]
+        public string PbpWatchAmount
+        {
+            get => _pbpWatchAmount;
+            set { _pbpWatchAmount = global::ConditioningControlPanel.Services.PieceByPiece.PbpWatchRules.CleanAmount(value); OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region The Arcademy (webview mini-game hub)
@@ -9649,6 +9788,53 @@ namespace ConditioningControlPanel.Models
         {
             get => _deeperPlayerWindowHeight;
             set { _deeperPlayerWindowHeight = value; OnPropertyChanged(); }
+        }
+
+        // The audio player with a playlist. All four are this machine's own (whole file paths):
+        // ProfileSyncService keeps every AudioPlaylist* property out of the cloud backup and
+        // carries it across a restore.
+        private List<string> _audioPlaylistPaths = new();
+        /// <summary>The playlist, whole paths in the player's order.</summary>
+        [JsonProperty]
+        public List<string> AudioPlaylistPaths
+        {
+            get => _audioPlaylistPaths;
+            set { _audioPlaylistPaths = value ?? new List<string>(); OnPropertyChanged(); }
+        }
+
+        private int _audioPlaylistVolume = 80;
+        /// <summary>The playlist player's own level (0..100), scaled by MasterVolume when it plays.</summary>
+        [JsonProperty]
+        public int AudioPlaylistVolume
+        {
+            get => _audioPlaylistVolume;
+            set { _audioPlaylistVolume = Math.Max(0, Math.Min(100, value)); OnPropertyChanged(); }
+        }
+
+        private int _audioPlaylistLoop;
+        /// <summary>0 off, 1 all, 2 one (Services.AudioPlayer.AudioPlaylistLoop).</summary>
+        [JsonProperty]
+        public int AudioPlaylistLoop
+        {
+            get => _audioPlaylistLoop;
+            set { _audioPlaylistLoop = Math.Max(0, Math.Min(2, value)); OnPropertyChanged(); }
+        }
+
+        private bool _audioPlaylistShuffle;
+        [JsonProperty]
+        public bool AudioPlaylistShuffle
+        {
+            get => _audioPlaylistShuffle;
+            set { _audioPlaylistShuffle = value; OnPropertyChanged(); }
+        }
+
+        private bool _audioPlaylistEnhancements = true;
+        /// <summary>A track's Deeper enhancement runs with it (Services.Deeper.PlaylistEnhancementBridge). On by default.</summary>
+        [JsonProperty]
+        public bool AudioPlaylistEnhancements
+        {
+            get => _audioPlaylistEnhancements;
+            set { _audioPlaylistEnhancements = value; OnPropertyChanged(); }
         }
 
         private bool _companionAsksEnabled = true;

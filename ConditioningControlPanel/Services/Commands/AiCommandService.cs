@@ -165,7 +165,7 @@ namespace ConditioningControlPanel.Services.Commands
                 case AICommandType.mantra_lockscreen when d is MantraLockscreen m:
                     var mt = (m.Mantra ?? "").Trim();
                     if (mt.Length > 30) mt = mt.Substring(0, 30) + "…";
-                    return $"🔒 Lock card · \"{mt}\" ×{Math.Clamp(m.Amount, 0, 5)}";
+                    return $"🔒 Lock card · \"{mt}\" ×{MantraLockScreenCommand.Repeats(m.Amount)}";
                 case AICommandType.spiral when d is SpiralPinkFiler sp:
                     return sp.On ? $"🌀 Spiral on ({Math.Clamp(sp.Intensity, 0, 30)}%)" : "🌀 Spiral off";
                 case AICommandType.pink when d is SpiralPinkFiler pp:
@@ -190,17 +190,48 @@ namespace ConditioningControlPanel.Services.Commands
 
         /// <summary>
         /// Follow-up feed line for a command whose executor reported failure, so the panel
-        /// never leaves a request line standing as if the effect happened. Audio names the
-        /// usual cause: there are no files in the assets audio folder (#1120).
+        /// never leaves a request line standing as if the effect happened. Audio says which of
+        /// its two causes it was, and names the folder by its real path (#1120, #1428).
         /// </summary>
         private static string FormatFailedAction(AiCommandData c)
         {
             return c.Command switch
             {
-                AICommandType.audio => "🔇 Audio didn't play - check your assets audio folder",
+                AICommandType.audio => FormatFailedAudio(),
                 AICommandType.video => "🎬 Video didn't play",
                 _ => $"⚠️ {c.Command} didn't fire"
             };
+        }
+
+        private static string FormatFailedAudio()
+        {
+            try
+            {
+                var folder = MediaCommand.AudioFolderUnder(App.EffectiveAssetsPath);
+                // "Had something to play" covers the recorded mod clips that stand in for an
+                // empty folder, so a clip that did not start never blames the folder.
+                return FormatFailedAudio(folder, MediaCommand.CurrentAudioPool().Pool != MediaCommand.AudioPool.None);
+            }
+            catch
+            {
+                return FormatFailedAudio("", hasFiles: true);
+            }
+        }
+
+        /// <summary>
+        /// The Audio effect plays the player's LOCAL files from one folder, else a recorded clip
+        /// from the active mod (<see cref="MediaCommand.ChooseAudioPool"/>); no online source
+        /// feeds it, whatever the media source is set to. The old line said "check your assets
+        /// audio folder", which no page in the app names, so a player with online media (whose
+        /// folder is the empty one the app creates) could not act on it (ccp-bugs #1428).
+        /// An empty folder gets its full path; files that are there but did not start point at
+        /// the output device instead.
+        /// </summary>
+        internal static string FormatFailedAudio(string audioFolder, bool hasFiles)
+        {
+            if (hasFiles || string.IsNullOrWhiteSpace(audioFolder))
+                return "🔇 Audio didn't play - check the output device in Settings, Audio";
+            return $"🔇 No audio to play - this effect only plays your own files. Put .mp3 or .wav files in {audioFolder}";
         }
 
         private static bool IsEffectAllowed(AICommandType cmd, Models.CompanionPromptSettings s)

@@ -474,6 +474,85 @@ public class DashboardBillboardTests
         Assert.Equal(4, deck.Cards.Count);
     }
 
+    // The featured match bug (2026-10-14): the poll answers a moment after Home opens, the card
+    // ranks first (Live), behind the walk, so it waited a whole cycle (12 s a card) and the owner
+    // never saw it. A Live arrival now lands at the next change and the walk picks up after it.
+    [Fact]
+    public void A_live_card_that_comes_in_mid_cycle_lands_at_the_next_change_then_the_walk_goes_on()
+    {
+        var p = new FakeProvider { Cards = { Card("resume", BillboardCardKind.Resume), Card("event", BillboardCardKind.Event), Card("house", BillboardCardKind.House) } };
+        var deck = Deck(BillboardTier.Free, null, null, p);
+        Assert.Equal("resume", deck.Start()!.Spec.Id);
+        p.Cards.Add(Card("live.featured", BillboardCardKind.Live));
+        deck.MarkDirty();
+        Assert.Equal("live.featured", deck.Next()!.Spec.Id);
+        Assert.Equal(0, deck.Index);
+        Assert.Equal("event", deck.Next()!.Spec.Id);
+        Assert.Equal("house", deck.Next()!.Spec.Id);
+        Assert.Equal(0, deck.Cycle);
+        Assert.Equal("live.featured", deck.Next()!.Spec.Id);
+        Assert.Equal(1, deck.Cycle);
+    }
+
+    [Fact]
+    public void Refresh_rebuilds_now_keeps_the_card_on_screen_and_reports_a_live_arrival()
+    {
+        var p = new FakeProvider { Cards = { Card("resume", BillboardCardKind.Resume), Card("house", BillboardCardKind.House) } };
+        var deck = Deck(BillboardTier.Free, null, null, p);
+        deck.Start();
+        Assert.False(deck.Refresh()); // nothing dirty
+        p.Cards.Add(Card("live.featured", BillboardCardKind.Live));
+        deck.MarkDirty();
+        Assert.True(deck.Refresh());
+        Assert.False(deck.IsDirty);
+        Assert.Equal(3, deck.Cards.Count);
+        Assert.Equal("resume", deck.Current!.Spec.Id);
+        Assert.Equal(1, deck.Index);
+        Assert.True(deck.HasArrival);
+        Assert.Equal("live.featured", deck.Next()!.Spec.Id);
+        Assert.False(deck.HasArrival);
+        Assert.Equal("house", deck.Next()!.Spec.Id);
+    }
+
+    [Fact]
+    public void Refresh_waits_for_the_next_change_when_the_card_on_screen_would_leave()
+    {
+        var p = new FakeProvider { Cards = { Card("live.featured", BillboardCardKind.Live), Card("house", BillboardCardKind.House) } };
+        var deck = Deck(BillboardTier.Free, null, null, p);
+        Assert.Equal("live.featured", deck.Start()!.Spec.Id);
+        p.Cards.RemoveAt(0);
+        deck.MarkDirty();
+        Assert.False(deck.Refresh());
+        Assert.True(deck.IsDirty);
+        Assert.Equal(2, deck.Cards.Count);
+        Assert.Equal("live.featured", deck.Current!.Spec.Id);
+    }
+
+    [Fact]
+    public void A_non_live_card_or_a_rotated_featured_match_is_no_arrival()
+    {
+        var featured = Card("live.featured", BillboardCardKind.Live);
+        var p = new FakeProvider { Cards = { featured, Card("resume", BillboardCardKind.Resume), Card("house", BillboardCardKind.House) } };
+        var deck = Deck(BillboardTier.Free, null, null, p);
+        deck.Start();
+        deck.Next(); // resume
+        p.Cards.Add(Card("event", BillboardCardKind.Event));
+        p.Cards[0] = featured with { Title = "B vs C" }; // same id, the next match
+        deck.MarkDirty();
+        Assert.False(deck.Refresh());
+        Assert.Equal("B vs C", deck.Cards[0].Spec.Title);
+        Assert.Equal("event", deck.Next()!.Spec.Id);
+    }
+
+    [Theory]
+    [InlineData(0.0, true, true)]
+    [InlineData(0.2, true, true)]
+    [InlineData(0.25, true, false)]
+    [InlineData(0.9, true, false)]
+    [InlineData(0.0, false, false)] // hover, focus, Motion Off or off screen
+    public void A_live_arrival_jumps_in_only_while_the_card_on_screen_has_barely_started(double progress, bool holdRuns, bool jumps) =>
+        Assert.Equal(jumps, DashboardBillboard.JumpToArrival(progress, holdRuns));
+
     [Fact]
     public void A_fresh_board_post_jumps_the_queue_once_and_wears_new_once()
     {

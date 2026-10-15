@@ -59,6 +59,9 @@ public sealed class BrowserMediaService
     /// <summary>Whether the CURRENT session has ever reported playback. Distinguishes "still
     /// loading" from "was playing and stopped", which the navigated/heartbeat paths both need.</summary>
     private bool _hasEverPlayed;
+    /// <summary>The player asked for this takeover (a video requested in chat), so their
+    /// longest-video limit does not cut it. Set per session by BeginTakeover.</summary>
+    private bool _playerAskedFor;
 
     private DispatcherTimer? _heartbeatTimer;
 
@@ -151,7 +154,7 @@ public sealed class BrowserMediaService
     /// the atomic guard that closes the race against VideoService's ~2s pre-roll window where a
     /// committed mandatory video still reads as not playing.
     /// </summary>
-    public bool BeginTakeover(MediaOwner owner)
+    public bool BeginTakeover(MediaOwner owner, bool playerAskedFor = false)
     {
         if (App.InteractionQueue != null && !App.InteractionQueue.TryStart(
                 InteractionQueueService.InteractionType.WebVideo, () => { }, queue: false))
@@ -166,6 +169,7 @@ public sealed class BrowserMediaService
             _sessionGeneration++;
             _owner = owner;
             _isTakeover = true;
+            _playerAskedFor = playerAskedFor;
             _holdsQueueSlot = App.InteractionQueue != null;
             _durationSeconds = 0;
             _hasEverPlayed = false;
@@ -220,12 +224,18 @@ public sealed class BrowserMediaService
     {
         bool becamePlaying;
         bool scheduleHardStop = false;
+        double? userCapSeconds = null;
         int gen;
 
         lock (_lock)
         {
             becamePlaying = !_isPlaying;
             _isPlaying = true;
+            // The player's longest-video limit, armed once at a takeover's first playback and
+            // whatever length the page reports, a missing one included (#1438).
+            if (!_hasEverPlayed && _isTakeover && !_playerAskedFor)
+                userCapSeconds = Video.VideoLengthCap.BrowserTakeoverSeconds(
+                    App.Settings?.Current?.VideoMaxDurationSeconds ?? 0, _owner);
             _hasEverPlayed = true;
             _lastHeartbeatUtc = DateTime.UtcNow;
 
@@ -258,6 +268,11 @@ public sealed class BrowserMediaService
         StartHeartbeatTimer();
         ExtendQueueTimeout();
         if (scheduleHardStop) ScheduleTakeoverHardStop(gen, durationSeconds);
+        if (userCapSeconds is double capSec)
+        {
+            App.Logger?.Information("BrowserMedia: takeover started - the player's longest-video limit cuts it at +{Cap:F0}s", capSec);
+            ScheduleTakeoverStop(gen, TimeSpan.FromSeconds(capSec), "max-video-length");
+        }
         if (becamePlaying) RaisePlayingChanged(true);
     }
 
@@ -425,7 +440,13 @@ public sealed class BrowserMediaService
         var cap = TimeSpan.FromSeconds(Math.Min(durationSeconds + TakeoverGraceSeconds, TakeoverMaxSeconds));
         App.Logger?.Information("BrowserMedia: takeover clip reports {Seconds:F0}s - hard stop at +{Cap:F0}s",
             durationSeconds, cap.TotalSeconds);
+        ScheduleTakeoverStop(generation, cap, "takeover-overran");
+    }
 
+    /// <summary>Force-end THIS takeover after <paramref name="cap"/>, unless the session has
+    /// ended, been replaced, or stopped being a takeover (fullscreen left) by then.</summary>
+    private void ScheduleTakeoverStop(int generation, TimeSpan cap, string reason)
+    {
         System.Threading.Tasks.Task.Delay(cap).ContinueWith(_ =>
         {
             var dispatcher = System.Windows.Application.Current?.Dispatcher;
@@ -440,8 +461,8 @@ public sealed class BrowserMediaService
                 {
                     if (_sessionGeneration != generation || !_isTakeover) return;
                 }
-                App.Logger?.Information("BrowserMedia: takeover ran past its clip length - force-ending");
-                ForceEndCore("takeover-overran");
+                App.Logger?.Information("BrowserMedia: takeover reached its stop ({Reason}) - force-ending", reason);
+                ForceEndCore(reason);
             });
         });
     }
