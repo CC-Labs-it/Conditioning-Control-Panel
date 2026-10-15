@@ -41,9 +41,25 @@ public sealed class CompanionRoomThinkingTests
             Dispatcher.UIThread.RunJobs();
             var frames = TopLevelFrameSource.For(win);
             int baseline = frames.SubscriberCount;
-            vm.IsThinking = true;
+            // The user path: type a line, press Enter in the draft box (DraftBox_KeyDown -> SendCommand).
+            var box = chat.FindControl<TextBox>("DraftBox")!;
+            box.Focus();
+            box.Text = "hello";
             Dispatcher.UIThread.RunJobs();
+            win.KeyPress(global::Avalonia.Input.Key.Enter, global::Avalonia.Input.RawInputModifiers.None,
+                global::Avalonia.Input.PhysicalKey.Enter, null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(vm.IsThinking);
             Assert.Equal(baseline + 1, frames.SubscriberCount);
+            // A real window frame paints the dots (not only the explicit seam below).
+            var dot1 = chat.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Dot1")!;
+            dot1.Opacity = 1;
+            for (int i = 0; i < 4 && dot1.Opacity == 1; i++)
+            {
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(dot1.Opacity < 1, $"a frame tick should pulse Dot1, was {dot1.Opacity}");
             chat.PaintThinking(450);
             Assert.Equal(1, chat.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Dot1")!.Opacity, 8);
             Assert.Equal(.75, chat.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Dot2")!.Opacity, 8);
