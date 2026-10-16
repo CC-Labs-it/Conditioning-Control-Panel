@@ -69,6 +69,25 @@ public class ScrolllerCreditTests
         Assert.Contains("case 'creditQueued':", js);
         Assert.Contains("showOutro(c)", js);
         Assert.Contains("clearCredit();", js);   // teardown drops the card, so panic does too
+        Assert.Contains("post({ type: 'mediaEnded' })", js);   // host stops judging during the card
+    }
+
+    // Review 2026-10-16: a link pressed before a panic must never open in a later run, and nothing
+    // may judge the clip during the end card. Asserted on the source (no headless VideoService).
+    [Fact]
+    public void QueuedLink_OpensOnlyAtThisClipsPictureEnd_AndIsDroppedOnEveryNewSession()
+    {
+        var browser = ReadProduct("ConditioningControlPanel", "Services", "Video", "VideoService.Browser.cs");
+        var core = ReadProduct("ConditioningControlPanel", "Services", "Video", "VideoService.cs");
+        Assert.Contains("_creditLinkQueuedFor = null;   // a press belongs to the clip it was made on", browser);
+        var mediaEnded = browser[browser.IndexOf("private void OnBrowserMediaEnded()", StringComparison.Ordinal)..];
+        mediaEnded = mediaEnded[..mediaEnded.IndexOf("\n        }", StringComparison.Ordinal)];
+        Assert.Contains("_maxLenCapTimer?.Stop();", mediaEnded);
+        Assert.Contains("_spawnTimes.Clear();", mediaEnded);
+        Assert.Contains("CanOpenLink(IsStrictActive", mediaEnded);   // re-gated at open time
+        Assert.DoesNotContain("_creditLinkQueuedFor", core);          // no other door opens it
+
+        var html = ReadProduct("ConditioningControlPanel", "Resources", "web", "player", "index.html");
         Assert.Contains("id=\"credit\"", html);
         Assert.Contains("id=\"outro\"", html);
     }

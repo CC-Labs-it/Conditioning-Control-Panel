@@ -88,6 +88,7 @@ namespace ConditioningControlPanel.Services
                     engine.KeyPressed += OnBrowserKey;
                     engine.AttentionClicked += OnBrowserAttentionClicked;
                     engine.CreditClicked += OnBrowserCreditClicked;
+                    engine.MediaEnded += OnBrowserMediaEnded;
                     engine.AttentionMoved += OnBrowserAttentionMoved;
                     engine.WindowDropped += OnBrowserWindowDropped;
                 }
@@ -115,6 +116,7 @@ namespace ConditioningControlPanel.Services
                 if (!ShouldFillSecondaryMonitors(screens.Count)) secondaries.Clear();
 
                 _browserPath = path;
+                _creditLinkQueuedFor = null;   // a press belongs to the clip it was made on
                 _browserStrict = strict;
                 _browserTimeMs = -1;
                 _browserPaused = false;
@@ -604,7 +606,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>The "via Scrolller" badge was pressed. Floating: the link opens now. Fullscreen:
-        /// it waits for the clip's natural end (see <see cref="OpenQueuedCreditLink"/>). Under any
+        /// it waits for the clip's natural end (see <see cref="OnBrowserMediaEnded"/>). Under any
         /// lock nothing happens (the page already shows the badge as not pressable).</summary>
         private void OnBrowserCreditClicked()
         {
@@ -621,15 +623,31 @@ namespace ConditioningControlPanel.Services
             Browser.MarkCreditQueued();
         }
 
-        /// <summary>Cleanup's natural-end door: open the link the user asked for during this clip.
-        /// An attention retry replays the same clip, so the request survives it; a different clip
-        /// (or a panic, which never reaches here with naturalEnd) drops it.</summary>
-        private void OpenQueuedCreditLink(bool naturalEnd)
+        /// <summary>
+        /// The primary's picture reached its end and only the "via Scrolller" end card is left
+        /// before the page reports <c>ended</c>. Nothing may judge the clip during the card: the
+        /// longest-video cap stands down (it would cut a clip that finished and skip its natural
+        /// end) and no further attention target spawns (the ones already up stay pressable).
+        ///
+        /// A link pressed during THIS clip opens here, re-checked against every lock. It is the only
+        /// place it opens: a panic or stop closes the window before the picture ends, and every new
+        /// session starts with nothing queued, so a press can never surface in a later run.
+        /// </summary>
+        private void OnBrowserMediaEnded()
         {
+            if (!_browserActive) return;
+            _maxLenCapTimer?.Stop();
+            _maxLenCapTimer = null;
+            _spawnTimes.Clear();
+
             var queued = _creditLinkQueuedFor;
             _creditLinkQueuedFor = null;
-            if (!naturalEnd || queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
-            Application.Current?.Dispatcher?.BeginInvoke(new Action(() => Video.ScrolllerCredit.Open(queued)));
+            if (queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
+            Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            {
+                if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                Video.ScrolllerCredit.Open(queued);
+            }));
         }
 
         /// <summary>

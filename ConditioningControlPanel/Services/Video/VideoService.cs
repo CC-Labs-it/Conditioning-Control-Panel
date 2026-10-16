@@ -8114,7 +8114,6 @@ namespace ConditioningControlPanel.Services
             // dismiss (SetupStrictHandlers / TryEscapeFromGlobalKey). The VideoDiag PANIC line
             // immediately before an ESC-driven call says which one it was.
             CloseAll(reason: "cleanup", softExit: naturalEnd);
-            OpenQueuedCreditLink(naturalEnd);   // the "via Scrolller" link pressed during the clip
 
             App.Logger?.Information("VideoService: Cleanup() - CloseAll completed, _windows now={WinCount}", _windows.Count);
             // Audio unduck now happens inside CloseAll (above) so every teardown path releases the

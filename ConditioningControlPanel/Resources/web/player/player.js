@@ -555,6 +555,9 @@
     const c = cur.credit;
     const outroMs = c && Number.isFinite(c.outroMs) ? Math.min(Math.max(c.outroMs, 0), 5000) : 0;
     if (outroMs > 0 && showOutro(c)) {
+      // The picture is over: the host stops judging the clip (length cap, new targets)
+      // and opens a link pressed during it. `ended` follows after the card.
+      post({ type: 'mediaEnded' });
       const session = cur;
       outroTimer = setTimeout(() => {
         outroTimer = 0;

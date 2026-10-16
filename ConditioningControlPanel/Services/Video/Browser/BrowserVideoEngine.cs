@@ -267,6 +267,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// <see cref="Clicked"/> for the same press.</summary>
         public event Action? CreditClicked;
 
+        /// <summary>The primary's picture ended and the page is showing the "via Scrolller" end card;
+        /// <see cref="Ended"/> follows once the card is done.</summary>
+        public event Action? MediaEnded;
+
         /// <summary>Tell every screen the credit link will open once the video is over.</summary>
         public void MarkCreditQueued() => Broadcast(new { type = "creditQueued" });
 
@@ -747,6 +751,9 @@ namespace ConditioningControlPanel.Services.Video.Browser
                         // `paused` is absent on older cached page HTML — pass null through rather than
                         // defaulting to false, which would be the blind-clear this fixed (#874).
                         Time?.Invoke((long?)o["ms"] ?? 0, (bool?)o["paused"]);
+                        break;
+                    case "mediaEnded":
+                        MediaEnded?.Invoke();
                         break;
                     case "ended":
                         StopFirstFrameWatch();
