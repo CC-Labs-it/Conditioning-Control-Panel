@@ -31,6 +31,9 @@ namespace ConditioningControlPanel.Services
         private volatile bool _browserActive;
 
         private string? _browserPath;
+        /// <summary>The clip whose "via Scrolller" link was pressed mid-video: it opens once that
+        /// clip ends on its own (a fullscreen video is topmost, a browser opened now would land behind it).</summary>
+        private string? _creditLinkQueuedFor;
         private bool _browserStrict;
         private long _browserTimeMs = -1;
         /// <summary>Pause state of the session, the answer behind IsPrimaryMediaPlaying for a browser
@@ -84,6 +87,7 @@ namespace ConditioningControlPanel.Services
                     engine.Clicked += OnBrowserClicked;
                     engine.KeyPressed += OnBrowserKey;
                     engine.AttentionClicked += OnBrowserAttentionClicked;
+                    engine.CreditClicked += OnBrowserCreditClicked;
                     engine.AttentionMoved += OnBrowserAttentionMoved;
                     engine.WindowDropped += OnBrowserWindowDropped;
                 }
@@ -143,6 +147,9 @@ namespace ConditioningControlPanel.Services
                     // probe: the page wants one fixed answer at load time, and this is the value the
                     // whole run is locked to.
                     Strict = strict,
+                    // "via Scrolller" badge + end card; under any lock the badge shows but takes no press.
+                    Credit = Video.ScrolllerCredit.PagePayload(path, Video.ScrolllerCredit.CanOpenLink(
+                        strict, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)),
                     IsHostPaused = () => _gracePaused,
                     // Lock Card / Lockdown / Possession: every screen is covered on purpose, so a
                     // dead mirror is left black rather than uncovered mid-clip (the engine asks
@@ -594,6 +601,35 @@ namespace ConditioningControlPanel.Services
                     if (_primarySurface != null) OnFloatingTouched(_primarySurface);   // a press takes the sound
                     BeginFloatingDrag(_primaryVideoWindow);
                 }));
+        }
+
+        /// <summary>The "via Scrolller" badge was pressed. Floating: the link opens now. Fullscreen:
+        /// it waits for the clip's natural end (see <see cref="OpenQueuedCreditLink"/>). Under any
+        /// lock nothing happens (the page already shows the badge as not pressable).</summary>
+        private void OnBrowserCreditClicked()
+        {
+            if (!_browserActive) return;
+            var path = _browserPath;
+            if (Video.ScrolllerCredit.For(path) == null) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+            if (IsFloating)
+            {
+                Application.Current?.Dispatcher?.BeginInvoke(new Action(() => Video.ScrolllerCredit.Open(path)));
+                return;
+            }
+            _creditLinkQueuedFor = path;
+            Browser.MarkCreditQueued();
+        }
+
+        /// <summary>Cleanup's natural-end door: open the link the user asked for during this clip.
+        /// An attention retry replays the same clip, so the request survives it; a different clip
+        /// (or a panic, which never reaches here with naturalEnd) drops it.</summary>
+        private void OpenQueuedCreditLink(bool naturalEnd)
+        {
+            var queued = _creditLinkQueuedFor;
+            _creditLinkQueuedFor = null;
+            if (!naturalEnd || queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
+            Application.Current?.Dispatcher?.BeginInvoke(new Action(() => Video.ScrolllerCredit.Open(queued)));
         }
 
         /// <summary>
