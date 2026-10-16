@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Tests;
 public class VaultOfferTests
 {
     private static readonly DateTime Now = new(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
-    private static readonly string[] Languages = { "en", "de", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN" };
+    private static readonly string[] Languages = { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" };
 
     // The compiled plan list (contract C1): USD headline, EUR secondary, yearly 20% off.
     [Theory]
