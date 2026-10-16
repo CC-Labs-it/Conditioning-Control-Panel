@@ -20,13 +20,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.9";
+        public const string AppVersion = "7.1.10";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.9 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.10 - Stay Tuned
+
+NEW IN 7.1.10
+- Italiano (beta): the whole app in Italian. pick it under Settings > Language. it is a first pass, so odd lines are expected; tell us in #bug-reports.
+- Slut Mode has teeth: with the switch on, every persona talks dirty in the chat box, not only the ones that had a filthy variant. your companion says so when you flip it. nothing else changes: barks, voice lines and triggers stay as they were.
+- the tube chat box closes when you send, so it no longer sits over the reply. click the avatar or press the chat key to type the next line.
+
+FIXES IN 7.1.10
+- online clips are capped at 720p, so the engine stops pulling 4K files for a thumbnail-sized flash.
+- Back Room: wall screens that light up together now show different pictures.
+
+v7.1.9 - Stay Tuned
 
 PIECE BY PIECE
 - watch a game: public games have a Watch button in the Lobby. you see the real board about 15 s behind, can swap sides, use the same camera and Options, and see both players' IQ. players still never see each other's. ""Let people watch my games"" sits in Options, on by default.
