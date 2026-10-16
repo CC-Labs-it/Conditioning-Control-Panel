@@ -58,6 +58,10 @@ internal sealed class ScrolllerSource : IFeedSource
     private const int PageLimit = 30;
     private const int NullStrikesBeforeDead = 3;   // a null answer is a bad minute until it repeats
     private const int MaxSourceWidth = 1920;          // don't stream 4K into a feed tile
+    // Clips cap at 720p by the SHORT side (portrait and landscape alike). Scrolller's
+    // bandwidth, not ours: they asked (2026-10-16). HD posts usually carry only 1080p +
+    // 480p, so in practice an HD clip now plays its 480p rendition.
+    private const int MaxClipShortSide = 720;
     private const int MaxPosterWidth = 960;           // a poster is a placeholder, not the media
     private const int MaxSmallClipWidth = 640;        // Entry.SmallUrl: a card-sized clip (the web port's cap)
     private const int MaxSmallStillWidth = 1280;      // Entry.SmallUrl: a card-sized still (idem)
@@ -291,7 +295,7 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
 
         var best = stills
             ? PickSource(sources, RemoteMediaFormats.IsRemoteImage, MaxSourceWidth)
-            : PickSource(sources, RemoteMediaFormats.IsRemoteVideo, MaxSourceWidth);
+            : PickSource(sources, RemoteMediaFormats.IsRemoteVideo, MaxClipShortSide, shortSide: true);
         if (best == null) return null;
 
         long postId = (long?)item["id"] ?? 0;
@@ -349,8 +353,11 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     /// preview loop rather than the clip, and on the still side it's a grid thumbnail that
     /// would look like a downscale bug at flash size. (Divergence from the mobile port,
     /// whose <c>pickPosterUrl</c> neither skips thumbs nor is order-independent.)
+    ///
+    /// <paramref name="shortSide"/> measures each source by min(width, height) instead of
+    /// width, so the cap reads as "720p" for a portrait clip too.
     /// </summary>
-    private static JToken? PickSource(JArray sources, Func<string?, bool> accept, int maxWidth)
+    internal static JToken? PickSource(JArray sources, Func<string?, bool> accept, int maxWidth, bool shortSide = false)
     {
         JToken? best = null;
         int bestWidth = -1;
@@ -360,6 +367,8 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
             if (string.IsNullOrEmpty(url)) continue;
             if (!accept(url) || url.Contains("_thumb", StringComparison.OrdinalIgnoreCase)) continue;
             int w = (int?)s["width"] ?? 0;
+            int h = (int?)s["height"] ?? 0;
+            if (shortSide && h > 0 && h < w) w = h;
             bool better = best == null
                 || (w <= maxWidth && (bestWidth > maxWidth || w > bestWidth))
                 || (w > maxWidth && bestWidth > maxWidth && w < bestWidth);
