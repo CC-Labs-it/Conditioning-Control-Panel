@@ -6,6 +6,8 @@ using System.Runtime.CompilerServices;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.AIService;
+using ConditioningControlPanel.Services.Companion.Brain;
 using ConditioningControlPanel.Services.Moderation;
 using Xunit;
 
@@ -185,10 +187,9 @@ public class SlutModePromptTests : IDisposable
             Assert.Contains(SlutModeBite.Header, on, StringComparison.Ordinal);
             // After the persona's own rules (the examples it re-registers come first), before the floor.
             Assert.True(on.IndexOf(SlutModeBite.Header, StringComparison.Ordinal) < on.IndexOf(SafetyComposer.Floor, StringComparison.Ordinal));
-            // Presets with their own variant get the short form, the rest the long one.
-            var expected = string.IsNullOrWhiteSpace(PersonalityPresets.GetBuiltInById(id)!.PromptSettings!.SlutModePersonality)
-                ? SlutModeBite.Full : SlutModeBite.Core;
-            Assert.Contains(expected, on, StringComparison.Ordinal);
+            // One block for every preset: the short form for presets with their own variant
+            // left Bambi at nine-token replies on the owner's desk run (2026-10-16).
+            Assert.Contains(SlutModeBite.Block, on, StringComparison.Ordinal);
         }
     }
 
@@ -199,7 +200,7 @@ public class SlutModePromptTests : IDisposable
         // a bite the guard blocked on the way out would be the old no-op in a new coat.
         var guard = new ModerationGuard();
         var validator = new PromptValidator();
-        foreach (var text in new[] { SlutModeBite.Full, SlutModeBite.Core }.Concat(SlutModeBite.ExampleLines))
+        foreach (var text in new[] { SlutModeBite.Block, PromptAssembler.ChatSpiceInstruction }.Concat(SlutModeBite.ExampleLines))
         {
             var outcome = guard.CheckOutput(text);
             Assert.True(outcome.Allow, $"ModerationGuard blocked the bite ({outcome.Category}: {outcome.Note}): {text}");
@@ -211,8 +212,8 @@ public class SlutModePromptTests : IDisposable
     [Fact]
     public void TheBite_WearsNoHeaderTheSafetyPreambleNullifiesByName()
     {
-        foreach (var block in new[] { SlutModeBite.Full, SlutModeBite.Core })
         {
+            var block = SlutModeBite.Block;
             Assert.StartsWith(SlutModeBite.Header, block, StringComparison.Ordinal);
             Assert.DoesNotContain("[NO LIMITS", block, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("[FULL ENGAGEMENT", block, StringComparison.OrdinalIgnoreCase);
@@ -220,9 +221,33 @@ public class SlutModePromptTests : IDisposable
             // Gender neutral toward the user: the persona decides, the bite never does.
             Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\b(she|he|her|his|girl|boy)\b",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase), block);
+            // The block lifts the persona's word cap; without this line Bambi's "Max 15 words" wins.
+            Assert.Contains("two to four sentences", block, StringComparison.Ordinal);
         }
-        // The long form is the short form plus the persona swap, never a second voice.
-        Assert.True(SlutModeBite.Full.Length > SlutModeBite.Core.Length);
+    }
+
+    [Fact]
+    public void SpiceOn_DropsCannedAppLinesFromTheHistoryWindow()
+    {
+        // 23 turns of "Breakout? go on. I will be watching." pulled the model tame on the owner's
+        // desk run; while the switch is on only typed exchanges reach the wire.
+        var typedQ = CompanionTurn.Create(TurnKind.UserChat, "hey");
+        var typedA = CompanionTurn.Create(TurnKind.AssistantChat, "Mm. Hey yourself.");
+        var canned = CompanionTurn.Create(TurnKind.AssistantChat, "Breakout? go on. I will be watching.") with { IsApplicationReply = true };
+        var window = new[] { canned, typedQ, typedA, canned };
+        var kept = PromptAssembler.DropApplicationReplies(window);
+        Assert.Equal(new[] { typedQ, typedA }, kept);
+        var clean = new[] { typedQ, typedA };
+        Assert.Same(clean, PromptAssembler.DropApplicationReplies(clean));
+    }
+
+    [Fact]
+    public void SpiceOn_LiftsTheChatTokenCapButNeverAboveTheEffectsEnvelope()
+    {
+        Assert.True(AiCallOptions.ChatSpice.MaxTokens > AiCallOptions.Chat.MaxTokens);
+        Assert.True(AiCallOptions.ChatSpice.MaxTokens <= AiCallOptions.ChatWithEffects.MaxTokens);
+        Assert.Equal(AiPurpose.Chat, AiCallOptions.ChatSpice.Purpose);
+        Assert.True(AiCallOptions.ChatSpice.Interactive);
     }
 
     [Fact]

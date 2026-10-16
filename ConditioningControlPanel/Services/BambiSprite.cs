@@ -1071,7 +1071,7 @@ Example responses with REAL video names:
             // Slut Mode bites here, after the persona's own examples and rules, on EVERY preset:
             // the last persona text before the tail, so it outranks the tame reaction examples it
             // asks the model to re-register (see SlutModeBite).
-            var bite = slutMode ? Companion.SlutModeBite.For(preset, usingSlutVariant) : null;
+            var bite = slutMode ? Companion.SlutModeBite.For(preset) : null;
             if (bite != null)
             {
                 sb.AppendLine();
