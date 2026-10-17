@@ -437,6 +437,10 @@ namespace ConditioningControlPanel.Services
                     fadeMs = Safety.GentleVisuals.On ? Safety.GentleVisuals.FadeMs(0) : 0,
                     strict = false,
                     sinkLabel = BrowserSinkLabel.Resolve(),
+                    // "via Scrolller" badge + end card. Floating runs are never strict; Lockdown and
+                    // Chaos still make the badge not pressable.
+                    credit = Video.ScrolllerCredit.PagePayload(clip, Video.ScrolllerCredit.CanOpenLink(
+                        false, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)),
                 });
                 win.Show();              // never activated: a floating browser window takes no focus
                 PreventClickRaise(win);
@@ -521,6 +525,14 @@ namespace ConditioningControlPanel.Services
                 case "click":
                     // The page posts this on pointerdown: a touch (the frame reports its own too).
                     PostAfterPageMessage(() => { if (!c.Closed && c.Surface != null) OnFloatingTouched(c.Surface); });
+                    break;
+                case "creditClick":
+                    // A floating window is not topmost over everything, so the link opens right away.
+                    PostAfterPageMessage(() =>
+                    {
+                        if (c.Closed || !Video.ScrolllerCredit.CanOpenLink(false, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                        Video.ScrolllerCredit.Open(c.Clip);
+                    });
                     break;
             }
         }

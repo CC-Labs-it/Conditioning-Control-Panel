@@ -87,6 +87,9 @@ namespace ConditioningControlPanel.Views.Tabs
             catch (Exception ex) { App.Logger?.Debug("PaintAssetsFolder: {E}", ex.Message); }
         }
 
+        /// <summary>The online-source credit line's scrolller.com link (refused under any lock).</summary>
+        private void ScrolllerLink_Click(object sender, RoutedEventArgs e) => Services.Video.ScrolllerCredit.OpenHome();
+
         private void BtnPickAssetsFolder_Click(object sender, RoutedEventArgs e)
         {
             if (Window.GetWindow(this) is MainWindow mw) mw.RequestPickAssetsFolder();

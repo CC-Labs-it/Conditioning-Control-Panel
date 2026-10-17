@@ -58,6 +58,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// </summary>
         public bool Strict { get; init; }
 
+        /// <summary>The page's "via Scrolller" badge + end card (<see cref="ScrolllerCredit.PagePayload"/>);
+        /// null for every clip that is not Scrolller's.</summary>
+        public object? Credit { get; init; }
+
         /// <summary>Runs on each window after construction and BEFORE Show() - the host's hook for
         /// strict handlers and anything that must be wired before the HWND is realized.</summary>
         public Action<Window, Screen, bool>? ConfigureBeforeShow { get; init; }
@@ -258,6 +262,17 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// <summary>An attention-check target was pressed (target id). Never accompanied by
         /// <see cref="Clicked"/> for the same press - the page routes one or the other.</summary>
         public event Action<string>? AttentionClicked;
+
+        /// <summary>The "via Scrolller" badge was pressed, on any screen. Never accompanied by
+        /// <see cref="Clicked"/> for the same press.</summary>
+        public event Action? CreditClicked;
+
+        /// <summary>The primary's picture ended and the page is showing the "via Scrolller" end card;
+        /// <see cref="Ended"/> follows once the card is done.</summary>
+        public event Action? MediaEnded;
+
+        /// <summary>Tell every screen the credit link will open once the video is over.</summary>
+        public void MarkCreditQueued() => Broadcast(new { type = "creditQueued" });
 
         /// <summary>Target id + its viewport-fraction rectangle, ~10 Hz while the target bounces and
         /// only when the show message asked for it (gaze click enabled). Pure position bookkeeping.</summary>
@@ -528,6 +543,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     // the Windows default; the page treats every failure the same way and reports it
                     // back as {type:'sink'}.
                     sinkLabel = BrowserSinkLabel.ForWindow(primary, sinkLabel),
+                    credit = req.Credit,
                 });
 
                 try { req.ConfigureBeforeShow?.Invoke(win, screen, primary); }
@@ -673,6 +689,9 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     case "attentionClick":
                         AttentionClicked?.Invoke((string?)o["id"] ?? "");
                         return;
+                    case "creditClick":
+                        CreditClicked?.Invoke();
+                        return;
                     case "attentionMove":
                         AttentionMoved?.Invoke((string?)o["id"] ?? "",
                             (double?)o["xPct"] ?? 0, (double?)o["yPct"] ?? 0,
@@ -732,6 +751,9 @@ namespace ConditioningControlPanel.Services.Video.Browser
                         // `paused` is absent on older cached page HTML — pass null through rather than
                         // defaulting to false, which would be the blind-clear this fixed (#874).
                         Time?.Invoke((long?)o["ms"] ?? 0, (bool?)o["paused"]);
+                        break;
+                    case "mediaEnded":
+                        MediaEnded?.Invoke();
                         break;
                     case "ended":
                         StopFirstFrameWatch();

@@ -6766,6 +6766,8 @@ namespace ConditioningControlPanel.Services
             // Extend stuck detection timeout so long videos aren't killed prematurely
             // Gentle visuals: a slowed clip runs longer on the wall clock (rate 1 = unchanged).
             var wallSeconds = Video.GentleWindowRules.WallSeconds(videoDurationSeconds, _playRate);
+            // A credited Scrolller clip holds its end card before the page reports `ended`.
+            if (_browserActive && Video.ScrolllerCredit.For(_browserPath) != null) wallSeconds += Video.ScrolllerCredit.OutroMs / 1000.0;
             App.InteractionQueue?.ExtendTimeout(wallSeconds, InteractionQueueService.InteractionType.Video);
 
             // Add 5 second buffer beyond video duration
@@ -8448,6 +8450,7 @@ namespace ConditioningControlPanel.Services
                     continue;
                 }
                 accepted.Add(entry.Url);
+                Video.ScrolllerCredit.Remember(entry);
             }
 
             if (accepted.Count == 0)

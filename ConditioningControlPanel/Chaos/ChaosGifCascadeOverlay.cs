@@ -426,6 +426,7 @@ public sealed class ChaosGifCascadeOverlay : Window
             Canvas.SetLeft(img, centerX - _gifSize / 2);
             Canvas.SetTop(img, 0);
             _canvas.Children.Add(img);
+            if (Services.Video.ScrolllerCredit.IsScrolllerMedia(path)) Controls.ScrolllerCreditChip.Hold(img);   // one "via Scrolller" mark for the cascade
             _fallers.Add(new Faller
             {
                 Img = img, CenterX = centerX, Y = y,
@@ -466,6 +467,7 @@ public sealed class ChaosGifCascadeOverlay : Window
                     try { AnimationBehavior.SetSourceUri(f.Img, null); Services.AnimatedWebp.Detach(f.Img); f.Img.Source = null; } catch { }
                     if (f.Animated) _animatedAlive = Math.Max(0, _animatedAlive - 1);
                     _canvas.Children.Remove(f.Img);
+                    Controls.ScrolllerCreditChip.Release(f.Img);
                     _fallers.RemoveAt(i);
                 }
             }
@@ -506,6 +508,7 @@ public sealed class ChaosGifCascadeOverlay : Window
         foreach (var f in _fallers)
         {
             try { AnimationBehavior.SetSourceUri(f.Img, null); Services.AnimatedWebp.Detach(f.Img); f.Img.Source = null; } catch { }
+            Controls.ScrolllerCreditChip.Release(f.Img);
         }
         _fallers.Clear();
         _animatedAlive = 0;

@@ -193,6 +193,51 @@
       + ' (' + claimed + '/' + MEDIA_KEY_ACTIONS.length + ' actions)');
   }
 
+  // ---------- "via Scrolller" credit ----------
+  // load field `credit` {sub, site, clickable, outroMs}; absent for every other clip.
+  // A corner badge while the clip plays, an end card for outroMs before `ended` is
+  // reported. Both only fade (Gentle visuals safe). A press on either, when
+  // clickable, posts creditClick INSTEAD of the generic click; the host opens the
+  // link (the page never navigates) and may answer creditQueued.
+
+  const creditEl = document.getElementById('credit');
+  const outroEl = document.getElementById('outro');
+  let outroTimer = 0;
+
+  function fillCredit(root, c) {
+    root.querySelectorAll('[data-credit="sub"]').forEach((n) => { n.textContent = String(c.sub || ''); });
+    root.querySelectorAll('[data-credit="site"]').forEach((n) => { n.textContent = String(c.site || ''); });
+    root.classList.toggle('clickable', !!c.clickable);
+    root.classList.remove('queued');
+  }
+
+  function showCredit(c) {
+    if (!c || !creditEl) return;
+    fillCredit(creditEl, c);
+    creditEl.hidden = false;
+    requestAnimationFrame(() => creditEl.classList.add('on'));
+  }
+
+  function showOutro(c) {
+    if (!c || !outroEl) return false;
+    fillCredit(outroEl, c);
+    if (creditEl && creditEl.classList.contains('queued')) outroEl.classList.add('queued');
+    if (creditEl) creditEl.classList.remove('on');
+    outroEl.hidden = false;
+    requestAnimationFrame(() => outroEl.classList.add('on'));
+    return true;
+  }
+
+  function clearCredit() {
+    clearTimeout(outroTimer);
+    outroTimer = 0;
+    [creditEl, outroEl].forEach((n) => {
+      if (!n) return;
+      n.classList.remove('on', 'clickable', 'queued');
+      n.hidden = true;
+    });
+  }
+
   // ---------- teardown ----------
 
   /** Free both decoders NOW. Safe to call at any time, including with no session. */
@@ -200,6 +245,7 @@
     cur = null; // first, so the pause/error churn below reaches no handler
     setMediaKeyGuard(false); // the lock belongs to the clip, not to the page
     clearAttention(); // targets belong to the clip that is going away
+    clearCredit(); // so does the credit, end card included
     stopTicker();
     lastTimeMs = -1;
     lastTimePostAt = 0;
@@ -346,6 +392,7 @@
       pauseStamps: [],
       startApplied: false,
       lastDurationMs: -1,
+      credit: d.credit && typeof d.credit === 'object' ? d.credit : null,
     };
 
     document.body.classList.toggle('has-bg', cur.blur);
@@ -480,6 +527,7 @@
     if (cur.playingSent) return;
     cur.playingSent = true;
     post({ type: 'playing' });
+    showCredit(cur.credit);
   });
 
   fg.addEventListener('timeupdate', () => {
@@ -502,6 +550,21 @@
     // for as long as the user takes) — so stop the 10 Hz ticker rather than let it
     // spin for the whole of it.
     stopTicker();
+    // A credited clip holds its end card first. A `stop` or a new `load` in the
+    // meantime runs teardown, which drops the card and this timer with it.
+    const c = cur.credit;
+    const outroMs = c && Number.isFinite(c.outroMs) ? Math.min(Math.max(c.outroMs, 0), 5000) : 0;
+    if (outroMs > 0 && showOutro(c)) {
+      // The picture is over: the host stops judging the clip (length cap, new targets)
+      // and opens a link pressed during it. `ended` follows after the card.
+      post({ type: 'mediaEnded' });
+      const session = cur;
+      outroTimer = setTimeout(() => {
+        outroTimer = 0;
+        if (cur === session) post({ type: 'ended' });
+      }, outroMs);
+      return;
+    }
     post({ type: 'ended' });
   });
 
@@ -845,6 +908,11 @@
       case 'attentionHide':
         attentionHide(data);
         break;
+      case 'creditQueued':
+        // The link opens once the video is over: the badge (and the end card) wear a tick.
+        if (creditEl) creditEl.classList.add('queued');
+        if (outroEl) outroEl.classList.add('queued');
+        break;
       default:
         break;
     }
@@ -866,6 +934,13 @@
       e.preventDefault();
       e.stopPropagation();
       attentionHit(attn.get(node.dataset.id));
+      return;
+    }
+    const credit = e.target && e.target.closest ? e.target.closest('.credit-link.clickable') : null;
+    if (credit) {
+      e.preventDefault();
+      e.stopPropagation();
+      post({ type: 'creditClick' });
       return;
     }
     post({ type: 'click' });

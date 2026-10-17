@@ -7765,6 +7765,7 @@
   "launcher_media_src_online_hint": "Streamed from the niches you pick",
   "launcher_media_src_mixed": "Mixed",
   "launcher_media_src_mixed_hint": "Both, blended by the share below",
+  "label_online_media_credit": "Online pictures and clips come from Scrolller, wallpapers included.",
   "launcher_media_mixed_share": "{0}% online",
   "launcher_media_niches": "Niches",
   "launcher_media_niches_hint": "Used when the source is Online or Mixed.",

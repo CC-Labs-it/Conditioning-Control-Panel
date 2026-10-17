@@ -7009,6 +7009,7 @@
   "launcher_media_src_online_hint": "選んだニッチからストリーミング",
   "launcher_media_src_mixed": "ミックス",
   "launcher_media_src_mixed_hint": "両方を下の割合でブレンド",
+  "label_online_media_credit": "オンラインの画像とクリップはScrolllerから届きます（壁紙も含む）。",
   "launcher_media_mixed_share": "オンライン {0}%",
   "launcher_media_niches": "ニッチ",
   "launcher_media_niches_hint": "ソースがオンラインまたはミックスのときに使われます。",

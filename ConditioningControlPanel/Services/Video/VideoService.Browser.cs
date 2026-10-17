@@ -31,6 +31,9 @@ namespace ConditioningControlPanel.Services
         private volatile bool _browserActive;
 
         private string? _browserPath;
+        /// <summary>The clip whose "via Scrolller" link was pressed mid-video: it opens once that
+        /// clip ends on its own (a fullscreen video is topmost, a browser opened now would land behind it).</summary>
+        private string? _creditLinkQueuedFor;
         private bool _browserStrict;
         private long _browserTimeMs = -1;
         /// <summary>Pause state of the session, the answer behind IsPrimaryMediaPlaying for a browser
@@ -84,6 +87,8 @@ namespace ConditioningControlPanel.Services
                     engine.Clicked += OnBrowserClicked;
                     engine.KeyPressed += OnBrowserKey;
                     engine.AttentionClicked += OnBrowserAttentionClicked;
+                    engine.CreditClicked += OnBrowserCreditClicked;
+                    engine.MediaEnded += OnBrowserMediaEnded;
                     engine.AttentionMoved += OnBrowserAttentionMoved;
                     engine.WindowDropped += OnBrowserWindowDropped;
                 }
@@ -111,6 +116,7 @@ namespace ConditioningControlPanel.Services
                 if (!ShouldFillSecondaryMonitors(screens.Count)) secondaries.Clear();
 
                 _browserPath = path;
+                _creditLinkQueuedFor = null;   // a press belongs to the clip it was made on
                 _browserStrict = strict;
                 _browserTimeMs = -1;
                 _browserPaused = false;
@@ -143,6 +149,9 @@ namespace ConditioningControlPanel.Services
                     // probe: the page wants one fixed answer at load time, and this is the value the
                     // whole run is locked to.
                     Strict = strict,
+                    // "via Scrolller" badge + end card; under any lock the badge shows but takes no press.
+                    Credit = Video.ScrolllerCredit.PagePayload(path, Video.ScrolllerCredit.CanOpenLink(
+                        strict, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)),
                     IsHostPaused = () => _gracePaused,
                     // Lock Card / Lockdown / Possession: every screen is covered on purpose, so a
                     // dead mirror is left black rather than uncovered mid-clip (the engine asks
@@ -594,6 +603,51 @@ namespace ConditioningControlPanel.Services
                     if (_primarySurface != null) OnFloatingTouched(_primarySurface);   // a press takes the sound
                     BeginFloatingDrag(_primaryVideoWindow);
                 }));
+        }
+
+        /// <summary>The "via Scrolller" badge was pressed. Floating: the link opens now. Fullscreen:
+        /// it waits for the clip's natural end (see <see cref="OnBrowserMediaEnded"/>). Under any
+        /// lock nothing happens (the page already shows the badge as not pressable).</summary>
+        private void OnBrowserCreditClicked()
+        {
+            if (!_browserActive) return;
+            var path = _browserPath;
+            if (Video.ScrolllerCredit.For(path) == null) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+            if (IsFloating)
+            {
+                Application.Current?.Dispatcher?.BeginInvoke(new Action(() => Video.ScrolllerCredit.Open(path)));
+                return;
+            }
+            _creditLinkQueuedFor = path;
+            Browser.MarkCreditQueued();
+        }
+
+        /// <summary>
+        /// The primary's picture reached its end and only the "via Scrolller" end card is left
+        /// before the page reports <c>ended</c>. Nothing may judge the clip during the card: the
+        /// longest-video cap stands down (it would cut a clip that finished and skip its natural
+        /// end) and no further attention target spawns (the ones already up stay pressable).
+        ///
+        /// A link pressed during THIS clip opens here, re-checked against every lock. It is the only
+        /// place it opens: a panic or stop closes the window before the picture ends, and every new
+        /// session starts with nothing queued, so a press can never surface in a later run.
+        /// </summary>
+        private void OnBrowserMediaEnded()
+        {
+            if (!_browserActive) return;
+            _maxLenCapTimer?.Stop();
+            _maxLenCapTimer = null;
+            _spawnTimes.Clear();
+
+            var queued = _creditLinkQueuedFor;
+            _creditLinkQueuedFor = null;
+            if (queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
+            Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            {
+                if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                Video.ScrolllerCredit.Open(queued);
+            }));
         }
 
         /// <summary>

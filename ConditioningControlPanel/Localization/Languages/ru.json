@@ -7009,6 +7009,7 @@
   "launcher_media_src_online_hint": "Потоком из выбранных вами ниш",
   "launcher_media_src_mixed": "Смешанный",
   "launcher_media_src_mixed_hint": "И то и другое, в пропорции ниже",
+  "label_online_media_credit": "Онлайн-картинки и клипы берутся со Scrolller, обои тоже.",
   "launcher_media_mixed_share": "{0}% онлайн",
   "launcher_media_niches": "Ниши",
   "launcher_media_niches_hint": "Используется, когда источник Онлайн или Смешанный.",

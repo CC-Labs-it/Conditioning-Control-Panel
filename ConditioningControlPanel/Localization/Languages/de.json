@@ -7009,6 +7009,7 @@
   "launcher_media_src_online_hint": "Gestreamt aus den Nischen, die du wählst",
   "launcher_media_src_mixed": "Gemischt",
   "launcher_media_src_mixed_hint": "Beides, gemischt nach dem Anteil unten",
+  "label_online_media_credit": "Online-Bilder und -Clips kommen von Scrolller, Hintergrundbilder eingeschlossen.",
   "launcher_media_mixed_share": "{0} % online",
   "launcher_media_niches": "Nischen",
   "launcher_media_niches_hint": "Gilt, wenn die Quelle Online oder Gemischt ist.",
