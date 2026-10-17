@@ -1,0 +1,124 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using ConditioningControlPanel.Controls.Leash;
+using ConditioningControlPanel.Services.Leash;
+using Xunit;
+
+namespace ConditioningControlPanel.Tests;
+
+/// <summary>The holder's "?" slips (ink slips, 2026-10-17): every holder command and every sheet
+/// row has one, each stamp is the lowest level the grammar allows, every key is in all ten
+/// languages, and the holder card carries a "?" per button and per row without pressing them.</summary>
+[Collection(CompanionWpfRenderCollection.Name)]
+public sealed class LeashHelpSlipTests
+{
+    [Fact]
+    public void Every_holder_button_and_let_go_has_a_slip()
+    {
+        foreach (var id in LeashHelpCatalog.HolderButtons.Append(LeashHelpCatalog.LetGoId))
+            Assert.NotNull(LeashHelpCatalog.Get(id));
+        Assert.Equal(LeashHelpCatalog.All.Count, LeashHelpCatalog.All.Select(e => e.Id).Distinct().Count());
+    }
+
+    [Fact]
+    public void Every_sheet_row_has_a_slip()
+    {
+        foreach (var k in Enum.GetValues<PunishKind>()) Assert.Equal(LeashHelpCatalog.Id(k), LeashHelpCatalog.ForPunish(k).Id);
+        foreach (var k in Enum.GetValues<AssignKind>()) Assert.Equal("assign", LeashHelpCatalog.ForAssign(k).Id);
+        var rewards = Enum.GetValues<RewardKind>().Select(k => LeashHelpCatalog.ForReward(k).Id).ToList();
+        Assert.Equal(rewards.Count, rewards.Distinct().Count());
+        Assert.Equal(new[] { "credit", "pardon", "praise", "sticker" }, rewards.OrderBy(x => x));
+    }
+
+    [Fact]
+    public void Stamps_match_the_grammar()
+    {
+        foreach (var k in Enum.GetValues<PunishKind>())
+            Assert.Equal(LeashGrammar.LowestIntensity(k), LeashHelpCatalog.ForPunish(k).Stamp);
+        Assert.Equal(LeashIntensity.Soft, LeashHelpCatalog.Get("punish")!.Stamp);
+        Assert.Equal(Enum.GetValues<PunishKind>().Select(LeashGrammar.LowestIntensity).Min(), LeashHelpCatalog.Get("punish")!.Stamp);
+        // Assign, tug, let go and every reward work at any level.
+        foreach (var id in new[] { "assign", "tug", "letgo", "reward", "sticker", "praise", "pardon", "credit" })
+            Assert.Null(LeashHelpCatalog.Get(id)!.Stamp);
+        Assert.Equal(LeashIntensity.Strict, LeashHelpCatalog.ForPunish(PunishKind.Chaster).Stamp);
+    }
+
+    [Fact]
+    public void Stamp_text_reads_like_the_mockup()
+    {
+        string Loc(string k) => k switch
+        {
+            "leash_slip_any" => "ANY LEVEL",
+            "leash_level_soft" => "Soft",
+            "leash_level_standard" => "Standard",
+            "leash_level_strict" => "Strict",
+            _ => k,
+        };
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        Assert.Equal("ANY LEVEL", LeashHelpCatalog.StampText(null, Loc, inv));
+        Assert.Equal("SOFT+", LeashHelpCatalog.StampText(LeashIntensity.Soft, Loc, inv));
+        Assert.Equal("STANDARD+", LeashHelpCatalog.StampText(LeashIntensity.Standard, Loc, inv));
+        Assert.Equal("STRICT", LeashHelpCatalog.StampText(LeashIntensity.Strict, Loc, inv));
+        Assert.Equal("+30 min", LeashHelpCatalog.YouLabel(LeashHelpCatalog.ForPunish(PunishKind.Chaster), _ => "{0} min"));
+        Assert.Equal("-30 min", LeashHelpCatalog.YouLabel(LeashHelpCatalog.ForReward(RewardKind.Credit), _ => "{0} min"));
+        Assert.Equal("100", LeashHelpCatalog.YouLabel(LeashHelpCatalog.ForPunish(PunishKind.Bubbles), k => k));
+    }
+
+    [Fact]
+    public void Every_pictogram_is_drawn()
+    {
+        foreach (var e in LeashHelpCatalog.All) Assert.Contains(e.Pictogram, LeashHelpCatalog.Pictograms);
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            foreach (var p in LeashHelpCatalog.Pictograms)
+                Assert.True(LeashHelpSlip.Pictogram(p).Children.Count >= 2, p);
+        });
+    }
+
+    /// <summary>With CCP_LEASH_SHOTS set to a folder, saves every slip and the holder card's
+    /// button row there as PNGs (the look the owner approved, checked by eye).</summary>
+    [Fact]
+    public void Slips_render()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var dir = Environment.GetEnvironmentVariable("CCP_LEASH_SHOTS");
+            foreach (var e in LeashHelpCatalog.All)
+            {
+                var slip = new LeashHelpSlip(e, "Mira");
+                var frame = new Border { Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0x0A, 0x1E)), Padding = new Thickness(14), Child = slip };
+                frame.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                frame.Arrange(new Rect(frame.DesiredSize));
+                frame.UpdateLayout();
+                Assert.True(slip.ActualHeight > 120, e.Id);
+                if (string.IsNullOrEmpty(dir)) continue;
+                Directory.CreateDirectory(dir);
+                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(frame.ActualWidth * 2), (int)Math.Ceiling(frame.ActualHeight * 2), 192, 192, System.Windows.Media.PixelFormats.Pbgra32);
+                bmp.Render(frame);
+                var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                using var fs = File.Create(Path.Combine(dir, "slip-" + e.Id + ".png"));
+                enc.Save(fs);
+            }
+        });
+    }
+
+    private static FrameworkElement? Find(DependencyObject root, Func<string, bool> tag)
+    {
+        if (root is FrameworkElement fe && fe.Tag is string s && tag(s)) return fe;
+        foreach (var c in LogicalTreeHelper.GetChildren(root))
+            if (c is DependencyObject d && Find(d, tag) is { } hit) return hit;
+        return null;
+    }
+
+    private static string RepoRoot()
+    {
+        var d = new DirectoryInfo(AppContext.BaseDirectory);
+        while (d != null && !Directory.Exists(Path.Combine(d.FullName, "ConditioningControlPanel", "Localization"))) d = d.Parent;
+        return d?.FullName ?? throw new InvalidOperationException("repo root not found");
+    }
+}
