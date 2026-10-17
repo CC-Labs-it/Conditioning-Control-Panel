@@ -289,7 +289,24 @@ public sealed class LeashHolderCard : Border
         var replay = new MenuItem { Header = Loc.Get("leash_menu_replay") };
         replay.Click += (_, _) => ReplaySnapRequested?.Invoke(_h);
         m.Items.Add(replay);
-        var release = new MenuItem { Header = Loc.GetF("leash_menu_release", _h.Who.Name) };
+        var releaseHead = new StackPanel { Orientation = Orientation.Horizontal };
+        releaseHead.Children.Add(new TextBlock { Text = Loc.GetF("leash_menu_release", _h.Who.Name), VerticalAlignment = VerticalAlignment.Center });
+        releaseHead.Children.Add(new Border
+        {
+            Width = 14,
+            Height = 14,
+            CornerRadius = new CornerRadius(7),
+            BorderBrush = FriendsLook.LilacBrush,
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = "leash-slip-help:" + LeashHelpCatalog.LetGoId,
+            Child = new TextBlock { Text = "?", FontSize = 9, FontWeight = FontWeights.Bold, Foreground = FriendsLook.LilacBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        });
+        var release = new MenuItem { Header = releaseHead, Tag = "leash-menu-release" };
+        release.ToolTip = LeashHelpButton.AsToolTip(LeashHelpCatalog.Get(LeashHelpCatalog.LetGoId)!, _h.Who.Name);
+        ToolTipService.SetInitialShowDelay(release, 250);
+        ToolTipService.SetShowDuration(release, 60000);
         // Letting go asks first (2026-09-28): it ends the leash for both and sets a 24 h cooldown.
         release.Click += (_, _) => LeashCutConfirmWindow.Confirm(
             Loc.GetF("leash_release_confirm_title", _h.Who.Name),
@@ -423,9 +440,25 @@ public sealed class LeashHolderCard : Border
         tug.Margin = new Thickness(3, 0, 0, 0);
         tug.IsEnabled = !dnd;
         tug.Click += async (_, _) => await TugAsync();
-        g.Children.Add(tug);
+        g.Children.Add(WithHelp(tug, "tug"));
         return g;
     }
+
+    /// <summary>A holder button with its "?" slip pinned to the top-right corner, so the row
+    /// keeps its layout and the "?" never presses the button under it.</summary>
+    private FrameworkElement WithHelp(Button b, string id)
+    {
+        var cell = new Grid();
+        cell.Children.Add(b);
+        var help = Help(LeashHelpCatalog.Get(id)!);
+        help.HorizontalAlignment = HorizontalAlignment.Right;
+        help.VerticalAlignment = VerticalAlignment.Top;
+        help.Margin = new Thickness(0, -5, b.Margin.Right - 4, 0);
+        cell.Children.Add(help);
+        return cell;
+    }
+
+    private Button Help(LeashHelpEntry entry, double size = 16) => LeashHelpButton.Create(entry, () => _h.Who.Name, size);
 
     private void Add(UniformGrid g, string id, string text, LeashLook.Tone tone, string icon, bool enabled)
     {
@@ -435,7 +468,7 @@ public sealed class LeashHolderCard : Border
         b.IsEnabled = enabled;
         if (_sheet == id) b.BorderBrush = FriendsLook.TextBrush;
         b.Click += (_, _) => ToggleSheet(id);
-        g.Children.Add(b);
+        g.Children.Add(WithHelp(b, id));
     }
 
     internal void ToggleSheet(string id)
@@ -470,24 +503,45 @@ public sealed class LeashHolderCard : Border
     private static StackPanel Rows(Border sheet) => (StackPanel)sheet.Child;
 
     /// <summary>One sheet row: a name on the left and its size chips on the right.</summary>
-    private FrameworkElement SizeRow(string label, string icon, Brush accent, IEnumerable<(string Text, string Tag, Func<Task> Send)> chips)
+    private FrameworkElement SizeRow(string label, string icon, Brush accent, IEnumerable<(string Text, string Tag, Func<Task> Send)> chips,
+        LeashHelpEntry? help = null)
     {
         var g = new Grid { Margin = new Thickness(0, 2, 0, 2) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var name = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        // Icon, name, "?": left-aligned so the "?" sits right after the name, and the name trims
+        // (never the "?") when a wide chip row leaves too little room.
+        var name = new Grid { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
+        name.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        name.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        name.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var ic = LeashLook.Icon(icon, accent, 13);
         ic.Margin = new Thickness(0, 0, 6, 0);
+        ic.VerticalAlignment = VerticalAlignment.Center;
         name.Children.Add(ic);
-        name.Children.Add(FriendsLook.Label(label, 12.5, FriendsLook.TextBrush, FriendsLook.Display, FontWeights.Medium));
+        var nameText = FriendsLook.Label(label, 12.5, FriendsLook.TextBrush, FriendsLook.Display, FontWeights.Medium);
+        nameText.TextTrimming = TextTrimming.CharacterEllipsis;
+        nameText.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(nameText, 1);
+        name.Children.Add(nameText);
+        if (help != null)
+        {
+            var q = Help(help, 15);
+            q.Margin = new Thickness(4, 0, 2, 0);
+            Grid.SetColumn(q, 2);
+            name.Children.Add(q);
+        }
         g.Children.Add(name);
         var chipsPanel = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var (text, tag, send) in chips)
+        var list = chips.ToList();
+        // Four chips (Praise) leave no room for the "?": those rows sit a little tighter.
+        bool tight = help != null && list.Count >= 4;
+        foreach (var (text, tag, send) in list)
         {
             var c = FriendsLook.Pill(new TextBlock { Text = text, FontFamily = FriendsLook.Mono, FontSize = 11.5, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
-                FriendsLook.ButtonBrush, FriendsLook.TextBrush, FriendsLook.Line2Brush, 8, new Thickness(7, 4, 7, 4));
-            c.MinWidth = 40;
-            c.Margin = new Thickness(4, 0, 0, 0);
+                FriendsLook.ButtonBrush, FriendsLook.TextBrush, FriendsLook.Line2Brush, 8, tight ? new Thickness(5, 4, 5, 4) : new Thickness(7, 4, 7, 4));
+            c.MinWidth = tight ? 36 : 40;
+            c.Margin = new Thickness(tight ? 3 : 4, 0, 0, 0);
             c.Tag = tag;
             c.Click += async (_, _) =>
             {
@@ -526,7 +580,7 @@ public sealed class LeashHolderCard : Border
                 k == PunishKind.Video ? Loc.Get("leash_pick") : LeashUiRules.SizeText(k, sz),
                 $"leash-punish:{k.ToString().ToLowerInvariant()}:{sz}",
                 (Func<Task>)(() => k == PunishKind.Video ? OpenVideo("punish") : SendPunishAsync(kind, sz, null))));
-            rows.Children.Add(SizeRow(Loc.Get(LeashUiRules.Key(k)), PunishIcon(k), FriendsLook.RedBrush, chips));
+            rows.Children.Add(SizeRow(Loc.Get(LeashUiRules.Key(k)), PunishIcon(k), FriendsLook.RedBrush, chips, LeashHelpCatalog.ForPunish(k)));
             if (k == PunishKind.Video && _videoFor == "punish")
             {
                 _videoCap = Math.Min(_videoCap, _h.VideoMax);
@@ -562,7 +616,7 @@ public sealed class LeashHolderCard : Border
                 $"leash-assign:{k.ToString().ToLowerInvariant()}:{sz}",
                 (Func<Task>)(() => k == AssignKind.Video ? OpenVideo("assign") : SendAssignAsync(kind, sz, null))));
             rows.Children.Add(SizeRow(Loc.Get(LeashUiRules.Key(k)), k switch { AssignKind.Minutes => "clock", AssignKind.Quests => "task", _ => "play" },
-                FriendsLook.GoldBrush, chips));
+                FriendsLook.GoldBrush, chips, LeashHelpCatalog.ForAssign(k)));
             if (k == AssignKind.Video && _videoFor == "assign") rows.Children.Add(VideoPicker(w => SendAssignAsync(AssignKind.Video, 1, w)));
         }
         return sheet;
@@ -592,16 +646,20 @@ public sealed class LeashHolderCard : Border
             };
             stickers.Children.Add(b);
         }
+        var sq = Help(LeashHelpCatalog.ForReward(RewardKind.Sticker));
+        sq.Margin = new Thickness(2, 0, 0, 0);
+        stickers.Children.Add(sq);
         rows.Children.Add(stickers);
 
         rows.Children.Add(SizeRow(Loc.Get("leash_rew_praise"), "heart", FriendsLook.PinkBrush,
-            LeashUiRules.Praise.Select(p => (Loc.Get("leash_praise_" + p), "leash-reward:praise:" + p, (Func<Task>)(() => SendRewardAsync(RewardKind.Praise, p, null))))));
+            LeashUiRules.Praise.Select(p => (Loc.Get("leash_praise_" + p), "leash-reward:praise:" + p, (Func<Task>)(() => SendRewardAsync(RewardKind.Praise, p, null)))), LeashHelpCatalog.ForReward(RewardKind.Praise)));
         rows.Children.Add(SizeRow(Loc.Get("leash_rew_pardon"), "scissors", FriendsLook.LilacBrush,
-            new[] { (Loc.Get("leash_give"), "leash-reward:pardon", (Func<Task>)(() => SendRewardAsync(RewardKind.Pardon, null, null))) }));
+            new[] { (Loc.Get("leash_give"), "leash-reward:pardon", (Func<Task>)(() => SendRewardAsync(RewardKind.Pardon, null, null))) },
+            LeashHelpCatalog.ForReward(RewardKind.Pardon)));
         if (_h.Report?.ChasterLinked == true)
         {
             rows.Children.Add(SizeRow(Loc.Get("leash_rew_credit"), "lock", FriendsLook.MintBrush,
-                LeashUiRules.CreditSizes.Select(s => ("-" + LeashUiRules.Clock(s), "leash-reward:credit:" + s, (Func<Task>)(() => SendRewardAsync(RewardKind.Credit, null, s))))));
+                LeashUiRules.CreditSizes.Select(s => ("-" + LeashUiRules.Clock(s), "leash-reward:credit:" + s, (Func<Task>)(() => SendRewardAsync(RewardKind.Credit, null, s)))), LeashHelpCatalog.ForReward(RewardKind.Credit)));
         }
         return sheet;
     }
