@@ -83,6 +83,7 @@ export function mount(container, ctx) {
   const whoSees = el('div', { class: 'gg-ot-who-sees' }, [
     el('div', { class: 'gg-ot-gh', text: S.table.whoSees }),
     el('div', { class: 'gg-ot-seg', role: 'group', 'aria-label': S.table.whoSees }, segBtns),
+    el('div', { class: 'gg-ot-small', text: S.table.visDefault }),
   ]);
   const listNote = el('p', { class: 'gg-ot-more', role: 'status', hidden: true, text: S.table.listFailed });
 

@@ -588,6 +588,7 @@ export default Object.freeze({
   gg_table_visFriends: "好友",
   gg_table_visAnyone: "所有人",
   gg_table_visOff: "关闭",
+  gg_table_visDefault: "默认是好友。选所有人，所有玩家都能看到。",
   gg_table_hintFriends: "你的好友能看到这张牌桌。",
   gg_table_hintAnyone: "所有已登录的玩家都能看到这张牌桌。",
   gg_table_hintOff: "已隐藏。分享邀请码来玩。",

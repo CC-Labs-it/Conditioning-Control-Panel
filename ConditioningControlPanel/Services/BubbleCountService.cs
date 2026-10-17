@@ -47,6 +47,9 @@ public class BubbleCountService : IDisposable
     private List<(string PackId, PackFileEntry File)> _packVideos = new();
     private readonly List<string> _tempPackFiles = new();  // Track temp files for cleanup
 
+    // #1449: a scheduled round with no video says why once per launch (BubbleCountNoVideos).
+    private bool _toldNoVideos;
+
     // Mercy/retry system (strict mode)
     private int _retryCount = 0;
     private readonly List<Window> _messageWindows = new();
@@ -476,6 +479,7 @@ public class BubbleCountService : IDisposable
                         _isBusy = false;
                         App.Bubbles?.Resume();
                         App.InteractionQueue?.Complete(InteractionQueueService.InteractionType.BubbleCount);
+                        TellNoVideos(forceTest);
                         return;
                     }
 
@@ -534,6 +538,26 @@ public class BubbleCountService : IDisposable
                 }
             });
         });
+    }
+
+    /// <summary>
+    /// #1449: the round could not start for want of a video. Say so in one toast instead of
+    /// leaving the switch on and the screen silent.
+    /// </summary>
+    private void TellNoVideos(bool forceTest)
+    {
+        try
+        {
+            if (!BubbleCountNoVideos.ShouldTell(forceTest, _toldNoVideos)) return;
+            _toldNoVideos = true;
+            var installed = App.ContentPacks?.InstalledPacks?.Count ?? 0;
+            var active = App.ContentPacks?.GetActivePackIds()?.Count ?? 0;
+            App.Notifications?.Show(Localization.Loc.Get(BubbleCountNoVideos.MessageKey(installed, active)), NotificationType.Warning);
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Debug("BubbleCountService: no-videos notice failed: {Error}", ex.Message);
+        }
     }
 
     /// <summary>
