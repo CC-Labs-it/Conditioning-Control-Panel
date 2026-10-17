@@ -365,6 +365,10 @@
                                    Foreground="{StaticResource TextMutedBrush}" FontSize="11.5"
                                    FontStyle="Italic"
                                    TextWrapping="Wrap" Margin="2,0,0,2" Visibility="Collapsed"/>
+                        <!-- Credit for the online source (owner, 2026-10-17). Inside the fold on
+                             purpose: the closed block stays one glance (AssetsMediaBlockRenderTests). -->
+                        <TextBlock Margin="2,10,0,4" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"><Run Text="{loc:Str label_online_media_credit}"/><Run Text=" "/><Hyperlink Click="ScrolllerLink_Click" Foreground="{DynamicResource TextSecondaryBrush}">scrolller.com</Hyperlink></TextBlock>
                     </StackPanel>
                     </ScrollViewer>
                 </Grid>

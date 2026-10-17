@@ -7009,6 +7009,7 @@
   "launcher_media_src_online_hint": "Transmitido dos nichos que você escolher",
   "launcher_media_src_mixed": "Misto",
   "launcher_media_src_mixed_hint": "Ambos, misturados pela proporção abaixo",
+  "label_online_media_credit": "Imagens e clipes online vêm do Scrolller, papéis de parede incluídos.",
   "launcher_media_mixed_share": "{0}% online",
   "launcher_media_niches": "Nichos",
   "launcher_media_niches_hint": "Usado quando a fonte é Online ou Misto.",

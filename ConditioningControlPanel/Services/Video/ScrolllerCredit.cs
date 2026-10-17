@@ -42,6 +42,59 @@ namespace ConditioningControlPanel.Services.Video
         internal static string? LinkFor(string? sub)
             => sub != null && SubName.IsMatch(sub) ? "https://scrolller.com/r/" + sub : null;
 
+        /// <summary>The brand mark every native surface shows (brief contract: never a loc key).</summary>
+        public const string Mark = "via Scrolller";
+
+        /// <summary>The scrolller.com home page, for the calm credit lines (pickers, settings).</summary>
+        public const string HomeLink = "https://scrolller.com";
+
+        /// <summary>RemoteMediaCache's temp-file prefix (kept in step with it by a test). Scrolller
+        /// is the only feed source, so a remote temp copy is always one of theirs.</summary>
+        internal const string RemoteTempPrefix = "ccp_temp_remote_";
+
+        /// <summary>An absolute http(s) url on scrolller.com or any of its subdomains
+        /// (api, images, v, meta...). Never a look-alike such as notscrolller.com.</summary>
+        internal static bool IsScrolllerUrl(string? url)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+            if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) return false;
+            var host = uri.Host;
+            return string.Equals(host, "scrolller.com", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".scrolller.com", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Is the thing a surface is about to show Scrolller's? A scrolller url, an entry
+        /// id shaped "scrolller/&lt;sub&gt;/&lt;postId&gt;", or a RemoteMediaCache temp copy. A local file,
+        /// a pack temp file and anything else: false.</summary>
+        internal static bool IsScrolllerMedia(string? pathOrUrl)
+        {
+            if (string.IsNullOrWhiteSpace(pathOrUrl)) return false;
+            if (IsScrolllerUrl(pathOrUrl)) return true;
+            if (FromId(pathOrUrl) != null) return true;
+            if (pathOrUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || pathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                return System.IO.Path.GetFileName(pathOrUrl)
+                    .StartsWith(RemoteTempPrefix, StringComparison.OrdinalIgnoreCase);
+            }
+            catch (ArgumentException) { return false; }
+        }
+
+        /// <summary>Open https://scrolller.com from a calm surface (a picker, Media History).
+        /// Refused under Strict Lock, Lockdown or a Chaos run. Never throws.</summary>
+        public static void OpenHome()
+        {
+            try
+            {
+                if (!CanOpenLink(App.Settings?.Current?.StrictLockEnabled == true,
+                        App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                ConditioningControlPanel.Helpers.BrowserLauncher.TryOpenUrl(HomeLink);
+            }
+            catch (Exception ex) { App.Logger?.Debug("ScrolllerCredit: home open failed: {E}", ex.Message); }
+        }
+
         /// <summary>The link may open only outside every lock: a browser coming up over Strict Lock,
         /// Lockdown or a Chaos run would be a way out of them.</summary>
         internal static bool CanOpenLink(bool strict, bool lockdown, bool chaos) => !strict && !lockdown && !chaos;

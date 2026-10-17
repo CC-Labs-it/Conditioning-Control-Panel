@@ -5308,6 +5308,7 @@ internal class Bubble
             if (FlashService.IsRemotePath(path))
             {
                 _ = LoadRemoteFaceAsync(img, path, Math.Max(64, (int)inner));
+                if (Video.ScrolllerCredit.IsScrolllerMedia(path)) Controls.ScrolllerCreditChip.Hold(this);   // "via Scrolller" while this face is up
             }
             else if (animate)
             {
@@ -5516,6 +5517,7 @@ internal class Bubble
     {
         if (_isDestroyed) return;
         _isDestroyed = true;
+        Controls.ScrolllerCreditChip.Release(this);
         _isAlive = false;
 
         // Release this tease's animated-gif budget slot (process-wide cap).

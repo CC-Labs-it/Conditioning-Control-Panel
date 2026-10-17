@@ -2128,6 +2128,11 @@ namespace ConditioningControlPanel.Services
                     _activeWindows.Add(window);
                 }
 
+                // "via Scrolller": one corner mark while any Scrolller flash is up (all three
+                // render paths), released in SafeCloseFlashWindow.
+                if (Video.ScrolllerCredit.IsScrolllerMedia(imageData.FilePath))
+                    Controls.ScrolllerCreditChip.Hold(window);
+
                 // Natasha's favourite: the red one showed, and its ring is running. Nothing books
                 // now; the ring's end decides.
                 if (natasha) StartNatashaDodge(window, monitor);
@@ -5044,6 +5049,7 @@ namespace ConditioningControlPanel.Services
                 // swept by a teardown). Drop the drag before the item goes, or the hook keeps
                 // paying for move messages nothing reads.
                 CancelLayerDrag(window);
+                Controls.ScrolllerCreditChip.Release(window);
 
                 // Dispose CTS registration first to release the closure capturing this window
                 try { window.LifetimeRegistration?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
