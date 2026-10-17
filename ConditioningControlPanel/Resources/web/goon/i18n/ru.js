@@ -588,6 +588,7 @@ export default Object.freeze({
   gg_table_visFriends: "Друзья",
   gg_table_visAnyone: "Все",
   gg_table_visOff: "Никто",
+  gg_table_visDefault: "Сначала стоит Друзья. Выбери Все, чтобы стол видел каждый игрок.",
   gg_table_hintFriends: "Этот стол видят твои друзья.",
   gg_table_hintAnyone: "Этот стол видит каждый вошедший игрок.",
   gg_table_hintOff: "Скрыт. Поделись кодом, чтобы сыграть.",

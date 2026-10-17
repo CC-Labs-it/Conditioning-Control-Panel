@@ -1190,6 +1190,9 @@ namespace ConditioningControlPanel.Services
                 ApplyServerCurveEpoch(user.CurveEpoch, "read-before-write");
                 // Tier is still not adopted wholesale here; only a RISE of the folded tier is offered.
                 EntitlementTierSync.Offer(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "read-before-write");
+                // A fresh server Patreon confirmation keeps the grace alive for a Discord sign-in.
+                EntitlementTierSync.OfferPatreon(new PatreonActiveReading(user.PatreonIsActive,
+                    Invites.InviteRules.ParseUtc(user.PatreonConfirmedAtRaw), user.PatreonTier), "read-before-write");
 
                 var preLevel = settings.PlayerLevel;
                 var preLevelXp = settings.PlayerXP;
@@ -4716,6 +4719,7 @@ namespace ConditioningControlPanel.Services
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
             nameof(AppSettings.InboxStamps),
+            nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
             nameof(AppSettings.PatreonMember),
             nameof(AppSettings.PostGrants),

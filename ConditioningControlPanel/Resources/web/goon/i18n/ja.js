@@ -588,6 +588,7 @@ export default Object.freeze({
   gg_table_visFriends: "フレンド",
   gg_table_visAnyone: "誰でも",
   gg_table_visOff: "オフ",
+  gg_table_visDefault: "最初はフレンド。誰でもを選ぶと全プレイヤーに表示。",
   gg_table_hintFriends: "フレンドにこのテーブルが見える。",
   gg_table_hintAnyone: "サインインしている全プレイヤーにこのテーブルが見える。",
   gg_table_hintOff: "非表示。遊ぶにはコードを共有して。",

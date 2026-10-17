@@ -699,7 +699,7 @@ namespace ConditioningControlPanel.Services
             {
                 bool layer = UseCompositor;
                 int cap = FlashStayRule.OnScreen(FlashStayRule.Cap(ResolveFlashCap(layer, !layer && stay.FlashSolidMode), true,
-                    sharedHost: layer || stay.FlashSolidMode), stay.HydraLimit);
+                    sharedHost: layer || stay.FlashSolidMode), stay.HydraLimit, stay: true);
                 int active;
                 lock (_lockObj) active = _activeWindows.Count;
                 if (FlashStayRule.ScreenFull(true, active, cap)) return;
@@ -1690,9 +1690,10 @@ namespace ConditioningControlPanel.Services
             // cheap shared-host items, so they get the higher cap (see MAX_CONCURRENT_FLASH_HOST).
             // Every path (timed, one-shot bursts, bubble pops, hydra) lands here, so this is the one
             // place the player's Max on screen is enforced.
+            bool staySpawn = StayUntilPopped(settings, pointFired: oneShotGen != null);
             int cap = FlashStayRule.OnScreen(FlashStayRule.Cap(ResolveFlashCap(useLayer, useHost),
-                StayUntilPopped(settings, pointFired: oneShotGen != null), sharedHost: useLayer || useHost),
-                settings.HydraLimit);
+                staySpawn, sharedHost: useLayer || useHost),
+                settings.HydraLimit, staySpawn);
             lock (_lockObj)
             {
                 if (_activeWindows.Count >= cap) return;

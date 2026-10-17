@@ -174,6 +174,11 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("patreon_is_active")]
             public bool PatreonIsActive { get; set; }
 
+            // When the server last saw an ACTIVE Patreon reading (webhook, reconcile, validate), or
+            // absent. Raw token: read through InviteRules.ParseUtc, never a throw (PatreonActiveRule).
+            [JsonProperty("patreon_confirmed_at")]
+            public JToken? PatreonConfirmedAtRaw { get; set; }
+
             [JsonProperty("patreon_is_whitelisted")]
             public bool PatreonIsWhitelisted { get; set; }
 

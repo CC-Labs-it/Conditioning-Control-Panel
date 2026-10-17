@@ -402,6 +402,7 @@ public sealed class VaultGateDialog : Window
 
     private static void OpenUrl(string url)
     {
+        Services.CheckoutWatch.NoteOpened(url);
         try { Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true }); }
         catch (Exception ex) { App.Logger?.Error(ex, "[VaultGate] failed to open {Url}", url); }
     }

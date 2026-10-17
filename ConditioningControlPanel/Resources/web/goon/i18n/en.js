@@ -589,6 +589,7 @@ export default Object.freeze({
   gg_table_visFriends: "Friends",
   gg_table_visAnyone: "Anyone",
   gg_table_visOff: "Off",
+  gg_table_visDefault: "Starts on Friends. Pick Anyone to list it for every player.",
   gg_table_hintFriends: "Your friends can see this table.",
   gg_table_hintAnyone: "Every signed-in player can see this table.",
   gg_table_hintOff: "Hidden. Share the code to play.",

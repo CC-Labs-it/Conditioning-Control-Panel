@@ -1367,6 +1367,7 @@ export const RAW = {
     visFriends: 'Friends',
     visAnyone: 'Anyone',
     visOff: 'Off',
+    visDefault: 'Starts on Friends. Pick Anyone to list it for every player.',
     hintFriends: 'Your friends can see this table.',
     hintAnyone: 'Every signed-in player can see this table.',
     hintOff: 'Hidden. Share the code to play.',

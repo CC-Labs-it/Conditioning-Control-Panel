@@ -3332,6 +3332,18 @@ namespace ConditioningControlPanel.Models
             set { _serverTierSeen = value; OnPropertyChanged(); }
         }
 
+        private int? _lastKnownEffectiveTier = null;
+        /// <summary>
+        /// The effective tier (0..2) this install last knew, for the "Your Prime is on" card
+        /// (<see cref="Services.TierOnNotice"/>). Null until the first reading. Machine-local.
+        /// </summary>
+        [JsonProperty("last_known_effective_tier")]
+        public int? LastKnownEffectiveTier
+        {
+            get => _lastKnownEffectiveTier;
+            set { _lastKnownEffectiveTier = value; OnPropertyChanged(); }
+        }
+
         private Dictionary<string, string> _inboxStamps = new(StringComparer.Ordinal);
         /// <summary>
         /// One stamp per conversion Inbox row key (lapse_warn_7, companion_cap, ...): the value that
