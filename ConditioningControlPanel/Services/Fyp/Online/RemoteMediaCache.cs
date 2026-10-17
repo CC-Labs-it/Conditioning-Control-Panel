@@ -89,15 +89,12 @@ internal static class RemoteMediaCache
 
     private static readonly HttpClient Http = CreateClient();
 
-    /// <summary>Same browser-ish headers <see cref="ScrolllerSource"/> uses for the API. The
-    /// CDN hotlinks fine without a Referer, but sending what its own site sends is the
-    /// cheapest possible insurance against that changing.</summary>
-    private static HttpClient CreateClient()
+    /// <summary>The same honest identity <see cref="ScrolllerSource"/> uses for the API: the
+    /// app's own user-agent and no Referer.</summary>
+    internal static HttpClient CreateClient()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
+        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ScrolllerSource.HonestUserAgent);
         c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
         return c;
     }
