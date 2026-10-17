@@ -442,7 +442,10 @@ function hardReset() {
 function updateCaption() {
   const cap = pageAt(activeIdx)?.caption();
   $('caption-name').textContent = cap?.filename ?? '';
-  $('caption-folder').textContent = cap?.folder ?? '';
+  // Online clips all come from Scrolller: credit them under the clip (owner, 2026-10-17).
+  $('caption-folder').textContent = cap?.online
+    ? [cap.folder, 'via Scrolller'].filter(Boolean).join(' · ')
+    : (cap?.folder ?? '');
 }
 
 function setMuted(m) {
