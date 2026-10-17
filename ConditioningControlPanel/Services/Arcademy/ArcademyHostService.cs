@@ -82,6 +82,11 @@ internal static class ArcademyHostService
     private static bool _minimizedMainWindow;
     private static bool _suppressSettingEcho; // we are mid set-setting: the reply is the echo
     private static bool _classActive;         // between class-started and class-left/class-ended
+    // The class opened by the last `class-started` that has not ended graded yet (#1455): what
+    // a leave without `class-ended` settles through ArcademyOneTryRule.
+    private static string? _openClassKey;
+    private static bool _openClassEndless;
+    private static string? _openClassDayUtc;
     private static int _remoteFetchInFlight;  // 0/1 via Interlocked
     private static bool _panicSuspended;      // press 1 of the panic ladder froze the page
     private static DateTime _lastPanicPressUtc;
@@ -199,6 +204,7 @@ internal static class ArcademyHostService
             _exiting = false;
             _initPosted = false;
             _classActive = false;
+            _openClassKey = null;
             _panicSuspended = false;
             _lastPanicPressUtc = DateTime.MinValue;
             _meta = new ArcademyMetaStore(msg => _host?.Post(msg));
@@ -578,6 +584,9 @@ internal static class ArcademyHostService
                 break;
             case "class-started":
                 _classActive = true;
+                _openClassKey = (string?)o["gameKey"];
+                _openClassEndless = o["endless"]?.Type == JTokenType.Boolean && (bool)o["endless"]!;
+                _openClassDayUtc = ArcademyOneTryRule.DayFor((string?)o["dayUtc"], DateTime.UtcNow);
                 // THE EXTRA CREDIT LEVER, remembered rather than believed. The page says which
                 // notch it thinks it pulled; the host clamps it against what is actually unlocked
                 // and holds the answer until class-ended asks. The page never echoes a multiplier.
@@ -603,6 +612,7 @@ internal static class ArcademyHostService
                 // rest of the session and every log line claimed we were still in one.
                 _classActive = false;
                 App.Logger?.Debug("ArcademyHost: class left ({Game})", (string?)o["gameKey"]);
+                SettleLeftClass("left");
                 break;
             case "resume-request":
                 OnResumeRequest(o);
@@ -3725,9 +3735,28 @@ internal static class ArcademyHostService
     /// <c>payout-result</c> reply. Every input is re-clamped: the page reports what happened, the
     /// host decides what it was worth.
     /// </summary>
+    /// <summary>
+    /// ONE TRY A DAY (#1455): a timed Daily Trigger class that ends without <c>class-ended</c>
+    /// still spends the day's XP slot, so the next run is a free retake. Every other class, and
+    /// every free swim, leaves for nothing (ArcademyOneTryRule).
+    /// </summary>
+    private static void SettleLeftClass(string how)
+    {
+        var key = _openClassKey;
+        var endless = _openClassEndless;
+        var day = _openClassDayUtc;
+        _openClassKey = null;
+        if (!ArcademyOneTryRule.ClaimsDayOnLeave(key, endless) || _meta == null) return;
+        bool claimed = _meta.TryClaimXpDay(key, day);
+        App.Logger?.Information("ArcademyHost: {Game} {How} mid-class - the day's try is spent for {Day}{Already}",
+            key, how, day, claimed ? "" : " (already spent)");
+    }
+
     private static void OnClassEnded(JObject o)
     {
         _classActive = false;
+        // Graded: the farm guard below claims the day itself, so the leave that follows settles nothing.
+        _openClassKey = null;
         try
         {
             // EVERY FIELD READ DEFENSIVELY, AND SEPARATELY. Newtonsoft throws on a cast it cannot
@@ -6048,6 +6077,8 @@ internal static class ArcademyHostService
             // A link-up the player started from the student ID belongs to THIS window. No frame:
             // there is nothing left to paint it.
             try { CancelPendingLink("teardown", tellPage: false); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // A window closed mid-class (panic twice, the X) is a leave too (#1455), settled before the save.
+            try { SettleLeftClass("closed"); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _meta?.FlushSave(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _meta = null;
             _classActive = false;
