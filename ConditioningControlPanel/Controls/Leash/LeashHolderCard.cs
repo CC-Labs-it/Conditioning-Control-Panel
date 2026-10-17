@@ -509,39 +509,22 @@ public sealed class LeashHolderCard : Border
         var g = new Grid { Margin = new Thickness(0, 2, 0, 2) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        // Icon, name, "?": left-aligned so the "?" sits right after the name, and the name trims
-        // (never the "?") when a wide chip row leaves too little room.
-        var name = new Grid { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
-        name.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        name.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        name.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var name = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         var ic = LeashLook.Icon(icon, accent, 13);
-        ic.Margin = new Thickness(0, 0, 6, 0);
-        ic.VerticalAlignment = VerticalAlignment.Center;
-        name.Children.Add(ic);
-        var nameText = FriendsLook.Label(label, 12.5, FriendsLook.TextBrush, FriendsLook.Display, FontWeights.Medium);
-        nameText.TextTrimming = TextTrimming.CharacterEllipsis;
-        nameText.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(nameText, 1);
-        name.Children.Add(nameText);
-        if (help != null)
-        {
-            var q = Help(help, 15);
-            q.Margin = new Thickness(4, 0, 2, 0);
-            Grid.SetColumn(q, 2);
-            name.Children.Add(q);
-        }
+        // The row's "?" (owner, 2026-10-17: a "?" after the name cut the names) is a badge on the
+        // icon's corner: the icon itself opens the slip and the row keeps main's layout.
+        FrameworkElement face = help == null ? ic : LeashHelpButton.Badged(ic, help, () => _h.Who.Name);
+        face.Margin = new Thickness(0, 0, 6, 0);
+        name.Children.Add(face);
+        name.Children.Add(FriendsLook.Label(label, 12.5, FriendsLook.TextBrush, FriendsLook.Display, FontWeights.Medium));
         g.Children.Add(name);
         var chipsPanel = new StackPanel { Orientation = Orientation.Horizontal };
-        var list = chips.ToList();
-        // Four chips (Praise) leave no room for the "?": those rows sit a little tighter.
-        bool tight = help != null && list.Count >= 4;
-        foreach (var (text, tag, send) in list)
+        foreach (var (text, tag, send) in chips)
         {
             var c = FriendsLook.Pill(new TextBlock { Text = text, FontFamily = FriendsLook.Mono, FontSize = 11.5, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
-                FriendsLook.ButtonBrush, FriendsLook.TextBrush, FriendsLook.Line2Brush, 8, tight ? new Thickness(5, 4, 5, 4) : new Thickness(7, 4, 7, 4));
-            c.MinWidth = tight ? 36 : 40;
-            c.Margin = new Thickness(tight ? 3 : 4, 0, 0, 0);
+                FriendsLook.ButtonBrush, FriendsLook.TextBrush, FriendsLook.Line2Brush, 8, new Thickness(7, 4, 7, 4));
+            c.MinWidth = 40;
+            c.Margin = new Thickness(4, 0, 0, 0);
             c.Tag = tag;
             c.Click += async (_, _) =>
             {

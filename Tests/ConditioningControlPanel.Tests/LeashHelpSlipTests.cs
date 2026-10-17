@@ -97,6 +97,48 @@ public sealed class LeashHelpSlipTests
     }
 
     [Fact]
+    public void Slip_accents_follow_the_card_and_stay_readable_on_paper()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            Assert.Equal(System.Windows.Media.Color.FromRgb(0xFF, 0xCF, 0x6B), LeashHelpSlip.AccentFor("assign").Bright);
+            Assert.Equal(LeashHelpSlip.MintAccent, LeashHelpSlip.AccentFor("reward"));
+            Assert.Equal(LeashHelpSlip.RedAccent, LeashHelpSlip.AccentFor("punish"));
+            foreach (var k in Enum.GetValues<PunishKind>()) Assert.Equal(LeashHelpSlip.RedAccent, LeashHelpSlip.AccentFor(LeashHelpCatalog.Id(k)));
+            Assert.Equal(LeashHelpSlip.PinkAccent, LeashHelpSlip.AccentFor("praise"));
+            Assert.Equal(LeashHelpSlip.LilacAccent, LeashHelpSlip.AccentFor("pardon"));
+            Assert.Equal(LeashHelpSlip.MintAccent, LeashHelpSlip.AccentFor("credit"));
+            foreach (var e in LeashHelpCatalog.All)
+            {
+                var a = LeashHelpSlip.AccentFor(e.Id);
+                Assert.True(LeashHelpSlip.Contrast(a.Deep, LeashHelpSlip.PaperColor) >= 4.5, e.Id + " stamp ink is too light on paper");
+            }
+        });
+    }
+
+    [Fact]
+    public void Slip_copy_says_what_the_player_sees()
+    {
+        var en = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages", "en.json")));
+        foreach (var e in LeashHelpCatalog.All)
+            foreach (var k in new[] { e.CaptionKey, e.LimitsKey })
+                Assert.DoesNotContain("gate", ((string)en[k]!).ToLowerInvariant());
+    }
+
+    [Fact]
+    public void Row_help_badge_costs_no_width()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var icon = new Border { Width = 13, Height = 13 };
+            var b = LeashHelpButton.Badged(icon, LeashHelpCatalog.Get("lines")!, () => "Mira");
+            b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Assert.Equal(13, b.DesiredSize.Width, 1);
+            Assert.Equal("leash-slip-help:lines", b.Tag);
+        });
+    }
+
+    [Fact]
     public void Slip_names_the_other_player()
     {
         WpfRenderHarness.OnStaThread(() =>

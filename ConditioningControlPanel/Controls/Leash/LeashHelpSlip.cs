@@ -17,35 +17,77 @@ namespace ConditioningControlPanel.Controls.Leash;
 
 /// <summary>
 /// A "?" slip (owner-approved "ink slips", 2026-10-17): a paper card that says what the other
-/// player gets when the holder presses a button. Title, a red level stamp, "YOU [button] -> THEM
-/// [pictogram]", a caption and a small limits line. Code-built; the pictograms are the mockup's
-/// SVGs redrawn as WPF shapes on a 130x84 canvas.
+/// player gets when the holder presses a button. A top band in the accent of the button or row
+/// it explains, the title, a level stamp, "YOU [button] -> THEM [pictogram]", a caption and a
+/// small limits line. Code-built; the pictograms are plain ink drawings on a 130x84 canvas of
+/// the surface the other player actually sees, highlighted in the same accent.
 /// </summary>
 public sealed class LeashHelpSlip : Border
 {
-    internal static readonly Brush Paper = FriendsLook.Frozen(Color.FromRgb(0xF3, 0xEE, 0xE4));
+    internal static readonly Color PaperColor = Color.FromRgb(0xF3, 0xEE, 0xE4);
+    internal static readonly Brush Paper = FriendsLook.Frozen(PaperColor);
     internal static readonly Brush Ink = FriendsLook.Frozen(Color.FromRgb(0x1E, 0x1B, 0x22));
-    internal static readonly Brush Stamp = FriendsLook.Frozen(Color.FromRgb(0xC2, 0x30, 0x4A));
     internal static readonly Brush Muted = FriendsLook.Frozen(Color.FromRgb(0x5A, 0x54, 0x62));
-    internal static readonly Brush Green = FriendsLook.Frozen(Color.FromRgb(0x2F, 0x7A, 0x4F));
+    internal static readonly Brush Faint = FriendsLook.Frozen(Color.FromRgb(0xB4, 0xAC, 0xA0));
     internal static readonly Brush PinkFill = FriendsLook.Frozen(Color.FromRgb(0xF2, 0xB6, 0xCF));
     private static readonly FontFamily Sans = new("Segoe UI");
 
+    /// <summary>One accent: <see cref="Bright"/> is the colour the card draws the button or row
+    /// icon in (band, fills); <see cref="Deep"/> is the same hue dark enough for text on paper.</summary>
+    internal readonly record struct SlipAccent(Color Bright, Color Deep)
+    {
+        public Brush BrightBrush => FriendsLook.Frozen(Bright);
+        public Brush DeepBrush => FriendsLook.Frozen(Deep);
+
+        /// <summary>The bright colour washed into the paper, for filled shapes under ink lines.</summary>
+        public Brush TintBrush => FriendsLook.Frozen(Mix(Bright, PaperColor, 0.42));
+    }
+
+    // Bright = the brush the holder card uses (LeashLook.Tone / SizeRow accent); Deep = 4.5:1 on paper.
+    internal static readonly SlipAccent GoldAccent = new(FriendsLook.Gold, Color.FromRgb(0x7A, 0x53, 0x00));
+    internal static readonly SlipAccent MintAccent = new(FriendsLook.Mint, Color.FromRgb(0x0E, 0x66, 0x50));
+    internal static readonly SlipAccent RedAccent = new(FriendsLook.Red, Color.FromRgb(0xB0, 0x24, 0x3F));
+    internal static readonly SlipAccent PinkAccent = new(FriendsLook.Pink, Color.FromRgb(0xA3, 0x17, 0x5E));
+    internal static readonly SlipAccent LilacAccent = new(FriendsLook.Lilac, Color.FromRgb(0x5A, 0x3D, 0xB0));
+
+    /// <summary>The accent of the button or row a slip explains, as the holder card paints it:
+    /// Assign gold, Reward mint, Punish and every punish row red (the card draws all punish row
+    /// icons in <c>FriendsLook.RedBrush</c>), Tug (the ghost button, lilac ink) lilac, Praise
+    /// pink, Pardon lilac, Chaster credit mint, the sticker shelf gold (its first stickers).</summary>
+    internal static SlipAccent AccentFor(string id) => id switch
+    {
+        "assign" => GoldAccent,
+        "reward" or "credit" => MintAccent,
+        "praise" => PinkAccent,
+        "tug" or "letgo" or "pardon" => LilacAccent,
+        "sticker" => GoldAccent,
+        "punish" or "lines" or "pink" or "bubbles" or "detention" or "video" or "chaster" => RedAccent,
+        _ => LilacAccent,
+    };
+
+    /// <summary>The shelf's sticker colours, in shelf order (LeashLook.StickerDisc).</summary>
+    internal static readonly Color[] StickerColors = { FriendsLook.Gold, FriendsLook.Gold, FriendsLook.Lilac, FriendsLook.Pink, FriendsLook.Mint };
+
     public LeashHelpEntry Entry { get; }
+    internal SlipAccent Accent { get; }
+    private readonly TextBlock _caption;
 
     public LeashHelpSlip(LeashHelpEntry entry, string theirName)
     {
         Entry = entry;
+        Accent = AccentFor(entry.Id);
         Width = 300;
         Background = Paper;
         CornerRadius = new CornerRadius(6);
-        Padding = new Thickness(16);
         BorderBrush = FriendsLook.Frozen(Color.FromRgb(0xD8, 0xCF, 0xBF));
         BorderThickness = new Thickness(0, 0, 0, 1);
         Tag = "leash-slip:" + entry.Id;
         Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 6, Direction = 270, Opacity = 0.25, Color = Color.FromRgb(0x1E, 0x1B, 0x22) };
 
-        var sp = new StackPanel();
+        var root = new StackPanel();
+        root.Children.Add(Band(entry.Id));
+        var sp = new StackPanel { Margin = new Thickness(16, 12, 16, 16) };
+        root.Children.Add(sp);
 
         // Title and stamp.
         var head = new Grid();
@@ -63,7 +105,7 @@ public sealed class LeashHelpSlip : Border
         });
         var stamp = new Border
         {
-            BorderBrush = Stamp,
+            BorderBrush = Accent.DeepBrush,
             BorderThickness = new Thickness(2),
             Padding = new Thickness(6, 1, 6, 1),
             Margin = new Thickness(8, 0, 2, 0),
@@ -77,7 +119,7 @@ public sealed class LeashHelpSlip : Border
                 FontFamily = FriendsLook.Mono,
                 FontWeight = FontWeights.Bold,
                 FontSize = 10,
-                Foreground = Stamp,
+                Foreground = Accent.DeepBrush,
             },
         };
         Grid.SetColumn(stamp, 1);
@@ -85,12 +127,12 @@ public sealed class LeashHelpSlip : Border
         sp.Children.Add(head);
 
         // YOU [button] -> THEM [pictogram].
-        var pic = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+        var pic = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
         var you = Side(Loc.Get("leash_slip_you"), new Border
         {
-            MinWidth = 64,
-            Height = 32,
-            Padding = new Thickness(8, 0, 8, 0),
+            MinWidth = 60,
+            Height = 30,
+            Padding = new Thickness(7, 0, 7, 0),
             BorderBrush = Ink,
             BorderThickness = new Thickness(2),
             CornerRadius = new CornerRadius(8),
@@ -107,16 +149,16 @@ public sealed class LeashHelpSlip : Border
         });
         you.VerticalAlignment = VerticalAlignment.Center;
         pic.Children.Add(you);
-        var arrow = new Canvas { Width = 28, Height = 16, Margin = new Thickness(6, 14, 6, 0), VerticalAlignment = VerticalAlignment.Center };
-        arrow.Children.Add(P("M2 8 H22 M16 3 L23 8 L16 13", null, Ink, 2));
+        var arrow = new Canvas { Width = 24, Height = 16, Margin = new Thickness(4, 14, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+        arrow.Children.Add(P("M2 8 H19 M13 3 L20 8 L13 13", null, Ink, 2.2));
         pic.Children.Add(arrow);
-        pic.Children.Add(Side(Loc.Get("leash_slip_them"), Pictogram(entry.Pictogram)));
+        pic.Children.Add(Side(Loc.Get("leash_slip_them"), Pictogram(entry.Pictogram, Accent)));
         sp.Children.Add(pic);
 
         // Caption and limits.
         var caption = Loc.Get(entry.CaptionKey);
         if (entry.CaptionNamesThem) caption = string.Format(CultureInfo.InvariantCulture, caption, theirName);
-        sp.Children.Add(new TextBlock
+        _caption = new TextBlock
         {
             Text = caption,
             FontFamily = Sans,
@@ -126,7 +168,8 @@ public sealed class LeashHelpSlip : Border
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 12, 0, 0),
             Tag = "leash-slip-caption",
-        });
+        };
+        sp.Children.Add(_caption);
         sp.Children.Add(new TextBlock
         {
             Text = Loc.Get(entry.LimitsKey),
@@ -137,10 +180,30 @@ public sealed class LeashHelpSlip : Border
             Margin = new Thickness(0, 10, 0, 0),
             Tag = "leash-slip-limits",
         });
-        Child = sp;
+        Child = root;
     }
 
-    internal string CaptionText => ((TextBlock)((StackPanel)Child).Children[2]).Text;
+    internal string CaptionText => _caption.Text;
+
+    /// <summary>The coloured band across the top: the accent, or the sticker colours in a row.</summary>
+    private FrameworkElement Band(string id)
+    {
+        var band = new Border { Height = 6, CornerRadius = new CornerRadius(6, 6, 0, 0), Tag = "leash-slip-band", Background = Accent.BrightBrush };
+        if (id == LeashHelpCatalog.StickerId)
+        {
+            var stops = new GradientStopCollection();
+            for (int i = 0; i < StickerColors.Length; i++)
+            {
+                // Hard stops: five flat blocks, not a gradient.
+                stops.Add(new GradientStop(StickerColors[i], (double)i / StickerColors.Length));
+                stops.Add(new GradientStop(StickerColors[i], (double)(i + 1) / StickerColors.Length));
+            }
+            var b = new LinearGradientBrush(stops, 0);
+            b.Freeze();
+            band.Background = b;
+        }
+        return band;
+    }
 
     private static StackPanel Side(string label, FrameworkElement body)
     {
@@ -153,116 +216,217 @@ public sealed class LeashHelpSlip : Border
             FontSize = 10,
             Foreground = Ink,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 5),
+            Margin = new Thickness(0, 0, 0, 4),
         });
         body.HorizontalAlignment = HorizontalAlignment.Center;
         s.Children.Add(body);
         return s;
     }
 
-    // ---- pictograms (the mockup's SVGs, 130x84) ----------------------------------------
+    internal static Color Mix(Color a, Color b, double t) => Color.FromRgb(
+        (byte)Math.Round(a.R * t + b.R * (1 - t)),
+        (byte)Math.Round(a.G * t + b.G * (1 - t)),
+        (byte)Math.Round(a.B * t + b.B * (1 - t)));
 
-    /// <summary>The pictogram for <paramref name="id"/>; an unknown id draws an empty frame.</summary>
-    internal static Canvas Pictogram(string id)
+    /// <summary>WCAG contrast ratio between two colours.</summary>
+    internal static double Contrast(Color a, Color b)
+    {
+        static double Lin(byte c) { var s = c / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); }
+        static double L(Color c) => 0.2126 * Lin(c.R) + 0.7152 * Lin(c.G) + 0.0722 * Lin(c.B);
+        double la = L(a), lb = L(b);
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+    }
+
+    // ---- pictograms: what the other player sees, 130x84 ---------------------------------
+
+    /// <summary>The pictogram for <paramref name="id"/> in its own accent.</summary>
+    internal static Canvas Pictogram(string id) => Pictogram(id, AccentFor(id));
+
+    /// <summary>The pictogram for <paramref name="id"/>, highlighted in <paramref name="accent"/>;
+    /// an unknown id draws an empty frame.</summary>
+    internal static Canvas Pictogram(string id, SlipAccent accent)
     {
         var c = new Canvas { Width = 130, Height = 84, Tag = "leash-slip-pic:" + id, ClipToBounds = false };
         void Add(UIElement e) => c.Children.Add(e);
+        Brush a = accent.BrightBrush, d = accent.DeepBrush, t = accent.TintBrush;
         switch (id)
         {
             case "assign":
-                Add(R(8, 6, 114, 72, 5, null, Ink, 2));
-                Add(R(18, 18, 10, 10, 2, null, Stamp, 2));
-                Add(P("M34 23 H84", null, Ink, 2));
-                Add(R(18, 36, 10, 10, 2, null, Ink, 2));
-                Add(P("M34 41 H70", null, Ink, 2));
-                Add(R(66, 56, 50, 14, 3, Ink, null, 0));
+                // A task card on their side: band, the task ticked off, a Done button.
+                Add(R(12, 3, 106, 78, 7, Paper, Ink, 2.4));
+                Add(R(13.2, 4.2, 103.6, 18, 6, a, null, 0));
+                Add(P("M13.2 16 H116.8 V22.2 H13.2 Z", a, null, 0));
+                Add(C(28, 13, 6, Paper, Ink, 2));
+                Add(P("M28 9.5 V13 L30.5 14.5", null, Ink, 1.8));
+                Add(R(40, 10, 50, 6, 3, Ink, null, 0));
+                Add(R(22, 31, 14, 14, 3, t, Ink, 2.2));
+                Add(P("M25 38 L28.5 41.5 L34 33.5", null, d, 2.6));
+                Add(R(42, 35, 52, 6, 3, Ink, null, 0));
+                Add(R(22, 52, 14, 14, 3, Paper, Ink, 2.2));
+                Add(R(42, 56, 34, 6, 3, Faint, null, 0));
+                Add(R(82, 60, 30, 16, 5, d, null, 0));
+                Add(P("M90 68 L94 72 L104 63.5", null, Paper, 2.4));
                 break;
             case "tug":
-                var g = new Canvas { Width = 130, Height = 84, RenderTransform = new RotateTransform(-4, 65, 42) };
-                g.Children.Add(R(12, 8, 106, 66, 5, null, Ink, 2));
-                g.Children.Add(R(64, 54, 48, 14, 3, Ink, null, 0));
+                // Their window wobbles; the chain jingles.
+                var g = new Canvas { Width = 130, Height = 84, RenderTransform = new RotateTransform(-5, 65, 40) };
+                g.Children.Add(R(22, 6, 86, 60, 7, Paper, Ink, 2.4));
+                g.Children.Add(P("M23.2 18 V12.5 a5.3 5.3 0 0 1 5.3 -5.3 H101.5 a5.3 5.3 0 0 1 5.3 5.3 V18 Z", Ink, null, 0));
+                g.Children.Add(R(32, 28, 66, 28, 5, t, Ink, 2));
+                g.Children.Add(R(40, 36, 44, 5, 2.5, Ink, null, 0));
+                g.Children.Add(R(40, 45, 30, 5, 2.5, Muted, null, 0));
                 Add(g);
-                Add(P("M4 30 Q8 36 4 42 M126 34 Q122 40 126 46", null, Stamp, 2));
-                Add(C(32, 34, 5, null, Stamp, 2));
-                Add(C(42, 30, 5, null, Stamp, 2));
-                Add(C(52, 26, 5, null, Stamp, 2));
+                Add(P("M6 22 Q12 32 6 42 M13 26 Q17 32 13 38", null, d, 2.8));
+                Add(P("M124 30 Q118 40 124 50 M117 34 Q113 40 117 46", null, d, 2.8));
+                Add(E(46, 76, 8, 5, null, d, 2.8));
+                Add(R(55, 74, 14, 4, 2, d, null, 0));
+                Add(E(78, 76, 8, 5, null, d, 2.8));
                 break;
             case "letgo":
-                Add(C(30, 30, 9, null, Ink, 2.4));
-                Add(C(48, 30, 9, null, Ink, 2.4));
-                Add(P("M62 22 L70 30 M66 18 L70 24", null, Stamp, 2.2));
-                Add(C(86, 30, 9, null, Ink, 2.4));
-                Add(R(20, 54, 34, 16, 8, null, Ink, 2));
-                Add(C(46, 62, 5, Ink, null, 0));
-                Add(T(60, 66, 11, Ink, "panic on"));
+                // The chain breaks; panic switches on, the lock opens.
+                Add(E(18, 20, 11, 7, null, Ink, 2.8));
+                Add(E(36, 20, 11, 7, null, Ink, 2.8));
+                Add(P("M54 10 L59 17 M62 7 V16 M70 10 L65 17 M54 30 L59 23 M70 30 L65 23", null, d, 2.4));
+                Add(E(88, 20, 11, 7, null, Ink, 2.8));
+                Add(E(106, 20, 11, 7, null, Ink, 2.8));
+                Add(R(14, 48, 48, 26, 13, a, Ink, 2.4));
+                Add(C(48, 61, 9, Paper, Ink, 2.2));
+                Add(R(84, 54, 30, 24, 5, t, Ink, 2.4));
+                Add(P("M90 54 V44 a8 8 0 0 1 16 0 V46", null, Ink, 2.8));
+                Add(C(99, 64, 3, Ink, null, 0));
                 break;
             case "lines":
-                Add(R(36, 20, 70, 50, 4, Paper, Ink, 2));
-                Add(R(28, 14, 70, 50, 4, Paper, Ink, 2));
-                Add(R(20, 8, 70, 50, 4, Paper, Ink, 2));
-                Add(P("M30 22 H78 M30 32 H70 M30 42 H74", null, Ink, 2));
-                Add(T(96, 80, 12, Stamp, "x5"));
+                // A gate card over their panel: a lock-card phrase, the box they type it in, 3 of 5.
+                Add(R(4, 3, 122, 78, 7, Faint, Ink, 2.4));
+                Add(R(16, 9, 98, 66, 7, Paper, Ink, 2.4));
+                Add(R(16.8, 9.8, 96.4, 12, 6, t, null, 0));
+                Add(P("M16.8 16 H113.2 V22 H16.8 Z", t, null, 0));
+                Add(R(24, 15, 11, 9, 2, d, null, 0));
+                Add(P("M26 15 V12.5 a3.5 3.5 0 0 1 7 0 V15", null, d, 2));
+                Add(R(42, 16, 54, 5, 2.5, Ink, null, 0));
+                Add(R(24, 30, 82, 16, 4, Paper, Ink, 2));
+                Add(R(29, 36, 42, 5, 2.5, Ink, null, 0));
+                Add(P("M75 34 V43", null, d, 2.2));
+                Add(C(28, 60, 4.5, d, null, 0));
+                Add(C(42, 60, 4.5, d, null, 0));
+                Add(C(56, 60, 4.5, d, null, 0));
+                Add(C(70, 60, 4.5, Paper, Ink, 2));
+                Add(C(84, 60, 4.5, Paper, Ink, 2));
+                Add(T(92, 65, 12, Ink, "3/5"));
                 break;
             case "pink":
-                Add(R(8, 6, 114, 72, 5, PinkFill, Ink, 2));
-                Add(R(22, 18, 30, 22, 2, null, Ink, 2));
-                Add(R(70, 40, 34, 24, 2, null, Ink, 2));
-                Add(T(84, 22, 11, Ink, "15:00"));
+                // Their screen under a pink filter: their own flashes, a session timer.
+                Add(R(4, 3, 122, 78, 7, PinkFill, Ink, 2.4));
+                Add(R(14, 14, 40, 30, 3, Paper, Ink, 2.2));
+                Add(P("M17 41 L28 27 L36 36 L42 30 L51 41 Z", d, null, 0));
+                Add(C(44, 21, 3.5, d, null, 0));
+                Add(R(66, 42, 46, 30, 3, Paper, Ink, 2.2));
+                Add(P("M69 69 L80 55 L88 64 L94 58 L109 69 Z", d, null, 0));
+                Add(R(70, 11, 46, 18, 9, Ink, null, 0));
+                Add(T(77, 24.5, 11, Paper, "15:00"));
+                Add(R(14, 56, 38, 6, 3, d, null, 0));
                 break;
             case "bubbles":
-                Add(R(8, 6, 114, 72, 5, null, Ink, 2));
-                Add(C(34, 30, 10, null, Stamp, 2));
-                Add(C(62, 48, 13, null, Stamp, 2));
-                Add(C(92, 26, 8, null, Stamp, 2));
-                Add(C(96, 58, 6, null, Stamp, 2));
-                Add(T(16, 72, 11, Ink, "12/100"));
+                // Bubbles float over their screen with the pop counter.
+                Add(R(4, 3, 122, 78, 7, Paper, Ink, 2.4));
+                Bubble(c, 32, 30, 14, t, d);
+                Bubble(c, 68, 46, 17, t, d);
+                Bubble(c, 102, 24, 11, t, d);
+                Bubble(c, 104, 60, 8, t, d);
+                Add(R(10, 62, 50, 15, 7.5, Ink, null, 0));
+                Add(T(16, 73.5, 10.5, Paper, "12/100"));
                 break;
             case "detention":
-                Add(R(8, 6, 114, 72, 5, null, Ink, 2));
-                Add(R(18, 16, 26, 20, 2, Ink, null, 0));
-                Add(R(52, 40, 22, 16, 2, Ink, null, 0));
-                var dash = P("M18 64 H60", null, Stamp, 2);
-                dash.StrokeDashArray = new DoubleCollection { 1.5, 2 };
-                Add(dash);
-                Add(C(98, 40, 15, null, Ink, 2));
-                Add(P("M98 32 V40 L104 44", null, Ink, 2));
+                // Their own flashes, subliminals and bubbles, against the clock.
+                Add(R(4, 3, 122, 78, 7, Paper, Ink, 2.4));
+                Add(R(12, 11, 34, 24, 3, Ink, null, 0));
+                Add(P("M15 32 L24 22 L30 28 L34 24 L43 32 Z", Faint, null, 0));
+                Add(R(12, 42, 44, 10, 2, d, null, 0));
+                Add(R(16, 45.5, 30, 3, 1.5, Paper, null, 0));
+                Bubble(c, 26, 66, 8, t, d);
+                Bubble(c, 46, 64, 5, t, d);
+                Add(C(92, 42, 25, Paper, Ink, 2.6));
+                Add(P("M92 17 A25 25 0 0 1 115.8 49.7", null, d, 5));
+                Add(P("M92 27 V42 L102 48", null, Ink, 3));
+                Add(C(92, 42, 2.8, Ink, null, 0));
                 break;
             case "video":
-                Add(R(8, 6, 114, 72, 5, null, Ink, 2));
-                Add(R(13, 10, 104, 64, 3, Ink, null, 0));
-                Add(P("M58 30 L76 42 L58 54 Z", Paper, null, 0));
-                Add(P("M104 16 L112 24 M112 16 L104 24", null, Paper, 2));
-                Add(P("M100 28 L116 12", null, Stamp, 2.4));
+                // A video over most of the screen: no pause, no close, a running bar.
+                Add(R(4, 3, 122, 78, 7, Ink, Ink, 2.4));
+                Add(C(65, 36, 17, null, Paper, 2.4));
+                Add(P("M59 27 L75 36 L59 45 Z", Paper, null, 0));
+                Add(R(12, 66, 106, 6, 3, Muted, null, 0));
+                Add(R(12, 66, 64, 6, 3, a, null, 0));
+                Add(C(76, 69, 4.5, Paper, null, 0));
+                Add(P("M104 10 L114 20 M114 10 L104 20", null, Muted, 2.2));
+                Add(P("M100 24 L118 6", null, a, 3));
                 break;
             case "chaster":
             case "credit":
+                // Their Chaster padlock: time goes on (+) or comes off (-).
                 bool credit = id == "credit";
-                Add(R(34, 34, 40, 34, 5, null, Ink, 2.4));
-                Add(P(credit ? "M42 34 V24 a12 12 0 0 1 24 0 V30" : "M42 34 V24 a12 12 0 0 1 24 0 V34", null, Ink, 2.4));
-                Add(C(54, 50, 4, Ink, null, 0));
-                Add(T(80, 40, 14, credit ? Green : Stamp, credit ? "-30" : "+30"));
+                Add(credit
+                    ? P("M24 40 V24 a13 13 0 0 1 26 0 V27", null, Ink, 3.6)
+                    : P("M24 40 V27 a13 13 0 0 1 26 0 V40", null, Ink, 3.6));
+                Add(R(14, 38, 46, 40, 7, t, Ink, 2.6));
+                Add(C(37, 54, 5, Ink, null, 0));
+                Add(R(35, 55, 4, 12, 2, Ink, null, 0));
+                Add(R(68, 22, 58, 32, 8, d, null, 0));
+                Add(T(80, 45, 19, Paper, credit ? "-30" : "+30"));
+                Add(T(86, 70, 12, Ink, "min"));
                 break;
             case "sticker":
-                Add(P("M14 66 H116", null, Ink, 2.4));
-                Add(P("M42 14 L48 30 L65 30 L51 40 L56 57 L42 47 L28 57 L33 40 L19 30 L36 30 Z", Stamp, null, 0));
-                Add(C(82, 50, 12, null, Ink, 2));
-                Add(R(100, 42, 14, 20, 3, null, Ink, 2));
+                // A new sticker lands on their shelf, in the shelf's own colours.
+                Add(P("M6 72 H124", null, Ink, 3));
+                Add(P("M22 72 V80 M108 72 V80", null, Ink, 2.6));
+                Sticker(c, 22, 54, 15, StickerColors[0], P("M22 44 L25 51 L32.5 51.5 L27 56.5 L28.5 64 L22 60 L15.5 64 L17 56.5 L11.5 51.5 L19 51 Z", Ink, null, 0));
+                Sticker(c, 56, 54, 15, StickerColors[3], P("M56 63 C50 59 47 56 47 52.5 A4.5 4.5 0 0 1 56 50.5 A4.5 4.5 0 0 1 65 52.5 C65 56 62 59 56 63 Z", Ink, null, 0));
+                Sticker(c, 90, 54, 15, StickerColors[4], T(81, 57.5, 10, Ink, "WOW"));
+                Sticker(c, 112, 24, 13, StickerColors[2], T(104, 27.5, 9, Ink, "PET"));
+                Add(P("M92 14 L96 20 M88 26 L94 27 M100 6 V13", null, accent.DeepBrush, 2.4));
                 break;
             case "praise":
-                Add(R(8, 6, 114, 72, 5, null, Ink, 2));
-                Add(R(40, 48, 74, 22, 4, Ink, null, 0));
-                Add(P("M48 59 H104", null, Paper, 2));
-                Add(P("M20 30 Q26 22 20 14 M28 34 Q38 22 28 10", null, Stamp, 2));
+                // A sound and a note on their screen.
+                Add(R(4, 3, 122, 78, 7, Paper, Ink, 2.4));
+                Add(P("M12 20 H17 L25 13 V35 L17 28 H12 Z", Ink, null, 0));
+                Add(P("M30 17 Q35 24 30 31 M36 12 Q45 24 36 36", null, d, 2.6));
+                Add(R(34, 44, 84, 28, 7, Ink, null, 0));
+                Add(P("M51 66 C44.5 61.5 42 58 42 54.5 A4.6 4.6 0 0 1 51 52.5 A4.6 4.6 0 0 1 60 54.5 C60 58 57.5 61.5 51 66 Z", a, null, 0));
+                Add(R(66, 52, 44, 5, 2.5, Paper, null, 0));
+                Add(R(66, 61, 28, 5, 2.5, Faint, null, 0));
                 break;
             case "pardon":
-                Add(P("M16 22 H112 V36 a6 6 0 0 0 0 12 V62 H16 V48 a6 6 0 0 0 0 -12 Z", null, Ink, 2.2));
-                Add(T(36, 47, 14, Stamp, "PARDON"));
+                // A ticket they spend on the gate; they can hold three.
+                Add(P("M8 14 H122 V34 a8 8 0 0 0 0 16 V70 H8 V50 a8 8 0 0 0 0 -16 Z", t, Ink, 2.6));
+                var perf = P("M94 18 V66", null, Ink, 2);
+                perf.StrokeDashArray = new DoubleCollection { 1.5, 2.5 };
+                Add(perf);
+                Add(C(28, 32, 6.5, Paper, d, 2.8));
+                Add(C(28, 54, 6.5, Paper, d, 2.8));
+                Add(P("M33.5 35.5 L62 54 M33.5 50.5 L62 32", null, d, 2.8));
+                Add(R(66, 36, 20, 5, 2.5, Ink, null, 0));
+                Add(R(66, 46, 14, 5, 2.5, Muted, null, 0));
+                Add(C(108, 28, 4.5, d, null, 0));
+                Add(C(108, 42, 4.5, d, null, 0));
+                Add(C(108, 56, 4.5, Paper, Ink, 2));
                 break;
             default:
-                Add(R(8, 6, 114, 72, 5, null, Ink, 2));
+                Add(R(4, 3, 122, 78, 7, null, Ink, 2.4));
                 break;
         }
         return c;
+    }
+
+    private static void Bubble(Canvas c, double cx, double cy, double r, Brush fill, Brush stroke)
+    {
+        c.Children.Add(C(cx, cy, r, fill, stroke, 2.6));
+        c.Children.Add(C(cx - r * 0.38, cy - r * 0.38, Math.Max(1.6, r * 0.22), Paper, null, 0));
+    }
+
+    private static void Sticker(Canvas c, double cx, double cy, double r, Color color, UIElement face)
+    {
+        c.Children.Add(C(cx, cy, r, FriendsLook.Frozen(color), Ink, 2));
+        c.Children.Add(face);
     }
 
     private static Rectangle R(double x, double y, double w, double h, double rx, Brush? fill, Brush? stroke, double sw)
@@ -273,11 +437,13 @@ public sealed class LeashHelpSlip : Border
         return r;
     }
 
-    private static Ellipse C(double cx, double cy, double r, Brush? fill, Brush? stroke, double sw)
+    private static Ellipse C(double cx, double cy, double r, Brush? fill, Brush? stroke, double sw) => E(cx, cy, r, r, fill, stroke, sw);
+
+    private static Ellipse E(double cx, double cy, double rx, double ry, Brush? fill, Brush? stroke, double sw)
     {
-        var e = new Ellipse { Width = r * 2, Height = r * 2, Fill = fill, Stroke = stroke, StrokeThickness = sw };
-        Canvas.SetLeft(e, cx - r);
-        Canvas.SetTop(e, cy - r);
+        var e = new Ellipse { Width = rx * 2, Height = ry * 2, Fill = fill, Stroke = stroke, StrokeThickness = sw };
+        Canvas.SetLeft(e, cx - rx);
+        Canvas.SetTop(e, cy - ry);
         return e;
     }
 
@@ -332,6 +498,54 @@ public static class LeashHelpButton
         b.Focusable = false;
         b.VerticalAlignment = VerticalAlignment.Center;
         b.Tag = "leash-slip-help:" + entry.Id;
+        var ctl = new Controller(b, entry, theirName);
+        b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
+        return b;
+    }
+
+    /// <summary>A sheet row's icon that is its own "?" (owner, 2026-10-17): the icon with a
+    /// small "?" badge on its top-right corner. The badge hangs outside the icon's box, so the
+    /// row's name keeps every pixel it had. Hover opens the slip, a click pins it.</summary>
+    public static Button Badged(FrameworkElement face, LeashHelpEntry entry, Func<string> theirName, double badge = 11)
+    {
+        var cell = new Grid { Background = Brushes.Transparent };
+        cell.Children.Add(face);
+        cell.Children.Add(new Border
+        {
+            Width = badge,
+            Height = badge,
+            CornerRadius = new CornerRadius(badge / 2),
+            Background = FriendsLook.Frozen(FriendsLook.Rgb(0x24, 0x18, 0x38)),
+            BorderBrush = FriendsLook.Frozen(Color.FromArgb(0xAA, 0xB9, 0x9C, 0xFF)),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, -badge * 0.6, -badge * 0.3, 0),
+            IsHitTestVisible = false,
+            Tag = "leash-slip-badge",
+            Child = new TextBlock
+            {
+                Text = "?",
+                FontFamily = FriendsLook.Display,
+                FontWeight = FontWeights.Bold,
+                FontSize = badge * 0.72,
+                Foreground = FriendsLook.LilacBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -1, 0, 0),
+            },
+        });
+        var template = new ControlTemplate(typeof(Button)) { VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)) };
+        template.Seal();
+        var b = new Button
+        {
+            Content = cell,
+            Template = template,
+            Focusable = false,
+            Cursor = Cursors.Help,
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = "leash-slip-help:" + entry.Id,
+        };
         var ctl = new Controller(b, entry, theirName);
         b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
         return b;

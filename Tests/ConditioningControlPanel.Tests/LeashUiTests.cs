@@ -144,6 +144,7 @@ public class LeashUiTests
             var card = new LeashHolderCard(svc.Snapshot.Holding[0], () => svc);
             card.ToggleSheet("punish");
             Assert.NotNull(Find(card, t => t == "leash-punish:chaster:900"));
+            Shot(card, "holder-punish-strict", 300);
             var status = card.SendPunishAsync(PunishKind.Lines, 5, null).GetAwaiter().GetResult();
             Assert.Equal(LeashSendStatus.Sent, status);
             Assert.Contains("punish:u_mika:Lines:5", svc.Calls);
