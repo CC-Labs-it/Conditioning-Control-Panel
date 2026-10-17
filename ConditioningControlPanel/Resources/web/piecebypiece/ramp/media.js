@@ -24,6 +24,7 @@
  * ==========================================================================*/
 
 import { lastHostFrame } from '../bridge.js';
+import { isScrolllerUrl } from './scrolllerMark.js';
 
 const KINDS = ['image', 'gif', 'video'];
 const NO_ECHO = 6;   // a reshuffled deck avoids repeating the last N draws
@@ -344,6 +345,7 @@ export function createHostMedia(entries, opts = {}) {
   }
 
   function noteShown(url) {
+    pingOnline();
     shown.add(url);
     if (asked || !online.size || shown.size < Math.ceil(online.size * ONLINE_LOW_SHARE)) return;
     asked = true;
@@ -361,6 +363,8 @@ export function createHostMedia(entries, opts = {}) {
       const alt = fromOnline ? (local.has(k) ? local.draw(k, avoid) : null) : (online.count(k) ? online.draw(k, avoid) : null);
       if (alt && alt !== url) { url = alt; if (!fromOnline) noteShown(alt); }
     } else if (url && fromOnline) noteShown(url);
+    // a host deck row that is itself a Scrolller URL (a browser shim) credits too
+    else if (url && !fromOnline && isScrolllerUrl(url)) pingOnline();
     last[k] = url;
     return url;
   };
@@ -372,6 +376,11 @@ export function createHostMedia(entries, opts = {}) {
   pool.stats = () => ({ ...local.stats(), label: 'host', online: online.stats().total, share });
   Object.defineProperty(pool, 'size', { get: () => localSize() + online.size, configurable: true });
   pool.online = online;
+  /* "via Scrolller" (2026-10-17): boot sets pool.onOnlineShown = () => mark.note(). */
+  pool.onOnlineShown = null;
+  function pingOnline() {
+    if (typeof pool.onOnlineShown === 'function') { try { pool.onOnlineShown(); } catch { /* credit only */ } }
+  }
 
   pool.settings = settings;
   /** Subscribe to host settings. Fires immediately if they already arrived. */
