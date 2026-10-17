@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import url from 'node:url';
 import {
-  SCROLLLER_TEXT, isScrolllerUrl, isScrolllerId, markText, markShouldShow, createScrolllerMark, MARK_HOLD_MS, domShowsScrolller,
+  SCROLLLER_TEXT, isScrolllerUrl, markShouldShow, createScrolllerMark, MARK_HOLD_MS, domShowsScrolller,
 } from '../exec/scrolllerMark.js';
 import { createGoonMediaPool } from '../exec/media.js';
 
@@ -26,8 +26,6 @@ ok(isScrolllerUrl('https://frame.example/scrolller-media/sub/a.jpg'), 'discord p
 ok(!isScrolllerUrl('https://ccp.assets/images/a.jpg'), 'local host url');
 ok(!isScrolllerUrl('https://evilscrolller.com/a.jpg'), 'look-alike host');
 ok(!isScrolllerUrl('blob:abc') && !isScrolllerUrl('') && !isScrolllerUrl(null), 'junk');
-ok(isScrolllerId('scrolller/Bimbos/12345') && !isScrolllerId('local/a/b') && !isScrolllerId('scrolller/x'), 'id shape');
-ok(markText('r/Bimbos') === 'via Scrolller · r/Bimbos' && markText('bad name') === 'via Scrolller' && markText() === 'via Scrolller', 'mark text');
 
 // 2. the pure rule
 ok(!markShouldShow({}), 'nothing shown');
