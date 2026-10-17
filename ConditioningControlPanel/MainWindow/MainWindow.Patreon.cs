@@ -1212,13 +1212,16 @@ namespace ConditioningControlPanel
             try
             {
                 var patreon = App.Patreon;
-                if (patreon?.HasPremiumAccess != true) return;
+                if (patreon?.HasPremiumAccess != true) { TierOnNoticePass(mayShow: false); return; }
                 // An invite week is a free trial, not a purchase: celebrating it would spend the
                 // tier-1 seen-flag and the friend's real subscription later would get no card.
-                if (patreon.IsInviteWeekOnly) return;
+                if (patreon.IsInviteWeekOnly) { TierOnNoticePass(mayShow: false); return; }
                 var tier = patreon.HasLabAccess ? 2 : 1;
                 var onRise = riseTier > 0;
-                if (!TierCelebration.IsOwed(App.Settings?.Current?.SeenFeatureIntros, tier, onRise)) return;
+                // The big once-ever card is spent: a later rise (a lapse and back, an upgrade
+                // celebrated before) gets the small "Your Prime is on" card instead.
+                if (!TierCelebration.IsOwed(App.Settings?.Current?.SeenFeatureIntros, tier, onRise)) { TierOnNoticePass(mayShow: true); return; }
+                TierOnNoticePass(mayShow: false);   // the celebration below says it
                 var key = TierCelebration.KeyFor(tier)!;
 
                 // A purchase the user just made is celebrated at once, not filed in the Inbox,
@@ -1250,6 +1253,43 @@ namespace ConditioningControlPanel
 
         /// <summary>Tier of a live rise waiting for the celebration pass, 0 when none.</summary>
         private int _pendingRiseTier;
+
+        /// <summary>
+        /// Records the effective tier and, when it rose over the last one this install knew and
+        /// <paramref name="mayShow"/>, posts the small "Your Prime is on" card through the presenter
+        /// (an Inbox row while the user is busy). Drops are recorded only once the server answered
+        /// this run, so a stale cache at launch never sets up a false card (TierOnNotice).
+        /// </summary>
+        private void TierOnNoticePass(bool mayShow)
+        {
+            try
+            {
+                var settings = App.Settings?.Current;
+                if (settings == null) return;
+                var current = EntitlementTierSync.EffectiveTierNow();
+                var verdict = TierOnNotice.Decide(settings.LastKnownEffectiveTier, current,
+                    mayRecordDrop: EntitlementTierSync.ServerAnsweredThisRun);
+                if (verdict.Record != settings.LastKnownEffectiveTier)
+                {
+                    settings.LastKnownEffectiveTier = verdict.Record;
+                    App.Settings?.Save();
+                }
+                if (!verdict.Owed || !mayShow) return;
+                // The once-ever celebration still owed for this tier says it instead (no two cards).
+                if (TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
+                var title = Loc.Get(TierOnNotice.TitleKey(current));
+                var body = Loc.Get("tier_on_body");
+                PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current,
+                    Glyph = "💖",
+                    Title = title,
+                    Summary = body,
+                    Open = () => InboxNoticeCard.Present(this, title, body, null, null),
+                });
+            }
+            catch (Exception ex) { App.Logger?.Debug("Tier-on notice failed: {Error}", ex.Message); }
+        }
 
         private bool CanCelebrateNow()
             => IsVisible && WindowState != WindowState.Minimized
@@ -1294,6 +1334,10 @@ namespace ConditioningControlPanel
             // Instant unlock for a tier bought on the site: a focus refresh when the user clicks back
             // in, and the rise's own fanfare on the profile bubble (EntitlementTierSync).
             Activated += (_, __) => EntitlementTierSync.OnAppFocused();
+            Activated += (_, __) => TierOnNoticePass(mayShow: true);
+            // Back from a Patreon / site checkout through ANY app window (launcher, game, dialog).
+            if (Application.Current != null)
+                Application.Current.Activated += (_, __) => EntitlementTierSync.OnAppActivatedAfterCheckout();
             Activated += (_, __) => MaybeShowInviteEnding();
             // Conversion rows (lapse warnings and the rest, MainWindow.Inbox.cs): checked on focus and
             // after any server tier reading that moved the stored lapse signal.
