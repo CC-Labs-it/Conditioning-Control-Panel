@@ -28,6 +28,10 @@ import { quality } from '../shared/quality.js';
 import { createScreenAnimationBudget } from './screen-animation-budget.js';
 import { screenTransition } from './screen-transition.js';
 import { createScreenDeal } from './screen-deal.js';
+import { sourceCredit, isScrolllerGif } from '../shared/source-credit.js';
+
+/** The walls hold the room's one "via Scrolller" mark while their gallery carries a Scrolller picture. */
+const CREDIT_KEY = 'room-walls';
 
 export const TURN_S = 9;
 const SCREEN_ASPECT = 2.12 / 1.22;
@@ -190,6 +194,10 @@ export async function createScreens(o) {
     if (!loaded.length) { if (urls.length && o.log) o.log('wall pictures: none readable, house art stays'); return 0; }
     const previous = custom ? gallery : [];
     gallery = loaded; custom = true; epoch = now(); faces.reset(loaded.length);
+    try {
+      const online = urls.some((u, k) => results[k] && gifs.some((g) => g && g.url === u && isScrolllerGif(g)));
+      if (online) sourceCredit.hold(CREDIT_KEY); else sourceCredit.drop(CREDIT_KEY);
+    } catch (e) { /* the credit never breaks a deal */ }
     previous.forEach(free);
     return loaded.length;
     } finally { dealing = false; refreshAt = version !== sourceVersion ? -Infinity : now() + 72; }
@@ -199,6 +207,7 @@ export async function createScreens(o) {
     update, deal,
     dispose() {
       disposed = true; controller.abort(); window.removeEventListener('br-media-changed', sourceChanged);
+      sourceCredit.drop(CREDIT_KEY);
       for (const src of new Set([...house, ...gallery])) src.dispose ? src.dispose() : src.texture.dispose();
       captions.forEach(t => t.dispose());
       // One transition ShaderMaterial per screen, made here, so it is freed here too.
