@@ -32,6 +32,7 @@
 
 import * as bridge from './bridge.js';
 import { media } from './exec/media.js';
+import { pageMark } from './exec/scrolllerMark.js';
 import * as layers from './exec/layers.js';
 // The per-match record of which artifacts a duel PARTNER put on this screen —
 // exec/videos.js owns it, the recap's report card reads it, and this file is
@@ -422,6 +423,9 @@ const mediaFlavour = (() => {
   };
   return api;
 })();
+
+// "via Scrolller" (2026-10-17): one corner mark while an online picture is on screen.
+media.setOnlineShownHandler(() => pageMark().note());
 
 // The online deck is mostly shown: ask the host for the next wave (it re-checks the pick and
 // the switch, and fetches only posts this list has not had).

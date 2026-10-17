@@ -559,7 +559,13 @@ async function pickMedia(params) {
       return media.createFixtureMedia(list);
     }
     if (mode === 'none') return media.createFixtureMedia([]);
-    return media.createHostMedia();
+    const pool = media.createHostMedia();
+    // "via Scrolller" (2026-10-17): one corner mark while an online Distraction picture is up
+    try {
+      const { pageMark } = await import('./ramp/scrolllerMark.js');
+      pool.onOnlineShown = () => pageMark().note();
+    } catch (e) { console.warn('[pbp] no credit mark', e); }
+    return pool;
   } catch (e) {
     console.warn('[pbp] no media source; the ramp runs without pictures', e);
     return undefined;   // attachRamp falls back to an empty pool of its own

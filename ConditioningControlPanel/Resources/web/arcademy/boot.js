@@ -31,6 +31,7 @@ import { installDeviceClass } from './core/device.js';
  * modules themselves are dynamic imports inside `loadGames`, so this costs the
  * boot nothing it was not already paying. */
 import { GAME_PATHS, isOpenSemester, gameTitle } from './games/registry.js';
+import { pageMark } from './provider/scrolllerMark.js';
 
 const doc = (typeof document !== 'undefined') ? document : null;
 const win = (typeof window !== 'undefined') ? window : null;
@@ -1023,6 +1024,9 @@ bridge.startHeartbeat(5000);
 armBootDeadline();
 bridge.announceReady();
 log('boot: ready posted, waiting for init');
+// "via Scrolller" (2026-10-17): remote media stays DOM-layer here, so one corner mark
+// follows any on-screen Scrolller img/video/background. Additive, no game code touched.
+if (doc) { try { pageMark().watch(); } catch (_e) { /* credit only */ } }
 strikeEarlyBed();
 
 if (!bridge.isHosted) {
