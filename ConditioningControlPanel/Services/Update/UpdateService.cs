@@ -20,13 +20,37 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.10";
+        public const string AppVersion = "7.1.11";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.10 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.11 - Stay Tuned
+
+NEW IN 7.1.11
+- Leash: a small ? next to every command. hover it to see what lands on the other player's screen, with a little picture: Assign, Reward, Punish, Tug, every punishment and reward row, and Let go.
+- just subscribed and still locked? press ""I just subscribed"" on the Premium page. the app also checks again on its own when you come back from the checkout page, and a small card tells you when your Basic or Prime is on.
+- Italiano (beta) rewritten line by line, so it reads like Italian and not like a translation.
+- a flag next to each language in the language picker.
+- online pictures and clips now say where they come from: a small ""via Scrolller"" credit wherever they show, and the app tells Scrolller plainly who it is.
+
+ARCADEMY
+- Daily Trigger: one paid try a day. it counts as soon as the class starts, so leaving with Esc uses it; after that it runs as a retake. the day now turns over at the same time as the credits (midnight UTC).
+
+FIXES IN 7.1.11
+- Patreon: patrons who sign in with Discord no longer lose access after 14 days while they are paying.
+- Takeover: Mind Wipe only plays when Mind Wipe is switched on.
+- changing the wallpaper can no longer freeze the app.
+- flashes that stay until popped are no longer trimmed by ""Max on screen"" (up to 40, as the setting says).
+- keyword triggers written as patterns now fire on screen text too, not only on typing.
+- Bubble Count tells you when it has no videos to play instead of staying silent.
+- 12 dead or VIP-only video links removed from the built-in lists.
+- Leash: long words on the holder buttons shrink instead of being cut, row names show in full, Chaster chips read +15m / +30m / +1h.
+- Circe's Tab: during the raffle month a day in credit still counts. the first slip-up of the day goes to your lock and the credit pays the rest.
+- wording: ""Basic tier"" and ""Prime tier"", ""Down the Rabbit Hole run"" instead of ""Chaos run"", Goon tables say they start on Friends, and Slut Mode is no longer listed as a Patreon perk (it is for everyone).
+
+v7.1.10 - Stay Tuned
 
 NEW IN 7.1.10
 - Italiano (beta): the whole app in Italian. pick it under Settings > Language. it is a first pass, so odd lines are expected; tell us in #bug-reports.
