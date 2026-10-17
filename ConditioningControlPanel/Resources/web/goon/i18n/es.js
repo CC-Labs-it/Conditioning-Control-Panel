@@ -588,6 +588,7 @@ export default Object.freeze({
   gg_table_visFriends: "Amigos",
   gg_table_visAnyone: "Cualquiera",
   gg_table_visOff: "Nadie",
+  gg_table_visDefault: "Empieza en Amigos. Elige Cualquiera para que la vea todo jugador.",
   gg_table_hintFriends: "Tus amigos pueden ver esta mesa.",
   gg_table_hintAnyone: "Cualquier jugador con sesión iniciada puede ver esta mesa.",
   gg_table_hintOff: "Oculta. Comparte el código para jugar.",
