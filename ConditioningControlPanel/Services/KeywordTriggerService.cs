@@ -937,11 +937,14 @@ namespace ConditioningControlPanel.Services
             foreach (var trigger in OrderedByPresetPriority(triggers))
             {
                 if (!trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword)) continue;
-                if (trigger.MatchType == KeywordMatchType.Regex) continue;
                 if (IsKeywordMuted(trigger.Keyword)) continue; // per-keyword hard cooldown
                 if (trigger.IsOnCooldown) continue;             // per-trigger cooldown
 
-                var words = FindMatchedWords(trigger.Keyword, allWords);
+                // #1456: regex triggers used to be skipped here, so they only ever fired from the
+                // keyboard. They now run the same pattern over the scan's text.
+                var words = trigger.MatchType == KeywordMatchType.Regex
+                    ? FindRegexMatchedWords(trigger.Keyword, allWords)
+                    : FindMatchedWords(trigger.Keyword, allWords);
                 if (words != null && words.Count > 0)
                 {
                     firedTriggers.Add(trigger);
@@ -1224,6 +1227,76 @@ namespace ConditioningControlPanel.Services
                         minX, minY, maxRight - minX, maxBottom - minY),
                     Screen = first.Screen,
                 });
+            }
+
+            return results.Count > 0 ? results : null;
+        }
+
+        /// <summary>
+        /// Regex keyword over one OCR scan (#1456). The scan's tokens are joined with single
+        /// spaces, in scan order, into the same kind of free text the keyboard matcher sees, and
+        /// the pattern runs over it with the keyboard's options (case-insensitive, 100 ms
+        /// timeout). Each match becomes ONE hit whose rect is the union of the tokens it
+        /// touches on the first token's screen, so the highlight draws one box per match. A bad
+        /// pattern, a timeout or an empty match finds nothing.
+        /// </summary>
+        internal static List<OcrWordHit>? FindRegexMatchedWords(string pattern, List<OcrWordHit> wordHits)
+        {
+            if (wordHits == null || wordHits.Count == 0 || string.IsNullOrEmpty(pattern)) return null;
+
+            var sb = new System.Text.StringBuilder();
+            var starts = new int[wordHits.Count];
+            for (int i = 0; i < wordHits.Count; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                starts[i] = sb.Length;
+                sb.Append(wordHits[i].Text ?? "");
+            }
+            var text = sb.ToString();
+
+            var results = new List<OcrWordHit>();
+            try
+            {
+                foreach (Match m in Regex.Matches(text, pattern, RegexOptions.IgnoreCase,
+                             TimeSpan.FromMilliseconds(100)))
+                {
+                    if (m.Length == 0) continue;
+                    int end = m.Index + m.Length;
+                    OcrWordHit? first = null;
+                    int minX = 0, minY = 0, maxRight = 0, maxBottom = 0;
+                    for (int i = 0; i < wordHits.Count; i++)
+                    {
+                        var w = wordHits[i];
+                        int wEnd = starts[i] + (w.Text ?? "").Length;
+                        if (wEnd <= m.Index || starts[i] >= end) continue;
+                        var r = w.ScreenRect;
+                        if (first == null)
+                        {
+                            first = w;
+                            minX = r.X; minY = r.Y; maxRight = r.Right; maxBottom = r.Bottom;
+                        }
+                        else if (ReferenceEquals(w.Screen, first.Screen))
+                        {
+                            if (r.X < minX) minX = r.X;
+                            if (r.Y < minY) minY = r.Y;
+                            if (r.Right > maxRight) maxRight = r.Right;
+                            if (r.Bottom > maxBottom) maxBottom = r.Bottom;
+                        }
+                    }
+                    if (first == null) continue; // the match sat only on joining spaces
+
+                    results.Add(new OcrWordHit
+                    {
+                        Text = m.Value,
+                        ScreenRect = new System.Drawing.Rectangle(minX, minY, maxRight - minX, maxBottom - minY),
+                        Screen = first.Screen,
+                    });
+                }
+            }
+            catch
+            {
+                // Bad pattern or timeout: same as the keyboard path, the trigger simply does not fire.
+                return null;
             }
 
             return results.Count > 0 ? results : null;
