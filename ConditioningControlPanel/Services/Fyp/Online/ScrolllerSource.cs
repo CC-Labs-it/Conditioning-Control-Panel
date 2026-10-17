@@ -83,13 +83,16 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     private static readonly SemaphoreSlim RequestGate = new(1, 1);
     private static DateTime _lastRequestUtc = DateTime.MinValue;
 
-    private static HttpClient CreateClient()
+    /// <summary>The app says who it is to Scrolller: no browser user-agent, no scrolller.com
+    /// Origin or Referer (owner, 2026-10-17; Scrolller had noticed the app posing as their own
+    /// site). Probed the same day: the API answers 200 and the CDN 206 with this alone.</summary>
+    internal static readonly string HonestUserAgent =
+        $"ConditioningControlPanel/{UpdateService.AppVersion} (+https://cclabs.app)";
+
+    internal static HttpClient CreateClient()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Origin", "https://scrolller.com");
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
+        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", HonestUserAgent);
         return c;
     }
 
