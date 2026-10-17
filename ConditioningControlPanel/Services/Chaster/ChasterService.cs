@@ -393,7 +393,8 @@ public sealed partial class ChasterService : IDisposable
                 if (room == 0) return new(0, TabRefusal.Remote);
                 seconds = Math.Min(seconds, room);
             }
-            booking = CircesTab.Book(_tab, eventId, seconds, now, _localNow(), _runStartUtc, safetyExit: now < _safetyUntilUtc, options.Caps)
+            booking = CircesTab.Book(_tab, eventId, seconds, now, _localNow(), _runStartUtc, safetyExit: now < _safetyUntilUtc, options.Caps,
+                raffleDay: seconds > 0 && RaffleRunning(now))
                 with { Unprompted = unprompted };
             if (booking.AppliedSeconds > 0) { CircesTab.NoteUse(_tab, eventId, _localNow()); if (heats) NoteHeat(eventId); }
             else if (booking.AppliedSeconds < 0) NoteCool();
