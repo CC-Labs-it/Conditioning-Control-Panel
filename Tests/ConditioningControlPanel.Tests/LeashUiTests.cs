@@ -174,6 +174,35 @@ public class LeashUiTests
     }
 
     [Fact]
+    public void Stacked_button_shrinks_a_long_word_instead_of_trimming_it()
+    {
+        Run(() =>
+        {
+            // One of four buttons on a 264 px card (ticket 2026-10-15: "Rew..."); fr is the longest.
+            var b = LeashLook.Chunky("Récompenser", LeashLook.Tone.Mint, "star", stacked: true, size: 12);
+            b.Measure(new Size(58, 100));
+            b.Arrange(new Rect(0, 0, 58, b.DesiredSize.Height));
+            b.UpdateLayout();
+            var box = FindVisual<Viewbox>(b, v => v.Child is TextBlock);
+            Assert.NotNull(box);
+            var text = (TextBlock)box!.Child;
+            Assert.True(text.DesiredSize.Width > box.ActualWidth, "the word should need shrinking at this width");
+            Assert.True(box.ActualWidth <= 58, $"label box {box.ActualWidth} px overflows the button");
+        });
+    }
+
+    private static T? FindVisual<T>(DependencyObject root, Func<T, bool> match) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var c = VisualTreeHelper.GetChild(root, i);
+            if (c is T t && match(t)) return t;
+            if (FindVisual(c, match) is { } found) return found;
+        }
+        return null;
+    }
+
+    [Fact]
     public void Self_card_cuts_in_one_click_and_sets_its_own_level()
     {
         Run(() =>
