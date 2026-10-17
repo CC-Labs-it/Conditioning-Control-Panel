@@ -91,8 +91,10 @@ public sealed class FlashPayload : EffectPayload
 
     internal (int Amount, int DurationMs, int Size) ResolveBurst(Models.AppSettings? settings)
     {
+        // #1445: a popped Flash bubble shows ONE picture (the one in the bubble), never the
+        // user's whole Flash Images burst; duration and size still follow the Flash settings.
         if (settings != null && (Ambient || UseFlashSettings))
-            return (settings.SimultaneousImages, AmbientFlashDurationMs(settings.FlashDuration), settings.ImageScale);
+            return (1, AmbientFlashDurationMs(settings.FlashDuration), settings.ImageScale);
         return (Scale(1, 3), (int)(Scale(900, 2000) * GlobalDurationMult * DurationMult), Scale(68, 143));
     }
 
