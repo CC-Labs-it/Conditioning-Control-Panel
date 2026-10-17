@@ -316,7 +316,10 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 // the 100-token chat cap and get guillotined mid-string. Size the budget to
                 // what we asked the model to produce. See AiCallOptions.ChatWithEffects.
                 var effectsOn = ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOnNow;
-                var options = effectsOn ? AiCallOptions.ChatWithEffects : AiCallOptions.Chat;
+                var spiceOn = App.Settings?.Current?.SlutModeEnabled == true;
+                var options = effectsOn ? AiCallOptions.ChatWithEffects
+                    : spiceOn ? AiCallOptions.ChatSpice
+                    : AiCallOptions.Chat;
                 var offered = _preview() && !ConversationDelivery.CardFollows(input)
                     ? ConversationDelivery.Select(Activities(), input, Session.Turns) : Array.Empty<CompanionActivity>();
                 if (_preview())

@@ -180,7 +180,7 @@ public class PbpFeaturedTests
     public void Every_language_carries_the_featured_keys()
     {
         var files = Directory.GetFiles(Path.Combine(AppDir(), "Localization", "Languages"), "*.json");
-        Assert.Equal(9, files.Length);
+        Assert.Equal(10, files.Length);
         var keys = new[]
         {
             "billboard_card_featured_pinned", "billboard_card_featured_rotating", "billboard_card_featured_line_watching",
