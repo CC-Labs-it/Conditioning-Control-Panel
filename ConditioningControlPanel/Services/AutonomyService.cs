@@ -590,6 +590,16 @@ namespace ConditioningControlPanel.Services
             => enabled && generationAtSchedule == generationNow;
 
         /// <summary>
+        /// May Takeover play a Mind Wipe sting? (ccp-bugs #1458, #1453.) Only when the Takeover box
+        /// allows it AND Mind Wipe itself is switched on. The Takeover box defaults to on, so before
+        /// this a player who switched Mind Wipe off still heard stings from the moment the app
+        /// started ("even disabling it doesn't turn it off"). Checked when picking and again when
+        /// an announced sting finally plays.
+        /// </summary>
+        public static bool MayMindWipe(bool takeoverMayMindWipe, bool mindWipeEnabled)
+            => takeoverMayMindWipe && mindWipeEnabled;
+
+        /// <summary>
         /// Cancel all active pulses and restore original settings.
         /// Called by panic key handler to immediately clear autonomy effects.
         /// Does NOT stop the autonomy service itself - just cancels current pulses.
@@ -1130,7 +1140,7 @@ namespace ConditioningControlPanel.Services
                 candidates.Add((AutonomyActionType.Comment, 20));
 
             // New progression features
-            if (settings.AutonomyCanTriggerMindWipe)
+            if (MayMindWipe(settings.AutonomyCanTriggerMindWipe, settings.MindWipeEnabled))
                 candidates.Add((AutonomyActionType.MindWipe, 15));
 
             if (settings.AutonomyCanTriggerLockCard)
@@ -1377,6 +1387,10 @@ namespace ConditioningControlPanel.Services
                             break;
 
                         case AutonomyActionType.MindWipe:
+                            // Re-checked: the box may have been unticked during the announcement.
+                            if (!MayMindWipe(App.Settings?.Current?.AutonomyCanTriggerMindWipe == true,
+                                    App.Settings?.Current?.MindWipeEnabled == true))
+                                break;
                             App.MindWipe?.TriggerOnce();
                             break;
 
