@@ -642,7 +642,7 @@ public sealed class LeashHolderCard : Border
         if (_h.Report?.ChasterLinked == true)
         {
             rows.Children.Add(SizeRow(Loc.Get("leash_rew_credit"), "lock", FriendsLook.MintBrush,
-                LeashUiRules.CreditSizes.Select(s => ("-" + LeashUiRules.Clock(s), "leash-reward:credit:" + s, (Func<Task>)(() => SendRewardAsync(RewardKind.Credit, null, s)))), LeashHelpCatalog.ForReward(RewardKind.Credit)));
+                LeashUiRules.CreditSizes.Select(s => ("-" + LeashUiRules.Span(s),"leash-reward:credit:" + s, (Func<Task>)(() => SendRewardAsync(RewardKind.Credit, null, s)))), LeashHelpCatalog.ForReward(RewardKind.Credit)));
         }
         return sheet;
     }
