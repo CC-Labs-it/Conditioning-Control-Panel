@@ -20,6 +20,35 @@ public sealed partial class ChasterService
     private readonly IChasterLadderApi? _ladderApi;
     private DateTime? _ladderVerifiedAtUtc;
     private Timer? _ladderRetry;
+    private int _raffleAsked;
+
+    /// <summary>Whether the server's raffle month is this UTC month (<see cref="CircesTab.Book"/>'s
+    /// raffle day rule). Not known yet this month: ask once per run, quietly, so the next slip-up
+    /// knows. Call inside the tab lock.</summary>
+    private bool RaffleRunning(DateTime nowUtc)
+    {
+        if (LadderApi == null) return false;
+        if (_tab.RaffleMonth == ChasterLadder.MonthKey(nowUtc)) return true;
+        if (IsLinked && Interlocked.Exchange(ref _raffleAsked, 1) == 0)
+            _ = Task.Run(async () =>
+            {
+                try { NoteRaffleMonth(await LadderApi.MeAsync().ConfigureAwait(false)); }
+                catch (Exception ex) { Diag.Swallowed(ex, "raffle month read skipped"); }
+            });
+        return false;
+    }
+
+    /// <summary>Remember the raffle month while the server says it is running.</summary>
+    private void NoteRaffleMonth(RaffleCard? card)
+    {
+        if (card == null || card.Today < 1 || card.Today > card.DaysInMonth) return;
+        lock (_gate)
+        {
+            if (_tab.RaffleMonth == card.Month) return;
+            _tab.RaffleMonth = card.Month;
+            SaveTab();
+        }
+    }
 
     /// <summary>Null = no ladder (tests). Setting one also starts the raffle's day ledger: every
     /// booking's gross goes into it as it is raised (<see cref="Booked"/>).</summary>
@@ -94,6 +123,7 @@ public sealed partial class ChasterService
         if (LadderApi == null) return null;
         await VerifyLadderAsync(ct).ConfigureAwait(false);
         var card = await LadderApi.MeAsync(ct).ConfigureAwait(false);
+        NoteRaffleMonth(card);
         var want = RafflePostDays?.Invoke() == true;
         if (card != null && card.PostDays != want && await LadderApi.OptInAsync(want, ct).ConfigureAwait(false))
             card = card with { PostDays = want };
