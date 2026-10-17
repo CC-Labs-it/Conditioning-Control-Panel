@@ -30,6 +30,7 @@ import { t, setLexicon, tierLabel, gradeLabel } from '../core/lexicon.js';
 import { makeRng } from '../core/rng.js';
 import { dayVocabulary } from '../core/vocab.js';
 import { buildTimetable, dayAdd } from '../core/timetable.js';
+import { rowForUtcDay, attemptedOnUtcDay } from '../core/dayclock.js';
 import { gradeClass, capsRaised, isSPlus, gradeKey } from '../core/grades.js';
 import { createStore } from '../core/store.js';
 import {
@@ -1359,10 +1360,31 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
   function todaysRecord(gameKey) {
     if (results[gameKey]) return results[gameKey];
     try {
-      const day = store.day(localDate);
-      const row = day && day.classes ? day.classes[gameKey] : null;
-      return (row && row.grade) ? row : null;
+      /* ONE CLOCK (core/dayclock.js): the row must have been written on the
+       * script's UTC day. Rows are filed under the LOCAL date, so the two
+       * neighbouring local days are asked too - a row from late last night or
+       * early tomorrow can sit on today's UTC day. */
+      const rowOf = (d) => {
+        const day = store.day(d);
+        return day && day.classes ? day.classes[gameKey] : null;
+      };
+      return rowForUtcDay(
+        [rowOf(localDate), rowOf(dayAdd(localDate, -1)), rowOf(dayAdd(localDate, 1))],
+        utcDateSeed || localDate);
     } catch (e) { return null; }
+  }
+
+  /** The class already had its one try on today's UTC day, graded or left
+   *  (ccp-bugs #1455): the game's own start stamp or the host's XP ledger. */
+  function attemptedToday(gameKey) {
+    try {
+      return attemptedOnUtcDay({
+        gameKey,
+        utcDay: utcDateSeed,
+        gameMeta: store.gameMeta(gameKey),
+        xpPaidDays: store.get('xpPaidDays', null),
+      });
+    } catch (e) { return false; }
   }
 
   /* ---------------------- punch cards (PUNCHCARD §2.3) ------------------
@@ -4058,7 +4080,8 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
     /* the door-open thump the card used to own - one verb, one sound */
     sfx('door', 0.35);
     const rec = todaysRecord(gameKey);
-    const done = !!rec;
+    // A try left mid-class is still today's try (#1455): the door says Retake.
+    const done = !!rec || attemptedToday(gameKey);
     const scheduled = timetable.classes.some((c) => c.gameKey === gameKey);
     let statusLine, actionLabel, xpLine;
     if (done) {
@@ -5247,7 +5270,7 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
     // identical-script replay needs nothing from this flag; it is here so a
     // game that wants to dress a replay differently can, and so the chrome can
     // say what is happening. A free swim is never a retake: it writes no row.
-    const retake = endless ? false : !!todaysRecord(cls.gameKey);
+    const retake = endless ? false : (!!todaysRecord(cls.gameKey) || attemptedToday(cls.gameKey));
     /* THE ONCE-EVER ENROLLMENT (PUNCHCARD §4). A free swim never enrolls: it
      * sends no `class-ended`, so it could never pay the ceremony off, and an
      * intro that led nowhere would be the worst version of this. */
@@ -5606,7 +5629,7 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
         // ran is the one this finish pays for, so a card the host enrolled
         // mid-class (it cannot, but a snapshot could) can never turn the
         // three-punch ceremony into a one-punch one halfway through.
-        finishClass(cls, gradeTier, result, { peek, belowPar, endless, enrolling });
+        finishClass(cls, gradeTier, result, { peek, belowPar, endless, enrolling, retake });
       },
     };
 
@@ -5666,7 +5689,7 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
     activeLever = leverPick();
     bridge.send(endless
       ? { type: 'class-started', gameKey: cls.gameKey, gradeTier, endless: true, lever: activeLever }
-      : { type: 'class-started', gameKey: cls.gameKey, gradeTier, lever: activeLever });
+      : { type: 'class-started', gameKey: cls.gameKey, gradeTier, lever: activeLever, dayUtc: utcDateSeed });
 
     /* THE GAME STARTS HERE, AND NOT BEFORE. Everything above is the stage; this
      * is the class. Enrollment (below) delays it by a few cards on a first run
@@ -5932,9 +5955,24 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
     // already paid the day's XP for the first (payout-result carries retake:true
     // and xp 0, which is what the report card's XP line then shows).
     const priorRow = todaysRecord(cls.gameKey);
-    const isRetake = !!priorRow;
+    /* ONE TRY A DAY (ccp-bugs #1455): a class that STARTED as a retake stays
+     * one, even with no graded row behind it - the first try was left with
+     * Esc, which writes no row. It pays nothing and promotes nothing, but it
+     * still files the day's row below, since there is no first grade to keep. */
+    const startedAsRetake = !!(shellState && shellState.retake);
+    const isRetake = !!priorRow || startedAsRetake;
 
-    if (!isRetake) {
+    if (!priorRow && startedAsRetake) {
+      results[cls.gameKey] = {
+        grade: graded.grade,
+        zen: graded.zen,
+        composite: graded.composite,
+        capped: capsList,
+        tier: gradeTier,
+        xp: null,
+        retake: true,
+      };
+    } else if (!isRetake) {
       results[cls.gameKey] = {
         grade: graded.grade,
         zen: graded.zen,
@@ -6024,8 +6062,9 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
         });
         if (adv.promoted) shout(tierLabel(adv.tier) + ' unlocked');
       }
-      // Not on a retake: the day's row is written once, by the first attempt.
-      if (!isRetake) {
+      // Not on a retake: the day's row is written once, by the first attempt
+      // (or by the first GRADED run after a try that was left mid-class).
+      if (!priorRow) {
         store.recordClass(localDate, cls.gameKey, {
           grade: graded.grade, zen: graded.zen, at: Date.now(),
         });
