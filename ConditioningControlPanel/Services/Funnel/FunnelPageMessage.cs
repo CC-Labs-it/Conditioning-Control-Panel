@@ -69,6 +69,7 @@ public static class FunnelPageMessage
             FunnelBeacon.Post(req.Event, req.A, req.B);
             if (req.Url == null || !mayOpen || !TakeOpenSlot(DateTime.UtcNow)) return;
             App.Logger?.Information("[Funnel] page opened {Url}", req.Url);
+            CheckoutWatch.NoteOpened(req.Url);
             if (OpenOverride != null) { OpenOverride(req.Url); return; }
             Process.Start(new ProcessStartInfo { FileName = req.Url, UseShellExecute = true });
         }
