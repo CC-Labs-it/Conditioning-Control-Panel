@@ -58,6 +58,7 @@ import { setLoomBook } from '../engine/loomSpirals.js';
 import { createLoomBook } from '../race/loomBook.js';
 import { createLoomSpiralFx } from '../race/loomSpiralFx.js';
 import { motionOff } from '../shared/motion.js';
+import { sourceCredit } from '../shared/sourceCredit.js';
 import { createScreenShake } from './screenShake.js';
 import { createChaosHud } from './chaosHud.js';
 import { createOverlays } from './overlays.js';
@@ -4065,6 +4066,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   function endRun(ranFullCourse) {
     if (state !== 'running') return;
     setState('recap');
+    try { sourceCredit.clear(); } catch (e) { /* ignore */ }   // the run's Scrolller cards leave with it; anything re-shown touches it back
     setRegionCycle(false); setBiomeCycle(false);   // The Bottomless Fall: disarm cycling so the next (normal) run clamps to Court
     // Surfaced: hush the drift whisper + calm the tube for the recap/hub idle.
     try { ctx.setRunActive && ctx.setRunActive(false); } catch (e) { /* ignore */ }

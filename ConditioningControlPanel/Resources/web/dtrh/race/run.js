@@ -53,6 +53,7 @@
 
 import * as THREE from 'three';
 import { Q } from '../shared/quality.js';
+import { sourceCredit } from '../shared/sourceCredit.js';
 import { createTunnel, FOG_DENSITY } from '../engine/tunnel.js';
 import { createFx } from '../engine/fx.js';
 import { createPayloadFx } from '../game/payloadFx.js';
@@ -424,6 +425,7 @@ export function createRace({ root, bridge, media, settings = {}, seed = 1, onExi
   function teardown() {
     if (!W) return;
     try { W.field.dispose(); W.kart.dispose(); W.wallDom.dispose(); W.walls.dispose(); W.dresser.dispose(); W.fx.dispose(); } catch (e) { /* half-built world */ }
+    try { sourceCredit.clear(); } catch (e) { /* ignore */ }
     scene.remove(W.tunnel.mesh); W.tunnel.dispose();
     W = null;
   }
