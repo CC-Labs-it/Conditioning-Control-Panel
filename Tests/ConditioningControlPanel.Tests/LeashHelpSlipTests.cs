@@ -79,6 +79,68 @@ public sealed class LeashHelpSlipTests
         });
     }
 
+    [Fact]
+    public void Every_slip_key_is_in_all_ten_languages()
+    {
+        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var keys = LeashHelpCatalog.AllKeys().Distinct().ToList();
+        Assert.True(keys.Count > 40, "found only " + keys.Count);
+        foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
+        {
+            var json = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(dir, lang + ".json")));
+            foreach (var k in keys) Assert.True(json[k] != null, $"{lang}.json is missing {k}");
+            foreach (var e in LeashHelpCatalog.All.Where(e => e.CaptionNamesThem))
+                Assert.Contains("{0}", (string)json[e.CaptionKey]!);
+            foreach (var e in LeashHelpCatalog.All.Where(e => !e.CaptionNamesThem))
+                Assert.DoesNotContain("{0}", (string)json[e.CaptionKey]!);
+        }
+    }
+
+    [Fact]
+    public void Slip_names_the_other_player()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var slip = new LeashHelpSlip(LeashHelpCatalog.Get("tug")!, "Vex");
+            Assert.Contains("Vex", slip.CaptionText);
+            Assert.DoesNotContain("{0}", slip.CaptionText);
+        });
+    }
+
+    [Fact]
+    public void Holder_card_has_a_help_per_button_and_row()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            LeashFx.ForceStill = true;
+            try
+            {
+                var svc = FakeLeashService.Sample();
+                var card = new LeashHolderCard(svc.Snapshot.Holding[0], () => svc);
+                foreach (var b in LeashHelpCatalog.HolderButtons)
+                    Assert.NotNull(Find(card, t => t == "leash-slip-help:" + b));
+                // The general explainer stays reachable from the head.
+                Assert.NotNull(Find(card, t => t == "leash-help:holder"));
+
+                card.ToggleSheet("punish");
+                foreach (var k in LeashUiRules.VisiblePunishments(svc.Snapshot.Holding[0].Intensity, svc.Snapshot.Holding[0].Report?.ChasterLinked == true))
+                    Assert.NotNull(Find(card, t => t == "leash-slip-help:" + LeashHelpCatalog.Id(k)));
+
+                card.ToggleSheet("reward");
+                foreach (var id in new[] { "sticker", "praise", "pardon" })
+                    Assert.NotNull(Find(card, t => t == "leash-slip-help:" + id));
+
+                // Pressing a "?" pins its slip and never opens or sends anything.
+                var before = card.OpenSheet;
+                var q = (Button)Find(card, t => t == "leash-slip-help:reward")!;
+                q.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, q));
+                Assert.Equal(before, card.OpenSheet);
+                Assert.Null(card.ResultText);
+            }
+            finally { LeashFx.ForceStill = false; }
+        });
+    }
+
     /// <summary>With CCP_LEASH_SHOTS set to a folder, saves every slip and the holder card's
     /// button row there as PNGs (the look the owner approved, checked by eye).</summary>
     [Fact]
