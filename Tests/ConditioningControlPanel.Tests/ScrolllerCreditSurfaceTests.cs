@@ -60,7 +60,6 @@ public class ScrolllerCreditSurfaceTests
     }
 
     [Theory]
-    [InlineData("Services/Flash/FlashService.cs")]
     [InlineData("Chaos/ChaosFlashOverlay.cs")]
     [InlineData("Chaos/ChaosGifCascadeOverlay.cs")]
     [InlineData("Services/BubbleService.cs")]
@@ -70,6 +69,19 @@ public class ScrolllerCreditSurfaceTests
         Assert.Contains("ScrolllerCredit.IsScrolllerMedia(", src);
         Assert.Contains("ScrolllerCreditChip.Hold(", src);
         Assert.Contains("ScrolllerCreditChip.Release(", src);
+    }
+
+    [Fact]
+    public void Flashes_CarryTheCreditOnThePictureItself()
+    {
+        // Owner, 2026-10-17: the corner chip was missed on flashes; the tag goes on the picture.
+        var flash = Read("ConditioningControlPanel", "Services", "Flash", "FlashService.cs");
+        Assert.Contains("window.LayerItem.Credit = Video.ScrolllerCredit.IsScrolllerMedia(", flash);
+        Assert.Contains("new Controls.ScrolllerCreditBadge", flash);
+        Assert.DoesNotContain("ScrolllerCreditChip.Hold(", flash);
+        var layer = Read("ConditioningControlPanel", "Services", "Compositor", "FlashLayer.cs");
+        Assert.Contains("if (item.Credit && item.Exit == null) DrawCredit(", layer);
+        Assert.Contains("canvas.DrawText(Video.ScrolllerCredit.Mark", layer);
     }
 
     [Fact]

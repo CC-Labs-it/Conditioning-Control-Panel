@@ -2029,6 +2029,20 @@ namespace ConditioningControlPanel.Services
                     window.NatashaDodgeRing = ring;
                 }
 
+                // "via Scrolller" on the picture itself, bottom-right, like the video badge (the
+                // layer path draws the same text in FlashLayer.DrawCredit). Fades with the flash.
+                if (!useLayer && content != null && Video.ScrolllerCredit.IsScrolllerMedia(imageData.FilePath))
+                {
+                    var credit = new Controls.ScrolllerCreditBadge
+                    {
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                        VerticalAlignment = System.Windows.VerticalAlignment.Bottom,
+                        Margin = new System.Windows.Thickness(0, 0, 6, 4),
+                    };
+                    content = new Grid { Children = { content, credit } };
+                    credit.SetShown(true);
+                }
+
                 if (useLayer)
                 {
                     // Convert frames + spawn the layer item; the heartbeat drives it from here
@@ -2127,11 +2141,6 @@ namespace ConditioningControlPanel.Services
                 {
                     _activeWindows.Add(window);
                 }
-
-                // "via Scrolller": one corner mark while any Scrolller flash is up (all three
-                // render paths), released in SafeCloseFlashWindow.
-                if (Video.ScrolllerCredit.IsScrolllerMedia(imageData.FilePath))
-                    Controls.ScrolllerCreditChip.Hold(window);
 
                 // Natasha's favourite: the red one showed, and its ring is running. Nothing books
                 // now; the ring's end decides.
@@ -2567,6 +2576,7 @@ namespace ConditioningControlPanel.Services
                         window.LayerItem = layer.Spawn(frames, x, y, w, h,
                             paddingPx, cornerRadiusPx, skGlowColor, glowSigmaPx,
                             glowOpacity, luckyPulse, motionState);
+                        window.LayerItem.Credit = Video.ScrolllerCredit.IsScrolllerMedia(imageData.FilePath);
                         window.LayerItem.NatashaCue = window.IsNatasha;
                         window.LayerItem.DodgeUntilMs = window.NatashaDodged ? 0 : window.NatashaDodgeUntilMs;
                         if (imageData.BubbleOriginPx is { } origin)
@@ -5049,7 +5059,6 @@ namespace ConditioningControlPanel.Services
                 // swept by a teardown). Drop the drag before the item goes, or the hook keeps
                 // paying for move messages nothing reads.
                 CancelLayerDrag(window);
-                Controls.ScrolllerCreditChip.Release(window);
 
                 // Dispose CTS registration first to release the closure capturing this window
                 try { window.LifetimeRegistration?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
