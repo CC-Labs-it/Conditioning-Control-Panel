@@ -361,12 +361,12 @@ function main() {
     view.dispose = () => { board.turnSpiral.dispose(); dispose(); };
   }).catch(e => console.warn('[pbp] turn spiral missing', e));
   // --- end T ---
-  // Esc on the menu closes the board; Esc in a game pauses it (owner, 2026-09-27). Mid-drag it also puts the
-  // piece back, and never closes the board. A local game holds its clock and the computer's reply; an online
+  // Esc in a game pauses it; on the pause card it resumes. Leaving is a button, never a key.
+  // Mid-drag it also puts the piece back. A local game holds its clock and the computer's reply; an online
   // clock belongs to the server, so the card says it keeps running.
   // The pause is also the first half of a panic press (the panel lets the board keep a first Escape as its
-  // pause; a second within 2 s closes it), so it goes quiet at once (ui/pause-hush.js), and an Escape on the
-  // pause card LEAVES, whatever the gap: Esc, Esc is always the way out. Resume is the focused button.
+  // pause; a second within 2 s is a full panic), so it goes quiet at once (ui/pause-hush.js).
+  // Resume, by button or Escape, brings the effects back through the same hush.
   const pauseCard = document.createElement('div');
   pauseCard.className = 'pbp-pause';
   pauseCard.hidden = true;
@@ -419,15 +419,11 @@ function main() {
   window.addEventListener('keydown', (e) => {
     // A held Escape is one press (the panel counts it once too); its key repeats must not leave the pause.
     if (e.key !== 'Escape' || e.repeat) return;
-    // In the stands Escape never leaves: it opens the pause card, and on the card it resumes (DESK note, 2026-10-14).
-    if (pausedGame && watchingNow()) { setGamePaused(false); return; }
-    if (pausedGame) { postToHost({ type: 'pbp:exit' }); return; }   // still hushed: nothing comes back on the way out
+    // Players and spectators resume alike; only the Leave button leaves the board.
+    if (pausedGame) { setGamePaused(false); return; }
     if (drag.isDragging()) { drag.drop(); window.PBP.escapePause(); return; }
     const inGame = inGameNow();
-    // A finished watched game has nothing to pause: Esc goes back to the tables.
-    if (!window.PBP.door?.isUp() && watchingNow()) { if (inGame) setGamePaused(true); else bus.emit('watch-leave'); return; }
     if (inGame) setGamePaused(true);
-    else postToHost({ type: 'pbp:exit' });
   });
   // The kept press plays through the listener above (and every other Escape listener), once.
   onHostMessage((m) => { if (m.type === HOST_ESCAPE) hostEscape.kept(); });
