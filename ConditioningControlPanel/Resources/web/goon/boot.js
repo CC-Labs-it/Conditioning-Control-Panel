@@ -17,7 +17,7 @@
  *   4. ATTACH/DETACH on currentMatch changes. The relay fallback REBUILDS the
  *      match object (net/session.js _fallBackToRelay), so nothing may cache the
  *      first instance — the whole executor/log/HUD graph re-binds here;
- *   5. the Escape ladder (mercy is never more than one keypress away);
+ *   5. Escape opens local options; mercy stays on its own button;
  *   6. phase-driven routing;
  *   7. Practice mode: a loopback pair and a scripted opponent, so the game is
  *      fully playable with no server and no second machine.
@@ -31,6 +31,9 @@
  * ==========================================================================*/
 
 import * as bridge from './bridge.js';
+import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
+const hostEscape = createHostEscape();
+bridge.on(HOST_ESCAPE, () => hostEscape.kept());
 import { media } from './exec/media.js';
 import { pageMark } from './exec/scrolllerMark.js';
 import * as layers from './exec/layers.js';
@@ -124,7 +127,6 @@ if (typeof window !== 'undefined') {
 const WARM_MS = 12000;   // hosted: "warming up" line in the loader
 const BOOT_MS = 45000;   // hosted: give up and tell C#
 const EXIT_FALLBACK_MS = 1200;
-const ESC_HOLD_MS = 1200;
 
 /**
  * How long after `matchEnded` we stop waiting for the countersignature and put
@@ -824,7 +826,6 @@ let micGateSaid = false;     // the mic breadcrumb is once per match — see rep
 let hudHandle = null;
 let mercyHandle = null;
 let phaseUnsubs = [];
-let escMercied = false;
 let awaitingEntry = false;
 let lastConnectFailed = null;
 let recapFallbackTimer = 0;
@@ -1396,7 +1397,6 @@ function attachMatch(match, transport) {
       peerNicheLink.fromCaps(match.remoteCaps);   // their hello may already be in
     } catch (_e) { /* a hook, never load-bearing */ }
   }
-  escMercied = false;
   // A new match is a new answer to "is there a mic on the desk". See reportMicGate.
   micGateSaid = false;
 
@@ -2972,38 +2972,7 @@ function finishExit(why) {
   bridge.send({ type: 'exit-done' });
 }
 
-/* ----------------------------------------------------------------------------
- * THE ESCAPE LADDER — the safety contract, in code.
- *
- *   TAP, Live or SuddenDeath   -> declareMercy() ON KEYDOWN. Not on keyup, not
- *                                 behind a confirm dialog, not after an
- *                                 animation. The dignified concede has to be
- *                                 the FASTEST thing on the page, and the engine
- *                                 ends the match locally even if the wire is
- *                                 dead (core/match.js §11).
- *   TAP, Lobby/Consent/Draft/Countdown
- *                              -> confirm-free cancel + leave. Pre-live is a
- *                                 clean fold that never reaches the ledger, so
- *                                 there is nothing to confirm.
- *   TAP, Recap                 -> leave, exactly like "Back to menu". The match
- *                                 is already over: there is nothing left to
- *                                 concede, and Escape must never be a key that
- *                                 does nothing. The owner hit precisely that —
- *                                 an end card with no way out.
- *   TAP, no match              -> close the topmost overlay, or nothing.
- *   HOLD >= 1.2s               -> mercy first (if we have not already), THEN
- *                                 the exit handshake. Closing the window can
- *                                 never be a way to dodge a loss or strand the
- *                                 opponent waiting on a countersignature.
- *
- * e.repeat is dropped and `escDown` latches, so a held key fires the tap action
- * exactly once — a mercy storm would spam the wire with `mercy` frames.
- * The mercy BUTTON (ui/mercy.js, sibling I) calls the same match API; neither
- * path is privileged over the other.
- * -------------------------------------------------------------------------- */
-let escTimer = 0;
-let escDown = false;
-
+// Escape opens local options; online clocks keep running. Leaving uses a button.
 function isPreLive(phase) {
   return phase === GoonMatchPhase.Lobby || phase === GoonMatchPhase.Consent
     || phase === GoonMatchPhase.Draft || phase === GoonMatchPhase.Countdown;
@@ -3019,51 +2988,10 @@ function onKeyDown(e) {
     }
     return;
   }
-  if (e.key !== 'Escape' || e.repeat || escDown) return;
-  escDown = true;
-
-  const m = currentMatch;
-  const phase = m ? m.phase : GoonMatchPhase.Idle;
-
-  if (m && (phase === GoonMatchPhase.Live || phase === GoonMatchPhase.SuddenDeath)) {
-    if (!escMercied) {
-      escMercied = true;
-      logger.info('escape -> mercy');
-      try { m.declareMercy(); } catch (err) { logger.error('declareMercy threw: ' + ((err && err.stack) || err)); }
-    }
-  } else if (m && isPreLive(phase)) {
-    logger.info('escape -> pre-live cancel');
-    void actions.leave('escape');
-  } else if (sheets && sheets.isOpen) {
-    sheets.close(null);
-  } else if (options && options.isOpen) {
-    options.close();
-  } else if (phase === GoonMatchPhase.Recap || (router && router.current === 'recap')) {
-    // The end card is a screen, not a match: Escape leaves it the same way the
-    // button does. Checked AFTER the overlays so Escape still peels the drawer
-    // or a sheet off the recap first, one layer per press.
-    logger.info('escape -> leave the recap');
-    void actions.leave('escape-recap');
-  }
-
-  try {
-    escTimer = setTimeout(() => { if (escDown) holdExit(); }, ESC_HOLD_MS);
-  } catch (_e) { /* ignore */ }
-}
-
-function holdExit() {
-  const m = currentMatch;
-  if (m && !escMercied && (m.phase === GoonMatchPhase.Live || m.phase === GoonMatchPhase.SuddenDeath)) {
-    escMercied = true;
-    try { m.declareMercy(); } catch (_e) { /* ignore */ }
-  }
-  requestExit('hold-escape');
-}
-
-function onKeyUp(e) {
-  if (e.key !== 'Escape') return;
-  escDown = false;
-  try { clearTimeout(escTimer); } catch (_e) { /* ignore */ }
+  if (e.key !== 'Escape' || e.repeat) return;
+  e.preventDefault();
+  if (sheets?.isOpen) sheets.close(null);
+  else options?.toggle();
 }
 
 /* ----------------------------------------------------------------------------
@@ -3133,7 +3061,6 @@ if (hasDom()) {
   initDebugOverlay();
   try {
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
     window.addEventListener('pagehide', () => { try { prefs?.flush?.(); } catch (_e) { /* ignore */ } });
   } catch (_e) { /* ignore */ }
   layers.setFxHeat(0);

@@ -13,9 +13,7 @@
  *      load): a slow-but-progressing boot must not be misread as a wedge, and a
  *      boot that genuinely never arrives must not spin the loader forever.
  *      Failure posts `boot-error` so C# can show its fallback dialog and close.
- *   3. HOLD-ESC EXIT LADDER: a TAP walks the shell's own ladder (close settings ->
- *      pause -> leave class) and then unfullscreens; a HOLD leaves the Arcademy.
- *      Nobody is ever trapped, and nobody exits by fumbling one key.
+ *   3. Escape pauses or resumes the class. Leaving uses a button.
  *   4. UNCAUGHT ERRORS AND REJECTIONS GO TO THE HOST LOG. There are no devtools
  *      in the hosted page; an unreported throw is an invisible bug.
  *
@@ -25,6 +23,9 @@
  * ==========================================================================*/
 
 import * as bridge from './bridge.js';
+import { createHostEscape, HOST_ESCAPE } from './shell/host-escape.js';
+const hostEscape = createHostEscape();
+bridge.on(HOST_ESCAPE, () => hostEscape.kept());
 import { installDeviceClass } from './core/device.js';
 /* THE DIRECT LAUNCH's two reads, and they are the only reason boot.js knows the
  * registry exists. Both are STATIC data (a frozen table and two Sets) - the game
@@ -48,13 +49,6 @@ const dom = {
 };
 
 const BOOT_DEADLINE_MS = 45000;
-const HOLD_EXIT_MS = 1200;
-/* THE REACH FOR THE DOOR. A tap is under 200ms, so a hold still going at this
- * mark is a genuine attempt to leave - and the ~750ms of hold left after it is
- * the only runway EMI's wordless send-off ever gets (the host closes the window
- * within a frame or two of `exit`). A release between the two marks was a
- * false-alarm reach: both timers are cleared and nothing else happens. */
-const EXIT_INTENT_MS = 450;
 const TOAST_MS = 2200;
 
 let shell = null;
@@ -896,118 +890,14 @@ function shutdown(reason) {
   bridge.send({ type: 'exit', reason: String(reason || 'page') });
 }
 
-/* ----------------------------------------------------------------------------
- * THE ESC LADDER
- *   tap  -> shell rung (close settings / pause / leave class), then unfullscreen,
- *           then a hint telling you how to actually leave
- *   hold -> exit
- * -------------------------------------------------------------------------- */
-let escTimer = 0;
-let escIntentTimer = 0;
-let escHint = null;
-
-/* THE CLOCK UNDER THE HOLD (W3 P0-33, vn/index.js's skip pill verbatim). 1200ms
- * of nothing is a long time to wonder whether the key was heard, so the reach
- * for the door counts itself out loud: one soft tick every 250ms, climbing a
- * step each time, and the door itself on the way out. The first tick is 250ms
- * in, so a TAP is silent and the ladder's rungs keep their own voices. It stops
- * three ways - a release, the hold completing, and losing the window. */
-const ESC_TICK_MS = 250;
-let escTickTimer = 0;
-let escTicks = 0;
-
-function stopEscTicks() {
-  if (escTickTimer) { clearTimeout(escTickTimer); escTickTimer = 0; }
-}
-
-function escTick() {
-  escTickTimer = 0;
-  escTicks += 1;
-  sfx('clock_tick', 0.2, { pitch: 1 + 0.08 * escTicks });
-  escTickTimer = setTimeout(escTick, ESC_TICK_MS);
-}
-
-/* EMI, LAZILY AND OPTIONALLY. boot.js knows nothing about the mascot and keeps
- * it that way: the module is only reached for when a hold has actually started,
- * the promise is cached (a failure is permanent silence) and the call is fired
- * and forgotten. NOTHING HERE MAY DELAY OR GATE THE EXIT. */
-let emiMoments = null;
-function fireEmi(name, payload) {
-  try {
-    if (!emiMoments) emiMoments = import('./emi/moments.js').catch(() => null);
-    emiMoments.then((m) => {
-      try { if (m && typeof m.fireMoment === 'function') m.fireMoment(name, payload); }
-      catch (e) { /* a mascot may never break the way out */ }
-    });
-  } catch (e) { /* noop */ }
-}
-
-function showEscHint() {
-  if (!doc || escHint) return;
-  try {
-    escHint = doc.createElement('div');
-    escHint.className = 'arc-esc-hint';
-    escHint.textContent = 'HOLD ESC TO LEAVE';
-    (doc.body || doc.documentElement).appendChild(escHint);
-    setTimeout(() => { try { escHint.remove(); } catch (e) { /* noop */ } escHint = null; }, 1400);
-  } catch (e) { escHint = null; }
-}
-
+// Escape acts on keydown so a host-kept press follows the same path.
 if (win) {
   win.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.repeat) return;
-    if (escTimer) return;
-    escTicks = 0;
-    escTickTimer = setTimeout(escTick, ESC_TICK_MS);   // W3 P0-33
-    escTimer = setTimeout(() => {
-      escTimer = 0;
-      stopEscTicks();
-      // W3 P0-33: the hold landed. The school shuts its door behind you, and
-      // the cue goes out before the teardown because nothing may delay an exit.
-      sfx('door', 0.3);
-      shutdown('hold-esc');
-    }, HOLD_EXIT_MS);
-    // EMI SEAM: the hold is past a tap, so the player is leaving the Arcademy.
-    escIntentTimer = setTimeout(() => {
-      escIntentTimer = 0;
-      fireEmi('exitIntent', { reason: 'hold-esc' });
-    }, EXIT_INTENT_MS);
+    e.preventDefault();
+    try { shell?.escapeStep(); }
+    catch (err) { bridge.log('error', 'escapeStep threw: ' + err); }
   });
-
-  win.addEventListener('keyup', (e) => {
-    if (e.key !== 'Escape') return;
-    if (escIntentTimer) { clearTimeout(escIntentTimer); escIntentTimer = 0; }
-    if (!escTimer) return;          // the hold already fired
-    clearTimeout(escTimer);
-    escTimer = 0;
-    // W3 P0-33: let go part-way and the count-out gets its own answer. A tap
-    // never ticked, so it never sighs either - the rung below keeps that beat.
-    stopEscTicks();
-    if (escTicks > 0) sfx('slide', 0.18, { pitch: 0.9 });
-    escTicks = 0;
-    // A tap: walk the ladder one rung.
-    let consumed = false;
-    try { consumed = !!(shell && shell.escapeStep()); }
-    catch (err) { bridge.log('error', 'escapeStep threw: ' + ((err && err.message) || err)); }
-    if (consumed) return;
-    if (fullscreen) { bridge.send({ type: 'fullscreen-request', on: false }); return; }
-    showEscHint();
-  });
-
-  /* A HOLD THAT LOSES THE WINDOW IS NOT A HOLD. The exit timer is only ever
-   * cancelled by keyup - but if focus leaves mid-press (alt-tab, a popup
-   * stealing the foreground, the host suspending us), the keyup lands in some
-   * other window, the timer completes on its own, and the player watches the
-   * Arcademy dismiss itself. Losing the window cancels the hold outright and
-   * never counts as a tap: the ladder must only ever move on a real keyup. */
-  const cancelEscHold = () => {
-    if (escIntentTimer) { clearTimeout(escIntentTimer); escIntentTimer = 0; }
-    if (escTimer) { clearTimeout(escTimer); escTimer = 0; }
-    stopEscTicks();                 // W3 P0-33: a lost window ticks no further
-    escTicks = 0;
-  };
-  win.addEventListener('blur', cancelEscHold);
-  if (doc) doc.addEventListener('visibilitychange', () => { if (doc.hidden) cancelEscHold(); });
 
   win.addEventListener('keydown', (e) => {
     // F11 is the app-wide fullscreen convention; the host owns the actual window.
