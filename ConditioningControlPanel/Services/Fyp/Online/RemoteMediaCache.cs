@@ -254,6 +254,9 @@ internal static class RemoteMediaCache
             App.Logger?.Debug("[remote media] refused non-media url from {Host}", Logging.UrlLog.Host(url));
             return null;
         }
+        // Licence switch off: a Scrolller url reads as a failed fetch (cache hits too, so
+        // nothing of theirs keeps showing). Same null every caller already handles.
+        if (ScrolllerPolicyService.Blocks(url)) return null;
 
         try
         {
