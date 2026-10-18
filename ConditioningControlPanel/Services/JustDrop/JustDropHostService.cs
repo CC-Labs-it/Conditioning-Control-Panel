@@ -192,6 +192,10 @@ namespace ConditioningControlPanel.Services.JustDrop
 
             core.WebResourceRequested += (_, e) =>
             {
+                // The event fires for EVERY filter on this core (the Scrolller gate adds its own),
+                // so check the path here too or the token would ride along to other hosts.
+                if (!e.Request.Uri.StartsWith(SiteOrigin + "/api/auth/desktop-session",
+                        StringComparison.OrdinalIgnoreCase)) return;
                 try { e.Request.Headers.SetHeader("X-CCP-Auth-Token", token); }
                 catch (Exception ex)
                 {
