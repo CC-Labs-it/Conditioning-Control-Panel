@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Win32;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Newtonsoft.Json;
@@ -430,6 +431,15 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _state == WebcamTrackingState.Tracking || _state == WebcamTrackingState.FaceLost;
         public WebcamCalibrationData? Calibration { get; private set; }
 
+        private readonly object _monitorLock = new();
+        private System.Windows.Forms.Screen[] _gazeScreens = Array.Empty<System.Windows.Forms.Screen>();
+        private System.Windows.Forms.Screen? _gazeScreen;
+        private string? _gazeMonitorName;
+        private bool _gazeMonitorFallback;
+        private int _gazeMonitorRevision;
+        internal int GazeMonitorRevision => Volatile.Read(ref _gazeMonitorRevision);
+
+
         /// <summary>
         /// Returns the System.Windows.Forms.Screen that matches the monitor the
         /// current calibration ran on, or null when (a) no calibration is loaded,
@@ -440,21 +450,59 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public System.Windows.Forms.Screen? GetCalibratedScreen()
         {
-            var name = Calibration?.MonitorBounds?.DeviceName;
-            if (string.IsNullOrEmpty(name)) return null;
-            try
+            lock (_monitorLock)
             {
-                foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+                RefreshGazeMonitor();
+                return string.IsNullOrEmpty(_gazeMonitorName) || _gazeMonitorFallback ? null : _gazeScreen;
+            }
+        }
+
+        internal System.Windows.Forms.Screen? GetGazeScreen()
+        {
+            lock (_monitorLock)
+            {
+                RefreshGazeMonitor();
+                return _gazeScreen;
+            }
+        }
+
+        private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatch(() =>
+        {
+            if (!_disposed) RefreshGazeMonitor(force: true);
+        });
+
+        private void RefreshGazeMonitor(bool force = false)
+        {
+            lock (_monitorLock)
+            {
+                try
                 {
-                    if (string.Equals(screen.DeviceName, name, StringComparison.OrdinalIgnoreCase))
-                        return screen;
+                    var screens = System.Windows.Forms.Screen.AllScreens;
+                    var name = Calibration?.MonitorBounds?.DeviceName;
+                    bool sameName = string.Equals(name, _gazeMonitorName, StringComparison.OrdinalIgnoreCase);
+                    bool sameScreens = screens.Length == _gazeScreens.Length;
+                    for (int i = 0; sameScreens && i < screens.Length; i++)
+                        sameScreens = screens[i].DeviceName == _gazeScreens[i].DeviceName
+                            && screens[i].Bounds == _gazeScreens[i].Bounds
+                            && screens[i].Primary == _gazeScreens[i].Primary;
+                    if (!force && sameName && sameScreens) return;
+
+                    var choice = WebcamMonitorRule.Select(name, screens.Select(s => s.DeviceName).ToArray(),
+                        Array.FindIndex(screens, s => s.Primary));
+                    if (sameName && _gazeMonitorFallback && !choice.TemporaryFallback)
+                        App.Logger?.Information("WebcamTrackingService: calibrated monitor {Name} returned", name);
+                    // Runtime-only resolution. Never overwrite the saved monitor or calibration geometry.
+                    _gazeScreens = screens;
+                    _gazeMonitorName = name;
+                    _gazeMonitorFallback = choice.TemporaryFallback;
+                    _gazeScreen = choice.Index >= 0 ? screens[choice.Index] : null;
+                    Interlocked.Increment(ref _gazeMonitorRevision);
+                }
+                catch (Exception ex)
+                {
+                    App.Logger?.Warning(ex, "WebcamTrackingService: monitor enumeration failed");
                 }
             }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning(ex, "WebcamTrackingService.GetCalibratedScreen: enumeration failed");
-            }
-            return null;
         }
 
         /// <summary>
@@ -945,6 +993,7 @@ namespace ConditioningControlPanel.Services
         {
             App.Logger?.Information("WebcamTrackingService: constructed");
             Calibration = WebcamCalibrationData.Load();
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         }
 
         /// <summary>
@@ -1264,6 +1313,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_disposed) return;
             _disposed = true;
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             try { Stop(); } catch (Exception ex) { App.Logger?.Warning(ex, "WebcamTrackingService.Dispose: Stop() threw"); }
             App.Logger?.Information("WebcamTrackingService: disposed");
         }
@@ -2462,7 +2512,12 @@ namespace ConditioningControlPanel.Services
                 // instead of an obvious magnet snap.
                 p = ShapeCursorMotion(p);
 
-                Dispatch(() => OnGazeMove?.Invoke(p));
+                Dispatch(() =>
+                {
+                    // Also catches a changed screen set before the display event reaches this dispatcher.
+                    RefreshGazeMonitor();
+                    OnGazeMove?.Invoke(p);
+                });
                 UpdateLongStareHeuristic(p);
             }
         }
