@@ -125,6 +125,24 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         public static bool IsActive => _host != null;
 
+        /// <summary>True while the game window is in front and can keep Escape as its pause.</summary>
+        public static bool IsInFront => _host?.IsForeground == true;
+
+        /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+        public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+        /// <summary>Hand the page a kept Escape after PanicPolicy.KeptEscapeGoesTo allows it,
+        /// then return keyboard focus so the pause card works without another click.</summary>
+        public static void PostKeptEscape()
+        {
+            try
+            {
+                _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+                _host?.FocusWeb();
+            }
+            catch (Exception ex) { App.Logger?.Debug("GoonHost: kept Escape post failed: {E}", ex.Message); }
+        }
+
         /// <summary>The join code of the room this window is hosting while nobody has sat down
         /// yet, else null. The page reports it (<c>room-code</c>); the friends drawer sends it.</summary>
         public static string? RoomCode => _roomCode;
