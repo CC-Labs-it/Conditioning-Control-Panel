@@ -106,6 +106,24 @@ internal static class ArcademyHostService
 
     public static bool IsActive => _host != null;
 
+    /// <summary>True while the game window is in front and can keep Escape as its pause.</summary>
+    public static bool IsInFront => _host?.IsForeground == true;
+
+    /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+    public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+    /// <summary>Hand the page a kept Escape after PanicPolicy.KeptEscapeGoesTo allows it,
+    /// then return keyboard focus so the pause card works without another click.</summary>
+    public static void PostKeptEscape()
+    {
+        try
+        {
+            _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+            _host?.FocusWeb();
+        }
+        catch (Exception ex) { App.Logger?.Debug("ArcademyHost: kept Escape post failed: {E}", ex.Message); }
+    }
+
     /// <summary>The page's LAST boot attempt failed: it reported <c>boot-error</c>, or the host's
     /// own progress deadline fired. Entry points read this to warn before sending someone back
     /// through a door that just failed on this machine.

@@ -1515,7 +1515,7 @@ namespace ConditioningControlPanel
             Services.FirstShow.FirstShowService.Open(this);
         }
 
-        /// <summary>When Racing Thoughts last kept an Escape as its pause; see <see cref="TryRacePauseOnEscape"/>.</summary>
+        /// <summary>When a game last kept an Escape as its pause; see <see cref="TryRacePauseOnEscape"/>.</summary>
         private DateTime? _lastRaceEscapeClaimUtc;
 
         /// <summary>
@@ -1524,12 +1524,8 @@ namespace ConditioningControlPanel
         /// the game under it. Every condition is in <see cref="Services.Safety.PanicPolicy.GameClaimsEscapeAsPause"/>,
         /// including the one that matters most: a second Escape within 2 s is a full panic.
         ///
-        /// <para>Piece by Piece rides the same rule (owner, 2026-09-29): without it the first Escape of a
-        /// chess game closed the board, so its own pause card could never be reached. The board's pause
-        /// goes quiet at once (ui/pause-hush.js) and an Escape on the pause card leaves.</para>
-        ///
-        /// <para>Breakout rides it too (tester report, 2026-09-30: Escape closed the whole game window).
-        /// The first Escape pauses it; an Escape on its pause card leaves.</para>
+        /// <para>Piece by Piece, Breakout, Down the Rabbit Hole, Arcademy, Goon, the Back Room and
+        /// Intake share this rule: Escape only pauses a game. Leaving is a pause-card button.</para>
         /// </summary>
         private bool TryRacePauseOnEscape()
         {
@@ -1541,16 +1537,25 @@ namespace ConditioningControlPanel
                 bool breakoutInFront = Services.BackRoom.BackRoomHostService.IsBreakoutInFront;
                 // Down the Rabbit Hole rides it too (owner, 2026-10-12: Escape only pauses the game).
                 bool dtrhInFront = Services.Chaos.DtrhHostService.IsInFront;
+                bool arcademyInFront = Services.Arcademy.ArcademyHostService.IsInFront;
+                bool goonInFront = Services.GoonGame.GoonHostService.IsInFront;
+                bool roomInFront = Services.BackRoom.BackRoomHostService.IsRoomInFront;
+                bool intakeInFront = Services.Quiz.IntakeHostService.IsInFront;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
-                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront,
+                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
+                        || arcademyInFront || goonInFront || roomInFront || intakeInFront,
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
                     nowUtc: now);
                 if (!claim) { _lastRaceEscapeClaimUtc = null; return false; }
                 _lastRaceEscapeClaimUtc = now;
-                VideoDiag.Log("PANIC", $"Escape kept by {(raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece" : breakoutInFront ? "Breakout" : "Down the Rabbit Hole")} as its pause (again within 2 s = full panic)");
+                var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
+                    : breakoutInFront ? "Breakout" : dtrhInFront ? "Down the Rabbit Hole"
+                    : arcademyInFront ? "Arcademy" : goonInFront ? "Goon"
+                    : roomInFront ? "Back Room" : "Intake";
+                VideoDiag.Log("PANIC", $"Escape kept by {gameName} as its pause (again within 2 s = full panic)");
                 // Each game pauses on its own keydown, which never comes while its WebView2 is out of
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
                 // when the real key reached it as well (host-escape.js).
@@ -1558,7 +1563,11 @@ namespace ConditioningControlPanel
                             raceInFront, raceReady: Services.Chaos.CaucusHostService.IsReady,
                             boardInFront, boardReady: Services.PieceByPiece.PieceByPieceHostService.IsReady,
                             breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady,
-                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady))
+                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady,
+                            arcademyInFront, arcademyReady: Services.Arcademy.ArcademyHostService.IsReady,
+                            goonInFront, goonReady: Services.GoonGame.GoonHostService.IsReady,
+                            roomInFront, roomReady: Services.BackRoom.BackRoomHostService.IsRoomReady,
+                            intakeInFront, intakeReady: Services.Quiz.IntakeHostService.IsReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
@@ -1568,6 +1577,14 @@ namespace ConditioningControlPanel
                         Services.BackRoom.BackRoomHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Dtrh:
                         Services.Chaos.DtrhHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Arcademy:
+                        Services.Arcademy.ArcademyHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Goon:
+                        Services.GoonGame.GoonHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Room:
+                        Services.BackRoom.BackRoomHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Intake:
+                        Services.Quiz.IntakeHostService.PostKeptEscape(); break;
                 }
                 return true;
             }
