@@ -1456,10 +1456,8 @@ namespace ConditioningControlPanel.Models
             set { _strictLockEnabled = value; OnPropertyChanged(); }
         }
 
-        // Video duration filter (seconds). 0 = no limit. Applied when refilling
-        // the video queue; videos outside the [min, max] range are excluded so
-        // a session can be pinned to short clips or long ones without
-        // shuffling content packs.
+        // Video duration limits (seconds). 0 = no limit. The minimum skips shorter
+        // clips in the queue; the maximum cuts playback after that much played time.
         private int _videoMinDurationSeconds = 0;
         public int VideoMinDurationSeconds
         {
@@ -1472,6 +1470,13 @@ namespace ConditioningControlPanel.Models
         {
             get => _videoMaxDurationSeconds;
             set { _videoMaxDurationSeconds = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _videoCutRandomStart = true;
+        public bool VideoCutRandomStart
+        {
+            get => _videoCutRandomStart;
+            set { _videoCutRandomStart = value; OnPropertyChanged(); }
         }
 
         private bool _forceVideoOnLaunch = false;

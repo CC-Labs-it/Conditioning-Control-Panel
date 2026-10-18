@@ -6304,6 +6304,8 @@
   "label_trigger_bubbles_egg_hint": "気をつけて、{0}はこれが大好き…",
   "setting_duration_filter": "動画の長さ",
   "tooltip_duration_filter": "左: これより短い動画は飛ばします。右: これより長い動画はこの長さで止めます。ウェブ動画とフローティング動画も同じです。0は制限なしです。",
+  "setting_video_cut_random_start": "短縮する動画をランダムな位置から開始",
+  "tooltip_video_cut_random_start": "制限時間を超える動画は、先頭ではなくランダムな位置から始まります。",
   "setting_stare_to_click": "見つめてクリック",
   "tooltip_stare_to_click": "ターゲットをクリックするかわりに、1秒ほど見つめます。同じヒット、同じ報酬です。",
   "tooltip_update_to_version_install": "バージョン {0} が出ています。クリックでインストール。",

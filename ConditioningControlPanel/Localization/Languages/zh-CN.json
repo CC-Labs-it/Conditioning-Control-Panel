@@ -6816,6 +6816,8 @@
   "label_trigger_bubbles_egg_hint": "小心，{0} 最喜欢这个了…",
   "setting_duration_filter": "视频时长",
   "tooltip_duration_filter": "左侧：更短的视频会被跳过。右侧：更长的视频播到这个时长就停，网页视频和悬浮视频也一样。0 表示不限。",
+  "setting_video_cut_random_start": "从随机位置播放截短的视频",
+  "tooltip_video_cut_random_start": "超过时长限制的视频会从随机位置开始播放，而不是从头开始。",
   "setting_stare_to_click": "凝视代替点击",
   "tooltip_stare_to_click": "盯着目标大约一秒，不用点击。一样算命中，奖励也一样。",
   "tooltip_update_to_version_install": "版本 {0} 已发布。点击安装。",

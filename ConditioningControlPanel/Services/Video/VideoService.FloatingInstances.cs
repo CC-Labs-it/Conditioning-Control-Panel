@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Services
             public bool Closed { get; set; }
             public long PositionMs { get; set; }
             public long DurationMs { get; set; }
+            public bool CutStartChosen { get; set; }
         }
 
         /// <summary>Oldest first. UI thread only.</summary>
@@ -500,10 +501,17 @@ namespace ConditioningControlPanel.Services
                     break;
                 case "meta":
                     c.DurationMs = (long?)o["durationMs"] ?? 0;
+                    if (!c.CutStartChosen && c.DurationMs > 0)
+                    {
+                        c.CutStartChosen = true;
+                        var offset = App.Settings?.Current?.VideoCutRandomStart == true
+                            ? VideoLengthCap.StartOffsetMs(App.Settings.Current.VideoMaxDurationSeconds, c.DurationMs, _random) : 0;
+                        if (offset > 0) PostAfterPageMessage(() => { if (!c.Closed) c.Window.Post(new { type = "seek", ms = offset }); });
+                    }
                     RenewFloatingQueueTimeout();
                     break;
                 case "time":
-                    c.PositionMs = Math.Max(c.PositionMs, (long?)o["ms"] ?? 0);
+                    c.PositionMs = Math.Max(c.PositionMs, (long?)o["playedMs"] ?? 0);
                     // The player's longest-video limit, per window: the run's own cap timer is
                     // off here (it watches one player), so each clip is cut on what it has played.
                     if (VideoLengthCap.Reached(App.Settings?.Current?.VideoMaxDurationSeconds ?? 0,
@@ -560,7 +568,6 @@ namespace ConditioningControlPanel.Services
             {
                 var watchedSec = c.PositionMs / 1000.0;
                 var durationSec = c.DurationMs / 1000.0;
-                if (watchedToEnd && durationSec > watchedSec) watchedSec = durationSec;
                 if (watchedSec >= 1.0)
                 {
                     App.Achievements?.TrackVideoWatched(watchedSec);

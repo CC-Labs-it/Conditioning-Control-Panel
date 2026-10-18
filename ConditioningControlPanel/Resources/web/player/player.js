@@ -454,7 +454,10 @@
     // clip is playing" — that made IsPrimaryMediaPlaying report true one message-hop after
     // the host paused, which broke Deeper's speak-holds. hostPaused covers a host-requested
     // hold; fg.paused also covers a pause the page itself is sitting in. (#874)
-    post({ type: 'time', ms: ms, paused: !!(cur.hostPaused || fg.paused) });
+    // The played ranges exclude seeks and pauses; a random start is not watch time.
+    let played = 0;
+    for (let i = 0; i < fg.played.length; i++) played += fg.played.end(i) - fg.played.start(i);
+    post({ type: 'time', ms: ms, playedMs: Math.round(played * 1000), paused: !!(cur.hostPaused || fg.paused) });
   }
 
   // ---------- ticker: 10 Hz time + stall watchdogs ----------
@@ -839,7 +842,10 @@
     let sec = Math.max(0, n / 1000);
     const d = fg.duration;
     if (Number.isFinite(d) && d > 0) sec = Math.min(sec, Math.max(0, d - 0.05));
-    try { fg.currentTime = sec; } catch (e) { log('seek rejected: ' + e); return; }
+    try { fg.currentTime = sec; } catch (e) {
+      cur.startAtMs = sec * 1000; cur.startApplied = false; // canplay retries early metadata seeks
+      log('seek deferred: ' + e); return;
+    }
     cur.ended = false; // seeking back out of the end re-arms normal reporting
     if (ticker == null) startTicker(); // ...including the ticker the end stopped
     cur.lastProgressAt = performance.now();

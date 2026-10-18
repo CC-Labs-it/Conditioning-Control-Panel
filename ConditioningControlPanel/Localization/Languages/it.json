@@ -6672,6 +6672,8 @@
   "label_trigger_bubbles_egg_hint": "occhio, {0} le adora…",
   "setting_duration_filter": "Durata video",
   "tooltip_duration_filter": "Sinistra: i video più corti vengono saltati. Destra: un video più lungo viene tagliato a questa durata, anche web e fluttuanti. 0 significa nessun limite.",
+  "setting_video_cut_random_start": "Avvia i video tagliati da un punto casuale",
+  "tooltip_video_cut_random_start": "Un clip più lungo del limite parte da un punto casuale invece che dall'inizio.",
   "setting_stare_to_click": "Fissa per cliccare",
   "tooltip_stare_to_click": "Guarda un bersaglio per circa un secondo invece di cliccarlo. Stesso colpo, stessa ricompensa.",
   "tooltip_update_to_version_install": "È uscita la versione {0}. Clicca per installarla.",

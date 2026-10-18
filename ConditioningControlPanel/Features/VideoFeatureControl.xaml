@@ -115,6 +115,19 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_cut_random_start}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{loc:Str setting_video_cut_random_start}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkVideoCutRandomStart" Style="{StaticResource ToggleStyle}"
+                                          VerticalAlignment="Center"
+                                          Checked="ChkVideoCutRandomStart_Changed" Unchecked="ChkVideoCutRandomStart_Changed"/>
+                            </Grid>
+                            <TextBlock Text="{loc:Str tooltip_video_cut_random_start}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 

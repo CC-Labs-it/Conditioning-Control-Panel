@@ -832,6 +832,18 @@ namespace ConditioningControlPanel
                             }
                         }
                         if (video) {
+                            // The host owns eligibility and the random draw; metadata is needed
+                            // before it can choose a start that leaves the entire cut available.
+                            window.__ccpSetCutStart = seconds => {
+                                try { if (seconds > 0) video.currentTime = seconds; } catch (_) {}
+                            };
+                            const reportMetadata = () => {
+                                if (Number.isFinite(video.duration) && video.duration > 0)
+                                    window.chrome.webview.postMessage(JSON.stringify({
+                                        type: 'ccpMedia', state: 'metadata', dur: video.duration }));
+                            };
+                            video.addEventListener('loadedmetadata', reportMetadata, { once: true });
+                            if (video.readyState >= 1) reportMetadata();
                             // NOTE: playback lifecycle (started / duration / ended) is NOT reported
                             // here any more — the always-on reporter injected by BrowserService owns
                             // it, so user-started videos are tracked too. This script is now only
@@ -1139,11 +1151,16 @@ namespace ConditioningControlPanel
 
                 switch (state)
                 {
+                    case "metadata":
+                        if (App.BrowserMedia.TakeoverStartOffsetMs(dur) is long offsetMs)
+                            _ = _browser?.ExecuteScriptAsync("window.__ccpSetCutStart?.("
+                                + (offsetMs / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture) + ");");
+                        break;
                     case "playing":
                         App.BrowserMedia.OnMediaPlaying(dur);
                         break;
                     case "progress":
-                        App.BrowserMedia.OnMediaProgress(pos, dur);
+                        App.BrowserMedia.OnMediaProgress(pos, dur, (double?)o["played"] ?? 0);
                         break;
                     case "stopped":
                         App.BrowserMedia.OnMediaStopped((string?)o["reason"] ?? "page");

@@ -6304,6 +6304,8 @@
   "label_trigger_bubbles_egg_hint": "조심하세요, {0}가 이걸 참 좋아합니다…",
   "setting_duration_filter": "영상 길이",
   "tooltip_duration_filter": "왼쪽: 더 짧은 영상은 건너뜁니다. 오른쪽: 더 긴 영상은 이 길이에서 끊습니다. 웹 영상과 떠 있는 영상도 같습니다. 0은 제한 없음입니다.",
+  "setting_video_cut_random_start": "잘린 영상을 임의의 지점에서 시작",
+  "tooltip_video_cut_random_start": "제한 시간보다 긴 영상은 처음 대신 임의의 지점에서 시작합니다.",
   "setting_stare_to_click": "응시해서 클릭",
   "tooltip_stare_to_click": "표적을 클릭하는 대신 1초쯤 바라보세요. 똑같이 맞은 것으로 치고, 보상도 같습니다.",
   "tooltip_update_to_version_install": "버전 {0}이(가) 나왔습니다. 클릭하면 설치합니다.",

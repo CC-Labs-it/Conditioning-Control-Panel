@@ -6304,6 +6304,8 @@
   "label_trigger_bubbles_egg_hint": "Vorsicht, {0} liebt die…",
   "setting_duration_filter": "Videolänge",
   "tooltip_duration_filter": "Links: kürzere Videos werden übersprungen. Rechts: ein längeres Video wird bei dieser Länge beendet, auch Web- und schwebende Videos. 0 heißt kein Limit.",
+  "setting_video_cut_random_start": "Gekürzte Videos an beliebiger Stelle starten",
+  "tooltip_video_cut_random_start": "Ein Clip über dem Zeitlimit startet an einer zufälligen Stelle statt am Anfang.",
   "setting_stare_to_click": "Ansehen statt klicken",
   "tooltip_stare_to_click": "Sieh ein Ziel etwa eine Sekunde an, statt es anzuklicken. Gleicher Treffer, gleiche Belohnung.",
   "tooltip_update_to_version_install": "Version {0} ist da. Klick, um sie zu installieren.",

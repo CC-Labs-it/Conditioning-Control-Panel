@@ -6304,6 +6304,8 @@
   "label_trigger_bubbles_egg_hint": "attention, {0} adore ça…",
   "setting_duration_filter": "Durée des vidéos",
   "tooltip_duration_filter": "À gauche : les vidéos plus courtes sont ignorées. À droite : une vidéo plus longue est coupée à cette durée, vidéos web et flottantes comprises. 0 veut dire sans limite.",
+  "setting_video_cut_random_start": "Démarrer les vidéos coupées à un point aléatoire",
+  "tooltip_video_cut_random_start": "Un clip plus long que la limite démarre à un point aléatoire au lieu du début.",
   "setting_stare_to_click": "Regarder pour cliquer",
   "tooltip_stare_to_click": "Fixe une cible environ une seconde au lieu de cliquer dessus. Même touche, même récompense.",
   "tooltip_update_to_version_install": "La version {0} est sortie. Cliquez pour l'installer.",

@@ -349,6 +349,12 @@ namespace ConditioningControlPanel.Services
                                 var d = m.duration;
                                 return (isFinite(d) && d > 0) ? d : 0;   // live streams report 0/Infinity
                             }
+                            function playedOf(m) {
+                                var seconds = 0;
+                                for (var i = 0; i < m.played.length; i++)
+                                    seconds += m.played.end(i) - m.played.start(i);
+                                return seconds;
+                            }
                             // Thumbnail hover-previews on HypnoTube are muted, tiny, autoplaying
                             // <video> elements. Treating those as 'the user is watching something'
                             // would suppress the whole app while merely mousing over a grid, so a
@@ -366,8 +372,8 @@ namespace ConditioningControlPanel.Services
                                 beat = setInterval(function() {
                                     if (!active || active.paused || active.ended) return;
                                     post({ type: 'ccpMedia', state: 'progress',
-                                           pos: active.currentTime || 0, dur: durOf(active) });
-                                }, 5000);
+                                           pos: active.currentTime || 0, dur: durOf(active), played: playedOf(active) });
+                                }, 1000);
                             }
                             function stopBeat() {
                                 if (beat) { clearInterval(beat); beat = null; }
