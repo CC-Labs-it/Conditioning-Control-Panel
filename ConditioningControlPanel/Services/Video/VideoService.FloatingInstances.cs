@@ -190,9 +190,20 @@ namespace ConditioningControlPanel.Services
             try { VideoStarted?.Invoke(this, EventArgs.Empty); }
             catch (Exception ex) { App.Logger?.Debug("VideoStarted handler error: {Error}", ex.Message); }
             // The scheduler is normally re-armed only when a video ends. A floating run leaves
-            // room for the next trigger, so it keeps ticking while windows are up.
-            if (_isRunning) ScheduleNext();
+            // room for the next trigger, so it keeps ticking while windows are up, on the shorter
+            // join delay: a full gap was reset by the run's own Cleanup before it ever fired, so
+            // two windows almost never met.
+            if (_isRunning) ScheduleNext(FloatingJoinDelay());
             return true;
+        }
+
+        /// <summary>When the next window may join the open run (MandatoryVideoPresentation.JoinDelaySeconds).
+        /// Null = no run open, or a limit of one: the ordinary full gap.</summary>
+        private double? FloatingJoinDelay()
+        {
+            if (!_floatRunOpen || _floaters.Count == 0) return null;
+            return MandatoryVideoPresentation.JoinDelaySeconds(
+                App.Settings?.Current?.VideosPerHour ?? 1, FloatingLimit(), _random.NextDouble());
         }
 
         /// <summary>The scheduler may fire during a floating run: its trigger lands in

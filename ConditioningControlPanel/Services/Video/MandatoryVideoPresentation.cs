@@ -54,6 +54,25 @@ namespace ConditioningControlPanel.Services.Video
             => up < ClampCount(limit) ? TriggerDecision.Open
                 : testPress ? TriggerDecision.ReplaceOldest : TriggerDecision.Skip;
 
+        /// <summary>Bounds of <see cref="JoinDelaySeconds"/>, before the jitter.</summary>
+        public const double MinJoinSeconds = 30, MaxJoinSeconds = 600;
+
+        /// <summary>
+        /// While floating windows are up with room for one more, the next one comes sooner than a
+        /// fresh video would (owner, 2026-10-18: floating videos should overlap now and then, and
+        /// more often the higher the frequency). A quarter of the picked gap, held between
+        /// <see cref="MinJoinSeconds"/> and <see cref="MaxJoinSeconds"/>, with the scheduler's own
+        /// +-20% jitter: 20 an hour joins after about 45 s, 6 after 2.5 min, 1 after 10 min, so a
+        /// rare video rarely finds another still playing. Null = a limit of one window, where
+        /// nothing can join: the ordinary gap applies. <paramref name="unit"/> is a 0..1 draw.
+        /// </summary>
+        public static double? JoinDelaySeconds(int videosPerHour, int limit, double unit)
+        {
+            if (ClampCount(limit) < 2) return null;
+            var gap = 3600.0 / Math.Max(1, videosPerHour);
+            return Math.Clamp(gap / 4, MinJoinSeconds, MaxJoinSeconds) * (0.8 + Math.Clamp(unit, 0, 1) * 0.4);
+        }
+
         /// <summary>Attention checks belong to a full-screen video only. A floating one has no
         /// targets, no mini-game, no verdict and no replay, on either engine.</summary>
         public static bool AttentionChecksApply(bool attentionSetting, bool floating) => attentionSetting && !floating;

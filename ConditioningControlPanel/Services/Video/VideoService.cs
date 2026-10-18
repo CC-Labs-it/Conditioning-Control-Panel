@@ -3044,7 +3044,7 @@ namespace ConditioningControlPanel.Services
                         {
                             TriggerVideo();
                             // Nothing ends here to re-arm the scheduler, so the tick does it.
-                            if (duringFloatingRun && _isRunning) ScheduleNext();
+                            if (duringFloatingRun && _isRunning) ScheduleNext(FloatingJoinDelay());
                         }
                     }
                     // Cleanup() will call ScheduleNext() when video ends
