@@ -60,8 +60,9 @@ internal sealed class ScrolllerSource : IFeedSource
     private const int MaxSourceWidth = 1920;          // don't stream 4K into a feed tile
     // Clips cap at 720p by the SHORT side (portrait and landscape alike). Scrolller's
     // bandwidth, not ours: they asked (2026-10-16). HD posts usually carry only 1080p +
-    // 480p, so in practice an HD clip now plays its 480p rendition.
-    private const int MaxClipShortSide = 720;
+    // 480p, so in practice an HD clip now plays its 480p rendition. The server can lower it
+    // further (GET /config/scrolller, ScrolllerPolicy), never raise it.
+    private static int MaxClipShortSide => ScrolllerPolicy.MaxClipShortSide;
     private const int MaxPosterWidth = 960;           // a poster is a placeholder, not the media
     private const int MaxSmallClipWidth = 640;        // Entry.SmallUrl: a card-sized clip (the web port's cap)
     private const int MaxSmallStillWidth = 1280;      // Entry.SmallUrl: a card-sized still (idem)
@@ -384,6 +385,9 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     /// "data" object, or null on transport/HTTP/GraphQL-error failure (logged).</summary>
     private static async Task<JObject?> RequestGraphQlAsync(string query, JObject variables, CancellationToken ct)
     {
+        // Licence switch off: answer exactly like a failed request, so every caller falls back
+        // the way it already does when the network is down. Nothing leaves the machine.
+        if (!ScrolllerPolicy.Enabled) return null;
         await RequestGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {

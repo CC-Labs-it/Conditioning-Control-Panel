@@ -3890,6 +3890,8 @@ namespace ConditioningControlPanel.Services
                 media.AddOption($":network-caching={RemoteNetworkCachingMs}");
                 // A TCP connection dropped mid-clip is a rebuffer, not the end of the video.
                 media.AddOption(":http-reconnect");
+                // Remote clips are Scrolller's: VLC says who we are, not "VLC/3.x" (licence, 2026-10-18).
+                media.AddOption($":http-user-agent={Fyp.Online.ScrolllerSource.HonestUserAgent}");
             }
             VideoDiag.Log("VIDEO", $"win[{tag}]: Media ctor +{winSw.ElapsedMilliseconds}ms (remote={isRemote})");
             // Secondaries skip audio decoding entirely. Setting Mute=true after Play() opened
@@ -8401,6 +8403,13 @@ namespace ConditioningControlPanel.Services
             int left;
             lock (_remoteLock)
             {
+                // Licence switch off: LibVLC would stream these straight from Scrolller, so the
+                // buffered urls go and selection falls through to the local pools.
+                if (!Fyp.Online.ScrolllerPolicy.Enabled)
+                {
+                    _remoteVideoQueue.Clear();
+                    return null;
+                }
                 if (_remoteVideoQueue.Count > 0) url = _remoteVideoQueue.Dequeue();
                 left = _remoteVideoQueue.Count;
             }

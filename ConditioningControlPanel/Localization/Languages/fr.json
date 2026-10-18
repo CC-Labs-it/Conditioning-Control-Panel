@@ -7027,7 +7027,7 @@
   "launcher_media_src_online_hint": "Diffusé depuis les niches que tu choisis",
   "launcher_media_src_mixed": "Mixte",
   "launcher_media_src_mixed_hint": "Les deux, mélangés selon la part ci-dessous",
-  "label_online_media_credit": "Les images et clips en ligne viennent de Scrolller, fonds d'écran compris.",
+  "label_online_media_credit": "Toutes les images et clips en ligne, fonds d'écran compris.",
   "launcher_media_mixed_share": "{0} % en ligne",
   "launcher_media_niches": "Niches",
   "launcher_media_niches_hint": "Utilisé quand la source est En ligne ou Mixte.",
