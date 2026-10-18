@@ -8401,6 +8401,13 @@ namespace ConditioningControlPanel.Services
             int left;
             lock (_remoteLock)
             {
+                // Licence switch off: LibVLC would stream these straight from Scrolller, so the
+                // buffered urls go and selection falls through to the local pools.
+                if (!Fyp.Online.ScrolllerPolicy.Enabled)
+                {
+                    _remoteVideoQueue.Clear();
+                    return null;
+                }
                 if (_remoteVideoQueue.Count > 0) url = _remoteVideoQueue.Dequeue();
                 left = _remoteVideoQueue.Count;
             }

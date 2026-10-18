@@ -318,6 +318,11 @@ internal sealed class FypOnlineCoordinator
     /// <summary>The full batch result for an explicit media kind.</summary>
     public async Task<FeedBatch> FetchBatchDetailedAsync(FeedMediaKind kind, CancellationToken ct)
     {
+        // Licence switch off (ScrolllerPolicy): the same "offline" every consumer already shows
+        // for a dead network, without striking or cooling a single channel, so the feed comes
+        // straight back when the switch does.
+        if (!ScrolllerPolicy.Enabled) return new FeedBatch(new List<FypAssetManifest.Entry>(), "offline", false, 0);
+
         List<FeedChannelState> order;
         lock (_lock)
         {
@@ -419,6 +424,7 @@ internal sealed class FypOnlineCoordinator
     {
         var clean = SanitizeSub(rawSub);
         if (clean == null) return new SubProbe { Ok = false, Error = "invalid" };
+        if (!ScrolllerPolicy.Enabled) return new SubProbe { Ok = false, Error = "offline" };
         return await ProbeSource.ProbeSubAsync(clean, ct).ConfigureAwait(false);
     }
 

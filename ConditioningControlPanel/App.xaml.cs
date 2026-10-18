@@ -1969,6 +1969,10 @@ namespace ConditioningControlPanel
             CleanupStaleTempFiles();
             Services.Fyp.Online.RemoteMediaCache.CleanupStaleTempFiles();
 
+            // The Scrolller licence switch: read now (off the UI thread) and every 30 min. No
+            // answer = the shipped behaviour, so this never holds startup.
+            Services.Fyp.Online.ScrolllerPolicyService.Start();
+
             // Initialize localization (must be after settings, before UI)
             LocalizationManager.Instance.Initialize(Settings?.Current?.Language ?? "en");
 
