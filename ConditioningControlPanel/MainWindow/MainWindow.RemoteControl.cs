@@ -952,7 +952,6 @@ namespace ConditioningControlPanel
         {
             try
             {
-                if (_remoteOverlayBrowserRevealed == reveal) return;
                 _remoteOverlayBrowserRevealed = reveal;
 
                 if (reveal)
@@ -961,7 +960,8 @@ namespace ConditioningControlPanel
                     App.Logger?.Information(
                         "[RemoteControl] Browser un-hidden for a controller video (the remote overlay stays behind the WebView)");
                 }
-                else if (RemoteControlOverlay.Visibility == System.Windows.Visibility.Visible)
+                else if (Services.Browser.RemoteBrowserStopRule.HideBrowser(
+                    RemoteControlOverlay.Visibility == System.Windows.Visibility.Visible, reveal))
                 {
                     // Controller still connected: the overlay needs its airspace back so the
                     // session code is legible again.

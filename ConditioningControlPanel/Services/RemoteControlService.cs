@@ -1399,6 +1399,7 @@ namespace ConditioningControlPanel.Services
 
                         case "stop_video":
                             App.Video?.Stop();
+                            MainWindowRef?.StopBrowserVideoFromRemote();
                             break;
 
                         case "play_hypnotube":

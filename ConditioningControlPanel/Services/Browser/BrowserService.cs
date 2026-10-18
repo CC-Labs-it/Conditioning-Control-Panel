@@ -1400,9 +1400,14 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>
-        /// Exit fullscreen mode in the browser
-        /// </summary>
+        /// <summary>Teardown cannot rely on a disposed/navigating page to emit fullscreen exit.</summary>
+        internal void ClearFullscreenRegistration()
+        {
+            IsFullscreen = false;
+            App.Overlay?.SetFullscreenBrowserActive(this, false);
+        }
+
+        /// <summary>Exit fullscreen mode in the browser.</summary>
         public async Task ExitFullscreenAsync()
         {
             if (_webView?.CoreWebView2 == null) return;
