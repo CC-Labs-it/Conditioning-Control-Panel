@@ -7027,7 +7027,7 @@
   "launcher_media_src_online_hint": "선택한 니치에서 스트리밍",
   "launcher_media_src_mixed": "혼합",
   "launcher_media_src_mixed_hint": "둘 다, 아래 비율로 섞음",
-  "label_online_media_credit": "온라인 이미지와 클립은 Scrolller에서 가져옵니다(배경화면 포함).",
+  "label_online_media_credit": "모든 온라인 이미지와 클립(배경화면 포함).",
   "launcher_media_mixed_share": "온라인 {0}%",
   "launcher_media_niches": "니치",
   "launcher_media_niches_hint": "소스가 온라인 또는 혼합일 때 사용됩니다.",

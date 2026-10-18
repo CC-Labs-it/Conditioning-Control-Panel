@@ -103,7 +103,7 @@
                         <TextBlock x:Name="SourceHint" Style="{StaticResource MediaCopy}" FontSize="13" Margin="0,2,0,0"/>
                         <!-- credit for the online source (owner, 2026-10-17); shown while online is in play -->
                         <TextBlock x:Name="ScrolllerCreditLine" Style="{StaticResource MediaCopy}" FontSize="12" Opacity="0.75"
-                                   Margin="0,4,0,0" Visibility="Collapsed"><Run Text="{loc:Str label_online_media_credit}"/><Run Text=" "/><Hyperlink Click="ScrolllerLink_Click" Foreground="{DynamicResource TextSecondaryBrush}">scrolller.com</Hyperlink></TextBlock>
+                                   Margin="0,4,0,0" Visibility="Collapsed"><Hyperlink Click="ScrolllerLink_Click" Foreground="{DynamicResource TextSecondaryBrush}">Media from Scrolller</Hyperlink><Run Text=". "/><Run Text="{loc:Str label_online_media_credit}"/></TextBlock>
 
                         <!-- mixed only: how much of the pool is online -->
                         <Grid x:Name="RatioRow" Margin="0,14,0,0" Visibility="Collapsed">

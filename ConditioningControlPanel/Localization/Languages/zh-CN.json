@@ -7539,7 +7539,7 @@
   "launcher_media_src_online_hint": "从你选择的细分类别流式获取",
   "launcher_media_src_mixed": "混合",
   "launcher_media_src_mixed_hint": "两者兼有，按下方比例混合",
-  "label_online_media_credit": "在线图片和短片来自 Scrolller，壁纸也包括在内。",
+  "label_online_media_credit": "所有在线图片和短片，壁纸也包括在内。",
   "launcher_media_mixed_share": "在线 {0}%",
   "launcher_media_niches": "细分类别",
   "launcher_media_niches_hint": "当来源为在线或混合时使用。",
