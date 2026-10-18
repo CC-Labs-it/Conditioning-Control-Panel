@@ -3890,6 +3890,8 @@ namespace ConditioningControlPanel.Services
                 media.AddOption($":network-caching={RemoteNetworkCachingMs}");
                 // A TCP connection dropped mid-clip is a rebuffer, not the end of the video.
                 media.AddOption(":http-reconnect");
+                // Remote clips are Scrolller's: VLC says who we are, not "VLC/3.x" (licence, 2026-10-18).
+                media.AddOption($":http-user-agent={Fyp.Online.ScrolllerSource.HonestUserAgent}");
             }
             VideoDiag.Log("VIDEO", $"win[{tag}]: Media ctor +{winSw.ElapsedMilliseconds}ms (remote={isRemote})");
             // Secondaries skip audio decoding entirely. Setting Mute=true after Play() opened
