@@ -62,6 +62,8 @@ namespace ConditioningControlPanel.Features
                 TxtVideoMinDur.Text = FormatDuration(s.VideoMinDurationSeconds);
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
+                ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
+                ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
                 ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
@@ -218,6 +220,7 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.StrictLockEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoMaxDurationSeconds) ||
+                e.PropertyName == nameof(Models.AppSettings.VideoCutRandomStart) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionChecksEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionDensity) ||
                 e.PropertyName == nameof(Models.AppSettings.RandomizeAttentionTargets) ||
@@ -274,6 +277,15 @@ namespace ConditioningControlPanel.Features
                 SliderVideoMinDur.Value = v;
                 TxtVideoMinDur.Text = FormatDuration(v);
             }
+            App.Settings?.Save();
+        }
+
+        private void ChkVideoCutRandomStart_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.VideoCutRandomStart = ChkVideoCutRandomStart.IsChecked ?? true;
             App.Settings?.Save();
         }
 

@@ -477,6 +477,15 @@ namespace ConditioningControlPanel.Services
             // durationchange) - last one wins, so the guillotine is simply re-armed.
             StartSafetyTimer(_duration);
 
+            if (!_browserSegmentSeeked && !SegmentArmed)
+            {
+                _browserSegmentSeeked = true;
+                var offset = App.Settings?.Current?.VideoCutRandomStart == true
+                    ? Video.VideoLengthCap.StartOffsetMs(App.Settings.Current.VideoMaxDurationSeconds, durationMs, _random) : 0;
+                var cutRun = _videoRunId;
+                if (offset > 0) PostAfterPageMessage(() => { if (cutRun == _videoRunId && BrowserEventIsCurrent()) Browser.Seek(offset); });
+            }
+
             // Free duration metadata: the selection-time min/max filter improves with every browser
             // play, with no LibVLC parse (and no preparse crash surface, #750-#753).
             try
@@ -564,7 +573,7 @@ namespace ConditioningControlPanel.Services
             // cached page HTML that predates the field; leave the PausePrimary/PlayPrimary edges
             // to answer, which is the pre-#874 behaviour minus the blind clear.
             if (paused.HasValue) _browserPaused = paused.Value;
-            _lastWatchPositionMs = ms;   // watch-time crediting (#447), same field the LibVLC path feeds
+            _lastWatchPositionMs = Browser.PlayedMs;
             try { PrimaryPlaybackTimeMsChanged?.Invoke(ms); }
             catch (Exception ex) { App.Logger?.Debug("PrimaryPlaybackTimeMsChanged handler error: {Error}", ex.Message); }
         }

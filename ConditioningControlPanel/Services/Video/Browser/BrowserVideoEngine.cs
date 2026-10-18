@@ -242,6 +242,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// null = the page did not report it (older cached page HTML); leave the host's own pause
         /// bookkeeping alone in that case.</summary>
         public event Action<long, bool?>? Time;
+        public long PlayedMs { get; private set; }
 
         /// <summary>Natural end of the clip.</summary>
         public event Action? Ended;
@@ -454,6 +455,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
             StopSession();   // a previous session must never outlive its video
 
             var session = ++_sessionId;
+            PlayedMs = 0;
             _failedRaised = false;
             _isHostPaused = req.IsHostPaused;
             _isHostStrict = req.IsHostStrict;
@@ -748,6 +750,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                         Playing?.Invoke();
                         break;
                     case "time":
+                        PlayedMs = (long?)o["playedMs"] ?? 0;
                         // `paused` is absent on older cached page HTML — pass null through rather than
                         // defaulting to false, which would be the blind-clear this fixed (#874).
                         Time?.Invoke((long?)o["ms"] ?? 0, (bool?)o["paused"]);

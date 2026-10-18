@@ -1,3 +1,4 @@
+using System;
 using ConditioningControlPanel.Services.Browser;
 
 namespace ConditioningControlPanel.Services.Video;
@@ -16,6 +17,13 @@ public static class VideoLengthCap
 {
     /// <summary>Whether a limit is set at all. 0 or less means the player set none.</summary>
     public static bool IsSet(int maxSeconds) => maxSeconds > 0;
+
+    /// <summary>Uniform millisecond offset leaving a whole capped slice. Unknown lengths start at 0.</summary>
+    public static long StartOffsetMs(int maxSeconds, long durationMs, Random random)
+    {
+        if (!IsSet(maxSeconds) || durationMs <= maxSeconds * 1000L) return 0;
+        return random.NextInt64(durationMs - maxSeconds * 1000L + 1);
+    }
 
     /// <summary>
     /// A window that knows how much of its clip has played (floating windows): true once it has

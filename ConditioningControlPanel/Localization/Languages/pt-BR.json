@@ -6304,6 +6304,8 @@
   "label_trigger_bubbles_egg_hint": "cuidado, {0} adora essas…",
   "setting_duration_filter": "Duração do vídeo",
   "tooltip_duration_filter": "Esquerda: vídeos mais curtos são pulados. Direita: um vídeo mais longo é cortado nessa duração, os da web e os flutuantes também. 0 quer dizer sem limite.",
+  "setting_video_cut_random_start": "Iniciar vídeos cortados em qualquer ponto",
+  "tooltip_video_cut_random_start": "Um clipe mais longo que o limite começa em um ponto aleatório em vez do início.",
   "setting_stare_to_click": "Olhar para clicar",
   "tooltip_stare_to_click": "Olhe para um alvo por cerca de um segundo em vez de clicar. Mesmo acerto, mesma recompensa.",
   "tooltip_update_to_version_install": "A versão {0} saiu. Clique para instalar.",

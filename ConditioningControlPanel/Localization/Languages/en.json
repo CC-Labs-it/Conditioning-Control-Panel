@@ -6924,6 +6924,8 @@
   "label_trigger_bubbles_egg_hint": "careful, {0} loves these…",
   "setting_duration_filter": "Video length",
   "tooltip_duration_filter": "Left: shorter videos are skipped. Right: a longer video is cut at this length, web and floating ones too. 0 means no limit.",
+  "setting_video_cut_random_start": "Start cut videos anywhere",
+  "tooltip_video_cut_random_start": "A clip longer than the limit starts at a random point instead of the beginning.",
   "setting_stare_to_click": "Stare to click",
   "tooltip_stare_to_click": "Look at a target for about a second instead of clicking it. Same hit, same reward.",
   "tooltip_update_to_version_install": "Version {0} is out. Click to install it.",

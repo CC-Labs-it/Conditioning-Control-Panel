@@ -59,11 +59,11 @@ namespace ConditioningControlPanel.Services
         private DispatcherTimer? _attentionTimer;
         private DispatcherTimer? _safetyTimer;
         private DispatcherTimer? _fallbackSafetyTimer;
-        // Hard wall-clock cap that force-ends a video once it has played for VideoMaxDurationSeconds.
-        // The selection-time duration filter (RefillQueues) is best-effort — it lets a video with no
-        // cached duration through and warms the cache in the background — so a long clip can slip past
-        // the user's max on a cold cache (#584). This cap guarantees the max is never exceeded on screen.
+        // Cut on playback time, excluding the initial random seek and any pause or buffering.
         private DispatcherTimer? _maxLenCapTimer;
+        private long _cutStartMs;
+        private Video.VideoPlaybackClock? _cutClock;
+        private MediaElement? _fallbackMedia;
 
         // ---- UI-thread wedge watchdog (freeze/lockout rescue, #529/#532 storm) ----
         // The _safetyTimer/_fallbackSafetyTimer above are DispatcherTimers: dead weight the moment
@@ -624,6 +624,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public void SeekPrimary(long ms)
         {
+            _cutClock?.ResetPosition();
             // Mirror the seek to EVERY screen's player, not just the primary — otherwise a Deeper
             // blink/rewind ("pull backward") rewinds the primary monitor while the secondary clone
             // keeps playing, so the two screens desync (#527). Only the primary raises events, but
@@ -2842,7 +2843,7 @@ namespace ConditioningControlPanel.Services
 
                 mediaPlayer.TimeChanged += (s, e) =>
                 {
-                    _lastWatchPositionMs = e.Time; // track watched position for quest crediting (#447)
+                    if (_cutClock == null) _lastWatchPositionMs = e.Time;
                     try { PrimaryPlaybackTimeMsChanged?.Invoke(e.Time); }
                     catch (Exception ex) { App.Logger?.Debug("PrimaryPlaybackTimeMsChanged handler error: {Error}", ex.Message); }
                 };
@@ -3271,11 +3272,8 @@ namespace ConditioningControlPanel.Services
                 // once video duration is known.
                 StartFallbackSafetyTimer();
 
-                // Enforce the user's max video-length cap (#584). This is independent of the safety
-                // timers (which key off the file's own duration, not the user's cap) and of the
-                // selection filter (best-effort, cold-cache bypass), so it holds even for a long clip
-                // that slipped past selection. Wall-clock from playback start; a few seconds of LibVLC
-                // startup latency before frames roll is negligible against a minutes-long cap.
+                // The user cap counts playback after the initial seek. Safety timers remain
+                // separate backstops for a missing duration or a player that stops responding.
                 StartMaxLengthCapTimer();
                 VideoDiag.Log("VIDEO", $"safety + max-length timers armed +{showSw.ElapsedMilliseconds}ms");
 
@@ -3357,6 +3355,7 @@ namespace ConditioningControlPanel.Services
                         {
                             // Fallback to MediaElement (requires Windows codecs)
                             var (primaryWin, primaryMedia) = CreateMediaElementVideoWindow(path, primary, strict);
+                            _fallbackMedia = primaryMedia;
                             _windows.Add(primaryWin);
 
                             if (App.Settings.Current.DualMonitorEnabled)
@@ -3557,7 +3556,7 @@ namespace ConditioningControlPanel.Services
 
                 mediaPlayer.TimeChanged += (s, e) =>
                 {
-                    _lastWatchPositionMs = e.Time; // track watched position for quest crediting (#447)
+                    if (_cutClock == null) _lastWatchPositionMs = e.Time;
                     try { PrimaryPlaybackTimeMsChanged?.Invoke(e.Time); }
                     catch (Exception ex) { App.Logger?.Debug("PrimaryPlaybackTimeMsChanged handler error: {Error}", ex.Message); }
                 };
@@ -3600,6 +3599,8 @@ namespace ConditioningControlPanel.Services
                                             {
                                                 if (_videoPlaying && mediaPlayer.IsPlaying && mediaPlayer.Time < startMs - 1000)
                                                 {
+                                                    _cutStartMs = startMs;
+                                                    _cutClock?.ResetPosition();
                                                     mediaPlayer.Time = startMs;
                                                     App.Logger?.Information("VideoService: random segment — seeking to {Start}s of {Len}s",
                                                         startMs / 1000, e.Length / 1000);
@@ -5322,6 +5323,13 @@ namespace ConditioningControlPanel.Services
                 if (mediaElement.NaturalDuration.HasTimeSpan)
                 {
                     _duration = mediaElement.NaturalDuration.TimeSpan.TotalSeconds;
+                    if (_maxLenCapTimer != null && App.Settings?.Current?.VideoCutRandomStart == true)
+                    {
+                        _cutStartMs = Video.VideoLengthCap.StartOffsetMs(App.Settings.Current.VideoMaxDurationSeconds,
+                            (long)(_duration * 1000), _random);
+                        mediaElement.Position = TimeSpan.FromMilliseconds(_cutStartMs);
+                        _cutClock?.ResetPosition();
+                    }
                     StartSafetyTimer(_duration);
                 }
             };
@@ -6154,7 +6162,7 @@ namespace ConditioningControlPanel.Services
             if (noFrameRendered)
                 VideoDiag.Log("VIDEO", "no frame ever rendered - crediting 0s watched (skipping the full-duration seed)");
             else if (_lastWatchPositionMs <= 0 && _duration > 0)
-                _lastWatchPositionMs = _duration * 1000.0;
+                _lastWatchPositionMs = Math.Max(0, _duration * 1000.0 - _cutStartMs);
 
             Cleanup(naturalEnd: !noFrameRendered);
         }
@@ -6910,26 +6918,54 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// Arms the user's max video-length cap (#584). When VideoMaxDurationSeconds &gt; 0, force-ends the
-        /// current video once it has played that many wall-clock seconds, regardless of the file's real
-        /// duration — the selection-time filter only best-effort excludes long files (cold-cache bypass),
-        /// so this is what actually guarantees the on-screen video never runs past the user's limit.
-        /// One-shot; disarmed on Cleanup. No-op when no cap is set.
+        /// Cuts after the allowed playback time, starting the allowance at the chosen offset.
+        /// Unknown-length clips still cut. Pauses and buffering never consume the allowance.
         /// </summary>
         private void StartMaxLengthCapTimer()
         {
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
 
+            _cutStartMs = 0;
+
             var maxSec = App.Settings?.Current?.VideoMaxDurationSeconds ?? 0;
+            _cutClock = maxSec > 0 ? new Video.VideoPlaybackClock() : null;
             if (maxSec <= 0) return;
 
             var capRun = _videoRunId;
-            var capTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(maxSec) };
+            bool startChosen = false;
+            var sought = new HashSet<LibVLCSharp.Shared.MediaPlayer>();
+            var capTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _maxLenCapTimer = capTimer;
             _maxLenCapTimer.Tick += (s, e) =>
             {
                 if (IsStaleGuardTick(capRun, _videoRunId)) { capTimer.Stop(); return; }
+                if (!_browserActive && !startChosen && _primaryMediaPlayer is { IsPlaying: true, IsSeekable: true } player && player.Length > 0)
+                {
+                    startChosen = true;
+                    if (!SegmentArmed && App.Settings?.Current?.VideoCutRandomStart == true)
+                    {
+                        _cutStartMs = Video.VideoLengthCap.StartOffsetMs(maxSec, player.Length, _random);
+                    }
+                }
+                // A slow mirror gets the same slice as soon as its decoder can seek.
+                if (!_browserActive && _cutStartMs > 0 && !SegmentArmed)
+                    foreach (var mirror in SnapshotPlayers())
+                        if (!sought.Contains(mirror) && mirror.IsPlaying && mirror.IsSeekable)
+                        {
+                            mirror.Time = _cutStartMs + (_cutClock?.PlayedMs ?? 0);
+                            sought.Add(mirror);
+                            if (ReferenceEquals(mirror, _primaryMediaPlayer)) _cutClock?.ResetPosition();
+                        }
+                if (!_browserActive)
+                {
+                    _cutClock?.Observe(_fallbackMedia != null ? (long)_fallbackMedia.Position.TotalMilliseconds
+                        : GetCurrentPlaybackTimeMs(), Environment.TickCount64);
+                    _lastWatchPositionMs = _cutClock?.PlayedMs ?? 0;
+                }
+                var playedMs = _browserActive ? Browser.PlayedMs
+                    : _cutClock?.PlayedMs ?? 0;
+                if (!Video.VideoLengthCap.Reached(maxSec, playedMs)) return;
                 _maxLenCapTimer?.Stop();
                 _maxLenCapTimer = null;
                 if (_videoPlaying)
@@ -7561,6 +7597,8 @@ namespace ConditioningControlPanel.Services
             {
                 _lastWatchPositionMs = 0;
                 _creditedWatchSeconds = 0;
+                _cutStartMs = 0;
+                _cutClock = null;
             }
         }
 
@@ -7719,6 +7757,7 @@ namespace ConditioningControlPanel.Services
                 // engine read sees null rather than a half-disposed handle.
                 _primaryMediaPlayer = null;
                 _primaryVideoWindow = null;
+                _fallbackMedia = null;
                 // The enhancement is torn down with the video; clear the driving flag so a later
                 // non-enhanced video gets the normal duration guillotine even if the bridge's
                 // Unbind races the teardown (panic/CloseAll doesn't raise VideoEnded). (#536)
@@ -8598,29 +8637,12 @@ namespace ConditioningControlPanel.Services
             }
             keptEnabled = files.Count;
 
-            // Duration filter (Phase 5). Best-effort: videos with no cached
-            // duration are included and parsed lazily — they'll get filtered
-            // correctly on the next refill once the cache is warm. We never
-            // block playback on a cache miss, so cold runs aren't penalized.
-            //
-            // Remote clips are deliberately NOT here: `files` is the local walk, and putting a
-            // CDN URL through MetadataCache would mean a network parse per candidate per refill.
-            // The user's MAXIMUM still holds on screen (StartMaxLengthCapTimer is wall-clock, not
-            // metadata), but their minimum does not apply to remote clips. See the Phase 4 region.
-            //
-            // CONTENT-PACK videos are in the same boat, and for the same reason (#584/#581/#484 keep
-            // coming back as "max video length ignored" on a pack clip). They are appended to their
-            // own queue BELOW this filter, and they cannot join it: PackFileEntry carries no duration,
-            // pack media is encrypted, and each play decrypts to a fresh ccp_temp_<GUID> path that
-            // MetadataCache — keyed on path+size+mtime — could never hit. Filtering them at selection
-            // would mean decrypting and parsing every pack candidate on every refill. The wall-clock
-            // StartMaxLengthCapTimer is therefore what enforces the maximum for pack videos, and it is
-            // armed for BOTH engines before the first frame (StartVideoPlayback / StartBrowserVideoPlayback),
-            // so a long pack clip is truncated on screen rather than never picked. Do not "fix" this by
-            // making the queue refill parse packs.
+            // Only the minimum filters local candidates. The maximum cuts playback on every
+            // surface, so warming the cache must never remove a long clip from the slice pool.
+            // Pack/remote candidates are not parsed here; their unknown lengths still obey the cut.
             var minSec = App.Settings?.Current?.VideoMinDurationSeconds ?? 0;
             var maxSec = App.Settings?.Current?.VideoMaxDurationSeconds ?? 0;
-            if ((minSec > 0 || maxSec > 0) && MetadataCache != null)
+            if (minSec > 0 && MetadataCache != null)
             {
                 var beforeDur = files.Count;
                 files = files.Where(f =>
@@ -8634,7 +8656,6 @@ namespace ConditioningControlPanel.Services
                         return true;
                     }
                     if (minSec > 0 && dur.Value < minSec) return false;
-                    if (maxSec > 0 && dur.Value > maxSec) return false;
                     return true;
                 }).ToList();
                 App.Logger?.Debug("VideoService: {Before} -> {After} after duration filter [{Min}s, {Max}s]",

@@ -62,11 +62,13 @@ public sealed class BrowserMediaService
     /// <summary>The player asked for this takeover (a video requested in chat), so their
     /// longest-video limit does not cut it. Set per session by BeginTakeover.</summary>
     private bool _playerAskedFor;
+    private double? _userCapSeconds;
+    private bool _cutStartChosen;
 
     private DispatcherTimer? _heartbeatTimer;
 
     /// <summary>How long we tolerate silence from the page's progress heartbeat once playback has
-    /// actually started. The injected script ticks every 5s, so 20s means four missed ticks —
+    /// actually started. The injected script ticks every second, with 20s of stall tolerance -
     /// long enough to ride out a stall or a slow SPA route change.</summary>
     private const double HeartbeatTimeoutSeconds = 20;
 
@@ -170,6 +172,8 @@ public sealed class BrowserMediaService
             _owner = owner;
             _isTakeover = true;
             _playerAskedFor = playerAskedFor;
+            _userCapSeconds = null;
+            _cutStartChosen = false;
             _holdsQueueSlot = App.InteractionQueue != null;
             _durationSeconds = 0;
             _hasEverPlayed = false;
@@ -198,6 +202,9 @@ public sealed class BrowserMediaService
             _sessionGeneration++;
             _owner = owner;
             _isTakeover = takeover;
+            _playerAskedFor = false;
+            _userCapSeconds = null;
+            _cutStartChosen = false;
             _durationSeconds = 0;
             _hasEverPlayed = false;
             _lastHeartbeatUtc = DateTime.UtcNow;
@@ -224,7 +231,6 @@ public sealed class BrowserMediaService
     {
         bool becamePlaying;
         bool scheduleHardStop = false;
-        double? userCapSeconds = null;
         int gen;
 
         lock (_lock)
@@ -234,7 +240,7 @@ public sealed class BrowserMediaService
             // The player's longest-video limit, armed once at a takeover's first playback and
             // whatever length the page reports, a missing one included (#1438).
             if (!_hasEverPlayed && _isTakeover && !_playerAskedFor)
-                userCapSeconds = Video.VideoLengthCap.BrowserTakeoverSeconds(
+                _userCapSeconds = Video.VideoLengthCap.BrowserTakeoverSeconds(
                     App.Settings?.Current?.VideoMaxDurationSeconds ?? 0, _owner);
             _hasEverPlayed = true;
             _lastHeartbeatUtc = DateTime.UtcNow;
@@ -268,27 +274,41 @@ public sealed class BrowserMediaService
         StartHeartbeatTimer();
         ExtendQueueTimeout();
         if (scheduleHardStop) ScheduleTakeoverHardStop(gen, durationSeconds);
-        if (userCapSeconds is double capSec)
-        {
-            App.Logger?.Information("BrowserMedia: takeover started - the player's longest-video limit cuts it at +{Cap:F0}s", capSec);
-            ScheduleTakeoverStop(gen, TimeSpan.FromSeconds(capSec), "max-video-length");
-        }
         if (becamePlaying) RaisePlayingChanged(true);
     }
 
+    /// <summary>Choose once, after metadata, only for a video the app makes the player watch.</summary>
+    public long? TakeoverStartOffsetMs(double durationSeconds)
+    {
+        lock (_lock)
+        {
+            var settings = App.Settings?.Current;
+            if (!_isTakeover || _playerAskedFor || _cutStartChosen || !IsUsableDuration(durationSeconds)
+                || durationSeconds > long.MaxValue / 1000d || settings?.VideoCutRandomStart != true
+                || Video.VideoLengthCap.BrowserTakeoverSeconds(settings.VideoMaxDurationSeconds, _owner) == null)
+                return null;
+            _cutStartChosen = true;
+            return Video.VideoLengthCap.StartOffsetMs(settings.VideoMaxDurationSeconds,
+                (long)(durationSeconds * 1000), Random.Shared);
+        }
+    }
+
     /// <summary>
-    /// Progress heartbeat (~5s) from the injected script. Doubles as liveness — replacing the old
+    /// Progress heartbeat (~1s) from the injected script. Doubles as liveness - replacing the old
     /// fixed 30s load watchdog, which could not tell "page never played" from "long video still
     /// playing" — and re-measures duration when a site auto-advances to a new clip.
     /// </summary>
-    public void OnMediaProgress(double positionSeconds, double durationSeconds)
+    public void OnMediaProgress(double positionSeconds, double durationSeconds, double playedSeconds = 0)
     {
         bool durationChanged = false;
+        bool cutReached;
         int gen;
         lock (_lock)
         {
             if (!_isPlaying) return;
             _lastHeartbeatUtc = DateTime.UtcNow;
+            cutReached = _isTakeover && _userCapSeconds is double cap
+                && double.IsFinite(playedSeconds) && playedSeconds >= cap;
 
             if (IsUsableDuration(durationSeconds) && Math.Abs(durationSeconds - _durationSeconds) > 1.0)
             {
@@ -298,6 +318,7 @@ public sealed class BrowserMediaService
             gen = _sessionGeneration;
         }
 
+        if (cutReached) { ForceEnd("max-video-length"); return; }
         if (durationChanged)
         {
             ExtendQueueTimeout();
