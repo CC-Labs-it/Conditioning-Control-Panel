@@ -815,9 +815,7 @@ export async function mount(ctx) {
       if(typing || game.snapshot().demoComplete)return;
       if(!menuOpen&&game.snapshot().finale?.phase!=='outro'&&(e.key==='Escape'||e.key.toLowerCase()==='p')){
         e.preventDefault();
-        // Desktop (tester report 2026-09-30): the panel keeps a first Escape as the pause, and an Escape on any
-        // pause card leaves, as in chess (owner call). The web (no panel) keeps Escape as a pause toggle.
-        if(e.key==='Escape'&&paused&&ctx.hostKeepsEscape){back();return;}
+        // Escape pauses or resumes on every host. Leaving is a button, never a key.
         setPaused(!paused);if(paused)el.querySelector('[data-menu="resume"]').focus();else canvas.focus();return;
       }
       if(paused)return;
@@ -829,7 +827,7 @@ export async function mount(ctx) {
         return;                                                // the tiles are buttons: Enter and Space are theirs
       }
       if (menuOpen) {
-        if (e.key === 'Escape') { e.preventDefault(); back(); }
+        if (e.key === 'Escape') { e.preventDefault(); }
         else if ((e.key === 'Enter' || e.key === ' ') &&
           (e.target === ui.play || e.target === document.body || e.target === el)) {
           e.preventDefault(); pressStart();
@@ -854,7 +852,7 @@ export async function mount(ctx) {
     });
     // A blur pauses only when the page is still out of focus a moment later. The desktop panel hands a kept
     // Escape over and gives the game the keyboard back in the same beat, which blurs and refocuses the page at
-    // once; pausing on that blur put the real Escape on a pause card, and Escape there leaves (desk run 2026-09-30).
+    // once; pausing on that blur would let the same Escape resume the game instead of pausing it.
     let blurWait = 0;
     on(window, 'blur', () => {
       if (!moved || blurWait) return;

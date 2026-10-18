@@ -50,8 +50,6 @@ function applyHost(m) {
   hostInit = { ...hostInit, ...m };
   if (m.breakout) ctx.breakout = m.breakout;
   if (m.plans && typeof m.plans === 'object') ctx.plans = m.plans;   // brief C1/C10: the demo card's price, when the host sends it
-  // The desktop's own Breakout window: its panel keeps the first Escape, so Escape on the pause card leaves.
-  if (m.breakoutStandalone) ctx.hostKeepsEscape = true;
   if (m.gates) ctx.gates = m.gates;
   if (m.audio) ctx.audio = m.audio;
   if (m.media) {
