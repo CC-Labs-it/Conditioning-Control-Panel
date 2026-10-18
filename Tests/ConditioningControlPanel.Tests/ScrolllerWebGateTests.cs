@@ -13,6 +13,22 @@ namespace ConditioningControlPanel.Tests;
 /// </summary>
 public class ScrolllerWebGateTests
 {
+    // The gate's filter makes JustDrop's handler see Scrolller requests too: the CCP token goes on
+    // the sign-in request only, judged on the parsed url.
+    [Theory]
+    [InlineData("https://app.cclabs.app/api/auth/desktop-session", true)]
+    [InlineData("https://app.cclabs.app/api/auth/desktop-session?next=%2Fjustdrop", true)]
+    [InlineData("https://api.scrolller.com/admin", false)]
+    [InlineData("https://app.cclabs.app/api/auth/desktop-session-x", false)]
+    [InlineData("https://app.cclabs.app/api/auth/other", false)]
+    [InlineData("https://app.cclabs.app@evil.net/api/auth/desktop-session", false)]
+    [InlineData("https://user@app.cclabs.app/api/auth/desktop-session", false)]
+    [InlineData("http://app.cclabs.app/api/auth/desktop-session", false)]
+    [InlineData("https://app.cclabs.app:8443/api/auth/desktop-session", false)]
+    [InlineData("not a url", false)]
+    public void JustDrop_token_only_rides_the_sign_in_request(string url, bool expected)
+        => Assert.Equal(expected, ConditioningControlPanel.Services.JustDrop.JustDropHostService.IsDesktopSessionRequest(url));
+
     [Theory]
     [InlineData("scrolller.com")]
     [InlineData("api.scrolller.com")]

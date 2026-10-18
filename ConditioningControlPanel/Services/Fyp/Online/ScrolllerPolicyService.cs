@@ -49,6 +49,8 @@ internal static class ScrolllerPolicyService
         if (Interlocked.Exchange(ref _inFlight, 1) != 0) return;
         try
         {
+            // Offline mode promises no external connections at all.
+            if (App.Settings?.Current?.OfflineMode == true) return;
             using var res = await Http.GetAsync($"{BackRoomApi.BaseUrl}/config/scrolller").ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
             {
