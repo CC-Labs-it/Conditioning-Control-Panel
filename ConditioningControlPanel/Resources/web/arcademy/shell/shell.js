@@ -6216,7 +6216,7 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
           const offer = slipOfferButton();
           if (offer) overlay.appendChild(offer);
         }
-        overlay.appendChild(el('p', 'arc-note', 'Hold Esc to leave the Arcademy.'));
+        overlay.appendChild(el('p', 'arc-note', 'Esc resumes. Leave class uses the button.'));
         active.root.appendChild(overlay);
         active.pauseEl = overlay;
       }
@@ -7085,10 +7085,7 @@ export async function createShell({ init, bridge, dom, toast, log } = {}) {
       if (active && active.inSetup && !active.confirmEl) { askLeaveClass(); return true; }
       if (active && !active.paused) { pauseClass(true); return true; }
       if (active && active.paused) {
-        // DECK V: say what it costs on the way past, then go. The rung itself
-        // is unchanged - same condition, same showBoard(), same `true`.
-        announceJeopardy();
-        showBoard();
+        pauseClass(false);
         return true;
       }
       return false;

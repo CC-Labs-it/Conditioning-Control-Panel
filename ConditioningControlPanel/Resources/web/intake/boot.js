@@ -21,6 +21,7 @@
  * ==========================================================================*/
 
 import * as shim from './web-shim.js';
+import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
 import { createAI } from './core/ai.js';
 import { createEngine } from './core/engine.js';
 import { PRODUCT_NAME, Band, BAND_ORDER, themeOf, clamp01, bandIndex } from './core/contracts.js';
@@ -34,6 +35,9 @@ import { pageMark } from './core/scrolllerMark.js';
 // remembered fullscreen and has not opened a menu yet. Import-safe: every DOM
 // touch inside it is guarded, exactly like the handles below.
 import './ui/fullscreen.js';
+
+const hostEscape = createHostEscape(); // Before pause installs its frozen clocks.
+shim.on(HOST_ESCAPE, () => hostEscape.kept());
 
 /* ----------------------------------------------------------------------------
  * DOM handles — guarded so importing this module in node (no `document`) is
