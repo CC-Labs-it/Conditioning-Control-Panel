@@ -56,6 +56,21 @@ internal sealed class ScrolllerLedger
         Used = Used > long.MaxValue - bytes ? long.MaxValue : Used + bytes;
     }
 
+    /// <summary>Two ledgers for one account folded into one: the later day wins (a same day adds
+    /// up), and the earliest first day is kept. For the old machine-wide ledger and for charges
+    /// made while the book file was locked.</summary>
+    public static ScrolllerLedger Merge(ScrolllerLedger a, ScrolllerLedger b)
+    {
+        var first = a.FirstDay == null ? b.FirstDay
+            : b.FirstDay == null ? a.FirstDay
+            : string.CompareOrdinal(a.FirstDay, b.FirstDay) <= 0 ? a.FirstDay : b.FirstDay;
+        var order = string.CompareOrdinal(a.Day, b.Day);
+        if (order == 0)
+            return new ScrolllerLedger(a.Day, a.Used > long.MaxValue - b.Used ? long.MaxValue : a.Used + b.Used, first);
+        var later = order > 0 ? a : b;
+        return new ScrolllerLedger(later.Day, later.Used, first);
+    }
+
     /// <summary>Share used, 0..1. A limit of zero or less reads as fully used.</summary>
     public static double Fraction(long used, long limit) => limit <= 0 ? 1.0 : Math.Clamp((double)used / limit, 0.0, 1.0);
 
@@ -103,8 +118,11 @@ internal static class ScrolllerAllowance
     private static long _free = DefaultFreeBytes, _freeFirst = DefaultFreeFirstDayBytes, _basic = DefaultBasicBytes, _prime = DefaultPrimeBytes;
     private static readonly object Gate = new();
     private static Dictionary<string, ScrolllerLedger>? _book; // every account's ledger, loaded once
+    private static bool _bookUnread;           // the file could not be read (locked): _book is interim, never saved
+    private static long _bookRetryTick;        // Environment.TickCount64 of the next read attempt
     private static bool _legacyAdopted;        // the old machine-wide ledger has found its owner
     private static bool _legacyGone;           // ...and its file is deleted
+    private static long _legacyRetryTick;      // a locked old ledger is tried again after this
     private static ScrolllerLedger? _ledger;   // the current account's entry in _book
     private static string? _ledgerKey;         // whose it is
     private static string? _keyId;             // the raw id _keyHash was made from (in memory only)
@@ -261,6 +279,7 @@ internal static class ScrolllerAllowance
         lock (Gate)
         {
             Look(out var before); // the baseline (and any plan drop since the last look)
+            if (!_legacyAdopted && _ledgerKey != null) AdoptLegacy(_ledgerKey); // signed out claims it here
             Ledger().Charge(bytes, Now());
             Look(out crossed);
             crossed |= before;
@@ -359,7 +378,8 @@ internal static class ScrolllerAllowance
         }
         lock (Gate)
         {
-            _book = null; _legacyAdopted = false; _legacyGone = false;
+            _book = null; _bookUnread = false; _bookRetryTick = 0; _legacyRetryTick = 0;
+            _legacyAdopted = false; _legacyGone = false;
             _ledger = null; _ledgerKey = null; _keyId = null; _keyHash = AnonymousKey;
             SpentAnnounced.Clear();
             _wasSpent = null; _seenDay = null; _seenPlan = null; _seenLimit = -1;
@@ -404,8 +424,8 @@ internal static class ScrolllerAllowance
     private static ScrolllerLedger Ledger()
     {
         var key = CurrentKey();
-        if (_ledger != null && _ledgerKey == key) return _ledger;
-        var book = Book(key);
+        if (_ledger != null && _ledgerKey == key && !_bookUnread) return _ledger;
+        var book = Book();
         if (!book.TryGetValue(key, out var l))
         {
             l = new ScrolllerLedger(ScrolllerLedger.DayOf(Now()), 0);
@@ -417,52 +437,116 @@ internal static class ScrolllerAllowance
         }
         _ledger = l;
         _ledgerKey = key;
-        return l;
+        // A signed-in account claims the old machine-wide ledger the first time it is looked at.
+        // Signed out only claims it with a charge (Charge): a Patreon sign-in later in startup
+        // must not find it already given to the anonymous bucket.
+        if (!_legacyAdopted && key != AnonymousKey) AdoptLegacy(key);
+        return _ledger;
     }
 
-    /// <summary>Under <see cref="Gate"/>: the book, read from disk once. The first read adopts the
-    /// old machine-wide ledger for <paramref name="firstKey"/> (whoever is signed in then), once:
-    /// the book records the adoption and the old file is deleted after the next save (app exit
-    /// always saves; only a crash before the first save leaves it for the next launch).</summary>
-    private static Dictionary<string, ScrolllerLedger> Book(string firstKey)
+    /// <summary>How long a locked book or old ledger waits before the next read. Tests set zero.</summary>
+    internal static TimeSpan ReadRetry = TimeSpan.FromSeconds(5);
+
+    private enum BookRead { Ok, Locked }
+
+    /// <summary>Under <see cref="Gate"/>: the book, read from disk once. A file that cannot be
+    /// READ (OneDrive or an antivirus holding it at launch) leaves an interim book in memory that
+    /// is never saved, and the read is tried again every <see cref="ReadRetry"/>; once it reads,
+    /// what was charged meanwhile is merged in. A file that reads but does not parse is copied
+    /// aside to <c>.bad</c> before anything can overwrite it, and the book starts empty.</summary>
+    private static Dictionary<string, ScrolllerLedger> Book()
     {
-        if (_book != null) return _book;
-        var book = new Dictionary<string, ScrolllerLedger>(StringComparer.Ordinal);
+        if (_book != null && (!_bookUnread || Environment.TickCount64 < _bookRetryTick)) return _book;
+        if (ReadBook(out var loaded, out var adopted) == BookRead.Locked)
+        {
+            _book ??= new Dictionary<string, ScrolllerLedger>(StringComparer.Ordinal);
+            _bookUnread = true;
+            _bookRetryTick = Environment.TickCount64 + (long)ReadRetry.TotalMilliseconds;
+            return _book;
+        }
+        if (_book != null) // the interim book: keep what was charged while the file was locked
+        {
+            foreach (var (k, l) in _book)
+                loaded[k] = loaded.TryGetValue(k, out var disk) ? ScrolllerLedger.Merge(disk, l) : l;
+            _ledger = null; // re-fetched from the merged book by the caller
+            App.Logger?.Information("ScrolllerAllowance: the book read on a retry; merged {N} interim ledgers", _book.Count);
+        }
+        _legacyAdopted = adopted;
+        _book = loaded;
+        _bookUnread = false;
+        return _book;
+    }
+
+    private static BookRead ReadBook(out Dictionary<string, ScrolllerLedger> book, out bool adopted)
+    {
+        book = new Dictionary<string, ScrolllerLedger>(StringComparer.Ordinal);
+        adopted = false;
+        string? path = null, text;
         try
         {
-            var path = LedgerPath();
-            if (path != null && File.Exists(path))
-            {
-                var o = JObject.Parse(File.ReadAllText(path));
-                _legacyAdopted = (bool?)o["legacy_adopted"] ?? false;
-                if (o["accounts"] is JObject accounts)
-                    foreach (var p in accounts.Properties())
-                        if (p.Value is JObject e && Parse(e) is ScrolllerLedger l) book[p.Name] = l;
-            }
+            path = LedgerPath();
+            if (path == null || !File.Exists(path)) return BookRead.Ok;
+            text = File.ReadAllText(path);
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: book unreadable: {E}", ex.Message); }
-
-        if (!_legacyAdopted)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            try
+            App.Logger?.Debug("ScrolllerAllowance: book locked, will retry: {E}", ex.Message);
+            return BookRead.Locked;
+        }
+        catch { return BookRead.Ok; }
+        try
+        {
+            var o = JObject.Parse(text);
+            adopted = (bool?)o["legacy_adopted"] ?? false;
+            if (o["accounts"] is JObject accounts)
+                foreach (var p in accounts.Properties())
+                    if (p.Value is JObject e && Parse(e) is ScrolllerLedger l) book[p.Name] = l;
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Warning("ScrolllerAllowance: book unreadable, kept as .bad: {E}", ex.Message);
+            try { File.Copy(path!, path + ".bad", overwrite: true); } catch { }
+            book.Clear();
+            adopted = false;
+        }
+        return BookRead.Ok;
+    }
+
+    /// <summary>Under <see cref="Gate"/>: gives the old machine-wide ledger to <paramref name="key"/>,
+    /// once (merged with anything that account already has today). A locked file is tried again
+    /// later; a missing or unparseable one counts as decided. Never while the book is interim.</summary>
+    private static void AdoptLegacy(string key)
+    {
+        if (_legacyAdopted || _bookUnread || _book == null || Environment.TickCount64 < _legacyRetryTick) return;
+        try
+        {
+            var legacy = LegacyLedgerPath();
+            if (legacy != null && File.Exists(legacy)
+                && Parse(JObject.Parse(File.ReadAllText(legacy))) is ScrolllerLedger old)
             {
-                var legacy = LegacyLedgerPath();
-                if (legacy != null && File.Exists(legacy)
-                    && Parse(JObject.Parse(File.ReadAllText(legacy))) is ScrolllerLedger old
-                    && !book.ContainsKey(firstKey))
-                {
-                    book[firstKey] = old;
-                    App.Logger?.Information("ScrolllerAllowance: adopted the machine-wide ledger for the {Who} account",
-                        firstKey == AnonymousKey ? "signed-out" : "signed-in");
-                }
+                var mine = _book.TryGetValue(key, out var have) ? ScrolllerLedger.Merge(have, old) : old;
+                _book[key] = mine;
+                if (_ledgerKey == key) _ledger = mine;
+                App.Logger?.Information("ScrolllerAllowance: adopted the machine-wide ledger for the {Who} account",
+                    key == AnonymousKey ? "signed-out" : "signed-in");
             }
-            catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: old ledger unreadable: {E}", ex.Message); }
-            // Decided once, file or not: it never moves to another account. Written with the next
-            // save (a charge, an account switch, app exit), never by a mere read.
+            _legacyAdopted = true; // written with the next save, never by a mere read
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _legacyRetryTick = Environment.TickCount64 + (long)ReadRetry.TotalMilliseconds;
+        }
+        catch (Exception ex)
+        {
+            App.Logger?.Debug("ScrolllerAllowance: old ledger unreadable: {E}", ex.Message);
             _legacyAdopted = true;
         }
-        _book = book;
-        return book;
+    }
+
+    /// <summary>The book key of whoever is signed in now (for per-account dedupe elsewhere).</summary>
+    internal static string AccountKey
+    {
+        get { lock (Gate) return CurrentKey(); }
     }
 
     private static ScrolllerLedger? Parse(JObject o)
@@ -488,6 +572,9 @@ internal static class ScrolllerAllowance
 
     private static int _watchingAccount;
 
+    /// <summary>Where the account switch writes the book: off the calling thread. Tests run it inline.</summary>
+    internal static Action<Action> RunInBackground = a => Task.Run(a);
+
     /// <summary>The signed-in account moved: the meter switches to the new account's ledger (or
     /// the anonymous one), the book is written off the calling thread so the old account's day is
     /// on disk, and <see cref="Changed"/> repaints the meter. Never throws.</summary>
@@ -501,7 +588,7 @@ internal static class ScrolllerAllowance
         }
         if (loaded)
         {
-            try { Task.Run(Flush); }
+            try { RunInBackground(Flush); }
             catch { ScheduleSave(); }
         }
         Raise(_changed);
@@ -544,6 +631,12 @@ internal static class ScrolllerAllowance
                 lock (Gate)
                 {
                     if (_book == null) return;
+                    if (_bookUnread)
+                    {
+                        _bookRetryTick = 0; // one more read now; an interim book never overwrites the file
+                        Book();
+                        if (_bookUnread) return;
+                    }
                     var accounts = new JObject();
                     foreach (var (key, l) in _book)
                         accounts[key] = new JObject { ["day"] = l.Day, ["used"] = l.Used, ["first"] = l.FirstDay };

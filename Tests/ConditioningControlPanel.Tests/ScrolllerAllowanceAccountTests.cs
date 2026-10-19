@@ -46,6 +46,8 @@ public class ScrolllerAllowanceAccountTests : IDisposable
         ScrolllerAllowance.AccountProvider = () => _account;
         ScrolllerAllowance.Now = () => _now;
         ScrolllerAllowance.PlanProvider = () => ScrolllerPlan.Free;
+        ScrolllerAllowance.ReadRetry = TimeSpan.Zero;
+        ScrolllerAllowance.RunInBackground = a => a();   // no stray save from one test into the next
         ScrolllerAllowance.ResetForTests();
     }
 
@@ -62,6 +64,8 @@ public class ScrolllerAllowanceAccountTests : IDisposable
         ScrolllerAllowance.AccountProvider = () => null;
         ScrolllerAllowance.LedgerPath = () => null;
         ScrolllerAllowance.LegacyLedgerPath = () => null;
+        ScrolllerAllowance.ReadRetry = TimeSpan.FromSeconds(5);
+        ScrolllerAllowance.RunInBackground = a => System.Threading.Tasks.Task.Run(a);
         try { Directory.Delete(_dir, recursive: true); } catch { }
     }
 
@@ -159,14 +163,66 @@ public class ScrolllerAllowanceAccountTests : IDisposable
     }
 
     [Fact]
-    public void Signed_out_at_the_first_load_keeps_the_old_ledger_off_every_account()
+    public void A_sign_in_later_in_startup_still_gets_the_old_ledger()
+    {
+        // Patreon sign-in lands after the first look: a read while signed out adopts nothing.
+        File.WriteAllText(LegacyPath, "{\"day\":\"2026-10-19\",\"used\":" + 80 * MB + "}");
+        _account = null;
+        Rig(onDisk: true);
+        Assert.Equal(0, ScrolllerAllowance.UsedToday);
+        SignIn("account-a");
+        Assert.Equal(80 * MB, ScrolllerAllowance.UsedToday);
+        SignIn(null);
+        Assert.Equal(0, ScrolllerAllowance.UsedToday);
+    }
+
+    [Fact]
+    public void Signed_out_claims_the_old_ledger_only_with_a_charge()
     {
         File.WriteAllText(LegacyPath, "{\"day\":\"2026-10-19\",\"used\":" + 80 * MB + "}");
         _account = null;
         Rig(onDisk: true);
-        Assert.Equal(80 * MB, ScrolllerAllowance.UsedToday);
+        ScrolllerAllowance.Charge(MB);
+        Assert.Equal(81 * MB, ScrolllerAllowance.UsedToday);
         SignIn("account-a");
         Assert.Equal(0, ScrolllerAllowance.UsedToday);
+    }
+
+    [Fact]
+    public void A_locked_book_is_retried_and_never_overwritten()
+    {
+        File.WriteAllText(BookPath, "{\"v\":1,\"legacy_adopted\":true,\"accounts\":{\""
+            + ScrolllerAllowance.KeyFor("account-a") + "\":{\"day\":\"2026-10-19\",\"used\":" + 100 * MB + ",\"first\":\"2026-10-01\"}}}");
+        using (new FileStream(BookPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Rig(onDisk: true);                           // OneDrive or an antivirus holds it at launch
+            Assert.Equal(0, ScrolllerAllowance.UsedToday);
+            ScrolllerAllowance.Charge(10 * MB);
+        }
+        Assert.Equal(110 * MB, ScrolllerAllowance.UsedToday);   // read on the retry, the interim charge merged
+        Assert.False(ScrolllerAllowance.IsFirstDay);            // the account's real first day came back
+        ScrolllerAllowance.Flush();
+        Assert.Contains("\"used\":" + 110 * MB, File.ReadAllText(BookPath));
+    }
+
+    [Fact]
+    public void A_book_that_does_not_parse_is_kept_aside_before_any_save()
+    {
+        File.WriteAllText(BookPath, "{not json");
+        Rig(onDisk: true);
+        ScrolllerAllowance.Charge(MB);
+        ScrolllerAllowance.Flush();
+        Assert.Equal("{not json", File.ReadAllText(BookPath + ".bad"));
+        Assert.Contains("\"used\":" + MB, File.ReadAllText(BookPath));
+    }
+
+    [Fact]
+    public void Merging_keeps_the_later_day_adds_a_same_day_and_the_earliest_first_day()
+    {
+        var same = ScrolllerLedger.Merge(new ScrolllerLedger("2026-10-19", 5, "2026-10-10"), new ScrolllerLedger("2026-10-19", 7, "2026-10-02"));
+        Assert.Equal((12L, "2026-10-02"), (same.Used, same.FirstDay));
+        var later = ScrolllerLedger.Merge(new ScrolllerLedger("2026-10-18", 50, null), new ScrolllerLedger("2026-10-19", 7, "2026-10-19"));
+        Assert.Equal(("2026-10-19", 7L, "2026-10-19"), (later.Day, later.Used, later.FirstDay));
     }
 
     [Fact]
