@@ -3189,9 +3189,13 @@ namespace ConditioningControlPanel.Services
             VideoAboutToStart?.Invoke(this, EventArgs.Empty);
             VideoDiag.Log("VIDEO", $"prologue: VideoAboutToStart handlers +{prologueSw.ElapsedMilliseconds}ms");
 
-            // Stop flashes during video
-            App.Flash?.Stop();
-            VideoDiag.Log("VIDEO", $"prologue: Flash.Stop +{prologueSw.ElapsedMilliseconds}ms");
+            // Stop flashes during a FULL-SCREEN video (VideoFlashRule). A floating one, LibVLC route
+            // included, leaves them up: DecidePresentation runs after the pre-roll, so ask the same rule now.
+            if (Video.VideoFlashRule.StopsFlashes(floating: FloatingWanted(strict)))
+            {
+                App.Flash?.Stop();
+                VideoDiag.Log("VIDEO", $"prologue: Flash.Stop +{prologueSw.ElapsedMilliseconds}ms");
+            }
 
             // Duck other apps. Record that we took a duck ref so CloseAll releases exactly one
             // matching Unduck on teardown — otherwise a retry/troll "watch again" loop ducks again
@@ -3248,6 +3252,9 @@ namespace ConditioningControlPanel.Services
             // Full screen or the floating window: one answer per clip, before either engine builds
             // a window. A LibVLC fallback of the same clip keeps the answer it already has.
             if (!forceLibVlc) DecidePresentation(strict);
+            // The prologue asked the flash rule ~1.3 s ago; a full-screen answer here (the floating
+            // switch went off, a lock started) still takes the flashes down (VideoFlashRule).
+            if (!forceLibVlc && Video.VideoFlashRule.StopsFlashes(floating: IsFloating) && App.Flash?.IsRunning == true) App.Flash.Stop();
 
             // ---- hybrid routing (docs/BROWSER_VIDEO_ENGINE_PLAN.md §4) ----
             // The ONLY change to this path. When the browser engine takes the clip it satisfies the
@@ -8241,8 +8248,12 @@ namespace ConditioningControlPanel.Services
 
             if (_isRunning && App.Settings.Current.FlashEnabled)
             {
+                var flashWasRunning = App.Flash?.IsRunning == true;
                 App.Flash?.Start();
                 // Discord presence will be updated by FlashService.Start()
+                // ...except when it was never stopped (a floating video leaves it running): Start
+                // returns early then, so the presence is set here.
+                if (flashWasRunning) App.DiscordRpc?.SetFlashActivity();
             }
             else
             {

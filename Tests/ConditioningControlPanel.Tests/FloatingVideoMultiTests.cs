@@ -139,7 +139,7 @@ public class FloatingVideoMultiTests
         Assert.Contains("_floaters.Remove(c);", close);
         Assert.Contains("if (endRun && _floaters.Count == 0) EndFloatingRun(", close);
         Assert.DoesNotContain("CloseFloatingInstances(", close);          // one window takes nothing with it
-        Assert.Contains("CloseInstance(c, \"clip ended\", watchedToEnd: true)", inst);
+        Assert.Contains("CloseInstance(c, \"clip ended\", watchedToEnd: true, animate: true)", inst);
         // The run ends through the ordinary Cleanup: holds lift, the queue slot frees, VideoEnded.
         Assert.Contains("if (_videoPlaying && !_isCleaningUp) Cleanup();", Body(inst, "private void EndFloatingRun("));
         // A clip that played to its end counts as a watched video.

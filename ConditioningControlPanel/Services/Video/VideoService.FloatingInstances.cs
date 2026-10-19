@@ -43,6 +43,15 @@ namespace ConditioningControlPanel.Services
             public IFloatingVideoSurface? Surface { get; set; }
             public DispatcherTimer? FirstFrameWatch { get; set; }
             public bool Playing { get; set; }
+            // Veiled until its first frame (FloatingFirstFrame): the page's ready, playing and frame.
+            public DispatcherTimer? RevealWatch { get; set; }
+            public long ReadyTick { get; set; }
+            public long PlayingTick { get; set; }
+            public bool FrameSeen { get; set; }
+            public long FirstTimeMs { get; set; } = -1;   // played time at the first report after "playing"
+            public long LastTimeMs { get; set; }
+            public bool Revealed { get; set; }
+            public long SpawnTick { get; init; } = Environment.TickCount64;
             public bool Closed { get; set; }
             public long PositionMs { get; set; }
             public long DurationMs { get; set; }
@@ -54,6 +63,10 @@ namespace ConditioningControlPanel.Services
         private readonly FloatingAudioFocus<IFloatingVideoSurface> _audioFocus = new();
         /// <summary>The instances own the current video run: the last one to close ends it.</summary>
         private bool _floatRunOpen;
+        /// <summary>Windows playing their closing animation, and what closes each one now.</summary>
+        private readonly Dictionary<Window, Action> _vanishing = new();
+        /// <summary>The run is ending because its last window closed: that window keeps its animation.</summary>
+        private bool _spareVanishing;
 
         // LibVLC route only: the single window's frame, silenced by deselecting ITS audio track
         // (LibVLC Mute/Volume are process-wide). With one window it never is.
@@ -173,7 +186,7 @@ namespace ConditioningControlPanel.Services
 
             try { App.DiscordRpc?.SetVideoActivity(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { VideoAboutToStart?.Invoke(this, EventArgs.Empty); } catch (Exception ex) { Diag.Swallowed(ex); }
-            try { App.Flash?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // No Flash.Stop: a floating video leaves the flashes up (VideoFlashRule).
             if (App.Settings?.Current?.AudioDuckingEnabled == true)
             {
                 App.Audio?.Duck(App.Settings.Current.DuckingLevel);
@@ -216,7 +229,9 @@ namespace ConditioningControlPanel.Services
             if (!_floatRunOpen) return;
             _floatRunOpen = false;
             VideoDiag.Log("VIDEO", $"floating run ends ({reason})");
-            if (_videoPlaying && !_isCleaningUp) Cleanup();
+            _spareVanishing = true;
+            try { if (_videoPlaying && !_isCleaningUp) Cleanup(); }
+            finally { _spareVanishing = false; }
         }
 
         // ===================== frames and the one sound =====================
@@ -241,10 +256,12 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { App.Logger?.Warning("VideoService: floating frame setup failed - {Error}", ex.Message); }
         }
 
-        private void AdoptSurface(IFloatingVideoSurface surface, Screen screen)
+        /// <param name="joinAudio">False for a window still veiled (FloatingFirstFrame): it takes no sound
+        /// until it is shown, RevealInstance adds it then.</param>
+        private void AdoptSurface(IFloatingVideoSurface surface, Screen screen, bool joinAudio = true)
         {
             surface.Touched += OnFloatingTouched;
-            _audioFocus.Add(surface);
+            if (joinAudio) _audioFocus.Add(surface);
             try
             {
                 surface.MotionSpeed = FloatingMotionSpeed();
@@ -427,10 +444,15 @@ namespace ConditioningControlPanel.Services
                 var rect = FloatRectOn(screen, _floaters.Select(InstanceRectNow).ToList());
 
                 win = new BrowserVideoWindow(screen, primary: false, rect);
+                // "via Scrolller" badge + end card. Floating runs are never strict; Lockdown and
+                // Chaos still make the badge not pressable.
+                var credit = Video.ScrolllerCredit.PagePayload(clip, Video.ScrolllerCredit.CanOpenLink(
+                    false, App.Lockdown?.IsActive == true, LockedChaosRun()));
                 var c = new FloatingInstance { Window = win, Clip = clip, Screen = screen, Bounds = rect };
                 win.Message += OnInstanceMessage;
                 win.InitFailed += OnInstanceInitFailed;
                 win.ProcessFailed += OnInstanceProcessFailed;
+                win.Ready += OnInstanceReady;
 
                 // Loaded with the real volume, unmuted: the focus pass below silences every window
                 // but the newest through its frame, and a window loaded muted could never take the sound.
@@ -449,24 +471,27 @@ namespace ConditioningControlPanel.Services
                     fadeMs = Safety.GentleVisuals.On ? Safety.GentleVisuals.FadeMs(0) : 0,
                     strict = false,
                     sinkLabel = BrowserSinkLabel.Resolve(),
-                    // "via Scrolller" badge + end card. Floating runs are never strict; Lockdown and
-                    // Chaos still make the badge not pressable.
-                    credit = Video.ScrolllerCredit.PagePayload(clip, Video.ScrolllerCredit.CanOpenLink(
-                        false, App.Lockdown?.IsActive == true, LockedChaosRun())),
+                    credit,
                 });
+                // The frame goes on BEFORE the show, veiled: the window must be shown for its WebView2 to
+                // start, and must not be seen until its first frame (FloatingFirstFrame).
+                c.Surface = FloatingVideoFrame.Attach(win);   // a browser window: the frame silences it
+                c.Surface.Veil();
                 win.Show();              // never activated: a floating browser window takes no focus
                 PreventClickRaise(win);
 
                 _floaters.Add(c);
-                c.Surface = FloatingVideoFrame.Attach(win);   // a browser window: the frame silences it
-                AdoptSurface(c.Surface, screen);
-                ApplyAudioFocus();
+                // Motion now, sound at the reveal: a window nobody can see never plays, and never takes
+                // the sound from the clip being watched.
+                AdoptSurface(c.Surface, screen, joinAudio: false);
+                c.Surface.SetMuted(true);
 
                 // No picture in time: this window goes, the others carry on.
                 var watch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(InstanceFirstFrameMs) };
-                watch.Tick += (_, _) => { watch.Stop(); if (!c.Playing) CloseInstance(c, "no first frame"); };
+                watch.Tick += (_, _) => { watch.Stop(); if (!c.Revealed) CloseInstance(c, "no first frame"); };
                 c.FirstFrameWatch = watch;
                 watch.Start();
+                StartRevealWatch(c);
 
                 _ = InitInstanceAsync(c);
                 VideoDiag.Log("VIDEO", $"floating window {_floaters.Count} of {FloatingLimit()} up at {rect} - {System.IO.Path.GetFileName(clip)}");
@@ -479,6 +504,84 @@ namespace ConditioningControlPanel.Services
                 if (half != null) CloseInstance(half, "start failed", endRun: false);
                 else try { win?.Close(); } catch { }
                 return false;
+            }
+        }
+
+        // ===================== first frame, then the window (FloatingFirstFrame) =====================
+
+        private void OnInstanceReady(BrowserVideoWindow win)
+        {
+            var c = _floaters.FirstOrDefault(x => ReferenceEquals(x.Window, win));
+            if (c != null && c.ReadyTick == 0) c.ReadyTick = Environment.TickCount64;
+        }
+
+        private void StartRevealWatch(FloatingInstance c)
+        {
+            var watch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+            watch.Tick += (_, _) => CheckReveal(c);
+            c.RevealWatch = watch;
+            watch.Start();
+        }
+
+        /// <summary>The window stays veiled until its first frame; a clip that cannot get there in
+        /// time is skipped and its window closed, never shown black.</summary>
+        private void CheckReveal(FloatingInstance c)
+        {
+            if (c.Closed || c.Revealed) { c.RevealWatch?.Stop(); return; }
+            var now = Environment.TickCount64;
+            // A grace pause holds every page: its time does not count against the first frame.
+            if (_gracePaused)
+            {
+                if (c.ReadyTick != 0) c.ReadyTick += 100;
+                if (c.PlayingTick != 0) c.PlayingTick += 100;
+                return;
+            }
+            switch (FloatingFirstFrame.Decide(c.FrameSeen,
+                        c.PlayingTick == 0 ? null : now - c.PlayingTick,
+                        c.FirstTimeMs < 0 ? 0 : c.LastTimeMs - c.FirstTimeMs,
+                        c.ReadyTick == 0 ? null : now - c.ReadyTick))
+            {
+                case FloatingFirstFrame.Verdict.Reveal:
+                    RevealInstance(c);
+                    break;
+                case FloatingFirstFrame.Verdict.Skip:
+                    c.RevealWatch?.Stop();
+                    VideoDiag.Log("VIDEO", $"floating window skipped - no first frame {FloatingFirstFrame.ReadyBudgetMs}ms after the page was ready (playing={c.Playing}, cloaked={c.Surface?.Cloaked}) - {System.IO.Path.GetFileName(c.Clip)}");
+                    CloseInstance(c, "no first frame in time");
+                    break;
+            }
+        }
+
+        private void RevealInstance(FloatingInstance c)
+        {
+            if (c.Closed || c.Revealed) return;
+            c.Revealed = true;
+            c.RevealWatch?.Stop();
+            if (c.Surface != null)
+            {
+                // Shown: it joins the sound rotation as the newest, so it takes the sound (as a
+                // window did on creation before the veil).
+                _audioFocus.Add(c.Surface);
+                ApplyAudioFocus();
+            }
+            var animate = FloatingSpawnLook.Animates(MotionFx.Level);
+            VideoDiag.Log("VIDEO", $"floating window shown {Environment.TickCount64 - c.SpawnTick}ms after it was made (frame={c.FrameSeen}, cloaked={c.Surface?.Cloaked}, animated={animate})");
+            void Revealed()
+            {
+                // This window's mute and close (VideoService.Controls.cs), once it is fully shown and,
+                // under Gentle visuals, after the page's own fade.
+                if (!c.Closed) ShowInstanceControls(c.Window, Safety.GentleVisuals.On ? Safety.GentleVisuals.FadeMs(0) : 0);
+            }
+            if (c.Surface != null) c.Surface.Reveal(animate, Revealed);
+            else Revealed();
+        }
+
+        /// <summary>The mute and close buttons of one window go with it.</summary>
+        private void CloseControlsOf(Window host)
+        {
+            foreach (var x in _videoControls.Where(x => ReferenceEquals(x.Host, host)).ToList())
+            {
+                try { x.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
             }
         }
 
@@ -509,8 +612,13 @@ namespace ConditioningControlPanel.Services
             {
                 case "playing":
                     c.Playing = true;
-                    // This window's mute and close (VideoService.Controls.cs), after the page's fade.
-                    PostAfterPageMessage(() => { if (!c.Closed) ShowInstanceControls(c.Window, Safety.GentleVisuals.On ? Safety.GentleVisuals.FadeMs(0) : 0); });
+                    if (c.PlayingTick == 0) c.PlayingTick = Environment.TickCount64;
+                    // The mute and close buttons come with the reveal (RevealInstance).
+                    break;
+                case "firstFrame":
+                    c.FrameSeen = true;
+                    VideoDiag.Log("VIDEO", $"floating page painted: via={(string?)o["via"]} frames={(int?)o["frames"]} mediaMs={(long?)o["mediaMs"]} visibility={(string?)o["visibility"]} cloaked={c.Surface?.Cloaked}");
+                    PostAfterPageMessage(() => CheckReveal(c));
                     break;
                 case "meta":
                     c.DurationMs = (long?)o["durationMs"] ?? 0;
@@ -525,12 +633,18 @@ namespace ConditioningControlPanel.Services
                     break;
                 case "time":
                     c.PositionMs = Math.Max(c.PositionMs, (long?)o["playedMs"] ?? 0);
+                    if (c.Playing && (bool?)o["paused"] != true)
+                    {
+                        var at = (long?)o["playedMs"] ?? 0;   // played time: a seek is not progress
+                        if (c.FirstTimeMs < 0) c.FirstTimeMs = at;
+                        c.LastTimeMs = at;
+                    }
                     // The player's longest-video limit, per window: the run's own cap timer is
                     // off here (it watches one player), so each clip is cut on what it has played.
                     if (VideoLengthCap.Reached(App.Settings?.Current?.VideoMaxDurationSeconds ?? 0,
                             c.PositionMs))
                     {
-                        PostAfterPageMessage(() => CloseInstance(c, "longest-video limit reached"));
+                        PostAfterPageMessage(() => CloseInstance(c, "longest-video limit reached", animate: true));
                         break;
                     }
                     // No run left to belong to: the window goes.
@@ -538,7 +652,7 @@ namespace ConditioningControlPanel.Services
                         PostAfterPageMessage(() => { if (!_videoPlaying) CloseFloatingInstances("no run left"); });
                     break;
                 case "ended":
-                    PostAfterPageMessage(() => CloseInstance(c, "clip ended", watchedToEnd: true));
+                    PostAfterPageMessage(() => CloseInstance(c, "clip ended", watchedToEnd: true, animate: true));
                     break;
                 case "error":
                     PostAfterPageMessage(() => CloseInstance(c, "page error " + ((int?)o["code"] ?? 0)));
@@ -598,24 +712,56 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Close ONE window. Idempotent. It takes nothing with it: when it had the sound
         /// the most recent survivor takes it, and only the last one to go ends the run.</summary>
-        private void CloseInstance(FloatingInstance c, string reason, bool watchedToEnd = false, bool endRun = true, bool refocus = true)
+        /// <param name="animate">A clip that ended or reached the limit closes with the short
+        /// closing animation (FloatingSpawnLook); every stop, skip and failure closes at once.</param>
+        private void CloseInstance(FloatingInstance c, string reason, bool watchedToEnd = false, bool endRun = true, bool refocus = true, bool animate = false)
         {
             if (c.Closed) return;
             c.Closed = true;
             _floaters.Remove(c);
             c.FirstFrameWatch?.Stop();
+            c.RevealWatch?.Stop();
             CreditInstance(c, watchedToEnd);
-            if (c.Surface != null) DropSurface(c.Surface);
             var w = c.Window;
+            var surface = c.Surface;
+            if (surface != null)
+            {
+                // Out of the sound rotation now; the frame itself lets go when the window does.
+                surface.Touched -= OnFloatingTouched;
+                _audioFocus.Remove(surface);
+            }
             try
             {
                 w.Message -= OnInstanceMessage;
                 w.InitFailed -= OnInstanceInitFailed;
                 w.ProcessFailed -= OnInstanceProcessFailed;
-                if (w.IsReady) w.Post(new { type = "stop" });
-                w.Close();
+                w.Ready -= OnInstanceReady;
             }
-            catch (Exception ex) { App.Logger?.Debug("VideoService: floating window close failed - {Error}", ex.Message); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+            CloseControlsOf(w);   // the buttons go first, never left over a closing window
+
+            var finished = false;
+            void Finish()
+            {
+                if (finished) return;
+                finished = true;
+                _vanishing.Remove(w);
+                try { surface?.Detach(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                try
+                {
+                    if (w.IsReady) w.Post(new { type = "stop" });
+                    w.Close();
+                }
+                catch (Exception ex) { App.Logger?.Debug("VideoService: floating window close failed - {Error}", ex.Message); }
+            }
+
+            if (animate && surface != null && c.Revealed && FloatingSpawnLook.Animates(MotionFx.Level))
+            {
+                try { surface.SetMuted(true); } catch (Exception ex) { Diag.Swallowed(ex); }   // the frame adds silence
+                _vanishing[w] = Finish;
+                surface.Vanish(true, Finish);
+            }
+            else Finish();
             VideoDiag.Log("VIDEO", $"floating window closed ({reason}), {_floaters.Count} left");
             if (refocus) ApplyAudioFocus();
             if (endRun && _floaters.Count == 0) EndFloatingRun("last window closed: " + reason);
@@ -628,7 +774,7 @@ namespace ConditioningControlPanel.Services
         private void CloseFloatingInstances(string reason)
         {
             _floatRunOpen = false;
-            if (_floaters.Count == 0) return;
+            if (_floaters.Count == 0 && _vanishing.Count == 0) return;
             var dispatcher = Application.Current?.Dispatcher;
             if (dispatcher != null && !dispatcher.CheckAccess())
             {
@@ -636,6 +782,13 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Diag.Swallowed(ex); }
                 return;
             }
+            // A window still playing its closing animation goes now too (panic, a stop), unless
+            // this is the run ending because that very window was the last one.
+            if (!_spareVanishing)
+                foreach (var finish in _vanishing.Values.ToList())
+                {
+                    try { finish(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                }
             foreach (var c in _floaters.ToList())
             {
                 try { CloseInstance(c, reason, endRun: false, refocus: false); }

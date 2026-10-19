@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ConditioningControlPanel.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
@@ -40,6 +41,22 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// the monitor it is on.
         /// </summary>
         void StartMotion(Rect boundsPx);
+
+        /// <summary>Hide the window until <see cref="Reveal"/>: DWM-cloaked (still composed off screen,
+        /// takes no clicks), or a one-pixel region where cloaking is refused. Call before the window
+        /// is shown (FloatingFirstFrame).</summary>
+        void Veil();
+
+        /// <summary>The window is cloaked right now (the veil took the DWM route).</summary>
+        bool Cloaked { get; }
+
+        /// <summary>Show a veiled window: the opening animation when <paramref name="animate"/>
+        /// (FloatingSpawnLook), else at once. <paramref name="revealed"/> runs once it is fully shown.</summary>
+        void Reveal(bool animate, Action? revealed);
+
+        /// <summary>The closing animation; <paramref name="done"/> runs once at its end, or at once
+        /// when not animating. Detach runs it too, so it can never be lost.</summary>
+        void Vanish(bool animate, Action done);
 
         /// <summary>Stops moving and lets go of every hook. Safe to call twice, and on a closed window.</summary>
         void Detach();
@@ -99,6 +116,13 @@ namespace ConditioningControlPanel.Services.Video.Floating
             private bool _forceMove;   // the window was moved or sized behind the motion's back
             private bool _resync;      // ...while it was at rest: read its rectangle again
             private (byte R, byte G, byte B) _painted;
+            private bool _veiled;          // the region shows _shown of the window (FloatingSpawnLook)
+            private bool _cloakWanted;     // the veil asks DWM to cloak the window
+            private bool _cloaked;         // ...and DWM did
+            private bool _shaped;          // a region is on the window
+            private double _shown = 1.0;
+            private DispatcherTimer? _anim;
+            private Action? _animDone;
 
             public event Action<IFloatingVideoSurface>? Touched;
 
@@ -172,6 +196,8 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 _detached = true;
                 _clock.Stop();
                 _clock.Tick -= OnTick;
+                LiftCloakHidden();   // never a cloaked window left alive, never a flash of it either
+                FinishAnimation();
                 FloatingVideoPointer.Unregister(this);
                 _motion?.Drop();
                 Touched = null;
@@ -189,6 +215,118 @@ namespace ConditioningControlPanel.Services.Video.Floating
                         _win.SourceInitialized -= OnSourceInitialized;
                     }
                 }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            }
+
+            // ---- veil, reveal, close (FloatingFirstFrame, FloatingSpawnLook) ----
+
+            public bool Cloaked => _cloaked;
+
+            public void Veil()
+            {
+                if (_detached) return;
+                _veiled = true;
+                _cloakWanted = true;
+                _shown = FloatingSpawnLook.RevealFrom;   // where the opening starts once the cloak lifts
+                ApplyCloak();
+                ApplyShape();
+            }
+
+            /// <summary>DWMWA_CLOAK: the window stays composed (the page keeps painting, no occlusion)
+            /// but is not on screen and takes no clicks. Refused = the one-pixel region instead.</summary>
+            private void ApplyCloak()
+            {
+                if (_hwnd == IntPtr.Zero) return;
+                int on = _cloakWanted ? 1 : 0;
+                bool ok;
+                try { ok = DwmSetWindowAttribute(_hwnd, DWMWA_CLOAK, ref on, sizeof(int)) == 0; }
+                catch (Exception ex) { Diag.Swallowed(ex); ok = false; }
+                _cloaked = _cloakWanted && ok;
+            }
+
+            private void Uncloak()
+            {
+                if (!_cloakWanted && !_cloaked) return;
+                _cloakWanted = false;
+                ApplyCloak();
+            }
+
+            /// <summary>Detach before the reveal (a close, a skip, a panic): the window is about to go,
+            /// so it is emptied first and then uncloaked, which shows nothing.</summary>
+            private void LiftCloakHidden()
+            {
+                _cloakWanted = false;
+                if (!_cloaked) return;
+                try
+                {
+                    if (_hwnd != IntPtr.Zero && IsWindow(_hwnd))
+                    {
+                        var rgn = CreateRectRgn(0, 0, 0, 0);
+                        if (rgn != IntPtr.Zero && SetWindowRgn(_hwnd, rgn, false) == 0) DeleteObject(rgn);
+                        ApplyCloak();
+                    }
+                }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+                _cloaked = false;
+            }
+
+            public void Reveal(bool animate, Action? revealed)
+            {
+                if (_detached || !_veiled || _anim != null) { revealed?.Invoke(); return; }
+                if (!animate || _hwnd == IntPtr.Zero) { EndVeil(); Uncloak(); revealed?.Invoke(); return; }
+                _shown = FloatingSpawnLook.RevealScale(0);
+                ApplyShape();
+                Uncloak();
+                Animate(FloatingSpawnLook.RevealMs, FloatingSpawnLook.RevealScale, () => { EndVeil(); revealed?.Invoke(); });
+            }
+
+            public void Vanish(bool animate, Action done)
+            {
+                if (_detached || !animate || _hwnd == IntPtr.Zero || !IsWindow(_hwnd)) { done(); return; }
+                FinishAnimation();
+                _veiled = true;
+                Animate(FloatingSpawnLook.VanishMs, FloatingSpawnLook.VanishScale, done);
+            }
+
+            private void EndVeil()
+            {
+                if (_detached) return;   // closing mid-reveal: never one frame of the full window
+                _veiled = false;
+                _shown = 1.0;
+                ApplyShape();
+            }
+
+            /// <summary>Only the region moves, about 60 times a second: no window opacity (the window
+            /// is never layered), no Effect, no resize of the video under it.</summary>
+            private void Animate(int ms, Func<double, double> shownAt, Action done)
+            {
+                var sw = Stopwatch.StartNew();
+                _animDone = done;
+                var anim = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
+                _anim = anim;
+                anim.Tick += (_, _) =>
+                {
+                    if (!ReferenceEquals(_anim, anim)) { anim.Stop(); return; }
+                    var t = sw.Elapsed.TotalMilliseconds;
+                    _shown = shownAt(t);
+                    ApplyShape();
+                    if (t >= ms) FinishAnimation();
+                };
+                _shown = shownAt(0);
+                ApplyShape();
+                anim.Start();
+            }
+
+            /// <summary>Stops a running animation and runs what was waiting on its end, once.</summary>
+            private void FinishAnimation()
+            {
+                var anim = _anim;
+                var done = _animDone;
+                _anim = null;
+                _animDone = null;
+                anim?.Stop();
+                if (done == null) return;
+                try { done(); }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
 
@@ -216,6 +354,8 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 if ((ex & WS_EX_NOACTIVATE) == 0) SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE);
 
                 RoundCorners();
+                if (_cloakWanted) ApplyCloak();   // before the first show: never one visible frame
+                if (_veiled) ApplyShape();
                 Paint(force: true);
                 FloatingVideoPointer.Register(this);
                 if (_bounds != null) SyncMotion(moveIfClamped: true);
@@ -235,7 +375,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
                         handled = true;
                         return IntPtr.Zero;
                     case WM_SIZE:
-                        if (_regionCorners) ApplyRegion();
+                        if (_regionCorners || _veiled) ApplyShape();
                         OnResized();
                         break;
                     case WM_DISPLAYCHANGE:
@@ -258,13 +398,22 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 }
                 catch (Exception ex) { Diag.Swallowed(ex); }
                 _regionCorners = true;   // no DWM corners here (Windows 10): cut them ourselves
-                ApplyRegion();
+                ApplyShape();
             }
 
-            private void ApplyRegion()
+            /// <summary>The window's region: rounded corners where DWM has none (Windows 10), and the
+            /// visible share during a veil, reveal or close. No region at all when neither applies,
+            /// so DWM's own rounding (Windows 11) comes back once a reveal ends.</summary>
+            private void ApplyShape()
             {
                 try
                 {
+                    if (_hwnd == IntPtr.Zero || !IsWindow(_hwnd)) return;
+                    if (!_veiled && !_regionCorners)
+                    {
+                        if (_shaped && SetWindowRgn(_hwnd, IntPtr.Zero, true) != 0) _shaped = false;
+                        return;
+                    }
                     if (!GetWindowRect(_hwnd, out var r)) return;
                     int w = r.Right - r.Left, h = r.Bottom - r.Top;
                     if (w <= 0 || h <= 0) return;
@@ -272,9 +421,13 @@ namespace ConditioningControlPanel.Services.Video.Floating
                     try { dpi = GetDpiForWindow(_hwnd); } catch (Exception ex) { Diag.Swallowed(ex); }
                     if (dpi == 0) dpi = 96;
                     int d = (int)Math.Round(FloatingFrameLook.CornerDip * 2.0 * dpi / 96.0);
-                    var rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
+                    var (l, t, rr, b) = _veiled ? FloatingSpawnLook.Visible(w, h, (_cloakWanted && !_cloaked) ? 0 : _shown) : (0, 0, w, h);
+                    // A veil DWM refused to cloak, or the end of a close: ONE pixel at the centre, never an
+                    // empty region, so the window stays on screen for Chromium and keeps painting.
+                    var rgn = rr > l && b > t ? CreateRoundRectRgn(l, t, rr + 1, b + 1, d, d) : CreateRectRgn(w / 2, h / 2, w / 2 + 1, h / 2 + 1);
                     if (rgn == IntPtr.Zero) return;
                     if (SetWindowRgn(_hwnd, rgn, true) == 0) DeleteObject(rgn);   // on success Windows owns it
+                    else _shaped = true;
                 }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
@@ -519,6 +672,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
             private const uint SWP_NOZORDER = 0x0004;
             private const uint SWP_NOACTIVATE = 0x0010;
             private const uint SWP_NOOWNERZORDER = 0x0200;
+            private const int DWMWA_CLOAK = 13;
             private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
             private const int DWMWA_BORDER_COLOR = 34;
             private const int DWMWCP_ROUND = 2;
@@ -543,6 +697,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
             [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
             [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hWnd);
             [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
+            [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
             [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int l, int t, int r, int b, int w, int h);
             [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
             [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
