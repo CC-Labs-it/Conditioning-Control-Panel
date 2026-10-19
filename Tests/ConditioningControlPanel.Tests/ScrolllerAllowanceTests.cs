@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Tests;
 /// Prime far more; the meter shows a percentage only; the day resets at local midnight; the
 /// server can retune the limits without a release.
 /// </summary>
-[Collection("ScrolllerAllowance")]
+[Collection(ScrolllerPolicyCollection.Name)] // ScrolllerPolicyService.Accept reads the allowance: never in parallel
 public class ScrolllerAllowanceTests : IDisposable
 {
     private DateTime _now = new(2026, 10, 19, 14, 0, 0);
@@ -31,6 +31,8 @@ public class ScrolllerAllowanceTests : IDisposable
         ScrolllerAllowance.ResetForTests();
         ScrolllerAllowance.Now = () => DateTime.Now;
         ScrolllerAllowance.AccountProvider = () => null;
+        ScrolllerAllowance.LedgerPath = () => null;
+        ScrolllerAllowance.LegacyLedgerPath = () => null;
     }
 
     [Fact]
@@ -201,6 +203,7 @@ public class ScrolllerAllowanceTests : IDisposable
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-allow-" + Guid.NewGuid().ToString("N") + ".json");
         System.IO.File.WriteAllText(path, "{\"day\":\"2026-10-19\",\"used\":" + 400 * ScrolllerAllowance.MB + ",\"first\":\"2026-10-18\"}");
         ScrolllerAllowance.LegacyLedgerPath = () => path;   // an older build's ledger, adopted at load
+        ScrolllerAllowance.ResetForTests();                 // a read from a parallel test may have loaded the book already
         var fired = 0;
         EventHandler h = (_, _) => fired++;
         ScrolllerAllowance.SpentReached += h;

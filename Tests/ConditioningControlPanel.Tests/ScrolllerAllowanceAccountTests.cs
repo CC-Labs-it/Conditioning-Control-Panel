@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Tests;
 /// day and its own spent notice; signed out has a bucket of its own; the machine-wide ledger of
 /// earlier builds goes to whoever is signed in at the first load, once.
 /// </summary>
-[Collection("ScrolllerAllowance")]
+[Collection(ScrolllerPolicyCollection.Name)] // ScrolllerPolicyService.Accept reads the allowance: never in parallel
 public class ScrolllerAllowanceAccountTests : IDisposable
 {
     private const long MB = ScrolllerAllowance.MB;
@@ -28,21 +28,25 @@ public class ScrolllerAllowanceAccountTests : IDisposable
         Rig();
     }
 
-    /// <summary>A fresh process: in-memory state gone, the files on disk kept.</summary>
-    private void Rig()
+    /// <summary>A fresh process: in-memory state gone, the files on disk kept. Everything is set
+    /// BEFORE the reset: tests outside this collection read the share (the web gate asks
+    /// MayFetchFresh), and a read in between would load the book from the wrong place.</summary>
+    private void Rig(bool onDisk = false)
     {
-        ScrolllerAllowance.ResetForTests();
-        ScrolllerAllowance.LedgerPath = () => null;
-        ScrolllerAllowance.LegacyLedgerPath = () => null;
+        if (onDisk)
+        {
+            ScrolllerAllowance.LedgerPath = () => BookPath;
+            ScrolllerAllowance.LegacyLedgerPath = () => LegacyPath;
+        }
+        else
+        {
+            ScrolllerAllowance.LedgerPath = () => null;
+            ScrolllerAllowance.LegacyLedgerPath = () => null;
+        }
         ScrolllerAllowance.AccountProvider = () => _account;
         ScrolllerAllowance.Now = () => _now;
         ScrolllerAllowance.PlanProvider = () => ScrolllerPlan.Free;
-    }
-
-    private void OnDisk()
-    {
-        ScrolllerAllowance.LedgerPath = () => BookPath;
-        ScrolllerAllowance.LegacyLedgerPath = () => LegacyPath;
+        ScrolllerAllowance.ResetForTests();
     }
 
     private void SignIn(string? account)
@@ -81,7 +85,7 @@ public class ScrolllerAllowanceAccountTests : IDisposable
     [Fact]
     public void Switching_accounts_reloads_from_disk_and_the_id_never_lands_in_the_file()
     {
-        OnDisk();
+        Rig(onDisk: true);
         ScrolllerAllowance.Charge(100 * MB);
         SignIn("account-b");
         ScrolllerAllowance.Charge(30 * MB);
@@ -92,7 +96,7 @@ public class ScrolllerAllowanceAccountTests : IDisposable
         Assert.Contains(ScrolllerAllowance.KeyFor("account-a"), text);
         Assert.Matches("^[0-9a-f]{16}$", ScrolllerAllowance.KeyFor("account-a"));
 
-        Rig(); OnDisk();                                 // the next launch, signed in as b
+        Rig(onDisk: true);                               // the next launch, signed in as b
         Assert.Equal(30 * MB, ScrolllerAllowance.UsedToday);
         SignIn("account-a");
         Assert.Equal(100 * MB, ScrolllerAllowance.UsedToday);
@@ -133,8 +137,8 @@ public class ScrolllerAllowanceAccountTests : IDisposable
     [Fact]
     public void The_old_ledger_goes_to_the_first_account_only_and_only_once()
     {
-        OnDisk();
         File.WriteAllText(LegacyPath, "{\"day\":\"2026-10-19\",\"used\":" + 120 * MB + ",\"first\":\"2026-10-12\"}");
+        Rig(onDisk: true);
 
         Assert.Equal(120 * MB, ScrolllerAllowance.UsedToday);   // a, signed in at the first load
         Assert.False(ScrolllerAllowance.IsFirstDay);            // its first day came with it
@@ -147,8 +151,8 @@ public class ScrolllerAllowanceAccountTests : IDisposable
 
         // The old file turns up again (a downgrade and back): it is never adopted a second time.
         File.WriteAllText(LegacyPath, "{\"day\":\"2026-10-19\",\"used\":" + 300 * MB + "}");
-        Rig(); OnDisk();
         _account = "account-c";
+        Rig(onDisk: true);
         Assert.Equal(0, ScrolllerAllowance.UsedToday);
         SignIn("account-a");
         Assert.Equal(120 * MB, ScrolllerAllowance.UsedToday);
@@ -157,9 +161,9 @@ public class ScrolllerAllowanceAccountTests : IDisposable
     [Fact]
     public void Signed_out_at_the_first_load_keeps_the_old_ledger_off_every_account()
     {
-        OnDisk();
         File.WriteAllText(LegacyPath, "{\"day\":\"2026-10-19\",\"used\":" + 80 * MB + "}");
         _account = null;
+        Rig(onDisk: true);
         Assert.Equal(80 * MB, ScrolllerAllowance.UsedToday);
         SignIn("account-a");
         Assert.Equal(0, ScrolllerAllowance.UsedToday);
