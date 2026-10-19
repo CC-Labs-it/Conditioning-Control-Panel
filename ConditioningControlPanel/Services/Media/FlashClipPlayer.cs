@@ -13,7 +13,18 @@ namespace ConditioningControlPanel.Services;
 // Silent clip frames use the same transparent WPF/Skia surfaces as GIFs.
 internal sealed class FlashClipPlayer : IDisposable
 {
-    private static int _alive;
+    /// <summary>App-wide player slots, shared by flashes, bubbles and the GIF cascade. Counted as
+    /// live leases (ClipSlotBudget), so a missed or doubled release can never drift the count.</summary>
+    internal const int MaxPlayers = 8;
+    /// <summary>Bubbles and the GIF cascade share this many; the rest stay free for flashes.</summary>
+    internal const int MaxSharedPlayers = 5;
+    internal static readonly ClipSlotBudget Budget = new(MaxPlayers, MaxSharedPlayers);
+    private static long _lastRefusedLogMs;
+
+    /// <summary>True when a flash's TryStart right now would get a slot (free, or one marked evictable).</summary>
+    internal static bool CanStartFlash => Budget.CanAcquireFor(reserved: true);
+
+    private readonly ClipSlotBudget.Lease _lease;
     private readonly object _gate = new();
     private readonly Action<BitmapSource> _show;
     private readonly int _width, _height;
@@ -24,22 +35,56 @@ internal sealed class FlashClipPlayer : IDisposable
     private long _lastFrame;
     private bool _queued;
     private volatile bool _disposed;
+    private int _disposeOnce;
+
+    /// <summary>This picture is leaving (fading out, popping): another surface may take the slot.</summary>
+    internal bool Evictable { get => _lease.Evictable; set => _lease.Evictable = value; }
+
+    internal bool IsDisposed => _disposed;
 
     internal static FlashClipPlayer? Start(string? path, int width, int height, Action<BitmapSource> show, double speed = 1)
+        => TryStart(path, width, height, show, speed, out _);
+
+    /// <param name="refusedAtCap">True when the only reason for null was a full budget: the
+    /// caller may try again once <see cref="CanStartFlash"/> says a slot is free.</param>
+    /// <param name="flash">A flash: may use the slots bubbles and the cascade cannot take.</param>
+    internal static FlashClipPlayer? TryStart(string? path, int width, int height, Action<BitmapSource> show, double speed, out bool refusedAtCap, bool flash = false)
     {
+        refusedAtCap = false;
         if (path == null || VideoService.SharedLibVLC is not { } vlc) return null;
-        if (Interlocked.Increment(ref _alive) > 8) { Interlocked.Decrement(ref _alive); return null; }
-        try { return new FlashClipPlayer(vlc, path, width, height, show, speed); }
+        // A deleted temp file would "play" (Play returns true) and show nothing while holding a slot.
+        if (!System.IO.File.Exists(path)) { VideoDiag.Log("CLIP", "clip file missing, poster stays"); return null; }
+        FlashClipPlayer? created = null;
+        var lease = Budget.TryAcquire(() => created?.Dispose(), out var evicted, reserved: flash);
+        if (lease == null)
+        {
+            refusedAtCap = true;
+            long now = Environment.TickCount64;
+            if (now - Interlocked.Read(ref _lastRefusedLogMs) > 1000)
+            {
+                Interlocked.Exchange(ref _lastRefusedLogMs, now);
+                VideoDiag.Log("CLIP", $"refused at cap ({(flash ? "flash" : "shared")}), live={Budget.Live}/{MaxPlayers} shared={Budget.LiveShared}/{MaxSharedPlayers}");
+            }
+            return null;
+        }
+        try
+        {
+            created = new FlashClipPlayer(vlc, path, width, height, show, speed, lease);
+            VideoDiag.Log("CLIP", $"acquire live={Budget.Live}/{MaxPlayers}{(evicted != null ? " (evicted a leaving one)" : "")}");
+            return created;
+        }
         catch (Exception ex)
         {
-            Interlocked.Decrement(ref _alive);
+            lease.Dispose();
             App.Logger?.Debug("Flash clip failed: {Error}", ex.Message);
+            VideoDiag.Log("CLIP", $"start failed, live={Budget.Live}/{MaxPlayers}: {ex.Message}");
             return null;
         }
     }
 
-    private FlashClipPlayer(LibVLC vlc, string path, int width, int height, Action<BitmapSource> show, double speed)
+    private FlashClipPlayer(LibVLC vlc, string path, int width, int height, Action<BitmapSource> show, double speed, ClipSlotBudget.Lease lease)
     {
+        _lease = lease;
         _show = show;
         double scale = Math.Min(1, 480.0 / Math.Max(1, Math.Max(width, height)));
         _width = Math.Max(2, (int)(width * scale));
@@ -98,8 +143,12 @@ internal sealed class FlashClipPlayer : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (Interlocked.Exchange(ref _disposeOnce, 1) != 0) return;
         _disposed = true;
+        // The slot goes back now, on every path: nothing reads this player's frames any more.
+        // Only the native teardown below is deferred.
+        if (_lease.Release())
+            VideoDiag.Log("CLIP", $"release live={Budget.Live}/{MaxPlayers}");
         // Native callbacks retain their buffer until Stop and Dispose have completed.
         _ = Task.Run(() =>
         {
@@ -109,11 +158,10 @@ internal sealed class FlashClipPlayer : IDisposable
                 _player.Dispose();
                 _media.Dispose();
                 Marshal.FreeHGlobal(_buffer);
-                Interlocked.Decrement(ref _alive);
             }
             catch (Exception ex)
             {
-                // Keep the native buffer and budget slot if shutdown cannot be confirmed.
+                // Keep the native buffer if shutdown cannot be confirmed: a callback may still write it.
                 App.Logger?.Warning("Flash clip cleanup failed: {Error}", ex.Message);
             }
         });
