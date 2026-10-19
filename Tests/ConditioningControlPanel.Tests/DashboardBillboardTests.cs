@@ -691,13 +691,13 @@ public class DashboardBillboardTests
     {
         var now = new DateTime(2026, 10, 12);
         var lock25 = BuiltInArt.CalendarData(new Dictionary<string, int> { ["counted"] = 6, ["need"] = 25, ["days"] = 31, ["today"] = 12 }, now);
-        Assert.Equal(new CalendarInfo(6, 25, 31, 12), lock25);
+        Assert.Equal(new CalendarInfo(6, 25, 31, 12, 0b111111), lock25);
         var program = BuiltInArt.CalendarData(new Dictionary<string, int> { ["day"] = 4, ["days"] = 14 }, now);
-        Assert.Equal(new CalendarInfo(3, 14, 14, 4), program);
+        Assert.Equal(new CalendarInfo(3, 14, 14, 4, 0b111), program);
         var none = BuiltInArt.CalendarData(null, now);
-        Assert.Equal(new CalendarInfo(0, 0, 31, 12), none);
+        Assert.Equal(new CalendarInfo(0, 0, 31, 12, 0), none);
         var silly = BuiltInArt.CalendarData(new Dictionary<string, int> { ["counted"] = 90, ["need"] = -3, ["days"] = 0 }, now);
-        Assert.Equal(new CalendarInfo(1, 0, 1, 1), silly);
+        Assert.Equal(new CalendarInfo(1, 0, 1, 1, 1), silly);
 
         Assert.Equal((2, 5), BuiltInArt.WheelData(new Dictionary<string, int> { ["done"] = 2, ["total"] = 5 }));
         Assert.Equal((5, 5), BuiltInArt.WheelData(new Dictionary<string, int> { ["done"] = 9, ["total"] = 5 }));

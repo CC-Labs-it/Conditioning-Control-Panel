@@ -627,6 +627,8 @@
   "chaster_cal_served": "dia {0}, cumprido",
   "chaster_cal_locked": "dia {0}, a cumprir",
   "chaster_cal_elided": "e os {0} dias antes destes",
+  "chaster_cal_served_raffle": "dia {0}, cumprido, conta para o sorteio",
+  "chaster_cal_raffle_key": "conta para o sorteio",
   "chaster_import_title": "Inclui tempo de cadeado",
   "chaster_import_body": "Este preset pode somar tempo ao seu cadeado do Chaster.",
   "chaster_import_detail": "{0} gatilhos, {1} min se cada um disparar uma vez. Cada gatilho soma no máximo 15 min por dia.",

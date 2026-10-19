@@ -627,6 +627,8 @@
   "chaster_cal_served": "jour {0}, purgé",
   "chaster_cal_locked": "jour {0}, encore à purger",
   "chaster_cal_elided": "et les {0} jours d'avant",
+  "chaster_cal_served_raffle": "jour {0}, purgé, compté pour la tombola",
+  "chaster_cal_raffle_key": "compté pour la tombola",
   "chaster_import_title": "Contient du temps de cadenas",
   "chaster_import_body": "Ce préréglage peut ajouter du temps à ton cadenas Chaster.",
   "chaster_import_detail": "{0} déclencheurs, {1} min si chacun se déclenche une fois. Chaque déclencheur ajoute 15 min par jour au plus.",
