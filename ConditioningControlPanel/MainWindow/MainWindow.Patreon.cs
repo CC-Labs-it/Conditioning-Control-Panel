@@ -1363,6 +1363,7 @@ namespace ConditioningControlPanel
             // "Muted" is now its own flag, not the inverse of the enable (AppSettings.SubAudioMuted).
             CompanionTab.ChkMuteWhispersCompanion.IsChecked = settings.SubAudioMuted;
             CompanionTab.ChkVoiceLinesCompanion.IsChecked = settings.CompanionVoiceLinesMuted;
+            CompanionTab.ChkIdleVoiceEngineOffCompanion.IsChecked = settings.CompanionSpeaksIdleWhenEngineOff;
             CompanionTab.SliderIdleIntervalCompanion.Value = settings.IdleGiggleIntervalSeconds;
             CompanionTab.TxtIdleIntervalCompanion.Text = $"{settings.IdleGiggleIntervalSeconds}s";
             CompanionTab.SliderBubbleDurationCompanion.Value = settings.BubbleDurationSeconds;
@@ -2238,6 +2239,19 @@ namespace ConditioningControlPanel
             if (App.Settings?.Current != null)
             {
                 App.Settings.Current.CompanionVoiceLinesMuted = checkbox?.IsChecked == true;
+                App.Settings.Save();
+            }
+        }
+
+        // ccp-bugs #1468: let the idle-timer lines speak while the engine is off. Read at the same
+        // choke point (ShowGiggle) through CompanionIdleVoice.ShouldVoiceNow.
+        internal void ChkIdleVoiceEngineOff_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var checkbox = sender as CheckBox;
+            if (App.Settings?.Current != null)
+            {
+                App.Settings.Current.CompanionSpeaksIdleWhenEngineOff = checkbox?.IsChecked == true;
                 App.Settings.Save();
             }
         }

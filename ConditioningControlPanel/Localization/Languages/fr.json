@@ -1649,6 +1649,8 @@
   "label_mute_subliminal_audio": "Couper l'audio subliminal",
   "label_mute_voice_lines": "Couper les répliques vocales",
   "label_mute_voice_lines_hint": "Les réponses restent affichées en texte. Seules les répliques parlées se taisent.",
+  "label_idle_voice_engine_off": "Dire les répliques d'attente moteur coupé",
+  "label_idle_voice_engine_off_hint": "Désactivé : elles s'affichent toujours, en silence.",
   "label_companion_voice_level": "Niveau de la voix",
   "label_companion_voice_level_hint": "Le volume de la voix par rapport à tout le reste. 80 est le niveau habituel.",
   "label_pause_browser": "Pause Navigateur",

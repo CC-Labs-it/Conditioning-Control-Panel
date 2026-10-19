@@ -1649,6 +1649,8 @@
   "label_mute_subliminal_audio": "Отключить аудио сублиминалов",
   "label_mute_voice_lines": "Отключить голосовые реплики",
   "label_mute_voice_lines_hint": "Ответы по-прежнему приходят текстом. Замолкают только озвученные реплики.",
+  "label_idle_voice_engine_off": "Озвучивать фоновые реплики при выключенном движке",
+  "label_idle_voice_engine_off_hint": "Выкл.: реплики видны, но без звука.",
   "label_companion_voice_level": "Громкость голоса",
   "label_companion_voice_level_hint": "Насколько громко звучит голос на фоне всего остального. 80 - обычный уровень.",
   "label_pause_browser": "Пауза браузера",
