@@ -493,12 +493,52 @@ internal static class ScrolllerWebGate
             if (h.Contains(MarkerHeader)) return;
             var status = e.Response.StatusCode;
             if (status != 200 && status != 206) return;
-            var bytes = ChargeableLength(h.Contains("Content-Length") ? h.GetHeader("Content-Length") : null,
-                h.Contains("Content-Range") ? h.GetHeader("Content-Range") : null);
-            if (bytes > 0) ScrolllerAllowance.Charge(bytes);
-            else App.Logger?.Debug("ScrolllerWebGate: no length on a passed-through response, not charged");
+            var length = h.Contains("Content-Length") ? h.GetHeader("Content-Length") : null;
+            var range = h.Contains("Content-Range") ? h.GetHeader("Content-Range") : null;
+            var bytes = ChargeableLength(length, range);
+            if (bytes <= 0)
+            {
+                App.Logger?.Debug("ScrolllerWebGate: no length on a passed-through response, not charged");
+                return;
+            }
+            // Chromium's own HTTP cache answers a replay without the network and this event
+            // cannot tell: a url is never charged past its whole size in one day.
+            var total = TotalSize(status, length, range);
+            var day = ScrolllerLedger.DayOf(DateTime.Now);
+            long due;
+            lock (ChargedToday)
+            {
+                if (ChargedDay != day) { ChargedToday.Clear(); ChargedDay = day; }
+                ChargedToday.TryGetValue(url, out var already);
+                due = DedupedCharge(already, bytes, total);
+                if (due > 0) ChargedToday[url] = already + due;
+            }
+            if (due > 0) ScrolllerAllowance.Charge(due);
         }
         catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: response hook failed: {E}", ex.Message); }
+    }
+
+    private static readonly System.Collections.Generic.Dictionary<string, long> ChargedToday = new(StringComparer.Ordinal);
+    private static string? ChargedDay;
+
+    /// <summary>What a passed-through response still owes today: never past the file's whole
+    /// <paramref name="total"/> for the day; with no known total, only the first response pays.</summary>
+    internal static long DedupedCharge(long already, long bytes, long? total)
+    {
+        if (bytes <= 0) return 0;
+        if (total is long t && t > 0) return Math.Max(0, Math.Min(bytes, t - already));
+        return already > 0 ? 0 : bytes;
+    }
+
+    /// <summary>The whole file's size: a 206's "bytes a-b/TOTAL", a 200's Content-Length, else null.</summary>
+    internal static long? TotalSize(int status, string? contentLength, string? contentRange)
+    {
+        if (status == 206)
+        {
+            var slash = contentRange?.LastIndexOf('/') ?? -1;
+            return slash >= 0 && long.TryParse(contentRange!.AsSpan(slash + 1), out var t) && t > 0 ? t : null;
+        }
+        return long.TryParse(contentLength, out var n) && n > 0 ? n : null;
     }
 
     private static HttpClient CreateHttp()
