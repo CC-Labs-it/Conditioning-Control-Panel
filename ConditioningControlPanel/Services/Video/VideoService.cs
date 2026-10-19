@@ -3879,9 +3879,13 @@ namespace ConditioningControlPanel.Services
             // Media is disposed after Play() — LibVLC internally ref-counts, so this is safe
             // (DualMonitorVideoService already uses this pattern with 'using var media')
             bool isRemote = IsRemoteMediaPath(path);
+            // A Scrolller clip the top-up already put in the device cache plays from that FILE:
+            // no second download, nothing more charged to the daily share (owner, 2026-10-19).
+            var cachedClip = isRemote ? Fyp.Online.ScrolllerDiskCache.TryGetPath(path) : null;
+            if (cachedClip != null) isRemote = false;
             using var media = isRemote
                 ? new Media(_libVLC!, path, FromType.FromLocation)
-                : new Media(_libVLC!, path, FromType.FromPath);
+                : new Media(_libVLC!, cachedClip ?? path, FromType.FromPath);
             if (isRemote)
             {
                 // A CDN read is not a disk read. VLC's default network-caching (~1s) is tuned for
@@ -8309,7 +8313,11 @@ namespace ConditioningControlPanel.Services
         //     blocklist is the remote equivalent and lives in FypOnlineCoordinator.
         //
         // BRIGHT LINE: this machine fetches straight from the provider. No CC Labs server is in
-        // the path, and on this surface nothing is written to disk at all.
+        // the path. Since the daily share (owner, 2026-10-19) a Scrolller clip is downloaded into
+        // the device cache (ScrolllerDiskCache) by the background top-up and only a CACHED clip
+        // is handed out, so every fresh byte is charged and a replay costs nothing. LibVLC plays
+        // the cached file; the browser engine asks for the url and the page's gate answers it
+        // from the same file. The url stays the clip's identity (the Scrolller credit keys on it).
 
         /// <summary>Consumer id for our coordinator tenant. Rotation and dwell are per-consumer,
         /// so mandatory videos learn their own channel taste without fighting the For You feed
@@ -8410,15 +8418,100 @@ namespace ConditioningControlPanel.Services
                     _remoteVideoQueue.Clear();
                     return null;
                 }
-                if (_remoteVideoQueue.Count > 0) url = _remoteVideoQueue.Dequeue();
+                var pending = _remoteVideoQueue.ToList();
+                url = PickPlayableRemote(pending,
+                    Video.ScrolllerCredit.IsScrolllerUrl,
+                    Fyp.Online.ScrolllerDiskCache.Contains,
+                    Fyp.Online.ScrolllerPolicyService.MayFetchFresh);
+                _remoteVideoQueue.Clear();
+                foreach (var u in pending) _remoteVideoQueue.Enqueue(u);
                 left = _remoteVideoQueue.Count;
             }
 
             if (url != null)
                 App.Logger?.Information("VideoService: playing remote clip {Clip} ({Left} buffered)", DescribeClip(url), left);
+            else if (left > 0)
+                App.Logger?.Debug("VideoService: {Left} remote clips buffered, none downloaded yet", left);
 
             KickRemotePrefetch();
             return url;
+        }
+
+        /// <summary>Clips the background top-up keeps downloaded ahead of play.</summary>
+        private const int RemoteReadyTarget = 3;
+
+        /// <summary>0/1 via Interlocked: one clip download loop at a time.</summary>
+        private int _remoteDownloadInFlight;
+
+        /// <summary>
+        /// The remote pick, pure (owner, 2026-10-19): walks the buffer in order and takes the first
+        /// clip that can play WITHOUT a fresh fetch at play time: a Scrolller clip already in the
+        /// device cache, or a url from any other provider (streamed as before). A Scrolller clip not
+        /// cached yet stays for the downloader while a fresh fetch is allowed, and is dropped when
+        /// it is not (share used up, nobody watching): it could only stream uncharged. Removes the
+        /// pick and the dropped urls from <paramref name="queue"/>. Null = nothing ready.
+        /// </summary>
+        internal static string? PickPlayableRemote(List<string> queue, Func<string, bool> isScrolller,
+            Func<string, bool> cached, Func<string, bool> mayFetchFresh)
+        {
+            for (int i = 0; i < queue.Count; i++)
+            {
+                var u = queue[i];
+                if (!isScrolller(u) || cached(u)) { queue.RemoveAt(i); return u; }
+                if (!mayFetchFresh(u)) { queue.RemoveAt(i); i--; }
+            }
+            return null;
+        }
+
+        /// <summary>Fire-and-forget: download buffered Scrolller clips into the device cache until
+        /// <see cref="RemoteReadyTarget"/> are ready. Single-flight; never throws.</summary>
+        private void KickRemoteDownloads()
+        {
+            if (!RemoteMediaEnabled()) return;
+            if (Interlocked.CompareExchange(ref _remoteDownloadInFlight, 1, 0) != 0) return;
+            try
+            {
+                _ = Task.Run(async () =>
+                {
+                    try { await DownloadRemoteClipsAsync().ConfigureAwait(false); }
+                    catch (Exception ex) { App.Logger?.Debug("VideoService: remote clip download failed: {Error}", ex.Message); }
+                    finally { Interlocked.Exchange(ref _remoteDownloadInFlight, 0); }
+                });
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("VideoService: could not start the remote clip download: {Error}", ex.Message);
+                Interlocked.Exchange(ref _remoteDownloadInFlight, 0);
+            }
+        }
+
+        private async Task DownloadRemoteClipsAsync()
+        {
+            for (int guard = 0; guard < RemoteBufferCap; guard++)
+            {
+                string? next = null;
+                int ready = 0;
+                lock (_remoteLock)
+                {
+                    foreach (var u in _remoteVideoQueue)
+                    {
+                        if (!Video.ScrolllerCredit.IsScrolllerUrl(u) || Fyp.Online.ScrolllerDiskCache.Contains(u)) ready++;
+                        else next ??= u;
+                    }
+                }
+                if (next == null || ready >= RemoteReadyTarget) return;
+                if (!Fyp.Online.ScrolllerPolicyService.MayFetchFresh(next)) return;
+
+                var file = await Fyp.Online.ScrolllerDiskCache.GetOrFetchAsync(next, null, CancellationToken.None).ConfigureAwait(false);
+                if (file != null) continue;
+                // Dead link, too big, or refused mid-way: it can never play from a file, so it goes.
+                lock (_remoteLock)
+                {
+                    var keep = _remoteVideoQueue.Where(u => !string.Equals(u, next, StringComparison.Ordinal)).ToList();
+                    _remoteVideoQueue.Clear();
+                    foreach (var u in keep) _remoteVideoQueue.Enqueue(u);
+                }
+            }
         }
 
         /// <summary>Fire-and-forget top-up of the remote buffer. Single-flight, bounded, and it
@@ -8430,6 +8523,7 @@ namespace ConditioningControlPanel.Services
             try
             {
                 if (!RemoteMediaEnabled()) return;
+                KickRemoteDownloads();
 
                 lock (_remoteLock)
                 {
@@ -8518,7 +8612,8 @@ namespace ConditioningControlPanel.Services
                 buffered = _remoteVideoQueue.Count;
             }
 
-            App.Logger?.Information("VideoService: buffered {Added} remote clips ({Total} ready)", accepted.Count, buffered);
+            App.Logger?.Information("VideoService: buffered {Added} remote clips ({Total} queued)", accepted.Count, buffered);
+            KickRemoteDownloads();
         }
 
         #endregion

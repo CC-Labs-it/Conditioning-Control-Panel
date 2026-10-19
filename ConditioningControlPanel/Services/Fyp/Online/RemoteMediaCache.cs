@@ -300,6 +300,15 @@ internal static class RemoteMediaCache
     {
         try
         {
+            // Scrolller media goes through the device cache (owner, 2026-10-19): a cached copy
+            // costs no network and nothing against the daily share, a fresh one is charged.
+            if (global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url))
+            {
+                var viaDisk = await FromScrolllerCacheAsync(url).ConfigureAwait(false);
+                if (viaDisk != null) Store(url, viaDisk);
+                return viaDisk;
+            }
+
             // ResponseHeadersRead so an oversized body is refused on Content-Length rather
             // than after we have already buffered all of it.
             using var resp = await Http
@@ -337,6 +346,38 @@ internal static class RemoteMediaCache
         {
             lock (Gate) InFlight.Remove(url);
         }
+    }
+
+    /// <summary>How a url that missed the in-memory layer is served.</summary>
+    internal enum Route { Network, DiskHit, FreshThroughDisk, Refused }
+
+    /// <summary>The routing rule, pure: a non-Scrolller url goes to the network as it always did;
+    /// a Scrolller url is read from the device cache when it is there, else fetched INTO it when a
+    /// fresh fetch is allowed (switch on, share left, someone watching), else refused (null, and
+    /// every caller already falls back to local media).</summary>
+    internal static Route RouteFor(bool isScrolller, bool diskHit, bool mayFetchFresh)
+    {
+        if (!isScrolller) return Route.Network;
+        if (diskHit) return Route.DiskHit;
+        return mayFetchFresh ? Route.FreshThroughDisk : Route.Refused;
+    }
+
+    private static async Task<byte[]?> FromScrolllerCacheAsync(string url)
+    {
+        var path = ScrolllerDiskCache.TryGetPath(url);
+        switch (RouteFor(true, path != null, ScrolllerPolicyService.MayFetchFresh(url)))
+        {
+            case Route.DiskHit: break;
+            case Route.FreshThroughDisk:
+                path = await ScrolllerDiskCache.GetOrFetchAsync(url, null, CancellationToken.None).ConfigureAwait(false);
+                break;
+            default:
+                return null;
+        }
+        if (path == null) return null;
+        var info = new FileInfo(path);
+        if (!info.Exists || info.Length > MaxSingleEntryBytes) return null;
+        return await File.ReadAllBytesAsync(path, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>Body → bytes, abandoning anything that grows past the per-item cap mid-stream
