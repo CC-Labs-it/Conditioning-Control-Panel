@@ -157,7 +157,8 @@ internal sealed class ScrolllerCacheBook
 /// Layout: <c>{EffectiveAssetsPath}/.scrolller-cache/</c>, one file per url named by the url's
 /// sha256 plus its extension, and <c>index.json</c> (url, bytes, last use, label). A download is
 /// written to a <c>.part</c> file and renamed only once whole, so a partial file never becomes an
-/// entry; the first use after launch sweeps leftovers (parts, files the index does not know).
+/// entry; the load at launch (<see cref="WarmAsync"/>, in the background) sweeps leftovers (parts,
+/// files the index does not know). Until it is done the cache reads as empty.
 /// NOT the <c>ccp_temp_</c> scheme on purpose: those are swept at every launch.
 /// </summary>
 internal static class ScrolllerDiskCache
@@ -193,9 +194,26 @@ internal static class ScrolllerDiskCache
     /// <summary>The clock for last-use stamps. Replaceable by tests.</summary>
     internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
 
+    /// <summary>The user's remote-media consent (MediaSource not local AND HasRemoteMediaConsent).
+    /// Replaceable by tests.</summary>
+    internal static Func<bool> RemoteConsent = () =>
+    {
+        var s = App.Settings?.Current;
+        return s != null && s.MediaSource != "local" && s.HasRemoteMediaConsent;
+    };
+
+    /// <summary>Tests only: load the books on the caller's thread instead of in the background.</summary>
+    internal static bool WarmInline;
+
     private static readonly object Gate = new();
     private static ScrolllerCacheBook? _book;
     private static string? _bookRoot;
+    private static Task? _warm;
+    private static string? _warmRoot;
+    private static DateTime _warmStartedUtc;
+    private static readonly object SaveLock = new();  // the save timer field
+    private static readonly object FileLock = new();  // one writer of index.json.tmp at a time
+    private static long _saveSeq, _writtenSeq;        // a stale snapshot never overwrites a newer one
     private static Timer? _saveTimer;
     private static readonly ConcurrentDictionary<string, Lazy<Task<string?>>> InFlight = new(StringComparer.Ordinal);
     private static readonly Lazy<HttpClient> Http = new(() =>
@@ -229,22 +247,31 @@ internal static class ScrolllerDiskCache
         catch { return null; }
     }
 
-    /// <summary>True when a complete copy is cached (no LRU touch). False while the switch is off.</summary>
+    /// <summary>True when a complete copy is cached and its file is still there (no LRU touch).
+    /// False while the switch is off.</summary>
     public static bool Contains(string? url)
     {
         if (string.IsNullOrEmpty(url) || !ScrolllerPolicy.Enabled) return false;
-        try { lock (Gate) return Book()?.Get(url!) != null; }
+        try
+        {
+            string? path;
+            lock (Gate) path = Book()?.Get(url!)?.Path;
+            return path != null && File.Exists(path);
+        }
         catch { return false; }
     }
 
     /// <summary>The cached copy, else a fresh download into the cache (refused, null, when
-    /// <see cref="ScrolllerPolicyService.MayFetchFresh"/> says no). Null on any failure.
+    /// <see cref="ScrolllerPolicyService.MayFetchFresh"/> says no, or when the user has not
+    /// consented to remote media). Null on any failure.
     /// One download per url however many ask; the first asker's token can cancel it, a later
     /// asker only stops waiting.</summary>
     public static async Task<string?> GetOrFetchAsync(string url, ScrolllerCacheMeta? meta, CancellationToken ct)
     {
         try
         {
+            if (!RemoteConsent()) return null;
+            await WarmAsync().WaitAsync(ct).ConfigureAwait(false);   // never a cold miss that fetches a cached url
             var hit = TryGetPath(url);
             if (hit != null) return hit;
             if (!global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url)
@@ -303,12 +330,26 @@ internal static class ScrolllerDiskCache
         catch { return Array.Empty<ScrolllerCacheEntry>(); }
     }
 
-    /// <summary>Writes the index now (app exit). Never throws.</summary>
+    /// <summary>Writes the index now (app exit). Never throws. A commit after this still saves.</summary>
     public static void Flush()
     {
-        try { _saveTimer?.Dispose(); } catch { }
-        _saveTimer = null;
+        lock (SaveLock)
+        {
+            try { _saveTimer?.Dispose(); } catch { }
+            _saveTimer = null;
+        }
         Save();
+    }
+
+    /// <summary>Loads the books (and sweeps the folder) on a background thread; call at app start.
+    /// Until it finishes, every read sees an empty cache: the UI thread never waits on the scan.</summary>
+    public static Task WarmAsync()
+    {
+        try
+        {
+            lock (Gate) return Book() != null ? Task.CompletedTask : _warm ?? Task.CompletedTask;
+        }
+        catch { return Task.CompletedTask; }
     }
 
     // ---- pure helpers ---------------------------------------------------------------
@@ -348,14 +389,68 @@ internal static class ScrolllerDiskCache
 
     // ---- disk -----------------------------------------------------------------------
 
-    /// <summary>The book for the current root, loaded (and the folder swept) on first use. Null
-    /// when there is no folder. Caller holds <see cref="Gate"/>.</summary>
+    private static bool SameRoot(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The book for the current root, or null when there is no folder or it is still
+    /// loading (the load runs in the background: never a disk scan on the caller's thread). When
+    /// the root moved, the old book's index is written first so its fresh files are not swept as
+    /// strangers the next time that folder loads. Caller holds <see cref="Gate"/>.</summary>
     private static ScrolllerCacheBook? Book()
     {
         var root = RootProvider();
         if (string.IsNullOrEmpty(root)) return null;
-        if (_book != null && string.Equals(root, _bookRoot, StringComparison.OrdinalIgnoreCase)) return _book;
+        if (_book != null && SameRoot(root, _bookRoot)) return _book;
+        if (_book != null && _bookRoot != null)
+        {
+            WriteIndex(_book.ToJson(), Path.Combine(_bookRoot, IndexFileName), Interlocked.Increment(ref _saveSeq));
+            _book = null;
+            _bookRoot = null;
+        }
+        if (WarmInline)
+        {
+            Install(root!, LoadBook(root!));
+            return _book;
+        }
+        StartWarmLocked(root!);
+        return null;
+    }
 
+    /// <summary>Starts (or joins) the background load of <paramref name="root"/>. A load that
+    /// failed is retried at most once a minute. Caller holds <see cref="Gate"/>.</summary>
+    private static Task StartWarmLocked(string root)
+    {
+        if (_warm != null && SameRoot(root, _warmRoot)
+            && (!_warm.IsCompleted || UtcNow() - _warmStartedUtc < TimeSpan.FromMinutes(1)))
+            return _warm;
+        _warmRoot = root;
+        _warmStartedUtc = UtcNow();
+        _warm = Task.Run(() =>
+        {
+            try
+            {
+                var book = LoadBook(root);
+                lock (Gate) Install(root, book);
+                ScheduleSave();
+            }
+            catch (Exception ex) { App.Logger?.Debug("[scrolller cache] load failed: {E}", ex.Message); }
+        });
+        return _warm;
+    }
+
+    /// <summary>A loaded book becomes the live one, unless the root moved on meanwhile. Caller
+    /// holds <see cref="Gate"/>.</summary>
+    private static void Install(string root, ScrolllerCacheBook book)
+    {
+        if (!SameRoot(RootProvider(), root) || (_book != null && SameRoot(_bookRoot, root))) return;
+        _book = book;
+        _bookRoot = root;
+        EvictLocked(null);
+    }
+
+    /// <summary>Reads the index and sweeps the folder. Disk work, no lock held: nothing can write
+    /// into <paramref name="root"/> until its book is installed.</summary>
+    private static ScrolllerCacheBook LoadBook(string root)
+    {
         Directory.CreateDirectory(root);
         var indexPath = Path.Combine(root, IndexFileName);
         string? json = null;
@@ -384,23 +479,31 @@ internal static class ScrolllerDiskCache
             }
         }
         catch { }
-
-        _book = book;
-        _bookRoot = root;
-        EvictLocked(null);
         return book;
     }
 
     /// <summary>Drops oldest entries past the cap. Caller holds <see cref="Gate"/>. A file still
-    /// open (a player has it) cannot be deleted: it leaves the books anyway and the next launch's
-    /// sweep removes it.</summary>
+    /// open (a player has it) cannot be deleted: its row STAYS (the file is whole and still
+    /// serves, so a replay never pays to fetch it again only to fail the rename) and the next
+    /// eviction retries it; younger entries go in its place meanwhile.</summary>
     private static void EvictLocked(string? keepUrl)
     {
         if (_book == null) return;
-        foreach (var e in ScrolllerCacheBook.Evictions(_book.Snapshot(), CapBytes, keepUrl))
+        var stuck = new HashSet<string>(StringComparer.Ordinal);
+        long stuckBytes = 0;
+        for (int round = 0; round < 8; round++)
         {
-            _book.Remove(e.Url);
-            TryDelete(e.Path);
+            var drops = ScrolllerCacheBook.Evictions(_book.Snapshot().Where(e => !stuck.Contains(e.Url)), CapBytes - stuckBytes, keepUrl);
+            if (drops.Count == 0) return;
+            bool anyStuck = false;
+            foreach (var e in drops)
+            {
+                if (TryDelete(e.Path)) { _book.Remove(e.Url); continue; }
+                stuck.Add(e.Url);
+                stuckBytes += e.Bytes;
+                anyStuck = true;
+            }
+            if (!anyStuck) return;
         }
     }
 
@@ -521,12 +624,26 @@ internal static class ScrolllerDiskCache
 
     private static void ScheduleSave()
     {
-        try
+        lock (SaveLock)
         {
-            if (_saveTimer != null) return;
-            _saveTimer = new Timer(_ => { _saveTimer?.Dispose(); _saveTimer = null; Save(); }, null, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan);
+            try
+            {
+                if (_saveTimer != null) return;
+                _saveTimer = new Timer(_ => OnSaveTimer(), null, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan);
+            }
+            catch { }
         }
-        catch { }
+    }
+
+    private static void OnSaveTimer()
+    {
+        // Drop the timer BEFORE saving: a commit that lands during the write schedules a new one.
+        lock (SaveLock)
+        {
+            try { _saveTimer?.Dispose(); } catch { }
+            _saveTimer = null;
+        }
+        Save();
     }
 
     private static void Save()
@@ -534,32 +651,56 @@ internal static class ScrolllerDiskCache
         try
         {
             string json, path;
+            long seq;
             lock (Gate)
             {
                 if (_book == null || _bookRoot == null) return;
                 json = _book.ToJson();
                 path = Path.Combine(_bookRoot, IndexFileName);
+                seq = Interlocked.Increment(ref _saveSeq);
             }
-            var tmp = path + ".tmp";
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, path, overwrite: true);
+            WriteIndex(json, path, seq);
         }
         catch (Exception ex) { App.Logger?.Debug("[scrolller cache] index save failed: {E}", ex.Message); }
     }
 
-    private static void TryDelete(string? path)
+    /// <summary>One writer of the .tmp at a time; a snapshot older than the last one written is
+    /// dropped. May be called with <see cref="Gate"/> held (never the other way round).</summary>
+    private static void WriteIndex(string json, string path, long seq)
     {
-        if (string.IsNullOrEmpty(path)) return;
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
+        try
+        {
+            lock (FileLock)
+            {
+                if (seq < _writtenSeq) return;
+                var tmp = path + ".tmp";
+                File.WriteAllText(tmp, json);
+                File.Move(tmp, path, overwrite: true);
+                _writtenSeq = seq;
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] index save failed: {E}", ex.Message); }
     }
 
-    /// <summary>Tests only: forget the books (the folder stays).</summary>
+    /// <summary>Deletes the file. True when it is gone (or never was).</summary>
+    private static bool TryDelete(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return true;
+        try { if (File.Exists(path)) File.Delete(path); return true; } catch { return false; }
+    }
+
+    /// <summary>Tests only: forget the books (the folder stays); loads run inline.</summary>
     internal static void ResetForTests()
     {
-        try { _saveTimer?.Dispose(); } catch { }
-        _saveTimer = null;
-        lock (Gate) { _book = null; _bookRoot = null; }
+        lock (SaveLock)
+        {
+            try { _saveTimer?.Dispose(); } catch { }
+            _saveTimer = null;
+        }
+        lock (Gate) { _book = null; _bookRoot = null; _warm = null; _warmRoot = null; }
         InFlight.Clear();
         CapBytes = DefaultCapBytes;
+        WarmInline = true;
+        RemoteConsent = () => true;
     }
 }
