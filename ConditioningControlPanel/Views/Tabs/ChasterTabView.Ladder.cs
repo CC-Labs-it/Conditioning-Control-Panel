@@ -269,6 +269,7 @@ namespace ConditioningControlPanel.Views.Tabs
                 await Dispatcher.InvokeAsync(() =>
                 {
                     PaintLadder();
+                    RefreshCalendarRaffle();
                     if (LadderPopup.IsOpen) UnrollLadder();
                 });
             }
@@ -293,6 +294,7 @@ namespace ConditioningControlPanel.Views.Tabs
         {
             _raffleCard = card;
             PaintLadder();
+            RefreshCalendarRaffle();
         }
 
         private void PaintLadder()

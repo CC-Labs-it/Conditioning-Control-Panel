@@ -627,6 +627,8 @@
   "chaster_cal_served": "день {0}, отсижен",
   "chaster_cal_locked": "день {0}, ещё впереди",
   "chaster_cal_elided": "и {0} дн. до этого",
+  "chaster_cal_served_raffle": "день {0}, отсижен, засчитан в розыгрыш",
+  "chaster_cal_raffle_key": "засчитан в розыгрыш",
   "chaster_import_title": "Внутри время замка",
   "chaster_import_body": "Этот пресет может добавлять время к твоему замку Chaster.",
   "chaster_import_detail": "Триггеров: {0}, {1} мин, если каждый сработает раз. Каждый добавляет не больше 15 мин в день.",

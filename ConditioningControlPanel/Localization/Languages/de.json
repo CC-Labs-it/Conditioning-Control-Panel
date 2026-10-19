@@ -627,6 +627,8 @@
   "chaster_cal_served": "Tag {0}, abgesessen",
   "chaster_cal_locked": "Tag {0}, noch abzusitzen",
   "chaster_cal_elided": "und die {0} Tage davor",
+  "chaster_cal_served_raffle": "Tag {0}, abgesessen, zählt für die Verlosung",
+  "chaster_cal_raffle_key": "zählt für die Verlosung",
   "chaster_import_title": "Enthält Schlosszeit",
   "chaster_import_body": "Dieses Preset kann deinem Chaster-Schloss Zeit hinzufügen.",
   "chaster_import_detail": "{0} Trigger, {1} Min., wenn jeder einmal auslöst. Jeder Trigger fügt höchstens 15 Min. am Tag hinzu.",

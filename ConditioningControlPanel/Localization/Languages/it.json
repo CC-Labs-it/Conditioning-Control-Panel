@@ -764,6 +764,8 @@
   "chaster_cal_served": "giorno {0}, scontato",
   "chaster_cal_locked": "giorno {0}, ancora da scontare",
   "chaster_cal_elided": "e i {0} giorni prima di questi",
+  "chaster_cal_served_raffle": "giorno {0}, scontato, valido per il sorteggio",
+  "chaster_cal_raffle_key": "valido per il sorteggio",
   "chaster_import_title": "Contiene tempo sul lucchetto",
   "chaster_import_body": "Questo preset può aggiungere tempo al tuo lucchetto Chaster.",
   "chaster_import_detail": "{0} trigger, {1} min se ognuno scatta una volta. Ogni trigger aggiunge al massimo 15 min al giorno.",

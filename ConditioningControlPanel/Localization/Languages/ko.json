@@ -627,6 +627,8 @@
   "chaster_cal_served": "{0}일째, 완료",
   "chaster_cal_locked": "{0}일째, 남음",
   "chaster_cal_elided": "그 전의 {0}일",
+  "chaster_cal_served_raffle": "{0}일째, 완료, 추첨에 인정",
+  "chaster_cal_raffle_key": "추첨에 인정된 날",
   "chaster_import_title": "잠금 시간 포함",
   "chaster_import_body": "이 프리셋은 Chaster 잠금에 시간을 더할 수 있어요.",
   "chaster_import_detail": "트리거 {0}개, 각각 한 번씩 발동하면 {1}분. 트리거마다 하루 최대 15분까지 더해져요.",
