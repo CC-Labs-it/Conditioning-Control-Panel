@@ -40,6 +40,10 @@ internal sealed class ScrolllerCacheBook
     private readonly Dictionary<string, ScrolllerCacheEntry> _byUrl = new(StringComparer.Ordinal);
 
     public long TotalBytes { get; private set; }
+
+    /// <summary>Every row has passed the byte check (index field "fc"). An index written by a build
+    /// without the check drops the field, so its rows get checked again.</summary>
+    public bool FormatChecked { get; set; }
     public int Count => _byUrl.Count;
 
     public ScrolllerCacheEntry? Get(string url) => _byUrl.TryGetValue(url, out var e) ? e : null;
@@ -110,7 +114,9 @@ internal sealed class ScrolllerCacheBook
                 ["w"] = m.Width, ["h"] = m.Height, ["ti"] = m.Title,
             });
         }
-        return new JObject { ["v"] = 1, ["entries"] = arr }.ToString(Newtonsoft.Json.Formatting.None);
+        var root = new JObject { ["v"] = 1, ["entries"] = arr };
+        if (FormatChecked) root["fc"] = 1;
+        return root.ToString(Newtonsoft.Json.Formatting.None);
     }
 
     /// <summary>Index text -> book, paths under <paramref name="root"/>. A record whose file name
@@ -124,6 +130,7 @@ internal sealed class ScrolllerCacheBook
         {
             var o = JObject.Parse(json);
             if (o["entries"] is not JArray arr) return book;
+            book.FormatChecked = (int?)o["fc"] == 1;
             foreach (var t in arr.OfType<JObject>())
             {
                 var url = (string?)t["u"];
@@ -381,6 +388,118 @@ internal static class ScrolllerDiskCache
 
     internal static bool IsCacheFileName(string name) => CacheFile.IsMatch(name);
 
+    /// <summary>Check every body's own bytes before it becomes (or stays) an entry. Tests that
+    /// write placeholder bytes switch it off through <see cref="ResetForTests"/>.</summary>
+    internal static bool FormatCheck = true;
+
+    private static readonly HashSet<string> VideoExts = new(StringComparer.Ordinal) { ".mp4", ".m4v", ".mov", ".webm", ".mkv" };
+    private static readonly HashSet<string> ImageExts = new(StringComparer.Ordinal) { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp", ".heic" };
+
+    /// <summary>What the bytes really are, by signature (<see cref="Helpers.MediaTypeSniffer"/>),
+    /// or null for anything that is not media (an HTML or XML error page, an empty body).</summary>
+    internal static string? SniffFormat(byte[] head, int count)
+        => Helpers.MediaTypeSniffer.FromMagicBytes(head, count);
+
+    /// <summary>True when a WEBP head declares animation (VP8X with the ANIM flag).</summary>
+    internal static bool IsAnimatedWebp(byte[] head, int count)
+        => count >= 21 && head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F'
+           && head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P'
+           && head[12] == 'V' && head[13] == 'P' && head[14] == '8' && head[15] == 'X'
+           && (head[20] & 0x02) != 0;
+
+    /// <summary>
+    /// May a body with this head be kept for a url with extension <paramref name="ext"/> and label
+    /// <paramref name="kind"/>? The bytes must be media of the same family as the extension (an S3
+    /// "AccessDenied" XML body under a .mp4 url is not), and a "clip" or "gif" label must hold
+    /// something that moves: a video, a GIF, or an animated WEBP. A still under a gif label misses
+    /// and is fetched again as the clip it should be.
+    /// </summary>
+    internal static bool BodyFits(string ext, string? kind, byte[] head, int count)
+    {
+        var real = SniffFormat(head, count) ?? IsoBoxVideo(ext, kind, head, count);
+        if (real == null) return false;
+        bool video = VideoExts.Contains(real);
+        bool image = ImageExts.Contains(real);
+        if (kind == ScrolllerReuse.KindGif && video) return true;   // a GIF post served as video, whatever the url says
+        if (VideoExts.Contains(ext) && !video) return false;
+        if (ImageExts.Contains(ext) && !image) return false;
+        switch (kind)
+        {
+            case ScrolllerReuse.KindClip: return video;
+            case ScrolllerReuse.KindGif: return video || real == ".gif" || (real == ".webp" && IsAnimatedWebp(head, count));
+            case ScrolllerReuse.KindPicture: case ScrolllerReuse.KindPoster: return image;
+            default: return video || image;
+        }
+    }
+
+    private static readonly string[] IsoBoxes = { "styp", "moof", "sidx", "moov", "mdat", "free", "skip", "wide", "pnot" };
+
+    /// <summary>".mp4" for an ISO-BMFF body that does not open with <c>ftyp</c> (a fragmented
+    /// MP4 opens with styp/moof/sidx, a moov-first one with moov), when the url or the label says
+    /// video. Null otherwise.</summary>
+    internal static string? IsoBoxVideo(string ext, string? kind, byte[] head, int count)
+    {
+        if (count < 8) return null;
+        if (!VideoExts.Contains(ext) && kind != ScrolllerReuse.KindClip && kind != ScrolllerReuse.KindGif) return null;
+        foreach (var box in IsoBoxes)
+            if (head[4] == box[0] && head[5] == box[1] && head[6] == box[2] && head[7] == box[3]) return ".mp4";
+        return null;
+    }
+
+    /// <summary>
+    /// The startup check, which only drops on POSITIVE evidence (an unknown body is kept: dropping
+    /// a good copy would charge the share again for it): a text body (XML, HTML, JSON: an error
+    /// page) or a single-frame still under a clip or gif label. Nothing read = kept.
+    /// </summary>
+    internal static bool KeepAtLoad(string ext, string? kind, byte[] head, int count)
+    {
+        if (count <= 0) return true;
+        var real = SniffFormat(head, count) ?? IsoBoxVideo(ext, kind, head, count);
+        if (real == null)
+        {
+            int i = 0;
+            if (count >= 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF) i = 3;   // UTF-8 BOM
+            while (i < count && (head[i] == ' ' || head[i] == '\t' || head[i] == '\r' || head[i] == '\n')) i++;
+            return !(i < count && (head[i] == '<' || head[i] == '{'));
+        }
+        if (kind != ScrolllerReuse.KindClip && kind != ScrolllerReuse.KindGif) return true;
+        bool still = real is ".jpg" or ".png" or ".bmp" or ".avif" or ".heic"
+                     || (real == ".webp" && !IsAnimatedWebp(head, count));
+        return !still;
+    }
+
+    /// <summary>The first <see cref="Helpers.MediaTypeSniffer.MagicProbeBytes"/> bytes of a file
+    /// (fewer when it is shorter, none when it cannot be read).</summary>
+    private static (byte[] Head, int Count) ReadHead(string path)
+    {
+        var buf = new byte[Helpers.MediaTypeSniffer.MagicProbeBytes];
+        int read = 0;
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            while (read < buf.Length)
+            {
+                int got = fs.Read(buf, read, buf.Length - read);
+                if (got <= 0) break;
+                read += got;
+            }
+        }
+        catch { read = 0; }
+        return (buf, read);
+    }
+
+    /// <summary><see cref="BodyFits"/> (a new body) or <see cref="KeepAtLoad"/> (a stored one) on a
+    /// file. Always true while the check is off, and when nothing could be read: only bytes
+    /// actually read can condemn a file.</summary>
+    private static bool FileFits(string url, string? kind, string path, bool atLoad = false)
+    {
+        if (!FormatCheck) return true;
+        var (head, count) = ReadHead(path);
+        if (count == 0) return true;
+        var ext = ExtensionOf(url);
+        return atLoad ? KeepAtLoad(ext, kind, head, count) : BodyFits(ext, kind, head, count);
+    }
+
     /// <summary>The label a file is stored with: the caller's, else what the feed said, else a
     /// guess from the extension.</summary>
     internal static ScrolllerCacheMeta ResolveMeta(string url, ScrolllerCacheMeta? meta)
@@ -463,17 +582,25 @@ internal static class ScrolllerDiskCache
         try { if (File.Exists(indexPath)) json = File.ReadAllText(indexPath); } catch { }
         var book = ScrolllerCacheBook.FromJson(json, root);
 
-        // Records whose file is gone or has the wrong size go; files the index does not know
-        // (a crash mid-download, an eviction that hit an open file) are deleted.
+        // Records whose file is gone, has the wrong size, or whose bytes are not what the url and
+        // label say (an error page, a still under a gif label: kept by builds before the format
+        // check) go, so each misses once and is fetched again; files the index does not know
+        // (a crash mid-download, an eviction that hit an open file, those rows) are deleted.
+        // The byte check runs once per index: a stamped one only holds rows the commit check passed.
+        bool scan = FormatCheck && !book.FormatChecked;
+        int misfits = 0;
         foreach (var e in book.Snapshot())
         {
             try
             {
                 var fi = new FileInfo(e.Path);
                 if (!fi.Exists || fi.Length != e.Bytes) book.Remove(e.Url);
+                else if (scan && !FileFits(e.Url, e.Meta.Kind, e.Path, atLoad: true)) { book.Remove(e.Url); misfits++; }
             }
             catch { book.Remove(e.Url); }
         }
+        if (FormatCheck) book.FormatChecked = true;
+        if (misfits > 0) App.Logger?.Information("[scrolller cache] dropped {Count} file(s) whose bytes did not match their label", misfits);
         var known = new HashSet<string>(book.Snapshot().Select(e => Path.GetFileName(e.Path)), StringComparer.OrdinalIgnoreCase);
         try
         {
@@ -521,6 +648,14 @@ internal static class ScrolllerDiskCache
         {
             var len = new FileInfo(part).Length;
             if (len <= 0 || len > MaxEntryBytes) { TryDelete(part); return null; }
+            // Stored as served, never re-encoded: so the bytes themselves must be the media the
+            // url names. The download is still charged (it came); it just never replays.
+            if (!FileFits(url, meta.Kind, part))
+            {
+                TryDelete(part);
+                App.Logger?.Debug("[scrolller cache] body from {Host} is not the {Kind} its url names: not kept", Logging.UrlLog.Host(url), meta.Kind);
+                return null;
+            }
             string final;
             lock (Gate)
             {
@@ -719,6 +854,7 @@ internal static class ScrolllerDiskCache
         InFlight.Clear();
         CapBytes = DefaultCapBytes;
         WarmInline = true;
+        FormatCheck = false;
         RemoteConsent = () => true;
     }
 }

@@ -390,6 +390,12 @@ internal static class ScrolllerWebGate
             var kind = KindOf(url, e.ResourceContext == CoreWebView2WebResourceContext.Media,
                 e.ResourceContext == CoreWebView2WebResourceContext.Image);
             var path = kind == ScrolllerMediaKind.Other ? null : CachedPath(url);
+            // A body already refused today (not media) is answered locally: no refetch, no charge.
+            if (path == null && kind != ScrolllerMediaKind.Other && IsRefusedToday(url, DateTime.Now))
+            {
+                e.Response = core.Environment.CreateWebResourceResponse(null, 404, "Not Found", LocalErrorHeaders());
+                return;
+            }
             var route = Route(url, e.Request.Method, true, path != null,
                 ScrolllerPolicyService.MayFetchFresh(url), range != null, kind);
 
@@ -526,18 +532,19 @@ internal static class ScrolllerWebGate
             // Only a picture or GIF body is kept: an error page or anything else served with a
             // media extension is answered once and never replayed from the cache.
             IScrolllerCacheWriter? writer = null;
-            if (IsCacheableType(type))
-            {
-                var meta = ScrolllerItemIndex.MetaFor(url)
-                           ?? new ScrolllerCacheMeta(kind == ScrolllerMediaKind.Gif ? "gif" : "picture");
-                writer = ScrolllerDiskCache.BeginWrite(url, meta);
-            }
+            var meta = ScrolllerItemIndex.MetaFor(url)
+                       ?? new ScrolllerCacheMeta(kind == ScrolllerMediaKind.Gif ? "gif" : "picture");
+            if (IsCacheableType(type)) writer = ScrolllerDiskCache.BeginWrite(url, meta);
             await using var body = await res.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
             using var sink = new MemoryStream(expected is long n && n > 0 ? (int)n : 0);
             // The share is per account: a body that spans a sign-in or sign-out charges each chunk to
             // whoever is signed in when it arrives (one body at most MaxBodyBytes).
             var whole = await TeeCopyAsync(body, sink, writer, ScrolllerAllowance.Charge, expected, MaxBodyBytes,
                 budget.Token, FetchIdleTimeout).ConfigureAwait(false);
+            // Paid for but never cached (not media): remembered for the day, so later page views
+            // get a local 404 instead of fetching and paying for it again.
+            if (whole && ScrolllerDiskCache.FormatCheck && RefusedBody(url, meta.Kind, sink.GetBuffer(), (int)sink.Length))
+                RefuseForToday(url, DateTime.Now);
             // GetBuffer, not ToArray: the page is answered from this buffer, never a second copy.
             return whole
                 ? new Fetched(200, "OK", sink.GetBuffer(), (int)sink.Length, type)
@@ -548,6 +555,43 @@ internal static class ScrolllerWebGate
             App.Logger?.Debug("ScrolllerWebGate: fetch failed: {E}", ex.Message);
             return new Fetched(502, "Bad Gateway", Array.Empty<byte>(), 0, "");
         }
+    }
+
+    /// <summary>A whole-fetched body whose bytes the device cache's check refuses
+    /// (<see cref="ScrolllerDiskCache.BodyFits"/>): an error page, not media. Decided by the bytes,
+    /// never the content type: a CDN may serve a real picture as application/octet-stream. Pure.</summary>
+    internal static bool RefusedBody(string url, string? kind, byte[] body, int length)
+    {
+        int n = Math.Min(length, Helpers.MediaTypeSniffer.MagicProbeBytes);
+        return n > 0 && !ScrolllerDiskCache.BodyFits(ScrolllerDiskCache.ExtensionOf(url), kind, body, n);
+    }
+
+    private static readonly HashSet<string> RefusedUrls = new(StringComparer.Ordinal);
+    private static string? RefusedDay;
+    private const int RefusedSoftCap = 5000;
+
+    /// <summary>Remembers a refused url until local midnight. Machine-wide on purpose: the body is
+    /// not media for anyone, so another account signed in the same day is spared the fetch too.</summary>
+    internal static void RefuseForToday(string url, DateTime now)
+    {
+        var day = ScrolllerLedger.DayOf(now);
+        lock (RefusedUrls)
+        {
+            if (RefusedDay != day || RefusedUrls.Count >= RefusedSoftCap) { RefusedUrls.Clear(); RefusedDay = day; }
+            RefusedUrls.Add(url);
+        }
+    }
+
+    internal static bool IsRefusedToday(string url, DateTime now)
+    {
+        var day = ScrolllerLedger.DayOf(now);
+        lock (RefusedUrls) return RefusedDay == day && RefusedUrls.Contains(url);
+    }
+
+    /// <summary>Tests only.</summary>
+    internal static void ClearRefusedForTests()
+    {
+        lock (RefusedUrls) { RefusedUrls.Clear(); RefusedDay = null; }
     }
 
     /// <summary>Only image bodies go into the device cache from a whole fetch.</summary>
