@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Services.Video
     /// flashes on. OverlayService pins the compositor host below a playing video for the same
     /// reason (#497). A floating video is a small window among the rest: the flashes stay, the
     /// scheduler keeps going. A Test press follows the same rule as any other trigger.
-    /// Pure, pinned by VideoFlashRuleTests.
+    /// Pure, pinned by FloatingVideoPolishTests.
     /// </summary>
     internal static class VideoFlashRule
     {

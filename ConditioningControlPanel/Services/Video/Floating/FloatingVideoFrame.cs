@@ -238,6 +238,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
 
             private void EndVeil()
             {
+                if (_detached) return;   // closing mid-reveal: never one frame of the full window
                 _veiled = false;
                 _shown = 1.0;
                 ApplyShape();

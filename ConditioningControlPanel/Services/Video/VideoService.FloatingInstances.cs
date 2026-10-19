@@ -254,10 +254,12 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { App.Logger?.Warning("VideoService: floating frame setup failed - {Error}", ex.Message); }
         }
 
-        private void AdoptSurface(IFloatingVideoSurface surface, Screen screen)
+        /// <param name="joinAudio">False for a window still veiled (FloatingFirstFrame): it takes no sound
+        /// until it is shown, RevealInstance adds it then.</param>
+        private void AdoptSurface(IFloatingVideoSurface surface, Screen screen, bool joinAudio = true)
         {
             surface.Touched += OnFloatingTouched;
-            _audioFocus.Add(surface);
+            if (joinAudio) _audioFocus.Add(surface);
             try
             {
                 surface.MotionSpeed = FloatingMotionSpeed();
@@ -477,8 +479,10 @@ namespace ConditioningControlPanel.Services
                 PreventClickRaise(win);
 
                 _floaters.Add(c);
-                AdoptSurface(c.Surface, screen);
-                ApplyAudioFocus();
+                // Motion now, sound at the reveal: a window nobody can see never plays, and never takes
+                // the sound from the clip being watched.
+                AdoptSurface(c.Surface, screen, joinAudio: false);
+                c.Surface.SetMuted(true);
 
                 // No picture in time: this window goes, the others carry on.
                 var watch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(InstanceFirstFrameMs) };
@@ -523,6 +527,13 @@ namespace ConditioningControlPanel.Services
         {
             if (c.Closed || c.Revealed) { c.RevealWatch?.Stop(); return; }
             var now = Environment.TickCount64;
+            // A grace pause holds every page: its time does not count against the first frame.
+            if (_gracePaused)
+            {
+                if (c.ReadyTick != 0) c.ReadyTick += 100;
+                if (c.PlayingTick != 0) c.PlayingTick += 100;
+                return;
+            }
             switch (FloatingFirstFrame.Decide(c.FrameSeen,
                         c.PlayingTick == 0 ? null : now - c.PlayingTick,
                         c.ReadyTick == 0 ? null : now - c.ReadyTick))
@@ -543,6 +554,13 @@ namespace ConditioningControlPanel.Services
             if (c.Closed || c.Revealed) return;
             c.Revealed = true;
             c.RevealWatch?.Stop();
+            if (c.Surface != null)
+            {
+                // Shown: it joins the sound rotation as the newest, so it takes the sound (as a
+                // window did on creation before the veil).
+                _audioFocus.Add(c.Surface);
+                ApplyAudioFocus();
+            }
             var animate = FloatingSpawnLook.Animates(MotionFx.Level);
             VideoDiag.Log("VIDEO", $"floating window shown {Environment.TickCount64 - c.SpawnTick}ms after it was made (frame={c.FrameSeen}, animated={animate})");
             void Revealed()

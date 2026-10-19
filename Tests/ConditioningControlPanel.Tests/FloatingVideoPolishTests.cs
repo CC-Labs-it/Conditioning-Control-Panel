@@ -82,6 +82,39 @@ public class FloatingVideoPolishTests
         Assert.DoesNotContain("ShowInstanceControls", Between(src, "case \"playing\":", "case \"firstFrame\":"));
     }
 
+    [Fact]
+    public void A_playing_clip_is_never_skipped_for_a_late_frame_report()
+        => Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, 0, FloatingFirstFrame.ReadyBudgetMs * 2));
+
+    [Fact]
+    public void A_veiled_window_takes_no_sound_until_it_is_shown()
+    {
+        var src = Read("Services", "Video", "VideoService.FloatingInstances.cs");
+        var spawn = Member(src, "private bool SpawnInstance(");
+        Assert.Contains("AdoptSurface(c.Surface, screen, joinAudio: false);", spawn);
+        Assert.Contains("c.Surface.SetMuted(true);", spawn);
+        Assert.DoesNotContain("ApplyAudioFocus();", spawn);
+        var reveal = Member(src, "private void RevealInstance(");
+        Assert.Contains("_audioFocus.Add(c.Surface);", reveal);
+        Assert.Contains("ApplyAudioFocus();", reveal);
+        // A grace pause holds the first-frame clock.
+        Assert.Contains("if (_gracePaused)", Member(src, "private void CheckReveal("));
+        // Closing mid-reveal never shows the full window.
+        Assert.Contains("if (_detached) return;", Member(Read("Services", "Video", "Floating", "FloatingVideoFrame.cs"), "private void EndVeil("));
+    }
+
+    [Fact]
+    public void The_flash_rule_is_asked_again_with_the_real_presentation_and_the_presence_follows()
+    {
+        var main = Read("Services", "Video", "VideoService.cs");
+        var start = Member(main, "private void StartVideoPlayback(");
+        var decide = start.IndexOf("if (!forceLibVlc) DecidePresentation(strict);", StringComparison.Ordinal);
+        var again = start.IndexOf("Video.VideoFlashRule.StopsFlashes(floating: IsFloating) && App.Flash?.IsRunning == true) App.Flash.Stop();", StringComparison.Ordinal);
+        Assert.True(decide > 0 && again > decide);
+        // Flash.Start returns early on a service a floating video never stopped: the presence is set by hand.
+        Assert.Contains("if (flashWasRunning) App.DiscordRpc?.SetFlashActivity();", Member(main, "private void Cleanup("));
+    }
+
     // ---- spawn and close look ----
 
     [Theory]

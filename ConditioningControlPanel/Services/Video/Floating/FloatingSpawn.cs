@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
         {
             if (frameSeen) return Verdict.Reveal;
             if (msSincePlaying >= PlayingGraceMs) return Verdict.Reveal;
+            if (msSincePlaying != null) return Verdict.Wait;   // playing: the grace above decides, never a skip
             if (msSinceReady >= ReadyBudgetMs) return Verdict.Skip;
             return Verdict.Wait;
         }
