@@ -682,7 +682,7 @@
                         <Border.RenderTransform>
                             <ScaleTransform x:Name="LogoDriftScale" ScaleX="1" ScaleY="1"/>
                         </Border.RenderTransform>
-                        <Grid>
+                        <Grid x:Name="LogoFaceClip" x:FieldModifier="internal">
                             <!-- The deepest WELL on the page (polish wave 10): the plate is sunk, its
                                  top band runs half again as deep as any other well and the lit foot
                                  catches the lamp. Hit-test off; the wordmark sits in it. -->
@@ -730,7 +730,8 @@
                         </Grid>
                     </Border>
 
-                    <!-- FACE B: the weekly pass card. Collapsed by default so nothing about the
+                    <!-- FACE B: the weekly pass card. Margin 24 matches FACE A, so both faces are the same size
+                         (owner, 2026-10-19). Collapsed by default so nothing about the
                          Dashboard changes until RefreshIntakePassTile() decides otherwise.
                          Visual register deliberately matches Features/FeatureCard.xaml (elevated
                          surface, 1px glass border, 12px radius, pink drop glow) so it reads as a
@@ -740,7 +741,7 @@
                          out / spent) and is written by MainWindow.ApplyIntakePassFaceState(); the
                          {loc:Str} values below are the available-state defaults, so the card
                          still reads correctly if it is ever shown before the first paint. -->
-                    <Border x:Name="IntakePassFace" x:FieldModifier="internal"
+                    <Border x:Name="IntakePassFace" x:FieldModifier="internal" Margin="24"
                             Visibility="Collapsed"
                             Background="{DynamicResource ElevatedSurfaceBrush}"
                             BorderBrush="{DynamicResource GlassBorderBrush}"
