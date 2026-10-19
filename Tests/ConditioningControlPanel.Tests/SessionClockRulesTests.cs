@@ -61,11 +61,53 @@ public class SessionClockRulesTests
     }
 
     [Theory]
-    [InlineData(false, true)]   // after a panic the engine is off: Resume goes through Start
-    [InlineData(true, false)]   // a plain pause kept the engine on: Resume is enough
-    public void Resume_starts_the_engine_only_when_it_is_off(bool engineRunning, bool expected)
+    [InlineData(false, false, true)]    // after a panic the engine is off: Resume goes through Start
+    [InlineData(true, false, false)]    // a plain pause kept the engine on: Resume is enough
+    [InlineData(false, true, false)]    // a remote controller owns the engine: START is refused, so is this
+    [InlineData(true, true, false)]
+    public void Resume_starts_the_engine_only_when_it_is_off_and_local(bool engineRunning, bool controller, bool expected)
     {
-        Assert.Equal(expected, SessionClockRules.ResumeStartsEngine(engineRunning));
+        Assert.Equal(expected, SessionClockRules.ResumeStartsEngine(engineRunning, controller));
+    }
+
+    // ---- a failing step is reported once per session ------------------------------------------
+
+    [Fact]
+    public void Only_the_first_failure_of_each_step_is_reported_and_repeats_are_counted()
+    {
+        var log = new SessionClockRules.StepFailures();
+        Assert.False(log.Any);
+        Assert.Equal("", log.Summary());
+
+        Assert.True(log.Note("tick:ramp"));
+        for (int i = 0; i < 119; i++) Assert.False(log.Note("tick:ramp"));
+        Assert.True(log.Note("tick:bubbles"));
+        Assert.False(log.Note("tick:bubbles"));
+
+        Assert.True(log.Any);
+        Assert.Equal(120, log.Count("tick:ramp"));
+        Assert.Equal(0, log.Count("stop"));
+        Assert.Equal("tick:bubbles x2, tick:ramp x120", log.Summary());
+
+        log.Clear();   // a new session starts with a clean slate
+        Assert.False(log.Any);
+        Assert.True(log.Note("tick:ramp"));
+    }
+
+    [Fact]
+    public void Step_failures_reach_the_crash_log_once_and_the_stop_writes_one_summary()
+    {
+        var src = Source("Services", "Session", "SessionEngine.cs");
+        var report = Body(src, "private void ReportStepFailure(string step, Exception ex)");
+        Assert.Contains("if (!_stepFailures.Note(step)) return;", report);
+        Assert.Contains("App.LogCrashDetails(", report);
+        Assert.DoesNotContain("Session tick step failed", src);   // the old per-tick warning
+
+        Assert.Contains("_stepFailures.Clear();", Body(src, "public async Task StartSessionAsync("));
+        var stop = Body(src, "public void StopSession(");
+        Assert.Contains("_stepFailures.Summary()", stop);
+        Assert.Contains("internal static void LogCrashDetails(string source, Exception? ex)",
+            Source("App.xaml.cs"));
     }
 
     // ---- a throwing step never stops the clock ---------------------------------------------
@@ -124,21 +166,28 @@ public class SessionClockRulesTests
     public void Only_the_users_start_resumes_and_panic_still_pauses_and_stops()
     {
         var startStop = Source("MainWindow", "MainWindow.StartStop.cs");
-        var fromUser = Body(startStop, "private void StartEngineFromUser()");
+        var fromUser = Body(startStop, "internal void StartEngineFromUser()");
         Assert.Contains("SessionClockRules.StartResumesParkedSession(_isRunning, engine.IsRunning, engine.IsPaused)", fromUser);
-        Assert.Contains("engine.ResumeSession();", fromUser);
-        Assert.True(fromUser.IndexOf("StartEngine();", StringComparison.Ordinal)
-                    < fromUser.IndexOf("engine.ResumeSession();", StringComparison.Ordinal));
+        int start = fromUser.IndexOf("StartEngine(resumingSession: resuming);", StringComparison.Ordinal);
+        int resumed = fromUser.IndexOf("engine.ResumeSession();", StringComparison.Ordinal);
+        int reasserted = fromUser.IndexOf("engine.ReassertScheduleAfterEngineStart();", StringComparison.Ordinal);
+        Assert.True(start > 0 && resumed > start && reasserted > resumed);
+        // "resuming" is read BEFORE the start, while the session is still paused.
+        Assert.True(fromUser.IndexOf("var resuming = _sessionEngine?.IsRunning == true && _sessionEngine.IsPaused;",
+            StringComparison.Ordinal) is var at && at > 0 && at < start);
 
         // StartEngine itself never resumes: the scheduler, the Lockdown keeper and a program or
-        // remote session's own engine start all go through it.
-        Assert.DoesNotContain("ResumeSession", Body(startStop, "public void StartEngine(bool systemInitiated = false)"));
+        // remote session's own engine start all go through it. A resume is not one more session.
+        var engineStart = Body(startStop, "public void StartEngine(bool systemInitiated = false, bool resumingSession = false)");
+        Assert.DoesNotContain("ResumeSession", engineStart);
+        Assert.Contains("if (!systemInitiated && !resumingSession) settings.TotalSessions++;", engineStart);
+        Assert.Contains("if (!systemInitiated) App.Achievements?.CheckRelapse();", engineStart);
 
         // The user's START paths: the button, its "Start normally" menu, the pause button's Resume.
         Assert.Contains("StartEngineFromUser();", Body(startStop, "private void BtnStart_Click("));
         Assert.Contains("StartEngineFromUser();", Body(startStop, "private void MenuStartNormal_Click("));
         var resume = Body(Source("MainWindow", "MainWindow.Presets.cs"), "private void BtnPauseSession_Click(");
-        Assert.Contains("SessionClockRules.ResumeStartsEngine(_isRunning)) StartEngineFromUser();", resume);
+        Assert.Contains("SessionClockRules.ResumeStartsEngine(_isRunning, App.RemoteControl?.ControllerConnected == true))", resume);
 
         // Panic is not weakened: the stop tail still pauses the session, then stops the engine.
         var panic = Body(Source("MainWindow", "MainWindow.xaml.cs"), "private void RunPanicStopTail(bool advanceExitLadder)");
@@ -146,6 +195,45 @@ public class SessionClockRulesTests
         int stopEngine = panic.IndexOf("StopEngine();", StringComparison.Ordinal);
         Assert.True(pause > 0 && stopEngine > pause);
         Assert.DoesNotContain("ResumeSession", panic);
+    }
+
+    [Fact]
+    public void StartEngineFromUser_has_exactly_the_user_callers()
+    {
+        // A system path (scheduler, Lockdown keeper, program or remote start, auto-start) joining
+        // this list would resume a session a panic paused without the user asking. Pinned.
+        var expected = new SortedDictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["AvatarTube/AvatarTubeWindow.ChatInput.cs"] = 1,   // the companion menu's Start click
+            ["MainWindow/MainWindow.Presets.cs"] = 1,           // Resume with the engine off
+            ["MainWindow/MainWindow.StartStop.cs"] = 2,         // START, "Start normally"
+        };
+        var root = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        var found = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
+            if (rel.StartsWith("bin/", StringComparison.Ordinal) || rel.StartsWith("obj/", StringComparison.Ordinal)) continue;
+            int n = Count(File.ReadAllText(file), "StartEngineFromUser();");
+            if (n > 0) found[rel] = n;
+        }
+        Assert.Equal(expected, found);
+
+        var startStop = Source("MainWindow", "MainWindow.StartStop.cs");
+        Assert.Contains("StartEngineFromUser();", Body(startStop, "private void BtnStart_Click("));
+        Assert.Contains("StartEngineFromUser();", Body(startStop, "private void MenuStartNormal_Click("));
+    }
+
+    [Fact]
+    public void A_user_resume_puts_the_sessions_own_schedule_back()
+    {
+        var body = Body(Source("Services", "Session", "SessionEngine.cs"), "public void ReassertScheduleAfterEngineStart()");
+        Assert.Contains("_pendingFeatureStarts", body);                      // not-yet-due features stay off (#483)
+        Assert.Contains("App.LockCard?.Start(SessionWindowMinutes)", body);  // the session's window (#736)
+        Assert.Contains("App.MindWipe.StartSession(", body);                 // the session's Mind Wipe (#1304)
+        foreach (var name in new[] { "\"flash\"", "\"subliminal\"", "\"bouncing text\"", "\"mandatory videos\"",
+                                     "\"lock cards\"", "\"bubble count\"" })
+            Assert.Contains(name, body);
     }
 
     [Fact]

@@ -249,9 +249,9 @@ public class LockdownDoseKeeperTests
     public void AKeeperStartedEngine_SkipsTheUserOnlySideEffects()
     {
         var engine = Source("MainWindow", "MainWindow.StartStop.cs");
-        Assert.Contains("public void StartEngine(bool systemInitiated = false)", engine, StringComparison.Ordinal);
+        Assert.Contains("public void StartEngine(bool systemInitiated = false, bool resumingSession = false)", engine, StringComparison.Ordinal);
         Assert.Contains("if (!systemInitiated) App.Achievements?.CheckRelapse();", engine, StringComparison.Ordinal);
-        Assert.Contains("if (!systemInitiated) settings.TotalSessions++;", engine, StringComparison.Ordinal);
+        Assert.Contains("if (!systemInitiated && !resumingSession) settings.TotalSessions++;", engine, StringComparison.Ordinal);
         Assert.Contains("if (!systemInitiated) MaybePromptMandatoryVideoEnhancement();", engine, StringComparison.Ordinal);
 
         // The duplicated Pop Quiz start block: two identical blocks started the service twice.

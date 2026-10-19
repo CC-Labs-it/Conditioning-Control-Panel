@@ -172,6 +172,7 @@ namespace ConditioningControlPanel.Services
             // Breadcrumb for the hang report: names the session (and, for a program day, which day
             // via HangContext's passive program probe) that was live when the UI thread died.
             HangContext.Enter("session:" + (session?.Name ?? "?"));
+            _stepFailures.Clear();
             _isPaused = false;
             _pauseCount = 0;
             _pausedElapsedTime = TimeSpan.Zero;
@@ -369,8 +370,7 @@ namespace ConditioningControlPanel.Services
             // ccp-bugs #1464: _isRunning is already false, so a teardown step that throws must not
             // skip SessionStopped below - that is what resets every session clock and stops the
             // engine. Each step is guarded on its own.
-            static void Step(Action step) => SessionClockRules.RunStep(step,
-                ex => App.Logger?.Warning(ex, "Session stop step failed - the stop goes on"));
+            void Step(Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("stop", ex));
 
             // Close corner GIF
             // CloseCornerGif also hands the corner back to any standalone slot that stood down
@@ -502,6 +502,10 @@ namespace ConditioningControlPanel.Services
             try { App.SessionLog?.EndSession(completed, finalElapsedTime, xpForLog); }
             catch (Exception ex) { App.Logger?.Error(ex, "SessionLog.EndSession failed"); }
 
+            // One line for the whole session; the first failure of each step is in crash.log.
+            if (_stepFailures.Any)
+                App.Logger?.Warning("Session steps failed this session (first of each in crash.log): {Counts}", _stepFailures.Summary());
+
             _currentSession = null;
         }
 
@@ -618,6 +622,46 @@ namespace ConditioningControlPanel.Services
             try { SessionResumed?.Invoke(this, pausedFor); } catch (Exception ex) { App.Logger?.Debug(ex, "SessionResumed handler threw"); }
         }
 
+        /// <summary>
+        /// ccp-bugs #1464 review: the user's START has just resumed a session a panic parked, and
+        /// StartEngine started its features from the GLOBAL settings first. Put the session's own
+        /// schedule back: a feature its timeline has not reached yet stays off (#483), lock cards fit
+        /// the time left in the session (#736), and Mind Wipe is the session's, never the global one
+        /// (#1304). Each step guarded; call right after <see cref="ResumeSession"/>.
+        /// </summary>
+        public void ReassertScheduleAfterEngineStart()
+        {
+            if (!_isRunning || _isPaused || _currentSession == null) return;
+            var settings = _currentSession.Settings;
+            void Step(Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("resume", ex));
+
+            foreach (var name in _pendingFeatureStarts.Select(p => p.Name).Distinct().ToList())
+            {
+                Action? stop = name switch
+                {
+                    "flash" => () => App.Flash?.Stop(),
+                    "subliminal" => () => App.Subliminal?.Stop(),
+                    "bouncing text" => () => App.BouncingText?.Stop(),
+                    "mandatory videos" => () => App.Video?.Stop(),
+                    "lock cards" => () => App.LockCard?.Stop(),
+                    "bubble count" => () => App.BubbleCount?.Stop(),
+                    _ => null, // mind wipe below; audio whispers is a settings flag the engine never starts
+                };
+                if (stop != null) Step(stop);
+            }
+
+            if (settings.LockCardEnabled && !IsFeaturePending("lock cards"))
+                Step(() => { App.LockCard?.Stop(); App.LockCard?.Start(SessionWindowMinutes); });
+
+            Step(() => App.MindWipe?.Stop());
+            if (settings.MindWipeEnabled && !IsFeaturePending("mind wipe"))
+                Step(() =>
+                {
+                    App.MindWipe.Volume = settings.MindWipeVolume / 100.0;
+                    App.MindWipe.StartSession(settings.MindWipeBaseMultiplier);
+                });
+        }
+
         private void MainTimer_Tick(object? sender, EventArgs e)
         {
             if (!_isRunning || _isPaused || _currentSession == null) return;
@@ -637,14 +681,12 @@ namespace ConditioningControlPanel.Services
             // ccp-bugs #1464: every step below runs guarded. A DispatcherTimer only re-arms after
             // its Tick handler returns, so one throwing step used to kill the clock for good while
             // the session still read as running - every session clock frozen on its last value.
-            static void Report(Exception ex) => App.Logger?.Warning(ex, "Session tick step failed - the clock keeps going");
-
             // Update progress
             SessionClockRules.RunStep(() => ProgressUpdated?.Invoke(this, new SessionProgressEventArgs(
                 elapsed,
                 RemainingTime,
                 ProgressPercent
-            )), Report);
+            )), ex => ReportStepFailure("tick:progress", ex));
 
             // EMI Desk (MOMENTS 4.B): the two beats inside a run, each once. The bark's
             // SessionProgress context never carries the remaining time, which is the only number
@@ -666,17 +708,32 @@ namespace ConditioningControlPanel.Services
             catch { }
             
             // Check for phase changes
-            SessionClockRules.RunStep(() => CheckPhaseTransition(elapsedMinutes), Report);
+            SessionClockRules.RunStep(() => CheckPhaseTransition(elapsedMinutes), ex => ReportStepFailure("tick:phase", ex));
 
             // Update ramping values
-            SessionClockRules.RunStep(() => UpdateRampingValues(elapsedMinutes, totalMinutes), Report);
+            SessionClockRules.RunStep(() => UpdateRampingValues(elapsedMinutes, totalMinutes), ex => ReportStepFailure("tick:ramp", ex));
 
             // Check for delayed feature starts
-            SessionClockRules.RunStep(() => CheckDelayedFeatures(elapsedMinutes), Report);
+            SessionClockRules.RunStep(() => CheckDelayedFeatures(elapsedMinutes), ex => ReportStepFailure("tick:delayed-features", ex));
 
             // Handle intermittent bubbles
-            SessionClockRules.RunStep(() => HandleIntermittentBubbles(elapsedMinutes), Report);
+            SessionClockRules.RunStep(() => HandleIntermittentBubbles(elapsedMinutes), ex => ReportStepFailure("tick:bubbles", ex));
         }
+
+        /// <summary>
+        /// ccp-bugs #1464 review: a guarded step that throws every tick must not write a stack trace
+        /// a second. The FIRST failure of each step in a session goes to the crash log in full (the
+        /// path an unguarded tick exception used to take), repeats are only counted, and StopSession
+        /// writes one summary line.
+        /// </summary>
+        private void ReportStepFailure(string step, Exception ex)
+        {
+            if (!_stepFailures.Note(step)) return;
+            try { App.LogCrashDetails("SESSION " + step, ex); } catch { }
+        }
+
+        /// <summary>Failures of guarded tick and stop steps in this session, per step.</summary>
+        private readonly SessionClockRules.StepFailures _stepFailures = new();
         
         private void CheckPhaseTransition(double elapsedMinutes)
         {

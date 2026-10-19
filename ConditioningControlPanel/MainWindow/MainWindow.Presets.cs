@@ -2118,7 +2118,9 @@ namespace ConditioningControlPanel
                 // Resume. A panic stopped the engine along with the pause: resuming only the
                 // session left its clock counting over an engine the START button called stopped
                 // (ccp-bugs #1464). Start brings both back - it resumes the parked session itself.
-                if (Services.SessionClockRules.ResumeStartsEngine(_isRunning)) StartEngineFromUser();
+                // Never while a remote controller holds the engine: START is refused then too.
+                if (Services.SessionClockRules.ResumeStartsEngine(_isRunning, App.RemoteControl?.ControllerConnected == true))
+                    StartEngineFromUser();
                 else _sessionEngine.ResumeSession();
                 if (TxtPauseIcon != null) TxtPauseIcon.Text = "⏸";
                 BtnPauseSession.ToolTip = Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", _sessionEngine.PauseCount);

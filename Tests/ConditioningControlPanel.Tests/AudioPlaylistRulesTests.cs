@@ -291,7 +291,7 @@ public class AudioPlaylistRulesTests
         Assert.True(core.IndexOf("App.StopAudioPlaylist();", StringComparison.Ordinal)
                     < core.IndexOf("App.Video.Stop();", StringComparison.Ordinal));
 
-        string start = Body(src, "public void StartEngine(bool systemInitiated = false)");
+        string start = Body(src, "public void StartEngine(bool systemInitiated = false, bool resumingSession = false)");
         Assert.DoesNotContain("AudioPlaylist", start);
     }
 

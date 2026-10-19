@@ -53,8 +53,11 @@ namespace ConditioningControlPanel.Services
         /// the pause; resuming only the session left its clock counting over an engine that the
         /// START button still called stopped. With the engine off, Resume goes through the user's
         /// START, which resumes the session itself (<see cref="StartResumesParkedSession"/>).
+        /// A connected remote controller owns the engine (BtnStart_Click refuses START then), so
+        /// Resume only resumes the session, as it always did.
         /// </summary>
-        public static bool ResumeStartsEngine(bool engineRunning) => !engineRunning;
+        public static bool ResumeStartsEngine(bool engineRunning, bool controllerConnected) =>
+            !engineRunning && !controllerConnected;
 
         /// <summary>
         /// Runs one step of the session's one-second tick or of its stop. WPF's DispatcherTimer
@@ -75,6 +78,40 @@ namespace ConditioningControlPanel.Services
             {
                 try { onError?.Invoke(ex); } catch { }
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Counts the failures of guarded session steps, per step, for one session. A step that
+        /// throws on every tick would otherwise write a stack trace a second and wash the bug
+        /// report's activity log out: only the FIRST failure of each step is reported in full
+        /// (<see cref="Note"/> answers TRUE once), repeats are only counted, and the stop writes one
+        /// summary line. Cleared when a session starts. UI thread only, like the tick.
+        /// </summary>
+        public sealed class StepFailures
+        {
+            private readonly System.Collections.Generic.Dictionary<string, int> _counts = new(StringComparer.Ordinal);
+
+            /// <summary>TRUE for the first failure of <paramref name="step"/> since the last Clear.</summary>
+            public bool Note(string step)
+            {
+                _counts.TryGetValue(step, out var n);
+                _counts[step] = n + 1;
+                return n == 0;
+            }
+
+            public int Count(string step) => _counts.TryGetValue(step, out var n) ? n : 0;
+
+            public bool Any => _counts.Count > 0;
+
+            public void Clear() => _counts.Clear();
+
+            /// <summary>"progress x120, ramp x3", sorted by step name; empty when nothing failed.</summary>
+            public string Summary()
+            {
+                var keys = new System.Collections.Generic.List<string>(_counts.Keys);
+                keys.Sort(StringComparer.Ordinal);
+                return string.Join(", ", keys.ConvertAll(k => k + " x" + _counts[k]));
             }
         }
     }
