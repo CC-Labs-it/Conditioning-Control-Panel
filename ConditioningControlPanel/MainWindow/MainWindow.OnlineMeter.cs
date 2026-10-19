@@ -481,7 +481,10 @@ namespace ConditioningControlPanel
         {
             try
             {
-                if (_onlineSpentQueue.TryRelease(DateTime.Now, FriendsLanding.Holding())) ShowOnlineSpentNotice();
+                // A notice that waited out a hold is dropped when the share is no longer spent:
+                // another account signed in (the share is per account) or the plan went up.
+                if (_onlineSpentQueue.TryRelease(DateTime.Now, FriendsLanding.Holding()) && ScrolllerAllowance.Spent)
+                    ShowOnlineSpentNotice();
                 if (_onlineSpentQueue.Pending) _onlineSpentWait?.Start();
                 else _onlineSpentWait?.Stop();
             }

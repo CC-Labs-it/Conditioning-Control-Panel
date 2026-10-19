@@ -35,6 +35,7 @@ internal static class ScrolllerPolicyService
     /// <summary>Starts the launch read and the 30-minute poll. Idempotent. Never throws.</summary>
     public static void Start()
     {
+        ScrolllerAllowance.WatchAccount(); // the daily share is per account: follow sign-in / sign-out
         try
         {
             if (_timer != null) return;
