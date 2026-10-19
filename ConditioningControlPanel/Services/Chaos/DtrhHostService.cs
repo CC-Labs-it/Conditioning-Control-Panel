@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Chaos;
 /// input-receiving WebView2 window (via <see cref="ChaosWebViewHost"/>), the virtual-host
 /// mappings (ccp.game -> Resources/web, ccp.assets -> the user's active preset), and the
 /// bridge protocol (v1):
-///   - fire-payload -> the REAL desktop conditioning effects (EffectPayloadFactory)
+///   - fire-payload -> desktop audio payloads only (EffectPayloadFactory; DtrhNativePayloadRule refuses video)
 ///   - meta-command -> <see cref="DtrhMetaBridge"/> (chaos_meta.json stays C#-owned)
 ///   - run-started/run-ended -> crash sentinel, barks, XP payout + payout-result reply
 ///   - payload-state (video) -> page pauses while a mandatory video covers it; focus returns after
