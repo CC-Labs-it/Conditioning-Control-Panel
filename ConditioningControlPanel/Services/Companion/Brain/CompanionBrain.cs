@@ -604,7 +604,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 // BarkEchoes are flavor: capped at 5 per window and never persisted (they replay from
                 // bark_rules.json anyway, and they say nothing about the user).
                 Session.Append(TurnKind.BarkEcho, CompanionTurn.FormatBarkEcho(speaker, line),
-                    mood: rule?.Mood, voiced: true);
+                    mood: rule?.Mood, voiced: CompanionIdleVoice.ShouldVoiceNow(CompanionIdleVoice.IsUnprompted(rule?.Trigger))); // #1468: a held idle line was not spoken aloud
             }
             catch (Exception ex)
             {

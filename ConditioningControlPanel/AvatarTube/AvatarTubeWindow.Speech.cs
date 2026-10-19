@@ -483,10 +483,14 @@ namespace ConditioningControlPanel
             // Drive the emotive portrait to this line's emotion (pose A → linger → pose B → idle after
             // the dwell). lineId is the explicit arg or the bark audio filename stem. No-ops when the
             // portrait system is off, the line is unknown, or there's no audio (canned/AI/trigger text).
+            // ccp-bugs #1468: an idle-timer line with the engine off keeps its bubble, not its sound
+            // (voice, giggle and fallback pop alike), unless the player opted in. Decided once here so
+            // the avatar does not lip-sync a line that will stay silent.
+            bool heldIdle = !Services.Companion.CompanionIdleVoice.ShouldVoiceNow(unprompted);
             PlayEmotionForLine(
                 emotionLineId ?? (phraseAudioPath != null
                     ? System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath) : null),
-                phraseAudioPath, text, mood);
+                phraseAudioPath, text, mood, silent: heldIdle);
 
             // Any new bubble cuts off the previous spoken line (covers the giggle-sound/fallback branches
             // below, which otherwise wouldn't stop an in-flight voiceline → overlap).
@@ -501,10 +505,7 @@ namespace ConditioningControlPanel
             {
                 if (!_isGiggling) return; // a newer bubble took over during the lead-in
 
-                // ccp-bugs #1468: an idle-timer line with the engine off keeps its bubble, not its
-                // sound (voice, giggle and fallback pop alike), unless the player opted in.
-                bool heldIdle = !_isMuted && !Services.Companion.CompanionIdleVoice.ShouldVoiceNow(unprompted);
-                if (heldIdle) Services.Audio.EngineOffAudioLog.NoteHeld("companion-voice", "idle line");
+                if (heldIdle && !_isMuted) Services.Audio.EngineOffAudioLog.NoteHeld("companion-voice", "idle line");
 
                 // Audio only when NOT muted — mute silences the voice but keeps the text bubble (#445).
                 if (!_isMuted && !heldIdle)

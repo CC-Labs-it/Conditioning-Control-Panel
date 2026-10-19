@@ -34,9 +34,9 @@ namespace ConditioningControlPanel.Services.Companion
         public static bool ShouldVoice(bool unprompted, bool engineRunning, bool speakIdleWhenEngineOff) =>
             !unprompted || engineRunning || speakIdleWhenEngineOff;
 
-        /// <summary><see cref="ShouldVoice"/> against the live app state.</summary>
+        /// <summary><see cref="ShouldVoice"/> against the live app state (a prompted line never reads it).</summary>
         public static bool ShouldVoiceNow(bool unprompted) =>
-            ShouldVoice(unprompted, Audio.EngineOffAudioLog.EngineRunning,
+            !unprompted || ShouldVoice(unprompted, Audio.EngineOffAudioLog.EngineRunning,
                 App.Settings?.Current?.CompanionSpeaksIdleWhenEngineOff == true);
     }
 }

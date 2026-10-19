@@ -98,15 +98,28 @@ public class CompanionIdleVoiceTests
         var speech = File.ReadAllText(Path.Combine(root, "AvatarTube", "AvatarTubeWindow.Speech.cs"));
 
         Assert.Equal("Idle", CompanionIdleVoice.IdleTrigger);
-        Assert.Contains("var ctx = new BarkContext(\"Idle\");", bark);
-        Assert.Contains("bool unprompted = CompanionIdleVoice.IsUnprompted(rule.Trigger);", bark);
+        Assert.True(bark.Contains("BarkContext(\"Idle\")") || bark.Contains("BarkContext(CompanionIdleVoice.IdleTrigger)"),
+            "DispatchIdle must raise the Idle trigger");
+        Assert.Contains("CompanionIdleVoice.IsUnprompted(rule.Trigger)", bark);
+        // Speak hands the flag to BOTH routes: GigglePriority and Giggle.
+        Assert.True(Count(bark, "unprompted: unprompted") >= 2, "BarkService.Speak must pass unprompted to Giggle and GigglePriority");
 
-        Assert.Contains("!Services.Companion.CompanionIdleVoice.ShouldVoiceNow(unprompted);", speech);
-        Assert.Contains("Services.Audio.EngineOffAudioLog.NoteHeld(\"companion-voice\", \"idle line\");", speech);
-        Assert.Contains("if (!_isMuted && !heldIdle)", speech);
-        // The no-barks fallback on the idle tick is unprompted too, and a queued line keeps the flag.
-        Assert.Contains("else Giggle(GetRandomBambiPhrase(), unprompted: true);", speech);
-        Assert.Contains("ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted);", speech);
+        Assert.Contains("CompanionIdleVoice.ShouldVoiceNow(unprompted)", speech);
+        Assert.Contains("NoteHeld(\"companion-voice\", \"idle line\")", speech);
+        // Every route into ShowGiggle keeps the flag: the immediate Giggle path, GigglePriority, and
+        // the dequeued line (ShowSpeechBySource). Dropping any one of them breaks this count.
+        Assert.True(Count(speech, "unprompted: unprompted") >= 3, "a route into ShowGiggle lost the unprompted flag");
+        // The no-barks fallback on the idle tick is unprompted too.
+        Assert.Contains("GetRandomBambiPhrase(), unprompted: true", speech);
+    }
+
+    private static int Count(string haystack, string needle)
+    {
+        int n = 0;
+        for (int i = haystack.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+             i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+            n++;
+        return n;
     }
 
     private static string RepoRoot()
