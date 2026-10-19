@@ -17,7 +17,8 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 internal static class ScrolllerPolicyService
 {
     /// <summary>The server's answer, already shaped. Null fields = "no cap" / "no minimum".</summary>
-    internal sealed record Answer(bool Enabled, int? MaxClipShortSide, string? MinVersion);
+    internal sealed record Answer(bool Enabled, int? MaxClipShortSide, string? MinVersion,
+        long? FreeMb = null, long? BasicMb = null, long? PrimeMb = null, long? FreeFirstDayMb = null);
 
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
@@ -91,14 +92,20 @@ internal static class ScrolllerPolicyService
             && (long)c >= 0 && (long)c <= int.MaxValue ? (int)(long)c : null;
         string? ver = o["min_version"] is JValue { Type: JTokenType.String } v
             && !string.IsNullOrWhiteSpace((string?)v) ? ((string)v!).Trim() : null;
-        return new Answer(enabled, cap, ver);
+        var daily = o["daily_mb"] as JObject;
+        return new Answer(enabled, cap, ver, Mb(daily?["free"]), Mb(daily?["basic"]), Mb(daily?["prime"]), Mb(daily?["free_first_day"]));
     }
+
+    /// <summary>A whole, non-negative MB figure, else null (the default stays).</summary>
+    private static long? Mb(JToken? t)
+        => t is JValue { Type: JTokenType.Integer } v && (long)v >= 0 ? (long)v : null;
 
     /// <summary>Applies an answer: the switch and cap through <see cref="ScrolllerPolicy"/>
     /// (which clamps the cap), the minimum version here.</summary>
     internal static void Accept(Answer answer)
     {
         ScrolllerPolicy.Apply(answer.Enabled, answer.MaxClipShortSide);
+        ScrolllerAllowance.ApplyLimits(answer.FreeMb, answer.BasicMb, answer.PrimeMb, answer.FreeFirstDayMb);
         _minVersion = answer.MinVersion;
     }
 
@@ -106,4 +113,20 @@ internal static class ScrolllerPolicyService
     /// subdomain: the native fetchers refuse it as if the network had failed.</summary>
     internal static bool Blocks(string? url)
         => !ScrolllerPolicy.Enabled && global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url);
+
+    /// <summary>
+    /// May <paramref name="url"/> be fetched FRESH from the network right now? Not a Scrolller
+    /// url: always yes. A Scrolller url: only while the switch is on, today's share is not used up
+    /// (<see cref="ScrolllerAllowance.Spent"/>) and the user is not away
+    /// (<see cref="ScrolllerPolicy.Away"/>). A cached copy (<see cref="ScrolllerDiskCache"/>) needs
+    /// only the switch on.
+    /// </summary>
+    internal static bool MayFetchFresh(string? url)
+    {
+        if (!global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url)) return true;
+        return FreshRule(ScrolllerPolicy.Enabled, ScrolllerAllowance.Spent, ScrolllerPolicy.Away);
+    }
+
+    /// <summary>The rule behind <see cref="MayFetchFresh"/>, pure.</summary>
+    internal static bool FreshRule(bool enabled, bool spent, bool away) => enabled && !spent && !away;
 }
