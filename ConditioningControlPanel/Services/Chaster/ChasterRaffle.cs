@@ -67,6 +67,32 @@ public static class ChasterRaffle
 
     public static int DaysCounted(RaffleCard card) => Counted(card).Count;
 
+    /// <summary>The counted days when the card is for <paramref name="nowUtc"/>'s UTC month (the
+    /// raffle's clock), else null: a card from another month says nothing about this one.</summary>
+    public static IReadOnlyList<int>? CountedThisMonth(RaffleCard? card, DateTime nowUtc) =>
+        card != null && card.Month == ChasterLadder.MonthKey(nowUtc) ? Counted(card) : null;
+
+    /// <summary>The counted days as calendar dates of the card's month (date only). A raffle day
+    /// is a UTC day; a page that draws local days matches it by date, so day 5 counted is the
+    /// square that says 5.</summary>
+    public static IReadOnlySet<DateTime> CountedDates(RaffleCard? card)
+    {
+        var dates = new HashSet<DateTime>();
+        if (card != null && MonthStart(card.Month) is { } start)
+            foreach (var d in Counted(card))
+                dates.Add(new DateTime(start.Year, start.Month, d));
+        return dates;
+    }
+
+    /// <summary>Days of the month as bits, bit 0 = day 1. 31 days fit an int.</summary>
+    public static int DayMask(IEnumerable<int> days)
+    {
+        var mask = 0;
+        foreach (var d in days)
+            if (d >= 1 && d <= 31) mask |= 1 << (d - 1);
+        return mask;
+    }
+
     /// <summary>Days that can still count: today and after, not counted yet. The whole month
     /// before it starts, none once it is over.</summary>
     public static int DaysStillOpen(RaffleCard card)

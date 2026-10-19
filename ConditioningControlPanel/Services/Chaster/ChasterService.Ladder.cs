@@ -80,21 +80,48 @@ public sealed partial class ChasterService
     /// <summary>What the server last read off Chaster for this month, or null when it has not.</summary>
     public LadderVerify? LastLadderVerify { get; private set; }
 
+    /// <summary>The last raffle card the server sent (its real counted days), or null. The
+    /// billboard and the tab page both read their counted days from this one card.</summary>
+    public RaffleCard? LastRaffleCard { get; private set; }
+
+    /// <summary>A new raffle card arrived. Raised on whatever thread read it.</summary>
+    public event Action? RaffleChanged;
+
+    private void NoteRaffleCard(RaffleCard? card)
+    {
+        if (card == null) return;
+        LastRaffleCard = card;
+        try { RaffleChanged?.Invoke(); }
+        catch (Exception ex) { Diag.Swallowed(ex, "raffle changed handler"); }
+    }
+
+    /// <summary>A verify that read the lock afresh is followed by the card, so the days a
+    /// surface lights are the ones that verify just stored.</summary>
+    private async Task VerifyThenReadAsync()
+    {
+        try
+        {
+            if (await VerifyLadderAsync(CancellationToken.None).ConfigureAwait(false) && LadderApi != null)
+                NoteRaffleCard(await LadderApi.MeAsync().ConfigureAwait(false));
+        }
+        catch (Exception ex) { Diag.Swallowed(ex, "raffle card read skipped"); }
+    }
+
     /// <summary>Lifetime seconds CCP added to the lock. Added only: nothing taken off counts.</summary>
     public long AddedLifetimeSeconds { get { lock (_gate) return ChasterLadder.Lifetime(_tab); } }
 
     /// <summary>This UTC month's adds, as this machine counted them.</summary>
     public int AddedThisMonthSeconds { get { lock (_gate) return ChasterLadder.ThisMonth(_tab, _utcNow()); } }
 
-    private void LadderPushLanded() => _ = VerifyLadderAsync(CancellationToken.None);
+    private void LadderPushLanded() => _ = VerifyThenReadAsync();
 
     /// <summary>Have the server read this month off the chosen lock, at most every 15 minutes.
-    /// Only while the link is live and a lock is picked.</summary>
-    public async Task VerifyLadderAsync(CancellationToken ct)
+    /// Only while the link is live and a lock is picked. True when a fresh Ok reading landed.</summary>
+    public async Task<bool> VerifyLadderAsync(CancellationToken ct)
     {
-        if (LadderApi == null || !IsLinked) return;
+        if (LadderApi == null || !IsLinked) return false;
         var lockId = (_options() ?? ChasterOptions.Off).LockId;
-        if (!ChasterClient.IsLockId(lockId)) return;
+        if (!ChasterClient.IsLockId(lockId)) return false;
         await _ladderGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -102,17 +129,18 @@ public sealed partial class ChasterService
             if (!ChasterLadder.VerifyDue(_ladderVerifiedAtUtc, now))
             {
                 ArmLadderRetry(ChasterLadder.VerifyAt(_ladderVerifiedAtUtc, now), now);
-                return;
+                return false;
             }
             var access = await AccessTokenAsync(ct).ConfigureAwait(false);
-            if (access == null) return;
+            if (access == null) return false;
             _ladderVerifiedAtUtc = now;
             IReadOnlyDictionary<string, LadderClaim> claims;
             lock (_gate) claims = ChasterLadder.Claims(_tab, _utcNow());
             var verdict = await LadderApi.VerifyAsync(lockId!, access, claims, ct).ConfigureAwait(false);
             if (verdict != null) LastLadderVerify = verdict;
+            return verdict is { Ok: true };
         }
-        catch (Exception ex) { Diag.Swallowed(ex, "ladder verify skipped"); }
+        catch (Exception ex) { Diag.Swallowed(ex, "ladder verify skipped"); return false; }
         finally { _ladderGate.Release(); }
     }
 
@@ -127,6 +155,7 @@ public sealed partial class ChasterService
         var want = RafflePostDays?.Invoke() == true;
         if (card != null && card.PostDays != want && await LadderApi.OptInAsync(want, ct).ConfigureAwait(false))
             card = card with { PostDays = want };
+        NoteRaffleCard(card);
         return card;
     }
 
@@ -157,7 +186,7 @@ public sealed partial class ChasterService
         if (at is not { } when) return;
         var delay = when - now;
         if (delay < TimeSpan.Zero) delay = TimeSpan.Zero;
-        var timer = new Timer(_ => _ = VerifyLadderAsync(CancellationToken.None), null, delay + TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+        var timer = new Timer(_ => _ = VerifyThenReadAsync(), null, delay + TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
         Interlocked.Exchange(ref _ladderRetry, timer)?.Dispose();
     }
 

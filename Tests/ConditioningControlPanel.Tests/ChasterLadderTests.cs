@@ -703,6 +703,22 @@ public class ChasterLadderTests : IDisposable
     }
 
     [Fact]
+    public async Task The_card_is_kept_for_the_billboard_and_announced()
+    {
+        var ladder = new FakeLadder();
+        using var service = Make(ladder);
+        var raised = 0;
+        service.RaffleChanged += () => raised++;
+        Assert.Null(service.LastRaffleCard);
+
+        var card = await service.RaffleAsync();
+
+        Assert.Same(card, service.LastRaffleCard);
+        Assert.Equal(new[] { 1, 2 }, service.LastRaffleCard!.Days);
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
     public async Task No_raffle_api_is_no_card()
     {
         using var service = new ChasterService(new ChasterClient(new Handler()), _store, Path.Combine(_dir, "tab2.json"), () => _options, () => _utc, () => _utc.ToLocalTime());
