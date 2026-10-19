@@ -17,11 +17,18 @@ internal sealed class ScrolllerLedger
     public string Day { get; private set; }
     public long Used { get; private set; }
 
-    public ScrolllerLedger(string day, long used)
+    /// <summary>The day this install first fetched Scrolller media; null until it does.</summary>
+    public string? FirstDay { get; private set; }
+
+    public ScrolllerLedger(string day, long used, string? firstDay = null)
     {
         Day = day;
         Used = Math.Max(0, used);
+        FirstDay = firstDay;
     }
+
+    /// <summary>True on the install's first day of online media (or before it has had one).</summary>
+    public bool IsFirstDay => FirstDay == null || FirstDay == Day;
 
     public static string DayOf(DateTime local) => local.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
@@ -39,7 +46,9 @@ internal sealed class ScrolllerLedger
     public void Charge(long bytes, DateTime local)
     {
         Roll(local);
-        if (bytes > 0) Used = Used > long.MaxValue - bytes ? long.MaxValue : Used + bytes;
+        if (bytes <= 0) return;
+        FirstDay ??= Day;
+        Used = Used > long.MaxValue - bytes ? long.MaxValue : Used + bytes;
     }
 
     /// <summary>Share used, 0..1. A limit of zero or less reads as fully used.</summary>
@@ -65,15 +74,20 @@ internal sealed class ScrolllerLedger
 /// and is never sent anywhere: the no-tracking promise holds. The limits come from the server's
 /// switch (<c>daily_mb</c> in <c>/config/scrolller</c>) so they can be tuned without a release;
 /// until it answers, the defaults below apply.
+///
+/// A free install's FIRST day of online media gets <see cref="DefaultFreeFirstDayBytes"/> instead
+/// (owner, 2026-10-19: room to fill the device cache, then the ordinary share from day two). The
+/// cache size, the reuse mix and these figures are ours to set: never a user setting.
 /// </summary>
 internal static class ScrolllerAllowance
 {
     public const long MB = 1024L * 1024;
     public const long DefaultFreeBytes = 300 * MB;
+    public const long DefaultFreeFirstDayBytes = 500 * MB;
     public const long DefaultBasicBytes = 2048 * MB;
     public const long DefaultPrimeBytes = 6144 * MB;
 
-    private static long _free = DefaultFreeBytes, _basic = DefaultBasicBytes, _prime = DefaultPrimeBytes;
+    private static long _free = DefaultFreeBytes, _freeFirst = DefaultFreeFirstDayBytes, _basic = DefaultBasicBytes, _prime = DefaultPrimeBytes;
     private static readonly object Gate = new();
     private static ScrolllerLedger? _ledger;
     private static string? _spentAnnouncedDay; // the day the SpentReached edge fired for
@@ -112,7 +126,23 @@ internal static class ScrolllerAllowance
         _ => Volatile.Read(ref _free),
     };
 
-    public static long LimitBytes => DailyBytes(Plan);
+    /// <summary>Today's share for this account: a free install's first day gets the bigger
+    /// first-day share (never less than the ordinary one).</summary>
+    public static long LimitBytes
+    {
+        get
+        {
+            var plan = Plan;
+            if (plan != ScrolllerPlan.Free || !IsFirstDay) return DailyBytes(plan);
+            return Math.Max(DailyBytes(ScrolllerPlan.Free), Volatile.Read(ref _freeFirst));
+        }
+    }
+
+    /// <summary>True on this install's first day of online media.</summary>
+    public static bool IsFirstDay
+    {
+        get { lock (Gate) { var l = Ledger(); l.Roll(Now()); return l.IsFirstDay; } }
+    }
 
     public static long UsedToday
     {
@@ -131,9 +161,10 @@ internal static class ScrolllerAllowance
 
     /// <summary>The server's limits in MB; a missing or negative value keeps the default. Never
     /// throws.</summary>
-    public static void ApplyLimits(long? freeMb, long? basicMb, long? primeMb)
+    public static void ApplyLimits(long? freeMb, long? basicMb, long? primeMb, long? freeFirstDayMb = null)
     {
         Volatile.Write(ref _free, ToBytes(freeMb, DefaultFreeBytes));
+        Volatile.Write(ref _freeFirst, ToBytes(freeFirstDayMb, DefaultFreeFirstDayBytes));
         Volatile.Write(ref _basic, ToBytes(basicMb, DefaultBasicBytes));
         Volatile.Write(ref _prime, ToBytes(primeMb, DefaultPrimeBytes));
         Raise(Changed);
@@ -177,6 +208,7 @@ internal static class ScrolllerAllowance
     {
         lock (Gate) { _ledger = null; _spentAnnouncedDay = null; }
         Volatile.Write(ref _free, DefaultFreeBytes);
+        Volatile.Write(ref _freeFirst, DefaultFreeFirstDayBytes);
         Volatile.Write(ref _basic, DefaultBasicBytes);
         Volatile.Write(ref _prime, DefaultPrimeBytes);
     }
@@ -206,7 +238,8 @@ internal static class ScrolllerAllowance
             var o = JObject.Parse(File.ReadAllText(path));
             var day = (string?)o["day"];
             var used = (long?)o["used"] ?? 0;
-            return string.IsNullOrEmpty(day) ? null : new ScrolllerLedger(day!, used);
+            var first = (string?)o["first"];
+            return string.IsNullOrEmpty(day) ? null : new ScrolllerLedger(day!, used, string.IsNullOrEmpty(first) ? null : first);
         }
         catch { return null; }
     }
@@ -231,7 +264,7 @@ internal static class ScrolllerAllowance
             lock (Gate)
             {
                 if (_ledger == null) return;
-                json = new JObject { ["day"] = _ledger.Day, ["used"] = _ledger.Used }.ToString(Newtonsoft.Json.Formatting.None);
+                json = new JObject { ["day"] = _ledger.Day, ["used"] = _ledger.Used, ["first"] = _ledger.FirstDay }.ToString(Newtonsoft.Json.Formatting.None);
             }
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, json);

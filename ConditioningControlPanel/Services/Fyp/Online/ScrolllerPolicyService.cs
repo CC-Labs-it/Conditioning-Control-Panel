@@ -18,7 +18,7 @@ internal static class ScrolllerPolicyService
 {
     /// <summary>The server's answer, already shaped. Null fields = "no cap" / "no minimum".</summary>
     internal sealed record Answer(bool Enabled, int? MaxClipShortSide, string? MinVersion,
-        long? FreeMb = null, long? BasicMb = null, long? PrimeMb = null);
+        long? FreeMb = null, long? BasicMb = null, long? PrimeMb = null, long? FreeFirstDayMb = null);
 
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
@@ -93,7 +93,7 @@ internal static class ScrolllerPolicyService
         string? ver = o["min_version"] is JValue { Type: JTokenType.String } v
             && !string.IsNullOrWhiteSpace((string?)v) ? ((string)v!).Trim() : null;
         var daily = o["daily_mb"] as JObject;
-        return new Answer(enabled, cap, ver, Mb(daily?["free"]), Mb(daily?["basic"]), Mb(daily?["prime"]));
+        return new Answer(enabled, cap, ver, Mb(daily?["free"]), Mb(daily?["basic"]), Mb(daily?["prime"]), Mb(daily?["free_first_day"]));
     }
 
     /// <summary>A whole, non-negative MB figure, else null (the default stays).</summary>
@@ -105,7 +105,7 @@ internal static class ScrolllerPolicyService
     internal static void Accept(Answer answer)
     {
         ScrolllerPolicy.Apply(answer.Enabled, answer.MaxClipShortSide);
-        ScrolllerAllowance.ApplyLimits(answer.FreeMb, answer.BasicMb, answer.PrimeMb);
+        ScrolllerAllowance.ApplyLimits(answer.FreeMb, answer.BasicMb, answer.PrimeMb, answer.FreeFirstDayMb);
         _minVersion = answer.MinVersion;
     }
 

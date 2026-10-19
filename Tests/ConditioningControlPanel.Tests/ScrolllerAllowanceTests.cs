@@ -38,8 +38,48 @@ public class ScrolllerAllowanceTests : IDisposable
     }
 
     [Fact]
+    public void A_free_install_gets_500_mb_on_its_first_day_then_300()
+    {
+        Assert.Equal(500 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
+        ScrolllerAllowance.Charge(400 * ScrolllerAllowance.MB);
+        Assert.False(ScrolllerAllowance.Spent);
+        Assert.Equal(80, ScrolllerAllowance.Percent);
+        _now = _now.AddDays(1);
+        Assert.False(ScrolllerAllowance.IsFirstDay);
+        Assert.Equal(300 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
+        _now = _now.AddDays(5);
+        Assert.Equal(300 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
+    }
+
+    [Fact]
+    public void The_first_day_is_the_first_day_with_online_media_not_the_install_date()
+    {
+        _now = _now.AddDays(3);   // nothing fetched yet: still the first day
+        Assert.True(ScrolllerAllowance.IsFirstDay);
+        ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+        _now = _now.AddDays(1);
+        Assert.False(ScrolllerAllowance.IsFirstDay);
+    }
+
+    [Fact]
+    public void Paid_plans_never_drop_to_the_first_day_figure()
+    {
+        _plan = ScrolllerPlan.Basic;
+        Assert.Equal(2048 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
+    }
+
+    [Fact]
+    public void A_first_day_figure_below_the_daily_one_is_ignored()
+    {
+        ScrolllerAllowance.ApplyLimits(300, null, null, 100);
+        Assert.Equal(300 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
+    }
+
+    [Fact]
     public void Free_is_spent_at_its_limit_and_prime_is_not()
     {
+        ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+        _now = _now.AddDays(1);   // past the first day
         ScrolllerAllowance.Charge(300 * ScrolllerAllowance.MB);
         Assert.True(ScrolllerAllowance.Spent);
         Assert.Equal(100, ScrolllerAllowance.Percent);
@@ -61,7 +101,12 @@ public class ScrolllerAllowanceTests : IDisposable
     [Fact]
     public void The_share_resets_at_local_midnight()
     {
-        ScrolllerAllowance.Charge(250 * ScrolllerAllowance.MB);
+        ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+        _now = _now.AddDays(-1);  // that charge was on an earlier day: today is not the first day
+        ScrolllerAllowance.ResetForTests();
+        ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+        _now = _now.AddDays(1);
+        ScrolllerAllowance.Charge(249 * ScrolllerAllowance.MB);
         Assert.Equal(83, ScrolllerAllowance.Percent);
         _now = new DateTime(2026, 10, 19, 23, 59, 59);
         Assert.Equal(83, ScrolllerAllowance.Percent);
@@ -78,7 +123,7 @@ public class ScrolllerAllowanceTests : IDisposable
         ScrolllerAllowance.SpentReached += h;
         try
         {
-            ScrolllerAllowance.Charge(200 * ScrolllerAllowance.MB);
+            ScrolllerAllowance.Charge(300 * ScrolllerAllowance.MB);
             Assert.Equal(0, fired);
             ScrolllerAllowance.Charge(200 * ScrolllerAllowance.MB);
             Assert.Equal(1, fired);
@@ -111,7 +156,8 @@ public class ScrolllerAllowanceTests : IDisposable
     [Fact]
     public void Config_parses_daily_mb()
     {
-        var a = ScrolllerPolicyService.Parse("{\"enabled\":true,\"daily_mb\":{\"free\":250,\"basic\":\"x\",\"prime\":8000}}")!;
+        var a = ScrolllerPolicyService.Parse("{\"enabled\":true,\"daily_mb\":{\"free\":250,\"basic\":\"x\",\"prime\":8000,\"free_first_day\":600}}")!;
+        Assert.Equal(600, a.FreeFirstDayMb);
         Assert.Equal(250, a.FreeMb);
         Assert.Null(a.BasicMb);
         Assert.Equal(8000, a.PrimeMb);
@@ -130,7 +176,7 @@ public class ScrolllerAllowanceTests : IDisposable
     [Fact]
     public void Other_hosts_are_never_held_back()
     {
-        ScrolllerAllowance.Charge(400 * ScrolllerAllowance.MB);
+        ScrolllerAllowance.Charge(600 * ScrolllerAllowance.MB);
         Assert.True(ScrolllerPolicyService.MayFetchFresh("https://cclabs.app/a.jpg"));
         Assert.False(ScrolllerPolicyService.MayFetchFresh("https://images.scrolller.com/a.jpg"));
     }
