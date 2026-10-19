@@ -121,6 +121,19 @@ internal static class OnlineMeterRules
         if (spent || percent <= 0) return 0;
         return Math.Clamp(Math.Max(percent, 3) / 100.0, 0, 0.999);
     }
+
+    // ---------------------------------------------------------------- the "?" help slip
+
+    /// <summary>The help slip's title key.</summary>
+    public const string HelpTitleKey = "online_help_title";
+
+    /// <summary>The help slip's paragraph keys, in order: the shares, what counts, the device cache,
+    /// a used-up day, and the privacy line. No figures anywhere (owner, 2026-10-19 21:30: the
+    /// online media UI never shows a size, only the percentage and "used up").</summary>
+    public static readonly string[] HelpParagraphKeys =
+        { "online_help_share", "online_help_counts", "online_help_cache", "online_help_spent", "online_help_local" };
+
+    public static string[] HelpParagraphs(Func<string, string> loc) => Array.ConvertAll(HelpParagraphKeys, k => loc(k));
 }
 
 /// <summary>

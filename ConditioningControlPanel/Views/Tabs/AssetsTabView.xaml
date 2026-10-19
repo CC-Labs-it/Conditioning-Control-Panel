@@ -354,7 +354,10 @@
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Left" Text="{loc:Str online_meter_label}"
                                            FontSize="12.5" FontWeight="SemiBold" Foreground="#E6FFFFFF"
-                                           VerticalAlignment="Center" Margin="0,0,14,0"/>
+                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <!-- The "?" slip: how the daily share works (MainWindow.OnlineMeter.cs). -->
+                                <ContentControl x:Name="OnlineMeterHelpHost" x:FieldModifier="internal" DockPanel.Dock="Left"
+                                                VerticalAlignment="Center" Focusable="False" Margin="0,0,14,0"/>
                                 <TextBlock x:Name="TxtOnlineMeterPct" x:FieldModifier="internal" DockPanel.Dock="Right"
                                            FontSize="17" FontWeight="Bold" Foreground="#FF69B4" MinWidth="52"
                                            TextAlignment="Right" VerticalAlignment="Center" Margin="14,0,0,0"/>

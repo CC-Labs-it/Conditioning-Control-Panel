@@ -479,6 +479,11 @@ public sealed class LeashHelpSlip : Border
 public static class LeashHelpButton
 {
     public static Button Create(LeashHelpEntry entry, Func<string> theirName, double size = 16)
+        => Create(() => new LeashHelpSlip(entry, theirName()), "leash-slip-help:" + entry.Id, size);
+
+    /// <summary>The same "?" for any paper slip (the online media meter's, 2026-10-19):
+    /// <paramref name="slip"/> builds the card each time it opens.</summary>
+    public static Button Create(Func<UIElement> slip, string tag, double size = 16)
     {
         var t = new TextBlock
         {
@@ -497,8 +502,9 @@ public static class LeashHelpButton
         b.Height = size;
         b.Focusable = false;
         b.VerticalAlignment = VerticalAlignment.Center;
-        b.Tag = "leash-slip-help:" + entry.Id;
-        var ctl = new Controller(b, entry, theirName);
+        b.Tag = tag;
+        var ctl = new Controller(b, slip);
+        Controllers.AddOrUpdate(b, ctl);
         b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
         return b;
     }
@@ -546,7 +552,8 @@ public static class LeashHelpButton
             VerticalAlignment = VerticalAlignment.Center,
             Tag = "leash-slip-help:" + entry.Id,
         };
-        var ctl = new Controller(b, entry, theirName);
+        var ctl = new Controller(b, () => new LeashHelpSlip(entry, theirName()));
+        Controllers.AddOrUpdate(b, ctl);
         b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
         return b;
     }
@@ -563,21 +570,28 @@ public static class LeashHelpButton
         Placement = PlacementMode.Right,
     };
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Button, Controller> Controllers = new();
+
+    /// <summary>Opens <paramref name="help"/>'s slip pinned, and leaves it open when it already is
+    /// (a click would toggle it shut). For a "?" made here; anything else is ignored.</summary>
+    public static void Pin(Button help)
+    {
+        if (Controllers.TryGetValue(help, out var ctl)) ctl.Pin();
+    }
+
     private sealed class Controller
     {
         private readonly Button _b;
-        private readonly LeashHelpEntry _entry;
-        private readonly Func<string> _name;
+        private readonly Func<UIElement> _slip;
         private Popup? _popup;
         private bool _pinned;
         private UIElement? _root;
         private readonly DispatcherTimer _leave;
 
-        public Controller(Button b, LeashHelpEntry entry, Func<string> name)
+        public Controller(Button b, Func<UIElement> slip)
         {
             _b = b;
-            _entry = entry;
-            _name = name;
+            _slip = slip;
             _leave = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
             _leave.Tick += (_, _) => { _leave.Stop(); if (!_pinned && !Over()) Close(); };
             b.MouseEnter += (_, _) => { _leave.Stop(); Open(); };
@@ -587,6 +601,12 @@ public static class LeashHelpButton
         }
 
         private bool Over() => _b.IsMouseOver || _popup?.Child is UIElement c && c.IsMouseOver;
+
+        public void Pin()
+        {
+            _pinned = true;
+            Open();
+        }
 
         public void TogglePin()
         {
@@ -600,7 +620,7 @@ public static class LeashHelpButton
             if (_popup is { IsOpen: true }) return;
             try
             {
-                var slip = new LeashHelpSlip(_entry, _name());
+                var slip = _slip();
                 var holder = new Border { Padding = new Thickness(0, 4, 8, 12), Background = Brushes.Transparent, Child = slip };
                 holder.MouseEnter += (_, _) => _leave.Stop();
                 holder.MouseLeave += (_, _) => _leave.Start();

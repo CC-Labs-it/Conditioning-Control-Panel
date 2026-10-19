@@ -224,8 +224,11 @@ internal static class ScrolllerAllowance
     private static long LimitFor(ScrolllerPlan plan, ScrolllerLedger l)
     {
         if (plan != ScrolllerPlan.Free || !l.IsFirstDay) return DailyBytes(plan);
-        return Math.Max(DailyBytes(ScrolllerPlan.Free), Volatile.Read(ref _freeFirst));
+        return FreeFirstDayBytes;
     }
+
+    /// <summary>A free account's first-day share: never less than the ordinary free one.</summary>
+    public static long FreeFirstDayBytes => Math.Max(DailyBytes(ScrolllerPlan.Free), Volatile.Read(ref _freeFirst));
 
     /// <summary>True on this account's first day of online media on this PC.</summary>
     public static bool IsFirstDay
