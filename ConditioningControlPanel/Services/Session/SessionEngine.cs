@@ -370,39 +370,39 @@ namespace ConditioningControlPanel.Services
             // ccp-bugs #1464: _isRunning is already false, so a teardown step that throws must not
             // skip SessionStopped below - that is what resets every session clock and stops the
             // engine. Each step is guarded on its own.
-            void Step(Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("stop", ex));
+            void Step(string name, Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("stop:" + name, ex));
 
             // Close corner GIF
             // CloseCornerGif also hands the corner back to any standalone slot that stood down
             // while this session's overlay owned it.
-            Step(CloseCornerGif);
+            Step("corner-gif", CloseCornerGif);
 
             // Stop Mind Wipe
-            Step(() => App.MindWipe?.Stop());
+            Step("mind-wipe", () => App.MindWipe?.Stop());
 
             // Stop Pop Quiz
-            Step(() => App.PopQuiz?.Stop());
+            Step("pop-quiz", () => App.PopQuiz?.Stop());
 
             // Stop Bubbles
-            Step(() => App.Bubbles?.Stop());
+            Step("bubbles", () => App.Bubbles?.Stop());
 
             // Stop Brain Drain if it was active during session
             if (_brainDrainActive)
             {
-                Step(() => App.BrainDrain?.Stop());
+                Step("brain-drain", () => App.BrainDrain?.Stop());
                 _brainDrainActive = false;
             }
 
             // Force-unduck audio before restoring settings (subliminals/flashes may have left it ducked)
-            Step(() => App.Audio?.ForceUnduck());
+            Step("unduck", () => App.Audio?.ForceUnduck());
 
             // Hand the flash trio back before the restore. Unconditional and ahead of
             // RestoreSettings, which returns early when there is no snapshot - a session overlay
             // left parked would keep overriding the user's own values for the rest of the run.
-            Step(() => App.Settings?.Current?.ClearSessionFlashRamp());
+            Step("flash-ramp", () => App.Settings?.Current?.ClearSessionFlashRamp());
 
             // Restore original settings
-            Step(RestoreSettings);
+            Step("restore-settings", RestoreSettings);
 
             // Fire events
             SessionStopped?.Invoke(this, EventArgs.Empty);
@@ -633,7 +633,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!_isRunning || _isPaused || _currentSession == null) return;
             var settings = _currentSession.Settings;
-            void Step(Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("resume", ex));
+            void Step(string name, Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("resume:" + name, ex));
 
             foreach (var name in _pendingFeatureStarts.Select(p => p.Name).Distinct().ToList())
             {
@@ -647,15 +647,15 @@ namespace ConditioningControlPanel.Services
                     "bubble count" => () => App.BubbleCount?.Stop(),
                     _ => null, // mind wipe below; audio whispers is a settings flag the engine never starts
                 };
-                if (stop != null) Step(stop);
+                if (stop != null) Step("hold-" + name, stop);
             }
 
             if (settings.LockCardEnabled && !IsFeaturePending("lock cards"))
-                Step(() => { App.LockCard?.Stop(); App.LockCard?.Start(SessionWindowMinutes); });
+                Step("lock-cards", () => { App.LockCard?.Stop(); App.LockCard?.Start(SessionWindowMinutes); });
 
-            Step(() => App.MindWipe?.Stop());
+            Step("mind-wipe-stop", () => App.MindWipe?.Stop());
             if (settings.MindWipeEnabled && !IsFeaturePending("mind wipe"))
-                Step(() =>
+                Step("mind-wipe", () =>
                 {
                     App.MindWipe.Volume = settings.MindWipeVolume / 100.0;
                     App.MindWipe.StartSession(settings.MindWipeBaseMultiplier);

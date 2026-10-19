@@ -157,8 +157,9 @@ public class SessionClockRulesTests
         int fired = stop.IndexOf("SessionStopped?.Invoke", StringComparison.Ordinal);
         Assert.True(fired > 0);
         var before = stop.Substring(0, fired);
-        Assert.Contains("Step(CloseCornerGif);", before);
-        Assert.Contains("Step(RestoreSettings);", before);
+        Assert.Contains("Step(\"corner-gif\", CloseCornerGif);", before);
+        Assert.Contains("Step(\"restore-settings\", RestoreSettings);", before);
+        Assert.Contains("ReportStepFailure(\"stop:\" + name, ex)", before);   // one first-failure trace per step
         Assert.DoesNotContain("\n            RestoreSettings();", before);
     }
 
