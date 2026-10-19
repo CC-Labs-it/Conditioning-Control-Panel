@@ -67,6 +67,10 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
         return b;
     }
     private static byte[] S3Error() => Ascii("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>");
+    private static byte[] FragmentedMp4() => Pad(new byte[] { 0, 0, 0, 0x18 }.Concat(Ascii("stypmsdh")).ToArray());
+    private static byte[] MoovFirst() => Pad(new byte[] { 0, 0, 0x10, 0 }.Concat(Ascii("moovmvhd")).ToArray());
+    private static byte[] Json() => Pad(Ascii("  {\"error\":\"denied\"}"));
+    private static byte[] Unknown() => Pad(new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
 
     // ---- magic-byte sniff -----------------------------------------------------------------
 
@@ -107,6 +111,11 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
         { ".webp", "poster", "mp4", false },
         { ".bin", "picture", "png", true },
         { ".bin", "picture", "s3", false },
+        { ".mp4", "gif", "fmp4", true },       // fragmented MP4 opens with styp, not ftyp
+        { ".mp4", "clip", "moov", true },      // moov-first MP4
+        { ".bin", "gif", "fmp4", true },       // the label alone says video
+        { ".webp", "poster", "fmp4", false },
+        { ".gif", "gif", "mp4", true },        // a GIF post served as video under a .gif url
     };
 
     [Theory]
@@ -116,9 +125,37 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
         var head = body switch
         {
             "mp4" => Mp4(), "webm" => Webm(), "gif" => Gif(), "awebp" => AnimatedWebp(), "webp" => StillWebp(),
-            "jpeg" => Jpeg(), "png" => Png(), _ => S3Error(),
+            "jpeg" => Jpeg(), "png" => Png(), "fmp4" => FragmentedMp4(), "moov" => MoovFirst(), _ => S3Error(),
         };
         Assert.Equal(fits, ScrolllerDiskCache.BodyFits(ext, kind, head, Math.Min(64, head.Length)));
+    }
+
+    public static TheoryData<string, string, string, bool> Keeps => new()
+    {
+        { ".mp4", "gif", "s3", false },        // XML error body
+        { ".mp4", "gif", "json", false },      // JSON error body
+        { ".webp", "gif", "webp", false },     // a still under a gif label
+        { ".jpg", "clip", "jpeg", false },
+        { ".mp4", "gif", "fmp4", true },
+        { ".mp4", "clip", "moov", true },
+        { ".mp4", "gif", "unknown", true },    // unknown is not evidence: kept
+        { ".webp", "poster", "unknown", true },
+        { ".webp", "poster", "webp", true },
+        { ".gif", "gif", "gif", true },
+        { ".webm", "gif", "webm", true },
+    };
+
+    [Theory]
+    [MemberData(nameof(Keeps))]
+    public void The_startup_check_drops_only_on_positive_evidence(string ext, string kind, string body, bool keep)
+    {
+        var head = body switch
+        {
+            "webm" => Webm(), "gif" => Gif(), "webp" => StillWebp(), "jpeg" => Jpeg(), "fmp4" => FragmentedMp4(),
+            "moov" => MoovFirst(), "json" => Json(), "unknown" => Unknown(), _ => S3Error(),
+        };
+        Assert.Equal(keep, ScrolllerDiskCache.KeepAtLoad(ext, kind, head, Math.Min(64, head.Length)));
+        Assert.True(ScrolllerDiskCache.KeepAtLoad(ext, kind, head, 0));   // nothing read condemns nothing
     }
 
     // ---- the cache on disk ----------------------------------------------------------------
@@ -165,6 +202,49 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
         Assert.True(ScrolllerDiskCache.Contains(clip));
         Assert.True(ScrolllerDiskCache.Contains(poster));
         Assert.False(File.Exists(stale));   // swept as a stranger, so the next ask fetches it again
+    }
+
+    [Fact]
+    public void Good_copies_survive_the_startup_check_and_an_unreadable_one_is_kept()
+    {
+        Restart(check: false);
+        var fragmented = "https://quark.scrolller.com/frag.mp4";
+        var moov = "https://quark.scrolller.com/moov.mp4";
+        var unknown = "https://quark.scrolller.com/odd.mp4";
+        var locked = "https://quark.scrolller.com/locked.webm";
+        var xml = "https://helios.scrolller.com/Err2-mobile.mp4";
+        Assert.True(Put(fragmented, "gif", FragmentedMp4()));
+        Assert.True(Put(moov, "clip", MoovFirst()));
+        Assert.True(Put(unknown, "gif", Unknown()));
+        Assert.True(Put(locked, "gif", S3Error()));   // bad bytes, but unreadable at load: no evidence
+        Assert.True(Put(xml, "gif", S3Error()));
+        var lockedPath = ScrolllerDiskCache.TryGetPath(locked)!;
+        ScrolllerDiskCache.Flush();
+
+        using (new FileStream(lockedPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Restart(check: true);
+            Assert.True(ScrolllerDiskCache.Contains(fragmented));
+            Assert.True(ScrolllerDiskCache.Contains(moov));
+            Assert.True(ScrolllerDiskCache.Contains(unknown));
+            Assert.True(ScrolllerDiskCache.Contains(locked));
+            Assert.False(ScrolllerDiskCache.Contains(xml));
+        }
+    }
+
+    [Fact]
+    public void A_scanned_index_is_stamped_and_not_scanned_again()
+    {
+        Restart(check: true);
+        Assert.False(ScrolllerDiskCache.Contains("https://quark.scrolller.com/none.webm"));   // loads + stamps
+        ScrolllerDiskCache.FormatCheck = false;   // a row the commit check never saw
+        var xml = "https://helios.scrolller.com/Err3-mobile.mp4";
+        Assert.True(Put(xml, "gif", S3Error()));
+        ScrolllerDiskCache.Flush();
+        Assert.Contains("\"fc\":1", File.ReadAllText(Path.Combine(_root, ScrolllerDiskCache.IndexFileName)));
+
+        Restart(check: true);
+        Assert.True(ScrolllerDiskCache.Contains(xml));   // stamped: rows are trusted, no rescan
     }
 
     // ---- rendition choice -----------------------------------------------------------------
