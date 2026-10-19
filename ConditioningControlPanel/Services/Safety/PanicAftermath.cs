@@ -8,15 +8,18 @@ namespace ConditioningControlPanel.Services.Safety
     /// Found on ccp-bugs #1464, where the log showed two leaks against "panic stops everything":
     ///
     /// <para>1. Trigger Mode runs on the companion tube's own timer, outside the engine. After a
-    /// haptics PANIC STOP it kept speaking triggers and pulsing the toy about 22 s later. A panic
-    /// now arms a QUIET window (the same five minutes EMI keeps silent after a panic). Trigger
-    /// Mode skips its tick inside it, haptics included, muted or not. A user's START ends it.</para>
+    /// haptics PANIC STOP it kept speaking triggers and pulsing the toy about 22 s later. Any panic
+    /// (local or remote) now arms a QUIET window, the same five minutes EMI keeps silent after a
+    /// panic, measured on the monotonic tick count. Trigger Mode skips its tick and any queued
+    /// trigger inside it, haptics included, muted or not. Only the user's own START ends it early
+    /// (MainWindow.StartEngineFromUser): the scheduler, auto-start, a remote or program session
+    /// start and the Lockdown keeper never do.</para>
     ///
-    /// <para>2. A remote "resume" (or the voice "resume", same path) resumed a session the LOCAL
-    /// panic had paused, and ResumeSession restarts flashes, video and subliminals even with the
-    /// engine stopped. The pause a panic made is remembered; a remote resume of THAT pause is
-    /// refused. Any later pause (the session was resumed locally and paused again) is a normal
-    /// one again, so nothing has to remember to clear it.</para>
+    /// <para>2. A remote "resume" (or the voice "resume", same path) resumed a session a LOCAL panic
+    /// had paused, and ResumeSession restarts flashes, video and subliminals even with the engine
+    /// stopped. A local panic remembers the pause it left (this run of this session, this pause of
+    /// it); a remote resume of THAT pause is refused. A remote panic never marks (owner, 2026-10-19:
+    /// the controller may resume its own panic). Any later pause is a normal one again.</para>
     ///
     /// Pure rules plus one process-wide quiet stamp. Never weakens a panic: both only ever refuse.
     /// </summary>
@@ -25,36 +28,40 @@ namespace ConditioningControlPanel.Services.Safety
         /// <summary>The post-panic quiet: the length of EMI's panicPressed hold tail (300 s).</summary>
         public static readonly TimeSpan QuietWindow = TimeSpan.FromMinutes(5);
 
-        private static long _quietUntilUtcTicks;
+        /// <summary>Environment.TickCount64 value the quiet lasts until; 0 = not armed.</summary>
+        private static long _quietUntilMs;
 
-        public static DateTime QuietUntil(DateTime panicUtc) => panicUtc + QuietWindow;
+        public static long QuietUntil(long panicMs) => panicMs + (long)QuietWindow.TotalMilliseconds;
 
-        public static bool IsQuiet(DateTime nowUtc, DateTime quietUntilUtc) => nowUtc < quietUntilUtc;
+        public static bool IsQuiet(long nowMs, long quietUntilMs) => quietUntilMs > 0 && nowMs < quietUntilMs;
 
-        /// <summary>A panic press, any rung. Safe from any thread.</summary>
-        public static void ArmQuiet(DateTime nowUtc) =>
-            Interlocked.Exchange(ref _quietUntilUtcTicks, QuietUntil(nowUtc).Ticks);
+        /// <summary>A panic press, any rung, local or remote. Safe from any thread.</summary>
+        public static void ArmQuiet() => ArmQuiet(Environment.TickCount64);
 
-        /// <summary>The user started the engine again: what they stopped may come back.</summary>
-        public static void EndQuiet() => Interlocked.Exchange(ref _quietUntilUtcTicks, 0);
+        public static void ArmQuiet(long nowMs) => Interlocked.Exchange(ref _quietUntilMs, QuietUntil(nowMs));
+
+        /// <summary>The user's own START: what they stopped may come back.</summary>
+        public static void EndQuiet() => Interlocked.Exchange(ref _quietUntilMs, 0);
 
         /// <summary>TRUE while Trigger Mode must stay silent (no bubble, no audio, no haptics).</summary>
-        public static bool TriggersSilenced(DateTime nowUtc) =>
-            IsQuiet(nowUtc, new DateTime(Interlocked.Read(ref _quietUntilUtcTicks), DateTimeKind.Utc));
+        public static bool TriggersSilenced() => TriggersSilenced(Environment.TickCount64);
 
-        /// <summary>The pause a panic left on a session: which session, and which pause of it.</summary>
-        public readonly record struct PanicPause(object Session, int PauseCount);
+        public static bool TriggersSilenced(long nowMs) => IsQuiet(nowMs, Interlocked.Read(ref _quietUntilMs));
 
-        /// <summary>The mark to keep after a panic, or null when no session sits paused.</summary>
-        public static PanicPause? MarkPause(object? session, bool sessionRunning, bool sessionPaused, int pauseCount) =>
-            session != null && sessionRunning && sessionPaused ? new PanicPause(session, pauseCount) : null;
+        /// <summary>The pause a local panic left: which session object, which run of it (session
+        /// objects are reused across runs), and which pause of that run.</summary>
+        public readonly record struct PanicPause(object Session, int Run, int PauseCount);
+
+        /// <summary>The mark a LOCAL panic keeps, or null when no session sits paused.</summary>
+        public static PanicPause? MarkPause(object? session, int run, bool sessionRunning, bool sessionPaused, int pauseCount) =>
+            session != null && sessionRunning && sessionPaused ? new PanicPause(session, run, pauseCount) : null;
 
         /// <summary>
-        /// TRUE when a remote resume would undo the local panic: the same session is still in the
-        /// very pause the panic left. Only a local START or Resume picks that one up.
+        /// TRUE when a remote resume would undo a local panic: the same run of the same session is
+        /// still in the very pause the panic left. Only a local START or Resume picks that one up.
         /// </summary>
-        public static bool RemoteResumeRefused(PanicPause? mark, object? session, bool sessionPaused, int pauseCount) =>
+        public static bool RemoteResumeRefused(PanicPause? mark, object? session, int run, bool sessionPaused, int pauseCount) =>
             mark is { } m && sessionPaused && session != null
-            && ReferenceEquals(m.Session, session) && m.PauseCount == pauseCount;
+            && ReferenceEquals(m.Session, session) && m.Run == run && m.PauseCount == pauseCount;
     }
 }

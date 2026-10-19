@@ -1574,8 +1574,9 @@ namespace ConditioningControlPanel.Services
                             break;
 
                         case "resume_session":
-                            MainWindowRef
-                                ?.ResumeSessionFromRemote();
+                            // A session a local panic paused stays paused: say so, not a silent ok.
+                            if (MainWindowRef?.ResumeSessionFromRemote() == false)
+                                ReportCommandRefused(action, "panic", "Not allowed");
                             break;
 
                         case "stop_session":

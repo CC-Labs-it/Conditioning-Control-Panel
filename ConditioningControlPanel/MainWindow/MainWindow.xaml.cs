@@ -1608,7 +1608,7 @@ namespace ConditioningControlPanel
             // down this method throws - the whole point is that she says nothing after a panic.
             try { App.EmiDesk?.Fire("panicPressed", null); } catch { }
             // Same five minutes for Trigger Mode: no trigger, sound or haptic pulse after a panic.
-            Services.Safety.PanicAftermath.ArmQuiet(DateTime.UtcNow);
+            Services.Safety.PanicAftermath.ArmQuiet();
 
             // Circe's tab: the way out never costs. Armed up here because most of the ladder below
             // returns early into a game's own panic rung, and the hold has to cover those too.
@@ -1866,9 +1866,24 @@ namespace ConditioningControlPanel
                 _lastPanicTime = now;
             }
             
+            // Pause session if one is running (instead of stopping it). ALWAYS, engine on or off: a
+            // session resumed with the engine stopped (Resume while a remote controller holds START)
+            // ticks its effects back on by itself, so the engine-off branch must pause it too.
+            bool sessionWasPaused = false;
+            if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
+            {
+                _sessionEngine.PauseSession();
+                sessionWasPaused = true;
+            }
+            NoteLocalPanicPause();   // a remote resume cannot undo this pause (PanicAftermath)
+
+            // The scheduler must not start the engine again after a panic: the flag STOP sets.
+            if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
+                _manuallyStoppedDuringSchedule = true;
+
             if (_isRunning)
             {
-                // First press while running: stop engine, pause session if active
+                // First press while running: stop engine (the session was paused above)
                 App.Logger?.Information("Panic key pressed! Stopping engine...");
 
                 // IMMEDIATELY kill ALL audio before anything else
@@ -1879,15 +1894,6 @@ namespace ConditioningControlPanel
 
                 // Track panic press for Relapse achievement (must be before stopping session)
                 App.Achievements?.TrackPanicPressed();
-
-                // Pause session if one is running (instead of stopping it)
-                bool sessionWasPaused = false;
-                if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
-                {
-                    _sessionEngine.PauseSession();
-                    sessionWasPaused = true;
-                }
-                NotePanicPause();   // a remote resume cannot undo this pause
 
                 // Remember if autonomy was running before we stop everything
                 bool autonomyWasRunning = App.Autonomy?.IsEnabled == true;

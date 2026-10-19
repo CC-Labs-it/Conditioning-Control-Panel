@@ -1973,6 +1973,9 @@ namespace ConditioningControlPanel
         private void OnSessionStarted(object? sender, EventArgs e)
         {
             App.IsSessionRunning = true;
+            // A new run: an old panic's pause mark never refuses its remote resume (PanicAftermath).
+            _sessionRun++;
+            _panicPause = null;
             // Safety net for the one-shot above: a new session always gets its own summary, even if
             // a suppression was armed and its stop somehow never produced a log.
             _suppressSessionSummaryUntil = DateTime.MinValue;
@@ -2018,6 +2021,7 @@ namespace ConditioningControlPanel
         private void OnSessionStopped(object? sender, EventArgs e)
         {
             App.IsSessionRunning = false;
+            _panicPause = null;
             // See OnSessionCompleted — drop the reference to the controller-started run.
             _remoteStartedSession = null;
 
