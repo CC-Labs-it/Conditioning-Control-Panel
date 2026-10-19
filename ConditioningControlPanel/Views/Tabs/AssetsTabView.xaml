@@ -270,6 +270,36 @@
                 <!-- Row 1, SOURCE: the header, the segmented bar (built in MainWindow.Assets.cs,
                      radio behaviour enforced there) and, in Both only, the share slider. The
                      old hint line now rides the header as a tooltip, to keep the block short. -->
+                <StackPanel>
+                <!-- The one-time "official" note (owner, 2026-10-19): only once the server says the
+                     Scrolller licence is signed, only while online media is in the source, gone for
+                     good after "Nice" (ScrolllerOfficialNoteSeen). Filled in MainWindow.OnlineMeter.cs. -->
+                <Border x:Name="OnlineOfficialNote" x:FieldModifier="internal" Visibility="Collapsed"
+                        Margin="0,0,0,12" Background="#181830" BorderBrush="#3A3A5C" BorderThickness="1"
+                        CornerRadius="12" Padding="16,14,16,14" HorizontalAlignment="Left" MaxWidth="720">
+                    <Border.RenderTransform>
+                        <TranslateTransform/>
+                    </Border.RenderTransform>
+                    <StackPanel>
+                        <Border HorizontalAlignment="Left" BorderBrush="{DynamicResource PinkBrush}"
+                                BorderThickness="2" CornerRadius="4" Padding="7,2,7,1">
+                            <Border.LayoutTransform>
+                                <RotateTransform Angle="-3"/>
+                            </Border.LayoutTransform>
+                            <TextBlock Text="{loc:Str online_official_stamp}" FontSize="10" FontWeight="ExtraBold"
+                                       Foreground="{DynamicResource PinkBrush}"/>
+                        </Border>
+                        <TextBlock Text="{loc:Str online_official_title}" FontSize="16" FontWeight="SemiBold"
+                                   Foreground="#F0F0F5" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                        <TextBlock Text="{loc:Str online_official_body}" FontSize="13" Foreground="#CCCCE0"
+                                   Margin="0,6,0,0" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="TxtOnlineOfficialPlan" x:FieldModifier="internal" FontSize="13"
+                                   Foreground="#E0B0FF" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                        <Button x:Name="BtnOnlineOfficialNice" x:FieldModifier="internal"
+                                Content="{loc:Str online_official_nice}" Style="{StaticResource SmallPinkButton}"
+                                HorizontalAlignment="Left" Padding="16,6" FontSize="13" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Border>
                 <DockPanel LastChildFill="False">
                     <TextBlock Text="{loc:Str section_media_source}" Style="{StaticResource SectionHeader}"
                                DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,16,0"
@@ -294,6 +324,7 @@
                                    FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </DockPanel>
+                </StackPanel>
 
                 <!-- Everything below only unfolds once remote media is in play. -->
                 <Grid x:Name="RemoteMediaDetails" x:FieldModifier="internal" Grid.Row="1" Visibility="Collapsed">
@@ -306,7 +337,7 @@
 
                     <!-- ONLINE MEDIA TODAY (owner, 2026-10-19): the day's share as a percent only,
                          never MB or a file count. Pink, amber from 80%, grey when used up. Kept to
-                         two short lines so the closed block
+                         two short lines (plus the stamped line once official) so the closed block
                          stays one glance. Filled in MainWindow.OnlineMeter.cs. -->
                     <Border x:Name="OnlineMeterCard" x:FieldModifier="internal" Margin="0,10,0,0"
                             Background="#0FFFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1"
@@ -333,6 +364,17 @@
                             </DockPanel>
                             <TextBlock x:Name="TxtOnlineMeterLine" x:FieldModifier="internal" Margin="0,5,0,0"
                                        FontSize="11.5" TextWrapping="Wrap" Foreground="#A7A7C1"/>
+                            <StackPanel x:Name="OnlineMeterStamped" x:FieldModifier="internal" Orientation="Horizontal"
+                                        Margin="0,6,0,0" Visibility="Collapsed">
+                                <Border BorderBrush="{DynamicResource PinkBrush}" BorderThickness="2" CornerRadius="4"
+                                        Padding="5,1,5,0" VerticalAlignment="Center" Margin="0,0,10,0">
+                                    <TextBlock Text="{loc:Str online_official_stamp}" FontSize="9" FontWeight="ExtraBold"
+                                               Foreground="{DynamicResource PinkBrush}"/>
+                                </Border>
+                                <TextBlock FontSize="11.5" Foreground="#CCCCE0" VerticalAlignment="Center"
+                                           TextWrapping="Wrap"><Hyperlink Click="ScrolllerLink_Click" Foreground="#CCCCE0"
+                                           TextDecorations="{x:Null}"><Run Text="{loc:Str online_official_stamped_line}"/></Hyperlink></TextBlock>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 
@@ -399,8 +441,10 @@
                                    FontStyle="Italic"
                                    TextWrapping="Wrap" Margin="2,0,0,2" Visibility="Collapsed"/>
                         <!-- Credit for the online source (owner, 2026-10-17). Inside the fold on
-                             purpose: the closed block stays one glance (AssetsMediaBlockRenderTests). -->
-                        <TextBlock Margin="2,10,0,4" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
+                             purpose: the closed block stays one glance (AssetsMediaBlockRenderTests).
+                             Once the licence is official the stamped line under the meter replaces it. -->
+                        <TextBlock x:Name="TxtScrolllerCredit" x:FieldModifier="internal"
+                                   Margin="2,10,0,4" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondaryBrush}"><Hyperlink Click="ScrolllerLink_Click" Foreground="{DynamicResource TextSecondaryBrush}">Media from Scrolller</Hyperlink><Run Text=". "/><Run Text="{loc:Str label_online_media_credit}"/></TextBlock>
                     </StackPanel>
                     </ScrollViewer>

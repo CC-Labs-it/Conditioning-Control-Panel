@@ -4724,6 +4724,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PatreonMember),
             nameof(AppSettings.PostGrants),
             nameof(AppSettings.ServerPaidUntil),
+            // The one-time "online media is official" note: this PC saw it, not the account.
+            nameof(AppSettings.ScrolllerOfficialNoteSeen),
         };
 
         /// <summary>
@@ -4779,6 +4781,7 @@ namespace ConditioningControlPanel.Services
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
+            restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)

@@ -7732,5 +7732,13 @@
   "online_pill_done": "Online für heute fertig",
   "online_hover_title": "Die Online-Medien für heute sind aufgebraucht",
   "online_hover_body": "Was du schon gesehen hast und deine eigenen Dateien laufen weiter. Ab Mitternacht wieder.",
-  "online_toast_spent": "Online-Medien sind für heute fertig. Weiter mit dem, was du schon gesehen hast, und deinen eigenen Dateien."
+  "online_toast_spent": "Online-Medien sind für heute fertig. Weiter mit dem, was du schon gesehen hast, und deinen eigenen Dateien.",
+  "online_official_stamp": "OFFIZIELL",
+  "online_official_title": "Online-Medien sind jetzt offiziell",
+  "online_official_body": "CCP hat jetzt eine richtige Lizenz von Scrolller. Der Online-Feed ist bezahlt, auf jedem Bild und Clip genannt und bleibt.",
+  "online_official_plan_free": "Alle bekommen einen Tagesanteil, am ersten Tag etwas mehr. Was du schon gesehen hast, läuft gratis noch mal.",
+  "online_official_plan_basic": "Basic bekommt einen großen Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
+  "online_official_plan_prime": "Prime bekommt den größten Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
+  "online_official_nice": "Schön",
+  "online_official_stamped_line": "Online-Medien lizenziert von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk."
 }

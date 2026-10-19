@@ -8487,5 +8487,13 @@
   "online_pill_done": "Online done for today",
   "online_hover_title": "Today's online media is used up",
   "online_hover_body": "What you've already seen and your own files keep playing. Back at midnight.",
-  "online_toast_spent": "Online media is done for today. Switching to what you've already seen and your own files."
+  "online_toast_spent": "Online media is done for today. Switching to what you've already seen and your own files.",
+  "online_official_stamp": "OFFICIAL",
+  "online_official_title": "Online media is official",
+  "online_official_body": "CCP now has a proper licence from Scrolller. The online feed is paid for, credited on every picture and clip, and here to stay.",
+  "online_official_plan_free": "Everyone gets a daily share, with extra on your first day. Anything you've already seen replays free.",
+  "online_official_plan_basic": "Basic gets a big daily share. Anything you've already seen replays free.",
+  "online_official_plan_prime": "Prime gets the biggest daily share. Anything you've already seen replays free.",
+  "online_official_nice": "Nice",
+  "online_official_stamped_line": "Online media licensed from Scrolller. Each picture and clip carries a small \"via Scrolller\" mark."
 }

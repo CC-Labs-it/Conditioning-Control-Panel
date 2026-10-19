@@ -8244,5 +8244,13 @@
   "online_pill_done": "在线：今日已用完",
   "online_hover_title": "今日在线媒体已用完",
   "online_hover_body": "看过的内容和你自己的文件会继续播放。午夜恢复。",
-  "online_toast_spent": "今日在线媒体已用完。正在切换到看过的内容和你自己的文件。"
+  "online_toast_spent": "今日在线媒体已用完。正在切换到看过的内容和你自己的文件。",
+  "online_official_stamp": "官方",
+  "online_official_title": "在线媒体现已正式授权",
+  "online_official_body": "CCP 现已获得 Scrolller 的正式授权。在线内容已付费，每张图片和每段短片都有署名，并会长期保留。",
+  "online_official_plan_free": "每个人都有每日额度，第一天更多。看过的内容重播免费。",
+  "online_official_plan_basic": "Basic 每日额度较大。看过的内容重播免费。",
+  "online_official_plan_prime": "Prime 每日额度最大。看过的内容重播免费。",
+  "online_official_nice": "好的",
+  "online_official_stamped_line": "在线媒体由 Scrolller 授权。每张图片和短片都带有一个小小的“via Scrolller”标记。"
 }
