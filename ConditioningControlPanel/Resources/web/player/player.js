@@ -530,8 +530,23 @@
     if (cur.playingSent) return;
     cur.playingSent = true;
     post({ type: 'playing' });
+    announceFirstFrame(cur);
     showCredit(cur.credit);
   });
+
+  // `firstFrame`: the first decoded frame is on the page, so a host that keeps its
+  // window hidden while a clip loads (floating videos) can show it now, never black.
+  // Without requestVideoFrameCallback it goes out with `playing`.
+  function announceFirstFrame(session) {
+    let sent = false;
+    const send = () => {
+      if (sent || cur !== session) return;
+      sent = true;
+      post({ type: 'firstFrame' });
+    };
+    if (typeof fg.requestVideoFrameCallback !== 'function') { send(); return; }
+    try { fg.requestVideoFrameCallback(send); } catch (e) { send(); }
+  }
 
   fg.addEventListener('timeupdate', () => {
     if (!cur || cur.errored || cur.ended || cur.hostPaused) return;

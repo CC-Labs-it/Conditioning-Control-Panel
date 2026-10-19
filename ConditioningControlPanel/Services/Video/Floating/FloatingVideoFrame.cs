@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ConditioningControlPanel.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
@@ -40,6 +41,18 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// the monitor it is on.
         /// </summary>
         void StartMotion(Rect boundsPx);
+
+        /// <summary>Hide the window (an empty window region: no pixels, no clicks) until
+        /// <see cref="Reveal"/>. Call before the window is shown (FloatingFirstFrame).</summary>
+        void Veil();
+
+        /// <summary>Show a veiled window: the opening animation when <paramref name="animate"/>
+        /// (FloatingSpawnLook), else at once. <paramref name="revealed"/> runs once it is fully shown.</summary>
+        void Reveal(bool animate, Action? revealed);
+
+        /// <summary>The closing animation; <paramref name="done"/> runs once at its end, or at once
+        /// when not animating. Detach runs it too, so it can never be lost.</summary>
+        void Vanish(bool animate, Action done);
 
         /// <summary>Stops moving and lets go of every hook. Safe to call twice, and on a closed window.</summary>
         void Detach();
@@ -99,6 +112,11 @@ namespace ConditioningControlPanel.Services.Video.Floating
             private bool _forceMove;   // the window was moved or sized behind the motion's back
             private bool _resync;      // ...while it was at rest: read its rectangle again
             private (byte R, byte G, byte B) _painted;
+            private bool _veiled;          // the region shows _shown of the window (FloatingSpawnLook)
+            private bool _shaped;          // a region is on the window
+            private double _shown = 1.0;
+            private DispatcherTimer? _anim;
+            private Action? _animDone;
 
             public event Action<IFloatingVideoSurface>? Touched;
 
@@ -172,6 +190,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 _detached = true;
                 _clock.Stop();
                 _clock.Tick -= OnTick;
+                FinishAnimation();
                 FloatingVideoPointer.Unregister(this);
                 _motion?.Drop();
                 Touched = null;
@@ -189,6 +208,72 @@ namespace ConditioningControlPanel.Services.Video.Floating
                         _win.SourceInitialized -= OnSourceInitialized;
                     }
                 }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            }
+
+            // ---- veil, reveal, close (FloatingFirstFrame, FloatingSpawnLook) ----
+
+            public void Veil()
+            {
+                if (_detached) return;
+                _veiled = true;
+                _shown = 0;
+                ApplyShape();
+            }
+
+            public void Reveal(bool animate, Action? revealed)
+            {
+                if (_detached || !_veiled || _anim != null) { revealed?.Invoke(); return; }
+                if (!animate || _hwnd == IntPtr.Zero) { EndVeil(); revealed?.Invoke(); return; }
+                Animate(FloatingSpawnLook.RevealMs, FloatingSpawnLook.RevealScale, () => { EndVeil(); revealed?.Invoke(); });
+            }
+
+            public void Vanish(bool animate, Action done)
+            {
+                if (_detached || !animate || _hwnd == IntPtr.Zero || !IsWindow(_hwnd)) { done(); return; }
+                FinishAnimation();
+                _veiled = true;
+                Animate(FloatingSpawnLook.VanishMs, FloatingSpawnLook.VanishScale, done);
+            }
+
+            private void EndVeil()
+            {
+                _veiled = false;
+                _shown = 1.0;
+                ApplyShape();
+            }
+
+            /// <summary>Only the region moves, about 60 times a second: no window opacity (the window
+            /// is never layered), no Effect, no resize of the video under it.</summary>
+            private void Animate(int ms, Func<double, double> shownAt, Action done)
+            {
+                var sw = Stopwatch.StartNew();
+                _animDone = done;
+                var anim = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
+                _anim = anim;
+                anim.Tick += (_, _) =>
+                {
+                    if (!ReferenceEquals(_anim, anim)) { anim.Stop(); return; }
+                    var t = sw.Elapsed.TotalMilliseconds;
+                    _shown = shownAt(t);
+                    ApplyShape();
+                    if (t >= ms) FinishAnimation();
+                };
+                _shown = shownAt(0);
+                ApplyShape();
+                anim.Start();
+            }
+
+            /// <summary>Stops a running animation and runs what was waiting on its end, once.</summary>
+            private void FinishAnimation()
+            {
+                var anim = _anim;
+                var done = _animDone;
+                _anim = null;
+                _animDone = null;
+                anim?.Stop();
+                if (done == null) return;
+                try { done(); }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
 
@@ -216,6 +301,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 if ((ex & WS_EX_NOACTIVATE) == 0) SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE);
 
                 RoundCorners();
+                if (_veiled) ApplyShape();
                 Paint(force: true);
                 FloatingVideoPointer.Register(this);
                 if (_bounds != null) SyncMotion(moveIfClamped: true);
@@ -235,7 +321,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
                         handled = true;
                         return IntPtr.Zero;
                     case WM_SIZE:
-                        if (_regionCorners) ApplyRegion();
+                        if (_regionCorners || _veiled) ApplyShape();
                         OnResized();
                         break;
                     case WM_DISPLAYCHANGE:
@@ -258,13 +344,22 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 }
                 catch (Exception ex) { Diag.Swallowed(ex); }
                 _regionCorners = true;   // no DWM corners here (Windows 10): cut them ourselves
-                ApplyRegion();
+                ApplyShape();
             }
 
-            private void ApplyRegion()
+            /// <summary>The window's region: rounded corners where DWM has none (Windows 10), and the
+            /// visible share during a veil, reveal or close. No region at all when neither applies,
+            /// so DWM's own rounding (Windows 11) comes back once a reveal ends.</summary>
+            private void ApplyShape()
             {
                 try
                 {
+                    if (_hwnd == IntPtr.Zero || !IsWindow(_hwnd)) return;
+                    if (!_veiled && !_regionCorners)
+                    {
+                        if (_shaped && SetWindowRgn(_hwnd, IntPtr.Zero, true) != 0) _shaped = false;
+                        return;
+                    }
                     if (!GetWindowRect(_hwnd, out var r)) return;
                     int w = r.Right - r.Left, h = r.Bottom - r.Top;
                     if (w <= 0 || h <= 0) return;
@@ -272,9 +367,11 @@ namespace ConditioningControlPanel.Services.Video.Floating
                     try { dpi = GetDpiForWindow(_hwnd); } catch (Exception ex) { Diag.Swallowed(ex); }
                     if (dpi == 0) dpi = 96;
                     int d = (int)Math.Round(FloatingFrameLook.CornerDip * 2.0 * dpi / 96.0);
-                    var rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
+                    var (l, t, rr, b) = _veiled ? FloatingSpawnLook.Visible(w, h, _shown) : (0, 0, w, h);
+                    var rgn = rr > l && b > t ? CreateRoundRectRgn(l, t, rr + 1, b + 1, d, d) : CreateRectRgn(0, 0, 0, 0);
                     if (rgn == IntPtr.Zero) return;
                     if (SetWindowRgn(_hwnd, rgn, true) == 0) DeleteObject(rgn);   // on success Windows owns it
+                    else _shaped = true;
                 }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
@@ -543,6 +640,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
             [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
             [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hWnd);
             [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
+            [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
             [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int l, int t, int r, int b, int w, int h);
             [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
             [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
