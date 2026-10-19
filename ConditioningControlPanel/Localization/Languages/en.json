@@ -8471,5 +8471,21 @@
   "conv_postcode_used": "This account already used that code.",
   "conv_postcode_expired": "That code has run out.",
   "conv_postcode_offline": "Could not reach the server. Try again in a minute.",
-  "conv_postcode_empty": "Type the code first."
+  "conv_postcode_empty": "Type the code first.",
+  "online_meter_label": "Online media today",
+  "online_meter_pct": "{0}%",
+  "online_meter_under_free": "Resets at midnight. Pictures, GIFs and clips all count. Anything you've already seen replays free.",
+  "online_meter_under_basic": "Resets at midnight. Basic has a big daily share.",
+  "online_meter_under_prime": "Resets at midnight. Prime has the largest daily share.",
+  "online_meter_upsell_free": "Free plan. Basic gets about 7 times more a day, Prime about 20.",
+  "online_meter_upsell_basic": "Basic plan. Prime gets about 3 times more a day.",
+  "online_see_plans": "See plans",
+  "online_meter_spent": "Today's online media is used up. What you've already seen and your own files keep playing. Back at midnight, in {0}.",
+  "online_meter_hours": "{0} h",
+  "online_meter_minutes": "{0} min",
+  "online_pill": "Online {0}%",
+  "online_pill_done": "Online done for today",
+  "online_hover_title": "Today's online media is used up",
+  "online_hover_body": "What you've already seen and your own files keep playing. Back at midnight.",
+  "online_toast_spent": "Online media is done for today. Switching to what you've already seen and your own files."
 }

@@ -160,6 +160,30 @@ public class AssetsMediaBlockRenderTests
         Assert.True(((SolidColorBrush)offTrack.Background).Color.A < 0x40);
     });
 
+    /// <summary>Online media today (2026-10-19): the meter card is two short lines
+    ///, so the closed block stays a glance and the asset browser keeps its
+    /// floor on the real ~650 px page. The longest English copy (Free plan) is used.</summary>
+    [Fact]
+    public void TheOnlineMeterCardIsShortAndTheBrowserKeepsItsFloor() => WpfRenderHarness.OnStaThread(() =>
+    {
+        var pink = FlavourPresets.All.Single(f => f.Id == "pink");
+        var sel = FlavourPresets.Resolve(pink, FypOnlineCoordinator.Catalog);
+        var (page, _, _) = Build(sel.NicheIds.ToArray(), sel.CustomSubs.ToArray());
+        page.OnlineMeterCard.Visibility = Visibility.Visible;
+        page.TxtOnlineMeterPct.Text = "42%";
+        page.OnlineMeterBarOn.Width = new GridLength(42, GridUnitType.Star);
+        page.OnlineMeterBarOff.Width = new GridLength(58, GridUnitType.Star);
+        page.TxtOnlineMeterLine.Text = "Resets at midnight. Pictures, GIFs and clips all count. Anything you've already seen replays free."
+            + "   Free plan. Basic gets about 7 times more a day, Prime about 20.   See plans";
+
+        Realize(page, 1469, 650);
+        MaybeRender(page.RemoteMediaBlock, "picker-meter.png");
+
+        Assert.True(page.OnlineMeterCard.ActualHeight < 90, $"meter card is {page.OnlineMeterCard.ActualHeight:0} px");
+        Assert.True(page.RemoteMediaBlock.ActualHeight < 300, $"closed block with the meter is {page.RemoteMediaBlock.ActualHeight:0} px");
+        Assert.True(page.AssetBrowserSection.ActualHeight >= 260);
+    });
+
     /// <summary>#1410: open, the list used to be capped at a fixed 430 px while the collapsed
     /// browser row still held its 260 px floor, so on the real page (about 650 px tall) the
     /// last rows and the r/ add field ran under the Start bar. Now the list takes what the

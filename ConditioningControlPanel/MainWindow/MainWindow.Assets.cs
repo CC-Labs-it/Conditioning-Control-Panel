@@ -2388,6 +2388,8 @@ namespace ConditioningControlPanel
                 PaintRemotePickerChrome(settings);
                 RebuildRemoteCustomSubChips(settings);
                 SetRemoteFineTuneOpen(_remoteFineTuneOpen);
+                // The online media card and the title bar pill follow the source.
+                RefreshOnlineMeter();
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "Remote media picker refresh failed"); }
             finally { _remotePickerSyncing = false; }

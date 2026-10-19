@@ -7716,5 +7716,21 @@
   "conv_postcode_used": "Ce compte a déjà utilisé ce code.",
   "conv_postcode_expired": "Ce code a expiré.",
   "conv_postcode_offline": "Serveur injoignable. Réessaie dans une minute.",
-  "conv_postcode_empty": "Tape d'abord le code."
+  "conv_postcode_empty": "Tape d'abord le code.",
+  "online_meter_label": "Médias en ligne aujourd'hui",
+  "online_meter_pct": "{0} %",
+  "online_meter_under_free": "Remise à zéro à minuit. Images, GIF et clips comptent tous. Ce que tu as déjà vu se rejoue gratuitement.",
+  "online_meter_under_basic": "Remise à zéro à minuit. Basic a une grosse part quotidienne.",
+  "online_meter_under_prime": "Remise à zéro à minuit. Prime a la plus grosse part quotidienne.",
+  "online_meter_upsell_free": "Offre Free. Basic a environ 7 fois plus par jour, Prime environ 20.",
+  "online_meter_upsell_basic": "Offre Basic. Prime a environ 3 fois plus par jour.",
+  "online_see_plans": "Voir les offres",
+  "online_meter_spent": "Les médias en ligne du jour sont épuisés. Ce que tu as déjà vu et tes propres fichiers continuent. Retour à minuit, dans {0}.",
+  "online_meter_hours": "{0} h",
+  "online_meter_minutes": "{0} min",
+  "online_pill": "En ligne {0} %",
+  "online_pill_done": "En ligne : fini pour aujourd'hui",
+  "online_hover_title": "Les médias en ligne du jour sont épuisés",
+  "online_hover_body": "Ce que tu as déjà vu et tes propres fichiers continuent. Retour à minuit.",
+  "online_toast_spent": "Les médias en ligne sont finis pour aujourd'hui. On passe à ce que tu as déjà vu et à tes propres fichiers."
 }

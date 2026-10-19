@@ -154,6 +154,10 @@ public static class FriendsLanding
         try { return read(); } catch { return false; }
     }
 
+    /// <summary>Where a corner notice that is not from a friend lands (the online media meter's
+    /// spent notice): the game in front, else the panel, else the launcher, else null (primary).</summary>
+    internal static Window? NoticeAnchor() => ActiveGameWindow() ?? Anchor();
+
     /// <summary>Where a card or a word lands when there is no game: the panel, else the launcher.</summary>
     private static Window? Anchor()
     {

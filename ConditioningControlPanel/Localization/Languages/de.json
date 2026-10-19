@@ -7716,5 +7716,21 @@
   "conv_postcode_used": "Dieses Konto hat den Code schon benutzt.",
   "conv_postcode_expired": "Dieser Code ist abgelaufen.",
   "conv_postcode_offline": "Server nicht erreichbar. Versuch es gleich noch mal.",
-  "conv_postcode_empty": "Gib zuerst den Code ein."
+  "conv_postcode_empty": "Gib zuerst den Code ein.",
+  "online_meter_label": "Online-Medien heute",
+  "online_meter_pct": "{0} %",
+  "online_meter_under_free": "Setzt sich um Mitternacht zurück. Bilder, GIFs und Clips zählen alle. Was du schon gesehen hast, läuft gratis noch mal.",
+  "online_meter_under_basic": "Setzt sich um Mitternacht zurück. Basic hat einen großen Tagesanteil.",
+  "online_meter_under_prime": "Setzt sich um Mitternacht zurück. Prime hat den größten Tagesanteil.",
+  "online_meter_upsell_free": "Free-Plan. Basic bekommt etwa 7-mal so viel am Tag, Prime etwa 20-mal.",
+  "online_meter_upsell_basic": "Basic-Plan. Prime bekommt etwa 3-mal so viel am Tag.",
+  "online_see_plans": "Pläne ansehen",
+  "online_meter_spent": "Die Online-Medien für heute sind aufgebraucht. Was du schon gesehen hast und deine eigenen Dateien laufen weiter. Ab Mitternacht wieder, in {0}.",
+  "online_meter_hours": "{0} Std.",
+  "online_meter_minutes": "{0} Min.",
+  "online_pill": "Online {0} %",
+  "online_pill_done": "Online für heute fertig",
+  "online_hover_title": "Die Online-Medien für heute sind aufgebraucht",
+  "online_hover_body": "Was du schon gesehen hast und deine eigenen Dateien laufen weiter. Ab Mitternacht wieder.",
+  "online_toast_spent": "Online-Medien sind für heute fertig. Weiter mit dem, was du schon gesehen hast, und deinen eigenen Dateien."
 }
