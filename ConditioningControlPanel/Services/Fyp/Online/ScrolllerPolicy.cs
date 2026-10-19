@@ -21,6 +21,17 @@ internal static class ScrolllerPolicy
     /// <summary>Largest clip short side to request, in pixels. Never above the default.</summary>
     public static int MaxClipShortSide => Volatile.Read(ref _maxClipShortSide);
 
+    private static int _away;
+
+    /// <summary>True while nobody can be watching (screen locked, display asleep): no FRESH
+    /// Scrolller fetch starts, cached media keeps playing (owner, 2026-10-19). Set by the away
+    /// watcher; never true on its own.</summary>
+    public static bool Away
+    {
+        get => Volatile.Read(ref _away) == 1;
+        set => Volatile.Write(ref _away, value ? 1 : 0);
+    }
+
     /// <summary>Applies the server's answer. A cap above the default is ignored (the server
     /// can only lower it); a cap under 240 falls back to 240.</summary>
     public static void Apply(bool enabled, int? maxClipShortSide)
