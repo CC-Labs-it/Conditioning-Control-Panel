@@ -114,7 +114,9 @@ namespace ConditioningControlPanel
         private static OnlineMeterState OnlineMeterNow()
         {
             var settings = App.Settings?.Current;
-            return OnlineMeterRules.For(settings?.MediaSource, ScrolllerPolicy.Enabled, ScrolllerAllowance.Percent,
+            // No consent = no online fetch at all, so no meter either.
+            var source = settings?.HasRemoteMediaConsent == true ? settings.MediaSource : "local";
+            return OnlineMeterRules.For(source, ScrolllerPolicy.Enabled, ScrolllerAllowance.Percent,
                 ScrolllerAllowance.Spent, ScrolllerAllowance.Plan, ScrolllerPolicy.Official,
                 settings?.ScrolllerOfficialNoteSeen == true);
         }
