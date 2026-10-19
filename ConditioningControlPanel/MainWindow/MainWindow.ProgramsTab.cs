@@ -2190,6 +2190,7 @@ namespace ConditioningControlPanel
                     _sessionEngine.PhaseChanged += OnSessionPhaseChanged;
                     _sessionEngine.SessionStarted += OnSessionStarted;
                     _sessionEngine.SessionStopped += OnSessionStopped;
+                    WatchSessionClocks(_sessionEngine);
                 }
 
                 // Both attaches detach any previous engine first, so re-attaching is safe.

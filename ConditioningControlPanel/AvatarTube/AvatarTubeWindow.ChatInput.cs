@@ -1082,7 +1082,7 @@ namespace ConditioningControlPanel
                 }
                 else
                 {
-                    mainWindow.StartEngine();
+                    mainWindow.StartEngineFromUser(); // a user click: resumes a session a panic paused (#1464)
                     Giggle("Engine started! *giggles*");
                 }
                 UpdateQuickMenuState();

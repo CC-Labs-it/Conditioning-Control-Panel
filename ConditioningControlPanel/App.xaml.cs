@@ -5258,7 +5258,7 @@ namespace ConditioningControlPanel
         /// signature in full, then one "suppressed" line, then nothing. The Serilog line is capped
         /// the same way — the storm floods app-.log too.</para>
         /// </summary>
-        private static void LogCrashDetails(string source, Exception? ex)
+        internal static void LogCrashDetails(string source, Exception? ex)
         {
             if (ex == null) return;
 
