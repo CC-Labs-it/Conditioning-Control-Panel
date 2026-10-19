@@ -51,7 +51,9 @@ public class OnlineMeterCopyTests
         Assert.Equal("Online {0}%", (string?)o["online_pill"]);
         Assert.Equal("Online done for today", (string?)o["online_pill_done"]);
         Assert.Equal("See plans", (string?)o["online_see_plans"]);
-        Assert.Equal("Free plan. Basic gets about 7 times more a day, Prime about 20.", (string?)o["online_meter_upsell_free"]);
+        // 300 MB free vs 4096 Basic and 7987 Prime (owner, 2026-10-19)
+        Assert.Equal("Free plan. Basic gets about 14 times more a day, Prime about 27.", (string?)o["online_meter_upsell_free"]);
+        Assert.Equal("Basic plan. Prime gets about twice as much a day.", (string?)o["online_meter_upsell_basic"]);
         Assert.Equal("Online media is official", (string?)o["online_official_title"]);
         // House voice: no em or en dashes, no exclamation marks, never a size or a count.
         foreach (var p in o.Properties())
