@@ -7032,6 +7032,7 @@ namespace ConditioningControlPanel.Services
                 if (_videoPlaying)
                 {
                     App.Logger?.Information("VideoService: Max video-length cap ({Max}s) reached - ending video early.", maxSec);
+                    OpenQueuedCreditLink();   // a press on the end card the cut ended over (CreditOutroTiming)
                     Cleanup();
                 }
             };

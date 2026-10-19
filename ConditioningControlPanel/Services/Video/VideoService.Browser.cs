@@ -60,6 +60,10 @@ namespace ConditioningControlPanel.Services
         /// twice (Infinity at loadedmetadata, the real value at durationchange) and a second seek
         /// would yank the user back mid-clip.</summary>
         private bool _browserSegmentSeeked;
+        /// <summary>The clip carries a "via ..." end card, and the page was told to show it over the
+        /// clip's last seconds (CreditOutroTiming). Once per clip.</summary>
+        private bool _browserHasCredit;
+        private bool _browserOutroSent;
 
         /// <summary>True while a browser video session owns the screen. Read by AudioService so the
         /// duck sweep never lowers the app's OWN video audio (LibVLC audio is in-process and
@@ -125,6 +129,8 @@ namespace ConditioningControlPanel.Services
                 _browserFallbackDone = false;
                 _browserStartedFired = false;
                 _browserSegmentSeeked = false;
+                _browserHasCredit = Video.ScrolllerCredit.For(path) != null;
+                _browserOutroSent = false;
 
                 // Chaos random-segment mode: the LibVLC path seeks from LengthChanged, but the page
                 // takes a start offset directly. The fraction needs the duration, which only arrives
@@ -576,6 +582,13 @@ namespace ConditioningControlPanel.Services
             // to answer, which is the pre-#874 behaviour minus the blind clear.
             if (paused.HasValue) _browserPaused = paused.Value;
             _lastWatchPositionMs = Browser.PlayedMs;
+            // The end card lays over the clip while it ends: the file's end, or the cut's on a capped clip.
+            if (_browserHasCredit && !_browserOutroSent && paused != true && Video.CreditOutroTiming.ShouldStart(ms, Browser.PlayedMs,
+                    (long)Math.Round(_duration * 1000), (App.Settings?.Current?.VideoMaxDurationSeconds ?? 0) * 1000L, Video.ScrolllerCredit.OutroMs))
+            {
+                _browserOutroSent = true;
+                PostAfterPageMessage(() => { if (BrowserEventIsCurrent()) Browser.ShowCreditOutro(); });
+            }
             try { PrimaryPlaybackTimeMsChanged?.Invoke(ms); }
             catch (Exception ex) { App.Logger?.Debug("PrimaryPlaybackTimeMsChanged handler error: {Error}", ex.Message); }
         }
@@ -650,10 +663,19 @@ namespace ConditioningControlPanel.Services
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
             _spawnTimes.Clear();
+            OpenQueuedCreditLink();
+        }
 
+        /// <summary>A link pressed on this clip's badge or end card opens now: at the picture's end,
+        /// or when the longest-video limit cuts the clip the end card was laid over. Checked against
+        /// every lock now, while the run's lock state is still this clip's, and again when it opens.</summary>
+        private void OpenQueuedCreditLink()
+        {
+            if (!_browserActive) return;
             var queued = _creditLinkQueuedFor;
             _creditLinkQueuedFor = null;
             if (queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
             Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
             {
                 if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;

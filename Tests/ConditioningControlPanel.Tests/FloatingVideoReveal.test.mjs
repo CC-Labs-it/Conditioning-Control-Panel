@@ -40,6 +40,8 @@ function harness({ frameCallback = true, visibility = 'visible' } = {}) {
   };
 }
 
+const credit = { sub: 'r/x', site: 'scrolller.com/r/x', clickable: false, outroMs: 2500 };
+
 test('firstFrame waits for three presented frames with the media time moving, once', () => {
   const h = harness();
   h.send({ type: 'load', url: 'https://example.invalid/a.mp4' });
@@ -67,3 +69,40 @@ test('without a frame callback nothing is posted (the host falls back on played 
   assert.equal(h.count('firstFrame'), 0);
 });
 
+test('an early outro shortens the hold after the end, and ends at once when it has run', () => {
+  const h = harness();
+  h.send({ type: 'load', url: 'https://example.invalid/a.mp4', credit });
+  h.send({ type: 'outro' });
+  assert.equal(h.node.hidden, false, 'the end card is up over the playing clip');
+  h.advance(2000);
+  h.emit('ended');
+  assert.equal(h.count('mediaEnded'), 1);
+  assert.equal(h.count('ended'), 0);
+  const hold = h.timers.at(-1);
+  assert.ok(hold.ms > 0 && hold.ms <= 500, `holds only what is left of the card (${hold.ms})`);
+  hold.fn();
+  assert.equal(h.count('ended'), 1);
+
+  const g = harness();
+  g.send({ type: 'load', url: 'https://example.invalid/b.mp4', credit });
+  g.send({ type: 'outro' });
+  g.advance(3000);
+  g.emit('ended');
+  assert.equal(g.count('ended'), 1, 'card already over: ended right away');
+});
+
+test('no outro from the host keeps the old card after the end', () => {
+  const h = harness();
+  h.send({ type: 'load', url: 'https://example.invalid/a.mp4', credit });
+  h.emit('ended');
+  assert.equal(h.count('ended'), 0);
+  assert.equal(h.timers.at(-1).ms, 2500);
+});
+
+test('outro is ignored for a clip with no credit', () => {
+  const h = harness();
+  h.send({ type: 'load', url: 'https://example.invalid/a.mp4' });
+  h.send({ type: 'outro' });
+  h.emit('ended');
+  assert.equal(h.count('ended'), 1);
+});

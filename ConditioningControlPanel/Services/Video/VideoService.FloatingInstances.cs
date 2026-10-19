@@ -52,6 +52,9 @@ namespace ConditioningControlPanel.Services
             public long LastTimeMs { get; set; }
             public bool Revealed { get; set; }
             public long SpawnTick { get; init; } = Environment.TickCount64;
+            // The "via ..." end card: shown over the clip's last seconds (CreditOutroTiming).
+            public bool HasCredit { get; init; }
+            public bool OutroSent { get; set; }
             public bool Closed { get; set; }
             public long PositionMs { get; set; }
             public long DurationMs { get; set; }
@@ -448,7 +451,7 @@ namespace ConditioningControlPanel.Services
                 // Chaos still make the badge not pressable.
                 var credit = Video.ScrolllerCredit.PagePayload(clip, Video.ScrolllerCredit.CanOpenLink(
                     false, App.Lockdown?.IsActive == true, LockedChaosRun()));
-                var c = new FloatingInstance { Window = win, Clip = clip, Screen = screen, Bounds = rect };
+                var c = new FloatingInstance { Window = win, Clip = clip, Screen = screen, Bounds = rect, HasCredit = credit != null };
                 win.Message += OnInstanceMessage;
                 win.InitFailed += OnInstanceInitFailed;
                 win.ProcessFailed += OnInstanceProcessFailed;
@@ -646,6 +649,13 @@ namespace ConditioningControlPanel.Services
                     {
                         PostAfterPageMessage(() => CloseInstance(c, "longest-video limit reached", animate: true));
                         break;
+                    }
+                    // The end card lays over the clip's last seconds, the cut's end on a capped clip.
+                    if (c.HasCredit && !c.OutroSent && (bool?)o["paused"] != true && CreditOutroTiming.ShouldStart((long?)o["ms"] ?? 0, c.PositionMs, c.DurationMs,
+                            (App.Settings?.Current?.VideoMaxDurationSeconds ?? 0) * 1000L, ScrolllerCredit.OutroMs))
+                    {
+                        c.OutroSent = true;
+                        PostAfterPageMessage(() => { if (!c.Closed) c.Window.Post(new { type = "outro" }); });
                     }
                     // No run left to belong to: the window goes.
                     if (!_videoPlaying)
