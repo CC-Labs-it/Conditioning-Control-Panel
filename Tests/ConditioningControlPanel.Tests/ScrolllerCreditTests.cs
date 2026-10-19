@@ -84,8 +84,13 @@ public class ScrolllerCreditTests
         mediaEnded = mediaEnded[..mediaEnded.IndexOf("\n        }", StringComparison.Ordinal)];
         Assert.Contains("_maxLenCapTimer?.Stop();", mediaEnded);
         Assert.Contains("_spawnTimes.Clear();", mediaEnded);
-        Assert.Contains("CanOpenLink(IsStrictActive", mediaEnded);   // re-gated at open time
+        Assert.Contains("OpenQueuedCreditLink();", mediaEnded);
+        var open = browser[browser.IndexOf("private void OpenQueuedCreditLink()", StringComparison.Ordinal)..];
+        open = open[..open.IndexOf("\n        }", StringComparison.Ordinal)];
+        Assert.Contains("CanOpenLink(IsStrictActive", open);   // re-gated at open time
         Assert.DoesNotContain("_creditLinkQueuedFor", core);          // no other door opens it
+        // The only other door: the longest-video limit cutting a clip its end card was laid over.
+        Assert.Equal(1, core.Split("OpenQueuedCreditLink();").Length - 1);
 
         var html = ReadProduct("ConditioningControlPanel", "Resources", "web", "player", "index.html");
         Assert.Contains("id=\"credit\"", html);

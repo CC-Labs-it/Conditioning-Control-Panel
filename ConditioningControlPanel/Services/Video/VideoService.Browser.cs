@@ -583,7 +583,7 @@ namespace ConditioningControlPanel.Services
             if (paused.HasValue) _browserPaused = paused.Value;
             _lastWatchPositionMs = Browser.PlayedMs;
             // The end card lays over the clip while it ends: the file's end, or the cut's on a capped clip.
-            if (_browserHasCredit && !_browserOutroSent && Video.CreditOutroTiming.ShouldStart(ms, Browser.PlayedMs,
+            if (_browserHasCredit && !_browserOutroSent && paused != true && Video.CreditOutroTiming.ShouldStart(ms, Browser.PlayedMs,
                     (long)Math.Round(_duration * 1000), (App.Settings?.Current?.VideoMaxDurationSeconds ?? 0) * 1000L, Video.ScrolllerCredit.OutroMs))
             {
                 _browserOutroSent = true;
@@ -663,10 +663,19 @@ namespace ConditioningControlPanel.Services
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
             _spawnTimes.Clear();
+            OpenQueuedCreditLink();
+        }
 
+        /// <summary>A link pressed on this clip's badge or end card opens now: at the picture's end,
+        /// or when the longest-video limit cuts the clip the end card was laid over. Checked against
+        /// every lock now, while the run's lock state is still this clip's, and again when it opens.</summary>
+        private void OpenQueuedCreditLink()
+        {
+            if (!_browserActive) return;
             var queued = _creditLinkQueuedFor;
             _creditLinkQueuedFor = null;
             if (queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
             Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
             {
                 if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;

@@ -52,6 +52,14 @@ public class CreditOutroTimingTests
         Assert.Contains("Video.CreditOutroTiming.ShouldStart(", full);
         Assert.Contains("_browserOutroSent = true;", full);
         Assert.Contains("Browser.ShowCreditOutro()", full);
+        // A paused clip's forced time post never brings the card up.
+        Assert.Contains("!_browserOutroSent && paused != true &&", full);
+        Assert.Contains("!c.OutroSent && (bool?)o[\"paused\"] != true &&", instances);
+        // A press on the card of a clip the limit cuts still opens, before the cut's Cleanup.
+        var core = Read("Services", "Video", "VideoService.cs");
+        var open = core.IndexOf("OpenQueuedCreditLink();", StringComparison.Ordinal);
+        var cleanup = core.IndexOf("Cleanup();", open, StringComparison.Ordinal);
+        Assert.True(open > 0 && cleanup > open && cleanup - open < 200);
     }
 
     private static string Read(params string[] parts)

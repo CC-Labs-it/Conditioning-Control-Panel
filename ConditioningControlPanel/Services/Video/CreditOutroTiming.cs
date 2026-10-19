@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Services.Video
     /// first: the file's end, or the player's longest-video limit on a cut clip (that limit counts
     /// played time, so a random start does not move it). The host asks this on every time report
     /// and tells the page once. A clip with no known end keeps the old card after the end.
-    /// Pure, pinned by FloatingVideoPolishTests.
+    /// Pure, pinned by CreditOutroTimingTests.
     /// </summary>
     internal static class CreditOutroTiming
     {

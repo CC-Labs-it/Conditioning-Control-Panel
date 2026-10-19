@@ -641,7 +641,7 @@ namespace ConditioningControlPanel.Services
                         break;
                     }
                     // The end card lays over the clip's last seconds, the cut's end on a capped clip.
-                    if (c.HasCredit && !c.OutroSent && CreditOutroTiming.ShouldStart((long?)o["ms"] ?? 0, c.PositionMs, c.DurationMs,
+                    if (c.HasCredit && !c.OutroSent && (bool?)o["paused"] != true && CreditOutroTiming.ShouldStart((long?)o["ms"] ?? 0, c.PositionMs, c.DurationMs,
                             (App.Settings?.Current?.VideoMaxDurationSeconds ?? 0) * 1000L, ScrolllerCredit.OutroMs))
                     {
                         c.OutroSent = true;
