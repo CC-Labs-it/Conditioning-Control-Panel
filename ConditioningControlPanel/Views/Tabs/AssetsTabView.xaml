@@ -273,32 +273,40 @@
                 <StackPanel>
                 <!-- The one-time "official" note (owner, 2026-10-19): only once the server says the
                      Scrolller licence is signed, only while online media is in the source, gone for
-                     good after "Nice" (ScrolllerOfficialNoteSeen). Filled in MainWindow.OnlineMeter.cs. -->
+                     good after "Nice" (ScrolllerOfficialNoteSeen). Filled in MainWindow.OnlineMeter.cs.
+                     ONE WIDE BAND on purpose (stamp | title, body and plan line as one text | Nice): the page is
+                     a fixed ~650 px with no scroll and the browser keeps a 260 px floor, so a tall
+                     card here clipped the browser (AssetsMediaBlockRenderTests measures it at 650). -->
                 <Border x:Name="OnlineOfficialNote" x:FieldModifier="internal" Visibility="Collapsed"
-                        Margin="0,0,0,12" Background="#181830" BorderBrush="#3A3A5C" BorderThickness="1"
-                        CornerRadius="12" Padding="16,14,16,14" HorizontalAlignment="Left" MaxWidth="720">
+                        Margin="0,0,0,8" Background="#181830" BorderBrush="#3A3A5C" BorderThickness="1"
+                        CornerRadius="12" Padding="14,9,14,9">
                     <Border.RenderTransform>
                         <TranslateTransform/>
                     </Border.RenderTransform>
-                    <StackPanel>
-                        <Border HorizontalAlignment="Left" BorderBrush="{DynamicResource PinkBrush}"
-                                BorderThickness="2" CornerRadius="4" Padding="7,2,7,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border VerticalAlignment="Center" BorderBrush="{DynamicResource PinkBrush}"
+                                BorderThickness="2" CornerRadius="4" Padding="7,2,7,1" Margin="0,0,14,0">
                             <Border.LayoutTransform>
                                 <RotateTransform Angle="-3"/>
                             </Border.LayoutTransform>
                             <TextBlock Text="{loc:Str online_official_stamp}" FontSize="10" FontWeight="ExtraBold"
                                        Foreground="{DynamicResource PinkBrush}"/>
                         </Border>
-                        <TextBlock Text="{loc:Str online_official_title}" FontSize="16" FontWeight="SemiBold"
-                                   Foreground="#F0F0F5" Margin="0,10,0,0" TextWrapping="Wrap"/>
-                        <TextBlock Text="{loc:Str online_official_body}" FontSize="13" Foreground="#CCCCE0"
-                                   Margin="0,6,0,0" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="TxtOnlineOfficialPlan" x:FieldModifier="internal" FontSize="13"
-                                   Foreground="#E0B0FF" Margin="0,6,0,0" TextWrapping="Wrap"/>
-                        <Button x:Name="BtnOnlineOfficialNice" x:FieldModifier="internal"
+                        <TextBlock x:Name="TxtOnlineOfficialText" x:FieldModifier="internal"
+                                   Grid.Column="1" VerticalAlignment="Center" FontSize="12.5" Foreground="#CCCCE0"
+                                   TextWrapping="Wrap"><Run Text="{loc:Str online_official_title}" FontSize="14"
+                                   FontWeight="SemiBold" Foreground="#F0F0F5"/><Run Text="   "/><Run
+                                   Text="{loc:Str online_official_body}"/><Run Text=" "/><Run
+                                   x:Name="TxtOnlineOfficialPlan" x:FieldModifier="internal" Foreground="#E0B0FF"/></TextBlock>
+                        <Button x:Name="BtnOnlineOfficialNice" x:FieldModifier="internal" Grid.Column="2"
                                 Content="{loc:Str online_official_nice}" Style="{StaticResource SmallPinkButton}"
-                                HorizontalAlignment="Left" Padding="16,6" FontSize="13" Margin="0,10,0,0"/>
-                    </StackPanel>
+                                VerticalAlignment="Center" Padding="16,6" FontSize="13" Margin="16,0,0,0"/>
+                    </Grid>
                 </Border>
                 <DockPanel LastChildFill="False">
                     <TextBlock Text="{loc:Str section_media_source}" Style="{StaticResource SectionHeader}"

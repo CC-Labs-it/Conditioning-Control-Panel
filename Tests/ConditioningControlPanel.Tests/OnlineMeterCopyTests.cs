@@ -68,7 +68,7 @@ public class OnlineMeterCopyTests
     private static void AssertKey(JObject o, string file, string key)
         => Assert.False(string.IsNullOrWhiteSpace((string?)o[key]), $"{Path.GetFileName(file)} has no {key}");
 
-    private static string LanguageDir()
+    internal static string LanguageDir()
     {
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         while (d != null)
