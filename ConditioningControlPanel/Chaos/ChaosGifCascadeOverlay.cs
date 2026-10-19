@@ -225,6 +225,15 @@ public sealed class ChaosGifCascadeOverlay : Window
     }
     private int _animatedAlive;   // clips currently running the full XamlAnimatedGif decode
 
+    /// <summary>A remote faller whose clip never started (load failed, no clip, player refused)
+    /// falls as a still: it gives its animated slot back. UI thread.</summary>
+    private void ReleaseSlotIfStill(Faller f)
+    {
+        if (f.Gone || f.Clip != null || !f.Animated) return;
+        f.Animated = false;
+        _animatedAlive = Math.Max(0, _animatedAlive - 1);
+    }
+
     private ChaosGifCascadeOverlay()
     {
         WindowStyle = WindowStyle.None;
@@ -360,25 +369,27 @@ public sealed class ChaosGifCascadeOverlay : Window
                 _animatedAlive++;
                 int size = (int)_gifSize;
                 string url = path;
+                var dispatcher = Dispatcher;
                 System.Threading.Tasks.Task.Run(async () =>
                 {
                     try
                     {
+                        // Never throws; null when the load failed. Every outcome settles on the UI
+                        // thread, so a faller that ends up a still gives its animated slot back.
                         var data = await Services.FlashService.LoadRemoteFaceAsync(url, size, true).ConfigureAwait(false);
-                        if (data == null || data.Frames.Count == 0) return;
-                        var dispatcher = Application.Current?.Dispatcher;
-                        if (dispatcher == null || dispatcher.HasShutdownStarted) return;
+                        if (dispatcher.HasShutdownStarted) return;
                         _ = dispatcher.BeginInvoke(() =>
                         {
                             try
                             {
-                                if (faller.Gone || !_fallers.Contains(faller)) return;
+                                if (faller.Gone || !_fallers.Contains(faller) || data == null || data.Frames.Count == 0) return;
                                 img.Source = data.Frames[0];
                                 if (data.ClipPath == null) return;
                                 faller.Clip = Services.FlashClipPlayer.Start(data.ClipPath, data.Width, data.Height,
-                                    frame => { if (!faller.Gone) img.Source = frame; });
+                                    frame => { if (!faller.Gone && Services.MotionFx.Level != Models.MotionLevel.Off) img.Source = frame; });
                             }
                             catch { }
+                            finally { ReleaseSlotIfStill(faller); }
                         });
                     }
                     catch (Exception ex) { App.Logger?.Debug("GifCascade remote clip: {E}", ex.Message); }
