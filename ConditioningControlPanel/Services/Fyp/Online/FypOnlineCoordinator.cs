@@ -140,7 +140,7 @@ internal sealed class FypOnlineCoordinator
     private Dictionary<string, FeedChannelState> _channels = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, (double EwmaMs, int Views)> _dwell = new(StringComparer.OrdinalIgnoreCase);
     private bool _dwellLoaded;
-    /// <summary>Cached urls this tenant was handed in the current reuse cycle (ScrolllerReuse.PickCycle).</summary>
+    /// <summary>Cached posts (ScrolllerReuse.PostKey) this tenant was handed in the current reuse cycle (ScrolllerReuse.PickCycle).</summary>
     private readonly HashSet<string> _reuseServed = new(StringComparer.Ordinal);
 
     private FypOnlineCoordinator(string consumerId, Func<IReadOnlyList<string>> channelProvider, FeedMediaKind kind)
@@ -327,10 +327,15 @@ internal sealed class FypOnlineCoordinator
 
         // Today's share is spent, or nobody can watch (ScrolllerPolicy.Away): the batch is cached
         // files of these niches only, or empty (the consumer falls back to local). No API page,
-        // no media fetch. Empty reads as dry so the For You page backs off instead of polling.
+        // no media fetch. Empty reads as dry so the For You page backs off instead of polling;
+        // the page's own "fresh" counts only ids it has never held (FypHostService), so a
+        // cached batch it already has backs it off too. Off the caller's thread: the For You
+        // host asks from the UI thread and the cache scan must never run there.
         if (!ScrolllerPolicyService.MayFetchFresh(ScrolllerReuse.MediaProbeUrl))
         {
-            var cachedOnly = CachedPicks(kind, ScrolllerReuse.CachedOnlyBatchSize, freshAllowed: false, exclude: null);
+            var cachedOnly = await Task.Run(() =>
+                CachedPicks(kind, ScrolllerReuse.CachedOnlyBatchSize, freshAllowed: false, exclude: null), ct)
+                .ConfigureAwait(false);
             return Summarize(cachedOnly, null) with { Dry = cachedOnly.Count == 0 };
         }
 
@@ -449,16 +454,20 @@ internal sealed class FypOnlineCoordinator
             if (count <= 0) return new List<FypAssetManifest.Entry>();
             var subs = new HashSet<string>(ActiveChannels(), StringComparer.OrdinalIgnoreCase);
             Func<string, bool> posterUsable = p => freshAllowed || ScrolllerDiskCache.Contains(p);
-            var candidates = new List<FypAssetManifest.Entry>();
+            var candidates = new List<(FypAssetManifest.Entry Entry, string Post)>();
             foreach (var c in ScrolllerDiskCache.Entries(c => c.Meta?.Sub != null && subs.Contains(c.Meta.Sub)
                                                              && ScrolllerReuse.KindFits(kind, c.Meta)))
             {
                 if (exclude != null && exclude.Contains(c.Url)) continue;
                 var e = ScrolllerReuse.ToEntry(c, kind, posterUsable);
                 if (e == null || (exclude != null && exclude.Contains(e.Id))) continue;
-                candidates.Add(e);
+                candidates.Add((e, ScrolllerReuse.PostKey(c.Url, c.Meta)));
             }
-            lock (_lock) return ScrolllerReuse.PickCycle(candidates, e => e.Url, count, _reuseServed, _rng);
+            // One post once: its full and small renditions may both be cached.
+            var onePerPost = ScrolllerReuse.OnePerKey(candidates, x => x.Post);
+            lock (_lock)
+                return ScrolllerReuse.PickCycle(onePerPost, x => x.Post, count, _reuseServed, _rng)
+                    .Select(x => x.Entry).ToList();
         }
         catch (Exception ex)
         {

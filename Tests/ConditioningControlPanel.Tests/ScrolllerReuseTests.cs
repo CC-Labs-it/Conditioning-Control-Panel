@@ -267,6 +267,67 @@ public sealed class ScrolllerReuseTests : IDisposable
         Assert.True(sw.ElapsedMilliseconds < 1000, $"took {sw.ElapsedMilliseconds} ms");
     }
 
+    // ---- For You back-off: fresh means new to the page ---------------------------------
+
+    [Fact]
+    public void CountNewToPage_ACachedBatchThePageAlreadyHolds_IsNotFresh()
+    {
+        // Spent/away: the coordinator hands the page cached files; the second time round they
+        // are all ones it holds, so fresh is 0 and the page's dry ladder arms (no 1/s loop).
+        var sent = new HashSet<string>(StringComparer.Ordinal);
+        var batch = new[] { "scrolller/a/1", "scrolller/a/2", "scrolller/a/3" };
+        Assert.Equal(3, ScrolllerReuse.CountNewToPage(sent, batch));
+        Assert.Equal(0, ScrolllerReuse.CountNewToPage(sent, batch));
+        Assert.Equal(1, ScrolllerReuse.CountNewToPage(sent, new[] { "scrolller/a/2", "scrolller/a/4", null, "" }));
+    }
+
+    [Fact]
+    public void ForYouPage_PacesOnItsOwnCount_AndAnAppendWithNothingNewNeverAsksAgain()
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var js = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "Resources", "web", "fyp", "main.js"));
+        int append = js.IndexOf("case 'assets-append':", StringComparison.Ordinal);
+        int status = js.IndexOf("case 'online-status':", StringComparison.Ordinal);
+        Assert.True(append > 0 && status > append);
+        var appendBody = js.Substring(append, status - append);
+        Assert.Contains("remoteAppendNew = (remoteAppendNew || 0) + fresh.length;", appendBody);
+        Assert.Contains("if (fresh.length) ensureRemoteBuffer();", appendBody);
+        var statusBody = js.Substring(status, 1500);
+        Assert.Contains("const fresh = remoteAppendNew !== null ? remoteAppendNew : hostFresh;", statusBody);
+    }
+
+    [Fact]
+    public void OnePost_IsOfferedOnce_EvenWithBothRenditionsCached()
+    {
+        // Across a restart the post id is gone: the full and small clip share a poster.
+        var full = new ScrolllerCacheMeta("clip", "hentai", "https://i.scrolller.com/p1.jpg", 1920, 1080, "t");
+        var small = new ScrolllerCacheMeta("clip", "hentai", "https://i.scrolller.com/p1.jpg", 640, 360, "t");
+        var pic = new ScrolllerCacheMeta("picture", "hentai", null, 800, 600, "same title");
+        var picSmall = new ScrolllerCacheMeta("picture", "Hentai", null, 400, 300, "same title");
+        var other = new ScrolllerCacheMeta("picture", "hentai", null, 800, 600, null);
+        var items = new List<(string Url, ScrolllerCacheMeta Meta)>
+        {
+            ("https://v.scrolller.com/x-full.mp4", full),
+            ("https://v.scrolller.com/x-small.mp4", small),
+            ("https://i.scrolller.com/y-full.jpg", pic),
+            ("https://i.scrolller.com/y-small.jpg", picSmall),
+            ("https://i.scrolller.com/z1.jpg", other),
+            ("https://i.scrolller.com/z2.jpg", other),
+        };
+        var one = ScrolllerReuse.OnePerKey(items, x => ScrolllerReuse.PostKey(x.Url, x.Meta));
+        Assert.Equal(new[] { "https://v.scrolller.com/x-full.mp4", "https://i.scrolller.com/y-full.jpg",
+            "https://i.scrolller.com/z1.jpg", "https://i.scrolller.com/z2.jpg" }, one.Select(x => x.Url));
+
+        // Same run: both renditions carry the post id, whatever their metadata says.
+        ScrolllerReuse.RememberPost("https://v.scrolller.com/q-full.mp4", "scrolller/hentai/77");
+        ScrolllerReuse.RememberPost("https://v.scrolller.com/q-small.mp4", "scrolller/hentai/77");
+        Assert.Equal(ScrolllerReuse.PostKey("https://v.scrolller.com/q-full.mp4", other),
+            ScrolllerReuse.PostKey("https://v.scrolller.com/q-small.mp4", null));
+    }
+
     [Fact]
     public void MediaProbeUrl_IsAScrolllerHost()
         => Assert.True(global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(ScrolllerReuse.MediaProbeUrl));

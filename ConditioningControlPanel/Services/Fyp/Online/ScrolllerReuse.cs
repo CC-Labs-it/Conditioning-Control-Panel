@@ -100,6 +100,43 @@ internal static class ScrolllerReuse
         return pick;
     }
 
+    /// <summary>
+    /// One key per POST, so a post cached as both its full and its small rendition (Url and
+    /// SmallUrl) is offered once, never twice in a batch. The post id when this run mapped it,
+    /// else the shared poster (clips), else niche + title, else the url itself.
+    /// </summary>
+    public static string PostKey(string url, ScrolllerCacheMeta? meta)
+    {
+        var id = PostIdFor(url);
+        if (id != null) return "id:" + id;
+        if (!string.IsNullOrEmpty(meta?.Poster)) return "poster:" + meta!.Poster;
+        if (!string.IsNullOrEmpty(meta?.Title)) return "title:" + (meta!.Sub ?? "").ToLowerInvariant() + "/" + meta.Title;
+        return "url:" + url;
+    }
+
+    /// <summary>Keeps the first item of each <paramref name="key"/>, in order.</summary>
+    public static List<T> OnePerKey<T>(IEnumerable<T> items, Func<T, string> key)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<T>();
+        foreach (var item in items) if (seen.Add(key(item))) result.Add(item);
+        return result;
+    }
+
+    /// <summary>
+    /// How many of <paramref name="ids"/> the page has never been handed, recording them in
+    /// <paramref name="sentToPage"/>. This is the "fresh" the For You page paces its back-off
+    /// on: a spent or away batch is cached files the page often already holds, and calling
+    /// those fresh kept the page asking about once a second.
+    /// </summary>
+    public static int CountNewToPage(HashSet<string> sentToPage, IEnumerable<string?> ids)
+    {
+        int added = 0;
+        foreach (var id in ids)
+            if (!string.IsNullOrEmpty(id) && sentToPage.Add(id!)) added++;
+        return added;
+    }
+
     /// <summary>Does a cached file of this kind suit a consumer asking for <paramref name="kind"/>?
     /// Mirrors what the fresh fetch would hand that consumer: the Back Room takes GIF clips only,
     /// never a full-length upload; still surfaces never get a clip.</summary>
