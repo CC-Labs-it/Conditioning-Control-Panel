@@ -29,11 +29,16 @@ namespace ConditioningControlPanel
         private bool _onlineMeterWired;
         /// <summary>One refresh a second at most while charges stream in (a clip charges every 256 KB).</summary>
         private DispatcherTimer? _onlineMeterThrottle;
-        /// <summary>A minute tick: the midnight reset raises no event, and "Back in 6 h" counts down.</summary>
+        /// <summary>A minute tick: "Back in 6 h" counts down, and it backs up ScrolllerAllowance.Changed
+        /// (raised at midnight and on a plan or limit change) should one ever be missed.</summary>
         private DispatcherTimer? _onlineMeterClock;
         private OnlineMeterRing? _onlineMeterPillRing;
         private Popup? _onlineMeterHover;
         private DispatcherTimer? _onlineMeterHoverLeave;
+        /// <summary>The spent notice waits out a session / Lockdown / Strict Lock / program hold.</summary>
+        private readonly OnlineSpentNoticeQueue _onlineSpentQueue = new();
+        /// <summary>Polls for the hold's end, only while a notice waits (FriendsLanding's cadence).</summary>
+        private DispatcherTimer? _onlineSpentWait;
 
         /// <summary>Hooks the allowance events, the timers, and the pill hover.
         /// Idempotent; called once the window has loaded.</summary>
@@ -48,15 +53,20 @@ namespace ConditioningControlPanel
                 _onlineMeterClock = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMinutes(1) };
                 _onlineMeterClock.Tick += (_, _) => RefreshOnlineMeter();
                 _onlineMeterClock.Start();
+                _onlineSpentWait = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(3) };
+                _onlineSpentWait.Tick += (_, _) => ReleaseOnlineSpentNotice();
 
                 ScrolllerAllowance.Changed += OnOnlineAllowanceChanged;
                 ScrolllerAllowance.SpentReached += OnOnlineAllowanceSpent;
+                LocalizationManager.Instance.LanguageChanged += OnOnlineMeterLanguageChanged;
                 Closed += (_, _) =>
                 {
                     ScrolllerAllowance.Changed -= OnOnlineAllowanceChanged;
                     ScrolllerAllowance.SpentReached -= OnOnlineAllowanceSpent;
+                    LocalizationManager.Instance.LanguageChanged -= OnOnlineMeterLanguageChanged;
                     _onlineMeterThrottle?.Stop();
                     _onlineMeterClock?.Stop();
+                    _onlineSpentWait?.Stop();
                     CloseOnlineMeterHover();
                 };
 
@@ -94,14 +104,30 @@ namespace ConditioningControlPanel
 
         private void OnOnlineAllowanceSpent(object? sender, EventArgs e)
         {
-            try { Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowOnlineSpentNotice)); }
+            try { Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(QueueOnlineSpentNotice)); }
+            catch { /* dispatcher shutting down */ }
+        }
+
+        /// <summary>The pill, the card and the hover card are filled in code (Loc.Get), so the
+        /// live {loc:Str} bindings do not reach them: repaint on a language switch.</summary>
+        private void OnOnlineMeterLanguageChanged(object? sender, EventArgs e)
+        {
+            try
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+                {
+                    CloseOnlineMeterHover();
+                    RefreshOnlineMeter();
+                }));
+            }
             catch { /* dispatcher shutting down */ }
         }
 
         private static OnlineMeterState OnlineMeterNow()
         {
             var settings = App.Settings?.Current;
-            return OnlineMeterRules.For(settings?.MediaSource, ScrolllerPolicy.Enabled, ScrolllerAllowance.Percent,
+            return OnlineMeterRules.For(settings?.MediaSource, settings?.HasRemoteMediaConsent == true,
+                ScrolllerPolicy.Enabled, ScrolllerAllowance.Percent,
                 ScrolllerAllowance.Spent, ScrolllerAllowance.Plan, ScrolllerPolicy.Official,
                 false);
         }
@@ -124,6 +150,8 @@ namespace ConditioningControlPanel
         {
             OnlineMeterPill.Visibility = st.Show ? Visibility.Visible : Visibility.Collapsed;
             if (!st.Show || !st.Spent) CloseOnlineMeterHover();
+            // An open hover card follows a plan change (its upsell line and "See plans" tier).
+            else if (_onlineMeterHover is { IsOpen: true, Child: Border holder }) holder.Child = BuildOnlineMeterHoverCard(st);
             if (!st.Show) return;
 
             if (_onlineMeterPillRing == null)
@@ -317,14 +345,34 @@ namespace ConditioningControlPanel
 
         // ---------------------------------------------------------------- the spent notice
 
-        /// <summary>Once a day (ScrolllerAllowance.SpentReached fires once per local day): a corner
-        /// notice through the app's corner notification stack, bottom right, never over the screen.</summary>
+        /// <summary>SpentReached (once per local day): the notice waits while a session, Lockdown,
+        /// Strict Lock or program holds, because the corner stack folds away under a hold.</summary>
+        private void QueueOnlineSpentNotice()
+        {
+            RefreshOnlineMeter();
+            _onlineSpentQueue.Arm(DateTime.Now);
+            ReleaseOnlineSpentNotice();
+        }
+
+        private void ReleaseOnlineSpentNotice()
+        {
+            try
+            {
+                if (_onlineSpentQueue.TryRelease(DateTime.Now, FriendsLanding.Holding())) ShowOnlineSpentNotice();
+                if (_onlineSpentQueue.Pending) _onlineSpentWait?.Start();
+                else _onlineSpentWait?.Stop();
+            }
+            catch (Exception ex) { App.Logger?.Debug("Online spent notice queue: {E}", ex.Message); }
+        }
+
+        /// <summary>A corner notice through the app's corner notification stack, bottom right, never
+        /// over the screen. A hold that folds it before it is read puts it back in the queue.</summary>
         private void ShowOnlineSpentNotice()
         {
             try
             {
                 RefreshOnlineMeter();
-                var tier = OnlineMeterRules.SeePlansTier(ScrolllerAllowance.Plan);
+                var tier = OnlineMeterRules.SpentNoticePlansTier(ScrolllerAllowance.Plan, FriendsLanding.LockdownActive());
                 var notice = new FriendNotice(NoticeKind.Watch, "ccp:online-media", Loc.Get("online_meter_label"),
                     DateTimeOffset.UtcNow, OnlineMeterRules.NoticeLifetimeMs);
                 FriendNotices.Show(FriendsLanding.NoticeAnchor(), notice, new NoticeLook
@@ -338,6 +386,13 @@ namespace ConditioningControlPanel
                     },
                     ActionLabel = tier != null ? Loc.Get("online_see_plans") : null,
                     Act = tier is int t ? _ => OpenOnlinePlans(t) : null,
+                    // Missed = ran out, pushed off, or folded by a hold; only the hold brings it back.
+                    Missed = _ =>
+                    {
+                        if (!FriendsLanding.Holding()) return;
+                        _onlineSpentQueue.Arm(DateTime.Now);
+                        _onlineSpentWait?.Start();
+                    },
                 });
             }
             catch (Exception ex) { App.Logger?.Debug("Online spent notice: {E}", ex.Message); }

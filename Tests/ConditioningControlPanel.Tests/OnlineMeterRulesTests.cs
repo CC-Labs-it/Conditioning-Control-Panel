@@ -12,8 +12,8 @@ namespace ConditioningControlPanel.Tests;
 public class OnlineMeterRulesTests
 {
     private static OnlineMeterState S(string? source = "mixed", bool on = true, int pct = 42, bool spent = false,
-        ScrolllerPlan plan = ScrolllerPlan.Free, bool official = false, bool seen = false)
-        => OnlineMeterRules.For(source, on, pct, spent, plan, official, seen);
+        ScrolllerPlan plan = ScrolllerPlan.Free, bool official = false, bool seen = false, bool consent = true)
+        => OnlineMeterRules.For(source, consent, on, pct, spent, plan, official, seen);
 
     [Theory]
     [InlineData("online", true)]
@@ -26,6 +26,65 @@ public class OnlineMeterRulesTests
 
     [Fact]
     public void HiddenWhileTheServerSwitchIsOff() => Assert.False(S(on: false).Show);
+
+    /// <summary>No remote media consent = no online fetch, so nothing online shows: not the meter,
+    /// not the official note, not the stamped line, whatever the source and the licence say.</summary>
+    [Theory]
+    [InlineData("online")]
+    [InlineData("mixed")]
+    public void NoConsentShowsNothingOnline(string source)
+    {
+        var st = S(source, official: true, seen: false, consent: false);
+        Assert.False(st.Show);
+        Assert.False(st.ShowOfficialNote);
+        Assert.False(st.ShowStampedLine);
+        Assert.True(S(source, official: true, consent: true).ShowStampedLine);
+    }
+
+    [Theory]
+    [InlineData((int)ScrolllerPlan.Free, false, 1)]
+    [InlineData((int)ScrolllerPlan.Basic, false, 2)]
+    [InlineData((int)ScrolllerPlan.Prime, false, null)]
+    [InlineData((int)ScrolllerPlan.Free, true, null)]    // never "See plans" under a Lockdown
+    [InlineData((int)ScrolllerPlan.Basic, true, null)]
+    public void SpentNoticeOffersPlansOutsideLockdownOnly(int plan, bool lockdown, int? tier)
+        => Assert.Equal(tier, OnlineMeterRules.SpentNoticePlansTier((ScrolllerPlan)plan, lockdown));
+
+    [Fact]
+    public void SpentNotice_ShowsAtOnceWhenNothingHolds()
+    {
+        var q = new OnlineSpentNoticeQueue();
+        var now = new DateTime(2026, 10, 19, 15, 0, 0);
+        Assert.False(q.TryRelease(now, holding: false));    // nothing armed
+        q.Arm(now);
+        Assert.True(q.TryRelease(now, holding: false));
+        Assert.False(q.Pending);
+        Assert.False(q.TryRelease(now, holding: false));    // once
+    }
+
+    [Fact]
+    public void SpentNotice_WaitsOutAHoldThenShowsOnce()
+    {
+        var q = new OnlineSpentNoticeQueue();
+        var now = new DateTime(2026, 10, 19, 15, 0, 0);
+        q.Arm(now);
+        Assert.False(q.TryRelease(now, holding: true));
+        Assert.False(q.TryRelease(now.AddHours(2), holding: true));
+        Assert.True(q.Pending);
+        Assert.True(q.TryRelease(now.AddHours(3), holding: false));
+        Assert.False(q.TryRelease(now.AddHours(3), holding: false));
+    }
+
+    [Fact]
+    public void SpentNotice_AHoldPastMidnightDropsIt()
+    {
+        var q = new OnlineSpentNoticeQueue();
+        var now = new DateTime(2026, 10, 19, 23, 30, 0);
+        q.Arm(now);
+        Assert.False(q.TryRelease(now, holding: true));
+        Assert.False(q.TryRelease(now.AddHours(1), holding: false));   // the share is back: stale
+        Assert.False(q.Pending);
+    }
 
     [Theory]
     [InlineData(0, false, (int)OnlineMeterTone.Pink)]
