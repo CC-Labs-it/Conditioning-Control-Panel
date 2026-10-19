@@ -23,9 +23,12 @@ public static class LockCalendar
     public const int Columns = 12;
 
     /// <param name="raffleDays">The raffle's counted dates (<see cref="ChasterRaffle.CountedDates"/>),
-    /// matched by date. Only a served day or today can carry one.</param>
-    public static IReadOnlyList<LockDay> CellsFor(DateTime start, DateTime end, DateTime today, IReadOnlySet<DateTime>? raffleDays = null)
+    /// matched by date (<see cref="CountsForRaffle"/>).</param>
+    /// <param name="utcNow">The raffle's clock; null = now.</param>
+    public static IReadOnlyList<LockDay> CellsFor(DateTime start, DateTime end, DateTime today,
+        IReadOnlySet<DateTime>? raffleDays = null, DateTime? utcNow = null)
     {
+        var utc = utcNow ?? DateTime.UtcNow;
         var first = start.Date;
         var last = end.Date;
         if (last < first) last = first;
@@ -48,12 +51,17 @@ public static class LockCalendar
                 Locked: date > now,
                 IsKey: false,
                 Elided: elided && i == 0,
-                RaffleCounted: date <= now && raffleDays != null && raffleDays.Contains(date)));
+                RaffleCounted: CountsForRaffle(date, raffleDays, utc)));
         }
         var opens = last.AddDays(1);
         cells.Add(new LockDay(opens, opens.Day, Served: false, Today: false, Locked: false, IsKey: true, Elided: false));
         return cells;
     }
+
+    /// <summary>Whether the raffle counted this date. Raffle days are UTC days and the server never
+    /// counts one ahead of the UTC date, so nothing past it carries the mark.</summary>
+    public static bool CountsForRaffle(DateTime date, IReadOnlySet<DateTime>? raffleDays, DateTime utcNow) =>
+        raffleDays != null && date.Date <= utcNow.Date && raffleDays.Contains(date.Date);
 
     /// <summary>How many days the elided marker stands for: the days before the first shown cell.</summary>
     public static int ElidedDays(DateTime start, DateTime end)

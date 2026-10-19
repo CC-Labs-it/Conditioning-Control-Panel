@@ -543,7 +543,7 @@ public class ChasterLadderTests : IDisposable
         public int Mes;
         public Task<LadderVerify?> VerifyAsync(string lockId, string accessToken, CancellationToken ct = default)
         {
-            Verifies.Add((lockId, accessToken));
+            lock (Verifies) Verifies.Add((lockId, accessToken));
             return Task.FromResult<LadderVerify?>(new LadderVerify(true, 42, null));
         }
         public readonly List<IReadOnlyDictionary<string, LadderClaim>?> Claims = new();
@@ -574,7 +574,7 @@ public class ChasterLadderTests : IDisposable
         }
         public Task<RaffleCard?> MeAsync(CancellationToken ct = default)
         {
-            Mes++;
+            Interlocked.Increment(ref Mes);
             return Task.FromResult<RaffleCard?>(new RaffleCard("2026-10", 31, 12, new[] { 1, 2 }, 900, 25, 111600, ServerPostDays, false, null));
         }
     }
@@ -716,6 +716,37 @@ public class ChasterLadderTests : IDisposable
         Assert.Same(card, service.LastRaffleCard);
         Assert.Equal(new[] { 1, 2 }, service.LastRaffleCard!.Days);
         Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task A_landed_push_reads_the_card_once_and_a_throttled_one_never()
+    {
+        // The raffle month runs (the page's read noted it), so a push that verifies afresh
+        // follows with exactly one /me; a push inside the 15 minutes verifies nothing and reads
+        // no card.
+        _utc = new DateTime(2026, 10, 12, 10, 0, 0, DateTimeKind.Utc);
+        _store.Tokens = new ChasterStoredTokens("AT", "RT", _utc.AddHours(1));
+        var ladder = new FakeLadder();
+        var chaster = new Handler { Answer = _ => new HttpResponseMessage(HttpStatusCode.NoContent) };
+        using var service = Make(ladder, chaster);
+        await service.RaffleAsync();
+        Assert.Equal(1, Volatile.Read(ref ladder.Mes));
+
+        _utc = _utc.AddMinutes(16);
+        var raised = 0;
+        service.RaffleChanged += () => Interlocked.Increment(ref raised);
+        service.NoteSeconds("typo", 60);
+        Assert.Equal(SettleOutcome.Pushed, await service.SettleAsync());
+        for (var i = 0; i < 100 && Volatile.Read(ref ladder.Mes) < 2; i++) await Task.Delay(20);
+        Assert.Equal(2, Volatile.Read(ref ladder.Mes));
+        Assert.Equal(1, Volatile.Read(ref raised));
+
+        _utc = _utc.AddMinutes(1);
+        service.NoteSeconds("typo", 60);
+        Assert.Equal(SettleOutcome.Pushed, await service.SettleAsync());
+        await Task.Delay(300);
+        Assert.Equal(2, Volatile.Read(ref ladder.Mes));
+        lock (ladder.Verifies) Assert.Equal(2, ladder.Verifies.Count);
     }
 
     [Fact]

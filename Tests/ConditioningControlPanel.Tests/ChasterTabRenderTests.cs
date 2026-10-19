@@ -401,8 +401,10 @@ public class ChasterTabRenderTests
             Assert.Equal(Visibility.Collapsed, tab.CalendarRaffleKey.Visibility);
             Assert.DoesNotContain(Descendants(tab.Calendar), d => d is Ellipse { Tag: ChasterTabView.RaffleDotTag });
 
+            var first = tab.Calendar.Children[0];
             tab.ShowRaffleCard(card);
             tab.UpdateLayout();
+            Assert.Same(first, tab.Calendar.Children[0]); // dotted in place, never redrawn
             var squares = tab.Calendar.Children.OfType<Border>().ToList();
             var dotted = squares.Where(sq => Descendants(sq).Any(d => d is Ellipse { Tag: ChasterTabView.RaffleDotTag })).ToList();
             Assert.Equal(new[] { "2", "3", "5", "19" }, dotted.Select(sq => Descendants(sq).OfType<TextBlock>().First().Text));

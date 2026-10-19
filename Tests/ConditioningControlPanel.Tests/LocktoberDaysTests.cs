@@ -119,7 +119,7 @@ public class LocktoberDaysTests
         var today = new DateTime(2026, 10, 19, 17, 0, 0);
         var counted = ChasterRaffle.CountedDates(Card("2026-10", PerlyDays.Append(19).Append(25).ToArray()));
 
-        var cells = LockCalendar.CellsFor(start, end, today, counted);
+        var cells = LockCalendar.CellsFor(start, end, today, counted, new DateTime(2026, 10, 19, 21, 0, 0, DateTimeKind.Utc));
         Assert.Equal(17, cells.Count(c => c.Served));
         Assert.Equal(PerlyDays, cells.Where(c => c.Served && c.RaffleCounted).Select(c => c.DayOfMonth));
         Assert.True(Assert.Single(cells, c => c.Today).RaffleCounted);
@@ -127,5 +127,20 @@ public class LocktoberDaysTests
         Assert.DoesNotContain(cells, c => c.IsKey && c.RaffleCounted);
 
         Assert.DoesNotContain(LockCalendar.CellsFor(start, end, today), c => c.RaffleCounted);
+    }
+
+    [Fact]
+    public void A_raffle_day_counts_up_to_the_utc_date_whatever_the_local_one()
+    {
+        var days = ChasterRaffle.CountedDates(Card("2026-10", 19, 20));
+        // late on the 19th west of UTC: it is already the 20th on the raffle's clock
+        var utc20 = new DateTime(2026, 10, 20, 2, 0, 0, DateTimeKind.Utc);
+        Assert.True(LockCalendar.CountsForRaffle(new DateTime(2026, 10, 20), days, utc20));
+        // early on the 20th east of UTC: the raffle is still on the 19th, the 20th cannot count yet
+        var utc19 = new DateTime(2026, 10, 19, 22, 0, 0, DateTimeKind.Utc);
+        Assert.False(LockCalendar.CountsForRaffle(new DateTime(2026, 10, 20), days, utc19));
+        Assert.True(LockCalendar.CountsForRaffle(new DateTime(2026, 10, 19, 23, 0, 0), days, utc19));
+        Assert.False(LockCalendar.CountsForRaffle(new DateTime(2026, 10, 18), days, utc19));
+        Assert.False(LockCalendar.CountsForRaffle(new DateTime(2026, 10, 19), null, utc19));
     }
 }

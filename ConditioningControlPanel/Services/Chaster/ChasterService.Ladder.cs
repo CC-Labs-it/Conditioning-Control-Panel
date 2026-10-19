@@ -32,7 +32,12 @@ public sealed partial class ChasterService
         if (IsLinked && Interlocked.Exchange(ref _raffleAsked, 1) == 0)
             _ = Task.Run(async () =>
             {
-                try { NoteRaffleMonth(await LadderApi.MeAsync().ConfigureAwait(false)); }
+                try
+                {
+                    var card = await LadderApi.MeAsync().ConfigureAwait(false);
+                    NoteRaffleMonth(card);
+                    NoteRaffleCard(card);
+                }
                 catch (Exception ex) { Diag.Swallowed(ex, "raffle month read skipped"); }
             });
         return false;
@@ -84,25 +89,30 @@ public sealed partial class ChasterService
     /// billboard and the tab page both read their counted days from this one card.</summary>
     public RaffleCard? LastRaffleCard { get; private set; }
 
-    /// <summary>A new raffle card arrived. Raised on whatever thread read it.</summary>
+    /// <summary>The raffle card changed (a new one, or a stale one dropped). Raised on whatever
+    /// thread read it.</summary>
     public event Action? RaffleChanged;
 
-    private void NoteRaffleCard(RaffleCard? card)
+    /// <summary>Keep a card the server sent. <paramref name="dropOnNull"/>: a fresh verify with no
+    /// card to follow it drops the old card, so the count the verify just stored wins.</summary>
+    private void NoteRaffleCard(RaffleCard? card, bool dropOnNull = false)
     {
-        if (card == null) return;
+        if (card == null && (!dropOnNull || LastRaffleCard == null)) return;
         LastRaffleCard = card;
         try { RaffleChanged?.Invoke(); }
         catch (Exception ex) { Diag.Swallowed(ex, "raffle changed handler"); }
     }
 
     /// <summary>A verify that read the lock afresh is followed by the card, so the days a
-    /// surface lights are the ones that verify just stored.</summary>
+    /// surface lights are the ones that verify just stored. Only while the raffle month runs.</summary>
     private async Task VerifyThenReadAsync()
     {
         try
         {
-            if (await VerifyLadderAsync(CancellationToken.None).ConfigureAwait(false) && LadderApi != null)
-                NoteRaffleCard(await LadderApi.MeAsync().ConfigureAwait(false));
+            if (!await VerifyLadderAsync(CancellationToken.None).ConfigureAwait(false) || LadderApi == null) return;
+            bool running;
+            lock (_gate) running = _tab.RaffleMonth == ChasterLadder.MonthKey(_utcNow());
+            if (running) NoteRaffleCard(await LadderApi.MeAsync().ConfigureAwait(false), dropOnNull: true);
         }
         catch (Exception ex) { Diag.Swallowed(ex, "raffle card read skipped"); }
     }
