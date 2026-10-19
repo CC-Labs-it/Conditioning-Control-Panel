@@ -546,7 +546,7 @@ namespace ConditioningControlPanel.Services
                     break;
                 case FloatingFirstFrame.Verdict.Skip:
                     c.RevealWatch?.Stop();
-                    VideoDiag.Log("VIDEO", $"floating window skipped - no first frame {FloatingFirstFrame.ReadyBudgetMs}ms after the page was ready (playing={c.Playing}) - {System.IO.Path.GetFileName(c.Clip)}");
+                    VideoDiag.Log("VIDEO", $"floating window skipped - no first frame {FloatingFirstFrame.ReadyBudgetMs}ms after the page was ready (playing={c.Playing}, cloaked={c.Surface?.Cloaked}) - {System.IO.Path.GetFileName(c.Clip)}");
                     CloseInstance(c, "no first frame in time");
                     break;
             }
@@ -565,7 +565,7 @@ namespace ConditioningControlPanel.Services
                 ApplyAudioFocus();
             }
             var animate = FloatingSpawnLook.Animates(MotionFx.Level);
-            VideoDiag.Log("VIDEO", $"floating window shown {Environment.TickCount64 - c.SpawnTick}ms after it was made (frame={c.FrameSeen}, animated={animate})");
+            VideoDiag.Log("VIDEO", $"floating window shown {Environment.TickCount64 - c.SpawnTick}ms after it was made (frame={c.FrameSeen}, cloaked={c.Surface?.Cloaked}, animated={animate})");
             void Revealed()
             {
                 // This window's mute and close (VideoService.Controls.cs), once it is fully shown and,
@@ -617,7 +617,7 @@ namespace ConditioningControlPanel.Services
                     break;
                 case "firstFrame":
                     c.FrameSeen = true;
-                    VideoDiag.Log("VIDEO", $"floating page painted: via={(string?)o["via"]} frames={(int?)o["frames"]} mediaMs={(long?)o["mediaMs"]} visibility={(string?)o["visibility"]}");
+                    VideoDiag.Log("VIDEO", $"floating page painted: via={(string?)o["via"]} frames={(int?)o["frames"]} mediaMs={(long?)o["mediaMs"]} visibility={(string?)o["visibility"]} cloaked={c.Surface?.Cloaked}");
                     PostAfterPageMessage(() => CheckReveal(c));
                     break;
                 case "meta":

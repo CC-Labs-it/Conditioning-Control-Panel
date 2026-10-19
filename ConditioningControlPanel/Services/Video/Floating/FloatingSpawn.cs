@@ -6,13 +6,14 @@ namespace ConditioningControlPanel.Services.Video.Floating
     /// <summary>
     /// When a floating video window may be seen (owner, 2026-10-19: for a second or two while a
     /// clip loaded, its square was a black rectangle). The window exists from the start, because a
-    /// WebView2 only initialises inside a shown window, but it stays veiled (a one-pixel
-    /// window region: nothing to see or click) until its picture is painted. A clip that never gets there is
+    /// WebView2 only initialises inside a shown window, but it stays veiled (DWM-cloaked:
+    /// still composed, not on screen, no clicks) until its picture is painted. A clip that never gets there is
     /// skipped and its window closed, never left on screen. Pure, pinned by FloatingVideoPolishTests.
     /// </summary>
     internal static class FloatingFirstFrame
     {
-        /// <summary>From the page's ready handshake: this long for a first frame, then the clip is skipped.</summary>
+        /// <summary>From the page's ready handshake: this long for a painted picture. Not playing by then =
+        /// the clip is skipped; playing = the window is shown anyway.</summary>
         public const int ReadyBudgetMs = 4000;
 
         /// <summary>No frame report (a page without requestVideoFrameCallback, or one Chromium treats
@@ -35,7 +36,9 @@ namespace ConditioningControlPanel.Services.Video.Floating
         {
             if (frameSeen) return Verdict.Reveal;
             if (msSincePlaying >= PlayingGraceMs && advancedMs >= AdvanceMs) return Verdict.Reveal;
-            if (msSincePlaying != null) return Verdict.Wait;   // playing: the grace above decides, never a skip
+            // Playing but no proof by the budget (a page that stops reporting while cloaked): shown
+            // anyway, never skipped. Lifting the cloak is what lets such a page paint.
+            if (msSincePlaying != null) return (msSinceReady ?? msSincePlaying) >= ReadyBudgetMs ? Verdict.Reveal : Verdict.Wait;
             if (msSinceReady >= ReadyBudgetMs) return Verdict.Skip;
             return Verdict.Wait;
         }

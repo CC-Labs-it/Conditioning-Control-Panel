@@ -42,9 +42,13 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// </summary>
         void StartMotion(Rect boundsPx);
 
-        /// <summary>Hide the window (a one-pixel window region: nothing to see, nothing to click) until
-        /// <see cref="Reveal"/>. Call before the window is shown (FloatingFirstFrame).</summary>
+        /// <summary>Hide the window until <see cref="Reveal"/>: DWM-cloaked (still composed off screen,
+        /// takes no clicks), or a one-pixel region where cloaking is refused. Call before the window
+        /// is shown (FloatingFirstFrame).</summary>
         void Veil();
+
+        /// <summary>The window is cloaked right now (the veil took the DWM route).</summary>
+        bool Cloaked { get; }
 
         /// <summary>Show a veiled window: the opening animation when <paramref name="animate"/>
         /// (FloatingSpawnLook), else at once. <paramref name="revealed"/> runs once it is fully shown.</summary>
@@ -113,6 +117,8 @@ namespace ConditioningControlPanel.Services.Video.Floating
             private bool _resync;      // ...while it was at rest: read its rectangle again
             private (byte R, byte G, byte B) _painted;
             private bool _veiled;          // the region shows _shown of the window (FloatingSpawnLook)
+            private bool _cloakWanted;     // the veil asks DWM to cloak the window
+            private bool _cloaked;         // ...and DWM did
             private bool _shaped;          // a region is on the window
             private double _shown = 1.0;
             private DispatcherTimer? _anim;
@@ -190,6 +196,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 _detached = true;
                 _clock.Stop();
                 _clock.Tick -= OnTick;
+                LiftCloakHidden();   // never a cloaked window left alive, never a flash of it either
                 FinishAnimation();
                 FloatingVideoPointer.Unregister(this);
                 _motion?.Drop();
@@ -213,18 +220,63 @@ namespace ConditioningControlPanel.Services.Video.Floating
 
             // ---- veil, reveal, close (FloatingFirstFrame, FloatingSpawnLook) ----
 
+            public bool Cloaked => _cloaked;
+
             public void Veil()
             {
                 if (_detached) return;
                 _veiled = true;
-                _shown = 0;
+                _cloakWanted = true;
+                _shown = FloatingSpawnLook.RevealFrom;   // where the opening starts once the cloak lifts
+                ApplyCloak();
                 ApplyShape();
+            }
+
+            /// <summary>DWMWA_CLOAK: the window stays composed (the page keeps painting, no occlusion)
+            /// but is not on screen and takes no clicks. Refused = the one-pixel region instead.</summary>
+            private void ApplyCloak()
+            {
+                if (_hwnd == IntPtr.Zero) return;
+                int on = _cloakWanted ? 1 : 0;
+                bool ok;
+                try { ok = DwmSetWindowAttribute(_hwnd, DWMWA_CLOAK, ref on, sizeof(int)) == 0; }
+                catch (Exception ex) { Diag.Swallowed(ex); ok = false; }
+                _cloaked = _cloakWanted && ok;
+            }
+
+            private void Uncloak()
+            {
+                if (!_cloakWanted && !_cloaked) return;
+                _cloakWanted = false;
+                ApplyCloak();
+            }
+
+            /// <summary>Detach before the reveal (a close, a skip, a panic): the window is about to go,
+            /// so it is emptied first and then uncloaked, which shows nothing.</summary>
+            private void LiftCloakHidden()
+            {
+                _cloakWanted = false;
+                if (!_cloaked) return;
+                try
+                {
+                    if (_hwnd != IntPtr.Zero && IsWindow(_hwnd))
+                    {
+                        var rgn = CreateRectRgn(0, 0, 0, 0);
+                        if (rgn != IntPtr.Zero && SetWindowRgn(_hwnd, rgn, false) == 0) DeleteObject(rgn);
+                        ApplyCloak();
+                    }
+                }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+                _cloaked = false;
             }
 
             public void Reveal(bool animate, Action? revealed)
             {
                 if (_detached || !_veiled || _anim != null) { revealed?.Invoke(); return; }
-                if (!animate || _hwnd == IntPtr.Zero) { EndVeil(); revealed?.Invoke(); return; }
+                if (!animate || _hwnd == IntPtr.Zero) { EndVeil(); Uncloak(); revealed?.Invoke(); return; }
+                _shown = FloatingSpawnLook.RevealScale(0);
+                ApplyShape();
+                Uncloak();
                 Animate(FloatingSpawnLook.RevealMs, FloatingSpawnLook.RevealScale, () => { EndVeil(); revealed?.Invoke(); });
             }
 
@@ -302,6 +354,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
                 if ((ex & WS_EX_NOACTIVATE) == 0) SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE);
 
                 RoundCorners();
+                if (_cloakWanted) ApplyCloak();   // before the first show: never one visible frame
                 if (_veiled) ApplyShape();
                 Paint(force: true);
                 FloatingVideoPointer.Register(this);
@@ -368,10 +421,9 @@ namespace ConditioningControlPanel.Services.Video.Floating
                     try { dpi = GetDpiForWindow(_hwnd); } catch (Exception ex) { Diag.Swallowed(ex); }
                     if (dpi == 0) dpi = 96;
                     int d = (int)Math.Round(FloatingFrameLook.CornerDip * 2.0 * dpi / 96.0);
-                    var (l, t, rr, b) = _veiled ? FloatingSpawnLook.Visible(w, h, _shown) : (0, 0, w, h);
-                    // Fully veiled = ONE pixel at the centre, never an empty region: the window stays on
-                    // screen for Chromium, so its page is not treated as hidden while the clip loads and
-                    // paints at once when the region opens.
+                    var (l, t, rr, b) = _veiled ? FloatingSpawnLook.Visible(w, h, (_cloakWanted && !_cloaked) ? 0 : _shown) : (0, 0, w, h);
+                    // A veil DWM refused to cloak, or the end of a close: ONE pixel at the centre, never an
+                    // empty region, so the window stays on screen for Chromium and keeps painting.
                     var rgn = rr > l && b > t ? CreateRoundRectRgn(l, t, rr + 1, b + 1, d, d) : CreateRectRgn(w / 2, h / 2, w / 2 + 1, h / 2 + 1);
                     if (rgn == IntPtr.Zero) return;
                     if (SetWindowRgn(_hwnd, rgn, true) == 0) DeleteObject(rgn);   // on success Windows owns it
@@ -620,6 +672,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
             private const uint SWP_NOZORDER = 0x0004;
             private const uint SWP_NOACTIVATE = 0x0010;
             private const uint SWP_NOOWNERZORDER = 0x0200;
+            private const int DWMWA_CLOAK = 13;
             private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
             private const int DWMWA_BORDER_COLOR = 34;
             private const int DWMWCP_ROUND = 2;
