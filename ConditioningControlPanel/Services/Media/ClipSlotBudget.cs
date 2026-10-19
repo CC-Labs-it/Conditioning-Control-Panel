@@ -4,15 +4,15 @@ using System.Collections.Generic;
 namespace ConditioningControlPanel.Services;
 
 /// <summary>
-/// The app-wide budget for silent clip players (flashes, bubbles, the GIF cascade). It counts
+/// The app-wide budget for silent clip players (flashes, bubbles, any other non-flash clip). It counts
 /// LIVE LEASES, never a bare counter: a lease is in the set or it is not, so a missed or doubled
 /// release cannot drift the count. Releasing a lease twice is a no-op.
 ///
 /// When every slot is taken, the oldest lease its owner marked <see cref="Lease.Evictable"/>
-/// (a flash fading out, a bubble popping) gives its slot to the new request instead of the
+/// (a flash fading out) gives its slot to the new request instead of the
 /// request falling back to a still. The evicted owner hears about it through its callback.
 ///
-/// Flashes hold RESERVED leases. Every other surface (bubbles, the GIF cascade) shares
+/// Flashes hold RESERVED leases. Every other surface (bubbles, any other non-flash clip) shares
 /// <see cref="SharedCap"/> of the slots, so a burst of bubbles can never leave the flashes with
 /// nothing but posters.
 /// Thread-safe; the eviction callback runs outside the lock on the acquiring thread.
@@ -35,7 +35,18 @@ internal sealed class ClipSlotBudget
 
     public int Live { get { lock (_gate) return _live.Count; } }
 
-    public int LiveShared { get { lock (_gate) return _live.FindAll(l => !l.Reserved).Count; } }
+    public int LiveShared
+    {
+        get
+        {
+            lock (_gate)
+            {
+                int shared = 0;
+                for (int i = 0; i < _live.Count; i++) if (!_live[i].Reserved) shared++;
+                return shared;
+            }
+        }
+    }
 
     /// <summary>True when a shared acquire right now would succeed (a free slot or an evictable one).</summary>
     public bool CanAcquire => CanAcquireFor(reserved: false);
@@ -75,13 +86,18 @@ internal sealed class ClipSlotBudget
     /// _live is in acquire order, so the first evictable match is the oldest.</summary>
     private int? VictimIndex(bool reserved)
     {
+        // Plain loops: this runs on every refused heartbeat tick, so no capturing lambdas.
         int shared = 0;
-        foreach (var l in _live) if (!l.Reserved) shared++;
+        for (int i = 0; i < _live.Count; i++) if (!_live[i].Reserved) shared++;
         bool sharedFull = !reserved && shared >= SharedCap;
         if (!sharedFull && _live.Count < Capacity) return -1;
         // A shared lease over its sub-cap may only take a slot from another shared lease.
-        int victim = _live.FindIndex(l => l.Evictable && (!sharedFull || !l.Reserved));
-        return victim < 0 ? null : victim;
+        for (int i = 0; i < _live.Count; i++)
+        {
+            var l = _live[i];
+            if (l.Evictable && (!sharedFull || !l.Reserved)) return i;
+        }
+        return null;
     }
 
     private bool Release(Lease lease)

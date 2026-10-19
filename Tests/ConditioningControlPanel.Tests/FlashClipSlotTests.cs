@@ -80,15 +80,149 @@ public class FlashClipSlotTests
     }
 
     [Fact]
-    public void EvictingAPlayerWhoseStartNeverFinishedDoesNotThrow()
+    public void EvictionDisposesTheOwnerAndItsOwnReleaseDoesNotFreeASecondSlot()
     {
-        // FlashClipPlayer hands the budget "created?.Dispose()" before the constructor returns.
+        // FlashClipPlayer's eviction callback is "created?.Dispose()", and Dispose releases the
+        // lease. The lease is already gone by then: that release must not free another slot.
+        var budget = new ClipSlotBudget(2);
+        FakePlayer? created = null;
+        var lease = budget.TryAcquire(() => created?.Dispose())!;
+        created = new FakePlayer(lease);
+        var other = budget.TryAcquire()!;
+        created.Lease.Evictable = true;
+
+        var taker = budget.TryAcquire(null, out var victim);
+        Assert.NotNull(taker);
+        Assert.Same(lease, victim);
+        Assert.True(created.Disposed);
+        Assert.False(created.ReleasedASlot);
+        Assert.Equal(2, budget.Live);
+        Assert.Null(budget.TryAcquire());
+        other.Dispose();
+        taker!.Dispose();
+        Assert.Equal(0, budget.Live);
+    }
+
+    private sealed class FakePlayer : IDisposable
+    {
+        public FakePlayer(ClipSlotBudget.Lease lease) => Lease = lease;
+        public ClipSlotBudget.Lease Lease { get; }
+        public bool Disposed { get; private set; }
+        public bool ReleasedASlot { get; private set; }
+        public void Dispose()
+        {
+            if (Disposed) return;
+            Disposed = true;
+            ReleasedASlot = Lease.Release();
+        }
+    }
+
+    // ---- the heartbeat's clip decision (FlashClipUpgrade) ----------------------------------
+
+    private sealed class SimFlash
+    {
+        public bool Showing = true, Attempted, RefusedAtCap;
+        public FakePlayer? Player;
+    }
+
+    /// <summary>One heartbeat tick for one flash, exactly as FlashService runs it.</summary>
+    private static void Tick(SimFlash f, ClipSlotBudget budget)
+    {
+        if (f.Player is { } p)
+        {
+            p.Lease.Evictable = FlashClipUpgrade.Evictable(f.Showing);
+            if (FlashClipUpgrade.Reclaim(true, p.Disposed, f.Showing))
+            { f.Player = null; f.RefusedAtCap = true; f.Attempted = false; }
+        }
+        if (!FlashClipUpgrade.ShouldTryStart(true, true, f.Showing, f.Player != null, f.Attempted,
+                f.RefusedAtCap, f.RefusedAtCap && budget.CanAcquireFor(reserved: true)))
+            return;
+        FakePlayer? created = null;
+        var lease = budget.TryAcquire(() => created?.Dispose(), out _, reserved: true);
+        if (lease != null) f.Player = created = new FakePlayer(lease);
+        (f.Attempted, f.RefusedAtCap) = FlashClipUpgrade.AfterTry(lease != null, lease == null);
+    }
+
+    [Fact]
+    public void PosterUpgradesToClipWhenASlotFrees()
+    {
+        var budget = new ClipSlotBudget(8, 5);
+        var flashes = Enumerable.Range(0, 12).Select(_ => new SimFlash()).ToList();
+        foreach (var f in flashes) Tick(f, budget);
+        Assert.Equal(8, flashes.Count(f => f.Player != null));
+        Assert.Equal(4, flashes.Count(f => f.RefusedAtCap && !f.Attempted));
+
+        // Two clips close: the next tick upgrades two posters, the rest wait without a final no.
+        flashes[0].Player!.Dispose(); flashes.RemoveAt(0);
+        flashes[0].Player!.Dispose(); flashes.RemoveAt(0);
+        foreach (var f in flashes) Tick(f, budget);
+        Assert.Equal(8, flashes.Count(f => f.Player is { Disposed: false }));
+        Assert.Equal(2, flashes.Count(f => f.RefusedAtCap));
+    }
+
+    [Fact]
+    public void LeavingFlashLendsItsSlotAndALingerStartsOver()
+    {
         var budget = new ClipSlotBudget(1);
-        object? created = null;
-        var first = budget.TryAcquire(() => (created as IDisposable)?.Dispose())!;
-        first.Evictable = true;
-        Assert.NotNull(budget.TryAcquire());
+        var leaving = new SimFlash();
+        Tick(leaving, budget);
+        Assert.NotNull(leaving.Player);
+
+        var waiting = new SimFlash();
+        Tick(waiting, budget);
+        Assert.True(waiting.RefusedAtCap);
+
+        leaving.Showing = false;                      // its fade starts
+        Tick(leaving, budget);
+        Assert.True(leaving.Player!.Lease.Evictable);
+        Tick(waiting, budget);                        // takes the leaving slot
+        Assert.NotNull(waiting.Player);
+        Assert.True(leaving.Player!.Disposed);
+
+        leaving.Showing = true;                       // a linger brings it back
+        Tick(leaving, budget);
+        Assert.Null(leaving.Player);
+        Assert.True(leaving.RefusedAtCap);
+        Assert.False(leaving.Attempted);
         Assert.Equal(1, budget.Live);
+    }
+
+    [Fact]
+    public void FailedStartIsFinalAndCapRefusalIsNot()
+    {
+        Assert.Equal((true, false), FlashClipUpgrade.AfterTry(started: true, atCap: false));
+        Assert.Equal((true, false), FlashClipUpgrade.AfterTry(started: false, atCap: false));
+        Assert.Equal((false, true), FlashClipUpgrade.AfterTry(started: false, atCap: true));
+        Assert.False(FlashClipUpgrade.ShouldTryStart(true, true, showing: false, false, false, false, true));
+        Assert.False(FlashClipUpgrade.ShouldTryStart(true, true, true, false, false, refusedAtCap: true, canStart: false));
+        Assert.True(FlashClipUpgrade.ShouldTryStart(true, true, true, false, false, refusedAtCap: true, canStart: true));
+    }
+
+    [Fact]
+    public void ThousandRoundsOfTicksNeverStrandAPoster()
+    {
+        var budget = new ClipSlotBudget(8, 5);
+        var rng = new Random(2491);
+        for (int round = 0; round < 1000; round++)
+        {
+            var flashes = Enumerable.Range(0, 20).Select(_ => new SimFlash()).ToList();
+            for (int t = 0; t < 30; t++)
+            {
+                // Two passes: a flash marked leaving late in pass one is lent in pass two.
+                foreach (var f in flashes) Tick(f, budget);
+                foreach (var f in flashes) Tick(f, budget);
+                Assert.True(budget.Live <= 8);
+                // A showing flash on its poster only ever waits while no slot can be had.
+                if (flashes.Any(f => f.Showing && f.Player is null or { Disposed: true }))
+                    Assert.False(budget.CanAcquireFor(reserved: true));
+                // Flashes leave one by one; a few linger back.
+                var live = flashes.Where(f => f.Showing).ToList();
+                if (live.Count > 0) live[rng.Next(live.Count)].Showing = false;
+                if (rng.Next(5) == 0 && flashes.FirstOrDefault(f => !f.Showing) is { } back) back.Showing = true;
+            }
+            foreach (var f in flashes) f.Player?.Dispose();   // round end: SafeCloseFlashWindow
+            Assert.Equal(0, budget.Live);
+        }
     }
 
     [Fact]
@@ -250,6 +384,10 @@ public class FlashClipSlotTests
         // A deleted temp file must not take a slot and show nothing.
         Assert.True(start.IndexOf("File.Exists(path)", StringComparison.Ordinal) < start.IndexOf("Budget.TryAcquire(", StringComparison.Ordinal));
         Assert.Contains("new(MaxPlayers, MaxSharedPlayers)", src);
+        // Teardowns still in flight are bounded too: counted before Task.Run, uncounted in finally.
+        Assert.True(start.IndexOf("TearingDown >= MaxTearingDown", StringComparison.Ordinal) < start.IndexOf("Budget.TryAcquire(", StringComparison.Ordinal));
+        Assert.True(dispose.IndexOf("Interlocked.Increment(ref _tearingDown)", StringComparison.Ordinal) < dispose.IndexOf("Task.Run", StringComparison.Ordinal));
+        Assert.Contains("Interlocked.Decrement(ref _tearingDown)", dispose.Substring(dispose.IndexOf("finally", StringComparison.Ordinal)));
         // Backward compatible entry point (bubbles, the GIF cascade).
         Assert.Contains("internal static FlashClipPlayer? Start(string? path, int width, int height, Action<BitmapSource> show, double speed = 1)", src);
     }
@@ -280,7 +418,10 @@ public class FlashClipSlotTests
         Assert.Single(Regex.Matches(src, @"window\.ClipPlayer = FlashClipPlayer\.").Cast<Match>());
         Assert.Contains("FlashClipPlayer.CanStartFlash", src);
         Assert.Contains("out var atCap, flash: true)", src);
-        Assert.Contains("Evictable = !showThisWindow", src);
+        Assert.Contains("Evictable = FlashClipUpgrade.Evictable(showThisWindow)", src);
+        Assert.Contains("FlashClipUpgrade.ShouldTryStart(", src);
+        // The gentle fade takes the window off the active list, so it lends its slot itself.
+        Assert.Contains("window.ClipPlayer.Evictable = true", fade);
     }
 
     [Fact]
@@ -291,6 +432,16 @@ public class FlashClipSlotTests
         Assert.Contains("RemoteClipFiles RemoteClips", src);
         Assert.Contains("RemoteClips.TakeAll()", Method(src, "public void Dispose()"));
         Assert.DoesNotContain("RemoteClips.Keys.Take(", src);
+        // File deletes never run under _remoteLock (the UI draw path waits on it), and a fresh
+        // file that never reached RemoteClips is released in a finally (teardown cancellation).
+        var prefetch = Method(src, "private async Task PrefetchRemoteBatchAsync()");
+        foreach (Match m in Regex.Matches(prefetch, @"lock \(_remoteLock\)\s*\{"))
+        {
+            var block = Method(prefetch.Substring(m.Index), "lock (_remoteLock)");
+            Assert.DoesNotContain("ReleaseTempFile", block);
+        }
+        var fin = prefetch.Substring(prefetch.IndexOf("finally", StringComparison.Ordinal));
+        Assert.Contains("if (ours) RemoteMediaCache.ReleaseTempFile(path);", fin);
         // A decode-cache hit for a remote URL hands out the clip file held NOW, not the cached one.
         Assert.Contains("if (IsRemotePath(path)) hit.ClipPath = CurrentRemoteClipPath(path);", src);
         // A URL handed out again keeps its file instead of materializing a second copy.

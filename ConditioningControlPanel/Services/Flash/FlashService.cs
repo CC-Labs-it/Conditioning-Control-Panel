@@ -3294,15 +3294,18 @@ namespace ConditioningControlPanel.Services
                     // lost its slot that way and is back on screen (a linger) asks again below.
                     if (window.ClipPlayer is { } clipPlayer)
                     {
-                        clipPlayer.Evictable = !showThisWindow;
-                        if (clipPlayer.IsDisposed && showThisWindow) { window.ClipPlayer = null; window.ClipRefusedAtCap = true; window.ClipAttempted = false; }
+                        clipPlayer.Evictable = FlashClipUpgrade.Evictable(showThisWindow);
+                        if (FlashClipUpgrade.Reclaim(true, clipPlayer.IsDisposed, showThisWindow))
+                        { window.ClipPlayer = null; window.ClipRefusedAtCap = true; window.ClipAttempted = false; }
                     }
 
                     // A flash refused at the player cap shows its poster and upgrades to the clip
                     // as soon as a slot frees (ClipAttempted stays false until a real attempt).
-                    if (window.ClipPath != null && window.ClipPlayer == null && !window.ClipAttempted && showThisWindow
-                        && (window.LayerItem != null || window.ImageControl != null)
-                        && (!window.ClipRefusedAtCap || FlashClipPlayer.CanStartFlash))
+                    // CanStartFlash is read only for a refused flash: it takes the budget lock.
+                    if (FlashClipUpgrade.ShouldTryStart(window.ClipPath != null,
+                            window.LayerItem != null || window.ImageControl != null, showThisWindow,
+                            window.ClipPlayer != null, window.ClipAttempted, window.ClipRefusedAtCap,
+                            window.ClipRefusedAtCap && FlashClipPlayer.CanStartFlash))
                     {
                         window.ClipPlayer = FlashClipPlayer.TryStart(window.ClipPath, window.Frames[0].PixelWidth,
                             window.Frames[0].PixelHeight, frame =>
@@ -3310,8 +3313,7 @@ namespace ConditioningControlPanel.Services
                                 if (window.LayerItem is { } item) item.SetClipFrame(frame);
                                 else if (window.ImageControl != null) window.ImageControl.Source = frame;
                             }, App.Settings?.Current.FlashGifSpeedMultiplier ?? 1, out var atCap, flash: true);
-                        window.ClipRefusedAtCap = window.ClipPlayer == null && atCap;
-                        window.ClipAttempted = !window.ClipRefusedAtCap;
+                        (window.ClipAttempted, window.ClipRefusedAtCap) = FlashClipUpgrade.AfterTry(window.ClipPlayer != null, atCap);
                     }
 
                     // Animate GIF frames
@@ -4186,16 +4188,32 @@ namespace ConditioningControlPanel.Services
                     var held = CurrentRemoteClipPath(url);
                     var path = held ?? await RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true).ConfigureAwait(false);
                     if (path == null) continue;
-                    if (!await RemoteMediaCache.PrefetchAsync(entry.PosterUrl, ct).ConfigureAwait(false))
-                    { if (held == null) RemoteMediaCache.ReleaseTempFile(path); continue; }
-                    RefreshRemoteSelection();
-                    lock (_remoteLock)
+                    // A fresh file is ours until RemoteClips takes it: released on every other
+                    // path, a cancelled poster fetch at teardown included. File deletes run
+                    // outside _remoteLock, which the UI draw path waits on.
+                    bool ours = held == null, stale = false;
+                    List<string>? dropped = null;
+                    try
                     {
-                        if (generation != _remoteReady.Generation) { if (held == null) RemoteMediaCache.ReleaseTempFile(path); return; }
-                        foreach (var old in RemoteClips.Put(url, path, entry.PosterUrl, Environment.TickCount64))
-                            RemoteMediaCache.ReleaseTempFile(old);
-                        if (_remoteReady.Add(generation, url)) warmed++;
+                        if (!await RemoteMediaCache.PrefetchAsync(entry.PosterUrl, ct).ConfigureAwait(false)) continue;
+                        RefreshRemoteSelection();
+                        lock (_remoteLock)
+                        {
+                            stale = generation != _remoteReady.Generation;
+                            if (!stale)
+                            {
+                                dropped = RemoteClips.Put(url, path, entry.PosterUrl, Environment.TickCount64);
+                                ours = false;
+                                if (_remoteReady.Add(generation, url)) warmed++;
+                            }
+                        }
                     }
+                    finally
+                    {
+                        if (ours) RemoteMediaCache.ReleaseTempFile(path);
+                        if (dropped != null) foreach (var old in dropped) RemoteMediaCache.ReleaseTempFile(old);
+                    }
+                    if (stale) return;
                 }
 
                 if (warmed > 0)
@@ -5060,6 +5078,8 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private void GentleFadeThenClose(FlashWindow window)
         {
+            // Off the active list now, so the heartbeat never marks it: lend the slot here.
+            if (window.ClipPlayer != null) window.ClipPlayer.Evictable = true;
             UIElement? target = window.UsesHost ? window.HostedRoot : window;
             if (target == null) { SafeCloseFlashWindow(window); return; }
             target.IsHitTestVisible = false;
