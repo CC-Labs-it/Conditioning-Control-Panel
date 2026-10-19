@@ -32,7 +32,9 @@ namespace ConditioningControlPanel
         // emotionLineId (bark audio-filename stem) rides along so a QUEUED bark still drives the
         // portrait emotion when its bubble finally renders, not when it was enqueued. Null for
         // non-bark speech (AI/triggers/canned) → no emotion change.
-        private readonly Queue<(string text, SpeechSource source, string? emotionLineId, string? mood)> _speechQueue = new();
+        // unprompted (ccp-bugs #1468) rides along too, so a queued idle line is still held when it
+        // finally renders with the engine off.
+        private readonly Queue<(string text, SpeechSource source, string? emotionLineId, string? mood, bool unprompted)> _speechQueue = new();
         private bool _isGiggling = false;
         private bool _isWaitingForAi = false; // Blocks other giggles while waiting for AI
         private DispatcherTimer? _speechTimer;
@@ -185,7 +187,7 @@ namespace ConditioningControlPanel
                 return;
             }
 
-            var (nextText, source, nextEmotionLineId, nextMood) = _speechQueue.Dequeue();
+            var (nextText, source, nextEmotionLineId, nextMood, nextUnprompted) = _speechQueue.Dequeue();
             App.Logger?.Debug("Dequeued speech ({Source}, line={LineId}, {Chars} chars)",
                 source, nextEmotionLineId ?? "-", (nextText ?? "").Length);
 
@@ -202,7 +204,7 @@ namespace ConditioningControlPanel
                 _speechDelayTimer.Tick += (s, e) =>
                 {
                     _speechDelayTimer.Stop();
-                    ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood);
+                    ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted);
                 };
                 _speechDelayTimer.Start();
                 App.Logger?.Debug("Delaying speech by {Delay:F1}s", remainingDelay);
@@ -210,14 +212,14 @@ namespace ConditioningControlPanel
             else
             {
                 // Show immediately
-                ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood);
+                ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted);
             }
         }
 
         /// <summary>
         /// Shows speech based on its source (triggers play audio, others don't)
         /// </summary>
-        private void ShowSpeechBySource(string text, SpeechSource source, string? emotionLineId = null, string? mood = null)
+        private void ShowSpeechBySource(string text, SpeechSource source, string? emotionLineId = null, string? mood = null, bool unprompted = false)
         {
             if (source == SpeechSource.Trigger)
             {
@@ -228,7 +230,7 @@ namespace ConditioningControlPanel
             {
                 // Determine sound: always for AI, 1 in 5 for presets
                 bool playSound = source == SpeechSource.AI || (source == SpeechSource.Preset && ++_presetGiggleCounter % 5 == 0);
-                ShowGiggle(text, playSound, source, emotionLineId: emotionLineId, mood: mood);
+                ShowGiggle(text, playSound, source, emotionLineId: emotionLineId, mood: mood, unprompted: unprompted);
             }
         }
 
@@ -236,8 +238,10 @@ namespace ConditioningControlPanel
         /// Queues a speech bubble to be displayed. Bubbles are shown one at a time.
         /// Blocked while waiting for AI response or while AI bubble is visible.
         /// Plays giggle sound 1 in 5 times for preset phrases.
+        /// <paramref name="unprompted"/>: an idle-timer line (ccp-bugs #1468); its sound obeys
+        /// <see cref="Services.Companion.CompanionIdleVoice"/>, its bubble shows regardless.
         /// </summary>
-        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
+        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false)
         {
             if (_isPlayingUninterruptibleClip) return; // an uninterruptible clip is speaking
 
@@ -273,7 +277,7 @@ namespace ConditioningControlPanel
 
                 if (_isGiggling)
                 {
-                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood));
+                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted));
                     App.Logger?.Debug("Queued preset speech (line={LineId}, {Chars} chars)", emotionLineId ?? "-", (text ?? "").Length);
                     return;
                 }
@@ -287,7 +291,7 @@ namespace ConditioningControlPanel
                     // Queue it and let the delay system handle it. The queue now carries emotionLineId so
                     // the portrait emotion still fires when the bubble renders; audio is still text-only on
                     // this delayed path (barks normally fire idle, so the immediate path below is the norm).
-                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood));
+                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted));
                     _isGiggling = true;
                     ProcessNextSpeech();
                 }
@@ -299,7 +303,7 @@ namespace ConditioningControlPanel
                     _presetGiggleCounter++;
                     bool playSound = _presetGiggleCounter % 5 == 0;
                     ShowGiggle(text, playSound, SpeechSource.Preset, phraseAudioPath, barkVoice: barkVoice,
-                        emotionLineId: emotionLineId, mood: mood);
+                        emotionLineId: emotionLineId, mood: mood, unprompted: unprompted);
                 }
             });
         }
@@ -319,7 +323,7 @@ namespace ConditioningControlPanel
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
+        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false)
         {
             if (_isPlayingUninterruptibleClip) return; // an uninterruptible clip is speaking
             string? emotionLineId = phraseAudioPath != null
@@ -356,7 +360,8 @@ namespace ConditioningControlPanel
                 // through GigglePriority are AI replies, but the awareness keyword path can fall back
                 // to canned phrases when the AI is unavailable — those callers pass false.
                 ShowGiggle(text, playSound: playSound, source: SpeechSource.AI, aiGenerated: aiGenerated,
-                    phraseAudioPath: phraseAudioPath, barkVoice: barkVoice, emotionLineId: emotionLineId, mood: mood);
+                    phraseAudioPath: phraseAudioPath, barkVoice: barkVoice, emotionLineId: emotionLineId, mood: mood,
+                    unprompted: unprompted);
 
                 App.Logger?.Debug("Priority speech, queue cleared (line={LineId}, {Chars} chars)", emotionLineId ?? "-", (text ?? "").Length);
             });
@@ -412,7 +417,8 @@ namespace ConditioningControlPanel
         /// <param name="text">The text to display</param>
         /// <param name="playSound">Whether to play a giggle sound</param>
         /// <param name="source">The source of the speech (for delay calculation)</param>
-        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null)
+        /// <param name="unprompted">An idle-timer line: no sound with the engine off unless opted in (#1468)</param>
+        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null, bool unprompted = false)
         {
             // An uninterruptible recorded clip owns the bubble — only its own (bypassing) call may render.
             if (_isPlayingUninterruptibleClip && !bypassClipLock) return;
@@ -495,8 +501,13 @@ namespace ConditioningControlPanel
             {
                 if (!_isGiggling) return; // a newer bubble took over during the lead-in
 
+                // ccp-bugs #1468: an idle-timer line with the engine off keeps its bubble, not its
+                // sound (voice, giggle and fallback pop alike), unless the player opted in.
+                bool heldIdle = !_isMuted && !Services.Companion.CompanionIdleVoice.ShouldVoiceNow(unprompted);
+                if (heldIdle) Services.Audio.EngineOffAudioLog.NoteHeld("companion-voice", "idle line");
+
                 // Audio only when NOT muted — mute silences the voice but keeps the text bubble (#445).
-                if (!_isMuted)
+                if (!_isMuted && !heldIdle)
                 {
                     // Play sound for the speech bubble
                     if (phraseAudioPath != null)
@@ -1673,7 +1684,7 @@ namespace ConditioningControlPanel
             // pool-wide no-repeat rotation. Preset phrases are just the no-barks fallback.
             // (flashes_audio voicelines are flash material and no longer spoken here.)
             if (App.Bark != null) App.Bark.DispatchIdle();
-            else Giggle(GetRandomBambiPhrase());
+            else Giggle(GetRandomBambiPhrase(), unprompted: true);
         }
 
         // ============================================================
@@ -2175,7 +2186,7 @@ namespace ConditioningControlPanel
                 if (_isGiggling || timeSinceLastSpeech < requiredDelay)
                 {
                     // Queue the trigger and let delay system handle it
-                    _speechQueue.Enqueue((trigger, SpeechSource.Trigger, null, null));
+                    _speechQueue.Enqueue((trigger, SpeechSource.Trigger, null, null, false));
                     App.Logger?.Debug("Queued trigger speech: {Trigger}", trigger);
                     if (!_isGiggling)
                     {

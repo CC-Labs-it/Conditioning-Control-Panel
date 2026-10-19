@@ -1991,12 +1991,16 @@ namespace ConditioningControlPanel.Services
             // Route by class/priority: non-Normal or high-priority barks preempt (GigglePriority);
             // ordinary barks queue (Giggle). Safety is non-Normal, so it preempts and clears the queue.
             // When a voiceline exists it plays as the bubble's audio (no giggle sound on top).
+            // ccp-bugs #1468: an Idle-trigger line is unprompted; the tube holds its sound while the
+            // engine is off (CompanionIdleVoice). The bubble shows either way.
+            bool unprompted = CompanionIdleVoice.IsUnprompted(rule.Trigger);
             bool priority = rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold;
             if (priority)
                 avatar.GigglePriority(line, playSound: audioPath == null, aiGenerated: false,
-                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood, unprompted: unprompted);
             else
-                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood,
+                    unprompted: unprompted);
 
             // Self-echo guard so the bubble text can't trip awareness/OCR off its own output.
             App.KeywordTriggers?.MuteKeywordEcho(line, SelfEchoMuteMs);

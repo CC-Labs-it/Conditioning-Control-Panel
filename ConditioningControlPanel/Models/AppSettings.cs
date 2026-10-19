@@ -6033,6 +6033,19 @@ namespace ConditioningControlPanel.Models
             set { _companionVoiceLinesMuted = value; OnPropertyChanged(); }
         }
 
+        private bool _companionSpeaksIdleWhenEngineOff = false;
+        /// <summary>
+        /// ccp-bugs #1468: false (default) keeps the idle-timer lines quiet while neither the engine
+        /// nor a session runs; the bubble and text still show. True speaks them as before. Lines that
+        /// answer a player action are never affected. Rule: Services.Companion.CompanionIdleVoice.
+        /// </summary>
+        [JsonProperty]
+        public bool CompanionSpeaksIdleWhenEngineOff
+        {
+            get => _companionSpeaksIdleWhenEngineOff;
+            set { _companionSpeaksIdleWhenEngineOff = value; OnPropertyChanged(); }
+        }
+
         private int _companionVoiceLevel = Services.CompanionVoiceGain.DefaultLevel;
         /// <summary>
         /// The companion's own voice level (0-100), on top of MasterVolume. The default reproduces
