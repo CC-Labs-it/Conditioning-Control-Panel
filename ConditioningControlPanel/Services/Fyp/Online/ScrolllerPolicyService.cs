@@ -16,9 +16,11 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 /// </summary>
 internal static class ScrolllerPolicyService
 {
-    /// <summary>The server's answer, already shaped. Null fields = "no cap" / "no minimum".</summary>
+    /// <summary>The server's answer, already shaped. Null fields = "no cap" / "no minimum".
+    /// <c>Official</c> = the licence is signed (only an explicit JSON true).</summary>
     internal sealed record Answer(bool Enabled, int? MaxClipShortSide, string? MinVersion,
-        long? FreeMb = null, long? BasicMb = null, long? PrimeMb = null, long? FreeFirstDayMb = null);
+        long? FreeMb = null, long? BasicMb = null, long? PrimeMb = null, long? FreeFirstDayMb = null,
+        bool Official = false);
 
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
@@ -93,7 +95,9 @@ internal static class ScrolllerPolicyService
         string? ver = o["min_version"] is JValue { Type: JTokenType.String } v
             && !string.IsNullOrWhiteSpace((string?)v) ? ((string)v!).Trim() : null;
         var daily = o["daily_mb"] as JObject;
-        return new Answer(enabled, cap, ver, Mb(daily?["free"]), Mb(daily?["basic"]), Mb(daily?["prime"]), Mb(daily?["free_first_day"]));
+        bool official = o["official"] is JValue { Type: JTokenType.Boolean } f && (bool)f;
+        return new Answer(enabled, cap, ver, Mb(daily?["free"]), Mb(daily?["basic"]), Mb(daily?["prime"]), Mb(daily?["free_first_day"]),
+            official);
     }
 
     /// <summary>A whole, non-negative MB figure, else null (the default stays).</summary>
@@ -101,10 +105,13 @@ internal static class ScrolllerPolicyService
         => t is JValue { Type: JTokenType.Integer } v && (long)v >= 0 ? (long)v : null;
 
     /// <summary>Applies an answer: the switch and cap through <see cref="ScrolllerPolicy"/>
-    /// (which clamps the cap), the minimum version here.</summary>
+    /// (which clamps the cap), the minimum version here. The official flag is set before the
+    /// limits so the allowance's <see cref="ScrolllerAllowance.Changed"/> (raised by
+    /// ApplyLimits) is the one signal the meter and the note refresh on.</summary>
     internal static void Accept(Answer answer)
     {
         ScrolllerPolicy.Apply(answer.Enabled, answer.MaxClipShortSide);
+        ScrolllerPolicy.Official = answer.Official;
         ScrolllerAllowance.ApplyLimits(answer.FreeMb, answer.BasicMb, answer.PrimeMb, answer.FreeFirstDayMb);
         _minVersion = answer.MinVersion;
     }
