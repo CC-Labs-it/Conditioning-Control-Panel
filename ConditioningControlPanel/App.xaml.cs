@@ -1972,6 +1972,10 @@ namespace ConditioningControlPanel
             // The Scrolller licence switch: read now (off the UI thread) and every 30 min. No
             // answer = the shipped behaviour, so this never holds startup.
             Services.Fyp.Online.ScrolllerPolicyService.Start();
+            // Locked screen or display off = nobody watching: no fresh Scrolller fetch (never on minimise).
+            Services.Fyp.Online.ScrolllerAwayWatcher.Start();
+            // The Scrolller device cache loads its books in the background: no UI-thread folder scan.
+            _ = Services.Fyp.Online.ScrolllerDiskCache.WarmAsync();
 
             // Initialize localization (must be after settings, before UI)
             LocalizationManager.Instance.Initialize(Settings?.Current?.Language ?? "en");
@@ -5687,6 +5691,11 @@ Application State:
             // EMI Desk (MOMENTS 4.B / 3.8): the wordless flinch. appClosing is a HOLD with no pool
             // and never gets one - she does not get a goodbye speech while the app is going away.
             try { EmiDesk?.Fire("appClosing", null); } catch (Exception ex) { Diag.Swallowed(ex); }
+
+            // Scrolller daily share: the ledger and the device cache index have debounced writes.
+            try { Services.Fyp.Online.ScrolllerAwayWatcher.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Services.Fyp.Online.ScrolllerAllowance.Flush(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Services.Fyp.Online.ScrolllerDiskCache.Flush(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             try { SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
 
