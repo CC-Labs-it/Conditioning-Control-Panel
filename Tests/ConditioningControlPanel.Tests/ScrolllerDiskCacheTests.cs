@@ -125,4 +125,44 @@ public sealed class ScrolllerDiskCacheTests : IDisposable
         ScrolllerPolicyService.Accept(new ScrolllerPolicyService.Answer(true, null, null));
         Assert.Null(ScrolllerDiskCache.GetOrFetchAsync("https://example.com/a.mp4", null, default).GetAwaiter().GetResult());
     }
+
+    [Fact]
+    public void A_body_declared_over_the_consumers_cap_is_refused_before_a_byte_is_read()
+    {
+        var body = new WatchedContent(30L * 1024 * 1024);
+        using var http = new System.Net.Http.HttpClient(new OneAnswer(body));
+        var got = ScrolllerDiskCache.DownloadAsync("https://images.scrolller.com/big.jpg", null, 24L * 1024 * 1024, default, http)
+            .GetAwaiter().GetResult();
+        Assert.Null(got);
+        Assert.False(body.Read);
+        Assert.Empty(Directory.Exists(_root) ? Directory.GetFiles(_root, "*" + ScrolllerDiskCache.PartSuffix) : Array.Empty<string>());
+    }
+
+    private sealed class OneAnswer : System.Net.Http.HttpMessageHandler
+    {
+        private readonly System.Net.Http.HttpContent _content;
+        public OneAnswer(System.Net.Http.HttpContent content) => _content = content;
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+            => System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = _content });
+    }
+
+    /// <summary>Declares a length and records whether anyone read the body.</summary>
+    private sealed class WatchedContent : System.Net.Http.HttpContent
+    {
+        private readonly long _length;
+        public bool Read { get; private set; }
+        public WatchedContent(long length) { _length = length; Headers.ContentLength = length; }
+        protected override System.Threading.Tasks.Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        {
+            Read = true;
+            return stream.WriteAsync(new byte[16], 0, 16);
+        }
+        protected override bool TryComputeLength(out long length) { length = _length; return true; }
+        protected override System.Threading.Tasks.Task<Stream> CreateContentReadStreamAsync()
+        {
+            Read = true;
+            return System.Threading.Tasks.Task.FromResult<Stream>(new MemoryStream(new byte[16]));
+        }
+    }
 }

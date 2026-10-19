@@ -57,6 +57,15 @@ public sealed class ScrolllerCacheRoutingTests
     }
 
     [Theory]
+    [InlineData("https://v.scrolller.com/a.mp4", false, true)]   // a retry of an url that is not cached: refused
+    [InlineData("https://v.scrolller.com/a.mp4", true, false)]
+    [InlineData("https://other/1.mp4", false, false)]            // other providers stream as before
+    [InlineData("C:/videos/a.mp4", false, false)]                // library files are never touched
+    [InlineData(null, false, false)]
+    public void Play_time_refuses_a_scrolller_clip_with_no_cached_file(string? path, bool cached, bool refused)
+        => Assert.Equal(refused, VideoService.RefuseUncachedScrolller(path, u => u.Contains("scrolller.com"), _ => cached));
+
+    [Theory]
     [InlineData(false, ScrolllerAwayWatcher.DisplayOn, false)]
     [InlineData(false, ScrolllerAwayWatcher.DisplayDimmed, false)]
     [InlineData(false, ScrolllerAwayWatcher.DisplayOff, true)]

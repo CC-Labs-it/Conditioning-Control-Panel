@@ -3100,6 +3100,24 @@ namespace ConditioningControlPanel.Services
                 return;
             }
 
+            // A Scrolller clip plays only from the device cache (owner, 2026-10-19): nothing
+            // streams it uncharged. The pick hands out cached clips only, but a retry replays an
+            // older url (_retryPath, the vout self-heal) and a file can be evicted since the pick.
+            // Not cached = the next pick instead; nothing playable = the run ends as a natural end.
+            if (RefuseUncachedScrolller(path, Video.ScrolllerCredit.IsScrolllerUrl, Fyp.Online.ScrolllerDiskCache.Contains))
+            {
+                var next = isVoutRetry ? null : GetNextVideo();
+                if (string.IsNullOrEmpty(next) || RefuseUncachedScrolller(next, Video.ScrolllerCredit.IsScrolllerUrl, Fyp.Online.ScrolllerDiskCache.Contains))
+                {
+                    App.Logger?.Information("VideoService: {Clip} is not on this device and never streams - skipped", DescribeClip(path));
+                    VideoDiag.Log("VIDEO", "SKIP - Scrolller clip not in the device cache");
+                    Cleanup();
+                    return;
+                }
+                App.Logger?.Information("VideoService: {Clip} is not on this device - playing {Next} instead", DescribeClip(path), DescribeClip(next));
+                path = next!;
+            }
+
             // Floating, and the browser engine can take the clip: the run opens on an equal
             // instance (VideoService.FloatingInstances.cs) and none of the single-player
             // machinery below applies. Otherwise the ordinary path, one window.
@@ -3247,6 +3265,18 @@ namespace ConditioningControlPanel.Services
                     OnFloatingPrimaryUp(path);   // the floating frame; a no-op full screen
                     return;
                 }
+            }
+
+            // LibVLC never streams a Scrolller clip (owner, 2026-10-19): it plays the cached file or
+            // nothing. Checked again here because the pre-roll and the browser fallback both sit
+            // between the pick and this point.
+            if (RefuseUncachedScrolller(path, Video.ScrolllerCredit.IsScrolllerUrl, Fyp.Online.ScrolllerDiskCache.Contains))
+            {
+                App.Logger?.Information("VideoService: {Clip} left the device cache before playback - skipped", DescribeClip(path));
+                VideoDiag.Log("VIDEO", "StartVideoPlayback SKIP - Scrolller clip not in the device cache");
+                _videoPlaying = false;
+                Cleanup();
+                return;
             }
 
             App.Logger?.Information("VideoService: StartVideoPlayback called for {File}", Path.GetFileName(path));
@@ -3883,6 +3913,13 @@ namespace ConditioningControlPanel.Services
             // no second download, nothing more charged to the daily share (owner, 2026-10-19).
             var cachedClip = isRemote ? Fyp.Online.ScrolllerDiskCache.TryGetPath(path) : null;
             if (cachedClip != null) isRemote = false;
+            // Evicted in the moment since StartVideoPlayback checked: still never a stream. The url
+            // goes in as a FILE path, which fails to open and ends through the player's error path.
+            else if (isRemote && Video.ScrolllerCredit.IsScrolllerUrl(path))
+            {
+                VideoDiag.Log("VIDEO", $"win[{tag}]: Scrolller clip left the device cache - not streamed");
+                isRemote = false;
+            }
             using var media = isRemote
                 ? new Media(_libVLC!, path, FromType.FromLocation)
                 : new Media(_libVLC!, cachedClip ?? path, FromType.FromPath);
@@ -8442,6 +8479,11 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>0/1 via Interlocked: one clip download loop at a time.</summary>
         private int _remoteDownloadInFlight;
+
+        /// <summary>The play-time rule, pure (owner, 2026-10-19): a Scrolller url with no cached
+        /// file is refused, never streamed. Local files and other providers' urls pass.</summary>
+        internal static bool RefuseUncachedScrolller(string? path, Func<string, bool> isScrolller, Func<string, bool> cached)
+            => IsRemoteMediaPath(path) && isScrolller(path!) && !cached(path!);
 
         /// <summary>
         /// The remote pick, pure (owner, 2026-10-19): walks the buffer in order and takes the first

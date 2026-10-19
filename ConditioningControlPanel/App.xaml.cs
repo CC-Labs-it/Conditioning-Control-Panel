@@ -1974,6 +1974,8 @@ namespace ConditioningControlPanel
             Services.Fyp.Online.ScrolllerPolicyService.Start();
             // Locked screen or display off = nobody watching: no fresh Scrolller fetch (never on minimise).
             Services.Fyp.Online.ScrolllerAwayWatcher.Start();
+            // The Scrolller device cache loads its books in the background: no UI-thread folder scan.
+            _ = Services.Fyp.Online.ScrolllerDiskCache.WarmAsync();
 
             // Initialize localization (must be after settings, before UI)
             LocalizationManager.Instance.Initialize(Settings?.Current?.Language ?? "en");

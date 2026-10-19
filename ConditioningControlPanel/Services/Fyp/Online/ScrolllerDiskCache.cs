@@ -266,7 +266,13 @@ internal static class ScrolllerDiskCache
     /// consented to remote media). Null on any failure.
     /// One download per url however many ask; the first asker's token can cancel it, a later
     /// asker only stops waiting.</summary>
-    public static async Task<string?> GetOrFetchAsync(string url, ScrolllerCacheMeta? meta, CancellationToken ct)
+    public static Task<string?> GetOrFetchAsync(string url, ScrolllerCacheMeta? meta, CancellationToken ct)
+        => GetOrFetchAsync(url, meta, MaxEntryBytes, ct);
+
+    /// <summary><see cref="GetOrFetchAsync(string, ScrolllerCacheMeta?, CancellationToken)"/> for a
+    /// consumer with its own size cap: a body the server declares larger is refused on its
+    /// Content-Length, before a byte is read or charged.</summary>
+    public static async Task<string?> GetOrFetchAsync(string url, ScrolllerCacheMeta? meta, long maxBytes, CancellationToken ct)
     {
         try
         {
@@ -280,7 +286,7 @@ internal static class ScrolllerDiskCache
             Lazy<Task<string?>>? mine = null;
             mine = new Lazy<Task<string?>>(() => Task.Run(async () =>
             {
-                try { return await DownloadAsync(url, meta, ct).ConfigureAwait(false); }
+                try { return await DownloadAsync(url, meta, maxBytes, ct).ConfigureAwait(false); }
                 finally { InFlight.TryRemove(new KeyValuePair<string, Lazy<Task<string?>>>(url, mine!)); }
             }));
             var running = InFlight.GetOrAdd(url, mine);
@@ -544,21 +550,31 @@ internal static class ScrolllerDiskCache
         }
     }
 
-    private static async Task<string?> DownloadAsync(string url, ScrolllerCacheMeta? meta, CancellationToken ct)
+    /// <summary>One fresh download into the cache. <paramref name="maxBytes"/> (never above
+    /// <see cref="MaxEntryBytes"/>) is checked on the declared length BEFORE any body byte is read
+    /// or charged, and again as the body flows (a chunked body has no length up front).
+    /// <paramref name="http"/> is for tests.</summary>
+    internal static async Task<string?> DownloadAsync(string url, ScrolllerCacheMeta? meta, long maxBytes, CancellationToken ct, HttpClient? http = null)
     {
         long uncharged = 0;
+        long cap = Math.Min(maxBytes, MaxEntryBytes);
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(DownloadBudget);
-            using var resp = await Http.Value.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+            using var resp = await (http ?? Http.Value).GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
                 App.Logger?.Debug("[scrolller cache] HTTP {Code} for {Host}", (int)resp.StatusCode, Logging.UrlLog.Host(url));
                 return null;
             }
             long? declared = resp.Content.Headers.ContentLength;
-            if (declared > MaxEntryBytes) return null;
+            if (declared > cap)
+            {
+                App.Logger?.Debug("[scrolller cache] item from {Host} is {Size} bytes, over the {Cap} cap: skipped unread",
+                    Logging.UrlLog.Host(url), declared, cap);
+                return null;
+            }
 
             using var writer = BeginWrite(url, meta) as Writer;
             if (writer == null) return null;
@@ -572,7 +588,7 @@ internal static class ScrolllerDiskCache
                 got += n;
                 uncharged += n;
                 if (uncharged >= ChargeStepBytes) { ScrolllerAllowance.Charge(uncharged); uncharged = 0; }
-                if (got > MaxEntryBytes) return null;
+                if (got > cap) return null;
                 await writer.Stream.WriteAsync(buf.AsMemory(0, n), cts.Token).ConfigureAwait(false);
             }
             if (!ScrolllerCacheBook.IsWhole(got, declared, reachedEnd: true)) return null;

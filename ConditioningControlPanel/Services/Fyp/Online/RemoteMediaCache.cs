@@ -369,7 +369,9 @@ internal static class RemoteMediaCache
         {
             case Route.DiskHit: break;
             case Route.FreshThroughDisk:
-                path = await ScrolllerDiskCache.GetOrFetchAsync(url, null, CancellationToken.None).ConfigureAwait(false);
+                // This cache's own per-item cap goes along, so an oversized body is refused on
+                // its Content-Length before a byte is read or charged (as the plain path does).
+                path = await ScrolllerDiskCache.GetOrFetchAsync(url, null, MaxSingleEntryBytes, CancellationToken.None).ConfigureAwait(false);
                 break;
             default:
                 return null;
