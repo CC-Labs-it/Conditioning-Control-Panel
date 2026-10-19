@@ -509,6 +509,15 @@ namespace ConditioningControlPanel
 
         private void BtnAccountChip_Click(object sender, RoutedEventArgs e)
         {
+            // Signed out, the chip reads "Sign in" and does exactly that: the same dialog as the
+            // bottom bar's Sign in button. The Account page only says "sign in to unlock", so
+            // landing there first was a dead end.
+            if (!App.IsLoggedIn)
+            {
+                OpenUnifiedLoginDialog();
+                return;
+            }
+
             // Phase 2: the account surface is a real page. The chip opens the Settings door and
             // scrolls it to Account - no popup, no reparenting trick. FocusSection is deliberately
             // called after ShowTab: the section can only be measured once the view is visible.
