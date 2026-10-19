@@ -73,6 +73,7 @@ internal static class FypHostService
     public static void Launch()
     {
         if (_host != null) { _host.FocusWeb(); return; }
+        _remoteSentIds.Clear();   // a new page holds nothing yet
         try
         {
             // EMI Desk: the ring learns from every open, not just its own cards.
@@ -478,6 +479,11 @@ internal static class FypHostService
 
     private static int _remoteFetchInFlight;   // 0/1 via Interlocked
 
+    /// <summary>Remote ids this page has been handed since it opened (UI thread only). The
+    /// "fresh" in online-status counts ids NEW to the page: a spent or away batch is cached
+    /// files the page may already hold, and counting those as fresh kept it asking ~1/s.</summary>
+    private static readonly HashSet<string> _remoteSentIds = new(StringComparer.Ordinal);
+
     /// <summary>Subs with a probe in the air; a second request for the same name is dropped
     /// rather than queued (the page commits on Enter AND on blur).</summary>
     private static readonly HashSet<string> _probesInFlight = new(StringComparer.OrdinalIgnoreCase);
@@ -542,6 +548,10 @@ internal static class FypHostService
                 if (_host == null) return;
                 if (batch.Entries.Count > 0)
                     _host.Post(new { type = "assets-append", assets = batch.Entries });
+                // Fresh = ids this page has never been handed. A spent/away batch is cached
+                // files (ScrolllerReuse), often ones the page already holds: counting those
+                // as fresh reset the page's dry ladder and it asked again about once a second.
+                int newToPage = ScrolllerReuse.CountNewToPage(_remoteSentIds, batch.Entries.Select(e => e.Id));
                 // Status goes out either way so the page can clear its loading state or
                 // show "offline" instead of an eternal spinner.
                 //
@@ -554,8 +564,8 @@ internal static class FypHostService
                     type = "online-status",
                     ok = batch.Error == null,
                     error = batch.Error,
-                    added = batch.Entries.Count,
-                    fresh = batch.Entries.Count,
+                    added = newToPage,
+                    fresh = newToPage,
                     dry = batch.Dry,
                     poolTotal = batch.PoolTotal,
                 });
