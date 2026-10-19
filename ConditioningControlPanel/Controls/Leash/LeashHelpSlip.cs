@@ -479,11 +479,6 @@ public sealed class LeashHelpSlip : Border
 public static class LeashHelpButton
 {
     public static Button Create(LeashHelpEntry entry, Func<string> theirName, double size = 16)
-        => Create(() => new LeashHelpSlip(entry, theirName()), "leash-slip-help:" + entry.Id, size);
-
-    /// <summary>The same "?" for any paper slip (the online media meter's, 2026-10-19):
-    /// <paramref name="slip"/> builds the card each time it opens.</summary>
-    public static Button Create(Func<UIElement> slip, string tag, double size = 16)
     {
         var t = new TextBlock
         {
@@ -502,8 +497,8 @@ public static class LeashHelpButton
         b.Height = size;
         b.Focusable = false;
         b.VerticalAlignment = VerticalAlignment.Center;
-        b.Tag = tag;
-        var ctl = new Controller(b, slip);
+        b.Tag = "leash-slip-help:" + entry.Id;
+        var ctl = new Controller(b, entry, theirName);
         b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
         return b;
     }
@@ -551,7 +546,7 @@ public static class LeashHelpButton
             VerticalAlignment = VerticalAlignment.Center,
             Tag = "leash-slip-help:" + entry.Id,
         };
-        var ctl = new Controller(b, () => new LeashHelpSlip(entry, theirName()));
+        var ctl = new Controller(b, entry, theirName);
         b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
         return b;
     }
@@ -571,16 +566,18 @@ public static class LeashHelpButton
     private sealed class Controller
     {
         private readonly Button _b;
-        private readonly Func<UIElement> _slip;
+        private readonly LeashHelpEntry _entry;
+        private readonly Func<string> _name;
         private Popup? _popup;
         private bool _pinned;
         private UIElement? _root;
         private readonly DispatcherTimer _leave;
 
-        public Controller(Button b, Func<UIElement> slip)
+        public Controller(Button b, LeashHelpEntry entry, Func<string> name)
         {
             _b = b;
-            _slip = slip;
+            _entry = entry;
+            _name = name;
             _leave = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
             _leave.Tick += (_, _) => { _leave.Stop(); if (!_pinned && !Over()) Close(); };
             b.MouseEnter += (_, _) => { _leave.Stop(); Open(); };
@@ -603,7 +600,7 @@ public static class LeashHelpButton
             if (_popup is { IsOpen: true }) return;
             try
             {
-                var slip = _slip();
+                var slip = new LeashHelpSlip(_entry, _name());
                 var holder = new Border { Padding = new Thickness(0, 4, 8, 12), Background = Brushes.Transparent, Child = slip };
                 holder.MouseEnter += (_, _) => _leave.Stop();
                 holder.MouseLeave += (_, _) => _leave.Start();

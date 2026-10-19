@@ -121,39 +121,6 @@ internal static class OnlineMeterRules
         if (spent || percent <= 0) return 0;
         return Math.Clamp(Math.Max(percent, 3) / 100.0, 0, 0.999);
     }
-
-    // ---------------------------------------------------------------- the "?" help slip
-
-    /// <summary>A share or cache size for the help slip only (the meter itself stays a percent):
-    /// whole MB under 1 GB ("300 MB"), else GB with at most one decimal ("2 GB", "7.8 GB").</summary>
-    public static string FormatSize(long bytes, IFormatProvider? culture = null)
-    {
-        const double mb = 1024d * 1024, gb = mb * 1024;
-        culture ??= System.Globalization.CultureInfo.InvariantCulture;
-        if (bytes < 1024L * 1024 * 1024)
-            return string.Format(culture, "{0:0} MB", Math.Max(0, Math.Round(bytes / mb, MidpointRounding.AwayFromZero)));
-        return string.Format(culture, "{0:0.#} GB", Math.Round(bytes / gb, 1, MidpointRounding.AwayFromZero));
-    }
-
-    /// <summary>The help slip's title key.</summary>
-    public const string HelpTitleKey = "online_help_title";
-
-    /// <summary>The help slip's paragraphs, in order, from the LIVE figures (the server can retune
-    /// the shares, so the copy never hard-codes them): the shares, what counts, the device cache,
-    /// a used-up day, and the privacy line.</summary>
-    public static string[] HelpParagraphs(Func<string, string> loc, long free, long freeFirstDay, long basic, long prime,
-        long cacheCap, IFormatProvider? culture = null)
-    {
-        string F(string key, params object[] args) => string.Format(culture ?? System.Globalization.CultureInfo.InvariantCulture, loc(key), args);
-        return new[]
-        {
-            F("online_help_share", FormatSize(free, culture), FormatSize(freeFirstDay, culture), FormatSize(basic, culture), FormatSize(prime, culture)),
-            loc("online_help_counts"),
-            F("online_help_cache", FormatSize(cacheCap, culture)),
-            loc("online_help_spent"),
-            loc("online_help_local"),
-        };
-    }
 }
 
 /// <summary>
