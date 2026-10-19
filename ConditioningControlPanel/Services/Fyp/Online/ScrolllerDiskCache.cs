@@ -587,6 +587,8 @@ internal static class ScrolllerDiskCache
                 if (n <= 0) break;
                 got += n;
                 uncharged += n;
+                // Per-account share: each step goes to whoever is signed in when it arrives, so a
+                // download spanning a sign-in or sign-out splits (bounded by the cap above).
                 if (uncharged >= ChargeStepBytes) { ScrolllerAllowance.Charge(uncharged); uncharged = 0; }
                 if (got > cap) return null;
                 await writer.Stream.WriteAsync(buf.AsMemory(0, n), cts.Token).ConfigureAwait(false);
@@ -601,7 +603,7 @@ internal static class ScrolllerDiskCache
         }
         finally
         {
-            if (uncharged > 0) ScrolllerAllowance.Charge(uncharged);
+            if (uncharged > 0) ScrolllerAllowance.Charge(uncharged); // the account signed in now
         }
     }
 

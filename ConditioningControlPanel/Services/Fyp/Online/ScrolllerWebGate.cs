@@ -534,6 +534,8 @@ internal static class ScrolllerWebGate
             }
             await using var body = await res.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
             using var sink = new MemoryStream(expected is long n && n > 0 ? (int)n : 0);
+            // The share is per account: a body that spans a sign-in or sign-out charges each chunk to
+            // whoever is signed in when it arrives (one body at most MaxBodyBytes).
             var whole = await TeeCopyAsync(body, sink, writer, ScrolllerAllowance.Charge, expected, MaxBodyBytes,
                 budget.Token, FetchIdleTimeout).ConfigureAwait(false);
             // GetBuffer, not ToArray: the page is answered from this buffer, never a second copy.
@@ -618,13 +620,15 @@ internal static class ScrolllerWebGate
     private static void ChargeCapped(string url, long bytes, long? total)
     {
         var day = ScrolllerLedger.DayOf(DateTime.Now);
+        // Per account, like the share: another account replaying the same url pays its own day.
+        var key = ScrolllerAllowance.AccountKey + "|" + url;
         long due;
         lock (ChargedToday)
         {
             if (ChargedDay != day) { ChargedToday.Clear(); ChargedDay = day; }
-            ChargedToday.TryGetValue(url, out var already);
+            ChargedToday.TryGetValue(key, out var already);
             due = DedupedCharge(already, bytes, total);
-            if (due > 0) ChargedToday[url] = already + due;
+            if (due > 0) ChargedToday[key] = already + due;
         }
         if (due > 0) ScrolllerAllowance.Charge(due);
     }
