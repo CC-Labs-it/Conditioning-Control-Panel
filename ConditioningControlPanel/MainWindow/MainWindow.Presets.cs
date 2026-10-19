@@ -2125,7 +2125,13 @@ namespace ConditioningControlPanel
                 // Never while a remote controller holds the engine: START is refused then too.
                 if (Services.SessionClockRules.ResumeStartsEngine(_isRunning, App.RemoteControl?.ControllerConnected == true))
                     StartEngineFromUser();
-                else _sessionEngine.ResumeSession();
+                else
+                {
+                    // The user's own Resume (engine still on, e.g. after a remote panic): what
+                    // they stopped may come back, Trigger Mode included (PanicAftermath).
+                    Services.Safety.PanicAftermath.EndQuiet();
+                    _sessionEngine.ResumeSession();
+                }
                 if (TxtPauseIcon != null) TxtPauseIcon.Text = "⏸";
                 BtnPauseSession.ToolTip = Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", _sessionEngine.PauseCount);
             }

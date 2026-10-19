@@ -35,13 +35,35 @@ namespace ConditioningControlPanel.Services.Safety
 
         public static bool IsQuiet(long nowMs, long quietUntilMs) => quietUntilMs > 0 && nowMs < quietUntilMs;
 
-        /// <summary>A panic press, any rung, local or remote. Safe from any thread.</summary>
+        /// <summary>1 while no system path may restart the engine (the Lockdown dose keeper).</summary>
+        private static int _engineHeld;
+
+        /// <summary>A panic press, any rung but the Ctrl+K palette's, local or remote. Arms the quiet
+        /// AND holds engine restarts until the user's START. Safe from any thread.</summary>
         public static void ArmQuiet() => ArmQuiet(Environment.TickCount64);
 
-        public static void ArmQuiet(long nowMs) => Interlocked.Exchange(ref _quietUntilMs, QuietUntil(nowMs));
+        public static void ArmQuiet(long nowMs)
+        {
+            Interlocked.Exchange(ref _quietUntilMs, QuietUntil(nowMs));
+            Interlocked.Exchange(ref _engineHeld, 1);
+        }
 
         /// <summary>The user's own START: what they stopped may come back.</summary>
-        public static void EndQuiet() => Interlocked.Exchange(ref _quietUntilMs, 0);
+        public static void EndQuiet()
+        {
+            Interlocked.Exchange(ref _quietUntilMs, 0);
+            Interlocked.Exchange(ref _engineHeld, 0);
+        }
+
+        /// <summary>
+        /// TRUE from a panic until the user's START (no time limit): the Lockdown dose keeper must not
+        /// start the engine again on its own 4 s grace. Only the user undoes a panic.
+        /// </summary>
+        public static bool HoldsEngineRestart => Volatile.Read(ref _engineHeld) == 1;
+
+        /// <summary>The user switched Lockdown on: a fresh commitment, so the keeper may run the engine
+        /// again. Leaves the Trigger Mode quiet alone.</summary>
+        public static void ReleaseEngineHold() => Interlocked.Exchange(ref _engineHeld, 0);
 
         /// <summary>TRUE while Trigger Mode must stay silent (no bubble, no audio, no haptics).</summary>
         public static bool TriggersSilenced() => TriggersSilenced(Environment.TickCount64);

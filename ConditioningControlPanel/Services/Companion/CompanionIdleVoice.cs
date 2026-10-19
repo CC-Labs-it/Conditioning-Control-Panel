@@ -34,9 +34,23 @@ namespace ConditioningControlPanel.Services.Companion
         public static bool ShouldVoice(bool unprompted, bool engineRunning, bool speakIdleWhenEngineOff) =>
             !unprompted || engineRunning || speakIdleWhenEngineOff;
 
-        /// <summary><see cref="ShouldVoice"/> against the live app state (a prompted line never reads it).</summary>
+        /// <summary>
+        /// ccp-bugs #1464 stack review: the panic aftermath. An unprompted line never makes a sound
+        /// inside the post-panic quiet (Safety.PanicAftermath), opted in or not, and a session a
+        /// panic PAUSED does not count as running - a panic-paused session kept IsSessionRunning
+        /// true, and a remote panic never stops the engine. Prompted lines are untouched.
+        /// </summary>
+        public static bool ShouldVoice(bool unprompted, bool engineRunning, bool sessionRunning, bool sessionPaused,
+                                       bool speakIdleWhenEngineOff, bool panicQuiet) =>
+            !unprompted
+            || (!panicQuiet && ShouldVoice(unprompted, engineRunning || (sessionRunning && !sessionPaused), speakIdleWhenEngineOff));
+
+        /// <summary><see cref="ShouldVoice(bool, bool, bool, bool, bool, bool)"/> against the live app
+        /// state (a prompted line never reads it).</summary>
         public static bool ShouldVoiceNow(bool unprompted) =>
-            !unprompted || ShouldVoice(unprompted, Audio.EngineOffAudioLog.EngineRunning,
-                App.Settings?.Current?.CompanionSpeaksIdleWhenEngineOff == true);
+            !unprompted || ShouldVoice(unprompted, App.IsEngineRunning, App.IsSessionRunning,
+                SessionEngine.Active?.IsPaused == true,
+                App.Settings?.Current?.CompanionSpeaksIdleWhenEngineOff == true,
+                Safety.PanicAftermath.TriggersSilenced());
     }
 }

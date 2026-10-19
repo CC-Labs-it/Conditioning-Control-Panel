@@ -1374,6 +1374,18 @@ namespace ConditioningControlPanel
                 engine?.IsRunning == true, engine?.IsPaused == true, engine?.PauseCount ?? 0);
         }
 
+        /// <summary>TRUE while the running session still sits in the pause a LOCAL panic left: a
+        /// remote resume_session or start_session must not undo it (PanicAftermath).</summary>
+        internal bool LocalPanicHoldsSession
+        {
+            get
+            {
+                var engine = _sessionEngine;
+                return engine?.IsRunning == true && Services.Safety.PanicAftermath.RemoteResumeRefused(
+                    _panicPause, engine.CurrentSession, _sessionRun, engine.IsPaused, engine.PauseCount);
+            }
+        }
+
         /// <summary>FALSE when the resume was refused (a local panic paused this session), so the
         /// remote command reports it instead of a silent ok.</summary>
         internal bool ResumeSessionFromRemote()
@@ -1383,9 +1395,7 @@ namespace ConditioningControlPanel
                 // A remote (or voice) resume never undoes a local panic: ResumeSession would restart
                 // flashes, video and subliminals with the engine stopped. Only a local START or
                 // Resume picks that pause up; the controller is told (reason "panic").
-                var engine = _sessionEngine;
-                if (Services.Safety.PanicAftermath.RemoteResumeRefused(_panicPause, engine?.CurrentSession, _sessionRun,
-                        engine?.IsPaused == true, engine?.PauseCount ?? 0))
+                if (LocalPanicHoldsSession)
                 {
                     App.Logger?.Information("[RemoteControl] Resume refused: a local panic paused this session");
                     return false;

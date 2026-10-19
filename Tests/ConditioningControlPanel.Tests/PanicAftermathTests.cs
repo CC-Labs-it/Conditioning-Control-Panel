@@ -53,10 +53,12 @@ public class PanicAftermathTests
         // A trigger already queued (the legacy ladder never clears the queue): checked before the
         // haptic pulse, which fires even when muted.
         var show = Body(speech, "private void ShowTriggerBubbleImmediate(string trigger)");
-        int q = show.IndexOf("PanicAftermath.TriggersSilenced()) { _isGiggling = false; return; }", StringComparison.Ordinal);
+        const string Drop = "PanicAftermath.TriggersSilenced()) { _isGiggling = false; ProcessNextSpeech(); return; }";
+        int q = show.IndexOf(Drop, StringComparison.Ordinal);
         Assert.True(q > 0 && q < show.IndexOf("TriggerSubliminalPatternAsync", StringComparison.Ordinal));
         // ...and once more after the lead-in delay, before the trigger audio.
-        int lead = show.IndexOf("PanicAftermath.TriggersSilenced()) { _isGiggling = false; return; }", q + 1, StringComparison.Ordinal);
+        // The queue moves on (ProcessNextSpeech), so speech queued behind a dropped trigger is not stranded.
+        int lead = show.IndexOf(Drop, q + 1, StringComparison.Ordinal);
         Assert.True(lead > q && lead < show.IndexOf("PlayTriggerAudio(", StringComparison.Ordinal));
     }
 
@@ -64,11 +66,15 @@ public class PanicAftermathTests
     public void Both_panic_paths_arm_the_quiet_first()
     {
         var key = Body(Source("MainWindow", "MainWindow.xaml.cs"), "private void HandlePanicKeyPress()");
-        int emi = key.IndexOf("App.EmiDesk?.Fire(\"panicPressed\", null)", StringComparison.Ordinal);
+        int decide = key.IndexOf("PanicPolicy.Decide(", StringComparison.Ordinal);
         int arm = key.IndexOf("PanicAftermath.ArmQuiet();", StringComparison.Ordinal);
-        Assert.True(emi > 0 && arm > emi);
-        // Armed before any rung can return early into a game's own panic ladder.
-        Assert.True(arm < key.IndexOf("PanicPolicy.Decide(", StringComparison.Ordinal));
+        // Right after the rung is decided, so an Escape that only closed the Ctrl+K palette arms
+        // nothing, and before any rung can return early into a game's own panic ladder.
+        Assert.True(decide > 0 && arm > decide);
+        int skip = key.IndexOf("if (rung != Services.Safety.PanicPolicy.Rung.DismissSettingsPalette)", StringComparison.Ordinal);
+        Assert.True(skip > decide && skip < arm && arm - skip < 120, "the palette rung must skip the quiet");
+        Assert.True(arm < key.IndexOf("if (!Services.Safety.PanicPolicy.StopsSurfaces(rung)) return;", StringComparison.Ordinal));
+        Assert.Equal(1, key.Split("PanicAftermath.ArmQuiet(").Length - 1);
 
         // A remote panic arms it too (quiet is harmless; owner, 2026-10-19).
         var remote = Body(Source("MainWindow", "MainWindow.RemoteControl.cs"), "internal void TriggerPanicFromRemote()");
@@ -78,14 +84,17 @@ public class PanicAftermathTests
     [Fact]
     public void A_non_user_start_never_ends_the_quiet()
     {
-        // The scheduler, auto-start, remote and program session starts and the Lockdown keeper all
-        // go through StartEngine; only the user's own START ends the quiet.
+        // The scheduler, auto-start, remote session starts and the Lockdown keeper all go through
+        // StartEngine; only the user's own START (StartEngineFromUser, whose callers are pinned in
+        // SessionClockRulesTests) or the user's own Resume ends the quiet.
         var startStop = Source("MainWindow", "MainWindow.StartStop.cs");
         Assert.DoesNotContain("EndQuiet", Body(startStop, "public void StartEngine("));
         Assert.Contains("Services.Safety.PanicAftermath.EndQuiet();", Body(startStop, "internal void StartEngineFromUser()"));
+        Assert.Contains("Services.Safety.PanicAftermath.EndQuiet();",
+            Body(Source("MainWindow", "MainWindow.Presets.cs"), "private void BtnPauseSession_Click("));
 
         var root = Path.Combine(RepoRoot(), "ConditioningControlPanel");
-        int callers = 0;
+        var found = new System.Collections.Generic.SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
         {
             var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
@@ -95,11 +104,14 @@ public class PanicAftermathTests
             for (int at = text.IndexOf("PanicAftermath.EndQuiet()", StringComparison.Ordinal); at >= 0;
                  at = text.IndexOf("PanicAftermath.EndQuiet()", at + 1, StringComparison.Ordinal))
             {
-                Assert.Equal("MainWindow/MainWindow.StartStop.cs", rel);
-                callers++;
+                found[rel] = found.TryGetValue(rel, out var n) ? n + 1 : 1;
             }
         }
-        Assert.Equal(1, callers);
+        Assert.Equal(new System.Collections.Generic.SortedDictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["MainWindow/MainWindow.Presets.cs"] = 1,     // the user's Resume with the engine on
+            ["MainWindow/MainWindow.StartStop.cs"] = 1,   // StartEngineFromUser
+        }, found);
     }
 
     [Fact]
@@ -184,8 +196,10 @@ public class PanicAftermathTests
     [Fact]
     public void A_refused_remote_resume_is_reported_to_the_controller()
     {
-        var resume = Body(Source("MainWindow", "MainWindow.RemoteControl.cs"), "internal bool ResumeSessionFromRemote()");
-        int ask = resume.IndexOf("PanicAftermath.RemoteResumeRefused(", StringComparison.Ordinal);
+        var rcSrc = Source("MainWindow", "MainWindow.RemoteControl.cs");
+        Assert.Contains("PanicAftermath.RemoteResumeRefused(", Body(rcSrc, "internal bool LocalPanicHoldsSession"));
+        var resume = Body(rcSrc, "internal bool ResumeSessionFromRemote()");
+        int ask = resume.IndexOf("if (LocalPanicHoldsSession)", StringComparison.Ordinal);
         Assert.True(ask > 0 && ask < resume.IndexOf("_sessionEngine.ResumeSession();", StringComparison.Ordinal));
         Assert.Contains("return false;", resume);
 
@@ -195,6 +209,80 @@ public class PanicAftermathTests
         var arm = svc.Substring(c, svc.IndexOf("break;", c, StringComparison.Ordinal) - c);
         Assert.Contains("ResumeSessionFromRemote() == false", arm);
         Assert.Contains("ReportCommandRefused(action, \"panic\"", arm);
+    }
+
+    [Fact]
+    public void A_remote_start_session_cannot_undo_a_local_panic()
+    {
+        // start_session would stop the panic-paused run (completed:false, its XP lost) and restart
+        // everything. While the local panic holds the session it is refused and reported.
+        var svc = Source("Services", "RemoteControlService.cs");
+        int c = svc.IndexOf("case \"start_session\":", StringComparison.Ordinal);
+        Assert.True(c > 0);
+        int guard = svc.IndexOf("if (MainWindowRef?.LocalPanicHoldsSession == true)", c, StringComparison.Ordinal);
+        int refused = svc.IndexOf("ReportCommandRefused(action, \"panic\", \"Not allowed\");", c, StringComparison.Ordinal);
+        int start = svc.IndexOf("StartSessionFromRemote(", c, StringComparison.Ordinal);
+        Assert.True(guard > c && refused > guard && start > refused);
+
+        // The individual effect verbs stay as they are (owner, 2026-10-19).
+        int flash = svc.IndexOf("case \"start_flash\":", StringComparison.Ordinal);
+        if (flash > 0)
+            Assert.DoesNotContain("LocalPanicHoldsSession", svc.Substring(flash, svc.IndexOf("break;", flash, StringComparison.Ordinal) - flash));
+    }
+
+    // ---- unprompted companion lines and the Lockdown keeper -------------------------------------
+
+    [Theory]
+    // unprompted, engine, session, paused, optedIn, quiet => voiced
+    [InlineData(false, false, false, false, false, true, true)]   // a prompted line always speaks
+    [InlineData(true, true, false, false, false, false, true)]    // engine on
+    [InlineData(true, true, false, false, true, true, false)]     // the quiet holds it, opted in or not
+    [InlineData(true, false, true, false, false, false, true)]    // a running session
+    [InlineData(true, false, true, true, false, false, false)]    // a panic-PAUSED session is not running
+    [InlineData(true, false, true, true, true, false, true)]      // ...unless the player opted in
+    [InlineData(true, false, false, false, false, false, false)]  // engine off, no session
+    public void Idle_lines_stay_silent_after_a_panic(bool unprompted, bool engine, bool session, bool paused,
+                                                     bool optedIn, bool quiet, bool voiced)
+    {
+        Assert.Equal(voiced, ConditioningControlPanel.Services.Companion.CompanionIdleVoice.ShouldVoice(
+            unprompted, engine, session, paused, optedIn, quiet));
+    }
+
+    [Fact]
+    public void Idle_voice_reads_the_quiet_and_the_session_pause()
+    {
+        var src = Source("Services", "Companion", "CompanionIdleVoice.cs");
+        var now = src.Substring(src.IndexOf("public static bool ShouldVoiceNow(bool unprompted)", StringComparison.Ordinal)); // expression-bodied
+        Assert.Contains("SessionEngine.Active?.IsPaused == true", now);
+        Assert.Contains("Safety.PanicAftermath.TriggersSilenced()", now);
+    }
+
+    [Fact]
+    public void A_panic_holds_engine_restarts_until_the_users_start()
+    {
+        PanicAftermath.ArmQuiet(Panic);
+        Assert.True(PanicAftermath.HoldsEngineRestart);
+        // No time limit: long after the five-minute quiet, the keeper still stands down.
+        Assert.False(PanicAftermath.TriggersSilenced(Panic + 3_600_000));
+        Assert.True(PanicAftermath.HoldsEngineRestart);
+        PanicAftermath.ReleaseEngineHold();          // the user switched Lockdown on
+        Assert.False(PanicAftermath.HoldsEngineRestart);
+        PanicAftermath.ArmQuiet(Panic);
+        PanicAftermath.EndQuiet();                   // the user's START
+        Assert.False(PanicAftermath.HoldsEngineRestart);
+        Assert.False(PanicAftermath.TriggersSilenced(Panic + 1));
+    }
+
+    [Fact]
+    public void The_lockdown_keeper_never_restarts_the_engine_after_a_panic()
+    {
+        var keeper = Source("Services", "Haptics", "LockdownDoseKeeper.cs");
+        var enforce = Body(keeper, "private void Enforce(bool atActivation)");
+        int off = enforce.IndexOf("if (!App.IsEngineRunning)", StringComparison.Ordinal);
+        int hold = enforce.IndexOf("PanicAftermath.HoldsEngineRestart) { _engineIdle = 0; return; }", StringComparison.Ordinal);
+        int start = enforce.IndexOf("StartEngine(mw);", StringComparison.Ordinal);
+        Assert.True(off > 0 && hold > off && start > hold);
+        Assert.Contains("Services.Safety.PanicAftermath.ReleaseEngineHold();", keeper);
     }
 
     // ---- helpers ----------------------------------------------------------------------------------

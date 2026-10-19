@@ -1607,8 +1607,6 @@ namespace ConditioningControlPanel
             // HOLD with a five-minute silence tail, and it has to be armed even if something further
             // down this method throws - the whole point is that she says nothing after a panic.
             try { App.EmiDesk?.Fire("panicPressed", null); } catch { }
-            // Same five minutes for Trigger Mode: no trigger, sound or haptic pulse after a panic.
-            Services.Safety.PanicAftermath.ArmQuiet();
 
             // Circe's tab: the way out never costs. Armed up here because most of the ladder below
             // returns early into a game's own panic rung, and the hold has to cover those too.
@@ -1652,6 +1650,12 @@ namespace ConditioningControlPanel
                 lockCardOpen: lockCardOpen,
                 paletteClaimedPress: paletteClaimed,
                 overrideAll: Services.Safety.PanicPolicy.OverrideEnabled(App.Settings?.Current));
+
+            // Same five minutes as EMI for Trigger Mode and unprompted lines (PanicAftermath), armed
+            // before any rung can return into a game's own ladder. Not for an Escape that only
+            // closed the Ctrl+K palette: that press stops nothing, so it silences nothing either.
+            if (rung != Services.Safety.PanicPolicy.Rung.DismissSettingsPalette)
+                Services.Safety.PanicAftermath.ArmQuiet();
 
             if (rung == Services.Safety.PanicPolicy.Rung.DismissLockCard)
             {

@@ -191,7 +191,8 @@ namespace ConditioningControlPanel
                 s.PinkFilterEnabled = rng.Next(2) == 0;
                 App.Settings?.Save();
             }
-            if (!_isRunning) StartEngine();
+            // "Jump right in" is the user's own START (ends the post-panic quiet, PanicAftermath).
+            if (!_isRunning) StartEngineFromUser();
         }
 
         // ==============================================================================

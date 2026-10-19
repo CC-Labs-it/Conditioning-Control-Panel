@@ -1514,6 +1514,13 @@ namespace ConditioningControlPanel.Services
                             break;
 
                         case "start_session":
+                            // A new session would stop the run a LOCAL panic paused (completed:false, its XP
+                            // lost) and restart everything: refused, like resume_session (PanicAftermath).
+                            if (MainWindowRef?.LocalPanicHoldsSession == true)
+                            {
+                                ReportCommandRefused(action, "panic", "Not allowed");
+                                break;
+                            }
                             // Look up requested session by ID, fall back to generic
                             var sessionId = parameters?["session_id"]?.ToString();
                             Models.Session? session = null;
