@@ -14,11 +14,14 @@ public class ScrolllerAllowanceTests : IDisposable
 {
     private DateTime _now = new(2026, 10, 19, 14, 0, 0);
     private ScrolllerPlan _plan = ScrolllerPlan.Free;
+    private string? _account = "account-a";
 
     public ScrolllerAllowanceTests()
     {
         ScrolllerAllowance.ResetForTests();
         ScrolllerAllowance.LedgerPath = () => null;
+        ScrolllerAllowance.LegacyLedgerPath = () => null;
+        ScrolllerAllowance.AccountProvider = () => _account;
         ScrolllerAllowance.Now = () => _now;
         ScrolllerAllowance.PlanProvider = () => _plan;
     }
@@ -27,14 +30,17 @@ public class ScrolllerAllowanceTests : IDisposable
     {
         ScrolllerAllowance.ResetForTests();
         ScrolllerAllowance.Now = () => DateTime.Now;
+        ScrolllerAllowance.AccountProvider = () => null;
     }
 
     [Fact]
-    public void Defaults_are_300_mb_2_gb_6_gb()
+    public void Defaults_are_300_mb_4096_mb_7987_mb()
     {
+        // owner 2026-10-19: Basic doubled (2048 -> 4096), Prime +30 % (6144 -> 7987)
         Assert.Equal(300 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Free));
-        Assert.Equal(2048 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Basic));
-        Assert.Equal(6144 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Prime));
+        Assert.Equal(500 * ScrolllerAllowance.MB, ScrolllerAllowance.DefaultFreeFirstDayBytes);
+        Assert.Equal(4096 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Basic));
+        Assert.Equal(7987 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Prime));
     }
 
     [Fact]
@@ -65,7 +71,7 @@ public class ScrolllerAllowanceTests : IDisposable
     public void Paid_plans_never_drop_to_the_first_day_figure()
     {
         _plan = ScrolllerPlan.Basic;
-        Assert.Equal(2048 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
+        Assert.Equal(4096 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
     }
 
     [Fact]
@@ -85,7 +91,7 @@ public class ScrolllerAllowanceTests : IDisposable
         Assert.Equal(100, ScrolllerAllowance.Percent);
         _plan = ScrolllerPlan.Prime;
         Assert.False(ScrolllerAllowance.Spent);
-        Assert.Equal(4, ScrolllerAllowance.Percent);
+        Assert.Equal(3, ScrolllerAllowance.Percent);   // 300 of 7987 MB
     }
 
     [Theory]
@@ -194,7 +200,7 @@ public class ScrolllerAllowanceTests : IDisposable
     {
         var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-allow-" + Guid.NewGuid().ToString("N") + ".json");
         System.IO.File.WriteAllText(path, "{\"day\":\"2026-10-19\",\"used\":" + 400 * ScrolllerAllowance.MB + ",\"first\":\"2026-10-18\"}");
-        ScrolllerAllowance.LedgerPath = () => path;
+        ScrolllerAllowance.LegacyLedgerPath = () => path;   // an older build's ledger, adopted at load
         var fired = 0;
         EventHandler h = (_, _) => fired++;
         ScrolllerAllowance.SpentReached += h;

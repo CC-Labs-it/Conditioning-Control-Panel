@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
@@ -17,7 +21,7 @@ internal sealed class ScrolllerLedger
     public string Day { get; private set; }
     public long Used { get; private set; }
 
-    /// <summary>The day this install first fetched Scrolller media; null until it does.</summary>
+    /// <summary>The day this account first fetched Scrolller media on this PC; null until it does.</summary>
     public string? FirstDay { get; private set; }
 
     public ScrolllerLedger(string day, long used, string? firstDay = null)
@@ -71,27 +75,41 @@ internal sealed class ScrolllerLedger
 /// clips and posters alike. A replay from the device cache (<see cref="ScrolllerDiskCache"/>)
 /// costs nothing. The meter is shown as a percentage only, never as megabytes or a file count.
 ///
-/// The ledger lives on this machine only (<c>scrolller-today.json</c> under the user data folder)
-/// and is never sent anywhere: the no-tracking promise holds. The limits come from the server's
-/// switch (<c>daily_mb</c> in <c>/config/scrolller</c>) so they can be tuned without a release;
-/// until it answers, the defaults below apply.
+/// The ledger is PER ACCOUNT (owner, 2026-10-19: a second account on the same PC inherited the
+/// first one's usage). One book (<c>scrolller-accounts.json</c> under the user data folder) holds a
+/// ledger per account key: the first 16 hex of the SHA-256 of <see cref="App.UnifiedUserId"/> (the
+/// id itself never lands on disk), or <see cref="AnonymousKey"/> while signed out. It lives on this
+/// machine only and is never sent anywhere: the no-tracking promise holds. The machine-wide ledger
+/// of earlier builds (<c>scrolller-today.json</c>) is adopted ONCE by whoever is signed in at the
+/// first load, then deleted. The limits come from the server's switch (<c>daily_mb</c> in
+/// <c>/config/scrolller</c>) so they can be tuned without a release; until it answers, the
+/// defaults below apply.
 ///
-/// A free install's FIRST day of online media gets <see cref="DefaultFreeFirstDayBytes"/> instead
-/// (owner, 2026-10-19: room to fill the device cache, then the ordinary share from day two). The
-/// cache size, the reuse mix and these figures are ours to set: never a user setting.
+/// A free account's FIRST day of online media on this PC gets <see cref="DefaultFreeFirstDayBytes"/>
+/// instead (owner, 2026-10-19: room to fill the device cache, then the ordinary share from day two).
+/// The cache size, the reuse mix and these figures are ours to set: never a user setting.
 /// </summary>
 internal static class ScrolllerAllowance
 {
     public const long MB = 1024L * 1024;
     public const long DefaultFreeBytes = 300 * MB;
     public const long DefaultFreeFirstDayBytes = 500 * MB;
-    public const long DefaultBasicBytes = 2048 * MB;
-    public const long DefaultPrimeBytes = 6144 * MB;
+    public const long DefaultBasicBytes = 4096 * MB;   // owner 2026-10-19: Basic doubled
+    public const long DefaultPrimeBytes = 7987 * MB;   // owner 2026-10-19: Prime +30 %
+
+    /// <summary>The book's key for signed-out use.</summary>
+    internal const string AnonymousKey = "anon";
 
     private static long _free = DefaultFreeBytes, _freeFirst = DefaultFreeFirstDayBytes, _basic = DefaultBasicBytes, _prime = DefaultPrimeBytes;
     private static readonly object Gate = new();
-    private static ScrolllerLedger? _ledger;
-    private static string? _spentAnnouncedDay; // the day the SpentReached edge fired for
+    private static Dictionary<string, ScrolllerLedger>? _book; // every account's ledger, loaded once
+    private static bool _legacyAdopted;        // the old machine-wide ledger has found its owner
+    private static bool _legacyGone;           // ...and its file is deleted
+    private static ScrolllerLedger? _ledger;   // the current account's entry in _book
+    private static string? _ledgerKey;         // whose it is
+    private static string? _keyId;             // the raw id _keyHash was made from (in memory only)
+    private static string _keyHash = AnonymousKey;
+    private static readonly Dictionary<string, string> SpentAnnounced = new(); // account key -> the day SpentReached fired for
     private static bool? _wasSpent;            // Spent at the last look; null = no look yet (startup is silent)
     private static string? _seenDay;           // what the last look saw, so a midnight, plan or limit
     private static ScrolllerPlan? _seenPlan;   // change raises Changed even when nothing is charged
@@ -116,12 +134,31 @@ internal static class ScrolllerAllowance
     /// <summary>The local clock. Replaceable by tests.</summary>
     internal static Func<DateTime> Now = () => DateTime.Now;
 
-    /// <summary>Where the ledger is kept. Replaceable by tests; null = keep it in memory only.</summary>
+    /// <summary>The signed-in account's id, null or empty when signed out. Replaceable by tests.</summary>
+    internal static Func<string?> AccountProvider = () => App.UnifiedUserId;
+
+    /// <summary>Where the per-account book is kept. Replaceable by tests; null = memory only.</summary>
     internal static Func<string?> LedgerPath = () =>
+    {
+        try { return Path.Combine(App.UserDataPath, "scrolller-accounts.json"); }
+        catch { return null; }
+    };
+
+    /// <summary>The machine-wide ledger of earlier builds, adopted once. Replaceable by tests.</summary>
+    internal static Func<string?> LegacyLedgerPath = () =>
     {
         try { return Path.Combine(App.UserDataPath, "scrolller-today.json"); }
         catch { return null; }
     };
+
+    /// <summary>The book key for an account id: the first 16 hex of its SHA-256 (FriendsFeedFile's
+    /// pattern, so the id never becomes file content), <see cref="AnonymousKey"/> when signed out.</summary>
+    internal static string KeyFor(string? accountId)
+    {
+        if (string.IsNullOrEmpty(accountId)) return AnonymousKey;
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(accountId));
+        return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
+    }
 
     /// <summary>Raised (any thread) after every charge and every limit, plan or day change. The day
     /// and plan are watched by a timer (local midnight, else every <see cref="TickPeriod"/>) that
@@ -154,7 +191,7 @@ internal static class ScrolllerAllowance
         _ => Volatile.Read(ref _free),
     };
 
-    /// <summary>Today's share for this account. A free install's FIRST day of online media gets
+    /// <summary>Today's share for this account. A free account's FIRST day of online media gets
     /// max(free, free_first_day): the bigger first-day share, never less than the ordinary one
     /// (a server figure below the daily one is ignored). Paid plans always get their own figure.</summary>
     public static long LimitBytes
@@ -172,7 +209,7 @@ internal static class ScrolllerAllowance
         return Math.Max(DailyBytes(ScrolllerPlan.Free), Volatile.Read(ref _freeFirst));
     }
 
-    /// <summary>True on this install's first day of online media.</summary>
+    /// <summary>True on this account's first day of online media on this PC.</summary>
     public static bool IsFirstDay
     {
         get { lock (Gate) { var l = Ledger(); l.Roll(Now()); return l.IsFirstDay; } }
@@ -258,8 +295,9 @@ internal static class ScrolllerAllowance
         var spent = l.Used >= limit;
         var was = _wasSpent ?? spent;
         _wasSpent = spent;
-        crossed = spent && !was && _spentAnnouncedDay != l.Day;
-        if (crossed) _spentAnnouncedDay = l.Day;
+        var key = _ledgerKey ?? AnonymousKey;
+        crossed = spent && !was && !(SpentAnnounced.TryGetValue(key, out var announced) && announced == l.Day);
+        if (crossed) SpentAnnounced[key] = l.Day;
         _seenDay = l.Day;
         _seenPlan = plan;
         _seenLimit = limit;
@@ -321,7 +359,9 @@ internal static class ScrolllerAllowance
         }
         lock (Gate)
         {
-            _ledger = null; _spentAnnouncedDay = null;
+            _book = null; _legacyAdopted = false; _legacyGone = false;
+            _ledger = null; _ledgerKey = null; _keyId = null; _keyHash = AnonymousKey;
+            SpentAnnounced.Clear();
             _wasSpent = null; _seenDay = null; _seenPlan = null; _seenLimit = -1;
         }
         Volatile.Write(ref _free, DefaultFreeBytes);
@@ -339,26 +379,132 @@ internal static class ScrolllerAllowance
         return ScrolllerPlan.Free;
     }
 
-    private static ScrolllerLedger Ledger()
+    /// <summary>The signed-in account's id, flips to the anonymous key on any failure.</summary>
+    private static string? AccountId()
     {
-        if (_ledger != null) return _ledger;
-        _ledger = Load() ?? new ScrolllerLedger(ScrolllerLedger.DayOf(Now()), 0);
-        return _ledger;
+        try { return AccountProvider(); } catch { return null; }
     }
 
-    private static ScrolllerLedger? Load()
+    /// <summary>Under <see cref="Gate"/>: the book key of whoever is signed in now. The hash is
+    /// only recomputed when the id moves.</summary>
+    private static string CurrentKey()
     {
+        var id = AccountId();
+        if (!string.Equals(id, _keyId, StringComparison.Ordinal))
+        {
+            _keyId = id;
+            _keyHash = KeyFor(id);
+        }
+        return _keyHash;
+    }
+
+    /// <summary>Under <see cref="Gate"/>: the signed-in account's ledger. When the account moved
+    /// since the last call, the Spent edge starts over silently (as at startup), so switching to an
+    /// account whose day is already spent never fires the notice.</summary>
+    private static ScrolllerLedger Ledger()
+    {
+        var key = CurrentKey();
+        if (_ledger != null && _ledgerKey == key) return _ledger;
+        var book = Book(key);
+        if (!book.TryGetValue(key, out var l))
+        {
+            l = new ScrolllerLedger(ScrolllerLedger.DayOf(Now()), 0);
+            book[key] = l;
+        }
+        if (_ledgerKey != null && _ledgerKey != key)
+        {
+            _wasSpent = null; _seenDay = null; _seenPlan = null; _seenLimit = -1;
+        }
+        _ledger = l;
+        _ledgerKey = key;
+        return l;
+    }
+
+    /// <summary>Under <see cref="Gate"/>: the book, read from disk once. The first read adopts the
+    /// old machine-wide ledger for <paramref name="firstKey"/> (whoever is signed in then), once:
+    /// the book records the adoption and the old file is deleted after the next save (app exit
+    /// always saves; only a crash before the first save leaves it for the next launch).</summary>
+    private static Dictionary<string, ScrolllerLedger> Book(string firstKey)
+    {
+        if (_book != null) return _book;
+        var book = new Dictionary<string, ScrolllerLedger>(StringComparer.Ordinal);
         try
         {
             var path = LedgerPath();
-            if (path == null || !File.Exists(path)) return null;
-            var o = JObject.Parse(File.ReadAllText(path));
+            if (path != null && File.Exists(path))
+            {
+                var o = JObject.Parse(File.ReadAllText(path));
+                _legacyAdopted = (bool?)o["legacy_adopted"] ?? false;
+                if (o["accounts"] is JObject accounts)
+                    foreach (var p in accounts.Properties())
+                        if (p.Value is JObject e && Parse(e) is ScrolllerLedger l) book[p.Name] = l;
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: book unreadable: {E}", ex.Message); }
+
+        if (!_legacyAdopted)
+        {
+            try
+            {
+                var legacy = LegacyLedgerPath();
+                if (legacy != null && File.Exists(legacy)
+                    && Parse(JObject.Parse(File.ReadAllText(legacy))) is ScrolllerLedger old
+                    && !book.ContainsKey(firstKey))
+                {
+                    book[firstKey] = old;
+                    App.Logger?.Information("ScrolllerAllowance: adopted the machine-wide ledger for the {Who} account",
+                        firstKey == AnonymousKey ? "signed-out" : "signed-in");
+                }
+            }
+            catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: old ledger unreadable: {E}", ex.Message); }
+            // Decided once, file or not: it never moves to another account. Written with the next
+            // save (a charge, an account switch, app exit), never by a mere read.
+            _legacyAdopted = true;
+        }
+        _book = book;
+        return book;
+    }
+
+    private static ScrolllerLedger? Parse(JObject o)
+    {
+        try
+        {
             var day = (string?)o["day"];
             var used = (long?)o["used"] ?? 0;
             var first = (string?)o["first"];
             return string.IsNullOrEmpty(day) ? null : new ScrolllerLedger(day!, used, string.IsNullOrEmpty(first) ? null : first);
         }
         catch { return null; }
+    }
+
+    /// <summary>Hooks <see cref="App.UnifiedIdentityChanged"/> (sign-in, sign-out, account switch,
+    /// a session the server refused). Idempotent; called once at startup. Never throws.</summary>
+    internal static void WatchAccount()
+    {
+        if (Interlocked.Exchange(ref _watchingAccount, 1) != 0) return;
+        try { App.UnifiedIdentityChanged += (_, _) => AccountChanged(); }
+        catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: account watch failed: {E}", ex.Message); }
+    }
+
+    private static int _watchingAccount;
+
+    /// <summary>The signed-in account moved: the meter switches to the new account's ledger (or
+    /// the anonymous one), the book is written off the calling thread so the old account's day is
+    /// on disk, and <see cref="Changed"/> repaints the meter. Never throws.</summary>
+    internal static void AccountChanged()
+    {
+        bool loaded;
+        lock (Gate)
+        {
+            loaded = _book != null;
+            if (loaded) Look(out _); // a fresh baseline for the new account: silent
+        }
+        if (loaded)
+        {
+            try { Task.Run(Flush); }
+            catch { ScheduleSave(); }
+        }
+        Raise(_changed);
     }
 
     private static void ScheduleSave()
@@ -394,14 +540,26 @@ internal static class ScrolllerAllowance
             lock (FileLock) // Flush and the debounce timer never share the .tmp
             {
                 string json;
+                bool dropLegacy;
                 lock (Gate)
                 {
-                    if (_ledger == null) return;
-                    json = new JObject { ["day"] = _ledger.Day, ["used"] = _ledger.Used, ["first"] = _ledger.FirstDay }.ToString(Newtonsoft.Json.Formatting.None);
+                    if (_book == null) return;
+                    var accounts = new JObject();
+                    foreach (var (key, l) in _book)
+                        accounts[key] = new JObject { ["day"] = l.Day, ["used"] = l.Used, ["first"] = l.FirstDay };
+                    json = new JObject { ["v"] = 1, ["legacy_adopted"] = _legacyAdopted, ["accounts"] = accounts }
+                        .ToString(Newtonsoft.Json.Formatting.None);
+                    dropLegacy = _legacyAdopted && !_legacyGone;
                 }
                 var tmp = path + ".tmp";
                 File.WriteAllText(tmp, json);
                 File.Move(tmp, path, overwrite: true);
+                if (dropLegacy)
+                {
+                    var legacy = LegacyLedgerPath();
+                    if (legacy != null && File.Exists(legacy)) File.Delete(legacy);
+                    lock (Gate) _legacyGone = true;
+                }
             }
         }
         catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: save failed: {E}", ex.Message); }
