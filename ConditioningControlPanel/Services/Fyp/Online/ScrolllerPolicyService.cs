@@ -127,12 +127,15 @@ internal static class ScrolllerPolicyService
     /// url: always yes. A Scrolller url: only while the switch is on, today's share is not used up
     /// (<see cref="ScrolllerAllowance.Spent"/>) and the user is not away
     /// (<see cref="ScrolllerPolicy.Away"/>). A cached copy (<see cref="ScrolllerDiskCache"/>) needs
-    /// only the switch on.
+    /// only the switch on. While the share's book file cannot be read yet (locked at launch) no
+    /// fresh fetch either: the stand-in ledger does not know today's usage or first day, so it
+    /// could hand a spent account a fresh share. Cached copies keep playing; it is a short window.
     /// </summary>
     internal static bool MayFetchFresh(string? url)
     {
         if (!global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url)) return true;
-        return FreshRule(ScrolllerPolicy.Enabled, ScrolllerAllowance.Spent, ScrolllerPolicy.Away);
+        var spent = ScrolllerAllowance.Spent;
+        return FreshRule(ScrolllerPolicy.Enabled, spent || !ScrolllerAllowance.BookSettled, ScrolllerPolicy.Away);
     }
 
     /// <summary>The rule behind <see cref="MayFetchFresh"/>, pure.</summary>

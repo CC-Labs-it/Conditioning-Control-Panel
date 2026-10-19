@@ -206,6 +206,25 @@ public class ScrolllerAllowanceAccountTests : IDisposable
     }
 
     [Fact]
+    public void No_fresh_fetch_while_the_book_is_locked()
+    {
+        // The stand-in knows neither today's usage nor the first day: it must not hand out a share.
+        File.WriteAllText(BookPath, "{\"v\":1,\"legacy_adopted\":true,\"accounts\":{\""
+            + ScrolllerAllowance.KeyFor("account-a") + "\":{\"day\":\"2026-10-19\",\"used\":" + 100 * MB + ",\"first\":\"2026-10-01\"}}}");
+        const string fresh = "https://images.scrolller.com/a.jpg";
+        using (new FileStream(BookPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Rig(onDisk: true);
+            Assert.False(ScrolllerAllowance.BookSettled);
+            Assert.False(ScrolllerPolicyService.MayFetchFresh(fresh));
+            Assert.True(ScrolllerPolicyService.MayFetchFresh("https://cclabs.app/a.jpg"));
+            Assert.False(ScrolllerAllowance.Spent);   // the meter does not claim "used up" meanwhile
+        }
+        Assert.True(ScrolllerAllowance.BookSettled);
+        Assert.True(ScrolllerPolicyService.MayFetchFresh(fresh));   // read: 100 of 300 MB, share left
+    }
+
+    [Fact]
     public void A_book_that_does_not_parse_is_kept_aside_before_any_save()
     {
         File.WriteAllText(BookPath, "{not json");

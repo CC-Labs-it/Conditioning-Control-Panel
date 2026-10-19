@@ -543,6 +543,17 @@ internal static class ScrolllerAllowance
         }
     }
 
+    /// <summary>False while the book file could not be read yet and a stand-in counts (its usage
+    /// and first day are unknown). Looks (and retries the read when due). Never throws.</summary>
+    internal static bool BookSettled
+    {
+        get
+        {
+            try { lock (Gate) { Ledger(); return !_bookUnread; } }
+            catch { return false; }
+        }
+    }
+
     /// <summary>The book key of whoever is signed in now (for per-account dedupe elsewhere).</summary>
     internal static string AccountKey
     {
