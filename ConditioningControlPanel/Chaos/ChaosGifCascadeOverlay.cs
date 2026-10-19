@@ -340,6 +340,8 @@ public sealed class ChaosGifCascadeOverlay : Window
     {
         if (!_spawning) return;
         if (_fallers.Count >= MAX_CONCURRENT) return;   // never let clips pile up into an OOM
+        // Out here so a spawn that throws can give back the animated slot it took (catch below).
+        var faller = new Faller();
         try
         {
             string path = _files[_rng.Next(_files.Count)];
@@ -350,7 +352,6 @@ public sealed class ChaosGifCascadeOverlay : Window
             // holds the clip on disk, so within the animated budget a remote GIF plays as that
             // clip (FlashClipPlayer, the bubbles' path) instead of falling as its still poster.
             bool remote = Services.FlashService.IsRemotePath(path);
-            var faller = new Faller();
             // A gif/animated-webp only animates while the animated budget has room and it isn't
             // huge; otherwise it falls as a still (BitmapImage decodes the first frame).
             bool animate = remote && _animatedAlive < MAX_ANIMATED && Services.MotionFx.Level != Models.MotionLevel.Off;
@@ -366,6 +367,7 @@ public sealed class ChaosGifCascadeOverlay : Window
             }
             if (animate && remote)
             {
+                faller.Animated = true;   // set with the count, so the catch can give it back
                 _animatedAlive++;
                 int size = (int)_gifSize;
                 string url = path;
@@ -397,6 +399,7 @@ public sealed class ChaosGifCascadeOverlay : Window
             }
             else if (animate)
             {
+                faller.Animated = true;   // set with the count, so the catch can give it back
                 _animatedAlive++;
                 // GIFs AND animated webps loop via AnimatedWebp's pre-decoded (off-thread,
                 // display-size, frozen) frame animation. Was XamlAnimatedGif for GIFs, whose frame
@@ -470,7 +473,18 @@ public sealed class ChaosGifCascadeOverlay : Window
             faller.Animated = animate; faller.Move = move; faller.Grow = grow;
             _fallers.Add(faller);
         }
-        catch (Exception ex) { App.Logger?.Debug("GifCascade spawn: {E}", ex.Message); }
+        catch (Exception ex)
+        {
+            App.Logger?.Debug("GifCascade spawn: {E}", ex.Message);
+            // Never added: no teardown will ever release its slot, and Gone stops a late clip start.
+            if (!_fallers.Contains(faller))
+            {
+                faller.Gone = true;
+                try { faller.Clip?.Dispose(); } catch { }
+                faller.Clip = null;
+                if (faller.Animated) { faller.Animated = false; _animatedAlive = Math.Max(0, _animatedAlive - 1); }
+            }
+        }
     }
 
     private void OnRender(object? sender, EventArgs e)

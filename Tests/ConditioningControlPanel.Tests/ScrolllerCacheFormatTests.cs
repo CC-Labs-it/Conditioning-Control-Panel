@@ -347,4 +347,17 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
         Assert.Contains("FlashClipPlayer.Start(data.ClipPath", src);
         Assert.Contains("f.Clip?.Dispose()", src);
     }
+
+    [Fact]
+    public void The_gif_cascade_never_leaks_an_animated_slot()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Chaos", "ChaosGifCascadeOverlay.cs"));
+        // A refused or failed clip (Start null when the shared slots are full) falls as a still
+        // and gives its slot back, once: no retry.
+        Assert.Contains("finally { ReleaseSlotIfStill(faller); }", src);
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(src, @"FlashClipPlayer\.Start\(").Count);
+        // The count and the flag move together, and a spawn that throws gives the slot back.
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(src, @"faller\.Animated = true;[^\n]*\n\s*_animatedAlive\+\+;").Count);
+        Assert.Contains("if (faller.Animated) { faller.Animated = false; _animatedAlive = Math.Max(0, _animatedAlive - 1); }", src);
+    }
 }
