@@ -5,9 +5,20 @@ using ConditioningControlPanel.Services.Chaster;
 
 namespace ConditioningControlPanel.Services.Billboard.Providers
 {
-    /// <summary>What the server last read off the lock for this month (the ladder verify the
-    /// Chaster service already runs after a push lands). Null when it has not answered yet.</summary>
-    public sealed record RaffleReading(int DaysCounted, long Seconds);
+    /// <summary>What the server last read off the lock for this month. <see cref="Days"/> are the
+    /// real counted UTC days off the raffle card; null when only the verify's count is known, and
+    /// then the calendar lights no day rather than guess which ones.</summary>
+    public sealed record RaffleReading(int DaysCounted, long Seconds, IReadOnlyList<int>? Days = null)
+    {
+        /// <summary>The one source both surfaces read: the raffle card (<c>/chaster/raffle/me</c>,
+        /// real days) when it is this UTC month's, else the last verify's count, else null.</summary>
+        public static RaffleReading? From(RaffleCard? card, LadderVerify? verify, DateTime nowUtc)
+        {
+            if (ChasterRaffle.CountedThisMonth(card, nowUtc) is { } days)
+                return new RaffleReading(days.Count, card!.TotalSeconds, days);
+            return verify is { Ok: true } ? new RaffleReading(verify.DaysCounted, verify.Seconds) : null;
+        }
+    }
 
     /// <summary>
     /// EVENT, the pure half: Locktober. Only while Chaster is linked and the UTC month is October
@@ -30,11 +41,11 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
 
             if (reading == null)
                 return Card(eyebrow, loc("billboard_card_locktober_title"), loc("billboard_card_locktober_unread_line"),
-                    action, Art(0, needDays, daysInMonth, today));
+                    action, Art(0, 0, needDays, daysInMonth, today));
 
             int counted = Math.Clamp(reading.DaysCounted, 0, daysInMonth);
             long seconds = Math.Max(0, reading.Seconds);
-            var art = Art(counted, needDays, daysInMonth, today);
+            var art = Art(counted, reading.Days == null ? 0 : ChasterRaffle.DayMask(reading.Days), needDays, daysInMonth, today);
 
             if (counted >= needDays && seconds >= needSeconds)
                 return Card(eyebrow, loc("billboard_card_locktober_in_title"),
@@ -64,15 +75,18 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
             return (minutes / 60).ToString(CultureInfo.InvariantCulture) + ":" + (minutes % 60).ToString("00", CultureInfo.InvariantCulture);
         }
 
-        private static IReadOnlyDictionary<string, int> Art(int counted, int need, int days, int today) =>
-            new Dictionary<string, int> { ["counted"] = counted, ["need"] = need, ["days"] = days, ["today"] = today };
+        /// <summary>The calendar's payload. <c>mask</c> is the lit days (bit 0 = day 1): the real
+        /// counted dates, never days 1..counted. 0 with a count = dates unknown, bar only.</summary>
+        private static IReadOnlyDictionary<string, int> Art(int counted, int mask, int need, int days, int today) =>
+            new Dictionary<string, int> { ["counted"] = counted, ["mask"] = mask, ["need"] = need, ["days"] = days, ["today"] = today };
 
         private static BillboardCardSpec Card(string eyebrow, string title, string line, BillboardAction action, object art) =>
             new(CardLocktober, BillboardCardKind.Event, 0, eyebrow, title, line, CardHues.Event, CardArt.Calendar, art, action);
     }
 
-    /// <summary>EVENT, the adapter: <see cref="ChasterService.IsLinked"/> (a cached token read) and
-    /// <see cref="ChasterService.LastLadderVerify"/> (kept in memory by the service).</summary>
+    /// <summary>EVENT, the adapter: <see cref="ChasterService.IsLinked"/> (a cached token read),
+    /// <see cref="ChasterService.LastRaffleCard"/> and <see cref="ChasterService.LastLadderVerify"/>
+    /// (kept in memory by the service).</summary>
     public sealed class EventProvider : BillboardProviderBase
     {
         private bool _hooked;
@@ -83,9 +97,8 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
         {
             var chaster = App.Chaster;
             if (chaster == null) return Array.Empty<BillboardCardSpec>();
-            if (!_hooked) { chaster.LinkChanged += RaiseChanged; _hooked = true; }
-            var verify = chaster.LastLadderVerify;
-            var reading = verify is { Ok: true } ? new RaffleReading(verify.DaysCounted, verify.Seconds) : null;
+            if (!_hooked) { chaster.LinkChanged += RaiseChanged; chaster.RaffleChanged += RaiseChanged; _hooked = true; }
+            var reading = RaffleReading.From(chaster.LastRaffleCard, chaster.LastLadderVerify, context.NowUtc);
             var card = EventCards.Locktober(chaster.IsLinked, context.NowUtc, reading, Loc);
             return card == null ? Array.Empty<BillboardCardSpec>() : new[] { card };
         });

@@ -384,6 +384,42 @@ public class ChasterTabRenderTests
     }
 
     [Fact]
+    public void The_sheet_dots_the_served_days_the_raffle_counted_and_says_what_the_dot_means()
+    {
+        // Perly's sheet: locked since the 2nd, today the 19th; the raffle counted the 2nd, 3rd,
+        // 5th and today. Every served day is crossed; only the counted ones carry the dot.
+        var today = new DateTime(2026, 10, 19, 17, 0, 0);
+        var span = (new DateTime(2026, 10, 2, 12, 31, 0), new DateTime(2026, 11, 1, 12, 31, 0));
+        var card = new RaffleCard("2026-10", 31, 19, new[] { 2, 3, 5, 19 }, 3600, 25, 31 * 3600, false, false, null);
+
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var tab = new ChasterTabView();
+            tab.LinkedPanel.Visibility = Visibility.Visible;
+            tab.BuildCalendar(span, today);
+            Realize(tab, 1000, 1400);
+            Assert.Equal(Visibility.Collapsed, tab.CalendarRaffleKey.Visibility);
+            Assert.DoesNotContain(Descendants(tab.Calendar), d => d is Ellipse { Tag: ChasterTabView.RaffleDotTag });
+
+            var first = tab.Calendar.Children[0];
+            tab.ShowRaffleCard(card);
+            tab.UpdateLayout();
+            Assert.Same(first, tab.Calendar.Children[0]); // dotted in place, never redrawn
+            var squares = tab.Calendar.Children.OfType<Border>().ToList();
+            var dotted = squares.Where(sq => Descendants(sq).Any(d => d is Ellipse { Tag: ChasterTabView.RaffleDotTag })).ToList();
+            Assert.Equal(new[] { "2", "3", "5", "19" }, dotted.Select(sq => Descendants(sq).OfType<TextBlock>().First().Text));
+            Assert.Equal(17, squares.Count(sq => Descendants(sq).OfType<Canvas>().Any(c => c.Children.OfType<Ellipse>().Any())));
+            Assert.Equal(Visibility.Visible, tab.CalendarRaffleKey.Visibility);
+            Assert.True(tab.Sheet.ActualWidth < 420, $"the sheet is {tab.Sheet.ActualWidth} wide with the key line");
+
+            // a card from another month dots its own dates only, and the key line stays away
+            tab.ShowRaffleCard(card with { Month = "2026-09" });
+            Assert.Equal(Visibility.Collapsed, tab.CalendarRaffleKey.Visibility);
+            Assert.DoesNotContain(Descendants(tab.Calendar), d => d is Ellipse { Tag: ChasterTabView.RaffleDotTag });
+        });
+    }
+
+    [Fact]
     public void The_paper_tag_says_what_is_on_the_tab_and_stamps_it_unpaid_clear_or_credit()
     {
         WpfRenderHarness.OnStaThread(() =>

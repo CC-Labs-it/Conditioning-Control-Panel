@@ -627,6 +627,8 @@
   "chaster_cal_served": "{0}日目、完了",
   "chaster_cal_locked": "{0}日目、これから",
   "chaster_cal_elided": "それ以前の{0}日",
+  "chaster_cal_served_raffle": "{0}日目、完了、抽選にカウント",
+  "chaster_cal_raffle_key": "抽選にカウント",
   "chaster_import_title": "ロック時間を含みます",
   "chaster_import_body": "このプリセットはChasterのロックに時間を追加できます。",
   "chaster_import_detail": "トリガー {0} 個、各1回発動で {1} 分。各トリガーの追加は1日15分まで。",

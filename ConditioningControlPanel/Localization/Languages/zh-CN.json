@@ -632,6 +632,8 @@
   "chaster_cal_served": "第 {0} 天，已服完",
   "chaster_cal_locked": "第 {0} 天，还要服",
   "chaster_cal_elided": "以及之前的 {0} 天",
+  "chaster_cal_served_raffle": "第 {0} 天，已服完，计入抽奖",
+  "chaster_cal_raffle_key": "计入抽奖",
   "chaster_import_title": "含锁定时间",
   "chaster_import_body": "这个预设可以给你的 Chaster 锁加时间。",
   "chaster_import_detail": "{0} 个触发器，每个触发一次共 {1} 分钟。每个触发器每天最多加 15 分钟。",
