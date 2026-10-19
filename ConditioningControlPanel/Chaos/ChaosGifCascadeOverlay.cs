@@ -216,6 +216,8 @@ public sealed class ChaosGifCascadeOverlay : Window
     private sealed class Faller
     {
         public Image Img = null!; public double Y; public double CenterX; public double Speed; public bool Animated;
+        // A remote GIF playing as its clip; Gone stops a late load from starting one on a removed faller.
+        public Services.FlashClipPlayer? Clip; public bool Gone;
         // Motion + growth ride RENDER transforms: layout-property animation (Width /
         // Canvas.Left/Top per frame) forces a full layout pass over the giant layered
         // window every frame — the 2026-06-10 mid-cascade UI freezes (Hang 1002).
@@ -333,20 +335,16 @@ public sealed class ChaosGifCascadeOverlay : Window
         {
             string path = _files[_rng.Next(_files.Count)];
             var img = new Image { Stretch = Stretch.Uniform, Opacity = _opacity };
-            // A remote still (Phase 3 / Contract 2) is an https URL, not a file. It NEVER
-            // animates — the provider has no usable GIFs and its webp posters are static VP8
-            // with no ANIM chunk (owner decision B2) — and every file-shaped probe below has to
-            // be skipped for it: AnimatedWebp.IsAnimated opens a FileStream on the path and
-            // FileInfo(path).Length stats it, so on a URL both would throw their way to a
-            // useless answer on the UI thread, once per spawn.
-            //
-            // Losing animation costs this overlay less than it sounds: MAX_ANIMATED caps the
-            // cascade at 3 animated clips and everything past that already falls as a still, so
-            // "most clips are stills" is the cascade's normal look, not a remote-only compromise.
+            // A remote pick is an https URL, not a file, so every file-shaped probe below is
+            // skipped for it (AnimatedWebp.IsAnimated opens a FileStream, FileInfo stats it). The
+            // provider serves its GIFs as silent webm/mp4 plus a static poster: the flash pool
+            // holds the clip on disk, so within the animated budget a remote GIF plays as that
+            // clip (FlashClipPlayer, the bubbles' path) instead of falling as its still poster.
             bool remote = Services.FlashService.IsRemotePath(path);
+            var faller = new Faller();
             // A gif/animated-webp only animates while the animated budget has room and it isn't
             // huge; otherwise it falls as a still (BitmapImage decodes the first frame).
-            bool animate = false;
+            bool animate = remote && _animatedAlive < MAX_ANIMATED && Services.MotionFx.Level != Models.MotionLevel.Off;
             bool isGif = !remote && path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
             bool isAnimatedWebp = !remote && !isGif
                 && path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
@@ -357,7 +355,36 @@ public sealed class ChaosGifCascadeOverlay : Window
                 try { len = new FileInfo(path).Length; } catch { }
                 animate = len > 0 && len <= ANIMATED_MAX_BYTES;
             }
-            if (animate)
+            if (animate && remote)
+            {
+                _animatedAlive++;
+                int size = (int)_gifSize;
+                string url = path;
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        var data = await Services.FlashService.LoadRemoteFaceAsync(url, size, true).ConfigureAwait(false);
+                        if (data == null || data.Frames.Count == 0) return;
+                        var dispatcher = Application.Current?.Dispatcher;
+                        if (dispatcher == null || dispatcher.HasShutdownStarted) return;
+                        _ = dispatcher.BeginInvoke(() =>
+                        {
+                            try
+                            {
+                                if (faller.Gone || !_fallers.Contains(faller)) return;
+                                img.Source = data.Frames[0];
+                                if (data.ClipPath == null) return;
+                                faller.Clip = Services.FlashClipPlayer.Start(data.ClipPath, data.Width, data.Height,
+                                    frame => { if (!faller.Gone) img.Source = frame; });
+                            }
+                            catch { }
+                        });
+                    }
+                    catch (Exception ex) { App.Logger?.Debug("GifCascade remote clip: {E}", ex.Message); }
+                });
+            }
+            else if (animate)
             {
                 _animatedAlive++;
                 // GIFs AND animated webps loop via AnimatedWebp's pre-decoded (off-thread,
@@ -427,12 +454,10 @@ public sealed class ChaosGifCascadeOverlay : Window
             Canvas.SetTop(img, 0);
             _canvas.Children.Add(img);
             if (Services.Video.ScrolllerCredit.IsScrolllerMedia(path)) Controls.ScrolllerCreditChip.Hold(img);   // one "via Scrolller" mark for the cascade
-            _fallers.Add(new Faller
-            {
-                Img = img, CenterX = centerX, Y = y,
-                Speed = _fallSpeed * (0.7 + _rng.NextDouble() * 0.6),
-                Animated = animate, Move = move, Grow = grow,
-            });
+            faller.Img = img; faller.CenterX = centerX; faller.Y = y;
+            faller.Speed = _fallSpeed * (0.7 + _rng.NextDouble() * 0.6);
+            faller.Animated = animate; faller.Move = move; faller.Grow = grow;
+            _fallers.Add(faller);
         }
         catch (Exception ex) { App.Logger?.Debug("GifCascade spawn: {E}", ex.Message); }
     }
@@ -464,7 +489,7 @@ public sealed class ChaosGifCascadeOverlay : Window
                 f.Move.Y = f.Y;
                 if (f.Y > Height + _gifSize)
                 {
-                    try { AnimationBehavior.SetSourceUri(f.Img, null); Services.AnimatedWebp.Detach(f.Img); f.Img.Source = null; } catch { }
+                    try { f.Gone = true; f.Clip?.Dispose(); f.Clip = null; AnimationBehavior.SetSourceUri(f.Img, null); Services.AnimatedWebp.Detach(f.Img); f.Img.Source = null; } catch { }
                     if (f.Animated) _animatedAlive = Math.Max(0, _animatedAlive - 1);
                     _canvas.Children.Remove(f.Img);
                     Controls.ScrolllerCreditChip.Release(f.Img);
@@ -507,7 +532,7 @@ public sealed class ChaosGifCascadeOverlay : Window
         GoIdle();
         foreach (var f in _fallers)
         {
-            try { AnimationBehavior.SetSourceUri(f.Img, null); Services.AnimatedWebp.Detach(f.Img); f.Img.Source = null; } catch { }
+            try { f.Gone = true; f.Clip?.Dispose(); f.Clip = null; AnimationBehavior.SetSourceUri(f.Img, null); Services.AnimatedWebp.Detach(f.Img); f.Img.Source = null; } catch { }
             Controls.ScrolllerCreditChip.Release(f.Img);
         }
         _fallers.Clear();
