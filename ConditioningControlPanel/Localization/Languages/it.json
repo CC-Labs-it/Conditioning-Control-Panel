@@ -8471,5 +8471,21 @@
   "conv_postcode_used": "Questo account ha già usato quel codice.",
   "conv_postcode_expired": "Quel codice è scaduto.",
   "conv_postcode_offline": "Impossibile raggiungere il server. Riprova tra un minuto.",
-  "conv_postcode_empty": "Scrivi prima il codice."
+  "conv_postcode_empty": "Scrivi prima il codice.",
+  "online_meter_label": "Media online di oggi",
+  "online_meter_pct": "{0}%",
+  "online_meter_under_free": "Si azzera a mezzanotte. Immagini, GIF e clip contano tutte. Quello che hai già visto si riguarda gratis.",
+  "online_meter_under_basic": "Si azzera a mezzanotte. Basic ha una quota giornaliera ampia.",
+  "online_meter_under_prime": "Si azzera a mezzanotte. Prime ha la quota giornaliera più ampia.",
+  "online_meter_upsell_free": "Piano Free. Basic ha circa 7 volte tanto al giorno, Prime circa 20.",
+  "online_meter_upsell_basic": "Piano Basic. Prime ha circa 3 volte tanto al giorno.",
+  "online_see_plans": "Vedi i piani",
+  "online_meter_spent": "I media online di oggi sono finiti. Quello che hai già visto e i tuoi file continuano. Si riparte a mezzanotte, tra {0}.",
+  "online_meter_hours": "{0} h",
+  "online_meter_minutes": "{0} min",
+  "online_pill": "Online {0}%",
+  "online_pill_done": "Online finito per oggi",
+  "online_hover_title": "I media online di oggi sono finiti",
+  "online_hover_body": "Quello che hai già visto e i tuoi file continuano. Si riparte a mezzanotte.",
+  "online_toast_spent": "I media online sono finiti per oggi. Si passa a quello che hai già visto e ai tuoi file."
 }

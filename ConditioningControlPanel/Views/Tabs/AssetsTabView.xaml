@@ -300,17 +300,50 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
+                    <!-- ONLINE MEDIA TODAY (owner, 2026-10-19): the day's share as a percent only,
+                         never MB or a file count. Pink, amber from 80%, grey when used up. Kept to
+                         two short lines so the closed block
+                         stays one glance. Filled in MainWindow.OnlineMeter.cs. -->
+                    <Border x:Name="OnlineMeterCard" x:FieldModifier="internal" Margin="0,10,0,0"
+                            Background="#0FFFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1"
+                            CornerRadius="10" Padding="12,7,12,7" Visibility="Collapsed">
+                        <StackPanel>
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Left" Text="{loc:Str online_meter_label}"
+                                           FontSize="12.5" FontWeight="SemiBold" Foreground="#E6FFFFFF"
+                                           VerticalAlignment="Center" Margin="0,0,14,0"/>
+                                <TextBlock x:Name="TxtOnlineMeterPct" x:FieldModifier="internal" DockPanel.Dock="Right"
+                                           FontSize="17" FontWeight="Bold" Foreground="#FF69B4" MinWidth="52"
+                                           TextAlignment="Right" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                <Border Height="8" CornerRadius="4" Background="#2E2E4A" VerticalAlignment="Center"
+                                        ClipToBounds="True">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition x:Name="OnlineMeterBarOn" x:FieldModifier="internal" Width="0*"/>
+                                            <ColumnDefinition x:Name="OnlineMeterBarOff" x:FieldModifier="internal" Width="100*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="OnlineMeterBarFill" x:FieldModifier="internal"
+                                                CornerRadius="4" Background="#FF69B4"/>
+                                    </Grid>
+                                </Border>
+                            </DockPanel>
+                            <TextBlock x:Name="TxtOnlineMeterLine" x:FieldModifier="internal" Margin="0,5,0,0"
+                                       FontSize="11.5" TextWrapping="Wrap" Foreground="#A7A7C1"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Row 2, FLAVOUR: six cards in one row (five flavours + Mine, mirrored from
                          the web pickers, FlavourPresets.cs). One click sets niches + pool. -->
-                    <UniformGrid x:Name="RemoteFlavourTiles" x:FieldModifier="internal" Rows="1"
+                    <UniformGrid x:Name="RemoteFlavourTiles" x:FieldModifier="internal" Grid.Row="1" Rows="1"
                                  Margin="0,10,-8,0"/>
 
                     <!-- Row 3, FINE-TUNE: one row says what is in the pool; a click opens the
                          niche list and your own communities. Session-only open state. -->
-                    <Button x:Name="BtnRemoteFineTune" x:FieldModifier="internal" Grid.Row="1" Margin="0,8,0,0"
+                    <Button x:Name="BtnRemoteFineTune" x:FieldModifier="internal" Grid.Row="2" Margin="0,8,0,0"
                             Style="{StaticResource RemoteFineTuneRow}">
                         <DockPanel>
                             <TextBlock x:Name="TxtRemoteFineTuneChevron" x:FieldModifier="internal"
@@ -327,7 +360,7 @@
                          collapses while Fine-tune is open, ApplyFineTuneLayout) and takes
                          whatever height the page has left (#1410): a fixed 430 px cap plus the
                          browser row's 260 px floor ran the list and the r/ field under the Start bar. -->
-                    <ScrollViewer x:Name="RemoteFineTuneScroll" x:FieldModifier="internal" Grid.Row="2"
+                    <ScrollViewer x:Name="RemoteFineTuneScroll" x:FieldModifier="internal" Grid.Row="3"
                                   Visibility="Collapsed" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="RemoteFineTuneBody" x:FieldModifier="internal"

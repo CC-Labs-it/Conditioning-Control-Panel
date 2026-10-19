@@ -3695,6 +3695,9 @@ namespace ConditioningControlPanel
             // Title-bar microphone-active indicator (privacy parity with the camera pill)
             WireMicActivePill();
 
+            // Title-bar "Online N%" pill + the Assets tab's online media card (MainWindow.OnlineMeter.cs)
+            WireOnlineMeter();
+
             // Movable loading splash shown while the webcam engine starts up
             InstallWebcamLoadingSplash();
 

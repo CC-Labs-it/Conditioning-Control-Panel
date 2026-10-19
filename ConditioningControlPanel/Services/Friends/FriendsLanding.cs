@@ -154,6 +154,23 @@ public static class FriendsLanding
         try { return read(); } catch { return false; }
     }
 
+    /// <summary>Where a corner notice that is not from a friend lands (the online media meter's
+    /// spent notice): the game in front, else the panel, else the launcher, else null (primary).</summary>
+    internal static Window? NoticeAnchor() => ActiveGameWindow() ?? Anchor();
+
+    /// <summary>A session, Lockdown, Strict Lock or program holds: corner notices fold away on the
+    /// next tick, so a notice that is not from a friend waits until this reads false.</summary>
+    internal static bool Holding()
+    {
+        try { return ReadWorld().Holding; } catch { return true; }
+    }
+
+    /// <summary>A Lockdown is running (a corner notice then offers no "See plans").</summary>
+    internal static bool LockdownActive()
+    {
+        try { return App.Lockdown?.IsActive == true; } catch { return false; }
+    }
+
     /// <summary>Where a card or a word lands when there is no game: the panel, else the launcher.</summary>
     private static Window? Anchor()
     {

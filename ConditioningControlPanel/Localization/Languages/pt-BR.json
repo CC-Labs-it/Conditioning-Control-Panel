@@ -7716,5 +7716,21 @@
   "conv_postcode_used": "Esta conta já usou esse código.",
   "conv_postcode_expired": "Esse código expirou.",
   "conv_postcode_offline": "Não deu para falar com o servidor. Tente de novo em um minuto.",
-  "conv_postcode_empty": "Digite o código primeiro."
+  "conv_postcode_empty": "Digite o código primeiro.",
+  "online_meter_label": "Mídia online hoje",
+  "online_meter_pct": "{0}%",
+  "online_meter_under_free": "Zera à meia-noite. Imagens, GIFs e clipes contam. O que você já viu repete de graça.",
+  "online_meter_under_basic": "Zera à meia-noite. O Basic tem uma cota diária grande.",
+  "online_meter_under_prime": "Zera à meia-noite. O Prime tem a maior cota diária.",
+  "online_meter_upsell_free": "Plano Free. O Basic tem cerca de 7 vezes mais por dia, o Prime cerca de 20.",
+  "online_meter_upsell_basic": "Plano Basic. O Prime tem cerca de 3 vezes mais por dia.",
+  "online_see_plans": "Ver planos",
+  "online_meter_spent": "A mídia online de hoje acabou. O que você já viu e seus próprios arquivos continuam tocando. Volta à meia-noite, em {0}.",
+  "online_meter_hours": "{0} h",
+  "online_meter_minutes": "{0} min",
+  "online_pill": "Online {0}%",
+  "online_pill_done": "Online: acabou por hoje",
+  "online_hover_title": "A mídia online de hoje acabou",
+  "online_hover_body": "O que você já viu e seus próprios arquivos continuam tocando. Volta à meia-noite.",
+  "online_toast_spent": "A mídia online acabou por hoje. Mudando para o que você já viu e seus próprios arquivos."
 }

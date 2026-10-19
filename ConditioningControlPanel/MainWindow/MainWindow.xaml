@@ -222,6 +222,24 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal"
                             HorizontalAlignment="Right" VerticalAlignment="Center">
 
+                    <!-- Online media today (owner, 2026-10-19): a percent ring, shown only while the
+                         media source includes online media. Click = Assets, hover when spent = a
+                         card with the way back. Owned by MainWindow.OnlineMeter.cs. -->
+                    <Border x:Name="OnlineMeterPill" x:FieldModifier="internal"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center"
+                            Background="#251A38" CornerRadius="12" Padding="6,3,10,3"
+                            Margin="0,0,12,0"
+                            Cursor="Hand"
+                            MouseLeftButtonDown="OnlineMeterPill_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Decorator x:Name="OnlineMeterPillRing" x:FieldModifier="internal"
+                                       Width="18" Height="18" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtOnlineMeterPill" x:FieldModifier="internal"
+                                       Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Directory listing status — Listed / Private only / Claimed.
                          Visible only while a remote-control session is active. Text,
                          dot colour and tooltip are set in UpdateDirectoryListingStatus(). -->

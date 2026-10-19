@@ -7716,5 +7716,21 @@
   "conv_postcode_used": "Esta cuenta ya usó ese código.",
   "conv_postcode_expired": "Ese código ya caducó.",
   "conv_postcode_offline": "No se pudo contactar con el servidor. Prueba en un minuto.",
-  "conv_postcode_empty": "Escribe primero el código."
+  "conv_postcode_empty": "Escribe primero el código.",
+  "online_meter_label": "Medios en línea hoy",
+  "online_meter_pct": "{0} %",
+  "online_meter_under_free": "Se reinicia a medianoche. Imágenes, GIFs y clips cuentan por igual. Lo que ya has visto se repite gratis.",
+  "online_meter_under_basic": "Se reinicia a medianoche. Basic tiene una cuota diaria grande.",
+  "online_meter_under_prime": "Se reinicia a medianoche. Prime tiene la mayor cuota diaria.",
+  "online_meter_upsell_free": "Plan Free. Basic recibe unas 7 veces más al día, Prime unas 20.",
+  "online_meter_upsell_basic": "Plan Basic. Prime recibe unas 3 veces más al día.",
+  "online_see_plans": "Ver planes",
+  "online_meter_spent": "Los medios en línea de hoy se han agotado. Lo que ya has visto y tus propios archivos siguen reproduciéndose. Vuelven a medianoche, en {0}.",
+  "online_meter_hours": "{0} h",
+  "online_meter_minutes": "{0} min",
+  "online_pill": "En línea {0} %",
+  "online_pill_done": "En línea: listo por hoy",
+  "online_hover_title": "Los medios en línea de hoy se han agotado",
+  "online_hover_body": "Lo que ya has visto y tus propios archivos siguen reproduciéndose. Vuelven a medianoche.",
+  "online_toast_spent": "Los medios en línea se acabaron por hoy. Pasamos a lo que ya has visto y a tus propios archivos."
 }
