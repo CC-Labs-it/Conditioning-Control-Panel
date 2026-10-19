@@ -10,8 +10,8 @@ namespace ConditioningControlPanel.Controls;
 
 /// <summary>
 /// The online media meter's "?" slip (owner, 2026-10-19): how the daily share works, in the
-/// leash "?" slips' paper look. The figures are the live ones (the server can retune them); the
-/// words come from <see cref="OnlineMeterRules.HelpParagraphs"/>. Opened by
+/// leash "?" slips' paper look. Words only, never a size (owner, 2026-10-19); they come from
+/// <see cref="OnlineMeterRules.HelpParagraphs"/>. Opened by
 /// <see cref="LeashHelpButton.Create(System.Func{UIElement}, string, double)"/>.
 /// </summary>
 public sealed class OnlineMediaHelpSlip : Border
@@ -42,10 +42,7 @@ public sealed class OnlineMediaHelpSlip : Border
             TextWrapping = TextWrapping.Wrap,
         });
 
-        var lines = OnlineMeterRules.HelpParagraphs(Loc.Get,
-            ScrolllerAllowance.DailyBytes(ScrolllerPlan.Free), ScrolllerAllowance.FreeFirstDayBytes,
-            ScrolllerAllowance.DailyBytes(ScrolllerPlan.Basic), ScrolllerAllowance.DailyBytes(ScrolllerPlan.Prime),
-            ScrolllerDiskCache.CapBytes, System.Globalization.CultureInfo.CurrentUICulture);
+        var lines = OnlineMeterRules.HelpParagraphs(Loc.Get);
         for (int i = 0; i < lines.Length; i++)
         {
             var last = i == lines.Length - 1;
