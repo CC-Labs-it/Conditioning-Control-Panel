@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Services
                     App.Settings?.Current?.MandatoryVideoFloating == true,
                     strict || IsStrictActive,
                     App.Lockdown?.IsActive == true,
-                    App.Chaos?.IsRunning == true);
+                    LockedChaosRun());   // Chaos or a DtRH run
             }
             catch (Exception ex) { Diag.Swallowed(ex); return false; }
         }
@@ -452,7 +452,7 @@ namespace ConditioningControlPanel.Services
                     // "via Scrolller" badge + end card. Floating runs are never strict; Lockdown and
                     // Chaos still make the badge not pressable.
                     credit = Video.ScrolllerCredit.PagePayload(clip, Video.ScrolllerCredit.CanOpenLink(
-                        false, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)),
+                        false, App.Lockdown?.IsActive == true, LockedChaosRun())),
                 });
                 win.Show();              // never activated: a floating browser window takes no focus
                 PreventClickRaise(win);
@@ -509,6 +509,8 @@ namespace ConditioningControlPanel.Services
             {
                 case "playing":
                     c.Playing = true;
+                    // This window's mute and close (VideoService.Controls.cs), after the page's fade.
+                    PostAfterPageMessage(() => { if (!c.Closed) ShowInstanceControls(c.Window, Safety.GentleVisuals.On ? Safety.GentleVisuals.FadeMs(0) : 0); });
                     break;
                 case "meta":
                     c.DurationMs = (long?)o["durationMs"] ?? 0;
@@ -549,7 +551,7 @@ namespace ConditioningControlPanel.Services
                     // A floating window is not topmost over everything, so the link opens right away.
                     PostAfterPageMessage(() =>
                     {
-                        if (c.Closed || !Video.ScrolllerCredit.CanOpenLink(false, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                        if (c.Closed || !Video.ScrolllerCredit.CanOpenLink(false, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
                         Video.ScrolllerCredit.Open(c.Clip);
                     });
                     break;

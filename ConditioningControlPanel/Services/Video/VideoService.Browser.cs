@@ -151,7 +151,7 @@ namespace ConditioningControlPanel.Services
                     Strict = strict,
                     // "via Scrolller" badge + end card; under any lock the badge shows but takes no press.
                     Credit = Video.ScrolllerCredit.PagePayload(path, Video.ScrolllerCredit.CanOpenLink(
-                        strict, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)),
+                        strict, App.Lockdown?.IsActive == true, LockedChaosRun())),
                     IsHostPaused = () => _gracePaused,
                     // Lock Card / Lockdown / Possession: every screen is covered on purpose, so a
                     // dead mirror is left black rather than uncovered mid-clip (the engine asks
@@ -556,6 +556,8 @@ namespace ConditioningControlPanel.Services
             {
                 if (!BrowserEventIsCurrent()) return;
                 VideoStarted?.Invoke(this, EventArgs.Empty);
+                // Mute and close, once the page's own fade from black has run (VideoService.Controls.cs).
+                ShowVideoControls(_browserStrict, Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0);
                 _ = App.Haptics?.StartVideoBackgroundVibeAsync();
                 try { App.Haptics?.FunScript?.OnVideoStarted(_browserPath ?? ""); }
                 catch (Exception ex) { App.Logger?.Debug("FunScript start hook failed: {Error}", ex.Message); }
@@ -622,7 +624,7 @@ namespace ConditioningControlPanel.Services
             if (!_browserActive) return;
             var path = _browserPath;
             if (Video.ScrolllerCredit.For(path) == null) return;
-            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
             if (IsFloating)
             {
                 Application.Current?.Dispatcher?.BeginInvoke(new Action(() => Video.ScrolllerCredit.Open(path)));
@@ -654,7 +656,7 @@ namespace ConditioningControlPanel.Services
             if (queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
             Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
             {
-                if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
                 Video.ScrolllerCredit.Open(queued);
             }));
         }
