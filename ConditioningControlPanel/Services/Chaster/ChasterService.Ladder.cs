@@ -34,9 +34,10 @@ public sealed partial class ChasterService
             {
                 try
                 {
+                    var epoch = RaffleEpoch;
                     var card = await LadderApi.MeAsync().ConfigureAwait(false);
                     NoteRaffleMonth(card);
-                    NoteRaffleCard(card);
+                    NoteRaffleCard(card, epoch);
                 }
                 catch (Exception ex) { Diag.Swallowed(ex, "raffle month read skipped"); }
             });
@@ -93,14 +94,51 @@ public sealed partial class ChasterService
     /// thread read it.</summary>
     public event Action? RaffleChanged;
 
-    /// <summary>Keep a card the server sent. <paramref name="dropOnNull"/>: a fresh verify with no
-    /// card to follow it drops the old card, so the count the verify just stored wins.</summary>
-    private void NoteRaffleCard(RaffleCard? card, bool dropOnNull = false)
+    /// <summary>Which CCP account the raffle reads belong to: bumped on every account change. A
+    /// read that started under an older one is dropped when it lands.</summary>
+    public int RaffleEpoch => Volatile.Read(ref _raffleEpoch);
+    private int _raffleEpoch;
+    private int _watchingIdentity;
+
+    /// <summary>Keep a card the server sent, unless the account changed since the read began.
+    /// <paramref name="dropOnNull"/>: no card drops the old one (a fresh verify with no card to
+    /// follow it, so the count it just stored wins; the page's own read).</summary>
+    private void NoteRaffleCard(RaffleCard? card, int epoch, bool dropOnNull = false)
     {
+        if (epoch != RaffleEpoch) return;
         if (card == null && (!dropOnNull || LastRaffleCard == null)) return;
         LastRaffleCard = card;
+        RaiseRaffleChanged();
+    }
+
+    private void RaiseRaffleChanged()
+    {
         try { RaffleChanged?.Invoke(); }
         catch (Exception ex) { Diag.Swallowed(ex, "raffle changed handler"); }
+    }
+
+    /// <summary>The raffle card and the verify are the CCP account's (<c>/chaster/raffle/me</c>
+    /// signs with it), while the Chaster link is this PC's and outlives a sign-out. The app's
+    /// service follows the account, so a sign-out or a switch never shows the last one's days.
+    /// Not in the constructor: a test's service must not hear another test's account change.</summary>
+    internal void WatchIdentity()
+    {
+        if (Interlocked.Exchange(ref _watchingIdentity, 1) == 0)
+            App.UnifiedIdentityChanged += OnIdentityChanged;
+    }
+
+    private void OnIdentityChanged(object? sender, EventArgs e) => ForgetRaffle();
+
+    /// <summary>Another account, or none: drop the card and the verify, ask the server again,
+    /// and let the next verify run at once. Raised so the billboard and the page let go too.</summary>
+    internal void ForgetRaffle()
+    {
+        Interlocked.Increment(ref _raffleEpoch);
+        LastRaffleCard = null;
+        LastLadderVerify = null;
+        _ladderVerifiedAtUtc = null;
+        Interlocked.Exchange(ref _raffleAsked, 0);
+        RaiseRaffleChanged();
     }
 
     /// <summary>A verify that read the lock afresh is followed by the card, so the days a
@@ -109,10 +147,11 @@ public sealed partial class ChasterService
     {
         try
         {
+            var epoch = RaffleEpoch;
             if (!await VerifyLadderAsync(CancellationToken.None).ConfigureAwait(false) || LadderApi == null) return;
             bool running;
             lock (_gate) running = _tab.RaffleMonth == ChasterLadder.MonthKey(_utcNow());
-            if (running) NoteRaffleCard(await LadderApi.MeAsync().ConfigureAwait(false), dropOnNull: true);
+            if (running) NoteRaffleCard(await LadderApi.MeAsync().ConfigureAwait(false), epoch, dropOnNull: true);
         }
         catch (Exception ex) { Diag.Swallowed(ex, "raffle card read skipped"); }
     }
@@ -133,6 +172,7 @@ public sealed partial class ChasterService
         var lockId = (_options() ?? ChasterOptions.Off).LockId;
         if (!ChasterClient.IsLockId(lockId)) return false;
         await _ladderGate.WaitAsync(ct).ConfigureAwait(false);
+        var epoch = RaffleEpoch;
         try
         {
             var now = _utcNow();
@@ -147,6 +187,13 @@ public sealed partial class ChasterService
             IReadOnlyDictionary<string, LadderClaim> claims;
             lock (_gate) claims = ChasterLadder.Claims(_tab, _utcNow());
             var verdict = await LadderApi.VerifyAsync(lockId!, access, claims, ct).ConfigureAwait(false);
+            if (epoch != RaffleEpoch)
+            {
+                // The account changed mid-read: the reading was the last one's, and the new
+                // one's first verify is not held back by it.
+                _ladderVerifiedAtUtc = null;
+                return false;
+            }
             if (verdict != null) LastLadderVerify = verdict;
             return verdict is { Ok: true };
         }
@@ -155,17 +202,21 @@ public sealed partial class ChasterService
     }
 
     /// <summary>The player's raffle card for the page, after a due verify. The server's copy of
-    /// the "post my days" switch is brought back in line with the player's when they differ.</summary>
+    /// the "post my days" switch is brought back in line with the player's when they differ.
+    /// No card drops the kept one: the page and the billboard show the same answer. Null when
+    /// the account changed while it read.</summary>
     public async Task<RaffleCard?> RaffleAsync(CancellationToken ct = default)
     {
         if (LadderApi == null) return null;
+        var epoch = RaffleEpoch;
         await VerifyLadderAsync(ct).ConfigureAwait(false);
         var card = await LadderApi.MeAsync(ct).ConfigureAwait(false);
         NoteRaffleMonth(card);
         var want = RafflePostDays?.Invoke() == true;
         if (card != null && card.PostDays != want && await LadderApi.OptInAsync(want, ct).ConfigureAwait(false))
             card = card with { PostDays = want };
-        NoteRaffleCard(card);
+        if (epoch != RaffleEpoch) return null;
+        NoteRaffleCard(card, epoch, dropOnNull: true);
         return card;
     }
 
@@ -200,5 +251,10 @@ public sealed partial class ChasterService
         Interlocked.Exchange(ref _ladderRetry, timer)?.Dispose();
     }
 
-    private void DisposeLadder() => Interlocked.Exchange(ref _ladderRetry, null)?.Dispose();
+    private void DisposeLadder()
+    {
+        if (Interlocked.Exchange(ref _watchingIdentity, 0) == 1)
+            App.UnifiedIdentityChanged -= OnIdentityChanged;
+        Interlocked.Exchange(ref _ladderRetry, null)?.Dispose();
+    }
 }

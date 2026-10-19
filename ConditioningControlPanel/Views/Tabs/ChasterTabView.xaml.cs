@@ -170,7 +170,16 @@ namespace ConditioningControlPanel.Views.Tabs
         }));
 
         // A new raffle card (a push verified, or the page's own read): the sheet's dots follow it.
-        private void OnRaffleChanged() => Dispatcher.BeginInvoke(new Action(RefreshCalendarRaffle));
+        // Another CCP account, or none: the page's own card goes too, so the card repaints empty.
+        private void OnRaffleChanged() => Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_raffleCard != null && PageRaffleCard == null)
+            {
+                _raffleCard = null;
+                PaintLadder();
+            }
+            RefreshCalendarRaffle();
+        }));
 
         // A push moves the lock AND empties the tab, so both halves are re-read.
         private void OnLockChanged() => Dispatcher.BeginInvoke(new Action(() =>
@@ -528,12 +537,12 @@ namespace ConditioningControlPanel.Views.Tabs
         /// the crosses do not vanish and draw in again.</summary>
         internal void RefreshCalendarRaffle() => MarkRaffleDays();
 
-        /// <summary>The raffle's counted days (the card the billboard reads, else the page's own)
-        /// dotted on the squares they fall on: a crossed day is a day served, not a day counted.
-        /// The key line shows while any square carries a dot.</summary>
+        /// <summary>The raffle's counted days (the card the billboard reads, else the page's own
+        /// while it is still this account's) dotted on the squares they fall on: a crossed day is
+        /// a day served, not a day counted. The key line shows while any square carries a dot.</summary>
         private void MarkRaffleDays()
         {
-            var raffleDays = ChasterRaffle.CountedDates(App.Chaster?.LastRaffleCard ?? _raffleCard);
+            var raffleDays = ChasterRaffle.CountedDates(App.Chaster?.LastRaffleCard ?? PageRaffleCard);
             var utcNow = DateTime.UtcNow;
             var any = false;
             foreach (var (day, square, number) in _calendarCells)

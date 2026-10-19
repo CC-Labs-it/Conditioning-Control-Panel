@@ -74,13 +74,17 @@ public static class ChasterRaffle
 
     /// <summary>The counted days as calendar dates of the card's month (date only). A raffle day
     /// is a UTC day; a page that draws local days matches it by date, so day 5 counted is the
-    /// square that says 5.</summary>
+    /// square that says 5. Held to the calendar's own month length: a card that says 31 days for
+    /// a 30-day month never builds a date that does not exist (that threw on the UI thread).</summary>
     public static IReadOnlySet<DateTime> CountedDates(RaffleCard? card)
     {
         var dates = new HashSet<DateTime>();
         if (card != null && MonthStart(card.Month) is { } start)
+        {
+            var last = DateTime.DaysInMonth(start.Year, start.Month);
             foreach (var d in Counted(card))
-                dates.Add(new DateTime(start.Year, start.Month, d));
+                if (d <= last) dates.Add(new DateTime(start.Year, start.Month, d));
+        }
         return dates;
     }
 

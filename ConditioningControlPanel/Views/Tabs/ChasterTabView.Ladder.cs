@@ -36,7 +36,13 @@ namespace ConditioningControlPanel.Views.Tabs
         private bool _overLadder;
         private bool _ladderLoading;
         private RaffleCard? _raffleCard;
+        private int _raffleCardEpoch;
         private DateTime _ladderFetchedUtc = DateTime.MinValue;
+
+        /// <summary>The page's own card while it is still this CCP account's: a sign-out or a
+        /// switch (<see cref="ChasterService.RaffleEpoch"/>) lets go of it, shown or hidden.</summary>
+        private RaffleCard? PageRaffleCard =>
+            App.Chaster is { } chaster && chaster.RaffleEpoch != _raffleCardEpoch ? null : _raffleCard;
         private long _addedShown = -1;
         private Window? _ladderHostWindow;
 
@@ -263,8 +269,10 @@ namespace ConditioningControlPanel.Views.Tabs
             _ladderLoading = true;
             try
             {
+                var epoch = chaster.RaffleEpoch;
                 var card = await Task.Run(() => chaster.RaffleAsync());
                 _raffleCard = card;
+                _raffleCardEpoch = epoch;
                 _ladderFetchedUtc = DateTime.UtcNow;
                 await Dispatcher.InvokeAsync(() =>
                 {
@@ -293,13 +301,14 @@ namespace ConditioningControlPanel.Views.Tabs
         internal void ShowRaffleCard(RaffleCard? card)
         {
             _raffleCard = card;
+            _raffleCardEpoch = App.Chaster?.RaffleEpoch ?? 0;
             PaintLadder();
             RefreshCalendarRaffle();
         }
 
         private void PaintLadder()
         {
-            var card = _raffleCard;
+            var card = PageRaffleCard;
             RafflePips.Children.Clear();
             string? state = null;
             if (card == null)
