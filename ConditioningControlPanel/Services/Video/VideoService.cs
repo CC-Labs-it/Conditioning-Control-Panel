@@ -3189,9 +3189,13 @@ namespace ConditioningControlPanel.Services
             VideoAboutToStart?.Invoke(this, EventArgs.Empty);
             VideoDiag.Log("VIDEO", $"prologue: VideoAboutToStart handlers +{prologueSw.ElapsedMilliseconds}ms");
 
-            // Stop flashes during video
-            App.Flash?.Stop();
-            VideoDiag.Log("VIDEO", $"prologue: Flash.Stop +{prologueSw.ElapsedMilliseconds}ms");
+            // Stop flashes during a FULL-SCREEN video (VideoFlashRule). A floating one, LibVLC route
+            // included, leaves them up: DecidePresentation runs after the pre-roll, so ask the same rule now.
+            if (Video.VideoFlashRule.StopsFlashes(floating: FloatingWanted(strict)))
+            {
+                App.Flash?.Stop();
+                VideoDiag.Log("VIDEO", $"prologue: Flash.Stop +{prologueSw.ElapsedMilliseconds}ms");
+            }
 
             // Duck other apps. Record that we took a duck ref so CloseAll releases exactly one
             // matching Unduck on teardown — otherwise a retry/troll "watch again" loop ducks again
