@@ -548,6 +548,13 @@
     try { fg.requestVideoFrameCallback(send); } catch (e) { send(); }
   }
 
+  // `outro`: the host shows the end card over the clip while it ends (its last
+  // seconds, or the end of a cut), instead of after it over a frozen frame.
+  function startOutroEarly() {
+    if (!cur || cur.ended || cur.errored || cur.outroAt || !cur.credit) return;
+    if (showOutro(cur.credit)) cur.outroAt = performance.now();
+  }
+
   fg.addEventListener('timeupdate', () => {
     if (!cur || cur.errored || cur.ended || cur.hostPaused) return;
     postTime(false);
@@ -572,15 +579,19 @@
     // meantime runs teardown, which drops the card and this timer with it.
     const c = cur.credit;
     const outroMs = c && Number.isFinite(c.outroMs) ? Math.min(Math.max(c.outroMs, 0), 5000) : 0;
-    if (outroMs > 0 && showOutro(c)) {
+    const early = cur.outroAt || 0;
+    if (outroMs > 0 && (early || showOutro(c))) {
       // The picture is over: the host stops judging the clip (length cap, new targets)
-      // and opens a link pressed during it. `ended` follows after the card.
+      // and opens a link pressed during it. `ended` follows after the card, which a
+      // host `outro` may already have started over the clip's last seconds.
       post({ type: 'mediaEnded' });
+      const left = early ? Math.max(0, outroMs - (performance.now() - early)) : outroMs;
+      if (left <= 0) { post({ type: 'ended' }); return; }
       const session = cur;
       outroTimer = setTimeout(() => {
         outroTimer = 0;
         if (cur === session) post({ type: 'ended' });
-      }, outroMs);
+      }, left);
       return;
     }
     post({ type: 'ended' });
@@ -928,6 +939,9 @@
         break;
       case 'attentionHide':
         attentionHide(data);
+        break;
+      case 'outro':
+        startOutroEarly();
         break;
       case 'creditQueued':
         // The link opens once the video is over: the badge (and the end card) wear a tick.

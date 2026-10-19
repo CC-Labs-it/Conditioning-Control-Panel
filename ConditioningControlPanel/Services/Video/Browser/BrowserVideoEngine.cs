@@ -275,6 +275,9 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// <summary>Tell every screen the credit link will open once the video is over.</summary>
         public void MarkCreditQueued() => Broadcast(new { type = "creditQueued" });
 
+        /// <summary>Show the "via ..." end card now, over the clip while it ends (CreditOutroTiming).</summary>
+        public void ShowCreditOutro() => Broadcast(new { type = "outro" });
+
         /// <summary>Target id + its viewport-fraction rectangle, ~10 Hz while the target bounces and
         /// only when the show message asked for it (gaze click enabled). Pure position bookkeeping.</summary>
         public event Action<string, double, double, double, double>? AttentionMoved;
