@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// </summary>
         void StartMotion(Rect boundsPx);
 
-        /// <summary>Hide the window (an empty window region: no pixels, no clicks) until
+        /// <summary>Hide the window (a one-pixel window region: nothing to see, nothing to click) until
         /// <see cref="Reveal"/>. Call before the window is shown (FloatingFirstFrame).</summary>
         void Veil();
 
@@ -369,7 +369,10 @@ namespace ConditioningControlPanel.Services.Video.Floating
                     if (dpi == 0) dpi = 96;
                     int d = (int)Math.Round(FloatingFrameLook.CornerDip * 2.0 * dpi / 96.0);
                     var (l, t, rr, b) = _veiled ? FloatingSpawnLook.Visible(w, h, _shown) : (0, 0, w, h);
-                    var rgn = rr > l && b > t ? CreateRoundRectRgn(l, t, rr + 1, b + 1, d, d) : CreateRectRgn(0, 0, 0, 0);
+                    // Fully veiled = ONE pixel at the centre, never an empty region: the window stays on
+                    // screen for Chromium, so its page is not treated as hidden while the clip loads and
+                    // paints at once when the region opens.
+                    var rgn = rr > l && b > t ? CreateRoundRectRgn(l, t, rr + 1, b + 1, d, d) : CreateRectRgn(w / 2, h / 2, w / 2 + 1, h / 2 + 1);
                     if (rgn == IntPtr.Zero) return;
                     if (SetWindowRgn(_hwnd, rgn, true) == 0) DeleteObject(rgn);   // on success Windows owns it
                     else _shaped = true;

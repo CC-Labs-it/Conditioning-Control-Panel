@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Services
             public long ReadyTick { get; set; }
             public long PlayingTick { get; set; }
             public bool FrameSeen { get; set; }
+            public long FirstTimeMs { get; set; } = -1;   // played time at the first report after "playing"
+            public long LastTimeMs { get; set; }
             public bool Revealed { get; set; }
             public long SpawnTick { get; init; } = Environment.TickCount64;
             public bool Closed { get; set; }
@@ -536,6 +538,7 @@ namespace ConditioningControlPanel.Services
             }
             switch (FloatingFirstFrame.Decide(c.FrameSeen,
                         c.PlayingTick == 0 ? null : now - c.PlayingTick,
+                        c.FirstTimeMs < 0 ? 0 : c.LastTimeMs - c.FirstTimeMs,
                         c.ReadyTick == 0 ? null : now - c.ReadyTick))
             {
                 case FloatingFirstFrame.Verdict.Reveal:
@@ -614,6 +617,7 @@ namespace ConditioningControlPanel.Services
                     break;
                 case "firstFrame":
                     c.FrameSeen = true;
+                    VideoDiag.Log("VIDEO", $"floating page painted: via={(string?)o["via"]} frames={(int?)o["frames"]} mediaMs={(long?)o["mediaMs"]} visibility={(string?)o["visibility"]}");
                     PostAfterPageMessage(() => CheckReveal(c));
                     break;
                 case "meta":
@@ -629,6 +633,12 @@ namespace ConditioningControlPanel.Services
                     break;
                 case "time":
                     c.PositionMs = Math.Max(c.PositionMs, (long?)o["playedMs"] ?? 0);
+                    if (c.Playing && (bool?)o["paused"] != true)
+                    {
+                        var at = (long?)o["playedMs"] ?? 0;   // played time: a seek is not progress
+                        if (c.FirstTimeMs < 0) c.FirstTimeMs = at;
+                        c.LastTimeMs = at;
+                    }
                     // The player's longest-video limit, per window: the run's own cap timer is
                     // off here (it watches one player), so each clip is cut on what it has played.
                     if (VideoLengthCap.Reached(App.Settings?.Current?.VideoMaxDurationSeconds ?? 0,

@@ -6,8 +6,8 @@ namespace ConditioningControlPanel.Services.Video.Floating
     /// <summary>
     /// When a floating video window may be seen (owner, 2026-10-19: for a second or two while a
     /// clip loaded, its square was a black rectangle). The window exists from the start, because a
-    /// WebView2 only initialises inside a shown window, but it stays veiled (an empty window
-    /// region: no pixels, no clicks) until its first frame is up. A clip that never gets there is
+    /// WebView2 only initialises inside a shown window, but it stays veiled (a one-pixel
+    /// window region: nothing to see or click) until its picture is painted. A clip that never gets there is
     /// skipped and its window closed, never left on screen. Pure, pinned by FloatingVideoPolishTests.
     /// </summary>
     internal static class FloatingFirstFrame
@@ -15,20 +15,26 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// <summary>From the page's ready handshake: this long for a first frame, then the clip is skipped.</summary>
         public const int ReadyBudgetMs = 4000;
 
-        /// <summary>The page said "playing" but no frame callback came (a page without
-        /// requestVideoFrameCallback): this long after "playing" counts as the frame.</summary>
-        public const int PlayingGraceMs = 500;
+        /// <summary>No frame report (a page without requestVideoFrameCallback, or one Chromium treats
+        /// as hidden): the clip counts as painted once it has been playing this long...</summary>
+        public const int PlayingGraceMs = 1000;
+
+        /// <summary>...and this much of it has played since "playing".</summary>
+        public const int AdvanceMs = 400;
 
         internal enum Verdict { Wait, Reveal, Skip }
 
-        /// <param name="frameSeen">The page reported its first presented frame.</param>
+        /// <param name="frameSeen">The page reported its picture painted: several presented frames with
+        /// the media time moving, on a visible page (player.js announceFirstFrame). One callback was
+        /// not enough: the owner saw the window open empty and the picture come a second later.</param>
         /// <param name="msSincePlaying">Since the page reported "playing", or null before it.</param>
+        /// <param name="advancedMs">How much has played since "playing" (seeks excluded).</param>
         /// <param name="msSinceReady">Since the page's ready handshake, or null before it (the
         /// WebView2 start-up has its own, longer watch).</param>
-        public static Verdict Decide(bool frameSeen, long? msSincePlaying, long? msSinceReady)
+        public static Verdict Decide(bool frameSeen, long? msSincePlaying, long advancedMs, long? msSinceReady)
         {
             if (frameSeen) return Verdict.Reveal;
-            if (msSincePlaying >= PlayingGraceMs) return Verdict.Reveal;
+            if (msSincePlaying >= PlayingGraceMs && advancedMs >= AdvanceMs) return Verdict.Reveal;
             if (msSincePlaying != null) return Verdict.Wait;   // playing: the grace above decides, never a skip
             if (msSinceReady >= ReadyBudgetMs) return Verdict.Skip;
             return Verdict.Wait;

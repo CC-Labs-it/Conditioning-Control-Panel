@@ -46,24 +46,29 @@ public class FloatingVideoPolishTests
     [Fact]
     public void A_window_is_shown_on_its_first_frame()
     {
-        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(true, null, null));
-        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(true, 10, 50));
+        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(true, null, 0, null));
+        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(true, 10, 0, 50));
     }
 
     [Fact]
-    public void Playing_without_a_frame_report_counts_after_a_short_grace()
+    public void Without_a_frame_report_the_clip_must_have_played_a_while_before_it_is_shown()
     {
-        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, FloatingFirstFrame.PlayingGraceMs - 1, 100));
-        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(false, FloatingFirstFrame.PlayingGraceMs, 100));
+        var grace = FloatingFirstFrame.PlayingGraceMs;
+        var moved = FloatingFirstFrame.AdvanceMs;
+        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, grace - 1, moved, 100));
+        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(false, grace, moved, 100));
+        // "Playing" alone is not a painted picture: a clip stuck on its first frame waits.
+        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, grace * 5, moved - 1, 100));
+        Assert.True(grace >= 1000 && moved >= 300);
     }
 
     [Fact]
     public void A_clip_with_no_frame_in_time_is_skipped_and_never_shown()
     {
-        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, null, FloatingFirstFrame.ReadyBudgetMs - 1));
-        Assert.Equal(FloatingFirstFrame.Verdict.Skip, FloatingFirstFrame.Decide(false, null, FloatingFirstFrame.ReadyBudgetMs));
+        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, null, 0, FloatingFirstFrame.ReadyBudgetMs - 1));
+        Assert.Equal(FloatingFirstFrame.Verdict.Skip, FloatingFirstFrame.Decide(false, null, 0, FloatingFirstFrame.ReadyBudgetMs));
         // Before the page is even ready, the WebView2 start-up has its own longer watch.
-        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, null, null));
+        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, null, 0, null));
         Assert.Equal(4000, FloatingFirstFrame.ReadyBudgetMs);
     }
 
@@ -84,7 +89,7 @@ public class FloatingVideoPolishTests
 
     [Fact]
     public void A_playing_clip_is_never_skipped_for_a_late_frame_report()
-        => Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, 0, FloatingFirstFrame.ReadyBudgetMs * 2));
+        => Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, 0, 0, FloatingFirstFrame.ReadyBudgetMs * 2));
 
     [Fact]
     public void A_veiled_window_takes_no_sound_until_it_is_shown()
@@ -99,6 +104,9 @@ public class FloatingVideoPolishTests
         Assert.Contains("ApplyAudioFocus();", reveal);
         // A grace pause holds the first-frame clock.
         Assert.Contains("if (_gracePaused)", Member(src, "private void CheckReveal("));
+        // The fallback counts played time from "playing" (a seek is not progress).
+        Assert.Contains("var at = (long?)o[\"playedMs\"] ?? 0;", src);
+        Assert.Contains("c.FirstTimeMs < 0 ? 0 : c.LastTimeMs - c.FirstTimeMs,", Member(src, "private void CheckReveal("));
         // Closing mid-reveal never shows the full window.
         Assert.Contains("if (_detached) return;", Member(Read("Services", "Video", "Floating", "FloatingVideoFrame.cs"), "private void EndVeil("));
     }
@@ -158,6 +166,9 @@ public class FloatingVideoPolishTests
         Assert.DoesNotContain(".Opacity", frame);
         Assert.DoesNotContain("Effect =", frame);
         Assert.Contains("SetWindowRgn(_hwnd, rgn, true)", frame);
+        // Fully veiled is one pixel, never an empty region: the page is not treated as hidden.
+        Assert.Contains("CreateRectRgn(w / 2, h / 2, w / 2 + 1, h / 2 + 1)", frame);
+        Assert.DoesNotContain("CreateRectRgn(0, 0, 0, 0)", frame);
     }
 
     [Fact]
