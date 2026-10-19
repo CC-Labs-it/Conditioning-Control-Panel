@@ -45,7 +45,7 @@ public sealed class OnlineMediaHelpSlip : Border
         var lines = OnlineMeterRules.HelpParagraphs(Loc.Get,
             ScrolllerAllowance.DailyBytes(ScrolllerPlan.Free), ScrolllerAllowance.FreeFirstDayBytes,
             ScrolllerAllowance.DailyBytes(ScrolllerPlan.Basic), ScrolllerAllowance.DailyBytes(ScrolllerPlan.Prime),
-            ScrolllerDiskCache.CapBytes);
+            ScrolllerDiskCache.CapBytes, System.Globalization.CultureInfo.CurrentUICulture);
         for (int i = 0; i < lines.Length; i++)
         {
             var last = i == lines.Length - 1;

@@ -504,6 +504,7 @@ public static class LeashHelpButton
         b.VerticalAlignment = VerticalAlignment.Center;
         b.Tag = tag;
         var ctl = new Controller(b, slip);
+        Controllers.AddOrUpdate(b, ctl);
         b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
         return b;
     }
@@ -552,6 +553,7 @@ public static class LeashHelpButton
             Tag = "leash-slip-help:" + entry.Id,
         };
         var ctl = new Controller(b, () => new LeashHelpSlip(entry, theirName()));
+        Controllers.AddOrUpdate(b, ctl);
         b.Click += (_, e) => { e.Handled = true; ctl.TogglePin(); };
         return b;
     }
@@ -567,6 +569,15 @@ public static class LeashHelpButton
         HasDropShadow = false,
         Placement = PlacementMode.Right,
     };
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Button, Controller> Controllers = new();
+
+    /// <summary>Opens <paramref name="help"/>'s slip pinned, and leaves it open when it already is
+    /// (a click would toggle it shut). For a "?" made here; anything else is ignored.</summary>
+    public static void Pin(Button help)
+    {
+        if (Controllers.TryGetValue(help, out var ctl)) ctl.Pin();
+    }
 
     private sealed class Controller
     {
@@ -590,6 +601,12 @@ public static class LeashHelpButton
         }
 
         private bool Over() => _b.IsMouseOver || _popup?.Child is UIElement c && c.IsMouseOver;
+
+        public void Pin()
+        {
+            _pinned = true;
+            Open();
+        }
 
         public void TogglePin()
         {

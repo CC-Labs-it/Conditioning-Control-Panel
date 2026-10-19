@@ -347,7 +347,7 @@ namespace ConditioningControlPanel
                     try
                     {
                         AssetsTab?.RemoteMediaBlock?.BringIntoView();
-                        if (_onlineMeterHelp is { IsVisible: true } q) q.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, q));
+                        if (_onlineMeterHelp is { IsVisible: true } q) Controls.Leash.LeashHelpButton.Pin(q);
                     }
                     catch { /* tab gone */ }
                 }));

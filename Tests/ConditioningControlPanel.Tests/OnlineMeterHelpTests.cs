@@ -34,6 +34,13 @@ public class OnlineMeterHelpTests
         => Assert.Equal(expected, OnlineMeterRules.FormatSize(bytes));
 
     [Fact]
+    public void Sizes_follow_the_number_format_they_are_given()
+    {
+        Assert.Equal("7,8 GB", OnlineMeterRules.FormatSize(7987 * MB, System.Globalization.CultureInfo.GetCultureInfo("it-IT")));
+        Assert.Equal("7.8 GB", OnlineMeterRules.FormatSize(7987 * MB, System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+    }
+
+    [Fact]
     public void The_english_slip_with_the_shipped_figures()
     {
         var o = JObject.Parse(File.ReadAllText(Path.Combine(OnlineMeterCopyTests.LanguageDir(), "en.json")));
@@ -46,8 +53,8 @@ public class OnlineMeterHelpTests
         Assert.Equal(new[]
         {
             "Each plan gets a daily share: Free 300 MB, or 500 MB on your first day; Basic 2 GB; Prime 6 GB. It is counted per account on this PC, and signed out has a share of its own.",
-            "Every picture, GIF and clip that comes fresh from the online feed counts. The share resets at midnight, your local time.",
-            "Online media you have seen is usually kept on this PC, up to about 2 GB. When that is full, what you played longest ago goes first. Playing a kept file again is free and does not count.",
+            "Every picture, GIF and clip that comes fresh from the online feed counts toward the share. It resets at midnight, your local time.",
+            "Online media you have seen is usually kept on this PC, up to about 2 GB. When that is full, what was used longest ago goes first. Playing a kept file again is free and does not count.",
             "When the share is used up, kept media keeps playing and new online media waits until midnight. Your own files are never affected.",
             "The meter is counted on this PC only. Your usage is never tracked or sent anywhere.",
         }, lines);
