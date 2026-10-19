@@ -36,13 +36,12 @@ public class ScrolllerAllowanceTests : IDisposable
     }
 
     [Fact]
-    public void Defaults_are_300_mb_4096_mb_7987_mb()
+    public void Defaults_are_300_mb_2_gb_6_gb()
     {
-        // owner 2026-10-19: Basic doubled (2048 -> 4096), Prime +30 % (6144 -> 7987)
         Assert.Equal(300 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Free));
         Assert.Equal(500 * ScrolllerAllowance.MB, ScrolllerAllowance.DefaultFreeFirstDayBytes);
-        Assert.Equal(4096 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Basic));
-        Assert.Equal(7987 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Prime));
+        Assert.Equal(2048 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Basic));
+        Assert.Equal(6144 * ScrolllerAllowance.MB, ScrolllerAllowance.DailyBytes(ScrolllerPlan.Prime));
     }
 
     [Fact]
@@ -73,7 +72,7 @@ public class ScrolllerAllowanceTests : IDisposable
     public void Paid_plans_never_drop_to_the_first_day_figure()
     {
         _plan = ScrolllerPlan.Basic;
-        Assert.Equal(4096 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
+        Assert.Equal(2048 * ScrolllerAllowance.MB, ScrolllerAllowance.LimitBytes);
     }
 
     [Fact]
@@ -93,7 +92,7 @@ public class ScrolllerAllowanceTests : IDisposable
         Assert.Equal(100, ScrolllerAllowance.Percent);
         _plan = ScrolllerPlan.Prime;
         Assert.False(ScrolllerAllowance.Spent);
-        Assert.Equal(3, ScrolllerAllowance.Percent);   // 300 of 7987 MB
+        Assert.Equal(4, ScrolllerAllowance.Percent);
     }
 
     [Theory]

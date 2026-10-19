@@ -94,8 +94,8 @@ internal static class ScrolllerAllowance
     public const long MB = 1024L * 1024;
     public const long DefaultFreeBytes = 300 * MB;
     public const long DefaultFreeFirstDayBytes = 500 * MB;
-    public const long DefaultBasicBytes = 4096 * MB;   // owner 2026-10-19: Basic doubled
-    public const long DefaultPrimeBytes = 7987 * MB;   // owner 2026-10-19: Prime +30 %
+    public const long DefaultBasicBytes = 2048 * MB;
+    public const long DefaultPrimeBytes = 6144 * MB;
 
     /// <summary>The book's key for signed-out use.</summary>
     internal const string AnonymousKey = "anon";
