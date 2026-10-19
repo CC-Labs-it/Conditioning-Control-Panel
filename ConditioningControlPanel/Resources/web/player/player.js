@@ -534,18 +534,30 @@
     showCredit(cur.credit);
   });
 
-  // `firstFrame`: the first decoded frame is on the page, so a host that keeps its
-  // window hidden while a clip loads (floating videos) can show it now, never black.
-  // Without requestVideoFrameCallback it goes out with `playing`.
+  // `firstFrame`: the picture is really being painted, so a host that keeps its
+  // window hidden while a clip loads (floating videos) can show it now, never empty.
+  // One frame callback was not proof (owner, 2026-10-19: the window opened empty and
+  // the picture came a second later): it takes FIRST_FRAME_COUNT presented frames,
+  // the media time moving between them, on a visible page. No frame callback, or a
+  // page that never gets there: nothing is posted and the host falls back on played
+  // time (FloatingFirstFrame).
+  const FIRST_FRAME_COUNT = 3;
   function announceFirstFrame(session) {
-    let sent = false;
-    const send = () => {
-      if (sent || cur !== session) return;
-      sent = true;
-      post({ type: 'firstFrame' });
+    if (typeof fg.requestVideoFrameCallback !== 'function') return;
+    let frames = 0, firstMedia = -1;
+    const onFrame = (_now, meta) => {
+      if (cur !== session) return;
+      const t = meta && Number.isFinite(meta.mediaTime) ? meta.mediaTime : (fg.currentTime || 0);
+      frames++;
+      if (firstMedia < 0) firstMedia = t;
+      const visibility = document.visibilityState || 'visible';
+      if (frames >= FIRST_FRAME_COUNT && t > firstMedia && visibility === 'visible') {
+        post({ type: 'firstFrame', via: 'frames', frames: frames, mediaMs: Math.round(t * 1000), visibility: visibility });
+        return;
+      }
+      try { fg.requestVideoFrameCallback(onFrame); } catch (e) { /* the host's fallback decides */ }
     };
-    if (typeof fg.requestVideoFrameCallback !== 'function') { send(); return; }
-    try { fg.requestVideoFrameCallback(send); } catch (e) { send(); }
+    try { fg.requestVideoFrameCallback(onFrame); } catch (e) { /* the host's fallback decides */ }
   }
 
   // `outro`: the host shows the end card over the clip while it ends (its last
