@@ -1357,10 +1357,32 @@ namespace ConditioningControlPanel
             }
         }
 
+        /// <summary>The pause a panic left on the session (PanicAftermath): a remote resume of
+        /// exactly that pause is refused.</summary>
+        private Services.Safety.PanicAftermath.PanicPause? _panicPause;
+
+        /// <summary>Called by both panic paths right after their session pause.</summary>
+        private void NotePanicPause()
+        {
+            var engine = _sessionEngine;
+            _panicPause = Services.Safety.PanicAftermath.MarkPause(
+                engine?.CurrentSession, engine?.IsRunning == true, engine?.IsPaused == true, engine?.PauseCount ?? 0);
+        }
+
         internal void ResumeSessionFromRemote()
         {
             try
             {
+                // A remote (or voice) resume never undoes a panic: ResumeSession would restart
+                // flashes, video and subliminals with the engine stopped. Only a local START or
+                // Resume picks that pause up. The controller sees the session stay paused.
+                var engine = _sessionEngine;
+                if (Services.Safety.PanicAftermath.RemoteResumeRefused(
+                        _panicPause, engine?.CurrentSession, engine?.IsPaused == true, engine?.PauseCount ?? 0))
+                {
+                    App.Logger?.Information("[RemoteControl] Resume refused: a panic paused this session");
+                    return;
+                }
                 if (_sessionEngine?.IsRunning == true && _sessionEngine.IsPaused)
                     _sessionEngine.ResumeSession();
             }
@@ -1405,6 +1427,7 @@ namespace ConditioningControlPanel
                 // bark's Panic trigger is raised from the key path only - so without this a remote
                 // panic would leave her chatting.
                 try { App.EmiDesk?.Fire("panicPressed", null); } catch { }
+                Services.Safety.PanicAftermath.ArmQuiet(DateTime.UtcNow);   // Trigger Mode stays quiet too
 
                 App.Logger?.Information("[RemoteControl] Panic triggered from remote");
 
@@ -1419,6 +1442,7 @@ namespace ConditioningControlPanel
                 {
                     _sessionEngine.PauseSession();
                 }
+                NotePanicPause();
 
                 // Stop video explicitly (closes all video windows)
                 App.Video?.Stop();

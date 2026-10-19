@@ -325,6 +325,9 @@ namespace ConditioningControlPanel
 
             // Check for Relapse achievement (restart within 10s of ESC)
             if (!systemInitiated) App.Achievements?.CheckRelapse();
+            // A start that is not the Lockdown keeper's ends the post-panic quiet: what the user stopped may
+            // come back now (Services/Safety/PanicAftermath, Trigger Mode).
+            if (!systemInitiated) Services.Safety.PanicAftermath.EndQuiet();
 
             var settings = App.Settings.Current;
 

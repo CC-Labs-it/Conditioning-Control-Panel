@@ -2137,6 +2137,9 @@ namespace ConditioningControlPanel
 
         private void OnTriggerTick(object? sender, EventArgs e)
         {
+            // Post-panic quiet: no trigger, sound or haptic pulse, muted or not (PanicAftermath).
+            if (Services.Safety.PanicAftermath.TriggersSilenced(DateTime.UtcNow)) return;
+
             // Skip if speech is on cooldown or currently showing
             if (!IsSpeechReady()) return;
 
