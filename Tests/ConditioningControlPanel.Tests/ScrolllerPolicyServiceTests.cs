@@ -61,6 +61,40 @@ public sealed class ScrolllerPolicyServiceTests : System.IDisposable
     }
 
     [Fact]
+    public void Parse_OfficialTrue_IsOfficial()
+        => Assert.True(ScrolllerPolicyService.Parse("{\"enabled\":true,\"official\":true}")!.Official);
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"official\":false}")]
+    [InlineData("{\"official\":\"true\"}")]
+    [InlineData("{\"official\":1}")]
+    [InlineData("{\"official\":null}")]
+    [InlineData("{\"official\":{}}")]
+    public void Parse_OnlyAnExplicitTrueIsOfficial(string body) => Assert.False(ScrolllerPolicyService.Parse(body)!.Official);
+
+    [Fact]
+    public void Accept_SetsOfficial_AndAnAnswerWithoutItClearsIt()
+    {
+        Assert.False(ScrolllerPolicy.Official);
+        ScrolllerPolicyService.Accept(new ScrolllerPolicyService.Answer(true, null, null, Official: true));
+        Assert.True(ScrolllerPolicy.Official);
+        ScrolllerPolicyService.Accept(ScrolllerPolicyService.Parse("{\"enabled\":true}")!);
+        Assert.False(ScrolllerPolicy.Official);
+    }
+
+    [Fact]
+    public void Accept_RaisesTheAllowanceChangedSignal_WithOfficialAlreadySet()
+    {
+        bool? seen = null;
+        void OnChanged(object? s, System.EventArgs e) => seen = ScrolllerPolicy.Official;
+        ScrolllerAllowance.Changed += OnChanged;
+        try { ScrolllerPolicyService.Accept(new ScrolllerPolicyService.Answer(true, null, null, Official: true)); }
+        finally { ScrolllerAllowance.Changed -= OnChanged; }
+        Assert.True(seen);
+    }
+
+    [Fact]
     public void Accept_SetsSwitchCapAndMinVersion()
     {
         ScrolllerPolicyService.Accept(new ScrolllerPolicyService.Answer(false, 480, "7.2.0"));

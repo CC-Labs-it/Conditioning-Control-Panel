@@ -32,6 +32,17 @@ internal static class ScrolllerPolicy
         set => Volatile.Write(ref _away, value ? 1 : 0);
     }
 
+    private static int _official;
+
+    /// <summary>True once the Scrolller licence is signed (server <c>official: true</c>): the
+    /// Assets tab shows the one-time "official" note and the stamped credit line. False by
+    /// default and on any answer that does not say an explicit true.</summary>
+    public static bool Official
+    {
+        get => Volatile.Read(ref _official) == 1;
+        set => Volatile.Write(ref _official, value ? 1 : 0);
+    }
+
     /// <summary>Applies the server's answer. A cap above the default is ignored (the server
     /// can only lower it); a cap under 240 falls back to 240.</summary>
     public static void Apply(bool enabled, int? maxClipShortSide)
