@@ -41,6 +41,13 @@ namespace ConditioningControlPanel.Services.Video
             catch (Exception ex) { App.Logger?.Debug("GentleCurtain.CoverOwner failed: {E}", ex.Message); return null; }
         }
 
+        /// <summary>A curtain owned by <paramref name="owner"/> is still up (the clip is still black).</summary>
+        public static bool Covers(Window owner)
+        {
+            foreach (var c in _live) if (ReferenceEquals(c.Owner, owner)) return true;
+            return false;
+        }
+
         /// <summary>The screen rectangle (physical pixels) a window covers, read while it still has
         /// an HWND. Null when it has none.</summary>
         public static Int32Rect? RectOf(Window w)

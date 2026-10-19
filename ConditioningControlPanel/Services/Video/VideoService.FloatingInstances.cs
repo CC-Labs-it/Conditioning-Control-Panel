@@ -509,6 +509,8 @@ namespace ConditioningControlPanel.Services
             {
                 case "playing":
                     c.Playing = true;
+                    // This window's mute and close (VideoService.Controls.cs), after the page's fade.
+                    PostAfterPageMessage(() => { if (!c.Closed) ShowInstanceControls(c.Window, Safety.GentleVisuals.On ? Safety.GentleVisuals.FadeMs(0) : 0); });
                     break;
                 case "meta":
                     c.DurationMs = (long?)o["durationMs"] ?? 0;

@@ -556,6 +556,8 @@ namespace ConditioningControlPanel.Services
             {
                 if (!BrowserEventIsCurrent()) return;
                 VideoStarted?.Invoke(this, EventArgs.Empty);
+                // Mute and close, once the page's own fade from black has run (VideoService.Controls.cs).
+                ShowVideoControls(_browserStrict, Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0);
                 _ = App.Haptics?.StartVideoBackgroundVibeAsync();
                 try { App.Haptics?.FunScript?.OnVideoStarted(_browserPath ?? ""); }
                 catch (Exception ex) { App.Logger?.Debug("FunScript start hook failed: {Error}", ex.Message); }

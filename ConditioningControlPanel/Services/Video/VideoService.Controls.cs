@@ -1,0 +1,100 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using ConditioningControlPanel.Services.Video;
+
+namespace ConditioningControlPanel.Services
+{
+    /// <summary>
+    /// The mute and close buttons on every mandatory video (owner, 2026-10-19). The buttons are
+    /// <see cref="VideoControlsOverlay"/>, one per video window: each screen's copy of a full-screen
+    /// video, the floating LibVLC window, and each floating browser instance. Shown once the clip
+    /// is playing, gone with their window.
+    ///
+    ///   * CLOSE is the Esc door with a mouse, minus the grace pause: <c>Cleanup()</c>, exactly what
+    ///     a non-strict Esc does (SetupStrictHandlers, TryEscapeFromGlobalKey, HandleBrowserKey), so
+    ///     timers, the duck, the queue slot, VideoEnded and the next scheduling run as on any
+    ///     dismiss. It is a skip, not a watch: no attention-check XP, no Circe "to the end" note
+    ///     (both live only in EndCurrentVideo), watch time for what played. A floating instance
+    ///     closes alone through <c>CloseInstance</c> (watchedToEnd false). Hidden under any lock
+    ///     (<see cref="MandatoryVideoControls.ShowClose"/>) and refused again on the press.
+    ///   * MUTE silences THIS video run only: folded into <see cref="GetEffectiveVolume"/> beside the
+    ///     DtRH external mute, so every player follows the one existing path (LibVLC Volume/Mute,
+    ///     MediaElement Volume, the browser page's muted flag, floating windows on top of their audio
+    ///     focus). Never the Windows mixer. Cleared when the video ends (Cleanup / ForceCleanup), so
+    ///     an attention-check replay of the same clip stays muted and the next video has sound.
+    /// </summary>
+    public partial class VideoService
+    {
+        private readonly List<VideoControlsOverlay> _videoControls = new();
+        private volatile bool _userMuted;
+
+        private static bool LockedChaosRun()
+            => App.Chaos?.IsRunning == true || ConditioningControlPanel.Services.Chaos.DtrhHostService.IsRunActive;
+
+        private bool CloseAllowed(bool strict)
+            => MandatoryVideoControls.ShowClose(strict || IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun());
+
+        /// <summary>Buttons on every window of the single video on screen that has none yet. UI thread.</summary>
+        private void ShowVideoControls(bool strict, int delayMs = 0)
+        {
+            try
+            {
+                if (!_videoPlaying || _isCleaningUp) return;
+                var showClose = CloseAllowed(strict);
+                foreach (var w in _windows.ToList())
+                    AttachVideoControls(w, showClose, () => CloseVideoFromButton(strict), delayMs);
+            }
+            catch (Exception ex) { App.Logger?.Debug("VideoService: video controls failed - {Error}", ex.Message); }
+        }
+
+        private void AttachVideoControls(Window host, bool showClose, Action onClose, int delayMs = 0)
+        {
+            if (!host.IsLoaded || _videoControls.Any(c => ReferenceEquals(c.Host, host))) return;
+            var c = new VideoControlsOverlay(host, showClose, _userMuted, ToggleUserMute, onClose, delayMs);
+            c.Closed += x => _videoControls.Remove(x);
+            _videoControls.Add(c);
+        }
+
+        private void ToggleUserMute()
+        {
+            _userMuted = !_userMuted;
+            VideoDiag.Log("VIDEO", $"mute button - video {(_userMuted ? "muted" : "unmuted")}");
+            UpdatePlayingVideosVolume();
+            foreach (var c in _videoControls.ToList()) c.SetMuted(_userMuted);
+        }
+
+        /// <summary>The video ended: the next one starts with its sound.</summary>
+        private void ResetUserMute() => _userMuted = false;
+
+        /// <summary>The X on a full-screen (or LibVLC floating) video: the non-strict Esc dismiss.</summary>
+        private void CloseVideoFromButton(bool strict)
+        {
+            if (!_videoPlaying || _isCleaningUp) return;
+            if (!CloseAllowed(strict))
+            {
+                VideoDiag.Log("PANIC", "close button refused - the video is locked");
+                return;
+            }
+            VideoDiag.Log("PANIC", "close button - dismissing the video via Cleanup (the Esc door)");
+            Cleanup();
+        }
+
+        /// <summary>The X on one floating browser window: that window goes, the run carries on.</summary>
+        private void ShowInstanceControls(Video.Browser.BrowserVideoWindow win, int delayMs)
+        {
+            try
+            {
+                if (!_videoPlaying || _isCleaningUp) return;
+                AttachVideoControls(win, CloseAllowed(strict: false), () =>
+                {
+                    if (!CloseAllowed(strict: false)) return;
+                    VideoDiag.Log("PANIC", "close button - one floating window closes (CloseInstance)");
+                    CloseInstanceOf(win, "close button");
+                }, delayMs);
+            }
+            catch (Exception ex) { App.Logger?.Debug("VideoService: floating controls failed - {Error}", ex.Message); }
+        }
+    }
+}

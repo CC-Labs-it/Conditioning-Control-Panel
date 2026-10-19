@@ -1637,7 +1637,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private int GetEffectiveVolume()
         {
-            if (_externalMute) return 0;
+            if (_externalMute || _userMuted) return 0;   // the DtRH dive, or the video's own mute button
             var master = App.Settings.Current.MasterVolume;
             var video = App.Settings.Current.VideoVolume;
             return (int)((master / 100.0) * (video / 100.0) * 100);
@@ -1655,6 +1655,7 @@ namespace ConditioningControlPanel.Services
             var master = App.Settings.Current.MasterVolume;
             var video = App.Settings.Current.VideoVolume;
             if (_externalMute) return $"DtRH dive external mute (user setting is master {master}%, video {video}%)";
+            if (_userMuted) return "the mute button on this video";
             if (master <= 0) return "user setting: master volume is 0";
             if (video <= 0) return "user setting: video volume is 0";
             return $"user setting (master {master}%, video {video}%)";
@@ -2717,6 +2718,7 @@ namespace ConditioningControlPanel.Services
             CloseAll(synchronous, reason: synchronous ? "app exit" : "force cleanup (panic / stuck / session switch)");
             App.Audio?.ForceUnduck();
             _penalties = 0;
+            ResetUserMute();
 
             // Release the InteractionQueue slot if we still hold it. Panic key / stuck-timer /
             // session-switch teardown routes through ForceCleanup (not Cleanup), so without this
@@ -3967,6 +3969,7 @@ namespace ConditioningControlPanel.Services
             if (withAudio)
             {
                 int audioRouted = 0; // Playing can fire again after a seek/restart - route once
+                int controlsShown = 0;
                 mediaPlayer.Playing += (s, e) =>
                 {
                     // Play() is async: LibVLC hasn't created the audio output yet when it returns,
@@ -3990,6 +3993,12 @@ namespace ConditioningControlPanel.Services
                         Task.Run(() => RouteAndProbeAudio(mediaPlayer!, Path.GetFileName(path)));
                     // A companion has the sound: this player's own track stays off (never Mute).
                     if (_primaryFocusMuted) Task.Run(() => ApplyPrimaryAudioTrack(mediaPlayer!));
+                    // The mute and close buttons, once the clip is rolling (VideoService.Controls.cs).
+                    if (System.Threading.Interlocked.Exchange(ref controlsShown, 1) == 0)
+                        Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                        {
+                            if (ReferenceEquals(mediaPlayer, _primaryMediaPlayer)) ShowVideoControls(strict);
+                        }));
                 };
                 if (floating)
                     mediaPlayer.ESSelected += (s, e) =>
@@ -5375,6 +5384,7 @@ namespace ConditioningControlPanel.Services
                     }
                     StartSafetyTimer(_duration);
                 }
+                ShowVideoControls(strict);   // mute and close (VideoService.Controls.cs)
             };
 
             mediaElement.MediaEnded += (s, e) =>
@@ -8204,6 +8214,7 @@ namespace ConditioningControlPanel.Services
             _strictActive = false;
             CancelPendingRetry();
             _penalties = 0;
+            ResetUserMute();
 
             // Resume bubbles now that video is done
             App.Bubbles?.Resume();
