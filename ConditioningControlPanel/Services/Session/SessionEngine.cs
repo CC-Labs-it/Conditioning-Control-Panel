@@ -366,38 +366,44 @@ namespace ConditioningControlPanel.Services
             // Drop any not-yet-fired deferred feature starts (#483)
             _pendingFeatureStarts.Clear();
 
+            // ccp-bugs #1464: _isRunning is already false, so a teardown step that throws must not
+            // skip SessionStopped below - that is what resets every session clock and stops the
+            // engine. Each step is guarded on its own.
+            static void Step(Action step) => SessionClockRules.RunStep(step,
+                ex => App.Logger?.Warning(ex, "Session stop step failed - the stop goes on"));
+
             // Close corner GIF
             // CloseCornerGif also hands the corner back to any standalone slot that stood down
             // while this session's overlay owned it.
-            CloseCornerGif();
-            
+            Step(CloseCornerGif);
+
             // Stop Mind Wipe
-            App.MindWipe?.Stop();
+            Step(() => App.MindWipe?.Stop());
 
             // Stop Pop Quiz
-            App.PopQuiz?.Stop();
+            Step(() => App.PopQuiz?.Stop());
 
             // Stop Bubbles
-            App.Bubbles?.Stop();
+            Step(() => App.Bubbles?.Stop());
 
             // Stop Brain Drain if it was active during session
             if (_brainDrainActive)
             {
-                App.BrainDrain?.Stop();
+                Step(() => App.BrainDrain?.Stop());
                 _brainDrainActive = false;
             }
 
             // Force-unduck audio before restoring settings (subliminals/flashes may have left it ducked)
-            App.Audio?.ForceUnduck();
+            Step(() => App.Audio?.ForceUnduck());
 
             // Hand the flash trio back before the restore. Unconditional and ahead of
             // RestoreSettings, which returns early when there is no snapshot - a session overlay
             // left parked would keep overriding the user's own values for the rest of the run.
-            App.Settings?.Current?.ClearSessionFlashRamp();
+            Step(() => App.Settings?.Current?.ClearSessionFlashRamp());
 
             // Restore original settings
-            RestoreSettings();
-            
+            Step(RestoreSettings);
+
             // Fire events
             SessionStopped?.Invoke(this, EventArgs.Empty);
             App.Friends?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session);
@@ -628,12 +634,17 @@ namespace ConditioningControlPanel.Services
                 return;
             }
             
+            // ccp-bugs #1464: every step below runs guarded. A DispatcherTimer only re-arms after
+            // its Tick handler returns, so one throwing step used to kill the clock for good while
+            // the session still read as running - every session clock frozen on its last value.
+            static void Report(Exception ex) => App.Logger?.Warning(ex, "Session tick step failed - the clock keeps going");
+
             // Update progress
-            ProgressUpdated?.Invoke(this, new SessionProgressEventArgs(
+            SessionClockRules.RunStep(() => ProgressUpdated?.Invoke(this, new SessionProgressEventArgs(
                 elapsed,
                 RemainingTime,
                 ProgressPercent
-            ));
+            )), Report);
 
             // EMI Desk (MOMENTS 4.B): the two beats inside a run, each once. The bark's
             // SessionProgress context never carries the remaining time, which is the only number
@@ -655,16 +666,16 @@ namespace ConditioningControlPanel.Services
             catch { }
             
             // Check for phase changes
-            CheckPhaseTransition(elapsedMinutes);
-            
+            SessionClockRules.RunStep(() => CheckPhaseTransition(elapsedMinutes), Report);
+
             // Update ramping values
-            UpdateRampingValues(elapsedMinutes, totalMinutes);
-            
+            SessionClockRules.RunStep(() => UpdateRampingValues(elapsedMinutes, totalMinutes), Report);
+
             // Check for delayed feature starts
-            CheckDelayedFeatures(elapsedMinutes);
-            
+            SessionClockRules.RunStep(() => CheckDelayedFeatures(elapsedMinutes), Report);
+
             // Handle intermittent bubbles
-            HandleIntermittentBubbles(elapsedMinutes);
+            SessionClockRules.RunStep(() => HandleIntermittentBubbles(elapsedMinutes), Report);
         }
         
         private void CheckPhaseTransition(double elapsedMinutes)
