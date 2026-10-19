@@ -1649,6 +1649,8 @@
   "label_mute_subliminal_audio": "Subliminales Audio stummschalten",
   "label_mute_voice_lines": "Sprachzeilen stummschalten",
   "label_mute_voice_lines_hint": "Antworten erscheinen weiter als Text. Nur die gesprochenen Zeilen verstummen.",
+  "label_idle_voice_engine_off": "Leerlaufzeilen sprechen, wenn die Engine aus ist",
+  "label_idle_voice_engine_off_hint": "Aus: Die Zeilen erscheinen weiter, nur leise.",
   "label_companion_voice_level": "Lautstärke der Stimme",
   "label_companion_voice_level_hint": "Wie laut die Stimme neben allem anderen ist. 80 ist der übliche Wert.",
   "label_pause_browser": "Browser pausieren",

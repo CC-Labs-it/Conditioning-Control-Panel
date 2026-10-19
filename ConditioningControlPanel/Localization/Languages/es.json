@@ -1649,6 +1649,8 @@
   "label_mute_subliminal_audio": "Silenciar audio subliminal",
   "label_mute_voice_lines": "Silenciar frases de voz",
   "label_mute_voice_lines_hint": "Las respuestas siguen saliendo como texto. Solo se callan las frases habladas.",
+  "label_idle_voice_engine_off": "Decir las frases de reposo con el motor apagado",
+  "label_idle_voice_engine_off_hint": "Apagado: siguen saliendo, en silencio.",
   "label_companion_voice_level": "Nivel de la voz",
   "label_companion_voice_level_hint": "Lo fuerte que suena la voz frente a todo lo demás. 80 es el nivel habitual.",
   "label_pause_browser": "Pausar Navegador",

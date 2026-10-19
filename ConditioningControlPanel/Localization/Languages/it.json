@@ -2419,6 +2419,8 @@
   "label_mute_subliminal_audio": "Silenzia l'audio subliminale",
   "label_mute_voice_lines": "Silenzia la voce",
   "label_mute_voice_lines_hint": "Le risposte restano come testo, solo la voce tace.",
+  "label_idle_voice_engine_off": "Pronuncia le frasi di attesa a motore spento",
+  "label_idle_voice_engine_off_hint": "Spento: compaiono comunque, in silenzio.",
   "label_pause_browser": "Pausa browser",
   "label_pause_embedded_browser_audio": "Metti in pausa l'audio del browser integrato",
   "label_click_avatar_for_progress_right_click_for_men": "Clic sull'avatar per i progressi · Clic destro per il menu · Doppio clic per chattare",
