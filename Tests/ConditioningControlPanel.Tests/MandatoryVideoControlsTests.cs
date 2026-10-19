@@ -38,7 +38,8 @@ public class MandatoryVideoControlsTests
     public void A_chaos_run_gets_no_buttons_and_a_refused_X_goes_away()
     {
         var controls = Read("Services", "Video", "VideoService.Controls.cs");
-        Assert.Contains("if (!MandatoryVideoControls.ShowMute(", Member(controls, "private void ShowVideoControls("));
+        Assert.Contains("if (!ControlsAllowed(strict)) return;", Member(controls, "private void ShowVideoControls("));
+        Assert.Contains("MandatoryVideoControls.ShowMute(", Member(controls, "private bool ControlsAllowed("));
         Assert.Contains("HideCloseButtons();", Member(controls, "private void CloseVideoFromButton("));
         Assert.Contains("HideCloseButtons();", Member(controls, "private void ShowInstanceControls("));
         Assert.Contains("if (!c.IsClosed) _videoControls.Add(c);", controls);
@@ -103,6 +104,56 @@ public class MandatoryVideoControlsTests
         Assert.Contains("WS_EX_NOACTIVATE", overlay);
         Assert.Contains("MA_NOACTIVATE", overlay);
         Assert.Contains("GentleCurtain.Covers(_host)", overlay);   // never over a black curtain
+    }
+
+    [Fact]
+    public void A_mute_press_during_teardown_does_nothing_and_CloseAll_takes_the_buttons_first()
+    {
+        var controls = Read("Services", "Video", "VideoService.Controls.cs");
+        Assert.Contains("if (!_videoPlaying || _isCleaningUp) return;", Member(controls, "private void ToggleUserMute("));
+        var closeAll = Member(Read("Services", "Video", "VideoService.cs"), "private void CloseAll(");
+        var at = closeAll.IndexOf("CloseVideoControls();", StringComparison.Ordinal);
+        Assert.True(at >= 0 && at < closeAll.IndexOf("GentleCurtain", StringComparison.Ordinal), "CloseAll must close the buttons first");
+    }
+
+    [Fact]
+    public void A_DtRH_run_counts_as_a_chaos_run_for_float_buttons_and_the_credit_link()
+    {
+        var floating = Read("Services", "Video", "VideoService.Floating.cs");
+        var instances = Read("Services", "Video", "VideoService.FloatingInstances.cs");
+        var browser = Read("Services", "Video", "VideoService.Browser.cs");
+        var credit = Read("Services", "Video", "ScrolllerCredit.cs");
+        foreach (var src in new[] { floating, instances })
+        {
+            Assert.Contains("LockedChaosRun());", src);
+            Assert.DoesNotContain("App.Chaos?.IsRunning == true);", src);
+        }
+        foreach (var src in new[] { instances, browser })
+            foreach (var line in src.Split('\n').Where(l => l.Contains("CanOpenLink(") || l.Contains("App.Lockdown?.IsActive == true, App.Chaos")))
+                Assert.DoesNotContain("App.Chaos?.IsRunning", line);
+        Assert.Contains("VideoService.LockedChaosRun()", credit);
+        Assert.Contains("DtrhHostService.IsRunActive", Read("Services", "Video", "VideoService.Controls.cs"));
+        Assert.Contains("if (!ControlsAllowed(strict: false)) return;", Member(Read("Services", "Video", "VideoService.Controls.cs"), "private void ShowInstanceControls("));
+    }
+
+    [Fact]
+    public void A_Lockdown_that_starts_mid_video_takes_the_X_down()
+    {
+        var controls = Read("Services", "Video", "VideoService.Controls.cs");
+        Assert.Contains("lockdown.LockdownActivated += OnLockdownActivated;", controls);
+        Assert.Contains("HideCloseButtons();", Member(controls, "private void OnLockdownActivated("));
+        Assert.Contains("WatchForLocks();", Member(controls, "private void AttachVideoControls("));
+    }
+
+    [Fact]
+    public void The_buttons_stay_directly_above_their_own_window_never_above_other_videos()
+    {
+        var overlay = Read("Windows", "VideoControlsOverlay.cs");
+        Assert.DoesNotContain("Topmost = true", overlay);
+        Assert.Contains("Topmost = host.Topmost", overlay);
+        Assert.Contains("GetWindow(host, GW_HWNDPREV)", overlay);
+        Assert.Contains("WM_WINDOWPOSCHANGED", overlay);
+        Assert.Contains("Restack();", Member(overlay, "private void TryShow("));
     }
 
     [Fact]

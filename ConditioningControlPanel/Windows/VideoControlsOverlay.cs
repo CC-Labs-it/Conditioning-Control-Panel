@@ -24,6 +24,10 @@ namespace ConditioningControlPanel
     /// down without a line of its own. Never activated, never focused: the strict window keeps its
     /// keyboard (the Esc pause door), and a floating window keeps the player's current app.
     /// It follows the window when it moves (floating windows fly and get dragged).
+    ///
+    /// Never above OTHER videos: shown at the top of the topmost band, A's buttons covered floating
+    /// window B's picture and a press there closed A. It is kept directly above its own owner,
+    /// re-stacked whenever the owner's z-order changes (WM_WINDOWPOSCHANGED).
     /// </summary>
     internal sealed class VideoControlsOverlay
     {
@@ -40,6 +44,7 @@ namespace ConditioningControlPanel
         private readonly DispatcherTimer _waitTimer;
         private readonly int _notBeforeTick;
         private IntPtr _hwnd;
+        private HwndSource? _hostSource;
         private bool _closed;
 
         /// <summary>Raised once, whichever way the buttons went away.</summary>
@@ -82,7 +87,9 @@ namespace ConditioningControlPanel
                 ShowInTaskbar = false,
                 ShowActivated = false,
                 Focusable = false,
-                Topmost = true,
+                // The owner's band (a video window is topmost), never above it: Restack keeps the
+                // buttons directly over their own window, under anything stacked over that window.
+                Topmost = host.Topmost,
                 Title = "",
                 WindowStartupLocation = WindowStartupLocation.Manual,
                 Left = host.Left + Math.Max(0, host.ActualWidth - 80),
@@ -145,6 +152,10 @@ namespace ConditioningControlPanel
                 if (_win.Owner == null) _win.Owner = _host;
                 _win.Show();
                 Place();
+                Restack();
+                var host = new WindowInteropHelper(_host).Handle;
+                _hostSource = host == IntPtr.Zero ? null : HwndSource.FromHwnd(host);
+                _hostSource?.AddHook(HostHook);
             }
             catch (Exception ex) { App.Logger?.Debug("VideoControlsOverlay: show failed - {Error}", ex.Message); Close(); }
         }
@@ -162,6 +173,35 @@ namespace ConditioningControlPanel
                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             }
             catch (Exception ex) { Diag.Swallowed(ex); }
+        }
+
+        /// <summary>Directly above the owner, below whatever sits above it (another floating video,
+        /// an attention target, the Chaos layer). Never activates.</summary>
+        private void Restack()
+        {
+            if (_closed || _hwnd == IntPtr.Zero) return;
+            try
+            {
+                var host = new WindowInteropHelper(_host).Handle;
+                if (host == IntPtr.Zero) return;
+                var above = GetWindow(host, GW_HWNDPREV);
+                if (above == _hwnd) return;   // already there
+                SetWindowPos(_hwnd, above, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);   // Zero = HWND_TOP
+            }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+        }
+
+        /// <summary>The owner changed place in the z-order: follow it, one dispatcher turn later.</summary>
+        private IntPtr HostHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg != WM_WINDOWPOSCHANGED || _closed || lParam == IntPtr.Zero) return IntPtr.Zero;
+            try
+            {
+                var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
+                if ((pos.flags & SWP_NOZORDER) == 0) _host.Dispatcher.BeginInvoke(new Action(Restack));
+            }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+            return IntPtr.Zero;
         }
 
         private void OnHostMoved(object? sender, EventArgs e) => Place();
@@ -188,6 +228,9 @@ namespace ConditioningControlPanel
             _host.SizeChanged -= OnHostMoved;
             _host.IsVisibleChanged -= OnHostVisibility;
             _host.Closed -= OnHostClosed;
+            try { if (_hostSource != null && !_hostSource.IsDisposed) _hostSource.RemoveHook(HostHook); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+            _hostSource = null;
             try { Closed?.Invoke(this); } catch (Exception ex) { Diag.Swallowed(ex); }
             Closed = null;
         }
@@ -251,6 +294,9 @@ namespace ConditioningControlPanel
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT { public int Left, Top, Right, Bottom; }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WINDOWPOS { public IntPtr hwnd, hwndInsertAfter; public int x, y, cx, cy; public uint flags; }
+
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
         private const int WS_EX_APPWINDOW = 0x00040000;
@@ -258,9 +304,13 @@ namespace ConditioningControlPanel
         private const int WM_MOUSEACTIVATE = 0x0021;
         private const int MA_NOACTIVATE = 3;
         private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const int WM_WINDOWPOSCHANGED = 0x0047;
+        private const uint GW_HWNDPREV = 3;
         private const uint SWP_NOZORDER = 0x0004;
         private const uint SWP_NOACTIVATE = 0x0010;
 
+        [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
         [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
         [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
