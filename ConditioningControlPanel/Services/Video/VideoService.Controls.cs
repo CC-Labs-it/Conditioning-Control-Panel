@@ -22,8 +22,11 @@ namespace ConditioningControlPanel.Services
     ///   * MUTE silences THIS video run only: folded into <see cref="GetEffectiveVolume"/> beside the
     ///     DtRH external mute, so every player follows the one existing path (LibVLC Volume/Mute,
     ///     MediaElement Volume, the browser page's muted flag, floating windows on top of their audio
-    ///     focus). Never the Windows mixer. Cleared when the video ends (Cleanup / ForceCleanup), so
-    ///     an attention-check replay of the same clip stays muted and the next video has sound.
+    ///     focus). Never the Windows mixer. Cleared when the video ends (Cleanup / ForceCleanup /
+    ///     Stop), so the next video has sound; an attention-check replay (a fresh clip that skips
+    ///     Cleanup) stays muted.
+    ///   * Neither button shows during a Chaos or Down the Rabbit Hole run: the run draws its own HUD
+    ///     over the clip and the dive holds its own mute (owner, 2026-10-19).
     /// </summary>
     public partial class VideoService
     {
@@ -42,6 +45,7 @@ namespace ConditioningControlPanel.Services
             try
             {
                 if (!_videoPlaying || _isCleaningUp) return;
+                if (!MandatoryVideoControls.ShowMute(strict || IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
                 var showClose = CloseAllowed(strict);
                 foreach (var w in _windows.ToList())
                     AttachVideoControls(w, showClose, () => CloseVideoFromButton(strict), delayMs);
@@ -51,10 +55,10 @@ namespace ConditioningControlPanel.Services
 
         private void AttachVideoControls(Window host, bool showClose, Action onClose, int delayMs = 0)
         {
-            if (!host.IsLoaded || _videoControls.Any(c => ReferenceEquals(c.Host, host))) return;
+            if (_videoControls.Any(c => ReferenceEquals(c.Host, host))) return;
             var c = new VideoControlsOverlay(host, showClose, _userMuted, ToggleUserMute, onClose, delayMs);
             c.Closed += x => _videoControls.Remove(x);
-            _videoControls.Add(c);
+            if (!c.IsClosed) _videoControls.Add(c);
         }
 
         private void ToggleUserMute()
@@ -63,6 +67,12 @@ namespace ConditioningControlPanel.Services
             VideoDiag.Log("VIDEO", $"mute button - video {(_userMuted ? "muted" : "unmuted")}");
             UpdatePlayingVideosVolume();
             foreach (var c in _videoControls.ToList()) c.SetMuted(_userMuted);
+        }
+
+        /// <summary>A lock started mid-video (a Lockdown): the X that now refuses goes away everywhere.</summary>
+        private void HideCloseButtons()
+        {
+            foreach (var c in _videoControls.ToList()) c.HideClose();
         }
 
         /// <summary>The video ended: the next one starts with its sound.</summary>
@@ -75,6 +85,7 @@ namespace ConditioningControlPanel.Services
             if (!CloseAllowed(strict))
             {
                 VideoDiag.Log("PANIC", "close button refused - the video is locked");
+                HideCloseButtons();
                 return;
             }
             VideoDiag.Log("PANIC", "close button - dismissing the video via Cleanup (the Esc door)");
@@ -89,7 +100,7 @@ namespace ConditioningControlPanel.Services
                 if (!_videoPlaying || _isCleaningUp) return;
                 AttachVideoControls(win, CloseAllowed(strict: false), () =>
                 {
-                    if (!CloseAllowed(strict: false)) return;
+                    if (!CloseAllowed(strict: false)) { HideCloseButtons(); return; }
                     VideoDiag.Log("PANIC", "close button - one floating window closes (CloseInstance)");
                     CloseInstanceOf(win, "close button");
                 }, delayMs);

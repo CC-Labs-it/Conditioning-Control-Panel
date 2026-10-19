@@ -1832,6 +1832,7 @@ namespace ConditioningControlPanel.Services
             // deferred ~1s to a background task.
             _videoPlaying = false;
             _strictActive = false;
+            ResetUserMute();   // the next video after a stop has its sound
             CancelPendingRetry();
             ClearGraceState();   // defensive: CloseAll also does it, but it early-returns if already cleaning (#735)
             CloseFloatingInstances("engine stop");   // before CloseAll: its JIT can throw below

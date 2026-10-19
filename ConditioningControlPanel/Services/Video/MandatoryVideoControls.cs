@@ -16,8 +16,10 @@ namespace ConditioningControlPanel.Services.Video
         public static bool ShowClose(bool strict, bool lockdownActive, bool chaosRunning)
             => !strict && !lockdownActive && !chaosRunning;
 
-        /// <summary>Mute ends nothing, so it shows on every mandatory video, strict ones too.</summary>
-        public static bool ShowMute(bool strict, bool lockdownActive, bool chaosRunning) => true;
+        /// <summary>Mute ends nothing, so it shows on strict and Lockdown videos too. Not inside a
+        /// Chaos or Down the Rabbit Hole run: the run's HUD owns that corner and the dive holds its own
+        /// mute (owner, 2026-10-19).</summary>
+        public static bool ShowMute(bool strict, bool lockdownActive, bool chaosRunning) => !chaosRunning;
 
         /// <summary>Button diameter in DIPs (scaled by the monitor's DPI like every WPF size).</summary>
         public const double ButtonDip = 24;

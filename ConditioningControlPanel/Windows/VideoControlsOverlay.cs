@@ -47,6 +47,9 @@ namespace ConditioningControlPanel
 
         public Window Host => _host;
 
+        /// <summary>The buttons are gone (or never made it on screen).</summary>
+        public bool IsClosed => _closed;
+
         /// <param name="host">The video window, already shown.</param>
         /// <param name="delayMs">Wait at least this long before showing (a page fading in from black).</param>
         public VideoControlsOverlay(Window host, bool showClose, bool muted, Action onMute, Action onClose, int delayMs = 0)
@@ -107,7 +110,6 @@ namespace ConditioningControlPanel
             _waitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             _waitTimer.Tick += (_, _) => TryShow();
             _waitTimer.Start();
-            TryShow();
         }
 
         public void SetMuted(bool muted)
@@ -115,6 +117,12 @@ namespace ConditioningControlPanel
             if (_closed) return;
             _muteMark.Data = Geometry.Parse(muted ? MutedData : WavesData);
             _muteButton.ToolTip = Loc.Get(muted ? "video_btn_unmute" : "video_btn_mute");
+        }
+
+        /// <summary>Collapses the X (a lock started after the buttons went up). Mute stays.</summary>
+        public void HideClose()
+        {
+            if (!_closed) _closeButton.Visibility = Visibility.Collapsed;
         }
 
         public void Close()

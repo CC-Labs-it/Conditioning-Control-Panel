@@ -23,12 +23,25 @@ public class MandatoryVideoControlsTests
         Assert.Equal(expected, MandatoryVideoControls.ShowClose(strict, lockdown, chaos));
 
     [Fact]
-    public void Mute_shows_on_every_video_strict_ones_too()
+    public void Mute_shows_on_every_video_strict_ones_too_but_never_inside_a_chaos_run()
     {
         foreach (var strict in new[] { false, true })
             foreach (var lockdown in new[] { false, true })
-                foreach (var chaos in new[] { false, true })
-                    Assert.True(MandatoryVideoControls.ShowMute(strict, lockdown, chaos));
+            {
+                Assert.True(MandatoryVideoControls.ShowMute(strict, lockdown, chaosRunning: false));
+                // The run's HUD owns the corner and the DtRH dive holds its own mute.
+                Assert.False(MandatoryVideoControls.ShowMute(strict, lockdown, chaosRunning: true));
+            }
+    }
+
+    [Fact]
+    public void A_chaos_run_gets_no_buttons_and_a_refused_X_goes_away()
+    {
+        var controls = Read("Services", "Video", "VideoService.Controls.cs");
+        Assert.Contains("if (!MandatoryVideoControls.ShowMute(", Member(controls, "private void ShowVideoControls("));
+        Assert.Contains("HideCloseButtons();", Member(controls, "private void CloseVideoFromButton("));
+        Assert.Contains("HideCloseButtons();", Member(controls, "private void ShowInstanceControls("));
+        Assert.Contains("if (!c.IsClosed) _videoControls.Add(c);", controls);
     }
 
     [Fact]
@@ -68,6 +81,7 @@ public class MandatoryVideoControlsTests
         Assert.Contains("if (_externalMute || _userMuted) return 0;", main);
         Assert.Contains("ResetUserMute();", Member(main, "private void Cleanup("));
         Assert.Contains("ResetUserMute();", Member(main, "public void ForceCleanup("));
+        Assert.Contains("ResetUserMute();", Member(main, "public void Stop()"));   // engine stop, session pause, remote stop
 
         foreach (var src in new[] { Read("Services", "Video", "VideoService.Controls.cs"), Read("Windows", "VideoControlsOverlay.cs") })
         {
