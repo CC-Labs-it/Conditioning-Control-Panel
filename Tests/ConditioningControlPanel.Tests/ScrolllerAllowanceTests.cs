@@ -137,6 +137,113 @@ public class ScrolllerAllowanceTests : IDisposable
     }
 
     [Fact]
+    public void Midnight_and_a_plan_change_raise_changed_without_a_charge()
+    {
+        var changed = 0;
+        EventHandler h = (_, _) => changed++;
+        ScrolllerAllowance.Changed += h;
+        try
+        {
+            ScrolllerAllowance.Tick();   // first look
+            changed = 0;
+            ScrolllerAllowance.Tick();
+            Assert.Equal(0, changed);
+            _now = new DateTime(2026, 10, 20, 0, 0, 1);
+            ScrolllerAllowance.Tick();
+            Assert.Equal(1, changed);
+            _plan = ScrolllerPlan.Prime;
+            ScrolllerAllowance.Tick();
+            Assert.Equal(2, changed);
+            ScrolllerAllowance.ApplyLimits(100, null, null);
+            Assert.Equal(3, changed);
+        }
+        finally { ScrolllerAllowance.Changed -= h; }
+    }
+
+    [Fact]
+    public void Spent_edge_fires_for_a_lower_limit_or_a_plan_drop_once_a_day()
+    {
+        var fired = 0;
+        EventHandler h = (_, _) => fired++;
+        ScrolllerAllowance.SpentReached += h;
+        try
+        {
+            _plan = ScrolllerPlan.Basic;
+            ScrolllerAllowance.Charge(1000 * ScrolllerAllowance.MB);
+            Assert.Equal(0, fired);
+            _plan = ScrolllerPlan.Free;             // plan drop: 1000 MB is past the free day
+            ScrolllerAllowance.Tick();
+            Assert.Equal(1, fired);
+            _plan = ScrolllerPlan.Basic;
+            ScrolllerAllowance.Tick();
+            _plan = ScrolllerPlan.Free;             // same day: never twice
+            ScrolllerAllowance.Tick();
+            Assert.Equal(1, fired);
+
+            _now = _now.AddDays(1);
+            _plan = ScrolllerPlan.Basic;
+            ScrolllerAllowance.Charge(250 * ScrolllerAllowance.MB);
+            ScrolllerAllowance.ApplyLimits(null, 200, null);   // a lower limit uses it up
+            Assert.Equal(2, fired);
+        }
+        finally { ScrolllerAllowance.SpentReached -= h; }
+    }
+
+    [Fact]
+    public void A_day_already_spent_at_startup_never_fires()
+    {
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-allow-" + Guid.NewGuid().ToString("N") + ".json");
+        System.IO.File.WriteAllText(path, "{\"day\":\"2026-10-19\",\"used\":" + 400 * ScrolllerAllowance.MB + ",\"first\":\"2026-10-18\"}");
+        ScrolllerAllowance.LedgerPath = () => path;
+        var fired = 0;
+        EventHandler h = (_, _) => fired++;
+        ScrolllerAllowance.SpentReached += h;
+        try
+        {
+            ScrolllerAllowance.Tick();
+            ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+            Assert.True(ScrolllerAllowance.Spent);
+            Assert.Equal(0, fired);
+        }
+        finally
+        {
+            ScrolllerAllowance.SpentReached -= h;
+            try { System.IO.File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void A_clock_set_back_keeps_the_day_used_and_never_a_fresh_share()
+    {
+        ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+        _now = _now.AddDays(1);
+        ScrolllerAllowance.Charge(250 * ScrolllerAllowance.MB);
+        _now = _now.AddDays(-2);
+        Assert.Equal(250 * ScrolllerAllowance.MB, ScrolllerAllowance.UsedToday);
+        ScrolllerAllowance.Charge(50 * ScrolllerAllowance.MB);
+        _now = _now.AddDays(2);
+        Assert.True(ScrolllerAllowance.Spent);
+        _now = _now.AddDays(1);
+        Assert.Equal(0, ScrolllerAllowance.UsedToday);
+    }
+
+    [Fact]
+    public void A_charge_after_flush_still_lands_on_disk()
+    {
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-allow-" + Guid.NewGuid().ToString("N") + ".json");
+        ScrolllerAllowance.LedgerPath = () => path;
+        try
+        {
+            ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+            ScrolllerAllowance.Flush();
+            ScrolllerAllowance.Charge(ScrolllerAllowance.MB);
+            ScrolllerAllowance.Flush();
+            Assert.Contains("\"used\":" + 2 * ScrolllerAllowance.MB, System.IO.File.ReadAllText(path));
+        }
+        finally { try { System.IO.File.Delete(path); } catch { } }
+    }
+
+    [Fact]
     public void Nothing_and_negatives_charge_nothing()
     {
         ScrolllerAllowance.Charge(0);
