@@ -1601,6 +1601,7 @@ namespace ConditioningControlPanel
                 _sessionEngine.PhaseChanged += OnSessionPhaseChanged;
                 _sessionEngine.SessionStarted += OnSessionStarted;
                 _sessionEngine.SessionStopped += OnSessionStopped;
+                WatchSessionClocks(_sessionEngine);
             }
 
             // The engine is MainWindow-owned and created lazily, so the observers can't subscribe
@@ -1920,6 +1921,47 @@ namespace ConditioningControlPanel
                 Loc.Get("label_session_bar_elapsed"));
         }
 
+        /// <summary>
+        /// ccp-bugs #1464: every session clock repainted from the engine's own state, not only from
+        /// its one-second tick, which is held while the session is paused. Runs on every engine
+        /// start and stop (UpdateStartButton) and on every pause and resume (WatchSessionClocks),
+        /// so a clock on screen either counts or carries the pause mark (SessionClockRules.Face).
+        /// Reads the engine and writes labels only - never settings.
+        /// </summary>
+        private void RefreshSessionClocks()
+        {
+            try
+            {
+                var engine = _sessionEngine;
+                var session = engine?.IsRunning == true ? engine.CurrentSession : null;
+                var face = Services.SessionClockRules.Face(session != null, engine?.IsPaused == true);
+                if (face != Services.SessionClockRules.ClockFace.None && engine != null && PresetsTab?.BtnStartSession != null)
+                {
+                    var paused = face == Services.SessionClockRules.ClockFace.Paused;
+                    PresetsTab.BtnStartSession.Content = Services.SessionClockLabel.StopButton(
+                        engine.RemainingTime, App.Settings?.Current?.ShowSessionCountdown != false,
+                        Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2"),
+                        Services.SessionClockRules.PauseMark(paused, Loc.Get("label_paused")));
+                    if (TxtPauseIcon != null) TxtPauseIcon.Text = paused ? "▶" : "⏸";
+                    if (BtnPauseSession != null)
+                        BtnPauseSession.ToolTip = paused
+                            ? Loc.Get("tooltip_resume_session")
+                            : Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", engine.PauseCount);
+                }
+                RefreshBarStatus();
+                UpdateProgramSessionRow();
+            }
+            catch (Exception ex) { App.Logger?.Debug("Session clocks repaint failed: {E}", ex.Message); }
+        }
+
+        /// <summary>A pause or resume from anywhere (panic, the button, remote, recalibration)
+        /// repaints the clocks at once: the tick that would have done it is held while paused.</summary>
+        private void WatchSessionClocks(SessionEngine engine)
+        {
+            engine.SessionPaused += (_, _) => Dispatcher.BeginInvoke(new Action(RefreshSessionClocks));
+            engine.SessionResumed += (_, _) => Dispatcher.BeginInvoke(new Action(RefreshSessionClocks));
+        }
+
         private void OnSessionPhaseChanged(object? sender, SessionPhaseChangedEventArgs e)
         {
             Dispatcher.Invoke(() =>
@@ -2073,8 +2115,11 @@ namespace ConditioningControlPanel
 
             if (_sessionEngine.IsPaused)
             {
-                // Resume
-                _sessionEngine.ResumeSession();
+                // Resume. A panic stopped the engine along with the pause: resuming only the
+                // session left its clock counting over an engine the START button called stopped
+                // (ccp-bugs #1464). Start brings both back - it resumes the parked session itself.
+                if (Services.SessionClockRules.ResumeStartsEngine(_isRunning)) StartEngineFromUser();
+                else _sessionEngine.ResumeSession();
                 if (TxtPauseIcon != null) TxtPauseIcon.Text = "⏸";
                 BtnPauseSession.ToolTip = Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", _sessionEngine.PauseCount);
             }
@@ -2112,8 +2157,8 @@ namespace ConditioningControlPanel
                 }
             }
 
-            // The tick may be held while paused: show (or drop) the pause mark on the bar now.
-            RefreshBarStatus();
+            // The tick may be held while paused: show (or drop) the pause mark on every clock now.
+            RefreshSessionClocks();
         }
         
         // Methods called by SessionEngine to control features

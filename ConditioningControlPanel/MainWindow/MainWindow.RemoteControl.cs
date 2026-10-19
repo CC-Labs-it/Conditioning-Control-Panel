@@ -1311,6 +1311,7 @@ namespace ConditioningControlPanel
                     _sessionEngine.PhaseChanged += OnSessionPhaseChanged;
                     _sessionEngine.SessionStarted += OnSessionStarted;
                     _sessionEngine.SessionStopped += OnSessionStopped;
+                    WatchSessionClocks(_sessionEngine);
                     // Attach the bark system to this session engine (it's MainWindow-owned
                     // and created lazily, so BarkService can't subscribe at its own Start()).
                     App.Bark?.AttachSessionEngine(_sessionEngine);

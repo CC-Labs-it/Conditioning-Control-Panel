@@ -109,8 +109,31 @@ namespace ConditioningControlPanel
             {
                 // User manually starting - clear manual stop flag
                 _manuallyStoppedDuringSchedule = false;
-                StartEngine();
+                StartEngineFromUser();
             }
+        }
+
+        /// <summary>
+        /// ccp-bugs #1464: a START the user pressed. A panic pauses the session and stops the
+        /// engine; START used to bring every effect back over a session still parked, its clock
+        /// frozen on the panic's value for the rest of the run. The user's START picks the session
+        /// back up. Only user paths call this: the scheduler, the Lockdown keeper and a program or
+        /// remote session's own engine start go through StartEngine and never resume a session a
+        /// panic paused.
+        /// </summary>
+        private void StartEngineFromUser()
+        {
+            StartEngine();
+            var engine = _sessionEngine;
+            if (engine == null || !SessionClockRules.StartResumesParkedSession(_isRunning, engine.IsRunning, engine.IsPaused))
+                return;
+            try
+            {
+                engine.ResumeSession();
+                App.Logger?.Information("Start resumed the paused session");
+            }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Start: resuming the paused session failed"); }
+            RefreshSessionClocks();
         }
 
         // Opens the Start-options menu (Start normally / Jump right in).
@@ -126,7 +149,7 @@ namespace ConditioningControlPanel
 
         private void MenuStartNormal_Click(object sender, RoutedEventArgs e)
         {
-            if (!_isRunning) StartEngine();
+            if (!_isRunning) StartEngineFromUser();
         }
 
         private void MenuJumpRightIn_Click(object sender, RoutedEventArgs e)
@@ -968,7 +991,7 @@ namespace ConditioningControlPanel
 
                 // Also update Presets tab button using direct reference
                 // "Running...", or the session's name and clock while a session runs.
-                RefreshBarStatus();
+                RefreshSessionClocks();
             }
             else
             {
@@ -985,11 +1008,9 @@ namespace ConditioningControlPanel
                     }
                 };
 
-                // Also update Presets tab button
-                if (TxtPresetsStatus != null)
-                {
-                    TxtPresetsStatus.Text = "";
-                }
+                // Also update Presets tab button: blank, or a session a panic paused shown as
+                // paused rather than as a clock that stopped moving (ccp-bugs #1464).
+                RefreshSessionClocks();
             }
 
             // Velvet Kit 2 (FX lane B): idle gets the charged gradient + ring exhale, running gets
