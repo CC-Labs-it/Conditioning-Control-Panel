@@ -161,7 +161,7 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
             foreach (var item in items)
             {
                 if (_nonExplicitOnly && (bool?)item["isNsfw"] != false) continue;
-                var e = MapItem(item, channel.Name, stills);
+                var e = MapItem(item, channel.Name, stills, filter);
                 if (e != null) entries.Add(e);
             }
         }
@@ -292,7 +292,11 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     /// lets clip-viewed reports attribute dwell back to the channel.</summary>
     /// <param name="stills">true for a PICTURE page (map to a static "image" entry),
     /// false for VIDEO/GIF (map to a "video" entry with a poster).</param>
-    private static FypAssetManifest.Entry? MapItem(JToken item, string sub, bool stills)
+    /// <param name="filter">The page's filter (VIDEO, GIF, PICTURE): labels the urls for the
+    /// device cache (<see cref="ScrolllerReuse.Label"/>) so a cached file can be reused by niche.
+    /// A GIF post is always taken as its webm/mp4 rendition or its static poster, never as a
+    /// real .gif (<see cref="RemoteMediaFormats"/> admits none).</param>
+    internal static FypAssetManifest.Entry? MapItem(JToken item, string sub, bool stills, string? filter = null)
     {
         var sources = item["mediaSources"] as JArray;
         if (sources == null || sources.Count == 0) return null;
@@ -345,6 +349,8 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
             App.Logger?.Debug("[FYP online] dropped r/{Sub} post {Post}: {Reason}", sub, postId, reason);
             return null;
         }
+        ScrolllerReuse.Label(entry, sub, ScrolllerReuse.LabelFor(filter, stills),
+            smallUrl != null ? (int?)small?["width"] : null, smallUrl != null ? (int?)small?["height"] : null);
         return entry;
     }
 
