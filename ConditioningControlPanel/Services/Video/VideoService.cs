@@ -7696,6 +7696,9 @@ namespace ConditioningControlPanel.Services
         /// also drop any curtain still fading (<see cref="Video.GentleCurtain.DropAll"/>).</param>
         private void CloseAll(bool synchronous = false, string reason = "teardown", bool softExit = false)
         {
+            // The buttons go before anything else: CloseAll can pump the dispatcher for seconds, and a
+            // press in that window must find nothing to press (VideoService.Controls.cs).
+            CloseVideoControls();
             List<Window>? softCurtains = null;
             if (Video.GentleWindowRules.SoftExit(Safety.GentleVisuals.On, softExit) && !_isCleaningUp && _windows.Count > 0)
             {

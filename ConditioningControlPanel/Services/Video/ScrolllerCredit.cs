@@ -83,13 +83,13 @@ namespace ConditioningControlPanel.Services.Video
         }
 
         /// <summary>Open https://scrolller.com from a calm surface (a picker, Media History).
-        /// Refused under Strict Lock, Lockdown or a Chaos run. Never throws.</summary>
+        /// Refused under Strict Lock, Lockdown or a Chaos or DtRH run. Never throws.</summary>
         public static void OpenHome()
         {
             try
             {
                 if (!CanOpenLink(App.Settings?.Current?.StrictLockEnabled == true,
-                        App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                        App.Lockdown?.IsActive == true, VideoService.LockedChaosRun())) return;
                 ConditioningControlPanel.Helpers.BrowserLauncher.TryOpenUrl(HomeLink);
             }
             catch (Exception ex) { App.Logger?.Debug("ScrolllerCredit: home open failed: {E}", ex.Message); }
