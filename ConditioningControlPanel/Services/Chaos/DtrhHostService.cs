@@ -617,9 +617,9 @@ internal static class DtrhHostService
     /// <summary>fire-payload {kind, strength?, durationMult?} -> a native effect.
     /// Since the 2026-07 hard cutover the browser game renders every VISUAL effect in-world
     /// (dtrh/game/payloadFx.js) - no more native WPF layered windows over the game surface.
-    /// Only the two non-visual / native-by-necessity kinds still ride this bridge:
-    ///   - video: a mandatory covering video window (in-world port is separate future work)
-    ///   - audio: a one-shot whisper on the native audio path
+    /// Only audio still rides this bridge: a one-shot whisper on the native audio path. The
+    /// video card is in-world too, and a native video here would outlive the run
+    /// (<see cref="DtrhNativePayloadRule"/>, ccp-bugs #1470).
     /// Any other kind arriving here means a page/host version mismatch - log and ignore.</summary>
     private static void FirePayload(JObject o)
     {
@@ -628,20 +628,15 @@ internal static class DtrhHostService
             var kindStr = (string?)o["kind"];
             if (string.IsNullOrWhiteSpace(kindStr)) return;
 
-            EffectPayload payload;
-            if (string.Equals(kindStr, "video", StringComparison.OrdinalIgnoreCase))
-                payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Video);
-            else if (string.Equals(kindStr, "audio", StringComparison.OrdinalIgnoreCase))
-            {
-                payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Audio);
-                if (_runActive) _runSubliminalsHeard++;   // native whisper = a subliminal heard
-            }
-            else
+            if (!DtrhNativePayloadRule.Accepts(kindStr))
             {
                 // Visual effects are in-world now; the page should never send them here.
                 App.Logger?.Warning("DtrhHost: payload kind '{K}' is in-world since the cutover - ignored", kindStr);
                 return;
             }
+
+            EffectPayload payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Audio);
+            if (_runActive) _runSubliminalsHeard++;   // native whisper = a subliminal heard
 
             payload.Strength = Math.Clamp((int?)o["strength"] ?? 60, 0, 100);
             payload.DurationMult = Math.Clamp((double?)o["durationMult"] ?? 1.0, 0.1, 10.0);
