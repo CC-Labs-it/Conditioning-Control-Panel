@@ -125,6 +125,19 @@
                       Checked="ChkVoiceLines_Changed" Unchecked="ChkVoiceLines_Changed"/>
         </Grid>
 
+        <!-- ccp-bugs #1468: checked = the idle-timer lines speak with the engine off (the old
+             behaviour). Default off: the bubble shows, quietly. Opposite polarity to the mutes
+             above on purpose: the label names what turning it on does. -->
+        <Grid Margin="0,6,0,0">
+            <StackPanel Margin="0,0,44,0">
+                <TextBlock Text="{loc:Str label_idle_voice_engine_off}" Style="{StaticResource CmpCellLabelStyle}"/>
+                <TextBlock Text="{loc:Str label_idle_voice_engine_off_hint}" Style="{StaticResource CmpCellHintStyle}"/>
+            </StackPanel>
+            <CheckBox x:Name="ChkIdleVoiceEngineOffCompanion" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"
+                      HorizontalAlignment="Right" VerticalAlignment="Center"
+                      Checked="ChkIdleVoiceEngineOff_Changed" Unchecked="ChkIdleVoiceEngineOff_Changed"/>
+        </Grid>
+
         <!-- TUBE GLASS: MIDNIGHT (Prize Counter restock, 2026-08-26). Always VISIBLE and greyed
              out until the counter has sold it - a prize you cannot see is a prize nobody knows
              to want. Its row seeds and re-arms itself in the code-behind on every reveal rather

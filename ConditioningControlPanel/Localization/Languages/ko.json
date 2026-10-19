@@ -1649,6 +1649,8 @@
   "label_mute_subliminal_audio": "서브리미널 오디오 음소거",
   "label_mute_voice_lines": "음성 대사 음소거",
   "label_mute_voice_lines_hint": "답장은 계속 텍스트로 보여요. 음성으로 나오는 대사만 조용해져요.",
+  "label_idle_voice_engine_off": "엔진이 꺼져 있을 때도 대기 대사 말하기",
+  "label_idle_voice_engine_off_hint": "끄면: 대사는 계속 보이고, 소리만 나지 않아요.",
   "label_companion_voice_level": "음성 크기",
   "label_companion_voice_level_hint": "다른 소리에 비해 음성이 얼마나 큰지 정해요. 80이 평소 크기예요.",
   "label_pause_browser": "브라우저 일시정지",

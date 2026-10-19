@@ -145,6 +145,7 @@ namespace ConditioningControlPanel.Views.Tabs
         internal CheckBox ChkMuteWhispersCompanion => _vm.Shelf.Behavior.ChkMuteWhispersCompanion;
         internal CheckBox ChkPauseBrowserCompanion => _vm.Shelf.Behavior.ChkPauseBrowserCompanion;
         internal CheckBox ChkVoiceLinesCompanion => _vm.Shelf.Behavior.ChkVoiceLinesCompanion;
+        internal CheckBox ChkIdleVoiceEngineOffCompanion => _vm.Shelf.Behavior.ChkIdleVoiceEngineOffCompanion;
 
         // ---- Z8 · TRIGGERS & PHRASES ----
         internal CheckBox ChkTriggerModeCompanion => _vm.Shelf.Triggers.ChkTriggerModeCompanion;

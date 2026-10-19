@@ -2518,6 +2518,8 @@
   "label_mute_subliminal_audio": "Mute subliminal audio",
   "label_mute_voice_lines": "Mute Voice Lines",
   "label_mute_voice_lines_hint": "Replies still show as text. Only the spoken lines go quiet.",
+  "label_idle_voice_engine_off": "Speak idle lines when the engine is off",
+  "label_idle_voice_engine_off_hint": "Off: they still show, quietly.",
   "label_companion_voice_level": "Voice Level",
   "label_companion_voice_level_hint": "How loud the voice is next to everything else. 80 is the usual level.",
   "label_pause_browser": "Pause Browser",

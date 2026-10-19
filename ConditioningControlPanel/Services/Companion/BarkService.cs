@@ -1977,10 +1977,15 @@ namespace ConditioningControlPanel.Services
             // Resolve the variant's voiceline (if any) to a real path under the active mod.
             string? audioPath = ResolveBarkAudio(variant.Audio);
 
+            // ccp-bugs #1468: an Idle-trigger line is unprompted; the tube holds its sound while the
+            // engine is off (CompanionIdleVoice). The bubble shows either way.
+            bool unprompted = CompanionIdleVoice.IsUnprompted(rule.Trigger);
+            bool held = !CompanionIdleVoice.ShouldVoiceNow(unprompted);
+
             // DtRH session telemetry (local-only): a spoken bark counts toward the descent's
-            // "voiceover heard". Only read the clip duration when a run is live so the global
-            // bark path pays nothing off the game. No-ops elsewhere.
-            if (audioPath != null && Services.Chaos.DtrhHostService.IsRunActive)
+            // "voiceover heard" (a held idle line was not heard). Only read the clip duration when
+            // a run is live so the global bark path pays nothing off the game. No-ops elsewhere.
+            if (audioPath != null && !held && Services.Chaos.DtrhHostService.IsRunActive)
             {
                 double sec = 0;
                 try { using var r = new NAudio.Wave.AudioFileReader(audioPath); sec = r.TotalTime.TotalSeconds; }
@@ -1994,9 +1999,10 @@ namespace ConditioningControlPanel.Services
             bool priority = rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold;
             if (priority)
                 avatar.GigglePriority(line, playSound: audioPath == null, aiGenerated: false,
-                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood, unprompted: unprompted);
             else
-                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood,
+                    unprompted: unprompted);
 
             // Self-echo guard so the bubble text can't trip awareness/OCR off its own output.
             App.KeywordTriggers?.MuteKeywordEcho(line, SelfEchoMuteMs);

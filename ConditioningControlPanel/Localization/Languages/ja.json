@@ -1649,6 +1649,8 @@
   "label_mute_subliminal_audio": "サブリミナルオーディオをミュート",
   "label_mute_voice_lines": "ボイスをミュート",
   "label_mute_voice_lines_hint": "返事は引き続きテキストで表示されます。音声だけが止まります。",
+  "label_idle_voice_engine_off": "エンジン停止中も待機セリフを声に出す",
+  "label_idle_voice_engine_off_hint": "オフ: セリフは表示されますが、音は出ません。",
   "label_companion_voice_level": "ボイスの音量",
   "label_companion_voice_level_hint": "ほかの音に対するボイスの大きさです。80 が通常の音量です。",
   "label_pause_browser": "ブラウザを一時停止",

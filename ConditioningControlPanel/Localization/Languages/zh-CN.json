@@ -2268,6 +2268,8 @@
   "label_mute_subliminal_audio": "静音潜意识音频",
   "label_mute_voice_lines": "静音语音台词",
   "label_mute_voice_lines_hint": "回复仍会以文字显示，只有语音台词会静下来。",
+  "label_idle_voice_engine_off": "引擎关闭时也说出闲置台词",
+  "label_idle_voice_engine_off_hint": "关闭：台词照常显示，只是没有声音。",
   "label_companion_voice_level": "语音音量",
   "label_companion_voice_level_hint": "语音相对于其他声音的大小。80 是平常的音量。",
   "label_pause_browser": "暂停浏览器",
