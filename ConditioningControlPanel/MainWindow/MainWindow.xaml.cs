@@ -1651,6 +1651,12 @@ namespace ConditioningControlPanel
                 paletteClaimedPress: paletteClaimed,
                 overrideAll: Services.Safety.PanicPolicy.OverrideEnabled(App.Settings?.Current));
 
+            // Same five minutes as EMI for Trigger Mode and unprompted lines (PanicAftermath), armed
+            // before any rung can return into a game's own ladder. Not for an Escape that only
+            // closed the Ctrl+K palette: that press stops nothing, so it silences nothing either.
+            if (rung != Services.Safety.PanicPolicy.Rung.DismissSettingsPalette)
+                Services.Safety.PanicAftermath.ArmQuiet();
+
             if (rung == Services.Safety.PanicPolicy.Rung.DismissLockCard)
             {
                 VideoDiag.Log("PANIC", "dismissing the open lock card (it outranks every hand-off)");
@@ -1864,9 +1870,24 @@ namespace ConditioningControlPanel
                 _lastPanicTime = now;
             }
             
+            // Pause session if one is running (instead of stopping it). ALWAYS, engine on or off: a
+            // session resumed with the engine stopped (Resume while a remote controller holds START)
+            // ticks its effects back on by itself, so the engine-off branch must pause it too.
+            bool sessionWasPaused = false;
+            if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
+            {
+                _sessionEngine.PauseSession();
+                sessionWasPaused = true;
+            }
+            NoteLocalPanicPause();   // a remote resume cannot undo this pause (PanicAftermath)
+
+            // The scheduler must not start the engine again after a panic: the flag STOP sets.
+            if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
+                _manuallyStoppedDuringSchedule = true;
+
             if (_isRunning)
             {
-                // First press while running: stop engine, pause session if active
+                // First press while running: stop engine (the session was paused above)
                 App.Logger?.Information("Panic key pressed! Stopping engine...");
 
                 // IMMEDIATELY kill ALL audio before anything else
@@ -1877,14 +1898,6 @@ namespace ConditioningControlPanel
 
                 // Track panic press for Relapse achievement (must be before stopping session)
                 App.Achievements?.TrackPanicPressed();
-
-                // Pause session if one is running (instead of stopping it)
-                bool sessionWasPaused = false;
-                if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
-                {
-                    _sessionEngine.PauseSession();
-                    sessionWasPaused = true;
-                }
 
                 // Remember if autonomy was running before we stop everything
                 bool autonomyWasRunning = App.Autonomy?.IsEnabled == true;

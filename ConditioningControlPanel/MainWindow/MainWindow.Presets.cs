@@ -1973,6 +1973,9 @@ namespace ConditioningControlPanel
         private void OnSessionStarted(object? sender, EventArgs e)
         {
             App.IsSessionRunning = true;
+            // A new run: an old panic's pause mark never refuses its remote resume (PanicAftermath).
+            _sessionRun++;
+            _panicPause = null;
             // Safety net for the one-shot above: a new session always gets its own summary, even if
             // a suppression was armed and its stop somehow never produced a log.
             _suppressSessionSummaryUntil = DateTime.MinValue;
@@ -2018,6 +2021,7 @@ namespace ConditioningControlPanel
         private void OnSessionStopped(object? sender, EventArgs e)
         {
             App.IsSessionRunning = false;
+            _panicPause = null;
             // See OnSessionCompleted — drop the reference to the controller-started run.
             _remoteStartedSession = null;
 
@@ -2121,7 +2125,13 @@ namespace ConditioningControlPanel
                 // Never while a remote controller holds the engine: START is refused then too.
                 if (Services.SessionClockRules.ResumeStartsEngine(_isRunning, App.RemoteControl?.ControllerConnected == true))
                     StartEngineFromUser();
-                else _sessionEngine.ResumeSession();
+                else
+                {
+                    // The user's own Resume (engine still on, e.g. after a remote panic): what
+                    // they stopped may come back, Trigger Mode included (PanicAftermath).
+                    Services.Safety.PanicAftermath.EndQuiet();
+                    _sessionEngine.ResumeSession();
+                }
                 if (TxtPauseIcon != null) TxtPauseIcon.Text = "⏸";
                 BtnPauseSession.ToolTip = Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", _sessionEngine.PauseCount);
             }

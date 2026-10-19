@@ -2149,6 +2149,9 @@ namespace ConditioningControlPanel
 
         private void OnTriggerTick(object? sender, EventArgs e)
         {
+            // Post-panic quiet: no trigger, sound or haptic pulse, muted or not (PanicAftermath).
+            if (Services.Safety.PanicAftermath.TriggersSilenced()) return;
+
             // Skip if speech is on cooldown or currently showing
             if (!IsSpeechReady()) return;
 
@@ -2207,6 +2210,7 @@ namespace ConditioningControlPanel
         /// </summary>
         private void ShowTriggerBubbleImmediate(string trigger)
         {
+            if (Services.Safety.PanicAftermath.TriggersSilenced()) { _isGiggling = false; ProcessNextSpeech(); return; } // a queued trigger, post-panic
             // ALWAYS trigger haptic, even when muted/off-screen
             _ = App.Haptics?.TriggerSubliminalPatternAsync(trigger);
 
@@ -2231,6 +2235,7 @@ namespace ConditioningControlPanel
             Action speak = () =>
             {
                 if (!_isGiggling) return; // a newer bubble took over during the lead-in
+                if (Services.Safety.PanicAftermath.TriggersSilenced()) { _isGiggling = false; ProcessNextSpeech(); return; } // a panic during the lead-in
 
                 // Play trigger audio only when avatar is visible
                 App.Subliminal?.PlayTriggerAudio(trigger);

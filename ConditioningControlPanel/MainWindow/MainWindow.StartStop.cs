@@ -124,6 +124,9 @@ namespace ConditioningControlPanel
         /// </summary>
         internal void StartEngineFromUser()
         {
+            // Only the user's own START ends the post-panic quiet (PanicAftermath, Trigger Mode):
+            // the scheduler, auto-start and remote or program starts go through StartEngine.
+            Services.Safety.PanicAftermath.EndQuiet();
             // A resume is not a new run: it must not count as one more session.
             var resuming = _sessionEngine?.IsRunning == true && _sessionEngine.IsPaused;
             StartEngine(resumingSession: resuming);
@@ -188,7 +191,8 @@ namespace ConditioningControlPanel
                 s.PinkFilterEnabled = rng.Next(2) == 0;
                 App.Settings?.Save();
             }
-            if (!_isRunning) StartEngine();
+            // "Jump right in" is the user's own START (ends the post-panic quiet, PanicAftermath).
+            if (!_isRunning) StartEngineFromUser();
         }
 
         // ==============================================================================

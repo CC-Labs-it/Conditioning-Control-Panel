@@ -207,7 +207,8 @@ public class SessionClockRulesTests
         {
             ["AvatarTube/AvatarTubeWindow.ChatInput.cs"] = 1,   // the companion menu's Start click
             ["MainWindow/MainWindow.Presets.cs"] = 1,           // Resume with the engine off
-            ["MainWindow/MainWindow.StartStop.cs"] = 2,         // START, "Start normally"
+            ["MainWindow/MainWindow.ProgramsTab.cs"] = 1,       // "Start today's session" (no session runs there)
+            ["MainWindow/MainWindow.StartStop.cs"] = 3,         // START, "Start normally", "Jump right in"
         };
         var root = Path.Combine(RepoRoot(), "ConditioningControlPanel");
         var found = new SortedDictionary<string, int>(StringComparer.Ordinal);
@@ -223,6 +224,8 @@ public class SessionClockRulesTests
         var startStop = Source("MainWindow", "MainWindow.StartStop.cs");
         Assert.Contains("StartEngineFromUser();", Body(startStop, "private void BtnStart_Click("));
         Assert.Contains("StartEngineFromUser();", Body(startStop, "private void MenuStartNormal_Click("));
+        Assert.Contains("StartEngineFromUser();", Body(startStop, "internal void RandomizeAndStart()"));
+        Assert.Contains("StartEngineFromUser();", Body(Source("MainWindow", "MainWindow.ProgramsTab.cs"), "internal async void StartProgramSession()"));
     }
 
     [Fact]
