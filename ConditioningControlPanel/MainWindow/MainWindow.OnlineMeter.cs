@@ -43,6 +43,8 @@ namespace ConditioningControlPanel
         private readonly OnlineSpentNoticeQueue _onlineSpentQueue = new();
         /// <summary>Polls for the hold's end, only while a notice waits (FriendsLanding's cadence).</summary>
         private DispatcherTimer? _onlineSpentWait;
+        /// <summary>The Assets card's "?" (how the daily share works).</summary>
+        private Button? _onlineMeterHelp;
 
         /// <summary>Hooks the allowance events, the timers, the pill hover and the note's "Nice".
         /// Idempotent; called once the window has loaded.</summary>
@@ -97,6 +99,9 @@ namespace ConditioningControlPanel
                     {
                         if (e.NewValue is true && !_onlineOfficialNoteLanded) { _onlineOfficialNoteLanded = true; LandOnlineOfficialNote(); }
                     };
+                    // The "?" slip (owner, 2026-10-19): hover opens, a click pins, the leash slips' rules.
+                    _onlineMeterHelp = Controls.Leash.LeashHelpButton.Create(() => new OnlineMediaHelpSlip(), "online-help");
+                    tab.OnlineMeterHelpHost.Content = _onlineMeterHelp;
                 }
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "Online meter wiring failed"); }
@@ -256,11 +261,20 @@ namespace ConditioningControlPanel
         private Border BuildOnlineMeterHoverCard(OnlineMeterState st)
         {
             var body = new StackPanel { Width = 276 };
-            body.Children.Add(new TextBlock
+            var head = new DockPanel();
+            // The "?" here leads to the Assets card's slip: a slip popping out of this hover card
+            // would fold the moment the pointer crossed onto it.
+            var help = OnlineHelpGlyph();
+            DockPanel.SetDock(help, Dock.Right);
+            help.Margin = new Thickness(8, 0, 0, 0);
+            help.Click += (_, e) => { e.Handled = true; OpenOnlineMeterHelp(); };
+            head.Children.Add(help);
+            head.Children.Add(new TextBlock
             {
                 Text = Loc.Get("online_hover_title"),
                 FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = OnlineText, TextWrapping = TextWrapping.Wrap,
             });
+            body.Children.Add(head);
             body.Children.Add(new TextBlock
             {
                 Text = Loc.Get("online_hover_body"),
@@ -295,6 +309,50 @@ namespace ConditioningControlPanel
                 Padding = new Thickness(16, 14, 16, 14),
                 Child = body,
             };
+        }
+
+        /// <summary>A "?" in the leash slips' look that only clicks (no hover slip of its own).</summary>
+        private static Button OnlineHelpGlyph(double size = 16)
+        {
+            var t = new TextBlock
+            {
+                Text = "?",
+                FontFamily = Controls.Friends.FriendsLook.Display,
+                FontWeight = FontWeights.Bold,
+                FontSize = size * 0.62,
+                Foreground = Controls.Friends.FriendsLook.LilacBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var b = Controls.Friends.FriendsLook.Pill(t, Frozen(Color.FromRgb(0x24, 0x18, 0x38)), Controls.Friends.FriendsLook.LilacBrush,
+                Frozen(Color.FromArgb(0x66, 0xB9, 0x9C, 0xFF)), size / 2, new Thickness(0));
+            b.Width = size;
+            b.Height = size;
+            b.Focusable = false;
+            b.VerticalAlignment = VerticalAlignment.Top;
+            b.Cursor = Cursors.Help;
+            b.Tag = "online-help-open";
+            return b;
+        }
+
+        /// <summary>The hover card's "?": the Assets tab, with the card's slip pinned open.</summary>
+        private void OpenOnlineMeterHelp()
+        {
+            CloseOnlineMeterHover();
+            try
+            {
+                ShowTab("assets");
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+                {
+                    try
+                    {
+                        AssetsTab?.RemoteMediaBlock?.BringIntoView();
+                        if (_onlineMeterHelp is { IsVisible: true } q) q.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, q));
+                    }
+                    catch { /* tab gone */ }
+                }));
+            }
+            catch (Exception ex) { App.Logger?.Debug("Online meter help: {E}", ex.Message); }
         }
 
         /// <summary>"See plans": the existing vault gate card on the next tier up (Free sees Basic,
