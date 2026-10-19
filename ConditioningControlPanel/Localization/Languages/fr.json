@@ -7732,5 +7732,13 @@
   "online_pill_done": "En ligne : fini pour aujourd'hui",
   "online_hover_title": "Les médias en ligne du jour sont épuisés",
   "online_hover_body": "Ce que tu as déjà vu et tes propres fichiers continuent. Retour à minuit.",
-  "online_toast_spent": "Les médias en ligne sont finis pour aujourd'hui. On passe à ce que tu as déjà vu et à tes propres fichiers."
+  "online_toast_spent": "Les médias en ligne sont finis pour aujourd'hui. On passe à ce que tu as déjà vu et à tes propres fichiers.",
+  "online_official_stamp": "OFFICIEL",
+  "online_official_title": "Les médias en ligne sont officiels",
+  "online_official_body": "CCP a maintenant une vraie licence de Scrolller. Le flux en ligne est payé, crédité sur chaque image et clip, et il est là pour de bon.",
+  "online_official_plan_free": "Tout le monde a une part quotidienne, avec un bonus le premier jour. Ce que tu as déjà vu se rejoue gratuitement.",
+  "online_official_plan_basic": "Basic a une grosse part quotidienne. Ce que tu as déjà vu se rejoue gratuitement.",
+  "online_official_plan_prime": "Prime a la plus grosse part quotidienne. Ce que tu as déjà vu se rejoue gratuitement.",
+  "online_official_nice": "Cool",
+  "online_official_stamped_line": "Médias en ligne sous licence Scrolller. Chaque image et clip porte une petite mention \"via Scrolller\"."
 }

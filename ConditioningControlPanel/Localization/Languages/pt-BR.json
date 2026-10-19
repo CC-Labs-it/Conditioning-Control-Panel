@@ -7732,5 +7732,13 @@
   "online_pill_done": "Online: acabou por hoje",
   "online_hover_title": "A mídia online de hoje acabou",
   "online_hover_body": "O que você já viu e seus próprios arquivos continuam tocando. Volta à meia-noite.",
-  "online_toast_spent": "A mídia online acabou por hoje. Mudando para o que você já viu e seus próprios arquivos."
+  "online_toast_spent": "A mídia online acabou por hoje. Mudando para o que você já viu e seus próprios arquivos.",
+  "online_official_stamp": "OFICIAL",
+  "online_official_title": "A mídia online é oficial",
+  "online_official_body": "O CCP agora tem uma licença de verdade do Scrolller. O feed online é pago, creditado em cada imagem e clipe, e veio para ficar.",
+  "online_official_plan_free": "Todo mundo recebe uma cota diária, com um extra no primeiro dia. O que você já viu repete de graça.",
+  "online_official_plan_basic": "O Basic recebe uma cota diária grande. O que você já viu repete de graça.",
+  "online_official_plan_prime": "O Prime recebe a maior cota diária. O que você já viu repete de graça.",
+  "online_official_nice": "Legal",
+  "online_official_stamped_line": "Mídia online licenciada do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\"."
 }

@@ -4695,6 +4695,16 @@ namespace ConditioningControlPanel.Models
             set { _remoteMediaConsented = value; OnPropertyChanged(); }
         }
 
+        private bool _scrolllerOfficialNoteSeen = false;
+        /// <summary>"Nice" was pressed on the one-time "Online media is official" note in the
+        /// Assets tab (owner, 2026-10-19). Machine-local: left out of the cloud backup and kept
+        /// across a restore (ProfileSyncService).</summary>
+        public bool ScrolllerOfficialNoteSeen
+        {
+            get => _scrolllerOfficialNoteSeen;
+            set { _scrolllerOfficialNoteSeen = value; OnPropertyChanged(); }
+        }
+
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
         /// not the raw flag: users who already accepted the FYP feed's consent card agreed to
         /// exactly this, and asking them a second time in different words would read as the

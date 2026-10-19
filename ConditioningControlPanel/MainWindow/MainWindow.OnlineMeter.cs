@@ -7,18 +7,21 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ConditioningControlPanel.Controls;
 using ConditioningControlPanel.FriendsWindows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel
 {
     // "Online media today" (owner, 2026-10-19): the title bar pill, the card in the Assets tab's
-    // Media source block, the once-a-day spent notice. What each
+    // Media source block, the one-time "official" note and the once-a-day spent notice. What each
     // shows is decided by OnlineMeterRules; this file only paints it. Percent only, never MB.
     public partial class MainWindow
     {
@@ -35,12 +38,13 @@ namespace ConditioningControlPanel
         private OnlineMeterRing? _onlineMeterPillRing;
         private Popup? _onlineMeterHover;
         private DispatcherTimer? _onlineMeterHoverLeave;
+        private bool _onlineOfficialNoteLanded;
         /// <summary>The spent notice waits out a session / Lockdown / Strict Lock / program hold.</summary>
         private readonly OnlineSpentNoticeQueue _onlineSpentQueue = new();
         /// <summary>Polls for the hold's end, only while a notice waits (FriendsLanding's cadence).</summary>
         private DispatcherTimer? _onlineSpentWait;
 
-        /// <summary>Hooks the allowance events, the timers, and the pill hover.
+        /// <summary>Hooks the allowance events, the timers, the pill hover and the note's "Nice".
         /// Idempotent; called once the window has loaded.</summary>
         private void WireOnlineMeter()
         {
@@ -85,6 +89,15 @@ namespace ConditioningControlPanel
                 };
                 OnlineMeterPill.MouseLeave += (_, _) => _onlineMeterHoverLeave.Start();
 
+                var tab = AssetsTab;
+                if (tab != null)
+                {
+                    tab.BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
+                    tab.OnlineOfficialNote.IsVisibleChanged += (_, e) =>
+                    {
+                        if (e.NewValue is true && !_onlineOfficialNoteLanded) { _onlineOfficialNoteLanded = true; LandOnlineOfficialNote(); }
+                    };
+                }
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "Online meter wiring failed"); }
             RefreshOnlineMeter();
@@ -129,10 +142,10 @@ namespace ConditioningControlPanel
             return OnlineMeterRules.For(settings?.MediaSource, settings?.HasRemoteMediaConsent == true,
                 ScrolllerPolicy.Enabled, ScrolllerAllowance.Percent,
                 ScrolllerAllowance.Spent, ScrolllerAllowance.Plan, ScrolllerPolicy.Official,
-                false);
+                settings?.ScrolllerOfficialNoteSeen == true);
         }
 
-        /// <summary>Repaints the pill, and the card from the live allowance. UI thread.</summary>
+        /// <summary>Repaints the pill, the card and the note from the live allowance. UI thread.</summary>
         internal void RefreshOnlineMeter()
         {
             try
@@ -304,6 +317,10 @@ namespace ConditioningControlPanel
             var tab = AssetsTab;
             if (tab == null) return;
             tab.OnlineMeterCard.Visibility = st.Show ? Visibility.Visible : Visibility.Collapsed;
+            tab.OnlineMeterStamped.Visibility = st.ShowStampedLine ? Visibility.Visible : Visibility.Collapsed;
+            // The stamped line replaces the plain credit in the fold while the licence is official.
+            tab.TxtScrolllerCredit.Visibility = st.ShowStampedLine ? Visibility.Collapsed : Visibility.Visible;
+            PaintOnlineOfficialNote(st);
             if (!st.Show) return;
 
             var tone = new SolidColorBrush(OnlineMeterRing.ColorFor(st.Tone));
@@ -341,6 +358,54 @@ namespace ConditioningControlPanel
                 line.Inlines.Add(new Run("   "));
                 line.Inlines.Add(link);
             }
+        }
+
+        // ---------------------------------------------------------------- the official note
+
+        private void PaintOnlineOfficialNote(OnlineMeterState st)
+        {
+            var tab = AssetsTab;
+            if (tab == null) return;
+            if (!st.ShowOfficialNote)
+            {
+                tab.OnlineOfficialNote.Visibility = Visibility.Collapsed;
+                return;
+            }
+            tab.TxtOnlineOfficialPlan.Text = Loc.Get(OnlineMeterRules.OfficialPlanKey(st.Plan));
+            tab.OnlineOfficialNote.Visibility = Visibility.Visible;
+        }
+
+        /// <summary>The note lands once, the first time it is actually on screen: a short rise and
+        /// fade in (GentleVisuals lengthens it, motion Off skips it).</summary>
+        private void LandOnlineOfficialNote()
+        {
+            var note = AssetsTab?.OnlineOfficialNote;
+            if (note == null || MotionFx.Level == MotionLevel.Off) return;
+            try
+            {
+                var ms = GentleVisuals.RiseMs(420);
+                var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                if (note.RenderTransform is TranslateTransform slide && MotionFx.Level == MotionLevel.Full)
+                    slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-6, 0, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+                note.BeginAnimation(OpacityProperty, new DoubleAnimation(0.2, 1, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+            }
+            catch (Exception ex) { App.Logger?.Debug("Official note landing: {E}", ex.Message); }
+        }
+
+        /// <summary>"Nice": the note folds away for good on this PC; the stamped line stays.</summary>
+        private void OnlineOfficialNice()
+        {
+            try
+            {
+                var settings = App.Settings?.Current;
+                if (settings != null)
+                {
+                    settings.ScrolllerOfficialNoteSeen = true;
+                    App.Settings?.Save();
+                }
+                RefreshOnlineMeter();
+            }
+            catch (Exception ex) { App.Logger?.Debug("Official note Nice: {E}", ex.Message); }
         }
 
         // ---------------------------------------------------------------- the spent notice
