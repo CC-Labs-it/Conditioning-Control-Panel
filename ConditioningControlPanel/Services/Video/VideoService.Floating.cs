@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Services
                     App.Settings?.Current?.MandatoryVideoFloating == true,
                     strict || IsStrictActive,
                     App.Lockdown?.IsActive == true,
-                    App.Chaos?.IsRunning == true);
+                    LockedChaosRun());   // Chaos or a DtRH run
             }
             catch (Exception ex) { Diag.Swallowed(ex); floating = false; }
 

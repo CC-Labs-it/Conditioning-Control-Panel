@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Services
                     Strict = strict,
                     // "via Scrolller" badge + end card; under any lock the badge shows but takes no press.
                     Credit = Video.ScrolllerCredit.PagePayload(path, Video.ScrolllerCredit.CanOpenLink(
-                        strict, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)),
+                        strict, App.Lockdown?.IsActive == true, LockedChaosRun())),
                     IsHostPaused = () => _gracePaused,
                     // Lock Card / Lockdown / Possession: every screen is covered on purpose, so a
                     // dead mirror is left black rather than uncovered mid-clip (the engine asks
@@ -637,7 +637,7 @@ namespace ConditioningControlPanel.Services
             if (!_browserActive) return;
             var path = _browserPath;
             if (Video.ScrolllerCredit.For(path) == null) return;
-            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
             if (IsFloating)
             {
                 Application.Current?.Dispatcher?.BeginInvoke(new Action(() => Video.ScrolllerCredit.Open(path)));
@@ -675,10 +675,10 @@ namespace ConditioningControlPanel.Services
             var queued = _creditLinkQueuedFor;
             _creditLinkQueuedFor = null;
             if (queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
-            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
             Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
             {
-                if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
                 Video.ScrolllerCredit.Open(queued);
             }));
         }

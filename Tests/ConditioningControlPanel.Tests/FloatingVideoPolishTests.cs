@@ -88,8 +88,14 @@ public class FloatingVideoPolishTests
     }
 
     [Fact]
-    public void A_playing_clip_is_never_skipped_for_a_late_frame_report()
-        => Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, 0, 0, FloatingFirstFrame.ReadyBudgetMs * 2));
+    public void A_playing_clip_is_never_skipped_and_is_shown_by_the_budget_even_without_proof()
+    {
+        var budget = FloatingFirstFrame.ReadyBudgetMs;
+        Assert.Equal(FloatingFirstFrame.Verdict.Wait, FloatingFirstFrame.Decide(false, 0, 0, budget - 1));
+        // A page that stops reporting while cloaked: lifting the cloak is what lets it paint.
+        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(false, 0, 0, budget));
+        Assert.Equal(FloatingFirstFrame.Verdict.Reveal, FloatingFirstFrame.Decide(false, budget, 0, null));
+    }
 
     [Fact]
     public void A_veiled_window_takes_no_sound_until_it_is_shown()
@@ -166,9 +172,16 @@ public class FloatingVideoPolishTests
         Assert.DoesNotContain(".Opacity", frame);
         Assert.DoesNotContain("Effect =", frame);
         Assert.Contains("SetWindowRgn(_hwnd, rgn, true)", frame);
-        // Fully veiled is one pixel, never an empty region: the page is not treated as hidden.
+        // The veil is a DWM cloak (composed off screen, no clicks), lifted before the region grows;
+        // a refused cloak falls back on one pixel, never an empty region while the page loads.
+        Assert.Contains("DWMWA_CLOAK = 13", frame);
+        var reveal = Member(frame, "public void Reveal(");
+        Assert.True(reveal.IndexOf("Uncloak();", StringComparison.Ordinal) < reveal.IndexOf("Animate(", StringComparison.Ordinal));
         Assert.Contains("CreateRectRgn(w / 2, h / 2, w / 2 + 1, h / 2 + 1)", frame);
-        Assert.DoesNotContain("CreateRectRgn(0, 0, 0, 0)", frame);
+        // Every detach (close, skip, panic) before the reveal empties the window, then uncloaks it.
+        Assert.Contains("LiftCloakHidden();", Member(frame, "public void Detach("));
+        var lift = Member(frame, "private void LiftCloakHidden(");
+        Assert.True(lift.IndexOf("CreateRectRgn(0, 0, 0, 0)", StringComparison.Ordinal) < lift.IndexOf("ApplyCloak();", StringComparison.Ordinal));
     }
 
     [Fact]

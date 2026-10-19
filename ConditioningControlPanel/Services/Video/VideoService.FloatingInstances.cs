@@ -101,7 +101,7 @@ namespace ConditioningControlPanel.Services
                     App.Settings?.Current?.MandatoryVideoFloating == true,
                     strict || IsStrictActive,
                     App.Lockdown?.IsActive == true,
-                    App.Chaos?.IsRunning == true);
+                    LockedChaosRun());   // Chaos or a DtRH run
             }
             catch (Exception ex) { Diag.Swallowed(ex); return false; }
         }
@@ -450,7 +450,7 @@ namespace ConditioningControlPanel.Services
                 // "via Scrolller" badge + end card. Floating runs are never strict; Lockdown and
                 // Chaos still make the badge not pressable.
                 var credit = Video.ScrolllerCredit.PagePayload(clip, Video.ScrolllerCredit.CanOpenLink(
-                    false, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true));
+                    false, App.Lockdown?.IsActive == true, LockedChaosRun()));
                 var c = new FloatingInstance { Window = win, Clip = clip, Screen = screen, Bounds = rect, HasCredit = credit != null };
                 win.Message += OnInstanceMessage;
                 win.InitFailed += OnInstanceInitFailed;
@@ -549,7 +549,7 @@ namespace ConditioningControlPanel.Services
                     break;
                 case FloatingFirstFrame.Verdict.Skip:
                     c.RevealWatch?.Stop();
-                    VideoDiag.Log("VIDEO", $"floating window skipped - no first frame {FloatingFirstFrame.ReadyBudgetMs}ms after the page was ready (playing={c.Playing}) - {System.IO.Path.GetFileName(c.Clip)}");
+                    VideoDiag.Log("VIDEO", $"floating window skipped - no first frame {FloatingFirstFrame.ReadyBudgetMs}ms after the page was ready (playing={c.Playing}, cloaked={c.Surface?.Cloaked}) - {System.IO.Path.GetFileName(c.Clip)}");
                     CloseInstance(c, "no first frame in time");
                     break;
             }
@@ -568,7 +568,7 @@ namespace ConditioningControlPanel.Services
                 ApplyAudioFocus();
             }
             var animate = FloatingSpawnLook.Animates(MotionFx.Level);
-            VideoDiag.Log("VIDEO", $"floating window shown {Environment.TickCount64 - c.SpawnTick}ms after it was made (frame={c.FrameSeen}, animated={animate})");
+            VideoDiag.Log("VIDEO", $"floating window shown {Environment.TickCount64 - c.SpawnTick}ms after it was made (frame={c.FrameSeen}, cloaked={c.Surface?.Cloaked}, animated={animate})");
             void Revealed()
             {
                 // This window's mute and close (VideoService.Controls.cs), once it is fully shown and,
@@ -620,7 +620,7 @@ namespace ConditioningControlPanel.Services
                     break;
                 case "firstFrame":
                     c.FrameSeen = true;
-                    VideoDiag.Log("VIDEO", $"floating page painted: via={(string?)o["via"]} frames={(int?)o["frames"]} mediaMs={(long?)o["mediaMs"]} visibility={(string?)o["visibility"]}");
+                    VideoDiag.Log("VIDEO", $"floating page painted: via={(string?)o["via"]} frames={(int?)o["frames"]} mediaMs={(long?)o["mediaMs"]} visibility={(string?)o["visibility"]} cloaked={c.Surface?.Cloaked}");
                     PostAfterPageMessage(() => CheckReveal(c));
                     break;
                 case "meta":
@@ -675,7 +675,7 @@ namespace ConditioningControlPanel.Services
                     // A floating window is not topmost over everything, so the link opens right away.
                     PostAfterPageMessage(() =>
                     {
-                        if (c.Closed || !Video.ScrolllerCredit.CanOpenLink(false, App.Lockdown?.IsActive == true, App.Chaos?.IsRunning == true)) return;
+                        if (c.Closed || !Video.ScrolllerCredit.CanOpenLink(false, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
                         Video.ScrolllerCredit.Open(c.Clip);
                     });
                     break;
