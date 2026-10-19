@@ -247,6 +247,45 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
         Assert.True(ScrolllerDiskCache.Contains(xml));   // stamped: rows are trusted, no rescan
     }
 
+    // ---- the web gate's whole fetch: a refused body is paid for once a day, not per view ----
+
+    [Fact]
+    public void A_whole_fetched_body_is_refused_by_its_bytes_not_its_content_type()
+    {
+        Assert.True(ScrolllerWebGate.RefusedBody("https://images.scrolller.com/a/x-540.webp", "poster", S3Error(), S3Error().Length));
+        Assert.True(ScrolllerWebGate.RefusedBody("https://images.scrolller.com/a/x-540.webp", "gif", StillWebp(), 64));
+        Assert.False(ScrolllerWebGate.RefusedBody("https://images.scrolller.com/a/x-540.webp", "poster", StillWebp(), 64));
+        Assert.False(ScrolllerWebGate.RefusedBody("https://images.scrolller.com/a/x.jpg", "picture", Jpeg(), 64));
+        Assert.False(ScrolllerWebGate.RefusedBody("https://images.scrolller.com/a/x.jpg", "picture", new byte[0], 0));
+    }
+
+    [Fact]
+    public void A_refused_url_is_remembered_until_local_midnight()
+    {
+        ScrolllerWebGate.ClearRefusedForTests();
+        try
+        {
+            var day = new DateTime(2026, 10, 19, 21, 0, 0, DateTimeKind.Local);
+            var url = "https://images.scrolller.com/a/err.webp";
+            Assert.False(ScrolllerWebGate.IsRefusedToday(url, day));
+            ScrolllerWebGate.RefuseForToday(url, day);
+            Assert.True(ScrolllerWebGate.IsRefusedToday(url, day.AddHours(2)));
+            Assert.False(ScrolllerWebGate.IsRefusedToday("https://images.scrolller.com/a/fine.webp", day));
+            Assert.False(ScrolllerWebGate.IsRefusedToday(url, day.AddHours(4)));   // next day: asked again
+        }
+        finally { ScrolllerWebGate.ClearRefusedForTests(); }
+    }
+
+    [Fact]
+    public void The_gate_answers_a_refused_url_locally_and_remembers_refusals_from_whole_fetches()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Fyp", "Online", "ScrolllerWebGate.cs"));
+        int check = src.IndexOf("IsRefusedToday(url, DateTime.Now)", StringComparison.Ordinal);
+        int route = src.IndexOf("var route = Route(url, e.Request.Method", StringComparison.Ordinal);
+        Assert.True(check > 0 && check < route, "a refused url must be answered before any fetch is routed");
+        Assert.Contains("RefuseForToday(url, DateTime.Now)", src);
+    }
+
     // ---- rendition choice -----------------------------------------------------------------
 
     [Fact]
