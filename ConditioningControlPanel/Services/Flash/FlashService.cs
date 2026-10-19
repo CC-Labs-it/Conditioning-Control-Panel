@@ -1202,7 +1202,11 @@ namespace ConditioningControlPanel.Services
                         if (cached.decodeMax >= decodeMax || uncapped)
                         {
                             _imageDecodeCache[path] = (cached.data, DateTime.UtcNow, cached.decodeMax);
-                            return CloneImageData(cached.data);
+                            var hit = CloneImageData(cached.data);
+                            // A remote decode is cached by URL, but its clip file can be replaced
+                            // or released since: hand out the CURRENT file, never the cached one.
+                            if (IsRemotePath(path)) hit.ClipPath = CurrentRemoteClipPath(path);
+                            return hit;
                         }
                     }
                 }
@@ -3286,16 +3290,28 @@ namespace ConditioningControlPanel.Services
                         window.Height = moving.H / d;
                     }
 
-                    if (window.ClipPath != null && window.ClipPlayer == null && !window.ClipAttempted
-                        && (window.LayerItem != null || window.ImageControl != null))
+                    // A leaving flash lends its clip slot to the next one that needs it. One that
+                    // lost its slot that way and is back on screen (a linger) asks again below.
+                    if (window.ClipPlayer is { } clipPlayer)
                     {
-                        window.ClipAttempted = true;
-                        window.ClipPlayer = FlashClipPlayer.Start(window.ClipPath, window.Frames[0].PixelWidth,
+                        clipPlayer.Evictable = !showThisWindow;
+                        if (clipPlayer.IsDisposed && showThisWindow) { window.ClipPlayer = null; window.ClipRefusedAtCap = true; window.ClipAttempted = false; }
+                    }
+
+                    // A flash refused at the player cap shows its poster and upgrades to the clip
+                    // as soon as a slot frees (ClipAttempted stays false until a real attempt).
+                    if (window.ClipPath != null && window.ClipPlayer == null && !window.ClipAttempted && showThisWindow
+                        && (window.LayerItem != null || window.ImageControl != null)
+                        && (!window.ClipRefusedAtCap || FlashClipPlayer.CanStartFlash))
+                    {
+                        window.ClipPlayer = FlashClipPlayer.TryStart(window.ClipPath, window.Frames[0].PixelWidth,
                             window.Frames[0].PixelHeight, frame =>
                             {
                                 if (window.LayerItem is { } item) item.SetClipFrame(frame);
                                 else if (window.ImageControl != null) window.ImageControl.Source = frame;
-                            }, App.Settings?.Current.FlashGifSpeedMultiplier ?? 1);
+                            }, App.Settings?.Current.FlashGifSpeedMultiplier ?? 1, out var atCap, flash: true);
+                        window.ClipRefusedAtCap = window.ClipPlayer == null && atCap;
+                        window.ClipAttempted = !window.ClipRefusedAtCap;
                     }
 
                     // Animate GIF frames
@@ -4079,7 +4095,13 @@ namespace ConditioningControlPanel.Services
         /// on a fetch. Cheap enough to call on every draw: three field reads when the pool is
         /// already full or a fetch is in flight.
         /// </summary>
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Path, string Poster)> RemoteClips = new();
+        // Owns the clip files (ownerReleases), so the shared 50-file temp sweep cannot delete a
+        // clip between its draw and LibVLC opening it (the "no flash animates after a few rounds" bug).
+        private static readonly RemoteClipFiles RemoteClips = new();
+
+        /// <summary>The clip file currently held for this URL, or null when there is none on disk.</summary>
+        private static string? CurrentRemoteClipPath(string url)
+            => RemoteClips.TryUse(url, Environment.TickCount64, out var path, out _) && File.Exists(path) ? path : null;
 
         private void RefreshRemoteSelection()
         {
@@ -4159,18 +4181,19 @@ namespace ConditioningControlPanel.Services
 
                     var url = entry.SmallUrl ?? entry.Url;
                     if (string.IsNullOrEmpty(entry.PosterUrl)) continue;
-                    var path = await RemoteMediaCache.MaterializeAsync(url, ct).ConfigureAwait(false);
+                    // A URL handed out again (reuse cycles, cached-only batches) keeps its file:
+                    // a second copy would orphan the first under a decode that still points at it.
+                    var held = CurrentRemoteClipPath(url);
+                    var path = held ?? await RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true).ConfigureAwait(false);
                     if (path == null) continue;
                     if (!await RemoteMediaCache.PrefetchAsync(entry.PosterUrl, ct).ConfigureAwait(false))
-                    { RemoteMediaCache.ReleaseTempFile(path); continue; }
+                    { if (held == null) RemoteMediaCache.ReleaseTempFile(path); continue; }
                     RefreshRemoteSelection();
                     lock (_remoteLock)
                     {
-                        if (generation != _remoteReady.Generation) { RemoteMediaCache.ReleaseTempFile(path); return; }
-                        if (RemoteClips.Count >= 512)
-                            foreach (var key in RemoteClips.Keys.Take(128))
-                                if (RemoteClips.TryRemove(key, out var old)) RemoteMediaCache.ReleaseTempFile(old.Path);
-                        RemoteClips[url] = (path, entry.PosterUrl);
+                        if (generation != _remoteReady.Generation) { if (held == null) RemoteMediaCache.ReleaseTempFile(path); return; }
+                        foreach (var old in RemoteClips.Put(url, path, entry.PosterUrl, Environment.TickCount64))
+                            RemoteMediaCache.ReleaseTempFile(old);
                         if (_remoteReady.Add(generation, url)) warmed++;
                     }
                 }
@@ -4210,7 +4233,7 @@ namespace ConditioningControlPanel.Services
             lock (_remoteLock)
             {
                 Func<string, bool> usable = url =>
-                    RemoteClips.TryGetValue(url, out var clip) && File.Exists(clip.Path);
+                    RemoteClips.TryUse(url, Environment.TickCount64, out var clipPath, out _) && File.Exists(clipPath);
                 return _remoteReady.Take(_random, usable) ?? _remoteReady.TakeShown(usable);
             }
         }
@@ -4249,7 +4272,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private async Task<LoadedImageData?> LoadRemoteImageAsync(string url, int decodeMax)
         {
-            if (RemoteClips.ContainsKey(url)) return await LoadRemoteFaceAsync(url, decodeMax, true);
+            if (RemoteClips.Contains(url)) return await LoadRemoteFaceAsync(url, decodeMax, true);
             try
             {
                 // A bounded wait even though the bytes should already be resident: if the entry
@@ -4507,8 +4530,8 @@ namespace ConditioningControlPanel.Services
                 // is static — the overlays are static singletons and hold no service reference.
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-                bool isClip = RemoteClips.TryGetValue(url, out var clip);
-                using var stream = await RemoteMediaCache.OpenAsync(isClip ? clip.Poster : url, cts.Token).ConfigureAwait(false);
+                bool isClip = RemoteClips.TryUse(url, Environment.TickCount64, out var clipPath, out var clipPoster);
+                using var stream = await RemoteMediaCache.OpenAsync(isClip ? clipPoster : url, cts.Token).ConfigureAwait(false);
                 if (stream == null) return null;
 
                 // CPU-bound; the stream stays alive for it because this await is inside the using.
@@ -4516,7 +4539,7 @@ namespace ConditioningControlPanel.Services
                 int max = Math.Clamp(decodeMax, 64, 4096);
                 var data = await Task.Run(() => DecodeRemoteStill(url, captured, max, allowAnimated: animate)).ConfigureAwait(false);
 
-                if (data != null && isClip && animate) data.ClipPath = clip.Path;
+                if (data != null && isClip && animate) data.ClipPath = clipPath;
                 // Frozen by DecodeRemoteStill, so it is safe to hand across to the UI thread.
                 return data;
             }
@@ -5082,6 +5105,7 @@ namespace ConditioningControlPanel.Services
                 window.ClipPlayer = null;
                 window.ClipPath = null;
                 window.ClipAttempted = false;
+                window.ClipRefusedAtCap = false;
                 window.Frames.Clear();
 
                 // Stop the glow's animations BEFORE dropping the content. A lucky proc starts
@@ -5320,6 +5344,7 @@ namespace ConditioningControlPanel.Services
             try { _remoteCts.Cancel(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _remoteCts.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             lock (_remoteLock) _remoteReady.Clear();
+            foreach (var clip in RemoteClips.TakeAll()) RemoteMediaCache.ReleaseTempFile(clip);
             StopCurrentSound();
             CleanupTempPackFiles();
             lock (_imageDecodeCache) { _imageDecodeCache.Clear(); _imageCacheBytes = 0; }
@@ -5436,6 +5461,7 @@ namespace ConditioningControlPanel.Services
         internal FlashClipPlayer? ClipPlayer;
         internal string? ClipPath;
         internal bool ClipAttempted;
+        internal bool ClipRefusedAtCap;
         public bool BubbleDelivery { get; set; }
         public double FadeAlpha { get; set; }
 
