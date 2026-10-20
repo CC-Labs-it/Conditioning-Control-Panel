@@ -1,7 +1,9 @@
 /* ============================================================================
  * THE PAPERS. Pure DATA for the Records Annex: every document the fake OS and
- * the room props can show. No imports, no DOM, no fetch. The lab renderers
- * (os.js, lab.js) read these tables and never invent a word.
+ * the room props can show. No DOM, no fetch, and one import: the Room 202
+ * paper, which is pure data too and lives in docs-rm202.js so the phone's store
+ * build can swap it (core/storesafe.js). The lab renderers (os.js, lab.js)
+ * read these tables and never invent a word.
  *
  * WRITING LAW (do not edit casually):
  * - This is the ONE surface where the fence words (retention, engagement,
@@ -18,6 +20,8 @@
  * - The last log line ends in 笑 and only renders once all four punches are
  *   open. Nothing else may use the glyph.
  * ==========================================================================*/
+
+import { RM202 } from './docs-rm202.js';
 
 /** Folder tree the FILES program renders, in display order. */
 export const TREE = Object.freeze([
@@ -192,37 +196,8 @@ export const DOCS = Object.freeze({
       'nobody has yet chosen to climb slowly']),
   }),
 
-  rm202: Object.freeze({
-    name: 'RM202.TXT',
-    head: 'PROTOCOL, ROOM 202. Own triggers.\nFiled term two, week 3.',
-    body:
-'**Evaluative conditioning** transfers feeling between paired items (De Houwer, Thomas and ' +
-'Baeyens, 2001), and **mere exposure** does the rest (Zajonc, 1968). The pads in this room ' +
-'therefore wear the subject\'s **own trigger phrases**, and one note in four carries the ' +
-'subject\'s **own recording** under it, low enough to sit **beneath attention**.\n\n' +
-'Cohort two\'s average session length rose **eleven minutes** after the pads began carrying ' +
-'their own material. **No subject has mentioned it.** Tuning is on Thursdays.',
-    tldr: Object.freeze(['evaluative conditioning', 'own trigger phrases', 'own recording',
-      'beneath attention', 'eleven minutes', 'no subject has mentioned it']),
-    attachments: Object.freeze([
-      Object.freeze({
-        kind: 'chart',
-        chart: Object.freeze({
-          type: 'line',
-          x: Object.freeze([1, 2, 3, 4, 5, 6, 7, 8]),
-          y: Object.freeze([18, 19, 19, 30, 30, 31, 31, 32]),
-          mark: 3,
-          markLabel: 'wk 4',
-        }),
-        caption: 'cohort two, minutes a night. the step is week 4, when the pads went on their ' +
-          'own material. archive figure.',
-      }),
-      Object.freeze({
-        kind: 'audio', sfx: 'pad', ms: 1600,
-        caption: 'one note from the room. the one under it did not survive the copy.',
-      }),
-    ]),
-  }),
+  /* Its own file, docs-rm202.js, so the store tree can swap it. */
+  rm202: RM202,
 
   rm203: Object.freeze({
     name: 'RM203.TXT',

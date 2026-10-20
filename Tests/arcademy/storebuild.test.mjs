@@ -97,3 +97,48 @@ test('the sort door offers only the host catalog in a store build', async () => 
   const stop = src.indexOf('if (isStoreSafe()) return;');
   assert.ok(stop > 0 && stop < src.indexOf('/* the library: ORANGE pills') && stop < src.indexOf('/* the search box */'));
 });
+
+// The owner's store wording rule: no hypnosis and no conditioning on anything a
+// player reads. Comments are not read by anyone, so they are blanked first
+// (block comments keep their line breaks, so a hit still names its line).
+const uncomment = (f, text) => (/\.(js|mjs|css)$/.test(f)
+  ? text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|[\s;,{}()])\/\/.*$/gm, '$1')
+  : text.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' ')));
+
+test('no hypnosis or conditioning wording outside comments in the store tree', () => {
+  const hits = [];
+  for (const [f, src] of storeTree) {
+    if (!/\.(js|mjs|json|html)$/.test(f) || f.startsWith('vendor/')) continue;
+    uncomment(f, readFileSync(join(ROOT, src), 'utf8')).split(/\r?\n/).forEach((line, i) => {
+      if (/hypno|conditioning/i.test(line)) hits.push(`${f}:${i + 1}: ${line.trim().slice(0, 90)}`);
+    });
+  }
+  assert.deepEqual(hits, []);
+  assert.equal(storeTree.get('annex/docs-rm202.js'), 'annex/docs-rm202.store.js');
+});
+
+test('the store Room 202 paper keeps its shape and bolds every tldr phrase', async () => {
+  const full = (await import(pathToFileURL(join(ROOT, 'annex/docs-rm202.js')))).RM202;
+  const store = (await import(pathToFileURL(join(ROOT, 'annex/docs-rm202.store.js')))).RM202;
+  const { DOCS } = await import(pathToFileURL(join(ROOT, 'annex/docs.js')));
+  assert.equal(DOCS.rm202, full, 'docs.js files the paper under its old id');
+  assert.equal(store.name, full.name);
+  assert.deepEqual(store.attachments.map((a) => a.kind), full.attachments.map((a) => a.kind));
+  assert.deepEqual(store.attachments[0].chart, full.attachments[0].chart);
+  const bold = [...store.body.matchAll(/\*\*(.+?)\*\*/g)].map((m) => m[1].toLowerCase().replace(/\.$/, ''));
+  for (const t of store.tldr) assert.ok(bold.includes(t), `tldr "${t}" is not bolded in the body`);
+  assert.doesNotMatch(JSON.stringify(store), /trigger|recording|—/i);
+});
+
+test("the store door's fallback rows read what the store lexicon writes", async () => {
+  const full = (await import(pathToFileURL(join(ROOT, 'games/sort/setup-lex.js')))).SETUP_LEX;
+  const store = (await import(pathToFileURL(join(ROOT, 'games/sort/setup-lex.store.js')))).SETUP_LEX;
+  assert.deepEqual(Object.keys(store), Object.keys(full), 'same rows, same order');
+  const set = manifest.lexicon.set;
+  for (const key of Object.keys(full)) {
+    if (key in set) assert.equal(store[key], set[key], `${key} differs from store-build.json`);
+    else assert.equal(store[key], full[key], `${key} is rewritten here but not in store-build.json`);
+    assert.doesNotMatch(store[key], /\bsubs?\b|subreddit|niche/i, `${key} still names subs or niches`);
+    assert.ok(store[key].length <= 96 && !store[key].includes('\u2014'), key);
+  }
+});

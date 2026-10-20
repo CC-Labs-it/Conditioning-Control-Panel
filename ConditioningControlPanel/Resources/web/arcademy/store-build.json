@@ -1,5 +1,5 @@
 {
-  "about": "The store build of this tree (Google Play and the App Store). The vendoring script's store targets read this file and never ship it: every X.store.js replaces its X.js sibling, the paths under drop are left out, and the lexicon rows below are rewritten or removed. See core/storesafe.js.",
+  "about": "The store build of this tree (Google Play and the App Store). The vendoring script's store targets read this file and never ship it: every X.store.js replaces its X.js sibling, the paths under drop are left out, and the lexicon rows below are rewritten or removed. Each sort_ row here reads exactly as it does in games/sort/setup-lex.store.js, the door's fallback table. See core/storesafe.js.",
   "drop": [
     "assets/sublim/"
   ],
@@ -13,6 +13,7 @@
       "sort_search_ph": "collection name",
       "sort_probe_bad": "That is not a collection name",
       "sort_overlap_note": "Shared picks were dropped from the rest",
+      "sort_spice_hot": "Hot. These two collections share ground.",
       "sort_quick_nag": "Add a second folder for a real sort."
     },
     "drop": [
