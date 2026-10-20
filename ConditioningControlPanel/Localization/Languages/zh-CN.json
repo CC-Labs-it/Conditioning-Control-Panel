@@ -1962,7 +1962,7 @@
   "tooltip_video_appearance_speed": "How fast a thrown window travels. Open windows change at once.",
   "video_appearance_no_checks_note": "Floating videos have no attention checks.",
   "setting_video_appearance_count": "Most at once",
-  "tooltip_video_appearance_count": "Each trigger opens one video. This is the most that can be up together. Only one has sound: the newest, or the last one you touched.",
+  "tooltip_video_appearance_count": "Each trigger opens one video, or every free window with Pop up together. This is the most that can be up together. Only one has sound: the newest, or the last one you touched.",
   "setting_video_float_together": "Pop up together",
   "tooltip_video_float_together": "One trigger opens every window at once, up to Most at once, each with its own clip where there are enough.",
   "setting_video_float_keep_sound": "Keep sound on the video I'm watching",
