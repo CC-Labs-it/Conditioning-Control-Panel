@@ -1236,6 +1236,7 @@ namespace ConditioningControlPanel
                 if (urlMatch.Success)
                 {
                     var videoUrl = urlMatch.Groups[1].Value;
+                    var videoDuration = Services.AudioSyncService.ParseReportedDuration(message);
                     App.Logger?.Information("AudioSync: Starting processing for video on {Host}", UrlLog.Host(videoUrl));
 
                     // Wire up progress events
@@ -1301,7 +1302,7 @@ namespace ConditioningControlPanel
                     {
                         try
                         {
-                            await App.AudioSync.OnVideoDetectedAsync(videoUrl);
+                            await App.AudioSync.OnVideoDetectedAsync(videoUrl, videoDuration);
                         }
                         catch (Exception ex)
                         {
