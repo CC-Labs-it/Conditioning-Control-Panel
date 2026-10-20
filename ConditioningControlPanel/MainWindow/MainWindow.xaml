@@ -240,7 +240,7 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Directory listing status — Listed / Private only / Claimed.
+                    <!-- Remote directory status - Remote: listed / private / claimed (names Remote so it is never read as the Goon table setting).
                          Visible only while a remote-control session is active. Text,
                          dot colour and tooltip are set in UpdateDirectoryListingStatus(). -->
                     <Border x:Name="DirectoryStatusPill"
@@ -251,7 +251,7 @@
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="DirectoryStatusDot" Width="8" Height="8"
                                      Fill="#B47BFF" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TxtDirectoryStatus" Text="Private only"
+                            <TextBlock x:Name="TxtDirectoryStatus" Text="Remote: private"
                                        Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>

@@ -1961,9 +1961,23 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
+                // The old null-context prompt ("tease them to get attention") made the model cast
+                // the USER as the attention-seeker, and one stateless call with byte-identical input
+                // repeated the same "brat" line minutes apart (beebee, 2026-10-20). With the brain
+                // on, the comment is an ambient event: it sees the chat and its anti-repeat line,
+                // and an ambient call never spends the user's moderation budget.
+                var brain = App.Brain;
+                if (context == null && App.Ai != null && Services.AIService.BrainAdapter.ShouldRouteAmbient(
+                        brain, Services.Companion.Brain.CompanionBrain.IsEnabled, App.Ai.IsAvailable, promptTemplate: null))
+                {
+                    var line = await Services.AIService.BrainAdapter.ReactAsync(brain!, Services.AIService.FrameFormatter.TakeoverCommentEvent());
+                    ShowAICommentLine(line, aiGenerated: true);
+                    return;
+                }
+
                 var prompt = context != null
                     ? $"Make a short teasing comment about {context}. Be playful and flirty."
-                    : "Say something random and teasing to get attention. Be playful.";
+                    : TakeoverCommentPrompt;
 
                 // R2-NEW-H-1: migrate to typed AI API. Refusals are silently dropped
                 // on this autonomy surface (the user did not directly prompt — a
@@ -1971,18 +1985,41 @@ namespace ConditioningControlPanel.Services
                 // logged via ModerationLog). IsAiGenerated now flows through so
                 // canned fallbacks (offline, login-required) no longer wear the AI badge.
                 var result = await App.Ai!.GetBambiReplyExAsync(prompt);
-                if (result.Refusal == null && !string.IsNullOrEmpty(result.Text))
-                {
-                    Application.Current?.Dispatcher?.BeginInvoke(() =>
-                    {
-                        App.AvatarWindow?.GigglePriority(result.Text, false, aiGenerated: result.IsAiGenerated);
-                    });
-                }
+                if (result.Refusal == null)
+                    ShowAICommentLine(result.Text, result.IsAiGenerated);
             }
             catch (Exception ex)
             {
                 App.Logger?.Warning("Autonomy: AI comment failed: {Error}", ex.Message);
             }
+        }
+
+        /// <summary>The stateless fallback (brain off): the user did nothing, the companion teases
+        /// out of nowhere. Never "to get attention", which read as the user being the brat.</summary>
+        internal const string TakeoverCommentPrompt =
+            "Tease the user in one short line, out of nowhere. They are busy in the app and did nothing to ask for it. Be playful.";
+
+        private string? _lastAICommentLine;
+
+        /// <summary>A comment word for word the same as the last one is dropped: a repeat reads as
+        /// a broken record, never as the companion paying attention.</summary>
+        internal static bool IsRepeatComment(string? last, string? next)
+            => !string.IsNullOrWhiteSpace(last) && !string.IsNullOrWhiteSpace(next)
+               && string.Equals(last.Trim(), next.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        private void ShowAICommentLine(string? text, bool aiGenerated)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            if (IsRepeatComment(_lastAICommentLine, text))
+            {
+                App.Logger?.Information("Autonomy: AI comment dropped (same as the last one)");
+                return;
+            }
+            _lastAICommentLine = text;
+            Application.Current?.Dispatcher?.BeginInvoke(() =>
+            {
+                App.AvatarWindow?.GigglePriority(text, false, aiGenerated: aiGenerated);
+            });
         }
 
         /// <summary>

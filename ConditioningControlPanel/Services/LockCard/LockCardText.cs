@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services
     {
         /// <summary>
         /// Folds a phrase or a typed answer to its comparable form: typographic punctuation
-        /// flattened to ASCII, sentence punctuation (, . ; : ! ?) read as a word break,
+        /// flattened to ASCII, sentence punctuation (, . ; : ! ? -) read as a word break,
         /// whitespace collapsed to single spaces, ends trimmed. Case is left
         /// alone - callers compare with <see cref="StringComparison.OrdinalIgnoreCase"/>.
         /// </summary>
@@ -111,11 +111,12 @@ namespace ConditioningControlPanel.Services
             || c == (char)0xFEFF;     // BOM / zero-width no-break space
 
         /// <summary>
-        /// Sentence punctuation a recital may leave out or swap: , . ; : ! ? (an ellipsis is
-        /// flattened to full stops first, so it goes too).
+        /// Sentence punctuation a recital may leave out or swap: , . ; : ! ? and the hyphen (an
+        /// ellipsis is flattened to full stops first and every dash to a hyphen, so they go too:
+        /// "SYSTEM OVERLOAD — SHUTDOWN" is recited as "SYSTEM OVERLOAD SHUTDOWN").
         /// </summary>
         private static bool IsIgnorablePunctuation(char c)
-            => c == ',' || c == '.' || c == ';' || c == ':' || c == '!' || c == '?';
+            => c == ',' || c == '.' || c == ';' || c == ':' || c == '!' || c == '?' || c == '-';
 
         /// <summary>
         /// One character in, its ASCII shape out. Multi-character expansions come back as a

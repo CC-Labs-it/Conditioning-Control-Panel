@@ -141,4 +141,25 @@ public class LockCardTextTests
         Assert.True(LockCardText.IsPrefixOf("PROCESS, COM", "PROCESS. COMPLY. REPEAT."));
         Assert.True(LockCardText.Matches("system overload shutdown", "SYSTEM OVERLOAD. SHUTDOWN."));
     }
+
+    /// <summary>
+    /// A dash is a pause, not a keystroke the card insists on: the shipped drone trigger
+    /// "SYSTEM OVERLOAD — SHUTDOWN" passes without it, with a hyphen, or with the dash itself.
+    /// </summary>
+    [Theory]
+    [InlineData("system overload shutdown")]
+    [InlineData("SYSTEM OVERLOAD - SHUTDOWN")]
+    [InlineData("SYSTEM OVERLOAD-SHUTDOWN")]
+    [InlineData("SYSTEM OVERLOAD " + EmDash + " SHUTDOWN")]
+    public void A_dash_is_ignorable(string typed)
+    {
+        Assert.True(LockCardText.Matches(typed, "SYSTEM OVERLOAD " + EmDash + " SHUTDOWN"));
+        Assert.True(LockCardText.IsPrefixOf("SYSTEM OVERLOAD SHUT", "SYSTEM OVERLOAD " + EmDash + " SHUTDOWN"));
+    }
+
+    [Fact]
+    public void The_typed_length_still_counts_the_dash()
+    {
+        Assert.Equal("SYSTEM OVERLOAD - SHUTDOWN".Length, LockCardText.TypedLength("SYSTEM OVERLOAD " + EmDash + " SHUTDOWN"));
+    }
 }
