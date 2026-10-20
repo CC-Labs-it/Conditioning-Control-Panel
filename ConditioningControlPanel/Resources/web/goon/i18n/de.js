@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "Tisch schließen",
   gg_table_closed: "Tisch geschlossen",
   gg_table_listFailed: "Die Liste hat ihn nicht angenommen. Der Code geht trotzdem.",
+  gg_table_listedAnyone: "Für Alle gelistet. Deinen eigenen Tisch siehst du nie in der Liste.",
+  gg_table_listedFriends: "Für deine Freunde gelistet. Deinen eigenen Tisch siehst du nie in der Liste.",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "Hosten ist für Unterstützer",
   gg_prime_line: "Jede bezahlte Stufe kann einen Tisch öffnen. Beitreten ist gratis, Üben auch.",

@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "Fechar a mesa",
   gg_table_closed: "Mesa fechada",
   gg_table_listFailed: "A lista não aceitou. O código ainda funciona.",
+  gg_table_listedAnyone: "Listada para Qualquer um. Sua própria mesa nunca aparece na sua lista.",
+  gg_table_listedFriends: "Listada para seus amigos. Sua própria mesa nunca aparece na sua lista.",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "Criar partidas é para apoiadores",
   gg_prime_line: "Qualquer nível pago pode abrir uma mesa. Entrar numa é grátis, e treinar também.",

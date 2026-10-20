@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "Закрыть стол",
   gg_table_closed: "Стол закрыт",
   gg_table_listFailed: "Список его не принял. Код по-прежнему работает.",
+  gg_table_listedAnyone: "В списке для «Все». Свой стол в своём списке ты не видишь.",
+  gg_table_listedFriends: "В списке для друзей. Свой стол в своём списке ты не видишь.",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "Создавать матчи могут поддерживающие",
   gg_prime_line: "Открыть стол может любой платный уровень. Сесть за стол бесплатно, как и тренироваться.",

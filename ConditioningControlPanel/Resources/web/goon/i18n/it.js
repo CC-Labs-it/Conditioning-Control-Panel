@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "Chiudi il tavolo",
   gg_table_closed: "Tavolo chiuso",
   gg_table_listFailed: "La lista non l'ha preso. Il codice funziona ancora.",
+  gg_table_listedAnyone: "In lista per Tutti. Il tuo tavolo non compare mai nella tua lista.",
+  gg_table_listedFriends: "In lista per i tuoi amici. Il tuo tavolo non compare mai nella tua lista.",
   gg_prime_badge: "SOGGETTO BASIC",
   gg_prime_headline: "Ospitare è per chi sostiene",
   gg_prime_line: "Qualsiasi livello a pagamento può aprire un tavolo. Entrare in uno è gratis, e anche l'allenamento.",
