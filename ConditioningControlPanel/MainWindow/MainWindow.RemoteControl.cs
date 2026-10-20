@@ -686,9 +686,9 @@ namespace ConditioningControlPanel
         /// Refreshes the header listing pill and the Session Code confirmation
         /// banner from the current remote-session state:
         ///   • no active session            → pill hidden, banner hidden
-        ///   • active, not opted in         → "Private only"
-        ///   • active, opted in, no claimer → "Listed" + confirmation banner
-        ///   • active, opted in, claimed    → "Claimed" + confirmation banner
+        ///   • active, not opted in         → "Remote: private"
+        ///   • active, opted in, no claimer → "Remote: listed" + confirmation banner
+        ///   • active, opted in, claimed    → "Remote: claimed" + confirmation banner
         /// </summary>
         private void UpdateDirectoryListingStatus()
         {
@@ -714,21 +714,21 @@ namespace ConditioningControlPanel
             string tip;
             if (!_directoryOptedIn)
             {
-                text = "Private only";
+                text = "Remote: private";
                 dot = System.Windows.Media.Color.FromRgb(0x8A, 0x8A, 0xA0); // muted grey
-                tip = "Your session is private — you are not listed in the Available Subjects Directory.";
+                tip = "Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.";
             }
             else if (claimed)
             {
-                text = "Claimed";
+                text = "Remote: claimed";
                 dot = System.Windows.Media.Color.FromRgb(0x00, 0xFF, 0x88); // green
-                tip = "A controller has claimed your directory listing.";
+                tip = "A controller has claimed your Remote listing.";
             }
             else
             {
-                text = "Listed";
+                text = "Remote: listed";
                 dot = System.Windows.Media.Color.FromRgb(0xB4, 0x7B, 0xFF); // neon purple (directory accent)
-                tip = "You're listed in the Available Subjects Directory and waiting to be claimed.";
+                tip = "Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.";
             }
 
             if (TxtDirectoryStatus != null) TxtDirectoryStatus.Text = text;

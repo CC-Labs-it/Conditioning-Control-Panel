@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Services.Audio
         private string? _videoUrl;
         private string? _cachedVideoPath;  // Keep video file for all chunks
         private TimeSpan _videoDuration;
+        private bool _durationKnown;
         private CancellationTokenSource? _cts;
         private Task? _backgroundTask;
         private bool _disposed;
@@ -162,7 +163,10 @@ namespace ConditioningControlPanel.Services.Audio
                 }
 
                 _videoUrl = videoUrl;
-                _videoDuration = estimatedDuration ?? TimeSpan.FromMinutes(30);
+                // A real length from the page when it has one; otherwise a 30 min first plan that
+                // grows on demand (ccp-bugs #1475: the plan used to stop dead at 30:00).
+                _durationKnown = estimatedDuration is { } d && d > TimeSpan.Zero;
+                _videoDuration = _durationKnown ? estimatedDuration!.Value : TimeSpan.FromMinutes(30);
                 _chunks.Clear();
                 _track.Clear();
                 _lowTrack.Clear();
@@ -216,12 +220,16 @@ namespace ConditioningControlPanel.Services.Audio
         /// </summary>
         public async Task EnsureChunkReadyAsync(int chunkIndex, CancellationToken ct = default)
         {
-            if (chunkIndex < 0 || chunkIndex >= _chunks.Count)
+            if (chunkIndex < 0)
                 return;
 
             // Check if already ready
             lock (_lock)
             {
+                // A seek past the planned end grows the plan (#1475).
+                ExtendPlan(_chunks, chunkIndex, _settings.ChunkDurationSeconds);
+                if (chunkIndex >= _chunks.Count)
+                    return;
                 if (_chunks[chunkIndex].State == ChunkState.Ready)
                     return;
             }
@@ -243,6 +251,12 @@ namespace ConditioningControlPanel.Services.Audio
                 // Find the chunk for current time
                 var currentChunkIndex = GetChunkIndexForTime(currentPlaybackTime);
 
+                // Playback past the planned end grows the plan (#1475). With an unknown length
+                // the next chunk is planned too so it buffers ahead; a known length only grows
+                // when playback really runs past it.
+                ExtendPlan(_chunks, _durationKnown ? currentChunkIndex : currentChunkIndex + 1,
+                    _settings.ChunkDurationSeconds);
+
                 // Check if we need to process upcoming chunks
                 for (int i = currentChunkIndex; i < _chunks.Count && i <= currentChunkIndex + 1; i++)
                 {
@@ -260,6 +274,42 @@ namespace ConditioningControlPanel.Services.Audio
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Grow a chunk plan so it holds <paramref name="targetIndex"/>. New chunks sit on the
+        /// same fixed grid <see cref="GetChunkIndexForTime"/> reads ([i*len, (i+1)*len)); a short
+        /// last chunk that has not started is widened to its full grid slot first. Returns how
+        /// many chunks were appended. Pure: the caller holds the lock.
+        /// </summary>
+        internal static int ExtendPlan(List<AudioChunk> chunks, int targetIndex, int chunkSeconds)
+        {
+            if (chunkSeconds <= 0 || targetIndex < chunks.Count)
+                return 0;
+            var len = TimeSpan.FromSeconds(chunkSeconds);
+
+            if (chunks.Count > 0)
+            {
+                var last = chunks[^1];
+                var gridEnd = TimeSpan.FromTicks(len.Ticks * (last.Index + 1));
+                if (last.State == ChunkState.NotStarted && last.EndTime < gridEnd)
+                    last.EndTime = gridEnd;
+            }
+
+            int added = 0;
+            while (chunks.Count <= targetIndex)
+            {
+                int i = chunks.Count;
+                chunks.Add(new AudioChunk
+                {
+                    Index = i,
+                    StartTime = TimeSpan.FromTicks(len.Ticks * i),
+                    EndTime = TimeSpan.FromTicks(len.Ticks * (i + 1)),
+                    State = ChunkState.NotStarted
+                });
+                added++;
+            }
+            return added;
         }
 
         /// <summary>

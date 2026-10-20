@@ -415,8 +415,10 @@ namespace ConditioningControlPanel
             {
                 if (App.Settings?.Current?.CompanionPrompt != null)
                 {
-                    App.Settings.Current.CompanionPrompt.AiProvider = Models.AiProviderType.Local;
-                    App.Settings.Current.CompanionPrompt.AiModel = _targetModel;
+                    // Every step ran against OllamaSetupService.DefaultHost (no host is passed), so
+                    // that is the host the smoke test just verified.
+                    OllamaSetupService.ApplyVerifiedSetup(App.Settings.Current.CompanionPrompt,
+                        OllamaSetupService.DefaultHost, _targetModel);
                     App.Settings.Save();
                 }
             }

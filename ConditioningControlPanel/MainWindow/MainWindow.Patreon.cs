@@ -1808,6 +1808,11 @@ namespace ConditioningControlPanel
                 SetAiProviderMode(Views.Controls.Companion.CompanionProviderMode.LocalOllama);
                 UpdateAiBrainPills();
             }
+
+            // The wizard wrote the host it verified (and the model) on Finish, even when the
+            // done page is closed with X: the Engine Room's Host box must show it, not stay blank.
+            if (wizard.LocalAiReady)
+                CompanionRoom?.EngineVm?.Sync();
         }
 
         // The five provider text fields (Ollama model/host, BYO endpoint/model/key, daily limit)
