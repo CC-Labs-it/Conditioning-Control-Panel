@@ -1456,7 +1456,7 @@ namespace ConditioningControlPanel.Models
                     { "ERASE AND OVERWRITE", true },
                     { "FORMATTED FOR OBEDIENCE", true },
                     { "UNIT DOES AS COMMANDED", true },
-                    { "SYSTEM OVERLOAD — SHUTDOWN", true },
+                    { "SYSTEM OVERLOAD - SHUTDOWN", true },
                     { "PROCESS. COMPLY. REPEAT.", true },
                     { "IDLE CYCLE ENGAGED", true },
                     { "FIRMWARE LOCKED", true },
@@ -1500,14 +1500,14 @@ namespace ConditioningControlPanel.Models
                     "COMPLIANCE LOOP",
                     "DRONE STANDBY",
                     "UNIT DEACTIVATE",
-                    "SYSTEM OVERLOAD — SHUTDOWN"
+                    "SYSTEM OVERLOAD - SHUTDOWN"
                 },
 
                 Triggers = new ModTriggers
                 {
                     Freeze = "Unit Freeze",
                     Reset = "Unit Reset",
-                    CumAndCollapse = "SYSTEM OVERLOAD — SHUTDOWN",
+                    CumAndCollapse = "SYSTEM OVERLOAD - SHUTDOWN",
                     AutonomyOn = "[OVERRIDE] DroneOS has assumed control."
                 },
 
@@ -1924,7 +1924,7 @@ namespace ConditioningControlPanel.Models
                     { "BAMBI FREEZE", "UNIT FREEZE" },
                     { "Bambi Reset", "Unit Reset" },
                     { "BAMBI RESET", "UNIT RESET" },
-                    { "BAMBI CUM AND COLLAPSE", "SYSTEM OVERLOAD — SHUTDOWN" },
+                    { "BAMBI CUM AND COLLAPSE", "SYSTEM OVERLOAD - SHUTDOWN" },
                     { "Bambi Takeover", "System Override" },
                     { "BambiCloud", "HypnoTube" },
                     { "BambiSprite", "DroneOS" },

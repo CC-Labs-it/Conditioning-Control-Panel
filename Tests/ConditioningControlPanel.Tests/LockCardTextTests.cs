@@ -85,7 +85,7 @@ public class LockCardTextTests
     [Fact]
     public void Normalize_flattens_punctuation_and_collapses_whitespace()
     {
-        Assert.Equal("good girl... i can't stop", LockCardText.Normalize("  good girl" + Ellipsis + "  i can" + RightSingle + "t	stop "));
+        Assert.Equal("good girl i can't stop", LockCardText.Normalize("  good girl" + Ellipsis + "  i can" + RightSingle + "t	stop "));
         Assert.Equal("", LockCardText.Normalize(null));
         Assert.Equal("", LockCardText.Normalize("   "));
     }
@@ -115,5 +115,30 @@ public class LockCardTextTests
     public void Prefix_check_survives_a_trailing_space()
     {
         Assert.True(LockCardText.IsPrefixOf("hush ", "hush now"));
+    }
+
+    /// <summary>
+    /// Sentence punctuation is not part of the recital: commas for full stops, none at all, or
+    /// a word glued to the next by a full stop all match. Words still have to be separate.
+    /// </summary>
+    [Theory]
+    [InlineData("PROCESS, COMPLY, REPEAT")]
+    [InlineData("process comply repeat")]
+    [InlineData("PROCESS; COMPLY: REPEAT!")]
+    [InlineData("PROCESS.COMPLY.REPEAT?")]
+    [InlineData("PROCESS. COMPLY. REPEAT.")]
+    public void Sentence_punctuation_is_ignorable(string typed)
+    {
+        Assert.True(LockCardText.Matches(typed, "PROCESS. COMPLY. REPEAT."));
+    }
+
+    [Fact]
+    public void Punctuation_never_glues_words_together()
+    {
+        Assert.Equal("autonomous thought denied", LockCardText.Normalize("autonomous thought: denied"));
+        Assert.Equal("obey drop", LockCardText.Normalize("obey.drop"));
+        Assert.False(LockCardText.Matches("PROCESSCOMPLYREPEAT", "PROCESS. COMPLY. REPEAT."));
+        Assert.True(LockCardText.IsPrefixOf("PROCESS, COM", "PROCESS. COMPLY. REPEAT."));
+        Assert.True(LockCardText.Matches("system overload shutdown", "SYSTEM OVERLOAD. SHUTDOWN."));
     }
 }

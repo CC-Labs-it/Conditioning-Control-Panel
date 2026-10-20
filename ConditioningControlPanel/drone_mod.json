@@ -28,7 +28,7 @@
   "triggers": {
     "freeze": "Unit Freeze",
     "reset": "Unit Reset",
-    "cumAndCollapse": "SYSTEM OVERLOAD — SHUTDOWN",
+    "cumAndCollapse": "SYSTEM OVERLOAD - SHUTDOWN",
     "autonomyOn": "[OVERRIDE] DroneOS has assumed control."
   },
 
@@ -51,7 +51,7 @@
     "BAMBI FREEZE": "UNIT FREEZE",
     "Bambi Reset": "Unit Reset",
     "BAMBI RESET": "UNIT RESET",
-    "BAMBI CUM AND COLLAPSE": "SYSTEM OVERLOAD — SHUTDOWN",
+    "BAMBI CUM AND COLLAPSE": "SYSTEM OVERLOAD - SHUTDOWN",
     "Bambi Takeover": "System Override",
     "BambiCloud": "HypnoTube",
     "BambiSprite": "DroneOS",
@@ -74,7 +74,7 @@
     "ERASE AND OVERWRITE": true,
     "FORMATTED FOR OBEDIENCE": true,
     "UNIT DOES AS COMMANDED": true,
-    "SYSTEM OVERLOAD — SHUTDOWN": true,
+    "SYSTEM OVERLOAD - SHUTDOWN": true,
     "PROCESS. COMPLY. REPEAT.": true,
     "IDLE CYCLE ENGAGED": true,
     "FIRMWARE LOCKED": true,
@@ -116,7 +116,7 @@
     "COMPLIANCE LOOP",
     "DRONE STANDBY",
     "UNIT DEACTIVATE",
-    "SYSTEM OVERLOAD — SHUTDOWN"
+    "SYSTEM OVERLOAD - SHUTDOWN"
   ],
 
   "phrases": {
