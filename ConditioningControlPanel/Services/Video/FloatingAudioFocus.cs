@@ -30,6 +30,22 @@ namespace ConditioningControlPanel.Services.Video
             _recency.Add(item);
         }
 
+        /// <summary>A window comes on screen. With <paramref name="keepHolder"/> ("Keep sound on the
+        /// video I'm watching") and a holder up, it joins muted just behind the holder, so the
+        /// current window keeps the sound and the newcomer takes it when the holder closes.
+        /// Otherwise it is <see cref="Add"/>: the newest takes the sound.</summary>
+        public void Join(T item, bool keepHolder)
+        {
+            var holder = Holder;
+            if (!keepHolder || holder == null || ReferenceEquals(holder, item))
+            {
+                Add(item);
+                return;
+            }
+            _recency.Remove(item);
+            _recency.Insert(_recency.Count - 1, item);
+        }
+
         /// <summary>The player pressed or flung a window. True when the holder changed.</summary>
         public bool Touch(T item)
         {

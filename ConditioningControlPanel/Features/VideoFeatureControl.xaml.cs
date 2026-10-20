@@ -90,6 +90,9 @@ namespace ConditioningControlPanel.Features
                 for (var n = 1; n <= VideoShow.MaxWindows; n++)
                     CmbFloatingCount.Items.Add(new ComboBoxItem { Content = n.ToString(), Tag = n });
                 CmbFloatingCount.SelectedIndex = VideoShow.ClampCount(s.MandatoryVideoFloatingCount) - 1;
+                ChkFloatingTogether.IsChecked = s.MandatoryVideoFloatingTogether;
+                ChkFloatingKeepSound.IsChecked = s.MandatoryVideoFloatingKeepSound;
+                ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
                 // The fold opens on its own when a row inside is off its default, so a setting
                 // someone changed is never hidden from them. It never closes itself.
                 if (s.VideoTargetMonitor != App.MonitorTargetFollowGlobal
@@ -204,6 +207,36 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
+        /// <summary>Read at the next trigger; the windows up stay as they are.</summary>
+        private void ChkFloatingTogether_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoFloatingTogether = ChkFloatingTogether.IsChecked == true;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Read when the next window is shown.</summary>
+        private void ChkFloatingKeepSound_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoFloatingKeepSound = ChkFloatingKeepSound.IsChecked == true;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Read at the next attention verdict.</summary>
+        private void ChkReplayFailedCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoReplayAfterFailedCheck = ChkReplayFailedCheck.IsChecked == true;
+            App.Settings?.Save();
+        }
+
         private static string FormatDuration(int seconds)
         {
             if (seconds <= 0) return "off";
@@ -229,6 +262,9 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.VideoGazeClickEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingCount) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingTogether) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingKeepSound) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoTargetMonitor))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));

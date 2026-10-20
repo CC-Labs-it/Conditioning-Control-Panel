@@ -109,10 +109,12 @@ public class FloatingVideoMultiTests
         Assert.False(File.Exists(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Video", "VideoService.Companions.cs")));
         Assert.DoesNotContain("Companion", inst);
 
-        // Each door spawns once: no loop fills the screen up to "how many".
+        // Each door spawns once: no loop fills the screen up to "how many", unless "Pop up
+        // together" is on (SpawnTogetherExtras does nothing while it is off).
         Assert.Equal(1, Count(Body(inst, "private bool TryStartFloatingRun("), "SpawnInstance("));
         var add = Body(inst, "private bool AddFloatingInstance(");
         Assert.Equal(1, Count(add, "SpawnInstance("));
+        Assert.Contains("if (!FloatingTogether()) return 0;", Body(inst, "private int SpawnTogetherExtras("));
         Assert.Contains("MandatoryVideoPresentation.DecideTrigger(_floaters.Count, FloatingLimit(), replaceOldestAtLimit)", add);
         Assert.DoesNotContain("while (_floaters.Count <", inst);
 
@@ -125,7 +127,7 @@ public class FloatingVideoMultiTests
         Assert.Contains("if (!isVoutRetry && TryStartFloatingRun(path, strict)) return;", Body(main, "private void PlayVideo("));
         // The scheduler keeps ticking through a floating run.
         Assert.Contains("if (_isRunning && SchedulerMayTrigger && !_triggerInProgress)", main);
-        Assert.Contains("private bool SchedulerMayTrigger => !_videoPlaying || (_floatRunOpen && _floaters.Count > 0);", inst);
+        Assert.Contains("private bool SchedulerMayTrigger => !_videoPlaying || (_floatRunOpen && _floaters.Count > 0 && !FloatingTogether());", inst);
         // Strict, Lockdown and Chaos never float, at either door.
         Assert.Contains("if (!FloatingWanted(strict)) return false;", Body(inst, "private bool TryStartFloatingRun("));
         Assert.Contains("if (!FloatingWanted(", Body(inst, "private bool TryFloatingTrigger("));

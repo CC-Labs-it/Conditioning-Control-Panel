@@ -54,6 +54,27 @@ namespace ConditioningControlPanel.Services.Video
             => up < ClampCount(limit) ? TriggerDecision.Open
                 : testPress ? TriggerDecision.ReplaceOldest : TriggerDecision.Skip;
 
+        /// <summary>
+        /// How many windows one trigger opens with <paramref name="up"/> on screen: one while there
+        /// is room, or with "Pop up together" (AppSettings.MandatoryVideoFloatingTogether) every free
+        /// slot at the same moment. Zero at the limit (DecideTrigger says what happens then).
+        /// </summary>
+        public static int WindowsToOpen(int up, int limit, bool together)
+        {
+            var room = ClampCount(limit) - Math.Max(0, up);
+            if (room <= 0) return 0;
+            return together ? room : 1;
+        }
+
+        /// <summary>
+        /// Whether a failed attention check (or the surprise replay after a pass) plays another
+        /// video (AppSettings.MandatoryVideoReplayAfterFailedCheck). Turning the replay off is a
+        /// comfort choice for an ordinary video only: a strict video and a Lockdown always replay,
+        /// the same split as <see cref="ShouldFloat"/>.
+        /// </summary>
+        public static bool ReplaysAfterCheck(bool replaySetting, bool strict, bool lockdownActive)
+            => replaySetting || strict || lockdownActive;
+
         /// <summary>Bounds of <see cref="JoinDelaySeconds"/>, before the jitter.</summary>
         public const double MinJoinSeconds = 30, MaxJoinSeconds = 600;
 
@@ -64,11 +85,12 @@ namespace ConditioningControlPanel.Services.Video
         /// <see cref="MinJoinSeconds"/> and <see cref="MaxJoinSeconds"/>, with the scheduler's own
         /// +-20% jitter: 20 an hour joins after about 45 s, 6 after 2.5 min, 1 after 10 min, so a
         /// rare video rarely finds another still playing. Null = a limit of one window, where
-        /// nothing can join: the ordinary gap applies. <paramref name="unit"/> is a 0..1 draw.
+        /// nothing can join, or "Pop up together", where the run opened full and nothing joins it:
+        /// the ordinary gap applies. <paramref name="unit"/> is a 0..1 draw.
         /// </summary>
-        public static double? JoinDelaySeconds(int videosPerHour, int limit, double unit)
+        public static double? JoinDelaySeconds(int videosPerHour, int limit, double unit, bool together = false)
         {
-            if (ClampCount(limit) < 2) return null;
+            if (together || ClampCount(limit) < 2) return null;
             var gap = 3600.0 / Math.Max(1, videosPerHour);
             return Math.Clamp(gap / 4, MinJoinSeconds, MaxJoinSeconds) * (0.8 + Math.Clamp(unit, 0, 1) * 0.4);
         }

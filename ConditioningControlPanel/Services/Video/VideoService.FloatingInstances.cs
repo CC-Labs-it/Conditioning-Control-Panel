@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Services
                     while (_floaters.Count >= FloatingLimit())
                         CloseInstance(_floaters[0], "the oldest makes room", endRun: false);
                 var ok = SpawnInstance(clip);
+                if (decision == MandatoryVideoPresentation.TriggerDecision.Open && SpawnTogetherExtras() > 0) ok = true;
                 if (_floaters.Count == 0) EndFloatingRun("nothing could replace the last window");
                 return ok;
             }
@@ -201,6 +202,7 @@ namespace ConditioningControlPanel.Services
                 EndFloatingRun("the first window could not start");
                 return true;
             }
+            SpawnTogetherExtras();
 
             try { App.Bubbles?.PauseAndClear(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { VideoStarted?.Invoke(this, EventArgs.Empty); }
@@ -219,12 +221,36 @@ namespace ConditioningControlPanel.Services
         {
             if (!_floatRunOpen || _floaters.Count == 0) return null;
             return MandatoryVideoPresentation.JoinDelaySeconds(
-                App.Settings?.Current?.VideosPerHour ?? 1, FloatingLimit(), _random.NextDouble());
+                App.Settings?.Current?.VideosPerHour ?? 1, FloatingLimit(), _random.NextDouble(), FloatingTogether());
         }
 
         /// <summary>The scheduler may fire during a floating run: its trigger lands in
-        /// <see cref="TryFloatingTrigger"/> (one more window, or a quiet skip at the limit).</summary>
-        private bool SchedulerMayTrigger => !_videoPlaying || (_floatRunOpen && _floaters.Count > 0);
+        /// <see cref="TryFloatingTrigger"/> (one more window, or a quiet skip at the limit). Not with
+        /// "Pop up together": that run opened full, and the next one waits for it to end, the way a
+        /// full-screen video does.</summary>
+        private bool SchedulerMayTrigger => !_videoPlaying || (_floatRunOpen && _floaters.Count > 0 && !FloatingTogether());
+
+        private static bool FloatingTogether() => App.Settings?.Current?.MandatoryVideoFloatingTogether == true;
+
+        private static bool FloatingKeepSound() => App.Settings?.Current?.MandatoryVideoFloatingKeepSound == true;
+
+        /// <summary>"Pop up together": the rest of the free slots open at the same moment as the
+        /// window just spawned, each on its own clip while the pool allows (PickFloatingClip skips
+        /// clips already up). Off: nothing. Returns how many opened.</summary>
+        private int SpawnTogetherExtras()
+        {
+            if (!FloatingTogether()) return 0;
+            var want = MandatoryVideoPresentation.WindowsToOpen(_floaters.Count, FloatingLimit(), together: true);
+            var opened = 0;
+            for (var i = 0; i < want && _floatRunOpen; i++)
+            {
+                var clip = PickFloatingClip();
+                if (clip == null || !SpawnInstance(clip)) break;
+                opened++;
+            }
+            if (opened > 0) VideoDiag.Log("VIDEO", $"floating: {opened} more opened together ({_floaters.Count} up)");
+            return opened;
+        }
 
         /// <summary>The last window closed on its own: the run ends the way any video ends.</summary>
         private void EndFloatingRun(string reason)
@@ -563,8 +589,9 @@ namespace ConditioningControlPanel.Services
             if (c.Surface != null)
             {
                 // Shown: it joins the sound rotation as the newest, so it takes the sound (as a
-                // window did on creation before the veil).
-                _audioFocus.Add(c.Surface);
+                // window did on creation before the veil). With "Keep sound on the video I'm
+                // watching" it joins muted behind the window that has the sound.
+                _audioFocus.Join(c.Surface, FloatingKeepSound());
                 ApplyAudioFocus();
             }
             var animate = FloatingSpawnLook.Animates(MotionFx.Level);

@@ -6130,6 +6130,15 @@ namespace ConditioningControlPanel.Services
                     // Apply Trainer companion penalty (-25 XP)
                     App.Companion?.OnAttentionCheckFailed();
                 }
+
+                // "Replay after a failed check" off: the verdict above stands (a fail still counts
+                // as one), the video just ends. A strict video and a Lockdown always replay.
+                if (loop && !Video.MandatoryVideoPresentation.ReplaysAfterCheck(
+                        settings.MandatoryVideoReplayAfterFailedCheck, _strictActive, App.Lockdown?.IsActive == true))
+                {
+                    VideoDiag.Log("VIDEO", $"attention {(troll ? "surprise replay" : "fail")} - no replay (setting off)");
+                    loop = troll = false;
+                }
             }
 
             if (loop && !string.IsNullOrEmpty(_retryPath))
