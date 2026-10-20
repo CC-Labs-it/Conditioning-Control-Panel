@@ -2010,8 +2010,9 @@ namespace ConditioningControlPanel
 
             // Name - use V2 unified display name (leaderboard name), never raw provider names
             if (DiscordTab.TxtProfileViewerName != null)
-                DiscordTab.TxtProfileViewerName.Text = App.Settings?.Current?.UserDisplayName
-                    ?? App.Discord?.CustomDisplayName ?? App.Patreon?.DisplayName ?? "You";
+                DiscordTab.TxtProfileViewerName.Text = NeedsDisplayNameRule.FirstName(
+                        App.Settings?.Current?.UserDisplayName, App.Discord?.CustomDisplayName, App.Patreon?.DisplayName)
+                    ?? (string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId) ? "You" : Loc.Get("account_name_not_set"));
 
             // Show edit name button for own profile (only if logged in with unified ID)
             if (DiscordTab.BtnChangeDisplayName != null)

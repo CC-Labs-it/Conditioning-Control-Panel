@@ -752,6 +752,9 @@ namespace ConditioningControlPanel
                 // nothing.
                 App.Descent?.RequestRefresh("profile loaded");
 
+                // A restored session with no display name gets asked (MainWindow.DisplayNameAsk.cs).
+                QueueDisplayNameAskIfNeeded();
+
                 // Re-arm autonomy after profile load ONLY if the user opted into resume-on-startup
                 // (same gate as App.OnStartup — Takeover otherwise always starts OFF).
                 var s = App.Settings?.Current;

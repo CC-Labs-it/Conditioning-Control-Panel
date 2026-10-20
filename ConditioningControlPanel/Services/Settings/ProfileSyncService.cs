@@ -241,6 +241,9 @@ namespace ConditioningControlPanel.Services
         private DateTime _lastProviderRevalidateAttempt = DateTime.MinValue;
         private readonly SemaphoreSlim _authRecoveryGate = new(1, 1);
         private bool _hasLoadedProfile; // true after first successful LoadProfileAsync/SyncProfileAsync round-trip
+
+        /// <summary>The server's profile has landed this session (the display-name ask waits for it).</summary>
+        public bool HasLoadedProfile => _hasLoadedProfile;
         private readonly SemaphoreSlim _syncGate = new(1, 1);
 
         /// <summary>
@@ -4248,6 +4251,26 @@ namespace ConditioningControlPanel.Services
             {
                 App.Logger?.Error(ex, "Skill purchase request failed");
                 return (false, "Connection failed. Please check your internet connection.");
+            }
+        }
+
+        /// <summary>
+        /// GET /v2/auth/check-name (no auth). Asked before <see cref="ChangeDisplayNameAsync"/>
+        /// because the change route spends its 60 s cooldown even on a taken name. Null when the
+        /// server could not answer; the change route still has the last word.
+        /// </summary>
+        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
+        {
+            try
+            {
+                var json = await _httpClient.GetStringAsync(
+                    $"{ProxyBaseUrl}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
+                return (bool?)JObject.Parse(json)["available"];
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Display name check failed: {Error}", ex.Message);
+                return null;
             }
         }
 

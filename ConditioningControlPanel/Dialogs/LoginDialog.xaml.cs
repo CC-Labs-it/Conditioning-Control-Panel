@@ -48,6 +48,9 @@ namespace ConditioningControlPanel
             public string? DisplayName { get; set; }
             public string? Provider { get; set; }
             public string? LinkedProvider { get; set; }
+
+            /// <summary>The server's needs_display_name, when it sent one (NeedsDisplayNameRule).</summary>
+            public bool? ServerNeedsDisplayName { get; set; }
         }
 
         public LoginDialog()
@@ -220,7 +223,8 @@ namespace ConditioningControlPanel
                         ShouldShowOgWelcome = authResponse.User.IsSeason0Og && App.Settings?.Current?.HasShownOgWelcome != true,
                         UnifiedId = authResponse.User.UnifiedId,
                         DisplayName = authResponse.User.DisplayName,
-                        Provider = provider
+                        Provider = provider,
+                        ServerNeedsDisplayName = authResponse.User.NeedsDisplayName
                     };
 
                     DialogResult = true;
@@ -907,7 +911,8 @@ namespace ConditioningControlPanel
                 ShouldShowOgWelcome = false,
                 UnifiedId = result.UnifiedId,
                 DisplayName = App.Settings?.Current?.UserDisplayName,
-                Provider = "device_code"
+                Provider = "device_code",
+                ServerNeedsDisplayName = result.NeedsDisplayName
             };
 
             // Polling loop has already returned; this is hygiene so the CTS

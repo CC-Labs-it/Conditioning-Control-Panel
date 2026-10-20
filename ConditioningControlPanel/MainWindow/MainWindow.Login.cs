@@ -204,6 +204,10 @@ namespace ConditioningControlPanel
                     }
                 });
 
+                // The display name is required: a nameless account picks one now, before any
+                // other post-login prompt (MainWindow.DisplayNameAsk.cs).
+                AskDisplayNameAfterSignIn(owner ?? this, result.DisplayName, result.ServerNeedsDisplayName);
+
                 // First-time login is the OTHER way a Discord account gets attached: the
                 // link-an-existing-account flows offer achievement sharing, this one never did,
                 // so Discord-first users never saw the prompt and their unlocks silently never
@@ -422,11 +426,14 @@ namespace ConditioningControlPanel
         private void UpdateQuickLoginUI()
         {
             var isLoggedIn = !string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId) || App.IsLoggedIn;
-            var displayName = App.Settings?.Current?.UserDisplayName
-                           ?? App.Patreon?.DisplayName
-                           ?? App.Discord?.DisplayName
-                           ?? App.SubscribeStar?.DisplayName
-                           ?? "User";
+            // FirstName skips an empty "" too (a nameless account stores one), and a signed-in
+            // account with no name reads "No name yet", never a generic "User".
+            var displayName = NeedsDisplayNameRule.FirstName(
+                                  App.Settings?.Current?.UserDisplayName,
+                                  App.Patreon?.DisplayName,
+                                  App.Discord?.DisplayName,
+                                  App.SubscribeStar?.DisplayName)
+                           ?? Loc.Get("account_name_not_set");
 
             SettingsTab.BtnUnifiedLogin.Visibility = isLoggedIn ? Visibility.Collapsed : Visibility.Visible;
             SettingsTab.LoggedInStatusPanel.Visibility = isLoggedIn ? Visibility.Visible : Visibility.Collapsed;
