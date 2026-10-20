@@ -203,6 +203,30 @@
                                               Style="{DynamicResource DarkComboBoxStyle}"
                                               SelectionChanged="CmbFloatingCount_Changed"/>
                                 </Grid>
+                                <!-- One trigger fills every free slot at once (MandatoryVideoPresentation.WindowsToOpen). -->
+                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_float_together}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_float_together}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <CheckBox Grid.Column="1" x:Name="ChkFloatingTogether" Style="{StaticResource ToggleStyle}"
+                                              VerticalAlignment="Center"
+                                              Checked="ChkFloatingTogether_Changed" Unchecked="ChkFloatingTogether_Changed"/>
+                                </Grid>
+                                <!-- A new window joins muted while another has the sound (FloatingAudioFocus.Join). -->
+                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_float_keep_sound}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_float_keep_sound}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <CheckBox Grid.Column="1" x:Name="ChkFloatingKeepSound" Style="{StaticResource ToggleStyle}"
+                                              VerticalAlignment="Center"
+                                              Checked="ChkFloatingKeepSound_Changed" Unchecked="ChkFloatingKeepSound_Changed"/>
+                                </Grid>
                                 <TextBlock Text="{loc:Str video_appearance_no_checks_note}" FontSize="11"
                                            Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="14,0,0,2"/>
                             </StackPanel>
@@ -317,6 +341,20 @@
                                 <TextBlock Grid.Column="2" x:Name="TxtTargetSize" Text="70" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
+                            </Grid>
+
+                            <!-- Off: a failed check still counts, the video just ends. Strict and
+                                 Lockdown always replay (MandatoryVideoPresentation.ReplaysAfterCheck). -->
+                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_replay_failed_check}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_replay_failed_check}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkReplayFailedCheck" Style="{StaticResource ToggleStyle}"
+                                          feat:SessionLock.Owned="True" VerticalAlignment="Center"
+                                          Checked="ChkReplayFailedCheck_Changed" Unchecked="ChkReplayFailedCheck_Changed"/>
                             </Grid>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>

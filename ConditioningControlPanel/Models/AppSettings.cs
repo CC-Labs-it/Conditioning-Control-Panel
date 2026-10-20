@@ -2669,6 +2669,39 @@ namespace ConditioningControlPanel.Models
             set { _mandatoryVideoFloatingCount = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampCount(value); OnPropertyChanged(); }
         }
 
+        private bool _mandatoryVideoFloatingTogether;
+        /// <summary>"Pop up together" (owner promise 2026-10-20): one trigger opens every free
+        /// floating window at once, up to <see cref="MandatoryVideoFloatingCount"/>, each with its own
+        /// clip where the pool allows, and nothing joins the run later. Default off = one window per
+        /// trigger, the next one joins on the join delay (MandatoryVideoPresentation.WindowsToOpen).</summary>
+        public bool MandatoryVideoFloatingTogether
+        {
+            get => _mandatoryVideoFloatingTogether;
+            set { _mandatoryVideoFloatingTogether = value; OnPropertyChanged(); }
+        }
+
+        private bool _mandatoryVideoFloatingKeepSound;
+        /// <summary>"Keep sound on the video I'm watching" (owner promise 2026-10-20): a floating
+        /// window that opens while another has the sound joins muted and the current one keeps it.
+        /// Default off = the newest window takes the sound (Services/Video/FloatingAudioFocus.Join).</summary>
+        public bool MandatoryVideoFloatingKeepSound
+        {
+            get => _mandatoryVideoFloatingKeepSound;
+            set { _mandatoryVideoFloatingKeepSound = value; OnPropertyChanged(); }
+        }
+
+        private bool _mandatoryVideoReplayAfterFailedCheck = true;
+        /// <summary>"Replay after a failed check" (owner promise 2026-10-20), default ON = as always:
+        /// a failed attention check, or the surprise replay after a pass, plays another video. Off =
+        /// a failed check still counts as failed (achievements, companion penalty) but the video just
+        /// ends. A strict video and a Lockdown always replay
+        /// (MandatoryVideoPresentation.ReplaysAfterCheck).</summary>
+        public bool MandatoryVideoReplayAfterFailedCheck
+        {
+            get => _mandatoryVideoReplayAfterFailedCheck;
+            set { _mandatoryVideoReplayAfterFailedCheck = value; OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC

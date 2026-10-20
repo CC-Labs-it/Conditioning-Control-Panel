@@ -106,7 +106,7 @@ public class FloatingVideoPolishTests
         Assert.Contains("c.Surface.SetMuted(true);", spawn);
         Assert.DoesNotContain("ApplyAudioFocus();", spawn);
         var reveal = Member(src, "private void RevealInstance(");
-        Assert.Contains("_audioFocus.Add(c.Surface);", reveal);
+        Assert.Contains("_audioFocus.Join(c.Surface, FloatingKeepSound());", reveal);
         Assert.Contains("ApplyAudioFocus();", reveal);
         // A grace pause holds the first-frame clock.
         Assert.Contains("if (_gracePaused)", Member(src, "private void CheckReveal("));
