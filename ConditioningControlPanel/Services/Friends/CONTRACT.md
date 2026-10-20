@@ -31,6 +31,9 @@ Ids on the wire are unified ids (`u_...`). The client never shows one.
 | `squelch` | `{ id, on }` | `{ ok }` |
 | `send` | `{ to, kind, poke?, destination?, code?, watch? }` | `{ ok, status, item_id? }` status: `sent` `squelched` `too_fast` `not_friends` `offline` `refused`; `item_id` (16 hex) only with `sent` |
 | `report` | `{ id, reason }` | `{ ok }` |
+| `link` | `{}` | `{ ok, url, token, expires_at, uses_left }`: the live link, minted when there is none (Links) |
+| `link_revoke` | `{}` | `{ ok }`: deletes the live link; the next `link` mints a new one |
+| `claim` | `{ token }` | `{ ok, status }` status: `friends` `already` `self` `full` `unusable` |
 
 `F` = `{ id, name, avatar, tier, online, activity, lock_day, last_seen, squelched }`
 `R` = `{ id, name, avatar, via, at }`
@@ -47,6 +50,31 @@ without the key is an older server; the client then falls back to what this PC r
 - `online` = the presence key exists (see Presence). `activity` is one of the grammar below or
   `"online"` when the friend shares nothing beyond being here. `lock_day` int or null.
 - Timestamps are ISO strings from the server clock.
+
+## Links (Friends Everywhere S1, 2026-10-20)
+
+An expiring friend link beside the typed code (the code stays and is never a URL). Additive: an
+old client never calls these ops; this client reads a missing or HTML reply as "no link" and Copy
+link then copies the code and says so.
+
+- Token: 12 chars from the code alphabet, case-insensitive on input, stored upper.
+  `url` = `https://app.cclabs.app/f/<token>`; the client builds the url from the token and accepts
+  a pasted link (any case, scheme optional, trailing `/`, `?` or `#` dropped) or a bare token in
+  the Add friend box, which then `claim`s instead of `request`ing.
+- Life: 7 days (`expires_at`, ISO) and 25 uses (`uses_left`). At the 25th claim or at expiry it is
+  unusable. The client caches the live link per account and asks again within 5 minutes of the end.
+- `claim` = the same checks as `accept` (not self, no block either way, both under 100 friends, not
+  already friends). On `friends` the pair is mutual at once, any pending request between them goes,
+  and the link OWNER gets the existing receipt `{ id: null, kind: "request", to: <claimer>,
+  to_name, state: "accepted", at }` (the accepted notice fires unchanged). Blocked, expired, revoked
+  and unknown tokens all answer `unusable`, never "blocked". Rate: the 60/min door plus 10 claims a
+  minute per account.
+- Server keys: `friend_link:<token>` -> `{ uid, uses, max, exp }` EX 7 d; `friend_link_of:<uid>` ->
+  token, same EX. Nothing on the `user:` record.
+- Public lookup (web only, never called by this client): `GET /v2/public/friend-link/:token` ->
+  `{ ok, state: "live" | "unusable", name, avatar }`, gated like `/v2/public/taste/:code`.
+- Invite destinations gain `race` and `breakout` (no `code`). Until the desktop learns them (D2)
+  `ParseItem` drops such an inbox item as outside the grammar; it never throws.
 
 ## Grammar (refuse anything else with `refused`)
 
