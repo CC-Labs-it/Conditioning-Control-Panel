@@ -1024,10 +1024,13 @@ public sealed partial class FriendsDrawer : Border
             ToolTip = Loc.Get("friends_add_hint"),
             Tag = "friends-code-box",
         };
+        var boxBefore = "";
         _codeBox.TextChanged += (_, _) =>
         {
             // A code, a pasted link or a bare link token (FriendsLinkRules.BoxText).
-            var (n, isToken) = FriendsLinkRules.BoxText(_codeBox.Text);
+            var raw = _codeBox.Text;
+            var (n, isToken) = FriendsLinkRules.BoxText(raw, raw.Length == boxBefore.Length + 1);
+            boxBefore = n;
             if (n != _codeBox.Text)
             {
                 _codeBox.Text = n;

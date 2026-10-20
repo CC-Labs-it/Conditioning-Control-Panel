@@ -19,6 +19,11 @@ public sealed partial class FriendsDrawer
     private string? _linkNoteText;
     private bool _linkNoteGood;
     private DispatcherTimer? _linkNoteTimer;
+    private bool _linkNoteFresh;
+
+    /// <summary>The Copy link pill and the note as the last Render built them (a Render replaces both).</summary>
+    private Button? _linkPill;
+    private TextBlock? _linkNote;
 
     /// <summary>The clipboard write. The suite swaps it so it never touches the real clipboard.</summary>
     internal Func<string, bool> CopyText { get; set; } = text =>
@@ -36,17 +41,28 @@ public sealed partial class FriendsDrawer
         pill.ToolTip = Loc.Get("friends_link_copy_tip");
         pill.IsEnabled = _svc?.Available == true;
         pill.Click += (_, _) => _ = CopyLinkAsync(pill);
+        _linkPill = pill;
         return pill;
     }
 
     private TextBlock? LinkNote()
     {
+        _linkNote = null;
         if (_linkNoteText == null) return null;
         var t = FriendsLook.Label(_linkNoteText, 10.5, _linkNoteGood ? FriendsLook.MintBrush : FriendsLook.GoldBrush, FriendsLook.Display);
         t.TextTrimming = TextTrimming.None;
         t.TextWrapping = TextWrapping.Wrap;
         t.Margin = new Thickness(8, 0, 2, 4);
         t.Tag = "friends-link-note";
+        if (_linkNoteFresh)
+        {
+            // IN: the note fades up once when it is set, not on every redraw while it stands.
+            _linkNoteFresh = false;
+            t.Opacity = 0;
+            t.BeginAnimation(UIElement.OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1,
+                TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.RiseMs(180))));
+        }
+        _linkNote = t;
         return t;
     }
 
@@ -88,7 +104,12 @@ public sealed partial class FriendsDrawer
         }
         FriendsSfx.Click();
         SetLinkNote(Loc.Get(isLink ? "friends_link_copied" : "friends_link_offline"), isLink);
-        if (from != null) Pop(from, FriendsLook.Lilac);
+        // SetLinkNote redrew the foot, so `from` is detached: pop the pill that replaced it, once laid out.
+        if (from != null && _linkPill is { } pill)
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            {
+                if (PresentationSource.FromVisual(pill) != null) Pop(pill, FriendsLook.Lilac);
+            }));
         return isLink;
     }
 
@@ -127,7 +148,8 @@ public sealed partial class FriendsDrawer
             if (_addGo != null) Shockwave(_addGo, FriendsLook.Mint);
             FriendsSfx.Accepted();
             if (_codeBox != null) _codeBox.Text = "";
-            _ = SafeRefreshAsync();
+            // No refresh here: FriendsService.ClaimLinkAsync already refreshed on `friends`
+            // (one `state` call against the 60/min door, not two).
         }
         else
         {
@@ -149,13 +171,25 @@ public sealed partial class FriendsDrawer
     {
         _linkNoteText = text;
         _linkNoteGood = good;
+        _linkNoteFresh = true;
         _linkNoteTimer?.Stop();
         _linkNoteTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        var timer = _linkNoteTimer;
         _linkNoteTimer.Tick += (_, _) =>
         {
-            _linkNoteTimer?.Stop();
-            _linkNoteText = null;
-            Render();
+            timer.Stop();
+            // OUT: fade the note, then drop it (a newer note in the meantime keeps its own timer).
+            void Drop()
+            {
+                if (_linkNoteTimer != timer) return;
+                _linkNoteText = null;
+                Render();
+            }
+            if (_linkNote is not { } note || PresentationSource.FromVisual(note) == null) { Drop(); return; }
+            var fade = new System.Windows.Media.Animation.DoubleAnimation(0,
+                TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.FadeMs(260)));
+            fade.Completed += (_, _) => Drop();
+            note.BeginAnimation(UIElement.OpacityProperty, fade);
         };
         _linkNoteTimer.Start();
         Render();

@@ -62,7 +62,9 @@ link then copies the code and says so.
   a pasted link (any case, scheme optional, trailing `/`, `?` or `#` dropped) or a bare token in
   the Add friend box, which then `claim`s instead of `request`ing.
 - Life: 7 days (`expires_at`, ISO) and 25 uses (`uses_left`). At the 25th claim or at expiry it is
-  unusable. The client caches the live link per account and asks again within 5 minutes of the end.
+  unusable. The client asks `link` on every Copy link press (a link renewed on another device or
+  spent at 25 claims is replaced at once); the per-account cache answers only when that call fails,
+  and never within 5 minutes of the end.
 - `claim` = the same checks as `accept` (not self, no block either way, both under 100 friends, not
   already friends). On `friends` the pair is mutual at once, any pending request between them goes,
   and the link OWNER gets the existing receipt `{ id: null, kind: "request", to: <claimer>,

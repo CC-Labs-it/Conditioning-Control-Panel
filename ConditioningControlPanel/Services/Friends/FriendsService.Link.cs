@@ -3,7 +3,9 @@ using System.Threading.Tasks;
 namespace ConditioningControlPanel.Services.Friends;
 
 // Friend links (CONTRACT.md "Links"): Copy link, New link, and a pasted link in the add box.
-// The live link is cached per account until it nears its end, so a press costs nothing most days.
+// Every Copy link press asks the server (`link` is cheap and re-mints a link that is no longer
+// live, e.g. after New link on the phone or the 25th claim); the per-account cache is only the
+// fallback when that call fails, and the self-check in ClaimLinkAsync.
 public sealed partial class FriendsService
 {
     private readonly FriendLinkCache _linkCache = new();
@@ -12,11 +14,14 @@ public sealed partial class FriendsService
     {
         var account = _account();
         if (account == null) return null;
-        if (_linkCache.Get(account, _now()) is { } cached) return cached;
         var link = await _api.LinkAsync();
-        if (link == null || _account() != account) return null;
-        _linkCache.Put(account, link);
-        return link;
+        if (_account() != account) return null;
+        if (link != null)
+        {
+            _linkCache.Put(account, link);
+            return link;
+        }
+        return _linkCache.Get(account, _now());
     }
 
     public async Task<FriendLink?> NewLinkAsync()

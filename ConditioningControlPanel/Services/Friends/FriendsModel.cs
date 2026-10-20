@@ -60,16 +60,37 @@ public static class FriendPlatform
     /// <summary>The one order the wire, the row marks and the tooltips use.</summary>
     public static readonly IReadOnlyList<string> Order = new[] { Desktop, Phone, Web };
 
+    // One shared read-only list per subset (bit i = Order[i]), so equal sets are the same reference
+    // and record equality on Friend holds from one poll to the next (no needless redraws).
+    private static readonly IReadOnlyList<string>[] Subsets = BuildSubsets();
+
+    private static IReadOnlyList<string>[] BuildSubsets()
+    {
+        var all = new IReadOnlyList<string>[1 << Order.Count];
+        all[0] = Array.Empty<string>();
+        for (var mask = 1; mask < all.Length; mask++)
+        {
+            var list = new List<string>(Order.Count);
+            for (var i = 0; i < Order.Count; i++) if ((mask & (1 << i)) != 0) list.Add(Order[i]);
+            all[mask] = list.ToArray();
+        }
+        return all;
+    }
+
     /// <summary>The wire's <c>platforms</c> as this client keeps it: known ids only, no repeats, in
-    /// <see cref="Order"/> whatever order they came in. Null or junk reads as none.</summary>
+    /// <see cref="Order"/> whatever order they came in. Null or junk reads as none. Equal sets come
+    /// back as the same cached instance.</summary>
     public static IReadOnlyList<string> Normalise(IEnumerable<string?>? ids)
     {
-        if (ids == null) return Array.Empty<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var id in ids) if (id != null) seen.Add(id.Trim().ToLowerInvariant());
-        var list = new List<string>(3);
-        foreach (var p in Order) if (seen.Contains(p)) list.Add(p);
-        return list;
+        if (ids == null) return Subsets[0];
+        var mask = 0;
+        foreach (var id in ids)
+        {
+            if (id == null) continue;
+            var key = id.Trim().ToLowerInvariant();
+            for (var i = 0; i < Order.Count; i++) if (Order[i] == key) mask |= 1 << i;
+        }
+        return Subsets[mask];
     }
 }
 

@@ -73,6 +73,22 @@ public class FriendsPlatformsTests
     public void AFriendBuiltInCodeHasNoPlatforms()
         => Assert.Empty(new Friend("u", "n", null, 0, true, FriendPresence.None, false).Platforms);
 
+    [Fact]
+    public void TheSameStateParsedTwiceIsTheSameSnapshot()
+    {
+        // Record equality compares Platforms by reference: equal sets must share one instance, or
+        // every `state` reply would redraw the drawer, the rail chip and the landing for nothing.
+        const string json = "{\"ok\":true,\"code\":\"CCP-ABCDE\",\"friends\":[" +
+            "{\"id\":\"u_1\",\"name\":\"Ann\",\"online\":true,\"activity\":\"panel\",\"platforms\":[\"desktop\",\"phone\"]}," +
+            "{\"id\":\"u_2\",\"name\":\"Bo\",\"online\":true,\"activity\":\"panel\",\"platforms\":[]}]}";
+        var a = FriendsApi.ParseState(JObject.Parse(json));
+        var b = FriendsApi.ParseState(JObject.Parse(json));
+        Assert.Equal(new[] { "desktop", "phone" }, a.Friends[0].Platforms);
+        Assert.Empty(a.Friends[1].Platforms);
+        Assert.True(FriendsSnapshotEquality.Same(a, b));
+        Assert.Same(FriendPlatform.Normalise(new[] { "phone", "desktop" }), FriendPlatform.Normalise(new[] { "desktop", "phone" }));
+    }
+
     private static Friend Online(params string[] platforms) =>
         new Friend("u_1", "Ann", null, 0, true, new FriendPresence(PresenceActivity.Panel, null, DateTimeOffset.UtcNow), false)
         { Platforms = platforms };
