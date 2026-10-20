@@ -714,7 +714,7 @@ namespace ConditioningControlPanel
 
         private async void BtnLoginDeviceCode_Click(object sender, RoutedEventArgs e)
         {
-            ShowLoading("Generating sign-in code...");
+            ShowLoading(Loc.Get("login_device_generating"));
 
             try
             {
@@ -759,7 +759,7 @@ namespace ConditioningControlPanel
                 : code;
             // Keep DRY with the service constant; if it changes, single source of truth.
             TxtVerificationUrl.Text = V2DeviceCodeService.VerificationUrl;
-            TxtDeviceStatus.Text = "Waiting for browser confirmation...";
+            TxtDeviceStatus.Text = Loc.Get("login_device_waiting");
         }
 
         private static void OpenVerificationUrl()
@@ -818,7 +818,7 @@ namespace ConditioningControlPanel
                         case V2DeviceCodeService.PollStatus.Pending:
                             intervalMs = 3000;
                             consecutiveUnknown = 0;
-                            TxtDeviceStatus.Text = "Waiting for browser confirmation...";
+                            TxtDeviceStatus.Text = Loc.Get("login_device_waiting");
                             break;
 
                         case V2DeviceCodeService.PollStatus.Expired:
@@ -830,18 +830,18 @@ namespace ConditioningControlPanel
                             // same (re-run /initiate) but the message differs. Shouldn't
                             // fire in practice (desktop holds the code; user doesn't type),
                             // but if it does, surface diagnostically clear copy.
-                            HandleDeviceCodeError("Sign-in code wasn't recognized. Please try again.");
+                            HandleDeviceCodeError(Loc.Get("login_device_failed"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.RateLimited:
                         case V2DeviceCodeService.PollStatus.ServiceUnavailable:
                             intervalMs = Math.Min(intervalMs * 2, 30000);
-                            TxtDeviceStatus.Text = "Connection busy, retrying...";
+                            TxtDeviceStatus.Text = Loc.Get("login_device_retrying");
                             break;
 
                         case V2DeviceCodeService.PollStatus.BadRequest:
                         case V2DeviceCodeService.PollStatus.Unauthorized:
-                            HandleDeviceCodeError("Sign-in failed. Please try again.");
+                            HandleDeviceCodeError(Loc.Get("login_device_failed"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.Unknown:
@@ -849,11 +849,11 @@ namespace ConditioningControlPanel
                             consecutiveUnknown++;
                             if (consecutiveUnknown >= 5)
                             {
-                                HandleDeviceCodeError("Lost connection to server. Please try again.");
+                                HandleDeviceCodeError(Loc.Get("login_device_lost"));
                                 return;
                             }
                             intervalMs = Math.Min(intervalMs * 2, 30000);
-                            TxtDeviceStatus.Text = "Connection issue, retrying...";
+                            TxtDeviceStatus.Text = Loc.Get("login_device_retrying");
                             break;
                     }
 
@@ -864,7 +864,7 @@ namespace ConditioningControlPanel
             catch (Exception ex)
             {
                 App.Logger?.Error(ex, "[DeviceCode] Poll loop crashed");
-                HandleDeviceCodeError("Unexpected error. Please try again.");
+                HandleDeviceCodeError(Loc.Get("login_device_failed"));
             }
         }
 
@@ -872,7 +872,7 @@ namespace ConditioningControlPanel
         {
             if (string.IsNullOrEmpty(result.AuthToken) || string.IsNullOrEmpty(result.UnifiedId))
             {
-                HandleDeviceCodeError("Server returned an incomplete response.");
+                HandleDeviceCodeError(Loc.Get("login_device_failed"));
                 return;
             }
 
@@ -927,7 +927,7 @@ namespace ConditioningControlPanel
             _deviceCts?.Cancel();
             _deviceCode = null;
             MessageBox.Show(this,
-                "Sign-in code expired. Please try again.",
+                Loc.Get("login_device_expired"),
                 Loc.Get("title_error"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -952,7 +952,7 @@ namespace ConditioningControlPanel
             try
             {
                 Clipboard.SetText(_deviceCode);
-                TxtDeviceStatus.Text = "Code copied. Paste in your browser.";
+                TxtDeviceStatus.Text = Loc.Get("login_device_copied");
             }
             catch (Exception ex)
             {
