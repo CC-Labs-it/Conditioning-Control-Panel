@@ -33,6 +33,7 @@ import { installDeviceClass } from './core/device.js';
  * boot nothing it was not already paying. */
 import { GAME_PATHS, isOpenSemester, gameTitle } from './games/registry.js';
 import { pageMark } from './provider/scrolllerMark.js';
+import { adoptStoreFlag } from './core/storesafe.js';
 
 const doc = (typeof document !== 'undefined') ? document : null;
 const win = (typeof window !== 'undefined') ? window : null;
@@ -800,6 +801,9 @@ bridge.on('init', guard('init', (m) => {
     return;
   }
   initMsg = m;
+  /* THE STORE-BUILD FLAG, on the window before any game module is imported.
+   * core/storesafe.js says what reads it; the desktop never sets the field. */
+  adoptStoreFlag(m);
   directGame = directLaunchKey(m);
   dressDirectLaunch();            // THE DIRECT LAUNCH: name the room on the splash
   bridge.markInitialized();       // flush anything the page queued pre-init

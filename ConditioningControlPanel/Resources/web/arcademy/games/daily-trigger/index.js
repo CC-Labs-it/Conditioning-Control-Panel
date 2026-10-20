@@ -30,6 +30,7 @@
 import { injectStyles } from './styles.js';
 import {
   dailyEntry, dateFromSeed, isAcceptable, pollutionWords, isThemeWord, categoryOf, REJECT,
+  CAT_NAMES,
 } from './bank.js';
 import {
   markGuess, isSolved, isNearMiss, hitCount, foldKeyboard, hardModeViolation,
@@ -884,14 +885,11 @@ export default {
     }
 
     /* ---------------------- the hand (stuck-hints) ------------------------ */
-    /** English fallbacks for the eight bands plus the plain one. The KEY is the
-     *  contract (`dt_cat_<band>` off `THEME_GROUPS[].cat`); these strings only
-     *  matter on a host that ships no lexicon at all. */
-    const DT_CAT_FALLBACK = Object.freeze({
-      trance: 'spirally', training: 'training arc', submission: "yes ma'am",
-      denial: 'not yet', bimbo: 'glittery', arcade: 'hometown',
-      school: 'classroom', melt: 'melty', common: 'civilian',
-    });
+    /** English fallbacks for the bands plus the plain one, owned by the pool
+     *  file (words-answers.js CAT_NAMES). The KEY is the contract
+     *  (`dt_cat_<band>` off `THEME_GROUPS[].cat`); these strings only matter on
+     *  a host that ships no lexicon row. */
+    const DT_CAT_FALLBACK = CAT_NAMES || {};
 
     /** Letters nailed in place so far. Two is a player closing in, not a player
      *  drowning - which is why GREENS_MAX is 1. */

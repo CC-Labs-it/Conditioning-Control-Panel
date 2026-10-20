@@ -11,8 +11,8 @@
  *
  * THE STAMPS ARE THE POINT. `sort_stamp_yes` / `sort_stamp_no` are 12 chars max
  * and read at 0.75s, because being mod-neutral is what makes this class fit
- * every mod: Bambi re-voices them GOOD GIRL / NO, Circe MINE / NOT MINE, and the
- * glyph underneath (a heart and a slash) never moves.
+ * every mod: a mod re-voices them with its own pair of words (MINE / NOT MINE,
+ * say), and the glyph underneath (a heart and a slash) never moves.
  * ==========================================================================*/
 
 export const SORT_LEX = Object.freeze({

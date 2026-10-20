@@ -41,16 +41,14 @@
  * ==========================================================================*/
 
 import { SETUP_LEX } from './setup-lex.js';
+import { STARTER_NOISE } from './starters.js';
 import { adoptVideo } from '../../engine/util.js';
+import { isStoreSafe } from '../../core/storesafe.js';
 
 /* ---------------------------------------------------------------- data --- */
 
-/** The shipped noise starter row. Real subs, all thick, all safe for work.
- *  DATA, not lexicon: a mod re-voicing "pokemon" would ask the host for a
- *  subreddit that does not exist. */
-export const STARTER_NOISE = Object.freeze([
-  'cats', 'aww', 'pokemon', 'food', 'EarthPorn', 'carporn', 'spaceporn', 'architecture',
-]);
+/** The shipped noise starter row (games/sort/starters.js). */
+export { STARTER_NOISE };
 
 /** The two folders the host always projects. A tree that is ONLY these has no
  *  second pile in it, which is what QUICK SORT exists for. */
@@ -86,7 +84,7 @@ export function sanitizeSub(raw) {
 const lc = (v) => String(v == null ? '' : v).toLowerCase();
 
 /** Case-insensitive uniq that KEEPS the first spelling it saw (the host is
- *  case-insensitive; the player is not, and "EarthPorn" should stay pretty). */
+ *  case-insensitive; the player is not, and "SpacePics" should stay pretty). */
 export function uniqCI(list) {
   const seen = new Set();
   const out = [];
@@ -174,7 +172,10 @@ const folderMedia = (f) => (f.gifs || 0) + (f.stills || 0) + (f.videos || 0);
 export function sourceOptions(cat) {
   const mediaFolders = cat.localFolders.filter((f) => folderMedia(f) > 0);
   const subFolders = mediaFolders.filter((f) => ROOT_FOLDERS.indexOf(f.path) < 0);
-  const online = cat.remoteConsent === true && cat.mediaSource !== 'local';
+  /* A store build's online pictures come only from the host's catalog (there is
+   * no library or search there; see buildRemotePicker), so no catalog, no door. */
+  const online = cat.remoteConsent === true && cat.mediaSource !== 'local'
+    && (!isStoreSafe() || cat.remoteCatalog.length > 0);
   const local = cat.assetPresets.length >= 1 || (subFolders.length >= 1 && mediaFolders.length >= 2);
   return { online, local, quickOnly: !online && !local, mediaFolders, subFolders };
 }
@@ -574,7 +575,7 @@ export function createSetupDoor(o) {
      * same name, so the step asked the same question in two places and answered
      * itself in both. A sub in the library renders ONLY as its library pill
      * (which is the richer control: it carries the clip count and the X). */
-    if (sideName === 'noise') {
+    if (sideName === 'noise' && !isStoreSafe()) {
       const fresh = STARTER_NOISE.filter(
         (name) => !cat.subLibrary.some((r) => lc(r.name) === lc(name)));
       if (fresh.length) {
@@ -593,6 +594,11 @@ export function createSetupDoor(o) {
         panel.appendChild(el('p', 'g-sort-hint', t('sort_starter_hint')));
       }
     }
+
+    /* THE STORE BUILD STOPS HERE. Its online pictures come only through the
+     * host's allowlisted catalog above, so it offers no library of typed subs
+     * and no search box to type one into (core/storesafe.js). */
+    if (isStoreSafe()) return;
 
     /* the library: ORANGE pills, a clip count, and an X that removes the sub
      * from the library everywhere (feed selection included, host side). */
@@ -919,7 +925,8 @@ export function createSetupDoor(o) {
       }
       const probe = resolveSetup(buildSetup(), cat);
       if (probe.ok && probe.dropped && probe.dropped.length) {
-        host.appendChild(strip('spice', t('sort_overlap_note') + ': r/' + probe.dropped.join(', r/')));
+        host.appendChild(strip('spice', t('sort_overlap_note')
+          + (isStoreSafe() ? '' : ': r/' + probe.dropped.join(', r/'))));
       }
     }
   }

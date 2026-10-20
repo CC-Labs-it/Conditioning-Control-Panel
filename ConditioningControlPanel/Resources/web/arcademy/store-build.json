@@ -1,0 +1,24 @@
+{
+  "about": "The store build of this tree (Google Play and the App Store). The vendoring script's store targets read this file and never ship it: every X.store.js replaces its X.js sibling, the paths under drop are left out, and the lexicon rows below are rewritten or removed. See core/storesafe.js.",
+  "drop": [
+    "assets/sublim/"
+  ],
+  "lexicon": {
+    "set": {
+      "sort_source_online_hint": "Pictures from the online feed",
+      "sort_source_online_off": "Online pictures aren't available in this version",
+      "sort_catalog_head": "Collections",
+      "sort_lib_empty": "Nothing here yet. Search for a collection below.",
+      "sort_search_head": "Add a collection",
+      "sort_search_ph": "collection name",
+      "sort_probe_bad": "That is not a collection name",
+      "sort_overlap_note": "Shared picks were dropped from the rest",
+      "sort_quick_nag": "Add a second folder for a real sort."
+    },
+    "drop": [
+      "dt_cat_submission",
+      "dt_cat_denial",
+      "dt_cat_bimbo"
+    ]
+  }
+}

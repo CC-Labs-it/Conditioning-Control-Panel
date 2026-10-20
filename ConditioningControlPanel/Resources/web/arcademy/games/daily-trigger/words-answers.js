@@ -145,4 +145,15 @@ export const PHRASES = Object.freeze([
   ['quiet', 'mind'], ['sweet', 'spot'], ['keep', 'still'], ['one', 'more'],
 ]);
 
-export default { THEME, THEME_GROUPS, COMMON, PHRASES };
+/**
+ * The bands' display names: the English fallback EMI's stuck-hint speaks when
+ * the host ships no `dt_cat_<cat>` row. They live beside the bands so a pool
+ * and its names always travel together (words-answers.store.js brings its own).
+ */
+export const CAT_NAMES = Object.freeze({
+  trance: 'spirally', training: 'training arc', submission: "yes ma'am",
+  denial: 'not yet', bimbo: 'glittery', arcade: 'hometown',
+  school: 'classroom', melt: 'melty', common: 'civilian',
+});
+
+export default { THEME, THEME_GROUPS, COMMON, PHRASES, CAT_NAMES };

@@ -21,6 +21,9 @@ import { hash01, makeRng, shuffled } from '../../core/rng.js';
 import { THEME, THEME_GROUPS, COMMON, PHRASES } from './words-answers.js';
 import { ACCEPT } from './words-accept.js';
 
+/** The band names, re-exported so the class reads them from the bank. */
+export { CAT_NAMES } from './words-answers.js';
+
 /**
  * The puzzle-number epoch. Shared with core/timetable.js on purpose (same day 0
  * for the whole Arcademy). MOVING THIS RENUMBERS EVERY PAST PUZZLE and reshuffles

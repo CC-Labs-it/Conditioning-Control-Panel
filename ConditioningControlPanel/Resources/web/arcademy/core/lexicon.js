@@ -896,6 +896,9 @@ export const DEFAULT_LEXICON = Object.freeze({
    * `dt_help_yes_cat` carries `{cat}`, and the CLASS substitutes it with one of
    * the `dt_cat_*` rows below. Those keys are the band names off
    * `words-answers.js THEME_GROUPS[].cat`; renaming a band orphans its row.
+   * Only the bands every build shares are mirrored here. The rest are named by
+   * their pool file's CAT_NAMES (the class passes those as the fallback, which
+   * t() reads before this table) and by the host's own lexicon.
    * ------------------------------------------------------------------------ */
   dt_help_ask_cat: 'psst. i might know this one.',
   dt_help_chip_cat_yes: 'spill',
@@ -908,9 +911,6 @@ export const DEFAULT_LEXICON = Object.freeze({
   dt_help_no_letter: 'ok. my letter and i will practice waiting.',
   dt_cat_trance: 'spirally',
   dt_cat_training: 'training arc',
-  dt_cat_submission: "yes ma'am",
-  dt_cat_denial: 'not yet',
-  dt_cat_bimbo: 'glittery',
   dt_cat_arcade: 'hometown',
   dt_cat_school: 'classroom',
   dt_cat_melt: 'melty',

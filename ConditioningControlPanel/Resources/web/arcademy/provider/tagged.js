@@ -8,10 +8,10 @@
  *
  *   const pool = await assets.claimTagged({
  *     sources: [
- *       { tag:'target', kind:'remote', subs:['BambiSleep','sissyhypno'] },
+ *       { tag:'target', kind:'remote', subs:['aww','cats'] },
  *       { tag:'noise',  kind:'remote', subs:['pokemon'] },
  *       // local rows instead (never mixed with remote in one claim):
- *       // { tag:'target', kind:'local', folders:['images/bambi'] }
+ *       // { tag:'target', kind:'local', folders:['images/mine'] }
  *       // { tag:'noise',  kind:'local', presetId:'<AssetPreset.Id>' }
  *     ],
  *     want: { loops: 48, stills: 32 },   // totals across tags, a HINT

@@ -12,12 +12,15 @@
  *
  * FORMAT: whitespace-separated lowercase a-z, exactly five letters. bank.js
  * filters/dedupes, so a stray token is simply ignored. No slurs, no hateful
- * terms; ordinary adult vocabulary is fine.
+ * terms. Words only an adult build should accept live in words-accept-extra.js,
+ * which the store tree swaps for an empty list (core/storesafe.js).
  *
  * PHRASE DAYS DO NOT USE THIS LIST - a phrase day accepts any A-Z fill of the
  * right length (the dossier's "the lexicon is the metagame" rule), because the
  * phrase halves are not single dictionary words.
  * ==========================================================================*/
+
+import { ACCEPT_EXTRA } from './words-accept-extra.js';
 
 /** Curated real words, acceptance only. */
 const ACCEPT_BASE = `
@@ -35,11 +38,11 @@ bared barge barks barns baron basal based basic basil basin basis basks baste ba
 batty bawdy bayou beach beads beady beams beans beard bears beast beats beech beefy beeps beers
 beets befit began beget begin begun being belay belie belle bells belly below belts bench bends
 bento berry berth beset betas betel bevel bezel bicep biddy bided bidet bigot biked biker bilge
-billy bimbo binds binge bingo biome biped birch birds birth bison biter bites bitty black blade
+billy binds binge bingo biome biped birch birds birth bison biter bites bitty black blade
 blame bland blank blare blast blaze bleak bleat bleed bleep blend bless blimp blind blink bliss
 blitz bloat blobs block blocs blogs bloke blond blood bloom blots blown bluer blues bluff blunt
 blurb blurs blurt blush board boars boast boats bobby bodes bogus boils bolds bolts bombs bonds
-boned boner bones bongo bonny bonus boost booth boots booze boozy borax bored borne boron bosom
+boned bones bongo bonny bonus boost booth boots booze boozy borax bored borne boron bosom
 bossy botch bough bound bowed bowel bowls boxed boxer boxes brace brags braid brain brake brand
 brass brats brave brawl brawn brays bread break bream breed brews briar bribe brick bride brief
 brims brine bring brink briny brisk broad broil broke brook broom broth brown brows brush brute
@@ -103,10 +106,10 @@ gelid genes genie genoa genre gents genus germs ghost ghoul giant gibes giddy gi
 gilts gimme gimpy girds girls girth gismo given giver gives gizmo glade glads gland glare glass
 glaze gleam glean glees glens glide glint glitz gloat globe globs gloom glory gloss glove glows
 glued glues gluey gluts glyph gnarl gnash gnats gnome goads goals goats godly gofer going golds
-golfs gonad goner gongs gonna gooey goofs goofy goons goose gorge gorse gouge gourd gowns grabs
+golfs gonad goner gongs gonna gooey goofs goofy goose gorge gorse gouge gourd gowns grabs
 grace grade grads graft grail grain grams grand grant grape graph grasp grass grate grave gravy
 grays graze great greed green greet greys grids grief grill grime grimy grind grins gripe grips
-grist grits groan groin groom grope gross group grout grove growl grown grows grubs gruel gruff
+grist grits groan groin groom gross group grout grove growl grown grows grubs gruel gruff
 grump grunt guano guard guava guess guest guide guild guile guilt guise gulch gulfs gulls gully
 gulps gumbo gummy guppy gurus gusto gusts gusty gutsy guyed gypsy gyros habit hacks hafts haiku
 hails hairs hairy haled hales halls halon halos halts halve hands handy hangs hanks happy hardy
@@ -116,9 +119,9 @@ heavy hedge heeds heels hefts hefty heirs heist helix hello hells helms helps he
 herds heron hertz hewed hewer hexed hexes hider hides highs hiked hiker hikes hilly hilts hinds
 hinge hints hippo hippy hired hirer hires hitch hived hives hoard hoary hobby hocks hoist hokey
 holds holes homed homer homes homey honed hones honey honks honor hoods hoofs hooks hooky hoops
-hoots hoped hopes horde horns horny horse horsy hosed hoses hosts hotel hotly hound hours house
+hoots hoped hopes horde horns horse horsy hosed hoses hosts hotel hotly hound hours house
 hovel hover howdy howls hubby huffs huffy huger hulks hulls human humid humor humps humus hunch
-hunks hunts hurls hurry hurts husks husky hussy hutch hydra hyena hymns hyped hyper hypes hypno
+hunks hunts hurls hurry hurts husks husky hutch hydra hyena hymns hyped hyper hypes
 icing ideal ideas idiom idiot idled idler idles idols igloo iliac image imams imbed imbue impel
 imply inane inapt incur index inept inert infer infix ingot inked inker inlay inlet inner input
 inset inter intro inure irate irked irons irony isles issue itchy items ivory jabot jacks jaded
@@ -126,12 +129,12 @@ jades jails jambs jaunt jawed jazzy jeans jeeps jeers jelly jerks jerky jetty je
 jingo jinks jived jives jocks joins joint joist joked joker jokes jolly jolts joule joust jowls
 judge judos juice juicy julep jumbo jumps jumpy junco junks junky junta juror kappa kaput karat
 karma kayak kebab keels keens keeps kelps kempt kendo kerbs kerns ketch keyed khaki kicks kiddo
-kills kilns kilos kilts kinds kings kinks kinky kiosk kites kitty kiwis knack knave knead kneed
+kills kilns kilos kilts kinds kings kiosk kites kitty kiwis knack knave knead kneed
 kneel knees knell knelt knife knits knobs knock knoll knots known knows koala kudos kudzu label
 labor laced laces lacks laded laden lades ladle lager lairs laity lakes lambs lamed lamer lames
 lamps lance lands lanes lanky lapel lapse larch large largo larks larva laser lasso lasts latch
-later latex lathe laths latte laugh laved lawns laxly layer leach leads leafy leaks leaky leans
-leant leaps leapt learn lease leash least leave ledge leech leeks leers leery lefts lefty legal
+later lathe laths latte laugh laved lawns laxly layer leach leads leafy leaks leaky leans
+leant leaps leapt learn lease least leave ledge leech leeks leers leery lefts lefty legal
 leggy legit lemma lemon lemur lends lento leper letup levee level lever liars libel liens lifer
 lifts light liked liken liker likes lilac lilts limbo limbs limed limes limit limns limos limps
 lined linen liner lines lingo links lints linty lions lipid liras lisps lists liter lithe litre
@@ -139,7 +142,7 @@ lived liven liver lives livid llama loach loads loafs loamy loans loath lobby lo
 locks locus lodes lodge lofts lofty logic logos loins loner longs looks looms loons loony loops
 loopy loose loots loped lopes lords lorry loser loses lotus louse lousy louts loved lover loves
 lowed lower lowly loyal lucid lucks lucky lucre lulls lumen lumps lumpy lunar lunch lunge lungs
-lupin lupus lurch lured lures lurid lurks lusts lusty lutes lying lymph lynch lyres lyric macaw
+lupin lupus lurch lured lures lurid lurks lusts lutes lying lymph lynch lyres lyric macaw
 maced maces macho macro madam madly mafia magic magma maids mails maims mains maize major maker
 makes males malls malts mamba mambo mamma manes mange mango mangy mania manic manly manor manse
 maple march mares marks marry marsh marts masks mason masts match mated mater mates matte mauls
@@ -147,18 +150,18 @@ mauve maven maxim maybe mayor mazes meals mealy means meant meats meaty mecha me
 meets melds melee melon melts memos mends menus meows mercy merge merit merry mesas messy metal
 meted meter metre metro mewls micro midge midst miens might miked mikes miler miles milks milky
 mills mimed mimes mimic mince minds mined miner mines minim minis minks minor mints minty minus
-mired mires mirth miser mists misty miter mitts mixed mixer mixes moans moats mocha mocks modal
+mired mires mirth miser mists misty miter mitts mixed mixer mixes moats mocha mocks modal
 model modem modes moist molar molds moldy moles molls molts money month moods moody mooed moons
 moors moose moots moped mopes moral moray morel morns moron morph mossy motel motes moths motif
 motor motto mould moult mound mount mourn mouse mousy mouth moved mover moves movie mowed mower
 mucks mucky mucus muddy muffs muggy mulch mules mulls multi mummy mumps munch mural murks murky
 mused muses mushy music musks musky musty muted muter mutes mutts mynah myrrh myths nabob nacho
-nadir nails naive naked named namer names nanny napes nappy narcs nasal nasty natal natty naval
+nadir nails naive named namer names nanny napes nappy narcs nasal nasty natal natty naval
 navel needs needy neigh nerds nerdy nerve nervy nests never newer newly newsy newts nexus nicer
 niche nicks niece nifty night nines ninja ninny ninth nippy niter nitro nixed noble nobly nodal
 nodes noise noisy nomad nooks noons noose norms north nosed noses nosey notch noted noter notes
-nouns novas novel noway nubby nudes nudge nuked nukes numbs nurse nutty nylon nymph oaken oared
-oases oasis oaten oaths obese obeys occur ocean ocher ochre octal octet odder oddly odium offal
+nouns novas novel noway nubby nudge nuked nukes numbs nurse nutty nylon nymph oaken oared
+oases oasis oaten oaths obese occur ocean ocher ochre octal octet odder oddly odium offal
 offer often ogled ogler ogles ogres oiled oiler oinks okapi okays olden older oldie olive omega
 omens omits onion onset oomph oozed oozes opals opens opera opine opium opted optic orals orate
 orbit order organ oriel other otter ought ounce ousts outdo outed outer outgo ovals ovary ovate
@@ -179,8 +182,8 @@ poles polio polka polls polos polyp pomps ponds pones pooch pools poops popes po
 pores porgy porks porky ports posed poser poses posit posse posts potty pouch pound pours pouts
 pouty power poxes prams prank prate prawn prays preen preps press preys price pricy pride pried
 prier pries prigs prima prime primo primp print prior prise prism privy prize probe prods profs
-promo prone prong proof props prose prosy proud prove prowl proxy prude prune psalm pubes pubic
-pubis puces pucks pudgy puffs puffy puked pukes pulls pulps pulpy pulse pumas pumps punch punks
+promo prone prong proof props prose prosy proud prove prowl proxy prude prune psalm
+puces pucks pudgy puffs puffy puked pukes pulls pulps pulpy pulse pumas pumps punch punks
 punky punts pupae pupal pupas pupil puppy puree purer purge purls purrs purse pushy putty pygmy
 pylon pyres quack quads quaff quail quake quaky qualm quant quark quart quash quasi quays queen
 queer quell query quest queue quick quids quiet quiff quill quilt quins quips quire quirk quirt
@@ -203,17 +206,17 @@ satay sated sates satin satyr sauce saucy sauna saved saver saves savor savvy sa
 scald scale scalp scaly scamp scans scant scare scarf scarp scars scary scats scene scent scion
 scoff scold scone scoop scoot scope score scorn scour scout scowl scram scrap scree screw scrim
 scrip scrub scrum scuba scuds scuff scull scums scurf seals seams seamy sears seats sedan sedge
-seeds seedy seeks seems seeps seers seize sells semen sends sense sepal sepia septa serfs serge
-serum serve servo setup seven sever sewed sewer sexed sexes shack shade shads shady shaft shags
+seeds seedy seeks seems seeps seers seize sells sends sense sepal sepia septa serfs serge
+serum serve servo setup seven sever sewed sewer shack shade shads shady shaft shags
 shake shaky shale shall shalt shame shams shank shape shard share shark sharp shave shawl sheaf
 shear sheds sheen sheep sheer sheet sheik shelf shell shied shier shies shift shims shine shins
 shiny ships shire shirk shirt shoal shock shoed shoes shone shook shoos shoot shops shore shorn
 short shots shout shove shown shows showy shred shrew shrub shrug shuck shuns shunt shush shuts
 shyer shyly sibyl sicko sided sider sides sidle siege sieve sifts sighs sight sigil sigma signs
 silks silky sills silly silos silty since sinew singe sings sinks sinus sired siren sires sisal
-sissy sitar sited sites sixes sixth sixty sized sizer sizes skate skeet skein skews skids skied
+sitar sited sites sixes sixth sixty sized sizer sizes skate skeet skein skews skids skied
 skier skies skiff skill skimp skims skins skips skirt skits skulk skull skunk slabs slack slags
-slain slake slams slang slant slaps slash slate slats slave slaws slays sleds sleek sleep sleet
+slain slake slams slang slant slaps slash slate slats slaws slays sleds sleek sleep sleet
 slept slews slice slick slide slime slims slimy sling slink slips slits slobs sloes slogs sloop
 slope slops slosh sloth slots slows slugs slump slums slung slunk slurp slurs slush slyly smack
 small smart smash smear smell smelt smile smirk smite smith smock smogs smoke smoky smote snack
@@ -221,8 +224,8 @@ snafu snags snail snake snaky snaps snare snarl sneak sneer snide sniff snipe sn
 snood snoop snoot snore snort snots snout snows snowy snubs snuff snugs soaks soaps soapy soars
 sober socks sodas sofas softy soggy soils solar soled soles solid solos solve sonar songs sonic
 sonny sooth sooty sorer sorry sorta sorts souls sound soups soupy sours south sowed sower space
-spade spake spank spans spare spark spars spasm spate spats spawn spays speak spear speck specs
-speed spell spelt spend spent sperm spews spice spicy spied spiel spies spike spiky spill spilt
+spade spake spans spare spark spars spasm spate spats spawn spays speak spear speck specs
+speed spell spelt spend spent spews spice spicy spied spiel spies spike spiky spill spilt
 spine spins spiny spire spite spits splat splay split spoil spoke spoof spook spool spoon spoor
 spore sport spots spout spray spree sprig spuds spume spunk spurn spurs spurt squab squad squat
 squib squid stabs stack staff stage stags staid stain stair stake stale stalk stall stamp stand
@@ -240,7 +243,7 @@ tapes tapir tardy tared tares tarns tarot tarps tarry tarts taste tasty tatty ta
 taxed taxes taxis teach teaks teals teams tears teary tease teats techs teddy teems teens teeny
 teeth telex tells tempi tempo temps tempt tench tends tenet tenor tense tenth tents tepee tepid
 terms terns terse tests testy texts thane thank thaws theft their theme there therm these theta
-thick thief thigh thine thing think thins third thong thorn those thous three threw throb throw
+thick thief thigh thine thing think thins third thorn those thous three threw throb throw
 thrum thuds thugs thumb thump thyme tiara tibia ticks tidal tided tides tiers tiger tight tikes
 tiled tiler tiles tills tilts timed timer times timid tinge tings tinny tints tipsy tired tires
 titan titer tithe title toads toast today toddy togas toils toked token tokes tolls tombs tomes
@@ -278,16 +281,17 @@ zeros zesty zilch zincs zings zippy zonal zoned zones zooms
 
 /**
  * NICHE EXTRAS (2026-08-25, with the answers-are-niche-only ruling): on-theme
- * words a player will actually try - kink / bimbo / school / arcade vocabulary
- * that the ordinary-English list above never carried. Acceptance only.
+ * words a player will actually try - school / arcade / campus vocabulary that
+ * the ordinary-English list above never carried. Acceptance only.
  */
 export const ACCEPT_NICHE = `
-  booty butts boobs busty twerk dildo femme domme roped caged cages melty dopey dazes dozes dulls
-  rerun aches ached burns rides kissy licks bling gaudy girly ditsy lacey panty bangs cuter circe
-  bambi popup lotto dings bytes stuck desks books years tasks dorms dotty kooky emoji chasm
+  melty dopey dazes dozes dulls
+  rerun aches ached burns rides bling gaudy girly ditsy lacey bangs cuter
+  popup lotto dings bytes stuck desks books years tasks dorms dotty kooky emoji chasm
 `;
 
-/** The list the bank reads: the curated base plus the niche extras. */
-export const ACCEPT = ACCEPT_BASE + ' ' + ACCEPT_NICHE;
+/** The list the bank reads: the curated base, the niche extras and the build's
+ *  own extra list. */
+export const ACCEPT = ACCEPT_BASE + ' ' + ACCEPT_NICHE + ' ' + ACCEPT_EXTRA;
 
 export default ACCEPT;

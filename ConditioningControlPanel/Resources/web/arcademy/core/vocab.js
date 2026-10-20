@@ -19,25 +19,16 @@
  * DECISIONS #10). A house word absorbed by Daily Trigger is session-only in
  * exactly the way a host word is.
  *
- * PURE: no imports, no DOM, no store, no clock. The day's seeded rng is passed
- * in so two devices on the same UTC date deal the same words.
+ * PURE: no DOM, no store, no clock, and one import - the word list itself, kept
+ * in core/house-words.js so the store tree can swap it (core/storesafe.js).
+ * The day's seeded rng is passed in so two devices on the same UTC date deal
+ * the same words.
  * ==========================================================================*/
 
-/**
- * The house vocabulary: 24 words, deliberately niche-agnostic and mod-agnostic.
- * Every one of them is something the school could say to anybody - no name, no
- * pronoun, no persona, nothing a creator mod would have to disown. Uppercase
- * because that is how a sub_flash card renders every other word it is given.
- *
- * The spelling is LOCKED: `slug()` below turns each entry into the filename its
- * whisper clip ships under (assets/sublim/<slug>.mp3), so renaming a word here
- * orphans a clip on disk.
- */
-export const HOUSE_WORDS = Object.freeze([
-  'FOCUS', 'RELAX', 'BREATHE', 'LET GO', 'SINK', 'DEEPER', 'DRIFT', 'BLANK',
-  'EMPTY', 'LISTEN', 'OBEY', 'GOOD', 'AGAIN', 'STAY', 'SMILE', 'SOFTER',
-  'MELT', 'CALM', 'DROP', 'TRUST', 'QUIET', 'OPEN', 'GIVE IN', 'FLOAT',
-]);
+import { HOUSE_WORDS } from './house-words.js';
+
+/** The house vocabulary (core/house-words.js says what belongs in it). */
+export { HOUSE_WORDS };
 
 /** How many house words a fallback day deals when the caller does not say. */
 export const HOUSE_DEAL = 12;
