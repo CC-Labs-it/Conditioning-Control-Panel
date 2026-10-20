@@ -29,7 +29,16 @@ namespace ConditioningControlPanel.Services
         /// whitespace collapsed to single spaces, ends trimmed. Case is left
         /// alone - callers compare with <see cref="StringComparison.OrdinalIgnoreCase"/>.
         /// </summary>
-        internal static string Normalize(string? text)
+        internal static string Normalize(string? text) => Normalize(text, dropSentencePunctuation: true);
+
+        /// <summary>
+        /// How many keystrokes the phrase takes when typed as written: the normalised form with
+        /// its sentence punctuation kept. Drives the by-length repeat budget, which must not move
+        /// just because the compare stopped insisting on full stops.
+        /// </summary>
+        internal static int TypedLength(string? text) => Normalize(text, dropSentencePunctuation: false).Length;
+
+        private static string Normalize(string? text, bool dropSentencePunctuation)
         {
             if (string.IsNullOrEmpty(text)) return "";
 
@@ -54,7 +63,7 @@ namespace ConditioningControlPanel.Services
                     // Sentence punctuation is not part of the line: "PROCESS, COMPLY, REPEAT"
                     // recites "PROCESS. COMPLY. REPEAT." and a mic never hears a full stop. It
                     // reads as a word break, so "obey.drop" still splits into two words.
-                    if (IsIgnorablePunctuation(c))
+                    if (dropSentencePunctuation && IsIgnorablePunctuation(c))
                     {
                         if (sb.Length > 0) pendingSpace = true;
                         continue;

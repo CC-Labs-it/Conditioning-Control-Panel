@@ -397,7 +397,7 @@ namespace ConditioningControlPanel.Services
             {
                 // The NORMALISED length, because that is what the user actually has to type: an
                 // ellipsis in the phrase is three keystrokes, a double space is one.
-                var typedLength = LockCardText.Normalize(phrase).Length;
+                var typedLength = LockCardText.TypedLength(phrase);
                 if (typedLength > 0)
                 {
                     var spread = Math.Max(0, variance);
