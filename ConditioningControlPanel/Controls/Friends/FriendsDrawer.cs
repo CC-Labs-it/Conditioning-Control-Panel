@@ -555,6 +555,7 @@ public sealed partial class FriendsDrawer : Border
             sq.Tag = "friends-squelched";
             nameLine.Children.Add(sq);
         }
+        AddPlatformMarks(nameLine, f);
         mid.Children.Add(nameLine);
         mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
         // What you last sent them and how far it got (sent, arrived, seen, answered).

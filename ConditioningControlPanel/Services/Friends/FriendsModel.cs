@@ -42,7 +42,36 @@ public sealed record Friend(
     int Tier,
     bool Online,
     FriendPresence Presence,
-    bool Squelched);
+    bool Squelched)
+{
+    /// <summary>Where they are online (Friends Everywhere S3): a subset of <see cref="FriendPlatform.Order"/>,
+    /// in that order. Empty when offline or from a server that predates platforms (no marks drawn).</summary>
+    public IReadOnlyList<string> Platforms { get; init; } = Array.Empty<string>();
+}
+
+/// <summary>The devices a friend can be online from (Friends Everywhere S3). This client always
+/// polls as <see cref="Desktop"/>. Loc key <c>friends_platform_&lt;id&gt;</c>.</summary>
+public static class FriendPlatform
+{
+    public const string Desktop = "desktop";
+    public const string Phone = "phone";
+    public const string Web = "web";
+
+    /// <summary>The one order the wire, the row marks and the tooltips use.</summary>
+    public static readonly IReadOnlyList<string> Order = new[] { Desktop, Phone, Web };
+
+    /// <summary>The wire's <c>platforms</c> as this client keeps it: known ids only, no repeats, in
+    /// <see cref="Order"/> whatever order they came in. Null or junk reads as none.</summary>
+    public static IReadOnlyList<string> Normalise(IEnumerable<string?>? ids)
+    {
+        if (ids == null) return Array.Empty<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var id in ids) if (id != null) seen.Add(id.Trim().ToLowerInvariant());
+        var list = new List<string>(3);
+        foreach (var p in Order) if (seen.Contains(p)) list.Add(p);
+        return list;
+    }
+}
 
 /// <summary>A pending request, incoming or outgoing. <see cref="Via"/> is the mutual friend's
 /// name when the server knows one, else null.</summary>
@@ -112,8 +141,17 @@ public static class InviteDestination
     /// <summary>Piece by Piece. The code is the server's challenge id (<c>c_</c> + 16 hex),
     /// minted by <c>/v2/pbp/challenge</c> with the friend as target.</summary>
     public const string Chess = "chess";
+    /// <summary>Racing Thoughts, sent from the web (Friends Everywhere W4). No code; Join opens the
+    /// web race in the browser.</summary>
+    public const string Race = "race";
+    /// <summary>Breakout, sent from the web demo (Friends Everywhere W4). No code; Join opens the
+    /// Breakout station.</summary>
+    public const string Breakout = "breakout";
 
-    public static readonly IReadOnlyList<string> All = new[] { Goon, BackRoom, Remote, Ramp, Chess };
+    public static readonly IReadOnlyList<string> All = new[] { Goon, BackRoom, Remote, Ramp, Chess, Race, Breakout };
+
+    /// <summary>The web race Join opens for a <see cref="Race"/> invite.</summary>
+    public const string RaceWebUrl = "https://app.cclabs.app/race";
 
     /// <summary>What the drawer offers and the service sends. Remote was dropped (owner,
     /// 2026-09-28): its PIN never travelled, so an invite was a dead end. It stays in

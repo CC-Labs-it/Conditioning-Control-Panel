@@ -201,6 +201,8 @@ public static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -555,6 +557,21 @@ public static class FriendsLanding
                 if (!InviteDestination.IsChallengeId(item.Code)) return;
                 try { ConditioningControlPanel.Services.PieceByPiece.PieceByPieceHostService.JoinFriendChallenge(item.Code!); }
                 catch (Exception ex) { App.Logger?.Warning(ex, "[Friends] chess launch failed"); }
+                return;
+
+            case InviteDestination.Race:
+                // A web race (no code): the friend is on app.cclabs.app/race, so is the join.
+                Helpers.BrowserLauncher.OpenUrlOrPrompt(InviteDestination.RaceWebUrl, Str("friends_land_dest_race", "Racing Thoughts"));
+                return;
+
+            case InviteDestination.Breakout:
+                // The station's own doors: the full game when the account has it, else the demo.
+                try
+                {
+                    if (BackRoom.BreakoutAccess.FullAllowed) BackRoom.BreakoutHostService.LaunchFull();
+                    else BackRoom.BreakoutHostService.LaunchDemo();
+                }
+                catch (Exception ex) { App.Logger?.Warning(ex, "[Friends] breakout launch failed"); }
                 return;
 
             case InviteDestination.Ramp:
