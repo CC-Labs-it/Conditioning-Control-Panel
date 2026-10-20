@@ -287,6 +287,7 @@ public sealed partial class FriendsService : IFriendsService, IDisposable
                 try { LeashBlockArrived?.Invoke(reply.Leash); }
                 catch (Exception ex) { App.Logger?.Debug("Leash block handler failed: {E}", ex.Message); }
                 RaiseReceipts(reply.Receipts);
+                if (FriendsPollRule.AcceptedRequest(reply.Receipts)) wantState = true;
             }
 
             if (wantState)

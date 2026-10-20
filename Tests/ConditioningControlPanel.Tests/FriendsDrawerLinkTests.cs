@@ -19,11 +19,18 @@ public partial class FriendsDrawerTests
             var d = NewDrawer(svc);
             string? copied = null;
             d.CopyText = t => { copied = t; return true; };
+            d.LinkClock = () => Now;
             Assert.NotNull(Find(d, "friends-copy-link"));
 
             Assert.True(d.CopyLinkAsync().GetAwaiter().GetResult());
             Assert.Equal("https://app.cclabs.app/f/7K2Q9ABCDEFG", copied);
-            Assert.Equal(Loc.Get("friends_link_copied"), d.LinkNoteText);
+            Assert.Equal(Loc.GetF("friends_link_copied_left", 7, 25), d.LinkNoteText);
+
+            // The note reads what the link has left, never a fixed week (red-team #17).
+            svc.Link = new FriendLink("7K2Q9ABCDEFG", Now.AddHours(5).AddMinutes(10), 3);
+            Assert.True(d.CopyLinkAsync().GetAwaiter().GetResult());
+            Assert.Equal(Loc.GetF("friends_link_copied_left_hours", 5, 3), d.LinkNoteText);
+            Assert.Contains("3", d.LinkNoteText);
 
             svc.Link = null;
             Assert.False(d.CopyLinkAsync().GetAwaiter().GetResult());
@@ -67,7 +74,8 @@ public partial class FriendsDrawerTests
     [Fact]
     public void Every_link_key_is_in_english()
     {
-        var keys = new[] { "friends_link_copy", "friends_link_copy_tip", "friends_link_copied", "friends_link_offline",
+        var keys = new[] { "friends_link_copy", "friends_link_copy_tip", "friends_link_copied_left",
+            "friends_link_copied_left_hours", "friends_link_full", "friends_link_offline",
             "friends_link_new_line", "friends_link_new", "friends_link_new_done", "friends_link_self", "friends_link_unusable" }
             .Concat(Enum.GetValues<ClaimResult>().Select(FriendsLinkRules.ClaimResultKey));
         foreach (var k in keys) Assert.NotEqual(k, Loc.Get(k));
