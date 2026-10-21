@@ -91,6 +91,7 @@ public sealed class LauncherFxTests
         Assert.True(wander.IsTicking);
         launcher.BuildTiles(); Dispatcher.UIThread.RunJobs(); launcher.UpdateLayout();
         Assert.False(wander.IsTicking); Assert.Null(launcher.WanderSheen);
+        Assert.Same(cta, launcher.CtaSheen); Assert.True(cta.IsTicking); Assert.True(launcher.WanderTicking);   // rebuild restarts the wander only
         CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
         ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
@@ -108,19 +109,6 @@ public sealed class LauncherFxTests
         CoreSettings.Current.PerformanceMode = false;
         launcher.Hide();
         Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
-    });
-
-    [Fact]   // The glow sits in the adorner layer, outside RootGrid: it must follow the open fade itself.
-    public void TileGlowFollowsTheRootGridFade() => Run(MotionLevel.Full, (_, launcher, _) =>
-    {
-        var root = launcher.FindControl<Panel>("RootGrid")!;
-        var tile = Tile(launcher);
-        launcher.StepFx(0.05);
-        Assert.InRange(root.Opacity, 0.01, 0.99);
-        Assert.Equal(0.35 * root.Opacity * tile.Opacity, launcher.TileGlow(tile)!.Opacity, 3);
-        Step(launcher, 0.6);
-        Assert.Equal(1, root.Opacity, 3);
-        Assert.Equal(0.35, launcher.TileGlow(tile)!.Opacity, 3);
     });
 
     [Fact]
@@ -179,8 +167,7 @@ public sealed class LauncherFxTests
         Assert.Contains("launcher-hover", cues);
         Step(launcher, 0.5);
         Assert.Equal(1.02, scale.ScaleX, 3);
-        Assert.Null(tile.Effect);
-        Assert.Equal(0.7, launcher.TileGlow(tile)!.Opacity, 3);
+        Assert.Equal(0.7, ((DropShadowEffect)tile.Effect!).Opacity, 3);
         Assert.Equal(0.45, glow.Opacity, 3);
 
         launcher.TileHover(tile, false);
@@ -203,9 +190,6 @@ public sealed class LauncherFxTests
         Assert.NotEqual(0, launcher.ShakeSlide.X);
         Step(launcher, 0.3);
         Assert.Equal(0.55, card.Opacity, 2);             // the rest stepped back
-        var other = launcher.FindControl<UniformGrid>("GamesGrid")!.Children.OfType<Border>().First();
-        Assert.Equal(0.55, other.Opacity, 2);
-        Assert.Equal(0.35 * other.Opacity * launcher.FindControl<Panel>("RootGrid")!.Opacity, launcher.TileGlow(other)!.Opacity, 3);   // and the exit fade
         Assert.True(launcher.IsVisible);
 
         Step(launcher, 0.3);                             // FadeLeadMs + FadeOutMs = 450 ms

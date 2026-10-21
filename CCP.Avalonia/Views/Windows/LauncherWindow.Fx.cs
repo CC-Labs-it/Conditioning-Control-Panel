@@ -75,9 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public Border Tile = null!;
             public ScaleTransform Scale = new(1, 1);
             public RotateTransform Tilt = new();
-            public Border? Glow;
-            public double GlowOpacity = TileGlowRest;
-            public IDisposable? GlowWatch;
+            public DropShadowEffect? Glow;
             public Color Hue;
             public Tween Lift, Lean, Shine, Dim;
             public double PopT = -1, PopPeak;
@@ -214,9 +212,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _shakeT = _ringT = _echoIn = -1;
                 ShakeSlide.X = ShakeSlide.Y = 0;
                 foreach (var r in _rings) r.Opacity = 0;
+                foreach (var t in _tileFx) SettleTile(t);
                 _fade.On = false;
                 RootGrid.Opacity = 1;
-                foreach (var t in _tileFx) SettleTile(t);
                 FinishExit();
             }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] FxPark failed"); }
@@ -358,42 +356,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var fx = new TileFx { Tile = tile, Hue = hue };
             tile.RenderTransformOrigin = RelativePoint.Center;
             tile.RenderTransform = new TransformGroup { Children = { fx.Scale, fx.Tilt } };
-            // The sheen is a looping layer: keep the tile out of an Effect's offscreen bitmap.
-            tile.AttachedToVisualTree += (_, _) => AttachTileGlow(fx);
-            tile.DetachedFromVisualTree += (_, _) => RemoveTileGlow(fx);
+            if (Env.AllowGlow(Env.CurrentTier))
+                tile.Effect = fx.Glow = new DropShadowEffect
+                {
+                    Color = hue, OffsetX = 0, OffsetY = 0, Opacity = TileGlowRest,
+                    BlurRadius = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
+                };
             _tileFx.Add(fx);
             tile.PointerEntered += (_, _) => TileHover(fx, true);
             tile.PointerExited += (_, _) => TileHover(fx, false);
             tile.PointerMoved += (_, e) => TiltToward(fx, e.GetPosition(tile));
-        }
-
-        internal Border? TileGlow(Border tile) => _tileFx.Find(t => ReferenceEquals(t.Tile, tile))?.Glow;
-
-        private static void AttachTileGlow(TileFx fx)
-        {
-            if (!Env.AllowGlow(Env.CurrentTier)) return;
-            var layer = global::Avalonia.Controls.Primitives.AdornerLayer.GetAdornerLayer(fx.Tile);
-            if (layer == null) return;
-            var glow = new Border
-            {
-                CornerRadius = fx.Tile.CornerRadius, IsHitTestVisible = false, Opacity = TileGlowRest,
-                BoxShadow = new BoxShadows(new BoxShadow
-                {
-                    Color = fx.Hue, Blur = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
-                }),
-            };
-            global::Avalonia.Controls.Primitives.AdornerLayer.SetAdornedElement(glow, fx.Tile);
-            layer.Children.Insert(0, glow);
-            fx.Glow = glow;
-            fx.GlowWatch = EffectiveVisibility.Watch(fx.Tile, () => glow.IsVisible = fx.Tile.IsEffectivelyVisible);
-            glow.IsVisible = fx.Tile.IsEffectivelyVisible;
-        }
-
-        private static void RemoveTileGlow(TileFx fx)
-        {
-            fx.GlowWatch?.Dispose(); fx.GlowWatch = null;
-            if (fx.Glow?.Parent is Panel layer) layer.Children.Remove(fx.Glow);
-            fx.Glow = null;
         }
 
         internal void TileHover(Border tile, bool on)
@@ -408,7 +380,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (on) LauncherSfx.Hover();
                 bool anim = Env.AllowTransitions;
                 t.Lift.Go(t.Scale.ScaleX, on ? HoverLiftScale : 1, anim ? HoverLiftSeconds : 0);
-                t.Shine.Go(t.GlowOpacity, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
+                t.Shine.Go(t.Glow?.Opacity ?? 0, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
                 if (!on) t.Lean.Go(t.Tilt.Angle, 0, anim ? TileHoverSeconds : 0);
                 if (!anim) StepTile(t, 0);
                 if (on) BleedGlow(t.Hue); else RestoreGlow();
@@ -431,16 +403,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (t.Lift.On || dt == 0) t.Scale.ScaleX = t.Scale.ScaleY = t.Lift.Step(dt);
             if (t.Lean.On || dt == 0) t.Tilt.Angle = t.Lean.Step(dt);
-            if (t.Shine.On || dt == 0) t.GlowOpacity = t.Shine.Step(dt);
+            if (t.Glow != null && (t.Shine.On || dt == 0)) t.Glow.Opacity = t.Shine.Step(dt);
             if (t.Dim.On) t.Tile.Opacity = t.Dim.Step(dt);
-            // The old Effect inherited the tile's dim and the RootGrid fade; the glow sits in the
-            // window's adorner layer, outside RootGrid, so it multiplies them in itself.
-            if (t.Glow != null)
-            {
-                double o = t.GlowOpacity;
-                for (Visual? v = t.Tile; v != null && v is not TopLevel; v = v.GetVisualParent()) o *= v.Opacity;
-                t.Glow.Opacity = o;
-            }
             if (t.PopT >= 0)
             {
                 // Choreo.cs Pop: to the peak by 35 % (quad out), back to 1 by 100 % (quad in-out).
