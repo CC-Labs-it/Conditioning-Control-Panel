@@ -1,6 +1,6 @@
 // PARTIALLY PORTED from ConditioningControlPanel/MainWindow/MainWindow.Awareness.cs.
 // The settings controls live in AwarenessTabView.axaml.cs; presets in its .Presets partial.
-// wire-shell-awareness: app-list commit now uses Core AwarenessAppList. WPF's trigger service
+// wire-shell-awareness: app-list commit now uses Core AwarenessAppScopeRules. WPF's trigger service
 // delegates to the same parser/matcher, so both heads agree about case, separators and .exe.
 // ponytail: wire-shell-awareness-b still owns the runtime pulse feed, OCR/keyboard lifecycle,
 // recently focused app suggestions, highlight overlays/capture affinity and the status pulse.

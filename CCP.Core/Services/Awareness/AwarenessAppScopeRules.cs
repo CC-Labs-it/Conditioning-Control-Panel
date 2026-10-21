@@ -5,7 +5,7 @@ using System.Linq;
 namespace ConditioningControlPanel.Services.Awareness;
 
 /// <summary>The shared text rules for the Awareness app-scope editor and the trigger service.</summary>
-public static class AwarenessAppList
+public static class AwarenessAppScopeRules
 {
     /// <summary>Whole process names, ignoring case, list-entry whitespace and an optional .exe suffix.</summary>
     public static bool MatchesAppList(IEnumerable<string>? list, string processName)

@@ -10,17 +10,17 @@ public sealed class AwarenessAppListTests
     [InlineData("")]
     [InlineData(" ;,\n\r .exe ; .EXE ")]
     public void EmptyEntriesCannotBecomeScopeRules(string? input)
-        => Assert.Empty(AwarenessAppList.ParseAppList(input));
+        => Assert.Empty(AwarenessAppScopeRules.ParseAppList(input));
 
     [Fact]
     public void MixedSeparatorsAndExeSuffixesKeepFirstSpellingAndOrder()
     {
-        var result = AwarenessAppList.ParseAppList(" Chrome.exe, discord; CHROME.EXE\nms-teams\r\nDiscord.exe ");
+        var result = AwarenessAppScopeRules.ParseAppList(" Chrome.exe, discord; CHROME.EXE\nms-teams\r\nDiscord.exe ");
         Assert.Equal(new[] { "Chrome", "discord", "ms-teams" }, result);
-        Assert.True(AwarenessAppList.MatchesAppList(result, "CHROME"));
-        Assert.True(AwarenessAppList.MatchesAppList(result, "ms-teams"));
-        Assert.False(AwarenessAppList.MatchesAppList(result, "chromedriver"));
-        Assert.False(AwarenessAppList.MatchesAppList(result, "googlechrome"));
+        Assert.True(AwarenessAppScopeRules.MatchesAppList(result, "CHROME"));
+        Assert.True(AwarenessAppScopeRules.MatchesAppList(result, "ms-teams"));
+        Assert.False(AwarenessAppScopeRules.MatchesAppList(result, "chromedriver"));
+        Assert.False(AwarenessAppScopeRules.MatchesAppList(result, "googlechrome"));
     }
 
     [Theory]
@@ -31,7 +31,7 @@ public sealed class AwarenessAppListTests
     [InlineData("  ", false)]
     public void MatchUsesWholeProcessNamesAndNormalizesUnparsedListEntries(string process, bool expected)
     {
-        Assert.Equal(expected, AwarenessAppList.MatchesAppList(new[] { "", "   ", ".exe", " Chrome.EXE " }, process));
-        Assert.False(AwarenessAppList.MatchesAppList(null, process));
+        Assert.Equal(expected, AwarenessAppScopeRules.MatchesAppList(new[] { "", "   ", ".exe", " Chrome.EXE " }, process));
+        Assert.False(AwarenessAppScopeRules.MatchesAppList(null, process));
     }
 }

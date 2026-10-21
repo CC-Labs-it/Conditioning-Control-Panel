@@ -344,14 +344,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void CommitAppList()
         {
             if (_isLoading) return;
-            var settings = CoreSettings.Current;
-            var parsed = AwarenessAppList.ParseAppList(TxtAwarenessAppList.Text);
-            if (parsed.SequenceEqual(settings.KeywordTriggerApps, StringComparer.OrdinalIgnoreCase)) return;
-            settings.KeywordTriggerApps = parsed;
-            CoreSettings.Save();
-            Serilog.Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
-                parsed.Count, settings.KeywordTriggerAppScope);
-            TxtAwarenessAppList.Text = string.Join(", ", parsed);
+            try
+            {
+                var settings = CoreSettings.Current;
+                var parsed = AwarenessAppScopeRules.ParseAppList(TxtAwarenessAppList.Text);
+                if (parsed.SequenceEqual(settings.KeywordTriggerApps, StringComparer.OrdinalIgnoreCase)) return;
+                settings.KeywordTriggerApps = parsed;
+                CoreSettings.Save();
+                Serilog.Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
+                    parsed.Count, settings.KeywordTriggerAppScope);
+                TxtAwarenessAppList.Text = string.Join(", ", parsed);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Awareness tab: failed to commit app scope list");
+            }
         }
 
         // ------------------------------------------------------------------ highlight colour

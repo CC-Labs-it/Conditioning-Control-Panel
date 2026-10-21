@@ -683,11 +683,11 @@ namespace ConditioningControlPanel.Services
         /// have to mean the same thing or the list silently fails to match.
         /// </summary>
         public static bool MatchesAppList(IEnumerable<string>? list, string processName)
-            => Awareness.AwarenessAppList.MatchesAppList(list, processName);
+            => Awareness.AwarenessAppScopeRules.MatchesAppList(list, processName);
 
         /// <summary>The same parser the Avalonia app-scope editor uses.</summary>
         public static List<string> ParseAppList(string? text)
-            => Awareness.AwarenessAppList.ParseAppList(text);
+            => Awareness.AwarenessAppScopeRules.ParseAppList(text);
 
         private DateTime _lastSampleAt = DateTime.MinValue;
 
