@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Data;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia;
@@ -28,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <c>if (Window.GetWindow(this) is MainWindow mw) mw.&lt;same name&gt;(...)</c>, plus the
     /// mod-aware feature art and the FX lifecycle hook. Library rows, the welcome card, player,
     /// folder and catalogue relay to MainShellWindow.DeeperHub.cs; the webcam card shares Blink
-    /// Trainer handlers as WPF does. Import and tutorial are still stubs (see docs/avalonia-parity.md). The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
+    /// Trainer handlers as WPF does. Import and tutorial delegate to the shared library and tour engine. The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
     /// answer WPF's ModResourceResolver gives, and Assets/features/deeper.png is linked here.
     /// </summary>
     public partial class DeeperTabView : UserControl
@@ -58,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            FinishImportReveal();
             CoreMods.ModChanged -= OnModChanged;
             CoreSettings.Current.PropertyChanged -= OnWebcamSettingsChanged;
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamColumn;
@@ -142,6 +144,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
+        private DispatcherTimer? _revealTimer;
+
+        /// <summary>WPF RevealDeeperLibraryRow: scroll to the existing filtered row and flash
+        /// it for 1.8 seconds. A rescan preserves the highlight until the timer ends.</summary>
+        internal void RevealLibraryRow(string path)
+        {
+            if (ViewModel is not { } model || !model.FilteredEntries.Any(r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, path))) return;
+            _revealTimer?.Stop();
+            var index = model.Highlight(path);
+            Dispatcher.UIThread.Post(() => ScrollToRow(index), DispatcherPriority.Loaded);
+            _revealTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1800) };
+            _revealTimer.Tick += (_, _) => FinishImportReveal();
+            _revealTimer.Start();
+        }
+
+        internal void FinishImportReveal() { _revealTimer?.Stop(); ViewModel?.Highlight(null); }
+
         private void ScrollToRow(int index)
         {
             if (index >= 0) this.FindControl<ItemsControl>("DeeperLibraryList")?.ContainerFromIndex(index)?.BringIntoView();
@@ -158,14 +177,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BtnDeeperCatalogue_Click(object? sender, RoutedEventArgs e)
             => _ = Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), MainShellWindow.DeeperCatalogueUrl);
-        // ponytail: import needs EnhancementLibrary.FindDuplicateOf/PromoteToLibrary (Core); no head instance yet.
-        private void BtnDeeperImport_Click(object? sender, RoutedEventArgs e) { }
+        private void BtnDeeperImport_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperImport_Click();
         private void BtnDeeperNewEnhancement_Click(object? sender, RoutedEventArgs e)
             => Owner?.BtnDeeperNewEnhancement_Click(sender, e);
         private void BtnDeeperOpenLibraryFolder_Click(object? sender, RoutedEventArgs e) => Owner?.OpenDeeperLibraryFolder();
         private void BtnDeeperOpenPlayer_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperOpenPlayer_Click();
-        // ponytail: StartTutorial(TutorialType.Deeper) - no TutorialService on this head.
-        private void BtnDeeperTutorial_Click(object? sender, RoutedEventArgs e) { }
+        private void BtnDeeperTutorial_Click(object? sender, RoutedEventArgs e) => Owner?.StartDeeperTabTutorial();
         // WPF MainWindow.BlinkTrainer.cs:1410: both setup cards use the same handlers.
         private BlinkTrainerTabView? WebcamActions => Owner?.Named<BlinkTrainerTabView>("BlinkTrainerTab");
         private void BtnDeeperWebcamCalibrate_Click(object? sender, RoutedEventArgs e)
@@ -189,6 +206,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RefreshWebcamColumn); return; }
             ViewModel?.RefreshWebcam();
+            var statusKey = Services.WebcamTrackingStatus.LocalizationKey(Platform.WebcamTracker.Instance.TrackingState);
+            TxtWebcamStatusChipDeeper.Bind(TextBlock.TextProperty, new Binding($"[{statusKey}]") { Source = LocalizationManager.Instance });
+            WebcamStatusChipDeeperDot.Fill = this.FindResource(Platform.WebcamTracker.Instance.TrackingState
+                is Services.WebcamTrackingState.Tracking or Services.WebcamTrackingState.FaceLost
+                ? "SuccessGreenBrush" : "TextMutedBrush") as IBrush ?? Brushes.Gray;
             bool consented = Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current);
             DeeperWebcamConsentCard.Background = new SolidColorBrush(Color.Parse(consented ? "#1A4ADE80" : "#1AFFD080"));
             DeeperWebcamConsentCard.BorderBrush = new SolidColorBrush(Color.Parse(consented ? "#4ADE80" : "#FFD080"));
@@ -347,6 +369,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// owns the clock and the commit).</summary>
         internal Dictionary<string, long> PendingDeletes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        private string? _highlightedPath;
+        internal int Highlight(string? path)
+        {
+            _highlightedPath = path;
+            var index = -1;
+            for (var i = 0; i < FilteredEntries.Count; i++)
+            {
+                FilteredEntries[i].IsHighlighted = PathsEqual(FilteredEntries[i].Entry.FilePath, path);
+                if (FilteredEntries[i].IsHighlighted) index = i;
+            }
+            return index;
+        }
+
         private string? _selectedPath;
 
         /// <summary>Rebuilds the rows without a rescan - a submission badge changed.</summary>
@@ -440,6 +475,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var row = BuildRow(entry);
                 row.IsSelected = PathsEqual(entry.FilePath, _selectedPath);
+                row.IsHighlighted = PathsEqual(entry.FilePath, _highlightedPath);
                 FilteredEntries.Add(row);
             }
             Notify(nameof(LibraryCountText), nameof(ShowLibraryEmpty), nameof(LibraryEmptyText),
@@ -581,6 +617,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// </summary>
     public sealed class DeeperLibraryRowVm : INotifyPropertyChanged
     {
+        private bool _isHighlighted;
+        public bool IsHighlighted
+        {
+            get => _isHighlighted;
+            set
+            {
+                if (_isHighlighted == value) return;
+                _isHighlighted = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHighlighted)));
+            }
+        }
         private bool _isSelected;
         public event PropertyChangedEventHandler? PropertyChanged;
 

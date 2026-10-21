@@ -182,7 +182,7 @@
         <!-- Per-row template. DataContext = DeeperLibraryRowVm; the original
              EnhancementLibraryEntry hangs off vm.Entry for action handlers. -->
         <DataTemplate x:Key="DeeperLibraryRowTemplate" x:DataType="vm:DeeperLibraryRowVm">
-            <Border x:Name="RowBorder" Classes="deeper-row" Classes.selected="{Binding IsSelected}"
+            <Border x:Name="RowBorder" Classes="deeper-row" Classes.selected="{Binding IsSelected}" Classes.highlighted="{Binding IsHighlighted}"
                     Background="{DynamicResource PanelBgBrush}"
                     BorderBrush="{DynamicResource DeeperAccentTransparent20Brush}"
                     BorderThickness="1" CornerRadius="6"
@@ -334,7 +334,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentBrush}"/>
         </Style>
         <!-- WPF DataTrigger IsSelected: keyboard/click selection. -->
-        <Style Selector="Border.deeper-row.selected">
+        <Style Selector="Border.deeper-row.selected, Border.deeper-row.highlighted">
             <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent20Brush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentBrush}"/>
         </Style>

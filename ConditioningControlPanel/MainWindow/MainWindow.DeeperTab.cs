@@ -779,59 +779,12 @@ namespace ConditioningControlPanel
                 return;
             }
 
-            var imported = new System.Collections.Generic.List<string>();
-            var errors = new System.Collections.Generic.List<string>();
-            int skippedNonEnhancement = 0;
-            string? lastImportedPath = null;
-            string? duplicateOfPath = null;
-
-            foreach (var path in paths)
-            {
-                var fileName = System.IO.Path.GetFileName(path);
-                if (!IsImportableEnhancementPath(path))
-                {
-                    errors.Add(string.Format(Loc.Get("deeper_import_err_not_enh_fmt"), fileName));
-                    continue;
-                }
-                try
-                {
-                    // Plain .json that is not an enhancement (settings.json, a
-                    // preset...) is skipped quietly rather than reported as a failure.
-                    if (!Services.Deeper.EnhancementImportRules.FileLooksLikeEnhancement(path))
-                    {
-                        skippedNonEnhancement++;
-                        continue;
-                    }
-                    // Same file, or identical content under another name: no
-                    // "Name (2)" copy, just point at the row that is already there.
-                    var existing = lib.FindDuplicateOf(path);
-                    if (existing != null)
-                    {
-                        duplicateOfPath = existing;
-                        continue;
-                    }
-                    // Validate by loading; bad schema / oversized files throw with
-                    // a useful message from the serializer.
-                    var enhancement = Services.Deeper.EnhancementSerializer.LoadFromFile(path);
-                    var saved = lib.PromoteToLibrary(enhancement, sourceTag: "import");
-                    if (saved == null)
-                    {
-                        errors.Add(string.Format(Loc.Get("deeper_import_err_write_fmt"), fileName));
-                        continue;
-                    }
-                    lastImportedPath = saved;
-                    imported.Add(System.IO.Path.GetFileName(saved));
-                }
-                catch (Services.Deeper.EnhancementLoadException ex)
-                {
-                    errors.Add($"{fileName}: {ex.Message}");
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Warning(ex, "ImportEnhancementFiles: import failed");
-                    errors.Add($"{fileName}: {ex.GetType().Name}");
-                }
-            }
+            var result = Services.Deeper.EnhancementImportBatch.Run(lib, paths);
+            var imported = result.Imported;
+            var errors = result.Errors;
+            var skippedNonEnhancement = result.SkippedNonEnhancement;
+            var lastImportedPath = result.LastImportedPath;
+            var duplicateOfPath = result.DuplicateOfPath;
 
             // Remember the source folder for next manual import so the file dialog
             // opens where the user picked from.

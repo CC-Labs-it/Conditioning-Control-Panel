@@ -135,6 +135,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private volatile WebcamCalibrationData? _calibration;
         private volatile bool _calibrationLoaded;
 
+        internal WebcamTrackingState TrackingState => _trackingState;
+        private volatile WebcamTrackingState _trackingState;
+        internal void PublishTrackingState(WebcamTrackingState state)
+        {
+            _trackingState = state;
+            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+        }
+
         public bool IsRunning => _run != null;
         /// <summary>Why the last start failed, for the user; null after a good start.</summary>
         public string? LastError { get; private set; }
@@ -193,6 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (IsRunning) return true;
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
+            PublishTrackingState(WebcamTrackingState.Starting);
             var run = new Run();
             try
             {
@@ -263,7 +272,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 Interlocked.Exchange(ref _busy, 0);
-                Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+                PublishTrackingState(IsRunning ? WebcamTrackingState.Tracking
+                    : LastError != null && !StartWasStopped ? WebcamTrackingState.Error : WebcamTrackingState.Stopped);
             }
         }
 
@@ -291,6 +301,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             Run? run;
             lock (_gate) { _gen++; run = Interlocked.Exchange(ref _run, null); }
+            PublishTrackingState(WebcamTrackingState.Stopped);
             if (run == null) return;
             run.Stop = true;
             // WPF Stop: bounded join; a wedged driver must not hang the caller forever. The loop
@@ -332,7 +343,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 run.Release();
                 // Ended on its own (read failures, revoke): no longer running.
                 if (Interlocked.CompareExchange(ref _run, null, run) == run)
-                    Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+                    PublishTrackingState(LastError == null ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
             }
         }
 
@@ -378,7 +389,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (r.Width < 16 || r.Height < 16) { NoFace(); return; }
             var lm = run.Mesh!.Detect(bgr, r);
             if (lm == null) { NoFace(); return; }
-            if (_gaze.FaceSeen()) Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
+            if (_gaze.FaceSeen())
+            {
+                if (IsRunning) PublishTrackingState(WebcamTrackingState.Tracking);
+                Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
+            }
             if (HeadPose(_gaze, lm, bgr.Width, bgr.Height) is { } pose)
                 Dispatcher.UIThread.Post(() => OnHeadPose?.Invoke(pose.Yaw, pose.Pitch));
             var left = run.Iris!.Detect(bgr, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], isRightEye: false);
@@ -434,7 +449,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void NoFace()
         {
-            if (_gaze.FaceMissing()) Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
+            if (_gaze.FaceMissing())
+            {
+                if (IsRunning) PublishTrackingState(WebcamTrackingState.FaceLost);
+                Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
+            }
             _blink.CancelClosure();
         }
     }

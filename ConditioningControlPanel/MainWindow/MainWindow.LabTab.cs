@@ -385,16 +385,8 @@ namespace ConditioningControlPanel
         /// "Stopped" beside fully-Russian card copy - and "FaceLost", which is not a sentence in
         /// any language. One mapper, so all four surfaces move together.
         /// </summary>
-        private static string WebcamStateText(WebcamTrackingState state) => Loc.Get(state switch
-        {
-            WebcamTrackingState.Starting => "rf_webcam_starting",
-            WebcamTrackingState.Tracking => "rf_webcam_tracking",
-            WebcamTrackingState.FaceLost => "rf_webcam_face_lost",
-            WebcamTrackingState.CameraInUse => "rf_webcam_camera_in_use",
-            WebcamTrackingState.CameraDenied => "rf_webcam_camera_denied",
-            WebcamTrackingState.Error => "rf_webcam_error",
-            _ => "rf_webcam_stopped",
-        });
+        private static string WebcamStateText(WebcamTrackingState state)
+            => Loc.Get(WebcamTrackingStatus.LocalizationKey(state));
 
         /// <summary>
         /// "Configure in Settings" from any of the three webcam status chips, and from the
