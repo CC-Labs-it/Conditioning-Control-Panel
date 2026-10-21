@@ -86,6 +86,8 @@ public sealed class WebAssetServer : IDisposable
         $"http://127.0.0.1:{Port}/{AssetsPrefix}" + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
 
     /// <summary>WPF's whisper virtual hosts, served behind the same token/cookie as the board.</summary>
+    // ponytail: WPF maps only the install folder (AppContext.BaseDirectory, PieceByPieceHostService.cs:773);
+    // ContentLocator also falls back to the downloaded-content folder when the install copy is missing. Harmless, kept.
     public Func<string?> SubAudioRoot { get; init; } = () => ContentLocator.ResolveDirectory("Resources/sub_audio");
     public Func<string?> WordsRoot { get; init; } = () => SubliminalWhisper.WordsRoot();
 
@@ -236,6 +238,8 @@ public sealed class WebAssetServer : IDisposable
         if (rel.Contains('\0')) return null;
         var full = Path.GetFullPath(Path.Combine(root, rel));
         if (!Inside(full, root) || !File.Exists(full) || !LinksStayInside(full, root)) return null;
+        // ponytail: brain-drain whisper clips also pass this filter, so a clip the user unchecked is offered by
+        // pbp:settings but 404s here (WPF serves every clip). Filtering the offered list instead is a follow-up.
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
     }
