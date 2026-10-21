@@ -294,7 +294,7 @@
 
             <Border Theme="{StaticResource CmpInsetPanelStyle}" Margin="0,12,0,0"
                     IsVisible="{ReflectionBinding ShowLiveActions}">
-                <!-- Avalonia ScrollViewer chains wheel input at the capped list's edge. -->
+                <!-- No wheel relay ported (WPF has one); relies on ScrollViewer chaining at the capped edge - untested. -->
                 <ItemsControl x:Name="LiveActionsFeed" ItemsSource="{ReflectionBinding LiveActions}"
                               Theme="{StaticResource CmpVirtualizedItemsControlStyle}" MaxHeight="140">
                     <ItemsControl.ItemTemplate>

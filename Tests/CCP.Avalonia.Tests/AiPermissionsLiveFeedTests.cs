@@ -7,7 +7,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -63,11 +62,6 @@ public sealed class AiPermissionsLiveFeedTests
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(2, drawer.FindControl<ItemsControl>("LiveActionsFeed")!.Items.Count);
-            using (var png = new RenderTargetBitmap(new PixelSize(900, 600)))
-            {
-                png.Render(window);
-                png.Save("/tmp/worker3-ai-live-feed.png");
-            }
             feed.Clear();
         }
         finally
@@ -161,8 +155,7 @@ public sealed class AiPermissionsLiveFeedTests
             forget.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var cancel = await PendingDialog(owner);
             cancel.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Task.Delay(20);
-            Dispatcher.UIThread.RunJobs();
+            await WaitFor(() => owner.OwnedWindows.Any(x => x.IsVisible) ? null : owner);
             Assert.Single(feed);
             forget.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var confirm = await PendingDialog(owner);
@@ -202,16 +195,21 @@ public sealed class AiPermissionsLiveFeedTests
         return Task.CompletedTask;
     });
 
-    private static async Task<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog> PendingDialog(Window owner)
+    private static Task<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog> PendingDialog(Window owner) =>
+        WaitFor(() => owner.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>()
+            .FirstOrDefault(x => x.IsVisible));
+
+    /// <summary>P73/P08: bounded by time (10 s), yields instead of sleeping.</summary>
+    private static async Task<T> WaitFor<T>(Func<T?> probe) where T : class
     {
-        for (var i = 0; i < 100; i++)
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.Elapsed < TimeSpan.FromSeconds(10))
         {
             Dispatcher.UIThread.RunJobs();
-            if (owner.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>()
-                .FirstOrDefault(x => x.IsVisible) is { } dialog) return dialog;
-            await Task.Delay(10);
+            if (probe() is { } hit) return hit;
+            await Task.Yield();
         }
-        throw new TimeoutException("The permissions confirmation did not open");
+        throw new TimeoutException("The permissions dialog state never appeared");
     }
 
     private static Task Run(Func<SettingsService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
