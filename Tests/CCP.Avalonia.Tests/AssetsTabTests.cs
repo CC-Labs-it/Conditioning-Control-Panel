@@ -232,8 +232,6 @@ public sealed class AssetsTabTests
         await tab.ThumbnailLoads;
     });
 
-    // ---- harness ----------------------------------------------------------------------
-
     [Fact]
     public Task PackCardHoverMovesOneSheenAndLeavingStopsItsClock() => Run(async (shell, tab, s) =>
     {
@@ -305,6 +303,25 @@ public sealed class AssetsTabTests
         Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
         Assert.False(sheen.IsTicking);
     });
+
+    [Fact]
+    public Task UnloadingTheTabStopsThePackCardSheenClock() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        var content = shell.Content;
+        shell.Content = null;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+        shell.Content = content;
+    });
+
+    // ---- harness ----------------------------------------------------------------------
 
     private static void HoverPack(Window shell, Control card, bool on) => card.RaiseEvent(
         new PointerEventArgs(on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent,
