@@ -126,8 +126,15 @@ public sealed class EnhancementsAnalyticsTests
             w.Show();
             Dispatcher.UIThread.RunJobs();
             var toggle = tab.GetLogicalDescendants().OfType<Border>().Single(b => b.Name == "ProToggle_season_rewind");
-            toggle.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+            toggle.BringIntoView();
+            Dispatcher.UIThread.RunJobs();
+            // A real left click (the mouse half of the toggle; the first test drives the keyboard half).
+            var at = toggle.TranslatePoint(new Point(toggle.Bounds.Width / 2, toggle.Bounds.Height / 2), w)!.Value;
+            w.MouseDown(at, MouseButton.Left, RawInputModifiers.None);
+            w.MouseUp(at, MouseButton.Left, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
             var panel = tab.GetLogicalDescendants().OfType<Border>().Single(b => b.Name == "ProPanel_season_rewind");
+            Assert.True(panel.IsVisible);
             var kinds = panel.GetLogicalDescendants().OfType<IconGlyph>().Select(g => g.Kind).ToList();
             Assert.Equal(1, kinds.Count(k => k == IconKind.ArrowUp));
             Assert.Equal(1, kinds.Count(k => k == IconKind.ArrowDown));
