@@ -31,8 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal const double QuestStampHoverScale = 1.5;
         private const double QuestStampPopWidth = 300;
         private const double QuestStampPopTrackWidth = QuestStampPopWidth - 28;
-        private static FluentIcons.Common.Symbol StampIcon(string? value) =>
-            IconMap.TryGet(value, out var entry) ? entry.Kind : FluentIcons.Common.Symbol.Sparkle;
+        private static IconKind StampIcon(string? value) =>
+            IconMap.TryGet(value, out var entry) ? entry.Kind : IconKind.Sparkle;
         private static IBrush StampInk(uint argb) => new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromUInt32(argb));
         private static readonly IBrush QuestStampGoldStroke = StampInk(0xCCFFD700);
         private static readonly IBrush QuestStampGoldFill = StampInk(0x30FFD700);
@@ -253,11 +253,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             cell.Children.Add(plate);
             if (art != null)
                 cell.Children.Add(new Rectangle { RadiusX = 3, RadiusY = 3, Fill = done ? QuestStampGoldWash : QuestStampArtScrim, IsHitTestVisible = false });
-            string? glyph = done ? "✓" : art == null && !ghost ? info.Def!.Icon : null;
-            if (!string.IsNullOrWhiteSpace(glyph))
+            bool showGlyph = done || (art == null && !ghost && !string.IsNullOrWhiteSpace(info.Def!.Icon));
+            if (showGlyph)
                 cell.Children.Add(new IconGlyph
                 {
-                    Kind = done ? FluentIcons.Common.Symbol.Checkmark : StampIcon(info.Def?.Icon),
+                    Kind = done ? IconKind.Checkmark : StampIcon(info.Def?.Icon),
                     Size = size >= QuestStampWeeklySize ? 12 : 10.5,
                     Foreground = done ? QuestStampGoldInk : stroke,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -326,7 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 IsVisible = false,
                 Child = new IconGlyph
                 {
-                    Kind = FluentIcons.Common.Symbol.Checkmark, Foreground = QuestStampDoneInk, Size = 60,
+                    Kind = IconKind.Checkmark, Foreground = QuestStampDoneInk, Size = 60,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 },
             };
@@ -440,12 +440,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var (xp, streak, reroll) = QuestsTabView.ComputeQuestXpDisplay(def, CoreSettings.Current);
             _stampPopXp!.Inlines = new InlineCollection
             {
-                new InlineUIContainer(new IconGlyph { Kind = FluentIcons.Common.Symbol.Gift, Size = 11, Foreground = accent }),
+                new InlineUIContainer(new IconGlyph { Kind = IconKind.Gift, Size = 11, Foreground = accent }),
                 new Run($" {xp} XP"),
             };
-            if (streak > 0) AddBonus(streak, FluentIcons.Common.Symbol.Fire);
-            if (reroll > 0) AddBonus(reroll, FluentIcons.Common.Symbol.ArrowSync);
-            void AddBonus(int percent, FluentIcons.Common.Symbol kind)
+            if (streak > 0) AddBonus(streak, IconKind.Fire);
+            if (reroll > 0) AddBonus(reroll, IconKind.ArrowSync);
+            void AddBonus(int percent, IconKind kind)
             {
                 _stampPopXp.Inlines.Add(new Run($" +{percent}%"));
                 _stampPopXp.Inlines.Add(new InlineUIContainer(new IconGlyph { Kind = kind, Size = 11, Foreground = accent }));
