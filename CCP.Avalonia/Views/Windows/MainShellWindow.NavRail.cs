@@ -7,7 +7,7 @@
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
 // ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
 // rail shadow (PaintDepthRail) - lane
-// sync6-nav-polish-b; the possession reroute seam (WPF PossessionReroute, written only by
+// wire-shell-nav-rail-b; the possession reroute seam (WPF PossessionReroute, written only by
 // Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 

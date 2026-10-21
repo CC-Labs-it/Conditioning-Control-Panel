@@ -21,7 +21,7 @@ public sealed class NavRailRemainingTests
     private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreMods.MakeModAwareProvider;
         var language = LocalizationManager.Instance.CurrentLanguage;
@@ -53,11 +53,16 @@ public sealed class NavRailRemainingTests
         var studio = w.NavSectionRowsForTests.Single(r => r.Section == NavSections.Studio).Label!;
         var homeEnglish = loc.GetEnglish(NavSections.Find(NavSections.Home)!.LabelKey)!;
         var searchEnglish = loc.GetEnglish("nav_search_label")!;
-        CoreMods.MakeModAwareProvider = text => text == homeEnglish ? "The nest" : text == searchEnglish ? "Seek" : text;
+        var backEnglish = loc.GetEnglish("nav_back_label")!;
+        var webEnglish = loc.GetEnglish("nav_door_webapp")!;
+        CoreMods.MakeModAwareProvider = text => text == homeEnglish ? "The nest" : text == searchEnglish ? "Seek"
+            : text == backEnglish ? "Retreat" : text == webEnglish ? "Hive" : text;
         CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("THE NEST", home.Text);
         Assert.Equal("Seek", w.Named<TextBlock>("TxtNavSearchLabel")!.Text);
+        Assert.Equal("Retreat", w.Named<TextBlock>("TxtNavBackLabel")!.Text);
+        Assert.Equal("Hive", w.Named<TextBlock>("TxtNavWebAppLabel")!.Text);
 
         loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
         Assert.Equal("THE NEST", home.Text); // a changed English label overrides localization
@@ -67,6 +72,18 @@ public sealed class NavRailRemainingTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(loc.Get(NavSections.Find(NavSections.Home)!.LabelKey).ToUpper(System.Globalization.CultureInfo.CurrentUICulture), home.Text);
         Assert.Equal(loc.Get("nav_search_label"), w.Named<TextBlock>("TxtNavSearchLabel")!.Text);
+    });
+
+    [Fact]
+    public void AModChangeQueuedBeforeCloseDoesNotRebindTheClosedRail() => Run(w =>
+    {
+        var back = w.Named<TextBlock>("TxtNavBackLabel")!;
+        var backEnglish = LocalizationManager.Instance.GetEnglish("nav_back_label")!;
+        CoreMods.MakeModAwareProvider = text => text == backEnglish ? "Retreat" : text;
+        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false)); // posts the relabel
+        w.Close(); // disposes the label bindings
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotEqual("Retreat", back.Text);
     });
 
     [Fact]

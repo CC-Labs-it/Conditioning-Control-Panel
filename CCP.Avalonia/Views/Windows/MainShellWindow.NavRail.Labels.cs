@@ -23,6 +23,8 @@ public partial class MainShellWindow
                 BindNavLabel(row.Label, section.LabelKey, caps: true);
         BindNavLabel(Named<TextBlock>("TxtNavBackLabel"), "nav_back_label");
         BindNavLabel(Named<TextBlock>("TxtNavSearchLabel"), "nav_search_label");
+        // Deliberate divergence: WPF has no Web App rail caption; its PlayTabView.xaml:590 card title
+        // is a plain {loc:Str}. This head's rail caption follows the mod like its Back/Search siblings.
         BindNavLabel(Named<TextBlock>("TxtNavWebAppLabel"), "nav_door_webapp");
     }
 
