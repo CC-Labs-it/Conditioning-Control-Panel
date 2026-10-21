@@ -1,4 +1,4 @@
-You are implementing ONE unit of the CCP Avalonia port in the GitHub repo CodeBambi/Conditioning-Control-Panel---CSharp-WPF.
+You are implementing ONE unit of the CCP Avalonia port in the GitHub repo CC-Labs-it/Conditioning-Control-Panel.
 
 ## Branch rules (hard)
 - Base: `origin/avalonia-port/cloud-wire-feat-pbp-host` (current stack tip). Work on a branch named `avalonia-port/cloud-wire-feat-pbp-host-b` created from it.

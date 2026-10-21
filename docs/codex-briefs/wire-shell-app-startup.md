@@ -1,4 +1,4 @@
-You are implementing ONE unit of the CCP Avalonia port in the GitHub repo CodeBambi/Conditioning-Control-Panel---CSharp-WPF.
+You are implementing ONE unit of the CCP Avalonia port in the GitHub repo CC-Labs-it/Conditioning-Control-Panel.
 
 ## Branch rules (hard)
 - Base: `origin/avalonia-port/goongame-core-c` (current stack tip). Work on a branch named `avalonia-port/cloud-wire-shell-app-startup` created from it (if your environment names the branch itself, keep that name and put `wire-shell-app-startup` in the PR title).
