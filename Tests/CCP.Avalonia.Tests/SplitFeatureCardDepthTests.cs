@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class SplitFeatureCardDepthTests
 {
     [Fact]
-    public Task DashboardClicksInvertAndSettingsRegateWithoutReshow() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task DashboardClicksInvertAndRefreshFxRegatesWithoutReshow() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions
@@ -63,14 +63,18 @@ public sealed class SplitFeatureCardDepthTests
             global::ConditioningControlPanel.Avalonia.Controls.HelpPopover.CloseActive();
             Dispatcher.UIThread.RunJobs();
             var glow = card.FindControl<Border>("GlowLayer")!;
+            // The shell re-gates via ApplyDashboardFxLoops -> RefreshFx on Env.MotionGateChanged.
             s.PerformanceMode = true;
+            card.RefreshFx();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, glow.Opacity);
             s.PerformanceMode = false;
             s.MotionLevel = MotionLevel.Reduced;
+            card.RefreshFx();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0.90, glow.Opacity, 3);
             s.MotionLevel = MotionLevel.Off;
+            card.RefreshFx();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, glow.Opacity);
         }

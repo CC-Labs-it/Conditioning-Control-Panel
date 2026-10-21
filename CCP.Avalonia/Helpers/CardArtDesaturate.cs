@@ -35,13 +35,9 @@ internal static class CardArtDesaturate
                 canvas.DrawBitmap(decoded, new SKRect(0, 0, w, h), paint);
             var bytes = small.Bytes;
             CardMutePixels.ToGrey(bytes);
-            using var result = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
-            using (var buffer = result.Lock())
+            var grey = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+            using (var buffer = grey.Lock())
                 for (int y = 0; y < h; y++) Marshal.Copy(bytes, y * w * 4, buffer.Address + y * buffer.RowBytes, w * 4);
-            using var encoded = new MemoryStream();
-            result.Save(encoded);
-            encoded.Position = 0;
-            var grey = new Bitmap(encoded);
             Cache.Add(source, grey);
             return grey;
         }

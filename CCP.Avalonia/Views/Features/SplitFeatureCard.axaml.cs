@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
@@ -154,7 +153,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private readonly TranslateTransform[] _travel = { new(), new() };
         private readonly RotateTransform[] _tilt = { new(), new() };
         private bool? _pressedHalf;
-        private AppSettings? _observedSettings;
 
         public SplitFeatureCard()
         {
@@ -211,8 +209,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             PointerReleased += OnPointerReleased;
             Unloaded += (_, _) =>
             {
-                if (_observedSettings != null) _observedSettings.PropertyChanged -= OnSettingsChanged;
-                _observedSettings = null;
                 _pressedHalf = null;
                 RefreshDepth();
                 _visibilityWatch?.Dispose();
@@ -225,8 +221,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             };
             Loaded += (_, _) =>
             {
-                _observedSettings = global::ConditioningControlPanel.CoreSettings.Current;
-                _observedSettings.PropertyChanged += OnSettingsChanged;
                 // Improvement over WPF: the breath parks while a hidden tab holds the tile.
                 _visibilityWatch = EffectiveVisibility.Watch(this, ApplyActiveState);
                 HookWindow(TopLevel.GetTopLevel(this) as Window);
@@ -238,15 +232,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ApplyHalfRestOpacity();
         }
 
-        /// <summary>WPF RefreshFx: re-applies the motion/tier/focus gates (settings changed).</summary>
+        /// <summary>WPF RefreshFx: re-applies the motion/tier/focus gates; the shell calls it on Env.MotionGateChanged.</summary>
         internal void RefreshFx() => ApplyActiveState();
-
-        private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName is not (nameof(AppSettings.MotionLevel) or nameof(AppSettings.PerformanceMode))) return;
-            if (Dispatcher.UIThread.CheckAccess()) RefreshFx();
-            else Dispatcher.UIThread.Post(() => { if (_observedSettings != null) RefreshFx(); });
-        }
 
         /// <summary>True while the breath clock runs (test seam).</summary>
         internal bool IsBreathing => _breath != null;
