@@ -82,6 +82,10 @@ public sealed class MainWindowThemeParityTests
             var chrome = tip.GetVisualDescendants().OfType<Border>().First();
             Assert.Equal(new CornerRadius(6), chrome.CornerRadius);
             Assert.Null(chrome.Effect);
+            // A local radius (RelationshipConstellation sets 10) must still reach the chrome.
+            tip.CornerRadius = new CornerRadius(10);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new CornerRadius(10), chrome.CornerRadius);
         }
         finally { ToolTip.SetIsOpen(owner, false); host.Close(); }
         return Task.CompletedTask;

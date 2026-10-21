@@ -87,10 +87,11 @@
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Padding" Value="10,6"/>
     <Setter Property="FontSize" Value="12"/>
+    <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="ToolTip">
         <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6"
+                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
                 Padding="{TemplateBinding Padding}">
           <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
         </Border>
@@ -98,7 +99,7 @@
     </Setter>
   </ControlTheme>
 
-  <!-- Current WPF MainWindow.xaml:759: 22px help chrome and owner tooltip delays.
+  <!-- Current WPF Resources/Theme/MainWindow.xaml:739: 22px help chrome and owner tooltip delays.
        ponytail: Avalonia has no ShowDuration property; the 60-second lifetime needs a UI seam. -->
   <ControlTheme x:Key="HelpButtonStyle" TargetType="Button">
     <Setter Property="Width" Value="22"/>
