@@ -231,8 +231,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         break;
                     case "lockdown": MaybeShowFeatureIntro("lockdown"); break;
                     case "blinktrainer":
-                        // WPF refreshes on every ShowTab, including a visit to an already-visible page.
-                        Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab")?.Refresh();
+                        // WPF refreshes on every ShowTab. Coming from another tab the view's own
+                        // IsVisible hook already did; only a re-visit of the visible page needs it.
+                        if (_tabBefore == "blinktrainer") Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab")?.Refresh();
                         MaybeShowFeatureIntro("blinktrainer");
                         break;
                     // WPF :581 - only once the room shows the map (its IsVisible hook re-read the gates).

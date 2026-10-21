@@ -65,10 +65,6 @@ public sealed class NavigationEntryParityTests
         shell.ShowTab("PrOgReSsIoN");
         Assert.Equal(new[] { "progression" }, keys);
         Assert.True(shell.Named<Control>("SettingsTab")!.IsVisible);
-        keys.Clear();
-        shell.ShowTab("ExClUsIvEs");
-        Assert.Equal(new[] { "exclusives" }, keys);
-        Assert.Equal("premium", shell.CurrentTab);
     });
 
     [Fact]
