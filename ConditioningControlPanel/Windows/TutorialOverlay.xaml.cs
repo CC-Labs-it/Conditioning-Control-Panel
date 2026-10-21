@@ -858,6 +858,8 @@ namespace ConditioningControlPanel
                         finally { DeleteObject(part); }
                     }
                     if (SetWindowRgn(hwnd, result, true) != 0) result = IntPtr.Zero; // OS ownership.
+                    App.Logger?.Debug("TutorialOverlay region: {W}x{H} hole=({X},{Y},{HW},{HH}) parts={N} dpi={D}",
+                        w, h, spotlightBoundsDip.X, spotlightBoundsDip.Y, spotlightBoundsDip.Width, spotlightBoundsDip.Height, rects.Length, sx);
                 }
                 finally { if (result != IntPtr.Zero) DeleteObject(result); }
 
