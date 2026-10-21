@@ -78,10 +78,54 @@ public sealed class StartModsTests
                 if (Directory.Exists(Path.Combine(root, dir))) Directory.Delete(Path.Combine(root, dir), recursive: true);
         }
     }
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ModSwitchPurgesOldBarkEchoesFromTheBrainCreatedAfterStartup(bool checkPromptCache)
+
+    [Fact]
+    public void ModSwitchPurgesOldBarkEchoesFromTheBrainCreatedAfterStartup() => WithBrainCreatedAfterStartup((_, brain) =>
+    {
+        brain.Session.Append(ConditioningControlPanel.Services.Companion.Brain.TurnKind.UserChat, "keep the user's transcript");
+        brain.Session.Append(ConditioningControlPanel.Services.Companion.Brain.TurnKind.BarkEcho,
+            "Old companion said aloud: stale echo");
+        AvApp.Mods!.ActivateMod(BuiltInMods.SissyHypnoId);
+
+        Assert.DoesNotContain(brain.Session.Turns,
+            t => t.Kind == ConditioningControlPanel.Services.Companion.Brain.TurnKind.BarkEcho);
+        Assert.Contains(brain.Session.Turns, t => t.Text == "keep the user's transcript");
+        Assert.Contains(brain.Session.Turns, t => t.Kind == ConditioningControlPanel.Services.Companion.Brain.TurnKind.SystemNote
+            && t.Text == "companion changed to " + AvApp.Mods.GetCompanionName());
+    });
+
+    [Fact]
+    public void ModSwitchEvictsTheCachedPromptWhenSameIdPackTextChanges() => WithBrainCreatedAfterStartup((settings, _) =>
+    {
+        // A downloaded replacement can change text without changing the mod id.
+        // The fingerprint stays the same, so startup must seed the eviction hook.
+        var manifest = AvApp.Mods!.ActiveMod.Manifest;
+        var priorReplacements = manifest.TextReplacements;
+        try
+        {
+            settings.Current.CompanionPrompt = new CompanionPromptSettings
+            {
+                UseCustomPrompt = true,
+                Personality = "startup pack persona"
+            };
+            var before = BambiSprite.GetStablePrompt();
+            Assert.Contains("startup pack persona", before);
+            manifest.TextReplacements = priorReplacements == null
+                ? new System.Collections.Generic.Dictionary<string, string>()
+                : new System.Collections.Generic.Dictionary<string, string>(priorReplacements);
+            manifest.TextReplacements["startup pack persona"] = "fresh pack persona";
+            Assert.Equal(before, BambiSprite.GetStablePrompt());
+            // Real path (ModService.ActivateMod): same-id activation is a no-op, so round-trip.
+            // The single-slot cache still holds Bambi's prefix, whose fingerprint matches again.
+            AvApp.Mods.ActivateMod(BuiltInMods.SissyHypnoId);
+            AvApp.Mods.ActivateMod(BuiltInMods.BambiSleepId);
+            Assert.Contains("fresh pack persona", BambiSprite.GetStablePrompt());
+        }
+        finally { manifest.TextReplacements = priorReplacements; }
+    });
+
+    private static void WithBrainCreatedAfterStartup(
+        System.Action<SettingsService, ConditioningControlPanel.Services.Companion.Brain.CompanionBrain> body)
     {
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
         using var mods = new CoreModsSnapshot();
@@ -104,47 +148,7 @@ public sealed class StartModsTests
                 store: new ConditioningControlPanel.Services.Companion.Brain.CompanionSessionStore(
                     Path.Combine(dir, "session.json"), Path.Combine(dir, "legacy.json")));
             AvApp.Brain = brain;
-            var turns = ConditioningControlPanel.Services.Companion.Brain.TurnKind.UserChat;
-            brain.Session.Append(turns, "keep the user's transcript");
-            brain.Session.Append(ConditioningControlPanel.Services.Companion.Brain.TurnKind.BarkEcho,
-                "Old companion said aloud: stale echo");
-
-            if (checkPromptCache)
-            {
-                // A downloaded replacement can change text without changing the mod id.
-                // The fingerprint stays the same, so startup must seed the eviction hook.
-                var manifest = AvApp.Mods!.ActiveMod.Manifest;
-                var priorReplacements = manifest.TextReplacements;
-                try
-                {
-                    settings.Current.CompanionPrompt = new CompanionPromptSettings
-                    {
-                        UseCustomPrompt = true,
-                        Personality = "startup pack persona"
-                    };
-                    var before = BambiSprite.GetStablePrompt();
-                    Assert.Contains("startup pack persona", before);
-                    manifest.TextReplacements = priorReplacements == null
-                        ? new System.Collections.Generic.Dictionary<string, string>()
-                        : new System.Collections.Generic.Dictionary<string, string>(priorReplacements);
-                    manifest.TextReplacements["startup pack persona"] = "fresh pack persona";
-                    Assert.Equal(before, BambiSprite.GetStablePrompt());
-                    // Real path (ModService.ActivateMod): same-id activation is a no-op, so round-trip.
-                    // The single-slot cache still holds Bambi's prefix, whose fingerprint matches again.
-                    AvApp.Mods.ActivateMod(BuiltInMods.SissyHypnoId);
-                    AvApp.Mods.ActivateMod(BuiltInMods.BambiSleepId);
-                    Assert.Contains("fresh pack persona", BambiSprite.GetStablePrompt());
-                }
-                finally { manifest.TextReplacements = priorReplacements; }
-                return;
-            }
-            AvApp.Mods!.ActivateMod(BuiltInMods.SissyHypnoId);
-
-            Assert.DoesNotContain(brain.Session.Turns,
-                t => t.Kind == ConditioningControlPanel.Services.Companion.Brain.TurnKind.BarkEcho);
-            Assert.Contains(brain.Session.Turns, t => t.Text == "keep the user's transcript");
-            Assert.Contains(brain.Session.Turns, t => t.Kind == ConditioningControlPanel.Services.Companion.Brain.TurnKind.SystemNote
-                && t.Text == "companion changed to " + AvApp.Mods.GetCompanionName());
+            body(settings, brain);
         }
         finally
         {
