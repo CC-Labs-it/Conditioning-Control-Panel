@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 /// on every disabled answer. Each step is guarded on its own: one failing never skips the rest.
 ///
 /// The copies: the device cache, the in-memory bytes, the <c>ccp_temp_remote_</c> files (players,
-/// wallpaper, games; born at their download time), DtRH's local copies, and a remote wallpaper
-/// Windows keeps its own copy of.
+/// wallpaper, games; born at their download time), DtRH's local copies, Chromium's disk cache of
+/// every WebView2 profile, and a remote wallpaper Windows keeps its own copy of.
 /// </summary>
 internal static class ScrolllerCopySweeper
 {
@@ -24,6 +24,7 @@ internal static class ScrolllerCopySweeper
         Step(() => OnUi(() => App.Wallpaper?.EnforceRemoteMaxAge()));
         Step(() => Chaos.DtrhAssetManifest.SweepLocalCopies());
         Step(() => RemoteMediaCache.SweepTempFilesOlderThan(ScrolllerDiskCache.MaxAge - ScrolllerDiskCache.SweepPeriod));
+        Step(() => _ = ScrolllerWebGate.ClearDueChromiumCachesAsync());
     }
 
     /// <summary>The off switch: every copy goes now. Idempotent, never throws.</summary>
@@ -34,6 +35,7 @@ internal static class ScrolllerCopySweeper
         Step(() => OnUi(() => App.Wallpaper?.EnforceRemoteMaxAge(all: true)));
         Step(() => Chaos.DtrhAssetManifest.SweepLocalCopies(all: true));
         Step(() => RemoteMediaCache.SweepTempFilesOlderThan(TimeSpan.Zero));
+        Step(() => _ = ScrolllerWebGate.ClearChromiumCachesAsync(reason));
     }
 
     /// <summary>Runs on the UI thread (queued, never waited on); nothing when there is none.</summary>

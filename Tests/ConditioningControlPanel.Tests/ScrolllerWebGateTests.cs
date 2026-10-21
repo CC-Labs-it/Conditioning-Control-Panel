@@ -102,6 +102,91 @@ public class ScrolllerWebGateTests
         Assert.True(missing.Count == 0, "WebView2 hosts without ScrolllerWebGate.Attach: " + string.Join(", ", missing));
     }
 
+    // ---- Chromium caches under the day limit (owner, 2026-10-21) -------------------------
+
+    [Fact]
+    public void Gate_answers_never_enter_chromiums_disk_cache()
+    {
+        Assert.Contains("Cache-Control: no-store\r\n", ScrolllerWebGate.ResponseHeaders("image/jpeg", 10));
+        Assert.Contains("Cache-Control: no-store\r\n",
+            ScrolllerWebGate.ResponseHeaders("video/mp4", 100, new ScrolllerByteRange(0, 99), 1000));
+    }
+
+    [Theory]
+    [InlineData(null, true)]      // never cleared
+    [InlineData(1.0, false)]
+    [InlineData(22.9, false)]
+    [InlineData(23.0, true)]      // a day old before the next hourly sweep
+    [InlineData(24.0, true)]
+    [InlineData(72.0, true)]
+    [InlineData(-2.0, true)]      // stamp from the future: the clock went back
+    public void Chromium_clear_due_matrix(double? hoursAgo, bool due)
+    {
+        var now = new DateTime(2026, 10, 21, 12, 0, 0, DateTimeKind.Utc);
+        DateTime? last = hoursAgo is double h ? now.AddHours(-h) : null;
+        Assert.Equal(due, ScrolllerWebGate.ChromiumClearDue(last, now));
+    }
+
+    [Fact]
+    public void Clear_stamps_round_trip_by_profile_name()
+    {
+        var at = new DateTime(2026, 10, 21, 9, 30, 0, DateTimeKind.Utc);
+        Assert.Equal("browser_data_fyp", ScrolllerWebGate.ProfileKey(@"C:\Users\x\AppData\Roaming\CCP\browser_data_fyp\"));
+        var json = ScrolllerWebGate.FormatClears(new System.Collections.Generic.Dictionary<string, ScrolllerWebGate.ClearStamp>
+        {
+            ["browser_data_goon"] = new(at, @"C:\ccp\browser_data_goon"),
+        });
+        var back = ScrolllerWebGate.ParseClears(json);
+        Assert.Equal(at, back["BROWSER_DATA_GOON"].At);
+        Assert.Equal(@"C:\ccp\browser_data_goon", back["browser_data_goon"].Folder);
+        Assert.Empty(ScrolllerWebGate.ParseClears("not json"));
+    }
+
+    [Fact]
+    public void A_closed_profile_loses_its_disk_cache_and_keeps_the_rest()
+    {
+        var udf = Path.Combine(Path.GetTempPath(), "ccp-udf-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var cache = Path.Combine(udf, "EBWebView", "Default", "Cache", "Cache_Data");
+            var storage = Path.Combine(udf, "EBWebView", "Default", "Local Storage");
+            Directory.CreateDirectory(cache);
+            Directory.CreateDirectory(storage);
+            File.WriteAllText(Path.Combine(cache, "f_000001"), "x");
+            Assert.True(ScrolllerWebGate.DeleteClosedProfileCache(udf));
+            Assert.False(Directory.Exists(Path.Combine(udf, "EBWebView", "Default", "Cache")));
+            Assert.True(Directory.Exists(storage));
+            Assert.False(ScrolllerWebGate.DeleteClosedProfileCache("relative\\path"));
+        }
+        finally { try { Directory.Delete(udf, true); } catch { } }
+    }
+
+    /// <summary>Every host that attaches the gate gets its profile's disk cache cleared, because the
+    /// clear is wired inside Attach itself, not in each host. The host list is derived from the
+    /// source, so a new host is covered (and counted) without editing this test.</summary>
+    [Fact]
+    public void Every_attached_host_is_covered_by_the_cache_clear()
+    {
+        var app = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        var hosts = Directory.EnumerateFiles(app, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)
+                     && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
+            .Where(f => File.ReadAllLines(f).Any(l => l.Contains("ScrolllerWebGate.Attach(") && !l.TrimStart().StartsWith("//")))
+            .ToList();
+        Assert.NotEmpty(hosts);
+
+        var gate = File.ReadAllText(Path.Combine(app, "Services", "Fyp", "Online", "ScrolllerWebGate.cs"));
+        int start = gate.IndexOf("public static void Attach(CoreWebView2? core)", StringComparison.Ordinal);
+        Assert.True(start >= 0, "Attach not found");
+        int end = gate.IndexOf("private static void Handle(", start, StringComparison.Ordinal);
+        var body = gate.Substring(start, end - start);
+        Assert.Contains("TrackForCacheClears(core);", body);
+        // The clear is the gate's only hook: no host may register the Scrolller filter itself.
+        var selfFiltered = hosts.Where(f => File.ReadAllText(f).Contains("*.scrolller.com"))
+            .Select(f => Path.GetRelativePath(app, f)).ToList();
+        Assert.True(selfFiltered.Count == 0, "hosts with their own Scrolller filter: " + string.Join(", ", selfFiltered));
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

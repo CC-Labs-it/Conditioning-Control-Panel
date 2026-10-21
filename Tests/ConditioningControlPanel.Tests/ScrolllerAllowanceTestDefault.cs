@@ -9,7 +9,8 @@ namespace ConditioningControlPanel.Tests;
 /// write the developer's real book or delete their real old ledger: both start as memory only.
 /// The allowance tests point them at a temp folder themselves. The device cache starts with no
 /// folder too: a switch-off answer purges it, and a test must never empty the developer's real
-/// cache, its old folders, nor the developer's real temp folder. Those tests point them at a temp folder themselves.
+/// cache, its old folders, the developer's real temp folder or browser profiles. Those tests
+/// point them at a temp folder themselves.
 /// </summary>
 internal static class ScrolllerAllowanceTestDefault
 {
@@ -23,5 +24,7 @@ internal static class ScrolllerAllowanceTestDefault
         ScrolllerDiskCache.SeedRootsProvider = () => System.Array.Empty<string>();
         RemoteMediaCache.TempDirProvider = () => null;
         RemoteMediaCache.SystemTempDirProvider = () => null;
+        ScrolllerWebGate.ProfileRootsProvider = () => System.Array.Empty<string>();
+        ScrolllerWebGate.ExtraProfileFoldersProvider = () => System.Array.Empty<string>();
     }
 }
