@@ -533,8 +533,9 @@
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,0,0"/>
                                                     </Grid>
                                                     <!-- Licence 3.2 (2026-10-21): a wallpaper cannot carry the "via Scrolller"
-                                                         mark, so the card that sets one carries the linked credit. -->
-                                                    <TextBlock x:Name="TxtWallpaperCredit" x:FieldModifier="internal" FontSize="10.5"
+                                                         mark, so the card that sets one carries the linked credit, while online
+                                                         media may reach the wallpaper (RefreshWallpaperCredit). -->
+                                                    <TextBlock x:Name="TxtWallpaperCredit" x:FieldModifier="internal" FontSize="10.5" Visibility="Collapsed"
                                                                Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,2,0,0"><Hyperlink
                                                                Click="ScrolllerLink_Click" Foreground="{StaticResource TextMutedBrush}">Media from Scrolller</Hyperlink><Run
                                                                Text=". "/><Run Text="{loc:Str label_online_media_credit}"/></TextBlock>

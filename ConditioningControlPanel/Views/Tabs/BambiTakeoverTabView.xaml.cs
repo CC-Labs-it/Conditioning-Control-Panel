@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Views.Tabs
             // Tabs are shown/hidden rather than rebuilt, so Loaded fires once. Re-read on every show
             // or the toggle lies after something else disarms the chant behind our back — panic clears
             // MantraChantEnabled (#685) and the checkbox would still read ON.
-            IsVisibleChanged += (_, _) => { if (IsVisible) LoadMantraChant(); };
+            IsVisibleChanged += (_, _) => { if (IsVisible) { LoadMantraChant(); RefreshWallpaperCredit(); } };
             Loaded += BambiTakeoverTabView_Loaded;
             Unloaded += BambiTakeoverTabView_Unloaded;
         }
@@ -231,6 +231,16 @@ namespace ConditioningControlPanel.Views.Tabs
             if (Window.GetWindow(this) is MainWindow mw)
                 mw.ChkAutonomyBehavior_Changed(sender, e);
         }
+        /// <summary>The wallpaper card credits Scrolller only while online media may reach it (the
+        /// same rule the wallpaper service fills its online pool by). Re-read on every show.</summary>
+        internal void RefreshWallpaperCredit()
+        {
+            var s = App.Settings?.Current;
+            TxtWallpaperCredit.Visibility = s != null && WallpaperService.RemoteMediaEnabled(s.MediaSource, s.HasRemoteMediaConsent)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
         // The wallpaper card's credit link; OpenHome refuses under Strict Lock, Lockdown and Chaos.
         private void ScrolllerLink_Click(object sender, RoutedEventArgs e) => Services.Video.ScrolllerCredit.OpenHome();
         private void BtnWallpaperFolder_Click(object sender, RoutedEventArgs e)

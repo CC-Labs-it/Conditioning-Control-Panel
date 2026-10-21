@@ -43,7 +43,15 @@ public class ScrolllerCreditCardsTests
         var credit = xaml.Substring(at, xaml.IndexOf("</TextBlock>", at, StringComparison.Ordinal) - at);
         Assert.Contains("Click=\"ScrolllerLink_Click\"", credit);
         Assert.Contains(">Media from Scrolller</Hyperlink>", credit);
-        Assert.Contains("ScrolllerCredit.OpenHome()", File.ReadAllText(Path.Combine(App(), "Views", "Tabs", "BambiTakeoverTabView.xaml.cs")));
+        var code = File.ReadAllText(Path.Combine(App(), "Views", "Tabs", "BambiTakeoverTabView.xaml.cs"));
+        Assert.Contains("ScrolllerCredit.OpenHome()", code);
+
+        // Only while online media may reach the wallpaper: hidden by default, shown by the same
+        // rule the wallpaper service fills its online pool by, re-read on every show.
+        Assert.Contains("Visibility=\"Collapsed\"", xaml.Substring(at, 140));
+        Assert.Contains("WallpaperService.RemoteMediaEnabled(s.MediaSource, s.HasRemoteMediaConsent)", code);
+        Assert.Contains("RefreshWallpaperCredit(); } };", code);
+        Assert.Contains("tab.RefreshWallpaperCredit();", File.ReadAllText(Path.Combine(App(), "MainWindow", "MainWindow.Autonomy.cs")));
     }
 
     [Fact]
