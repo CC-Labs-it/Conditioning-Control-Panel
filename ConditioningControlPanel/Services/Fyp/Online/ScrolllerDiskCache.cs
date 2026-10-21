@@ -435,9 +435,10 @@ internal static class ScrolllerDiskCache
         catch { return Task.CompletedTask; }
     }
 
-    /// <summary>Drops every row past the max age and deletes its file, then deletes every file in
-    /// the folder no row names (the index and a part younger than ten minutes stay). Returns how
-    /// many went. Never throws. Runs at launch (after the load) and hourly.</summary>
+    /// <summary>Drops every row that is past the max age, or will be before the next sweep, and
+    /// deletes its file, then deletes every file in the folder no row names (the index and a part
+    /// younger than ten minutes stay). Returns how many went. Never throws. Runs at launch (after
+    /// the load) and hourly.</summary>
     public static int SweepExpired()
     {
         int count = 0;
@@ -449,7 +450,15 @@ internal static class ScrolllerDiskCache
                 var book = Book();
                 var root = _bookRoot;
                 if (book == null || root == null) return 0;
-                foreach (var e in book.Expired(UtcNow())) { dropped |= DropIfExpiredLocked(book, e); count++; }
+                // One period ahead: what would pass the max age before the next sweep goes now,
+                // so no file sits on disk past it waiting for a read that never comes.
+                foreach (var e in book.Expired(UtcNow() + SweepPeriod))
+                {
+                    book.Remove(e.Url);
+                    TryDelete(e.Path);
+                    dropped = true;
+                    count++;
+                }
                 var known = new HashSet<string>(book.Snapshot().Select(e => Path.GetFileName(e.Path)), StringComparer.OrdinalIgnoreCase);
                 foreach (var file in Directory.GetFiles(root))
                 {

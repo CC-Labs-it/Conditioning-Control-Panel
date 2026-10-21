@@ -183,6 +183,16 @@ public sealed class ScrolllerCacheMaxAgeTests : IDisposable
     }
 
     [Fact]
+    public void Sweep_looks_one_period_ahead_so_no_file_outlives_the_day()
+    {
+        var path = Put("https://images.scrolller.com/age/ahead.jpg");
+        _now = _now.AddHours(23).AddMinutes(1);   // still served, but past it before the next sweep
+        Assert.True(ScrolllerDiskCache.Contains("https://images.scrolller.com/age/ahead.jpg"));
+        Assert.Equal(1, ScrolllerDiskCache.SweepExpired());
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public void The_off_switch_deletes_every_cached_file()
     {
         Put("https://images.scrolller.com/age/off1.jpg");

@@ -229,16 +229,20 @@ internal static class RemoteMediaCache
         lock (Gate) return Cache.TryGetValue(url, out var e) && !DropIfExpiredLocked(url, e);
     }
 
-    /// <summary>Drops every in-memory entry past the max age (24 h from its download). Returns
-    /// how many went. The hourly sweep calls it.</summary>
+    /// <summary>Drops every in-memory entry past the max age (24 h from its download), or past it
+    /// before the next hourly sweep. Returns how many went.</summary>
     internal static int DropExpiredMemory()
     {
         lock (Gate)
         {
             var old = new List<string>();
             foreach (var kvp in Cache)
-                if (ScrolllerCacheBook.IsExpiredAt(kvp.Value.DownloadedUtc, UtcNow())) old.Add(kvp.Key);
-            foreach (var url in old) DropIfExpiredLocked(url, Cache[url]);
+                if (ScrolllerCacheBook.IsExpiredAt(kvp.Value.DownloadedUtc, UtcNow() + ScrolllerDiskCache.SweepPeriod)) old.Add(kvp.Key);
+            foreach (var url in old)
+            {
+                _bytes -= Cache[url].Bytes.LongLength;
+                Cache.Remove(url);
+            }
             return old.Count;
         }
     }
