@@ -101,12 +101,13 @@ public partial class MainShellWindow
     }
 
     // One real timer tick, exposed internally so the bounded minute cadence needs no wall-clock test wait.
-    internal void TickFuseRetry()
+    // Returns the sync it started so a test can await it instead of polling.
+    internal Task TickFuseRetry()
     {
-        if (_fuseRetryTimer == null) return;
-        if (_windowClosed || !FuseRetryShouldContinue()) { StopFuseRetry(); return; }
+        if (_fuseRetryTimer == null) return Task.CompletedTask;
+        if (_windowClosed || !FuseRetryShouldContinue()) { StopFuseRetry(); return Task.CompletedTask; }
         _fuseRetryAttempts++;
-        _ = RequestFuseSync();
+        return RequestFuseSync();
     }
 
     private void StopFuseRetry()

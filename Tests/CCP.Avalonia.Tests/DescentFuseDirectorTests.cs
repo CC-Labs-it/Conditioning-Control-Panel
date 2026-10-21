@@ -207,8 +207,7 @@ public sealed partial class AccountSeedTests
             Assert.True(shell.FuseRetryRunning);
             var before = wire.Syncs.Count();
             s.OfflineMode = false; // only the injected HTTP handler may service the sync
-            shell.TickFuseRetry();
-            for (var i = 0; i < 100 && wire.Syncs.Count() == before; i++) await Task.Delay(10);
+            await shell.TickFuseRetry();
             Assert.Equal(before + 1, wire.Syncs.Count());
             await MainShellWindow.RequestFuseSync(); // sync cooldown owns refusal, just as WPF does
             Assert.Equal(before + 1, wire.Syncs.Count());
@@ -216,7 +215,7 @@ public sealed partial class AccountSeedTests
             now = now.AddMinutes(1);
             var live = MainShellWindow.OpenLiveFuseShow()!;
             live.FrameCrack(DescentFuseTimeline.LiveSeconds); // reduced/full both reached bloom
-            for (var i = 0; i < 100 && wire.Syncs.Count() < before + 2; i++) await Task.Delay(10);
+            await live.LastResync;
             Assert.Equal(before + 2, wire.Syncs.Count());
             live.FrameCrack(DescentFuseTimeline.LiveSeconds + 0.01);
             Assert.Equal(before + 2, wire.Syncs.Count()); // one sync per handoff slot

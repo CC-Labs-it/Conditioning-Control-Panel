@@ -63,6 +63,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Stopwatch _clock = new();
         private readonly DescentFuseHandoff _handoff = new();
 
+        /// <summary>The bloom's resync, kept so a test awaits it instead of polling.</summary>
+        internal System.Threading.Tasks.Task LastResync { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
+
         private readonly DescentFuseStageVisual _visual;
         private readonly Border _backdropLayer;
         private readonly TextBlock _showLine;
@@ -328,7 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             switch (_handoff.Advance(frame.SinceBloom, ceremonyOpen: false))
             {
                 case DescentHandoffAction.Resync:
-                    _ = MainShellWindow.RequestFuseSync();
+                    LastResync = MainShellWindow.RequestFuseSync();
                     break;
 
                 case DescentHandoffAction.CrossfadeToCeremony:
