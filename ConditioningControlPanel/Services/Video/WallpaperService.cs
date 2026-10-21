@@ -585,6 +585,50 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Debug("[Wallpaper] Released {Count} materialized remote wallpapers", toRelease.Count);
         }
 
+        /// <summary>The day limit on a remote wallpaper file, pure: its creation time is its
+        /// download time, and it goes once it would be a day old before the next hourly sweep.</summary>
+        internal static bool RemoteWallpaperStale(DateTime createdUtc, DateTime nowUtc)
+            => Fyp.Online.ScrolllerCacheBook.IsExpiredAt(createdUtc, nowUtc + Fyp.Online.ScrolllerDiskCache.SweepPeriod);
+
+        /// <summary>
+        /// Licence day limit (owner, 2026-10-21): no remote wallpaper stays set, or on disk, past a
+        /// day from its download, and Windows' own copy goes with it. Stale files leave the pool;
+        /// if one is on the desktop it rotates to another image, or the user's own wallpaper is put
+        /// back. <paramref name="all"/> treats every remote file as stale (the off switch). Call on
+        /// the UI thread (a rotation may persist settings). Returns how many files went.
+        /// </summary>
+        public int EnforceRemoteMaxAge(bool all = false)
+        {
+            List<string> stale;
+            bool onDesktop;
+            lock (_lock)
+            {
+                if (_disposed) return 0;
+                var now = DateTime.UtcNow;
+                stale = _remotePool.Where(p => all || RemoteWallpaperStale(CreatedUtc(p), now)).ToList();
+                if (stale.Count == 0) return 0;
+                _remotePool.RemoveAll(stale.Contains);
+                onDesktop = _isActive && _currentImagePath != null && stale.Contains(_currentImagePath);
+            }
+            if (onDesktop)
+            {
+                // Shuffle draws from the trimmed pools; with nothing else to show, the original returns.
+                bool moved = false;
+                try { moved = Shuffle(); } catch { }
+                if (!moved) Deactivate();
+            }
+            foreach (var temp in stale) SafeRelease(temp);
+            App.Logger?.Information("[Wallpaper] {Count} online wallpaper(s) past the day limit removed{Desk}",
+                stale.Count, onDesktop ? " (desktop moved off it)" : "");
+            return stale.Count;
+
+            static DateTime CreatedUtc(string p)
+            {
+                try { return File.Exists(p) ? File.GetCreationTimeUtc(p) : DateTime.MinValue; }
+                catch { return DateTime.MinValue; }
+            }
+        }
+
         #endregion
 
         /// <summary>Queue a wallpaper write and return at once (#1453); a refusal is only logged.</summary>

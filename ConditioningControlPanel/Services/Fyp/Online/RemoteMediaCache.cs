@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -150,6 +151,8 @@ internal static class RemoteMediaCache
     {
         var bytes = await GetBytesAsync(url, ct).ConfigureAwait(false);
         if (bytes == null) return null;
+        // Read now, before the write: a burst of stores can evict the memory row meanwhile.
+        var downloaded = DownloadTimeOf(url);
 
         string? path = null;
         try
@@ -162,6 +165,9 @@ internal static class RemoteMediaCache
                       ?? Helpers.MediaTypeSniffer.DefaultImageExtension;
             path = Path.Combine(App.GetMediaTempPath(), $"{TempPrefix}{Guid.NewGuid():N}{ext}");
             await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
+            // The file is born when its bytes were DOWNLOADED (a copy of a cached copy is no
+            // younger than it), so every sweep that reads the creation time honours the day limit.
+            if (downloaded != null) { try { File.SetCreationTimeUtc(path, downloaded.Value); } catch { } }
         }
         catch (Exception ex)
         {
@@ -216,6 +222,75 @@ internal static class RemoteMediaCache
 
         if (deleted > 0)
             App.Logger?.Information("[remote media] swept {Count} stale temp file(s)", deleted);
+    }
+
+    /// <summary>The temp folder the sweeps below walk, or null for none. Replaceable by tests.</summary>
+    internal static Func<string?> TempDirProvider = () =>
+    {
+        try { return App.GetMediaTempPath(); }
+        catch { return null; }
+    };
+
+    /// <summary>The system temp folder, where <see cref="App.GetMediaTempPath"/> falls back when the
+    /// assets folder cannot hold a .temp: swept too, or a fallback copy would never age out. Null
+    /// for none. Replaceable by tests.</summary>
+    internal static Func<string?> SystemTempDirProvider = () =>
+    {
+        try { return Path.GetTempPath(); }
+        catch { return null; }
+    };
+
+    /// <summary>
+    /// Licence day limit (owner, 2026-10-21): deletes every <c>ccp_temp_remote_</c> file (in the
+    /// assets .temp and the system temp folder) whose creation time (= its download time, see
+    /// <see cref="MaterializeAsync(string, CancellationToken, bool)"/>) is at least
+    /// <paramref name="age"/> old. A file a player still holds refuses and is retried by the next
+    /// sweep. <see cref="TimeSpan.Zero"/> = every one (the off switch). Returns how many went;
+    /// never throws.
+    /// </summary>
+    public static int SweepTempFilesOlderThan(TimeSpan age)
+    {
+        int deleted = 0;
+        try
+        {
+            var now = UtcNow();
+            var dirs = new[] { TempDirProvider(), SystemTempDirProvider() }
+                .Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d))
+                .Select(d => Path.GetFullPath(d!).TrimEnd(Path.DirectorySeparatorChar))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in dirs)
+            foreach (var file in Directory.GetFiles(dir, TempPrefix + "*"))
+            {
+                try
+                {
+                    if (now - File.GetCreationTimeUtc(file) < age) continue;
+                    File.Delete(file);
+                    deleted++;
+                }
+                catch { /* still open: the next sweep */ }
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("[remote media] day-limit sweep failed: {E}", ex.Message); }
+        if (deleted > 0) App.Logger?.Information("[remote media] {Count} temp file(s) past the day limit deleted", deleted);
+        return deleted;
+    }
+
+    /// <summary>When the in-memory copy of <paramref name="url"/> was downloaded, or null.</summary>
+    private static DateTime? DownloadedUtcOfMemory(string url)
+    {
+        lock (Gate) return Cache.TryGetValue(url, out var e) ? e.DownloadedUtc : null;
+    }
+
+    /// <summary>When the bytes of <paramref name="url"/> were downloaded: the memory copy, else the
+    /// device cache's row. A Scrolller url neither knows is taken as old as a copy may be (the next
+    /// sweep deletes its temp file). Null for anything else (not Scrolller's: no day limit).</summary>
+    internal static DateTime? DownloadTimeOf(string url)
+    {
+        var at = DownloadedUtcOfMemory(url) ?? ScrolllerDiskCache.DownloadedUtcOf(url);
+        if (at != null) return at;
+        return global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url)
+            ? UtcNow() - ScrolllerDiskCache.MaxAge
+            : null;
     }
 
     /// <summary>
