@@ -92,6 +92,7 @@ public sealed class PlayWallTests
                 {
                     Assert.True(C<Button>(n).IsEnabled, n);
                     Assert.Null(ToolTip.GetTip(C<Button>(n)));
+                    Assert.NotNull(C<Button>(n).Cursor); // WPF PlayTabView.xaml:365/:453 Cursor="Hand"
                 }
                 Assert.NotNull(C<Image>("PlayBreakoutArt").Source);
 
