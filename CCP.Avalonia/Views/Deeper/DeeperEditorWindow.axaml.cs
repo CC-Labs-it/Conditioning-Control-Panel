@@ -234,11 +234,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             Closed += (_, _) => { try { (Owner as Window)?.Activate(); } catch { } };
             Opened += (_, _) => s_open.Add(this);
             Closed += (_, _) => s_open.Remove(this);
-            CoreTutorial.StepChanged += PrepareEditorTutorialStep;
             Closed += (_, _) =>
             {
                 _editorIntroPending = false;
-                CoreTutorial.StepChanged -= PrepareEditorTutorialStep;
                 _editorTutorialOverlay?.Close();
             };
 
@@ -595,12 +593,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         private void BtnEditorHelp_Click(object? sender, RoutedEventArgs e) => StartEditorTutorial();
-
-        private void PrepareEditorTutorialStep(object? sender, CoreTutorial.Step step)
-        {
-            if (_editorTutorialOverlay != null)
-                TutorialHead.CurrentHeadStep?.PrepareTargetWindowAction?.Invoke(this);
-        }
 
         private void StartEditorTutorial()
         {

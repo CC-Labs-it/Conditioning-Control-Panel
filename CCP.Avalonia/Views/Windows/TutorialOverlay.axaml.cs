@@ -49,13 +49,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///     the tour rather than skipping a card. <c>AllowManualSkip</c> steps still have their
     ///     "Skip step" button, which is the WPF escape hatch for exactly this.</item>
     ///
-    ///   <item><b><c>TutorialStep.PrepareTargetWindowAction</c> did not cross.</b> It is an
-    ///     <c>Action&lt;System.Windows.Window&gt;</c> on Windows (DeeperTutorialPrep,
-    ///     CompanionTutorialPrep, AppSettingsTutorialPrep in Services/TutorialService.cs), so it
-    ///     cannot be seam data. Without it a step pointing INSIDE a default-collapsed drawer
-    ///     resolves its element but measures 0×0, and the settle timer runs out and draws the plain
-    ///     dim — the degraded path WPF already takes when an element cannot be found, not a
-    ///     crash.</item>
+    ///   <item><b><c>TutorialStep.PrepareTargetWindowAction</c></b> is not seam data (it is a
+    ///     head <c>Action&lt;Window&gt;</c>), so UpdateSpotlight reads it from
+    ///     <c>TutorialHead.CurrentHeadStep</c> on live tours, like WPF.</item>
     ///
     ///   <item><b>SetWindowRgn / CreateRectRgn / CombineRgn — the click-through hole.</b> WPF
     ///     punched the spotlight rect out of the window's OS-level region, because a WPF layered
@@ -444,10 +440,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // WPF gave the target window a chance to prepare itself here (expand the collapsed
-            // drawer that holds TargetElementName) via step.PrepareTargetWindowAction. That hook
-            // is an Action<System.Windows.Window> and did not cross with the seam - see the class
-            // header for what a step behind a collapsed drawer degrades to.
+            // Give the target window a chance to prepare itself (expand the collapsed drawer that
+            // holds TargetElementName), as WPF TutorialOverlay.xaml.cs:583 does. The action lives
+            // on the head step, not the Core step, so read it from TutorialHead.
+            if (_live)
+                try { ConditioningControlPanel.Avalonia.Tours.TutorialHead.CurrentHeadStep?.PrepareTargetWindowAction?.Invoke(_targetWindow); }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "tutorial prepare action failed"); }
             try { _targetWindow.UpdateLayout(); } catch { /* not laid out yet */ }
 
             var targetElement = FindElementByName(_targetWindow, step.TargetElementName);
