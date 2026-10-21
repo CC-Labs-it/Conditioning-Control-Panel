@@ -98,6 +98,10 @@ public sealed class ProgramsRunLifecycleTests
             shell.OnSessionTick();
             Assert.Equal(pausedClock, F<TextBlock>("TxtTodaySessionProgress").Text);
             Assert.Same(dayPips, F<ItemsControl>("ProgramDayStrip").ItemsSource); // ticks never rebuild
+            var glyph = F<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtTodaySessionGlyph");
+            glyph.Kind = FluentIcons.Common.Symbol.Gift;
+            shell.OnSessionTick();
+            Assert.Equal(FluentIcons.Common.Symbol.Gift, glyph.Kind); // P07: clock only
             runner.Resume();
             shell.OnSessionTick();
             Assert.DoesNotContain(Loc.GetF("programs_session_progress_paused", ""), F<TextBlock>("TxtTodaySessionProgress").Text);

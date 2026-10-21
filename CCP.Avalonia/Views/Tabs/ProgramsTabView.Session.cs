@@ -18,14 +18,20 @@ public partial class ProgramsTabView
     internal bool SessionSheenRunning => _sessionSheen?.IsRunning == true;
 
     // WPF UpdateProgramSessionRow: session ticks repaint only the slot, never the whole tab.
-    internal void RefreshProgramSessionRow()
+    // clockOnly (the 1 s tick): only the clock and bar; the button keeps its binding (P07).
+    internal void RefreshProgramSessionRow(bool clockOnly = false)
     {
         if (!IsVisible || VisualRoot is null) return;
         var svc = AvApp.Programs;
+        var accent = _runAccent ?? Theme("PinkBrush", Brushes.HotPink);
         if (svc?.ActiveEnrollment is { } enrollment && svc.TodayRecord is { } record &&
             Find<StackPanel>("ProgramsRunPanel").IsVisible)
-            UpdateSessionRow(svc, enrollment, record, _runAccent ?? Theme("PinkBrush", Brushes.HotPink),
-                Theme("TextMutedBrush", Brushes.Gray));
+        {
+            if (clockOnly)
+                PaintSessionProgress(svc, AvApp.Sessions is { IsRunning: true } r && svc.IsProgramSession(r.CurrentSession), accent);
+            else
+                UpdateSessionRow(svc, enrollment, record, accent, Theme("TextMutedBrush", Brushes.Gray));
+        }
         else
         {
             Find<Grid>("TodaySessionProgressRow").IsVisible = false;

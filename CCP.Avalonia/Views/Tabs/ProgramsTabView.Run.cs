@@ -225,8 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
-        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged). The clock alone
-        /// repaints per tick, without rebuilding the run panel or replaying its one-shot moments.</summary>
+        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged). The 1 s tick calls
+        /// only PaintSessionProgress (RefreshProgramSessionRow clockOnly), never this.</summary>
         private void UpdateSessionRow(ProgramService svc, ProgramEnrollment enrollment, ProgramDayRecord record,
                                       IBrush accent, IBrush muted)
         {

@@ -58,9 +58,10 @@ namespace ConditioningControlPanel.Services
                 : $"{(int)span.TotalMinutes}:{span.Seconds:D2}";
         }
 
-        /// <summary>Clamped fill for a session's elapsed time, independent of its clock text.</summary>
+        /// <summary>Clamped fill for a session's elapsed time, independent of its clock text. A zero-length
+        /// session reads full, as WPF SessionEngine.ProgressPercent did (elapsed / 0 = +inf, Min 100).</summary>
         public static double ProgramProgress(TimeSpan elapsed, double durationMinutes) =>
-            durationMinutes > 0 ? Math.Clamp(elapsed.TotalMinutes / durationMinutes * 100, 0, 100) : 0;
+            durationMinutes > 0 ? Math.Clamp(elapsed.TotalMinutes / durationMinutes * 100, 0, 100) : 100;
 
         private static string Minutes(TimeSpan t) => ((int)t.TotalMinutes).ToString("D2");
         private static string Seconds(TimeSpan t) => t.Seconds.ToString("D2");

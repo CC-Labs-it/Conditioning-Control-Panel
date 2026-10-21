@@ -145,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// and both clock labels. Runs on the UI thread (the runner ticks through CoreDispatch).</summary>
         internal void OnSessionTick()
         {
-            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshProgramSessionRow();
+            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshProgramSessionRow(clockOnly: true);
             RefreshSessionFeatureLock(force: false);
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)

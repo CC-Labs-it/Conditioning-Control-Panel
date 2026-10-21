@@ -22,7 +22,7 @@ public sealed class ProgramClockTests
     [InlineData(5, 20, 25)]
     [InlineData(20, 20, 100)]
     [InlineData(21, 20, 100)]
-    [InlineData(5, 0, 0)]
+    [InlineData(5, 0, 100)]
     public void ProgressIsClamped(double elapsedMinutes, double durationMinutes, double expected) =>
         Assert.Equal(expected, SessionClockLabel.ProgramProgress(TimeSpan.FromMinutes(elapsedMinutes), durationMinutes));
 }
