@@ -129,7 +129,10 @@ public sealed class StartModsTests
                         : new System.Collections.Generic.Dictionary<string, string>(priorReplacements);
                     manifest.TextReplacements["startup pack persona"] = "fresh pack persona";
                     Assert.Equal(before, BambiSprite.GetStablePrompt());
-                    CoreModsHooks.InvalidateStablePrompt?.Invoke();
+                    // Real path (ModService.ActivateMod): same-id activation is a no-op, so round-trip.
+                    // The single-slot cache still holds Bambi's prefix, whose fingerprint matches again.
+                    AvApp.Mods.ActivateMod(BuiltInMods.SissyHypnoId);
+                    AvApp.Mods.ActivateMod(BuiltInMods.BambiSleepId);
                     Assert.Contains("fresh pack persona", BambiSprite.GetStablePrompt());
                 }
                 finally { manifest.TextReplacements = priorReplacements; }
