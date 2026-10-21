@@ -58,7 +58,8 @@ public static class CompanionVoiceLines
     public static bool MigrateLegacyIds(AppSettings settings, IReadOnlyList<string> sortedFiles)
     {
         if (sortedFiles.Count == 0) return false;
-        var currentIds = new HashSet<string>(sortedFiles.Select(CompanionPhraseIds.VoiceLineId), StringComparer.OrdinalIgnoreCase);
+        // Built only once a positional id is seen: GetRows runs on every dialog open.
+        HashSet<string>? currentIds = null;
         var changed = false;
         foreach (var set in new[] { settings.DisabledPhraseIds, settings.RemovedPhraseIds })
         {
@@ -67,7 +68,9 @@ public static class CompanionVoiceLines
                 const string prefix = "VoiceLine:";
                 if (!old.StartsWith(prefix, StringComparison.Ordinal)) continue;
                 var tail = old[prefix.Length..];
-                if (tail.Length == 0 || !tail.All(char.IsDigit) || currentIds.Contains(old)) continue;
+                if (tail.Length == 0 || !tail.All(char.IsDigit)) continue;
+                currentIds ??= new HashSet<string>(sortedFiles.Select(CompanionPhraseIds.VoiceLineId), StringComparer.OrdinalIgnoreCase);
+                if (currentIds.Contains(old)) continue;
                 set.Remove(old);
                 changed = true;
                 if (int.TryParse(tail, out var index) && index < sortedFiles.Count)
