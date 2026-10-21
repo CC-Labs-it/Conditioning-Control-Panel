@@ -55,6 +55,17 @@ public interface IFriendsApi
     /// Done or TryLater (fakes that know nothing of the reasons).</summary>
     async Task<ActResult> ActForResultAsync(string op, string id, JObject? extra = null, CancellationToken ct = default)
         => await ActAsync(op, id, extra, ct).ConfigureAwait(true) ? ActResult.Done : ActResult.TryLater;
+
+    // ---- friend links (CONTRACT.md "Links"). Defaults: no link, for fakes and old servers ----
+
+    /// <summary><c>link</c>: the live link, minted when there is none. Null on any fault.</summary>
+    Task<FriendLink?> LinkAsync(CancellationToken ct = default) => Task.FromResult<FriendLink?>(null);
+
+    /// <summary><c>link_revoke</c>: true only on <c>ok</c>.</summary>
+    Task<bool> LinkRevokeAsync(CancellationToken ct = default) => Task.FromResult(false);
+
+    /// <summary><c>claim</c> with a token already in the grammar.</summary>
+    Task<ClaimResult> ClaimAsync(string token, CancellationToken ct = default) => Task.FromResult(ClaimResult.TryLater);
 }
 
 /// <summary>
@@ -261,6 +272,22 @@ public sealed class FriendsApi : IFriendsApi
         "bad_input" or "refused" or "blocked" => ActResult.Refused,
         _ => ActResult.TryLater,
     };
+
+    public async Task<FriendLink?> LinkAsync(CancellationToken ct = default)
+        => FriendsLinkRules.ParseLink(await CallAsync("link", null, ct));
+
+    public async Task<bool> LinkRevokeAsync(CancellationToken ct = default)
+    {
+        var o = await CallAsync("link_revoke", null, ct);
+        return o != null && Ok(o);
+    }
+
+    public async Task<ClaimResult> ClaimAsync(string token, CancellationToken ct = default)
+    {
+        var o = await CallAsync("claim", new JObject { ["token"] = token }, ct);
+        if (o == null) return ClaimResult.TryLater;
+        return FriendsLinkRules.ClaimFromWire(Ok(o) ? o.Value<string?>("status") : o.Value<string?>("reason"));
+    }
 
     private static bool Ok(JObject o) => o.Value<bool?>("ok") == true;
 

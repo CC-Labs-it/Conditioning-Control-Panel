@@ -68,6 +68,20 @@ public partial class FriendsServiceTests
             Acts.Add((op, id));
             return Task.FromResult(true);
         }
+
+        // ---- friend links (D1) ----
+        public Queue<FriendLink?> Links = new();
+        public int LinkCalls, RevokeCalls;
+        public bool RevokeAnswer = true;
+        public List<string> Claims = new();
+        public ClaimResult ClaimAnswer = ClaimResult.Friends;
+
+        public Task<FriendLink?> LinkAsync(CancellationToken ct = default)
+        { LinkCalls++; return Task.FromResult(Links.Count > 0 ? Links.Dequeue() : null); }
+
+        public Task<bool> LinkRevokeAsync(CancellationToken ct = default) { RevokeCalls++; return Task.FromResult(RevokeAnswer); }
+
+        public Task<ClaimResult> ClaimAsync(string token, CancellationToken ct = default) { Claims.Add(token); return Task.FromResult(ClaimAnswer); }
     }
 
     private static readonly DateTimeOffset T0 = new(2026, 9, 23, 12, 0, 0, TimeSpan.Zero);
