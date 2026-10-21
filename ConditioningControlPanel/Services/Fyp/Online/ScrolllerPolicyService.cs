@@ -108,13 +108,16 @@ internal static class ScrolllerPolicyService
     /// <summary>Applies an answer: the switch and cap through <see cref="ScrolllerPolicy"/>
     /// (which clamps the cap), the minimum version here. The official flag is set before the
     /// limits so the allowance's <see cref="ScrolllerAllowance.Changed"/> (raised by
-    /// ApplyLimits) is the one signal the meter and the note refresh on.</summary>
+    /// ApplyLimits) is the one signal the meter and the note refresh on. A disabled answer
+    /// DELETES every Scrolller copy held here (owner, 2026-10-21), on every such answer, not only
+    /// on the switch's edge: a purge of an empty cache costs nothing.</summary>
     internal static void Accept(Answer answer)
     {
         ScrolllerPolicy.Apply(answer.Enabled, answer.MaxClipShortSide);
         ScrolllerPolicy.Official = answer.Official;
         ScrolllerAllowance.ApplyLimits(answer.FreeMb, answer.BasicMb, answer.PrimeMb, answer.FreeFirstDayMb);
         _minVersion = answer.MinVersion;
+        if (!answer.Enabled) ScrolllerCopySweeper.PurgeAll("policy off");
     }
 
     /// <summary>True when the switch is off and <paramref name="url"/> is on scrolller.com or a

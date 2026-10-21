@@ -7,7 +7,9 @@ namespace ConditioningControlPanel.Tests;
 /// The online media book and the old machine-wide ledger default to the real user data folder.
 /// A test outside the allowance collection that charges (a cache or web gate test) must never
 /// write the developer's real book or delete their real old ledger: both start as memory only.
-/// The allowance tests point them at a temp folder themselves.
+/// The allowance tests point them at a temp folder themselves. The device cache starts with no
+/// folder too: a switch-off answer purges it, and a test must never empty the developer's real
+/// cache. The cache tests point it at a temp folder themselves.
 /// </summary>
 internal static class ScrolllerAllowanceTestDefault
 {
@@ -16,5 +18,6 @@ internal static class ScrolllerAllowanceTestDefault
     {
         ScrolllerAllowance.LedgerPath = () => null;
         ScrolllerAllowance.LegacyLedgerPath = () => null;
+        ScrolllerDiskCache.RootProvider = () => null;
     }
 }
