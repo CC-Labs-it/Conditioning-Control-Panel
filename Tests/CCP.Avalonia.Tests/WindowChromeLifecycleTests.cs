@@ -48,6 +48,7 @@ public sealed class WindowChromeLifecycleTests
             CoreSession.IsSessionRunningProvider = null;
             CoreEngine.StoppedHook = null; CoreEngine.Stop();
             shell.RequestExit(); shell.Tray?.Dispose(); Dispatcher.UIThread.RunJobs();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests(); // P02: no 900 ms wall-clock leak
             CoreSettings.ServiceProvider = old; CoreEntitlement.HasPremiumProvider = oldPremium;
         }
         return Task.CompletedTask;
@@ -56,7 +57,9 @@ public sealed class WindowChromeLifecycleTests
     private static readonly SettingsService Settings = new();
 
     [Fact]
-    public Task ScalingChangeQuiescesSharedOverlaySpawns() => WithShell(false, shell =>
+    public async Task ScalingChangeQuiescesSharedOverlaySpawns()
+    {
+        await WithShell(false, shell =>
     {
         // Drive the backend callback (Avalonia 12 keeps it protected on ITopLevelImpl).
         var callback = (Action<double>)typeof(global::Avalonia.Platform.ITopLevelImpl)
@@ -65,6 +68,9 @@ public sealed class WindowChromeLifecycleTests
         callback(2);
         Assert.True(ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.SpawnsSuppressed);
     });
+        // The quiet window must not outlive the test: flash/bubble/corner-GIF tests run next (P02).
+        Assert.False(ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.SpawnsSuppressed);
+    }
 
     [Fact]
     public Task WindowManagerMaximizeUpdatesChromeGlyph() => WithShell(false, shell =>
@@ -110,6 +116,21 @@ public sealed class WindowChromeLifecycleTests
         Assert.Equal(0, closing);
         shell.ShowFromTray();
         Assert.True(shell.IsVisible);
+    });
+
+    [Fact]
+    public Task TrayHideClosesQuizWindowsLikeWpf() => WithShell(false, shell =>
+    {
+        shell.CreateTray(); shell.TrayHostPresent = () => true;
+        var pop = new PopQuizWindow(PopQuizScheduler.QuestionPool[0], isTest: true);
+        var quiz = new QuizWindow();
+        pop.Show(); quiz.Show(); Dispatcher.UIThread.RunJobs();
+        Assert.True(PopQuizWindow.IsAnyOpen());
+        shell.Close(); Dispatcher.UIThread.RunJobs();
+        Assert.False(shell.IsVisible);
+        Assert.False(pop.IsVisible);
+        Assert.False(quiz.IsVisible);
+        Assert.False(QuizWindow.IsOpen);
     });
 
     [Fact]

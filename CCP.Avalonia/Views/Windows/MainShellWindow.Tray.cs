@@ -132,8 +132,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && TrayHostPresent())
             {
                 e.Cancel = true;
+                // WPF WindowChrome.cs:345: quizzes are unowned topmost windows that would stay on screen.
+                PopQuizWindow.ForceCloseAll();
+                QuizWindow.CloseAll();
                 Hide();
                 HideAvatarTube();
+                // ponytail: WPF fires App.EmiDesk "minimizedToTray" here (WindowChrome.cs:362); this head has no EmiDesk Fire moment bus yet.
                 if (!_shownFirstMinimizeNotification)
                 {
                     _shownFirstMinimizeNotification = true;
@@ -144,9 +148,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (e.Cancel) return;
             EnsureSessionRestoredForExit();
             // WPF WindowChrome.cs:180: a confirmed library delete still in its undo grace is honoured.
-            if (!e.Cancel) try { CommitPendingDeeperDeletesOnExit(); } catch { }
+            try { CommitPendingDeeperDeletesOnExit(); } catch { }
             // WPF WindowChrome.cs:176: the Companion drawers' state, when quitting from that tab.
-            if (!e.Cancel) try { PersistCompanionDrawerStatesOnExit(); } catch { }
+            try { PersistCompanionDrawerStatesOnExit(); } catch { }
             base.OnClosing(e);
         }
 
