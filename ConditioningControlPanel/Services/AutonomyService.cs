@@ -688,6 +688,42 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// A session is about to snapshot the user's settings: hand back the spiral and pink filter
+        /// values a running pulse wrote, and end those pulses (their 30 s restore then skips as
+        /// "no longer active"). Pulses never start during a session, but one started just before
+        /// it put its boosted opacity into that snapshot, and RestoreSettings made it the user's
+        /// for good (+15 pink, +20 spiral each time); its restore also landed mid-session over the
+        /// session's own overlays. Nothing else is touched: no wallpaper, bubbles or overlay stop.
+        /// </summary>
+        public void SettleSettingPulses()
+        {
+            var settings = App.Settings?.Current;
+            if (settings == null) return;
+
+            if (_spiralPulseActive && _originalSpiralEnabled.HasValue)
+            {
+                settings.SpiralEnabled = _originalSpiralEnabled.Value;
+                if (_originalSpiralOpacity.HasValue) settings.SpiralOpacity = _originalSpiralOpacity.Value;
+                App.Logger?.Information("AutonomyService: spiral pulse settled before a session");
+            }
+            _spiralPulseActive = false;
+            _originalSpiralEnabled = null;
+            _originalSpiralOpacity = null;
+            _spiralPulseStartedOverlay = false;
+
+            if (_pinkFilterPulseActive && _originalPinkFilterEnabled.HasValue)
+            {
+                settings.PinkFilterEnabled = _originalPinkFilterEnabled.Value;
+                if (_originalPinkFilterOpacity.HasValue) settings.PinkFilterOpacity = _originalPinkFilterOpacity.Value;
+                App.Logger?.Information("AutonomyService: pink filter pulse settled before a session");
+            }
+            _pinkFilterPulseActive = false;
+            _originalPinkFilterEnabled = null;
+            _originalPinkFilterOpacity = null;
+            _pinkPulseStartedOverlay = false;
+        }
+
+        /// <summary>
         /// Check if autonomy can start (requires Patreon + consent)
         /// </summary>
         private bool CanStart()

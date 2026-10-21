@@ -103,6 +103,23 @@ public class SessionSettingsJournalTests
         finally { Directory.Delete(dir, true); }
     }
 
+    [Fact]
+    public void A_takeover_pulse_is_settled_before_the_session_snapshot()
+    {
+        var engine = Read("Services", "Session", "SessionEngine.cs");
+        var settle = engine.IndexOf("App.Autonomy?.SettleSettingPulses();", StringComparison.Ordinal);
+        var snapshot = engine.IndexOf("            SaveCurrentSettings();", StringComparison.Ordinal);
+        Assert.True(settle > 0 && snapshot > settle && snapshot - settle < 300);
+
+        var settleBody = Member(Read("Services", "AutonomyService.cs"), "public void SettleSettingPulses()");
+        Assert.Contains("_pinkFilterPulseActive = false;", settleBody);
+        Assert.Contains("_spiralPulseActive = false;", settleBody);
+        // Narrow on purpose: no wallpaper, bubbles or overlay-service stop at a session start.
+        Assert.DoesNotContain("Wallpaper", settleBody);
+        Assert.DoesNotContain("Overlay?.Stop", settleBody);
+        Assert.DoesNotContain("_globalPulseGeneration", settleBody);
+    }
+
     // ---- conditioned minutes ----
 
     [Fact]

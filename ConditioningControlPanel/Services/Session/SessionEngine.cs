@@ -181,7 +181,10 @@ namespace ConditioningControlPanel.Services
             _currentPhaseIndex = 0;
             _cancellationToken = new CancellationTokenSource();
             
-            // Save current settings to restore later
+            // Save current settings to restore later. A Takeover pulse from the last 30 s hands its
+            // boosted spiral / pink values back first, or the snapshot keeps them (SettleSettingPulses).
+            try { App.Autonomy?.SettleSettingPulses(); }
+            catch (Exception ex) { App.Logger?.Debug(ex, "[Session] Takeover pulse settle failed"); }
             SaveCurrentSettings();
 
             // Capture achievement-relevant settings NOW (before anything can modify them mid-session)
