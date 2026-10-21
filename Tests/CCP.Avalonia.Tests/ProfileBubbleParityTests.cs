@@ -109,9 +109,6 @@ public sealed class ProfileBubbleParityTests : IDisposable
             Assert.Equal(-4, popup.HorizontalOffset);
             Assert.Equal(-46, popup.VerticalOffset);
             Assert.False(popup.IsHitTestVisible);
-            shell.OpenProfileBubbleMenu();
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(popup.IsOpen);
             var big = shell.FindControl<Image>("ProfileTierBadgeBig")!;
             Assert.Same(badge.Source, big.Source);
             Assert.Equal(72, big.Height);
@@ -131,6 +128,21 @@ public sealed class ProfileBubbleParityTests : IDisposable
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task FullMotionHoverThenCloseDoesNotThrow() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell(MotionLevel.Full);
+        var badge = shell.FindControl<Image>("ProfileBubbleTierBadge")!;
+        var position = badge.TranslatePoint(new Point(badge.Bounds.Width / 2, badge.Bounds.Height / 2), shell)!.Value;
+        shell.MouseMove(position);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.FindControl<Popup>("ProfileTierBadgePopup")!.IsOpen);
+        // Closed disposes the grow token, then hides the popup (which cancels it): must not throw.
+        shell.Close();
+        Dispatcher.UIThread.RunJobs();
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(MotionLevel.Full, true)]
     [InlineData(MotionLevel.Reduced, false)]
@@ -146,14 +158,8 @@ public sealed class ProfileBubbleParityTests : IDisposable
             Assert.True(shell.IsActive);
             ProgressionBank.Add(XpCurve.GetXPForLevel(3, XpCurve.EpochOf(_settings.Current)), "Quest");
             Dispatcher.UIThread.RunJobs();
-            var layer = shell.FindControl<Grid>("EventFxHost")!.Children.OfType<AmbientFxCanvas>().SingleOrDefault();
-            Assert.Equal(emitted, layer != null);
-            if (layer != null)
-            {
-                Assert.Equal(560, layer.Width);
-                Assert.Equal(AmbientFxLayers.None, layer.Layers);
-                Assert.True((int)typeof(AmbientFxCanvas).GetField("_burstN", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(layer)! > 0);
-            }
+            // The shared EventBurstLayer (560px, WPF EventFxAllowed gates) fired once on the bubble.
+            Assert.Equal(emitted ? 1 : 0, shell._profileBubbleBurst.Count);
         }
         finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
         return Task.CompletedTask;

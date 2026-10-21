@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _profileTierBeat.Stop();
                 _profileTierGrow?.Cancel();
                 _profileTierGrow?.Dispose();
+                _profileTierGrow = null;
                 HideProfileTierBig();
             };
         }
@@ -81,9 +82,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             popup.HorizontalOffset = -4;
             popup.VerticalOffset = -46;
             popup.IsOpen = true;
-            // The menu-open hook re-stacks it without a Win32 topmost call.
             _profileTierGrow?.Cancel();
             _profileTierGrow?.Dispose();
+            _profileTierGrow = null;
             if (!AmbientFxCanvas.Env.AllowTransitions)
             {
                 big.RenderTransform = new ScaleTransform(1, 1);

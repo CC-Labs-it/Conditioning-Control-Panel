@@ -21,7 +21,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -53,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DispatcherTimer? _profileBubbleOpenTimer;
         private DispatcherTimer? _profileBubbleCloseTimer;
         private bool _profileBubbleWatchersOn;
+        internal readonly EventBurstLayer _profileBubbleBurst = new();
 
         private Popup? ProfileBubblePopupHost => Named<Popup>("ProfileBubblePopup");
 
@@ -276,12 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 bool opened;
                 try { opened = OpenProfileLink(ProfileSharingUrl); }
                 catch { opened = false; }
-                if (opened) return;
-                // WPF BrowserLauncher.OpenUrlOrPrompt: a locked clipboard never suppresses the prompt.
-                try { if (Clipboard is { } clipboard) await clipboard.SetTextAsync(ProfileSharingUrl); } catch { }
-                await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
-                    Loc.GetF("msg_browser_no_default_for", "open your public profile")
-                    + Loc.GetF("msg_browser_link_copied", ProfileSharingUrl));
+                if (!opened) await Dialogs.MessageDialog.ShowLinkCopiedAsync(this, ProfileSharingUrl, "open your public profile");
             }
             catch (Exception ex) { Log.Warning(ex, "OpenPublicProfilePage failed"); }
         }
@@ -420,7 +415,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             PulseProfileBubble(1.35, 560);
             FlashProfileBubbleGlow();
-            FireProfileBubbleBurst();
+            // WPF OnBubbleLevelUp's second, smaller FireBurstAt(BtnProfileBubble, count: 45).
+            if (Named<Button>("BtnProfileBubble") is { } bubble) _profileBubbleBurst.Fire(bubble, 45);
             if (ProfileBubblePopupHost?.IsOpen == true) RefreshProfileMenu();
         }
 
