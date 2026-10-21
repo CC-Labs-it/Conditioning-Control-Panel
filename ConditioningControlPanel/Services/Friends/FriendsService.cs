@@ -340,7 +340,9 @@ public sealed partial class FriendsService : IFriendsService, IDisposable
             var p = on
                 ? f.Presence with { Activity = f.Presence.Activity == PresenceActivity.Offline ? PresenceActivity.Panel : f.Presence.Activity }
                 : f.Presence with { Activity = PresenceActivity.Offline, LastSeen = _now() };
-            return f with { Online = on, Presence = p };
+            // The marks were the old run's: a friend gone off the desktop and back on the phone kept
+            // the desktop mark until the next full list. No mark until the server says where again.
+            return f with { Online = on, Presence = p, Platforms = Array.Empty<string>() };
         }).ToList();
         Publish(snap with { Friends = friends });
     }

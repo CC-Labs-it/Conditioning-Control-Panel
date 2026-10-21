@@ -454,17 +454,22 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>The licence card (owner, 2026-10-21): the same gate as the note, as a pop-up on
-        /// the startup ladder so it waits out sessions, games and other startup surfaces. Closing it
-        /// counts as "Nice"; a card that never got its turn is offered again next launch.</summary>
+        /// the startup ladder so it waits out games and other startup surfaces. Closing it counts as
+        /// "Nice"; a card that never got its turn is offered again next launch.
+        /// <para>The ladder's modal pump does NOT wait for a session or a Lockdown (only the passive
+        /// route does), and the flag can flip mid-run, so the card asks the same hold the spent
+        /// notice does: while it holds nothing is queued, and the minute clock offers it again once
+        /// the hold ends. A card queued before a session started steps aside at show time.</para></summary>
         private void OfferOnlineLicenceCard(OnlineMeterState st)
         {
-            if (!st.ShowOfficialNote || _onlineLicenceCardQueued) return;
+            if (!st.ShowOfficialNote || _onlineLicenceCardQueued || FriendsLanding.Holding()) return;
             _onlineLicenceCardQueued = true;
             EnqueueStartupModal("online-licence", 40, owner =>
             {
                 // The flag or the source may have changed while it waited for its turn.
                 var now = OnlineMeterNow();
                 if (!now.ShowOfficialNote) return;
+                if (FriendsLanding.Holding()) { _onlineLicenceCardQueued = false; return; }
                 new OnlineLicenceCard(now.Plan) { Owner = owner ?? this }.ShowDialog();
                 OnlineOfficialNice();
             });
