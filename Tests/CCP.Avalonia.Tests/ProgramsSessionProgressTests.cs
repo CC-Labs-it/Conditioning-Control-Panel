@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -24,9 +23,7 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class ProgramsSessionProgressTests
 {
-    private static void Elapsed(SessionRunner runner, TimeSpan elapsed) => typeof(SessionRunner)
-        .GetField("_pausedElapsed", BindingFlags.Instance | BindingFlags.NonPublic)!
-        .SetValue(runner, elapsed);
+    private static void Elapsed(SessionRunner runner, TimeSpan elapsed) => runner._pausedElapsed = elapsed;
 
     [Fact]
     public Task LiveClockBarAndSheenFollowTheSessionWithoutRebuildingTasks() => Run(async (shell, tab, svc, runner) =>

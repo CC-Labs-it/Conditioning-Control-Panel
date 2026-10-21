@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Services
         private PhrasePoolCustody? _custody;
         private DateTime _startTime;
         private TimeSpan _lastElapsed;
-        private TimeSpan _pausedElapsed;
+        internal TimeSpan _pausedElapsed; // internal: tests step the paused clock (ProgramsSessionProgressTests)
         private readonly Random _random = new();
 
         public SessionLogService SessionLog { get; }
