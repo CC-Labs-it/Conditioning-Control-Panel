@@ -69,8 +69,7 @@ public sealed class CompanionHeroTutorialTests
             Assert.True(CoreTutorial.IsActive);
             Assert.Equal("Companion", CoreTutorial.CurrentTourName);
             Assert.Equal("comp_intro", CoreTutorial.CurrentStep!.Id);
-            var overlay = (TutorialOverlay?)typeof(TutorialHead).GetField("_shellOverlay",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+            var overlay = TutorialHead.ShellOverlay;
             Assert.NotNull(overlay);
             Assert.True(overlay!.IsVisible);
             Assert.Contains(overlay.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TxtTitle" && t.Text == "Meet Your Companion");
