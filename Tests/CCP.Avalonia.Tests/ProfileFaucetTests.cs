@@ -62,6 +62,58 @@ public sealed class ProfileFaucetTests
     });
 
     [Fact]
+    public Task PointerPressChargesAndReleaseOrExitCancelsWithoutPouring() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var previous = CoreSettings.ServiceProvider;
+        var previousAudio = CoreAudio.PlayOneShotProvider;
+        var shell = Create();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("discord");
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Call(shell, "ApplyFaucetReading", new VatRead { Kind = VatReadKind.Seed, Fill = .4, TodayXp = 400, Cap = 1000, Lip = 1.2 });
+            var cues = new List<string>();
+            CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
+            CoreSettings.Current.MasterVolume = 50;
+            var page = shell.ProfilePage!;
+            page.FindControl<Grid>("ProfileCardWrapper")!.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            using (shell.CaptureRenderedFrame()) { } // hit testing reads the last rendered frame
+            var tap = page.FindControl<Grid>("ProfileVatFaucet")!;
+            var ring = page.FindControl<Grid>("ProfileVatChargeRing")!;
+            var p = tap.TranslatePoint(new Point(tap.Bounds.Width / 2, tap.Bounds.Height / 2), shell)!.Value;
+
+            shell.MouseMove(p);
+            shell.MouseDown(p, MouseButton.Left);
+            Assert.True(ring.IsVisible);
+            shell.MouseUp(p, MouseButton.Left);
+            Assert.False(ring.IsVisible);
+            Assert.Equal("faucet_charge_drop.wav", cues.Last());
+
+            cues.Clear();
+            shell.MouseDown(p, MouseButton.Left);
+            Assert.True(ring.IsVisible);
+            tap.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, tap, new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), PointerType.Mouse, true), shell, default, 0, new PointerPointProperties(), KeyModifiers.None));
+            Assert.False(ring.IsVisible);
+            Assert.Equal("faucet_charge_drop.wav", cues.Last());
+            shell.MouseUp(p, MouseButton.Left);
+
+            cues.Clear();
+            shell.MouseDown(p, MouseButton.Left);
+            Assert.True(ring.IsVisible);
+            tap.RaiseEvent(new PointerCaptureLostEventArgs(tap, new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), PointerType.Mouse, true)));
+            Assert.False(ring.IsVisible);
+            Assert.DoesNotContain("faucet_charge_drop.wav", cues); // capture loss is silent
+            Assert.Equal(0, CoreSettings.Current.VatPouredTodayXp);
+            Call(shell, "DisarmVat");
+        }
+        finally { shell.Close(); CoreSettings.ServiceProvider = previous; CoreAudio.PlayOneShotProvider = previousAudio; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task KeyboardCancelKeepsTheHoldAndACompletedChargePoursOnlyOnce() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var previous = CoreSettings.ServiceProvider;

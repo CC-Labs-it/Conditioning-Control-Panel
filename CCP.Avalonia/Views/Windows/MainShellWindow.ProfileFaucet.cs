@@ -7,6 +7,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -21,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly VatFaucetHold _faucetHold = new(new AppSettingsVatPourLedger());
         private readonly VatFaucetChargePolicy _faucetChargePolicy = new();
         private static readonly System.Collections.Generic.HashSet<MainShellWindow> FaucetWindows = new();
-        private DispatcherTimer? _faucetChargeTimer;
+        private BeatLoop? _faucetChargeTimer;
         private DateTime _faucetChargeStart;
         private double _faucetChargeBudgetMs;
         private int _faucetChargeRungsPlayed;
@@ -178,6 +179,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void BeginFaucetCharge()
         {
             if (_faucetCharging || !_vatArmed || VatGlass?.IsPouring != false || _faucetHold.HeldXp <= 0) return;
+            // WPF wraps begin/tick/complete so a failing sound or haptic cancels the hold instead
+            // of reaching the dispatcher (MainWindow.ProfileFaucet.cs:624-628, 660-664).
+            try { StartFaucetCharge(); }
+            catch (Exception ex) { Serilog.Log.Debug("BeginFaucetCharge: {E}", ex.Message); CancelFaucetCharge(silent: true); }
+        }
+
+        private void StartFaucetCharge()
+        {
             _faucetCharging = true;
             _faucetChargeRungsPlayed = 1;
             _faucetChargeBudgetMs = VatFaucetChargePolicy.BudgetMilliseconds(_faucetHold.HeldXp, _faucetChargePolicy.IsCompact(DateTime.UtcNow));
@@ -186,17 +195,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateChargeRing(AmbientFxCanvas.Env.Level == MotionLevel.Full ? 0 : 1, force: true);
             PlayFaucetSfx("faucet_charge_1.wav", .15f);
             UpdateFaucetPresentation();
-            _faucetChargeTimer ??= new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
-            if (!_faucetTimerWired)
-            {
-                _faucetTimerWired = true;
-                _faucetChargeTimer.Tick += (_, _) => AdvanceFaucetCharge((DateTime.UtcNow - _faucetChargeStart).TotalMilliseconds / _faucetChargeBudgetMs);
-            }
-            _faucetChargeTimer.Start();
+            // Rides the window's shared 30 fps beat (AmbientBeatLoopsTests), not its own frame timer.
+            if (_faucetChargeTimer == null && Vat<Grid>("ProfileVatChargeRing") is { } owner)
+                _faucetChargeTimer = new BeatLoop(owner, t =>
+                {
+                    if (t > 0) AdvanceFaucetCharge((DateTime.UtcNow - _faucetChargeStart).TotalMilliseconds / _faucetChargeBudgetMs);
+                });
+            _faucetChargeTimer?.Start();
         }
-        private bool _faucetTimerWired;
 
         internal void AdvanceFaucetCharge(double progress)
+        {
+            try { StepFaucetCharge(progress); }
+            catch (Exception ex) { Serilog.Log.Debug("Faucet charge: {E}", ex.Message); CancelFaucetCharge(silent: true); }
+        }
+
+        private void StepFaucetCharge(double progress)
         {
             if (!_faucetCharging || !double.IsFinite(progress)) return;
             progress = Math.Clamp(progress, 0, 1);
@@ -207,7 +221,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (progress < 1) return;
             _faucetCharging = false;
             HideChargeRing();
-            if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) return;
+            if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) { UpdateFaucetPresentation(); return; }
             bool wasOver = glass.IsPastBrim(glass.Fill);
             var step = _faucetHold.PourAll();
             PlayFaucetSfx("faucet_pour.wav", .35f);
