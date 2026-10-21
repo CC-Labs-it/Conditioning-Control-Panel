@@ -117,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (nav/door_*.png) are the mod compatibility surface. A null resolve leaves the authored
         /// Source alone. Social's XAML placeholder (the Lobby picture under a shade) gives way to the
         /// shipped or modded nav/door_social.png, and the shade goes with it. ponytail: WPF's
-        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are row 90's (sync6-nav-polish).</summary>
+        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are lane wire-shell-nav-rail-b.</summary>
         internal void ApplyDoorArt()
         {
             try
