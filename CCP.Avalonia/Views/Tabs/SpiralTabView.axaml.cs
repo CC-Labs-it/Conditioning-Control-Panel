@@ -38,10 +38,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para><b>What is stubbed, and why each one is a stub:</b></para>
     /// <list type="bullet">
-    ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse, but
-    ///     <c>App.DescentMigration</c> (the withhold) and <c>App.Descent</c> (the block) are WPF-head
-    ///     services, so <see cref="Refresh"/> passes false for both and Spiral is unreachable — see the
-    ///     placeholder there.</item>
+    ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse. The withhold
+    ///     reads the persisted migration gates through the shared <c>SpiralRoom.SpiralWithheldFor</c>,
+    ///     but its live inputs (an offer in hand, an open ceremony) and <c>App.Descent</c> (the block)
+    ///     are WPF-head services, so <see cref="Refresh"/> passes false for those and Spiral is
+    ///     unreachable — see the placeholder there.</item>
     ///   <item><c>SpiralFirstLightVisual</c> is a WPF <c>DrawingVisual</c>, so <c>FogHost</c> stays
     ///     empty and FIRST LIGHT hands straight back rather than holding a black room for its three
     ///     and a half seconds. The reveal's frame loop, its block wait and its timeout go with it;
