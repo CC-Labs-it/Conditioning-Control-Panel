@@ -136,6 +136,11 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("display_name")]
             public string? DisplayName { get; set; }
 
+            // Onboarding contract (2026-10-20): true while the account has no name. Absent on
+            // older servers; NeedsDisplayNameRule then reads the empty name instead.
+            [JsonProperty("needs_display_name")]
+            public bool? NeedsDisplayName { get; set; }
+
             [JsonProperty("discord_id")]
             public string? DiscordId { get; set; }
 
