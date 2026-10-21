@@ -29,7 +29,7 @@ public sealed class StatusPulseLifecycleTests
     public Task StatusGlowBreathesBehindAnOpaqueDotAndParksOnEveryGate() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var oldSettings = CoreSettings.ServiceProvider;
         var oldTime = BeatLoop.Time;
@@ -91,6 +91,51 @@ public sealed class StatusPulseLifecycleTests
         finally
         {
             shell.Close(); BeatLoop.Time = oldTime; CoreSettings.ServiceProvider = oldSettings;
+        }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF seeds an already-connected device's pulse when Haptics arrives. Here the tab's
+    /// ctor refresh has no window yet, so the attach repaint (RefreshHapticToys) must light it.</summary>
+    [Fact]
+    public Task ConnectedHapticsGlowsWhenStudioOpens() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldHaptics = CoreHaptics.Service;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.MotionLevel = MotionLevel.Full;
+        settings.Current.PerformanceMode = false;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var hs = new HapticSettings { Enabled = true };
+        hs.EnsureV2Migrated();
+        hs.V2.Provider("lovense").Enabled = false;
+        hs.V2.Provider("buttplug").Enabled = false;
+        hs.V2.Provider("mock").Enabled = true;
+        var haptics = new HapticService(hs);
+        MainShellWindow? shell = null;
+        try
+        {
+            Assert.True(haptics.ConnectAsync().Result);
+            CoreHaptics.Service = haptics;
+            shell = new MainShellWindow();
+            shell.Show(); shell.Activate(); shell.ShowTab("studio");
+            Dispatcher.UIThread.RunJobs();
+            var glow = shell.StudioRack!.HapticsPanel.FindControl<Border>("HapticStatusGlow")!;
+            Assert.True(glow.IsVisible);
+        }
+        finally
+        {
+            shell?.Close();
+            haptics.PanicStop();
+            haptics.Dispose();
+            CoreHaptics.Service = oldHaptics;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+            CoreSettings.ServiceProvider = oldSettings;
         }
         return Task.CompletedTask;
     });

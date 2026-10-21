@@ -211,11 +211,11 @@
                   <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Grid Grid.Column="0" Width="10" Height="10" Margin="0,0,9,0" VerticalAlignment="Center">
-                    <Border x:Name="BlinkTrainerStatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
-                    <Ellipse x:Name="BlinkTrainerStatusDot"
-                         Width="10" Height="10"
-                         Fill="{DynamicResource PinkBrush}"
-                         VerticalAlignment="Center"/>
+                  <Border x:Name="BlinkTrainerStatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
+                  <Ellipse x:Name="BlinkTrainerStatusDot"
+                           Width="10" Height="10"
+                           Fill="{DynamicResource PinkBrush}"
+                           VerticalAlignment="Center"/>
                 </Grid>
                 <TextBlock Grid.Column="1" x:Name="BlinkTrainerStatusText"
                            Text="{loc:Str blink_trainer_status_ready}"

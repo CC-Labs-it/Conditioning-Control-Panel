@@ -131,10 +131,10 @@
                                 <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph Kind="HatGraduation" VerticalAlignment="Center"/><TextBlock Text="Tutorial"/></StackPanel>
                             </Button>
                             <Grid Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
-                    <Border x:Name="AwarenessStatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
-                    <Ellipse x:Name="AwarenessStatusDot" Width="8" Height="8"
-                                     Fill="#606060" VerticalAlignment="Center"/>
-                </Grid>
+                                <Border x:Name="AwarenessStatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
+                                <Ellipse x:Name="AwarenessStatusDot" Width="8" Height="8"
+                                         Fill="#606060" VerticalAlignment="Center"/>
+                            </Grid>
                             <TextBlock x:Name="TxtAwarenessStatus" Text="Off"
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>

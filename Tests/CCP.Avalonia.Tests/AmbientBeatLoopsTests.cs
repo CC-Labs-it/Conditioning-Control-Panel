@@ -78,7 +78,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
         "Views/Windows/LockCardWindow.axaml.cs", "Views/Windows/MainShellWindow.Animations.cs",
         "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MainShellWindow.NavRail.cs",
-        "Views/Windows/MainShellWindow.TabFxTakeoverLabStatus.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Windows/MantraWindow.axaml.cs",
         "Views/Windows/SettingsPaletteWindow.axaml.cs", "Views/Windows/TeaseRevealPopup.axaml.cs",
     };
 
@@ -196,7 +196,7 @@ public sealed class AmbientBeatLoopsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }

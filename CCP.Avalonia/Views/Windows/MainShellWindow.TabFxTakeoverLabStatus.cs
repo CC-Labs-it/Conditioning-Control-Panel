@@ -1,6 +1,6 @@
 // WPF MainWindow.TabFxTakeoverLabStatus.cs: the four status intents and global ambient gates.
-// Avalonia uses sibling Border.BoxShadow layers on the shared beat; dot opacity and fill stay
-// owned by the feature. Lab remains retired, and the Takeover orb owns its own Skia clock.
+// Avalonia uses sibling Border.BoxShadow layers on the shared beat; the feature owns the dot's
+// fill, and the dot's opacity is pinned to 1 (only the sibling layer breathes). Lab remains retired, and the Takeover orb owns its own Skia clock.
 // ponytail: Awareness has no live head engine yet; do not pulse merely because a preference is on.
 
 using System;
@@ -123,10 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (e.Property != Visual.IsVisibleProperty) return;
             try
             {
-                // WPF seeds an auto-connected device on arrival. The Studio ancestor can hide
-                // without changing PanelHaptics.IsVisible, so both visibility funnels participate.
-                if (StudioRack?.HapticsPanel.IsEffectivelyVisible == true)
-                    SetHapticsStatusPulse(CoreHaptics.Service?.IsConnected == true);
+                // WPF's arrival seed for an auto-connected device is not needed here: HapticsTabView's
+                // attach (RefreshHapticToys -> RefreshHapticConnectionUi) reports it to the shell.
                 ApplyPr4aFxLoops();
             }
             catch (Exception ex) { Log.Debug("OnPr4aTabPropertyChanged: {E}", ex.Message); }
