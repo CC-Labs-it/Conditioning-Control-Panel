@@ -137,8 +137,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // and an unfilled panel would prove nothing about the switches or the segments.
             LoadValues();
 
-            // The chrome on her body stays lit while the pointer is in here, so the gear that
-            // opened this is still on screen to close it again after the round trip.
             Closed += (_, _) =>
             {
                 _closingForGood = true;
@@ -149,6 +147,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     _owner.Resized -= OnOwnerResized;
                 }
             };
+            // The chrome on her body stays lit while the pointer is in here, so the gear that
+            // opened this is still on screen to close it again after the round trip.
             PointerEntered += (_, _) => Hold(true);
             PointerExited += (_, _) => Hold(false);
 
