@@ -435,8 +435,9 @@ public sealed class WebcamCalibrationTests
         Assert.True(Gaze(win, () => verify.IsVisible));
         win.FindControl<Button>("BtnVerifyBubbleTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.NotNull(Attractor(tracker));
-        tracker.Stop();   // what panic does to the camera
-        Assert.True(Gaze(win, () => !win.IsVisible, 3000));
+        PanicSurfaces.StopAll("test");   // the real panic pass; its last entry stops the camera
+        // The camera entry is fire-and-forget (StopAsync on the pool), so wait for its real completion, bounded.
+        Assert.True(SpinWait.SpinUntil(() => Gaze(win, () => !win.IsVisible, 10), 5000));
         Assert.Null(Attractor(tracker));
         Assert.Null(GazeHandlers(tracker));
     });
