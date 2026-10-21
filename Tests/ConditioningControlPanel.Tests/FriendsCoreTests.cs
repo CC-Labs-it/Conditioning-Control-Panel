@@ -77,7 +77,14 @@ public partial class FriendsServiceTests
         public ClaimResult ClaimAnswer = ClaimResult.Friends;
 
         public Task<FriendLink?> LinkAsync(CancellationToken ct = default)
-        { LinkCalls++; return Task.FromResult(Links.Count > 0 ? Links.Dequeue() : null); }
+        {
+            LinkCalls++;
+            if (LinkGate is { } gate) { LinkGate = null; return gate.Task; }
+            return Task.FromResult(Links.Count > 0 ? Links.Dequeue() : null);
+        }
+
+        /// <summary>When set, the next `link` call waits on it (a slow reply).</summary>
+        public TaskCompletionSource<FriendLink?>? LinkGate;
 
         public Task<bool> LinkRevokeAsync(CancellationToken ct = default) { RevokeCalls++; return Task.FromResult(RevokeAnswer); }
 

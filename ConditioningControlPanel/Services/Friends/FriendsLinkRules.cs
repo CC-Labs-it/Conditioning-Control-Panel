@@ -65,8 +65,10 @@ public static class FriendsLinkRules
 
     /// <summary>What the add box shows for what was typed or pasted, and whether it is a link
     /// token rather than a friend code. A whole link becomes its token; up to five characters (or
-    /// a pasted <c>CCP-</c> code) stay a code; six to twelve from the alphabet are a token on its way.</summary>
-    public static (string Text, bool IsToken) BoxText(string? typed)
+    /// a pasted <c>CCP-</c> code) stay a code; six to twelve from the alphabet are a token on its way.
+    /// <paramref name="oneKeystroke"/>: the text grew by one character, so a dashless <c>CCP</c> code
+    /// is not read into it (a token that starts with C, C, P must stay typeable by hand).</summary>
+    public static (string Text, bool IsToken) BoxText(string? typed, bool oneKeystroke = false)
     {
         if (string.IsNullOrEmpty(typed)) return ("", false);
         if (ParseToken(typed) is { } t) return (t, true);
@@ -74,8 +76,12 @@ public static class FriendsLinkRules
         if (s.StartsWith("CCP-", StringComparison.Ordinal)) return (Controls.Friends.FriendsDrawerRules.NormaliseCode(s), false);
         if (s.Contains('/') || s.Contains(':'))
         {
-            int at = s.LastIndexOf("/F/", StringComparison.Ordinal);
-            s = at >= 0 ? s.Substring(at + 3) : "";
+            // Only our own host gives up a token on its way; a link from anywhere else is not a claim.
+            foreach (var head in new[] { "HTTPS://", "HTTP://" })
+                if (s.StartsWith(head, StringComparison.Ordinal)) { s = s.Substring(head.Length); break; }
+            if (s.StartsWith("WWW.", StringComparison.Ordinal)) s = s.Substring(4);
+            const string host = "APP.CCLABS.APP/F/";
+            s = s.StartsWith(host, StringComparison.Ordinal) ? s.Substring(host.Length) : "";
         }
         var sb = new StringBuilder(TokenLength);
         foreach (var c in s)
@@ -85,13 +91,31 @@ public static class FriendsLinkRules
             if (sb.Length == TokenLength) break;
         }
         var f = sb.ToString();
-        if (f.Length == 8 && f.StartsWith("CCP", StringComparison.Ordinal)) return (f.Substring(3), false);
+        if (!oneKeystroke && f.Length == 8 && f.StartsWith("CCP", StringComparison.Ordinal)) return (f.Substring(3), false);
         return f.Length <= Controls.Friends.FriendsDrawerRules.CodeLength ? (f, false) : (f, true);
     }
 
     /// <summary>A link worth handing out: uses left and not within <see cref="ExpiryMargin"/> of its end.</summary>
     public static bool IsUsable(FriendLink? link, DateTimeOffset now)
         => link != null && link.UsesLeft > 0 && now < link.ExpiresAt - ExpiryMargin;
+
+    /// <summary>A link from the server this close to its end (or spent) is swapped for a fresh one
+    /// before Copy link hands it out: nobody gets a link that dies before the friend opens it.</summary>
+    public static readonly TimeSpan HandOutMargin = TimeSpan.FromHours(1);
+
+    public static bool WorthHandingOut(FriendLink? link, DateTimeOffset now)
+        => link != null && link.UsesLeft > 0 && now < link.ExpiresAt - HandOutMargin;
+
+    /// <summary>The note after Copy link, worded from the link itself: whole days left (an hour of
+    /// slack, so a link minted a moment ago reads 7), hours under a day, and the uses left.</summary>
+    public static (string Key, int Left, int Uses) CopiedNote(FriendLink link, DateTimeOffset now)
+    {
+        var left = link.ExpiresAt - now;
+        if (left < TimeSpan.Zero) left = TimeSpan.Zero;
+        int days = (int)Math.Floor((left + TimeSpan.FromHours(1)).TotalDays);
+        if (days >= 1) return ("friends_link_copied_left", days, link.UsesLeft);
+        return ("friends_link_copied_left_hours", Math.Max(1, (int)Math.Floor(left.TotalHours)), link.UsesLeft);
+    }
 
     /// <summary>What Copy link puts on the clipboard: the link when there is one, else the code
     /// (and the drawer says so), else nothing.</summary>
@@ -137,7 +161,7 @@ public static class FriendsLinkRules
         ClaimResult.Friends => "friends_add_accepted",
         ClaimResult.Already => "friends_add_already",
         ClaimResult.Self => "friends_link_self",
-        ClaimResult.Full => "friends_add_full",
+        ClaimResult.Full => "friends_link_full",
         ClaimResult.Unusable => "friends_link_unusable",
         _ => "friends_add_try_later",
     };

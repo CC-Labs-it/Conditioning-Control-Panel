@@ -44,6 +44,13 @@ public class FriendsLinkRulesTests
         => Assert.Equal((text, isToken), FriendsLinkRules.BoxText(typed));
 
     [Fact]
+    public void A_token_starting_with_CCP_stays_typeable_by_hand()
+    {
+        Assert.Equal(("CCP7K2Q9", true), FriendsLinkRules.BoxText("CCP7K2Q9", oneKeystroke: true));
+        Assert.Equal(("7K2Q9", false), FriendsLinkRules.BoxText("CCP7K2Q9", oneKeystroke: false));
+    }
+
+    [Fact]
     public void The_url_is_always_built_from_the_token()
         => Assert.Equal("https://app.cclabs.app/f/7K2Q9ABCDEFG", new FriendLink("7K2Q9ABCDEFG", T0, 25).Url);
 
@@ -97,32 +104,36 @@ public partial class FriendsServiceTests
     private static readonly DateTimeOffset L0 = new(2026, 10, 20, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task The_link_is_fetched_once_per_account_until_it_nears_its_end()
+    public async Task The_link_is_asked_for_every_press_and_the_cache_answers_only_when_the_call_fails()
     {
         var api = new FakeApi();
         string? account = "u_me";
         var now = L0;
         bool s = false;
         var svc = new FriendsService(api, () => account, () => true, () => now, () => s, v => s = v);
+
+        // Every press asks: a link renewed elsewhere (New link on the phone) reaches the desktop at once.
         api.Links.Enqueue(new FriendLink("7K2Q9ABCDEFG", L0.AddDays(7), 25));
-        api.Links.Enqueue(new FriendLink("ABCDEFGHJKLM", L0.AddDays(8), 25));
-        api.Links.Enqueue(new FriendLink("MNPQRSTUVWXY", L0.AddDays(14), 25));
-
+        api.Links.Enqueue(new FriendLink("ABCDEFGHJKLM", L0.AddDays(7), 25));
         Assert.Equal("7K2Q9ABCDEFG", (await svc.GetLinkAsync())!.Token);
-        Assert.Equal("7K2Q9ABCDEFG", (await svc.GetLinkAsync())!.Token);
-        Assert.Equal(1, api.LinkCalls);
-
-        account = "u_other";
         Assert.Equal("ABCDEFGHJKLM", (await svc.GetLinkAsync())!.Token);
         Assert.Equal(2, api.LinkCalls);
 
-        now = L0.AddDays(8);
-        Assert.Equal("MNPQRSTUVWXY", (await svc.GetLinkAsync())!.Token);
+        // The call fails (empty queue answers null): the last live link of this account stands in.
+        Assert.Equal("ABCDEFGHJKLM", (await svc.GetLinkAsync())!.Token);
         Assert.Equal(3, api.LinkCalls);
+
+        // Never another account's cached link, never one near its end.
+        account = "u_other";
+        Assert.Null(await svc.GetLinkAsync());
+        account = "u_me";
+        now = L0.AddDays(7);
+        Assert.Null(await svc.GetLinkAsync());
+        Assert.Equal(5, api.LinkCalls);
 
         account = null;
         Assert.Null(await svc.GetLinkAsync());
-        Assert.Equal(3, api.LinkCalls);
+        Assert.Equal(5, api.LinkCalls);
     }
 
     [Fact]

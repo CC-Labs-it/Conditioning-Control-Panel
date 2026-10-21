@@ -9,9 +9,20 @@ opt-in and defaults off. This file is the authority for both halves: `proxy/frie
 
 Every op is `POST /v2/friends/<op>` with JSON `{ unified_id, ... }` and the account token in
 `X-Auth-Token` (the same pair `BackRoomApi.AppIdentity()` stamps; server side copy
-`backroom-routes.js gate()`: `validateAuthToken`, `rateLimitIncr`, no web door in v1).
+`backroom-routes.js gate()`: `validateAuthToken`, `rateLimitIncr`).
 Replies are `{ ok: true, ... }` or `{ ok: false, reason }`. HTTP 200 for every worded reply,
 401 for a bad token, 429 `too_fast` past 60 calls a minute per account, 503 with no Redis.
+
+Web door (Friends Everywhere S2, 2026-10-20, additive; `proxy/friends-web-door.js`). With NO
+`X-Auth-Token`, an `Authorization: Bearer <Supabase JWT>` opens every friends op,
+`GET /v2/friends/avatar/:id` and every `/v2/leash/<op>`. The account is the ONE unified id the JWT
+resolves to (the helper `GET /v2/user/me` uses); it replaces any `unified_id` the body carried.
+401 `{ ok:false, reason:"no_record" }` when the JWT maps to no record, 409 `{ error:"merge_required",
+unified_ids }` when it maps to several, and the helper's own 401 `invalid_token` / `token_expired` /
+`missing_authorization` and 503 `auth_provider_unreachable` pass through (those bodies say `error`,
+not `reason`). With an `X-Auth-Token` present the desktop door decides and any Bearer is ignored.
+Rate limits stay per uid: web and desktop calls share one meter. This client never uses the web
+door; it always sends `unified_id` + `X-Auth-Token`.
 
 Ids on the wire are unified ids (`u_...`). The client never shows one.
 
@@ -20,7 +31,7 @@ Ids on the wire are unified ids (`u_...`). The client never shows one.
 | op | body | reply |
 |---|---|---|
 | `state` | | `{ ok, code, me:{activity,lock_day,shared}, friends:[F], incoming:[R], outgoing:[R], blocked:[B] }` |
-| `poll` | `{ activity?, lock_day?, shared, receipts?:[RQ], leash_report? }` | `{ ok, online:[id], inbox:[I], receipts:[RC], leash? }` |
+| `poll` | `{ platform, activity?, lock_day?, shared, accepts?, receipts?:[RQ], leash_report? }` | `{ ok, online:[id], inbox:[I], receipts:[RC], leash? }` (`leash` only on a desktop poll, see Presence) |
 | `request` | `{ code }` | `{ ok, status }` status: `sent` `accepted` `already` `not_found` `blocked` `self` `full` |
 | `accept` | `{ id }` | `{ ok }` |
 | `decline` | `{ id }` | `{ ok }` |
@@ -35,7 +46,7 @@ Ids on the wire are unified ids (`u_...`). The client never shows one.
 | `link_revoke` | `{}` | `{ ok }`: deletes the live link; the next `link` mints a new one |
 | `claim` | `{ token }` | `{ ok, status }` status: `friends` `already` `self` `full` `unusable` |
 
-`F` = `{ id, name, avatar, tier, online, activity, lock_day, last_seen, squelched }`
+`F` = `{ id, name, avatar, tier, online, platforms, activity, lock_day, last_seen, squelched }`
 `R` = `{ id, name, avatar, via, at }`
 `I` = `{ id, kind, from, from_name, from_avatar, poke, destination, code, watch, at, expires_at }`
 `B` = `{ id, name }`: an account this one blocked, newest 200 (FRIENDS-RECEIPTS v1). A reply
@@ -47,8 +58,14 @@ without the key is an older server; the client then falls back to what this PC r
   `presence.js`; a friend link does not widen it). The route reuses the presence avatar resolver.
 - `name` is `user.display_name`, never anything the client sent.
 - `tier` 0 / 1 / 2 from the record (`patreon_tier` through the usual `effectiveTier` helper).
-- `online` = the presence key exists (see Presence). `activity` is one of the grammar below or
-  `"online"` when the friend shares nothing beyond being here. `lock_day` int or null.
+- `online` = any of the friend's presence keys exists (see Presence). `activity` is one of the
+  grammar below or `"online"` when the friend shares nothing beyond being here. `lock_day` int or
+  null. Merged per field across devices: `activity` = the newest specific one (anything but
+  `panel` / `online`), else the newest `panel`, else `"online"`; `lock_day` = the first non-null in
+  desktop, phone, web order; `last_seen` = the newest `at`. A chatty web tab or phone never hides
+  what the desktop is doing.
+- `platforms` = the devices the friend is here on, a subset of `["desktop","phone","web"]` in that
+  order, `[]` when offline. A new server always sends it; this client reads it absent as `[]`.
 - Timestamps are ISO strings from the server clock.
 
 ## Links (Friends Everywhere S1, 2026-10-20)
@@ -58,31 +75,58 @@ old client never calls these ops; this client reads a missing or HTML reply as "
 link then copies the code and says so.
 
 - Token: 12 chars from the code alphabet, case-insensitive on input, stored upper.
-  `url` = `https://app.cclabs.app/f/<token>`; the client builds the url from the token and accepts
-  a pasted link (any case, scheme optional, trailing `/`, `?` or `#` dropped) or a bare token in
-  the Add friend box, which then `claim`s instead of `request`ing.
-- Life: 7 days (`expires_at`, ISO) and 25 uses (`uses_left`). At the 25th claim or at expiry it is
-  unusable. The client caches the live link per account and asks again within 5 minutes of the end.
+  `url` = `https://app.cclabs.app/f/<token>`; one live link per account. The client builds the url
+  from the token (it ignores `url`) and accepts a pasted `app.cclabs.app/f/` link (any case,
+  scheme optional, trailing `/`, `?` or `#` dropped; any other host is not claimed) or a bare token
+  in the Add friend box, which then `claim`s instead of `request`ing. `claim` takes the bare token.
+- Life: 7 days (`expires_at`, ISO) and 25 uses (`uses_left`, int). The 25th claim retires the link
+  (the owner's pointer goes only while it still names that token); at expiry it is unusable too.
+  Inside a link's last 24 h, `link` mints a fresh one (7 days, 25 uses) and the old token stops at
+  once, like a revoke; `claim` never re-mints. The client asks `link` on every Copy link press (a
+  link renewed on another device or spent at 25 claims is replaced at once); a reply with no uses
+  left or under 1 hour to `expires_at` is retired and minted again once (`link_revoke` then `link`,
+  `FriendsLinkRules.WorthHandingOut`), so a cached copy on the phone or web can go dead. The
+  per-account cache answers only when that call fails, and never within 5 minutes of the end. The
+  copied note reads the days or hours and the uses left from the link itself.
 - `claim` = the same checks as `accept` (not self, no block either way, both under 100 friends, not
   already friends). On `friends` the pair is mutual at once, any pending request between them goes,
-  and the link OWNER gets the existing receipt `{ id: null, kind: "request", to: <claimer>,
-  to_name, state: "accepted", at }` (the accepted notice fires unchanged). Blocked, expired, revoked
-  and unknown tokens all answer `unusable`, never "blocked". Rate: the 60/min door plus 10 claims a
-  minute per account.
+  the use count goes up by one, and the link OWNER gets the existing receipt `{ id: null, kind:
+  "request", to: <claimer>, to_name, state: "accepted", at }` (the accepted notice fires
+  unchanged; its feed key carries `at`, so a second claim by the same account after a remove
+  notifies again). Blocked, expired, revoked, used-up and unknown tokens, and a link whose owner
+  was deleted or merged, all answer `unusable`, never "blocked". This client also reads a claim
+  reason `bad_input` / `not_found` / `refused` / `blocked` as `unusable`; `full` reads "One of you
+  already has 100 friends."
+- Rates: `link`, `link_revoke` and `claim` count toward the 60/min door; `claim` also has 10 a
+  minute per account (HTTP 429 `{ ok:false, reason:"too_fast" }` past it; 503 `{ error:
+  "service_unavailable", retry_after }` when the limiter is down). `{ ok:false, reason:"busy" }`
+  when two calls race the same lock and the server's one retry 50 ms later also loses: this client
+  reads it as try again, never as a status.
 - Server keys: `friend_link:<token>` -> `{ uid, uses, max, exp }` EX 7 d; `friend_link_of:<uid>` ->
-  token, same EX. Nothing on the `user:` record.
-- Public lookup (web only, never called by this client): `GET /v2/public/friend-link/:token` ->
-  `{ ok, state: "live" | "unusable", name, avatar }`, gated like `/v2/public/taste/:code`.
-- Invite destinations gain `race` and `breakout` (no `code`). Until the desktop learns them (D2)
-  `ParseItem` drops such an inbox item as outside the grammar; it never throws.
+  token, same EX; `friend_link_mint:<uid>` / `friend_link_lock:<token>` EX 5 locks;
+  `friend_claim_rate:<uid>` EX 60. Nothing on the `user:` record.
+- Public lookup (web only, never called by this client): `GET /v2/public/friend-link/:token` (no
+  auth) -> `{ ok, state: "live" | "unusable", name, avatar }`. `name` = the owner's
+  `display_name`; `avatar` = the PUBLIC presence avatar path `/v2/arcademy/presence/avatar/<opaque
+  id>` only while the owner's presence rung is `discord`, else null; both null when `unusable` (a
+  malformed token is `unusable` too, HTTP 200). Never returns the owner's uid. Metered like
+  `GET /v2/public/taste/:code`: per visitor IP through `x-relay-key`, 60 a minute (`pub_flink`,
+  429 `{ error:"rate_limited" }`), `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`.
+- Invite destinations gain `race` and `breakout` (no `code`, sent from the web). This client
+  (D2) shows them on the knock card and Join opens `https://app.cclabs.app/race` in the browser
+  (race) or the Breakout station, full when the account has it, else the demo (breakout). It
+  does not send them (`InviteDestination.All`, not `Sendable`). A `code` on them must still fit
+  the join-code grammar or the item is dropped, so the web sends none. An older desktop drops such
+  an item in `ParseItem`; it never throws.
 
 ## Grammar (refuse anything else with `refused`)
 
 - `kind`: `poke` `invite` `watch`
 - `poke`: `hi wp tut gl oops thanks drop peek deeper still more sleepy`
-- `destination`: `goon backroom remote ramp chess`; `remote` is grammar only: since 2026-09-28 the
-  server answers `refused` to a remote invite and the client neither offers nor shows one
-- `code` (only with `goon` or `remote`): `^[A-Z0-9-]{4,12}$`, system-generated join codes
+- `destination`: `goon backroom ramp chess race breakout` (`race` and `breakout` added 2026-10-20,
+  no `code`); `remote` was dropped 2026-09-28: the server answers `refused` to a remote invite and
+  the client neither offers nor shows one
+- `code` (only with `goon`): `^[A-Z0-9-]{4,12}$`, system-generated join codes
 - `code` with `chess`: a Piece by Piece challenge id `^c_[0-9a-f]{16}$` minted by `POST /v2/pbp/challenge` (target = the friend's unified id, allowed only between friends both ways with no block). `send` answers `refused` unless that challenge is the sender's own, still pending, and pointed at `to`. The receiver accepts it with `/v2/pbp/challenge/:id/accept`.
 - `watch`: `{ kind, id, title? }`, `kind` in `catalogue` (`id` `^[A-Za-z0-9_-]{1,64}$`), `flavour`
   (`id` in `trance pink frills shiny censored`), `ht` (`id` `^[0-9]{1,8}$`); `title` <= 40 chars,
@@ -105,10 +149,37 @@ link then copies the code and says so.
 
 ## Presence
 
-`poll` writes `friend_presence:<uid>` = `{ activity, lock_day, at }` with EX 180 when `shared`
-is true, else deletes it. Online = key exists. The client polls every 20 s while the drawer is
-open or any friend is online and the app is in the foreground, else every 120 s; never when
-signed out. `state` is the full list; the drawer calls it on open and every fifth poll.
+Per platform (Friends Everywhere S3, 2026-10-20). Every `poll` body carries `platform`: this
+client sends `"desktop"` on every poll, the `shared:false` one included; the phone sends
+`"phone"`, the web `"web"`; absent or anything else = `"desktop"`, so old clients keep working.
+The poll writes `friend_presence:<uid>:<platform>` = `{ activity, lock_day, at }` with EX 180
+when `shared` is true; `shared:false` deletes ONLY the caller's platform key (a desktop also
+deletes the old single key), and the last seen goes once no device is left sharing; no `shared`
+changes nothing. Online = any platform key exists. Migration: the old `friend_presence:<uid>` is
+read as `desktop` until it runs out (180 s); nothing writes it any more. `poll` replies
+`online:[id]` as before. `state.me.shared` is true when ANY device of the account shares. Leash
+`H.online` is the same merged online, so a holder's view does not flicker when one device of the
+held account goes dark. This client reads a missing `platforms` as `[]` (and reads it only when
+`online` is true), drops unknown ids, forces the order desktop / phone / web and draws one mark
+per platform after the name (tooltip "On their phone").
+
+The leash rides only the desktop poll. A `poll` whose `platform` is `"phone"` or `"web"` never
+reads, reports or drains leash state: its reply has no `leash` block, `leash_report` in its body
+is ignored, and every leash key (the events list included) waits for the next desktop poll. An
+absent `platform` is desktop, so old desktops are unchanged. A phone or web client must never read
+a missing `leash` as "the leash ended".
+
+`accepts?: [destination]` names the invite doors the polling device can open. An invite to any
+other door stays in the inbox for the account's other devices; pokes, watches and requests go to
+whoever polls. Absent = per platform: desktop (and an old client) takes everything, `web` takes
+`["chess","race","breakout"]` (a Goon, Back Room or ramp invite waits for the desktop), the phone
+sends its own list. An array always wins, so `[]` = no invites at all. This client sends no
+`accepts`.
+
+The client polls every 20 s while the drawer is open or any friend is online and the app is in
+the foreground, else every 120 s; never when signed out. `state` is the full list; the drawer
+calls it on open and every fifth poll, and an accepted request receipt fetches it in the same
+tick so the new row shows with its notice.
 
 ## Receipts (FRIENDS-RECEIPTS v1, 2026-09-28)
 
@@ -164,6 +235,18 @@ RC = { id, kind, to, to_name, state, at, ref? }
 Oldest first, each delivered once (drained). The server keeps the newest 100 per sender for 7 days.
 One drain can carry several moves of one item (`arrived` then `seen`): keep the furthest.
 
+### Who drains (Friends Everywhere, 2026-10-20)
+
+- The sender's receipts list (`friend_receipts:<sender>`) is ONE list per account between the
+  desktop and the phone: whichever of them polls first takes the whole drain.
+- A `poll` with `platform:"web"` never drains or returns the receipts list or the ghost list
+  (`friend_ghost:<uid>`): its reply carries `receipts: []` and both wait for the next desktop or
+  phone poll.
+- Per-platform receipt cursors are owed; until then a phone that shows no receipt notices still
+  takes them, and the desktop misses those notices.
+- The inbox (`friend_inbox:<uid>`) is one list too: pokes, watches and requests go to whoever
+  polls first; invites follow `accepts` (Presence).
+
 ### Squelch and block
 
 - A squelched item: the sender hears `sent` + `item_id`, then `arrived` when the recipient next
@@ -198,8 +281,11 @@ One drain can carry several moves of one item (`arrived` then `seen`): keep the 
 
 `friends:<uid>` set, `friend_in:<uid>` set, `friend_out:<uid>` set, `friend_block:<uid>` set,
 `friend_squelch:<uid>` set, `friend_inbox:<uid>` list of `I` JSON (newest first, LTRIM 50),
-`friend_presence:<uid>` string EX 180, `friend_code:<code>` -> uid (and `user.friend_code`),
+`friend_presence:<uid>:<platform>` string EX 180 (the old `friend_presence:<uid>` is read only),
+`friend_code:<code>` -> uid (and `user.friend_code`),
 `friend_poke:<from>:<to>` EX 10, `friend_req_day:<uid>:<yyyymmdd>` EX 90000,
-`friend_reports` list (`{ by, about, reason, at }`, LTRIM 5000).
+`friend_reports` list (`{ by, about, reason, at }`, LTRIM 5000),
+`friend_link:<token>` / `friend_link_of:<uid>` and their locks (Links), `pub_flink:<ip>` EX 60,
+`friend_web_uid:<supabase sub>` -> uid EX 300 (the web door's hint).
 
 Nothing here goes through the profile sync body, the anticheat clamp or the leaderboard cache.
