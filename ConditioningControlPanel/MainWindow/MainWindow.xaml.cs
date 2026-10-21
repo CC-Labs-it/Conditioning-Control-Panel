@@ -2655,20 +2655,12 @@ namespace ConditioningControlPanel
             // the resolver distinguishes. It does not - so order the lookups by specificity
             // instead: themed variant first (it only exists app-side), unless the active mod is
             // a third-party one, whose base-path override must win.
-            var suffix = App.Mods?.ActiveModId switch
+            foreach (var path in Services.UI.ModTileArt.Candidates(baseName, App.Mods?.ActiveModId))
             {
-                Models.BuiltInMods.BambiSleepId => "_bambi",
-                Models.BuiltInMods.SissyHypnoId => "_sissy",
-                Models.BuiltInMods.DronificationId => "_drone",
-                Models.BuiltInMods.LockedId => "_locked",
-                _ => null,
-            };
-            if (suffix != null)
-            {
-                var themed = LoadModImageDecoded($"features/{baseName}{suffix}.png", decodeWidth);
-                if (themed != null) return themed;
+                var image = LoadModImageDecoded(path, decodeWidth);
+                if (image != null) return image;
             }
-            return LoadModImageDecoded($"features/{baseName}.png", decodeWidth);
+            return null;
         }
 
         // Dashboard tile decode caps. The mosaic lives in a 1489x901 design Viewbox, so a

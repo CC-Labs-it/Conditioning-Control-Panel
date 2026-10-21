@@ -62,12 +62,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public string Id { get; }
         public string Name { get; }
         public IBrush AccentBrush { get; }
+        public bool IsAction { get; }
 
-        public ModSelectorItem(string id, string name, IBrush accentBrush)
+        public ModSelectorItem(string id, string name, IBrush accentBrush, bool isAction = false)
         {
             Id = id;
             Name = name;
             AccentBrush = accentBrush;
+            IsAction = isAction;
         }
     }
 
@@ -333,10 +335,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private static Color LightenColor(…)
 //   private static Color DarkenColor(…)
 //   private void RefreshBrowserLoadingText(…)
-//   private static System.Windows.Media.ImageSource? ModTileVariant(…)
-//   private const int TileDecodeWidth
-//   private const int WideTileDecodeWidth
-//   private void LoadFeatureImages(…)
+//   Home feature art / ModTileVariant moved to MainShellWindow.ModTileArt.cs; remaining
+//   feature-description and rail-chip art are still owned by their view-specific ports.
 //   private static ImageSource? LoadModImageDecoded(…)
 //   private static void ApplyArtFraming(…)
 //   private static ModArtFraming? ActiveModFraming(…)
