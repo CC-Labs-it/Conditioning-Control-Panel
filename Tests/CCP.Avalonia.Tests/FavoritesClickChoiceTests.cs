@@ -65,12 +65,6 @@ public sealed class FavoritesClickChoiceTests
             Assert.True(popup.IsLightDismissEnabled);
             var body = dash.FindControl<Border>("ClickChoiceBody")!;
             Assert.True(body.Bounds.Width > 0 && body.Bounds.Height > 0);
-            using (var frame = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(
-                (int)System.Math.Ceiling(body.Bounds.Width), (int)System.Math.Ceiling(body.Bounds.Height))))
-            {
-                frame.Render(body);
-                frame.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-favorites-click-choice.png"));
-            }
             Assert.True(EscapeClaim.InASurface(choice));
             Assert.Equal(Loc.Get("dash_click_default"), dash.FindControl<TextBlock>("ClickChoiceDescription")!.Text);
             SettingsService.DisarmAllPendingSaves();
@@ -79,7 +73,9 @@ public sealed class FavoritesClickChoiceTests
             Assert.True(settings.HasPendingSave); // UI requested the real service's debounced save
             Assert.True(CoreSettings.Current.DashboardInvertClicks);
             Assert.Equal(Loc.Get("dash_click_swapped"), dash.FindControl<TextBlock>("ClickChoiceDescription")!.Text);
-            choice.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            choice.Focus();
+            shell.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, ""); // real key routing
+            Dispatcher.UIThread.RunJobs();
             Assert.False(popup.IsOpen);
             Assert.True(anchor.IsFocused);
             anchor.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -152,35 +148,42 @@ public sealed class FavoritesClickChoiceTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task NewPinGlowsItsChip() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task NewPinGlowsItsChip() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var s = CoreSettings.Current;
-        var oldFavorites = s.RailFavorites.ToList();
-        var oldMotion = s.MotionLevel;
-        var shell = new MainShellWindow();
-        shell.Show();
+        var previousProvider = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = settings.Current;
+        s.Welcomed = true;                       // P52/P76: no first-run or intro card mid-test
+        s.HasAcceptedAgeVerification = true;
+        s.WhatMovedCardShown = 1;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.RailFavorites.Clear();
+        s.MotionLevel = MotionLevel.Reduced;
+        MainShellWindow? shell = null;
         try
         {
-            s.RailFavorites.Clear();
-            s.MotionLevel = MotionLevel.Reduced;
+            shell = new MainShellWindow();
+            shell.Show();
             shell.SettingsPage!.SetFavoritesDrawer(true, animate: false);
             shell.TogglePinned("tab.haptics");
-            await Task.Delay(30);
-            Dispatcher.UIThread.RunJobs();
             var chip = shell.SettingsPage.FindControl<StackPanel>("FavoritesList")!.Children
                 .OfType<Button>().Single(c => Equals(c.Tag, "tab.haptics"));
-            Assert.Contains(AdornerLayer.GetAdornerLayer(chip)!.Children.OfType<NavGlowRing>(),
-                ring => AdornerLayer.GetAdornedElement(ring) == chip);
+            bool Glowing() => AdornerLayer.GetAdornerLayer(chip)!.Children.OfType<NavGlowRing>()
+                .Any(ring => AdornerLayer.GetAdornedElement(ring) == chip);
+            var sw = System.Diagnostics.Stopwatch.StartNew();   // P73: bounded by time, not turns
+            while (!Glowing() && sw.Elapsed < System.TimeSpan.FromSeconds(10)) Dispatcher.UIThread.RunJobs();
+            Assert.True(Glowing(), "pinned chip never glowed");
         }
         finally
         {
-            shell.Close();
-            s.RailFavorites.Clear(); s.RailFavorites.AddRange(oldFavorites);
-            s.MotionLevel = oldMotion;
-            CoreSettings.Save();
+            shell?.Close();
+            SettingsService.DisarmAllPendingSaves();
+            CoreSettings.ServiceProvider = previousProvider;
         }
+        return Task.CompletedTask;
     });
 }
