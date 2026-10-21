@@ -34,10 +34,15 @@ public sealed class MainWindowThemeParityTests
         var host = new Window { Width = 100, Height = 100, Content = button };
         host.Resources["PinkBrush"] = Brushes.Cyan;
         host.Resources["TransparentPink20Brush"] = Brushes.DarkCyan;
+        host.Resources["PanelBgBrush"] = Brushes.Navy;
+        host.Resources["SecondaryBrush"] = Brushes.Olive;
         host.Show();
         Dispatcher.UIThread.RunJobs();
         try
         {
+            Assert.Equal(new Cursor(StandardCursorType.Help).ToString(), button.Cursor?.ToString());
+            Assert.Same(Brushes.Navy, button.Background);
+            Assert.Same(Brushes.Olive, button.BorderBrush);
             Assert.Equal(22, button.Width);
             Assert.Equal(22, button.Height);
             Assert.Equal(100, ToolTip.GetShowDelay(button));
