@@ -21,7 +21,9 @@ import { createLedger, el, button } from '../router.js';
 import { S, mmss } from '../strings.js';
 import { avatarSlot, emitAva } from '../avatar.js';
 import { GoonEndReason, GoonMatchPhase } from '../../core/contracts.js';
-import { evidenceFor, submitReport, NOTE_MAX, REPORT_REASONS } from '../report.js';
+import {
+  evidenceFor, submitReport, NOTE_MAX, REPORT_REASONS, reportSourceFor, evidenceAllowed, SOURCE_SCROLLLER,
+} from '../report.js';
 import { noteMatchFinished } from '../nightProgress.js';
 import { settleOnce, formatRecord, outcomeOf } from '../rivalry.js';
 
@@ -102,7 +104,12 @@ export function assertStageClear(logger) {
  *
  * AN EMPTY RESULT IS THE GATE. No peer media, no card.
  *
- * @returns {Array<{sha,kind,mime,bytes,url,flagged:boolean,rendered:boolean,at:number}>}
+ * Every row is a peer TRANSFER (receivedStore), so each goes out tagged
+ * `from: 'received'`, which ui/report.js reads as the sender's own file. A row
+ * that names a Scrolller post (`id` / `subreddit` / `postId`) keeps those
+ * fields, so its report names the post instead of carrying frames.
+ *
+ * @returns {Array<{sha,kind,mime,bytes,url,from:string,flagged:boolean,rendered:boolean,at:number}>}
  */
 export function reportCandidates({ landed = [], held = [], rendered = [], max = MAX_REPORT_ITEMS } = {}) {
   const rows = new Map();
@@ -130,16 +137,19 @@ export function reportCandidates({ landed = [], held = [], rendered = [], max = 
   return order.slice(0, cap).map((sha) => {
     const row = rows.get(sha);
     const m = marks.get(sha) || null;
-    return {
+    const out = {
       sha,
       kind: row.kind || '',
       mime: row.mime || '',
       bytes: Math.max(0, Number(row.bytes) || 0),
       url: row.url || '',
+      from: 'received',
       flagged: !!(m && m.flagged),
       rendered: !!m,
       at: m ? (Number(m.at) || 0) : 0,
     };
+    for (const k of ['id', 'subreddit', 'postId']) if (typeof row[k] === 'string' && row[k]) out[k] = row[k];
+    return out;
   });
 }
 
@@ -191,6 +201,7 @@ export function mount(container, ctx) {
   let reportPhase = 'idle';   // idle | submitting | done | deduped | failed
   let reportId = '';
   let reportTries = 0;
+  let reportSourceKind = '';  // the filed report's source kind: '' | own | scrolller
 
   /** The shortlist, recomputed on every paint — the store can still be settling. */
   function reportItems() {
@@ -240,13 +251,17 @@ export function mount(container, ctx) {
     // Evidence generation is allowed to take a second (nothing is running) and
     // is allowed to FAIL. `null` is a normal outcome and the route accepts a
     // body without it — an unencodable thumbnail must never eat a report.
+    // SCROLLLER MEDIA (licence clause 3.4): no frame is even CAPTURED unless the
+    // reason is csam / illegal. buildReportBody drops one again either way.
     let evidence = null;
-    try { evidence = await evidenceFor(item); } catch (_e) { evidence = null; }
+    if (evidenceAllowed(reportSourceFor(item), reportReason)) {
+      try { evidence = await evidenceFor(item); } catch (_e) { evidence = null; }
+    }
     if (ledger.isDisposed) return;
 
     const res = await submitReport({
       session,
-      artifact: { sha: item.sha, mime: item.mime, bytes: item.bytes },
+      artifact: item,
       reason: reportReason,
       note: reportNote,
       atMatchMs: atMatchMsFor(item),
@@ -254,6 +269,7 @@ export function mount(container, ctx) {
     });
     if (ledger.isDisposed) return;
 
+    if (res.ok) reportSourceKind = res.sourceKind || '';
     if (res.ok && res.deduped) { reportPhase = 'deduped'; reportId = res.id; }
     else if (res.ok) { reportPhase = 'done'; reportId = res.id; }
     else { reportPhase = 'failed'; reportTries++; }
@@ -320,6 +336,9 @@ export function mount(container, ctx) {
         class: 'gg-report-status is-done',
         text: reportPhase === 'deduped' ? S.report.deduped : S.report.done(reportId),
       }));
+      if (reportSourceKind === SOURCE_SCROLLLER) {
+        card.appendChild(el('p', { class: 'gg-report-note-line gg-report-host', text: S.report.hostToo }));
+      }
       card.appendChild(emailLine());
       return card;
     }
@@ -401,7 +420,11 @@ export function mount(container, ctx) {
           text: spent ? S.report.givenUp : S.report.failed,
         }));
       } else if (!submitting) {
-        card.appendChild(el('p', { class: 'gg-report-note-line', text: S.report.evidenceNote }));
+        const frames = evidenceAllowed(reportSourceFor(picked), reportReason);
+        card.appendChild(el('p', {
+          class: 'gg-report-note-line',
+          text: frames ? S.report.evidenceNote : S.report.evidenceNoteHost,
+        }));
       }
     }
 

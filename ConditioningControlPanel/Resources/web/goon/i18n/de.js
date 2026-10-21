@@ -237,6 +237,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "Clip {n}",
   gg_report_thumbLabel_image: "Bild {n}",
   gg_report_evidenceNote: "hier wird ein kleines Vorschaubild erstellt und mit der Meldung geschickt, damit ein Mensch prüfen kann, ohne dich nach der Datei zu fragen.",
+  gg_report_evidenceNoteHost: "hier verlässt kein Vorschaubild dein Gerät. die Meldung nennt den Beitrag und geht auch an den Medienhost.",
+  gg_report_hostToo: "auch an den Medienhost geschickt.",
   gg_options_headline: "Optionen",
   gg_options_master: "Gesamt",
   gg_options_music: "Musik",

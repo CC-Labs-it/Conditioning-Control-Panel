@@ -237,6 +237,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "clip {n}",
   gg_report_thumbLabel_image: "immagine {n}",
   gg_report_evidenceNote: "qui viene creata una piccola miniatura che parte con la segnalazione, così una persona può controllare senza chiederti il file.",
+  gg_report_evidenceNoteHost: "in questo caso nessuna miniatura lascia il tuo dispositivo. la segnalazione indica il post e arriva anche a chi ospita il contenuto.",
+  gg_report_hostToo: "la segnalazione arriva anche a chi ospita il contenuto.",
   gg_options_headline: "opzioni",
   gg_options_master: "Master",
   gg_options_music: "Musica",
