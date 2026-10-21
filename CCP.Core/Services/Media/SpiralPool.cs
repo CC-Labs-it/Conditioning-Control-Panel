@@ -19,7 +19,12 @@ public sealed class SpiralPool
         try
         {
             var directory = string.IsNullOrEmpty(configured) ? library : Path.GetDirectoryName(configured);
-            if (PersonalFolderRoots.IsPersonalFolderRoot(directory)) directory = library;
+            if (PersonalFolderRoots.IsPersonalFolderRoot(directory))
+            {
+                Log.Warning("[Overlay] Spiral randomize: refusing {Pool} as a spiral pool (personal/system folder) " +
+                            "- falling back to the Spirals library", directory);
+                directory = library;
+            }
             if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory)) return null;
             var pool = Directory.GetFiles(directory)
                 .Where(f => Extensions.Contains(Path.GetExtension(f).ToLowerInvariant())).ToArray();
