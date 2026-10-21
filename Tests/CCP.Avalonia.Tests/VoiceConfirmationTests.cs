@@ -72,10 +72,17 @@ public sealed class VoiceConfirmationTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(clip, played);
             Assert.Equal("bark-voice", playedTag);
+            var tail = new TaskCompletionSource();
+            var tailStarted = new TaskCompletionSource();
+            shell.VoiceEchoTail = _ => { tailStarted.TrySetResult(); return tail.Task; }; // no real 300 ms sleep (P08)
             var quiet = host.WaitQuiet(true);
-            await Task.Delay(450);
+            Dispatcher.UIThread.RunJobs();
             Assert.False(quiet.IsCompleted, "The mic must not reopen while her voiced confirmation is playing.");
+            Assert.False(tailStarted.Task.IsCompleted, "The echo tail starts only after the clip ends.");
             finish!();
+            await tailStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.False(quiet.IsCompleted, "The mic must wait out the echo tail after the clip.");
+            tail.SetResult();
             await quiet.WaitAsync(TimeSpan.FromSeconds(2));
             Assert.Null(host.PickVoiceLine("unknown"));
             host.Say("unvoiced fallback", null);

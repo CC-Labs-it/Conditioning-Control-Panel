@@ -78,10 +78,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async Task WaitForVoiceConfirmationAsync()
         {
             var ct = _voicePromptCts?.Token ?? default;
-            try { await _voiceConfirmationSpoken.WaitAsync(TimeSpan.FromMilliseconds(5800), ct).ConfigureAwait(false); }
-            catch (TimeoutException) { /* WPF's speaking cap: a broken audio backend cannot wedge voice. */ }
-            await Task.Delay(300, ct).ConfigureAwait(false);
+            try
+            {
+                try { await _voiceConfirmationSpoken.WaitAsync(TimeSpan.FromMilliseconds(5800), ct).ConfigureAwait(false); }
+                catch (TimeoutException) { /* WPF's speaking cap: a broken audio backend cannot wedge voice. */ }
+                await VoiceEchoTail(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { /* panic/stop: the engine sees the cancelled session and stays shut. */ }
         }
+
+        /// <summary>WPF's 300 ms speaker-echo tail; a test seam so tests need no real sleep (P08).</summary>
+        internal Func<CancellationToken, Task> VoiceEchoTail = ct => Task.Delay(300, ct);
 
         /// <summary>True while the wake-word loop owns (or is waiting to own) the mic.</summary>
         internal bool WakeLoopArmed => _wakeLoopCts != null;
