@@ -19,6 +19,8 @@ public class OnlineMeterCopyTests
         "online_meter_minutes", "online_pill", "online_pill_done", "online_hover_title", "online_hover_body",
         "online_toast_spent",
         "online_official_stamp", "online_official_title", "online_official_body", "online_official_nice", "online_official_stamped_line",
+        "online_official_why_title", "online_official_why", "online_official_flow_title", "online_official_flow_kept",
+        "online_official_flow_mix", "online_official_flow_spent", "online_official_flow_local",
     };
 
     private static readonly string[] Formats =
@@ -52,7 +54,7 @@ public class OnlineMeterCopyTests
         Assert.Equal("Online done for today", (string?)o["online_pill_done"]);
         Assert.Equal("See plans", (string?)o["online_see_plans"]);
         Assert.Equal("Free plan. Basic gets about 7 times more a day, Prime about 20.", (string?)o["online_meter_upsell_free"]);
-        Assert.Equal("Online media is official", (string?)o["online_official_title"]);
+        Assert.Equal("Online media is going official", (string?)o["online_official_title"]);
         // House voice: no em or en dashes, no exclamation marks, never a size or a count.
         foreach (var p in o.Properties())
         {

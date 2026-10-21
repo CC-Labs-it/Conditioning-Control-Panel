@@ -7752,12 +7752,19 @@
   "online_hover_title": "Die Online-Medien für heute sind aufgebraucht",
   "online_hover_body": "Was du schon gesehen hast und deine eigenen Dateien laufen weiter. Ab Mitternacht wieder.",
   "online_toast_spent": "Online-Medien sind für heute fertig. Weiter mit dem, was du schon gesehen hast, und deinen eigenen Dateien.",
-  "online_official_stamp": "OFFIZIELL",
-  "online_official_title": "Online-Medien sind jetzt offiziell",
-  "online_official_body": "CCP hat jetzt eine richtige Lizenz von Scrolller. Der Online-Feed ist bezahlt, auf jedem Bild und Clip genannt und bleibt.",
+  "online_official_stamp": "IN ARBEIT",
+  "online_official_title": "Online-Medien werden offiziell",
+  "online_official_body": "Wir schließen gerade eine kommerzielle Lizenz mit Scrolller ab. Der Online-Feed wird bezahlt, genannt und bleibt. Wir fangen jetzt schon damit an.",
+  "online_official_why_title": "Warum es ein tägliches Kontingent gibt",
+  "online_official_why": "CCP hat viel mehr aus dem Feed gezogen, als wir je geplant hatten. Das richtig zu bezahlen heißt ein tägliches Kontingent pro Plan, damit die Rechnung tragbar bleibt.",
+  "online_official_flow_title": "Was alles flüssig hält",
+  "online_official_flow_kept": "Was du gesehen hast, bleibt auf diesem PC und läuft gratis noch mal.",
+  "online_official_flow_mix": "Sessions mischen Behaltenes mit frischen Funden, so hält das Kontingent länger.",
+  "online_official_flow_spent": "Ist es aufgebraucht, laufen Behaltenes und deine eigenen Dateien weiter. Frisches gibt es ab Mitternacht wieder.",
+  "online_official_flow_local": "Der Zähler läuft auf diesem PC. Davon wird nichts irgendwohin gesendet.",
   "online_official_plan_free": "Alle bekommen einen Tagesanteil, am ersten Tag etwas mehr. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_plan_basic": "Basic bekommt einen großen Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_plan_prime": "Prime bekommt den größten Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_nice": "Schön",
-  "online_official_stamped_line": "Online-Medien lizenziert von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk."
+  "online_official_stamped_line": "Online-Medien kommen von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk."
 }

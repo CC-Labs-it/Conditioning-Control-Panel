@@ -7752,12 +7752,19 @@
   "online_hover_title": "今日のオンラインメディアは使い切りました",
   "online_hover_body": "一度見たものと自分のファイルはそのまま再生されます。深夜0時に戻ります。",
   "online_toast_spent": "今日のオンラインメディアは終了です。一度見たものと自分のファイルに切り替えます。",
-  "online_official_stamp": "公式",
-  "online_official_title": "オンラインメディアが公式になりました",
-  "online_official_body": "CCPはScrolllerから正式なライセンスを取得しました。オンラインフィードは有料契約で、すべての画像とクリップにクレジットが入り、これからも続きます。",
+  "online_official_stamp": "準備中",
+  "online_official_title": "オンラインメディアが公式になります",
+  "online_official_body": "Scrolllerとの商用ライセンス契約を最終調整中です。オンラインフィードは有料契約となり、クレジットが入り、これからも続きます。準備は今から始めます。",
+  "online_official_why_title": "1日の上限がある理由",
+  "online_official_why": "CCPはフィードから、想定をはるかに超える量を使っていました。きちんと対価を払うために、プランごとに1日の上限を設け、費用を無理のない範囲に保ちます。",
+  "online_official_flow_title": "快適さを保つ工夫",
+  "online_official_flow_kept": "一度見たものはこのPCに残り、無料で再生できます。",
+  "online_official_flow_mix": "セッションでは保存済みと新着を混ぜるので、上限が長持ちします。",
+  "online_official_flow_spent": "使い切っても、保存済みのメディアと自分のファイルはそのまま流れます。新着は深夜0時に戻ります。",
+  "online_official_flow_local": "メーターはこのPCの中で数えます。どこにも送信されません。",
   "online_official_plan_free": "誰でも1日の割り当てがあり、初日は多めです。一度見たものは無料で再生できます。",
   "online_official_plan_basic": "Basicは1日の割り当てが大きめです。一度見たものは無料で再生できます。",
   "online_official_plan_prime": "Primeは1日の割り当てが最大です。一度見たものは無料で再生できます。",
   "online_official_nice": "了解",
-  "online_official_stamped_line": "オンラインメディアはScrolllerのライセンスを受けています。各画像とクリップに小さな「via Scrolller」の表示があります。"
+  "online_official_stamped_line": "オンラインメディアはScrolllerから届きます。各画像とクリップに小さな「via Scrolller」の表示があります。"
 }

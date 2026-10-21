@@ -7752,12 +7752,19 @@
   "online_hover_title": "오늘의 온라인 미디어를 다 썼습니다",
   "online_hover_body": "이미 본 것과 내 파일은 계속 재생됩니다. 자정에 다시 열립니다.",
   "online_toast_spent": "오늘 온라인 미디어는 끝났습니다. 이미 본 것과 내 파일로 전환합니다.",
-  "online_official_stamp": "공식",
-  "online_official_title": "온라인 미디어가 공식이 되었습니다",
-  "online_official_body": "CCP가 이제 Scrolller의 정식 라이선스를 받았습니다. 온라인 피드는 비용을 지불하고, 모든 이미지와 클립에 출처가 표시되며, 앞으로도 계속됩니다.",
+  "online_official_stamp": "진행 중",
+  "online_official_title": "온라인 미디어가 공식이 됩니다",
+  "online_official_body": "Scrolller와 상업용 라이선스를 마무리하고 있습니다. 온라인 피드는 비용을 지불하고, 출처가 표시되며, 앞으로도 계속됩니다. 작업은 지금 시작합니다.",
+  "online_official_why_title": "하루 사용량이 있는 이유",
+  "online_official_why": "CCP는 피드에서 예상보다 훨씬 많은 양을 가져왔습니다. 제대로 비용을 내기 위해 플랜마다 하루 사용량을 두어, 비용을 감당할 수 있게 유지합니다.",
+  "online_official_flow_title": "끊김 없이 즐기도록",
+  "online_official_flow_kept": "이미 본 것은 이 PC에 남아 무료로 다시 재생됩니다.",
+  "online_official_flow_mix": "세션은 보관된 미디어와 새 미디어를 섞어서 사용량이 오래갑니다.",
+  "online_official_flow_spent": "다 쓰면 보관된 미디어와 내 파일이 계속 재생됩니다. 새 미디어는 자정에 돌아옵니다.",
+  "online_official_flow_local": "미터는 이 PC에서 계산됩니다. 어디에도 전송되지 않습니다.",
   "online_official_plan_free": "누구나 하루 할당량을 받고, 첫날은 더 받습니다. 이미 본 것은 무료로 다시 재생됩니다.",
   "online_official_plan_basic": "Basic은 하루 할당량이 넉넉합니다. 이미 본 것은 무료로 다시 재생됩니다.",
   "online_official_plan_prime": "Prime은 하루 할당량이 가장 큽니다. 이미 본 것은 무료로 다시 재생됩니다.",
   "online_official_nice": "좋아요",
-  "online_official_stamped_line": "온라인 미디어는 Scrolller의 라이선스를 받았습니다. 모든 이미지와 클립에 작은 \"via Scrolller\" 표시가 있습니다."
+  "online_official_stamped_line": "온라인 미디어는 Scrolller에서 가져옵니다. 모든 이미지와 클립에 작은 \"via Scrolller\" 표시가 있습니다."
 }

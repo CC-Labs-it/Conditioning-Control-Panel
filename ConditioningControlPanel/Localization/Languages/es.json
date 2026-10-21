@@ -7752,12 +7752,19 @@
   "online_hover_title": "Los medios en línea de hoy se han agotado",
   "online_hover_body": "Lo que ya has visto y tus propios archivos siguen reproduciéndose. Vuelven a medianoche.",
   "online_toast_spent": "Los medios en línea se acabaron por hoy. Pasamos a lo que ya has visto y a tus propios archivos.",
-  "online_official_stamp": "OFICIAL",
-  "online_official_title": "Los medios en línea son oficiales",
-  "online_official_body": "CCP ahora tiene una licencia de verdad de Scrolller. El feed en línea está pagado, acreditado en cada imagen y clip, y ha llegado para quedarse.",
+  "online_official_stamp": "EN MARCHA",
+  "online_official_title": "Los medios en línea se vuelven oficiales",
+  "online_official_body": "Estamos cerrando una licencia comercial con Scrolller. El feed en línea quedará pagado, acreditado y para quedarse. Empezamos ya.",
+  "online_official_why_title": "Por qué hay una cuota diaria",
+  "online_official_why": "CCP tiró mucho más del feed de lo que jamás planeamos. Pagarlo como se debe significa una cuota diaria por plan, para que la factura siga siendo asumible.",
+  "online_official_flow_title": "Qué lo mantiene fluido",
+  "online_official_flow_kept": "Lo que has visto se queda en este PC y se repite gratis.",
+  "online_official_flow_mix": "Las sesiones mezclan lo guardado con novedades, así la cuota dura más.",
+  "online_official_flow_spent": "Cuando se acaba, lo guardado y tus propios archivos siguen. Las novedades vuelven a medianoche.",
+  "online_official_flow_local": "El contador vive en este PC. Nada de él se envía a ningún sitio.",
   "online_official_plan_free": "Todo el mundo recibe una cuota diaria, con extra el primer día. Lo que ya has visto se repite gratis.",
   "online_official_plan_basic": "Basic recibe una cuota diaria grande. Lo que ya has visto se repite gratis.",
   "online_official_plan_prime": "Prime recibe la mayor cuota diaria. Lo que ya has visto se repite gratis.",
   "online_official_nice": "Genial",
-  "online_official_stamped_line": "Medios en línea con licencia de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\"."
+  "online_official_stamped_line": "Los medios en línea vienen de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\"."
 }
