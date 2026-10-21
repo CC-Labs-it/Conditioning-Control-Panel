@@ -70,7 +70,11 @@ internal static class RemoteMediaCache
     {
         public byte[] Bytes = Array.Empty<byte>();
         public long Stamp;          // LRU: last touched, monotonically increasing
+        public DateTime DownloadedUtc;   // the 24 h max age counts from here, never from a use
     }
+
+    /// <summary>The clock for the max age. Replaceable by tests.</summary>
+    internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
 
     private static readonly object Gate = new();
     private static readonly Dictionary<string, CacheEntry> Cache = new(StringComparer.Ordinal);
@@ -222,7 +226,35 @@ internal static class RemoteMediaCache
     public static bool IsCached(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return false;
-        lock (Gate) return Cache.ContainsKey(url);
+        lock (Gate) return Cache.TryGetValue(url, out var e) && !DropIfExpiredLocked(url, e);
+    }
+
+    /// <summary>Drops every in-memory entry past the max age (24 h from its download), or past it
+    /// before the next hourly sweep. Returns how many went.</summary>
+    internal static int DropExpiredMemory()
+    {
+        lock (Gate)
+        {
+            var old = new List<string>();
+            foreach (var kvp in Cache)
+                if (ScrolllerCacheBook.IsExpiredAt(kvp.Value.DownloadedUtc, UtcNow() + ScrolllerDiskCache.SweepPeriod)) old.Add(kvp.Key);
+            foreach (var url in old)
+            {
+                _bytes -= Cache[url].Bytes.LongLength;
+                Cache.Remove(url);
+            }
+            return old.Count;
+        }
+    }
+
+    /// <summary>The max-age rule on one entry: past it, the entry leaves memory. True when it was
+    /// expired. Caller holds <see cref="Gate"/>.</summary>
+    private static bool DropIfExpiredLocked(string url, CacheEntry e)
+    {
+        if (!ScrolllerCacheBook.IsExpiredAt(e.DownloadedUtc, UtcNow())) return false;
+        _bytes -= e.Bytes.LongLength;
+        Cache.Remove(url);
+        return true;
     }
 
     /// <summary>
@@ -282,7 +314,7 @@ internal static class RemoteMediaCache
     {
         lock (Gate)
         {
-            if (Cache.TryGetValue(url, out var hit))
+            if (Cache.TryGetValue(url, out var hit) && !DropIfExpiredLocked(url, hit))
             {
                 hit.Stamp = ++_tick;
                 return Task.FromResult<byte[]?>(hit.Bytes);
@@ -305,7 +337,8 @@ internal static class RemoteMediaCache
             if (global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url))
             {
                 var viaDisk = await FromScrolllerCacheAsync(url).ConfigureAwait(false);
-                if (viaDisk != null) Store(url, viaDisk);
+                // The memory copy expires with the disk one: same download time, not a fresh day.
+                if (viaDisk != null) Store(url, viaDisk, ScrolllerDiskCache.DownloadedUtcOf(url) ?? UtcNow());
                 return viaDisk;
             }
 
@@ -332,7 +365,7 @@ internal static class RemoteMediaCache
             var bytes = await ReadBoundedAsync(resp, url).ConfigureAwait(false);
             if (bytes == null || bytes.Length == 0) return null;
 
-            Store(url, bytes);
+            Store(url, bytes, UtcNow());
             return bytes;
         }
         catch (Exception ex)
@@ -408,8 +441,8 @@ internal static class RemoteMediaCache
         return buffer.ToArray();
     }
 
-    /// <summary>Insert and evict least-recently-used until both caps hold.</summary>
-    private static void Store(string url, byte[] bytes)
+    /// <summary>Insert and evict least-recently-used until both caps hold. Internal for tests.</summary>
+    internal static void Store(string url, byte[] bytes, DateTime downloadedUtc)
     {
         lock (Gate)
         {
@@ -434,7 +467,7 @@ internal static class RemoteMediaCache
                 Cache.Remove(oldest);
             }
 
-            Cache[url] = new CacheEntry { Bytes = bytes, Stamp = ++_tick };
+            Cache[url] = new CacheEntry { Bytes = bytes, Stamp = ++_tick, DownloadedUtc = downloadedUtc };
             _bytes += bytes.LongLength;
         }
     }

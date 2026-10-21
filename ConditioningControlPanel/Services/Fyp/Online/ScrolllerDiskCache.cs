@@ -18,8 +18,10 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 internal sealed record ScrolllerCacheMeta(string Kind, string? Sub = null, string? Poster = null,
     int? Width = null, int? Height = null, string? Title = null);
 
-/// <summary>One complete cached file.</summary>
-internal sealed record ScrolllerCacheEntry(string Url, string Path, long Bytes, DateTime LastUsedUtc, ScrolllerCacheMeta Meta);
+/// <summary>One complete cached file. <see cref="DownloadedUtc"/> is when its bytes came from
+/// Scrolller (never moved by a use): the 24 h max age counts from it. MinValue = unknown = expired.</summary>
+internal sealed record ScrolllerCacheEntry(string Url, string Path, long Bytes, DateTime LastUsedUtc, ScrolllerCacheMeta Meta,
+    DateTime DownloadedUtc);
 
 /// <summary>A download being written into the cache as it is read (a tee). Dispose without
 /// <see cref="Commit"/> throws the partial file away.</summary>
@@ -99,6 +101,20 @@ internal sealed class ScrolllerCacheBook
     public static bool IsWhole(long received, long? declared, bool reachedEnd)
         => reachedEnd && received > 0 && (declared is not long d || d == received);
 
+    /// <summary>The licence rule (owner, 2026-10-21): a copy is kept at most
+    /// <see cref="ScrolllerDiskCache.MaxAge"/> from its DOWNLOAD, however recently it was used. No
+    /// stamp (a row from a build before the rule) is expired, and so is a stamp more than an hour
+    /// in the future (the clock went back: never a copy that lives forever).</summary>
+    public static bool IsExpiredAt(DateTime downloadedUtc, DateTime nowUtc)
+        => downloadedUtc <= DateTime.MinValue
+           || downloadedUtc - nowUtc > TimeSpan.FromHours(1)
+           || nowUtc - downloadedUtc >= ScrolllerDiskCache.MaxAge;
+
+    public static bool IsExpired(ScrolllerCacheEntry entry, DateTime nowUtc) => IsExpiredAt(entry.DownloadedUtc, nowUtc);
+
+    /// <summary>Every row past the max age at <paramref name="nowUtc"/>.</summary>
+    public List<ScrolllerCacheEntry> Expired(DateTime nowUtc) => _byUrl.Values.Where(e => IsExpired(e, nowUtc)).ToList();
+
     // ---- index file -----------------------------------------------------------------
 
     public string ToJson()
@@ -111,16 +127,17 @@ internal sealed class ScrolllerCacheBook
             {
                 ["u"] = e.Url, ["f"] = System.IO.Path.GetFileName(e.Path), ["b"] = e.Bytes,
                 ["t"] = e.LastUsedUtc.Ticks, ["k"] = m.Kind, ["s"] = m.Sub, ["p"] = m.Poster,
-                ["w"] = m.Width, ["h"] = m.Height, ["ti"] = m.Title,
+                ["w"] = m.Width, ["h"] = m.Height, ["ti"] = m.Title, ["d"] = e.DownloadedUtc.Ticks,
             });
         }
-        var root = new JObject { ["v"] = 1, ["entries"] = arr };
+        var root = new JObject { ["v"] = 2, ["entries"] = arr };
         if (FormatChecked) root["fc"] = 1;
         return root.ToString(Newtonsoft.Json.Formatting.None);
     }
 
     /// <summary>Index text -> book, paths under <paramref name="root"/>. A record whose file name
     /// is not one this cache makes is dropped (the index can never point outside the folder).
+    /// A v1 row (no "d") reads with no download stamp, which <see cref="IsExpired"/> calls expired.
     /// Bad text = an empty book.</summary>
     public static ScrolllerCacheBook FromJson(string? json, string root)
     {
@@ -141,7 +158,9 @@ internal sealed class ScrolllerCacheBook
                     (int?)t["w"], (int?)t["h"], (string?)t["ti"]);
                 var ticks = (long?)t["t"] ?? 0;
                 var when = ticks > 0 && ticks < DateTime.MaxValue.Ticks ? new DateTime(ticks, DateTimeKind.Utc) : DateTime.MinValue;
-                book.Put(new ScrolllerCacheEntry(url!, System.IO.Path.Combine(root, file), bytes, when, meta));
+                var dTicks = (long?)t["d"] ?? 0;
+                var got = dTicks > 0 && dTicks < DateTime.MaxValue.Ticks ? new DateTime(dTicks, DateTimeKind.Utc) : DateTime.MinValue;
+                book.Put(new ScrolllerCacheEntry(url!, System.IO.Path.Combine(root, file), bytes, when, meta, got));
             }
         }
         catch { return new ScrolllerCacheBook(); }
@@ -198,8 +217,20 @@ internal static class ScrolllerDiskCache
     /// <summary>Byte cap. Replaceable by tests.</summary>
     internal static long CapBytes = DefaultCapBytes;
 
-    /// <summary>The clock for last-use stamps. Replaceable by tests.</summary>
+    /// <summary>The clock for last-use and download stamps. Replaceable by tests.</summary>
     internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+
+    /// <summary>Licence rule (owner, 2026-10-21): no Scrolller copy outlives a day from its download.</summary>
+    public static readonly TimeSpan DefaultMaxAge = TimeSpan.FromHours(24);
+
+    /// <summary>The max age in force. Replaceable by tests; never raised in the app.</summary>
+    internal static TimeSpan MaxAge = DefaultMaxAge;
+
+    /// <summary>How often the running app sweeps every Scrolller copy (<see cref="ScrolllerCopySweeper"/>).</summary>
+    internal static readonly TimeSpan SweepPeriod = TimeSpan.FromHours(1);
+
+    /// <summary>A part file younger than this may still be downloading: the sweep leaves it.</summary>
+    private static readonly TimeSpan PartGrace = TimeSpan.FromMinutes(10);
 
     /// <summary>The user's remote-media consent (MediaSource not local AND HasRemoteMediaConsent).
     /// Replaceable by tests.</summary>
@@ -222,6 +253,7 @@ internal static class ScrolllerDiskCache
     private static readonly object FileLock = new();  // one writer of index.json.tmp at a time
     private static long _saveSeq, _writtenSeq;        // a stale snapshot never overwrites a newer one
     private static Timer? _saveTimer;
+    private static Timer? _sweepTimer;
     private static readonly ConcurrentDictionary<string, Lazy<Task<string?>>> InFlight = new(StringComparer.Ordinal);
     private static readonly Lazy<HttpClient> Http = new(() =>
     {
@@ -233,7 +265,8 @@ internal static class ScrolllerDiskCache
     // ---- contract -------------------------------------------------------------------
 
     /// <summary>Path of a complete cached copy of <paramref name="url"/>, or null. A hit counts as
-    /// a use (LRU). Null while the switch is off: cached copies stop too.</summary>
+    /// a use (LRU). Null while the switch is off: cached copies stop too. A copy past the max age
+    /// is a miss and is deleted on the spot.</summary>
     public static string? TryGetPath(string? url)
     {
         if (string.IsNullOrEmpty(url) || !ScrolllerPolicy.Enabled) return null;
@@ -245,7 +278,7 @@ internal static class ScrolllerDiskCache
                 var book = Book();
                 var e = book?.Get(url!);
                 if (book == null || e == null) return null;
-                if (!File.Exists(e.Path)) { book.Remove(url!); path = null; }
+                if (DropIfExpiredLocked(book, e) || !File.Exists(e.Path)) { book.Remove(url!); path = null; }
                 else { book.Touch(url!, UtcNow()); path = e.Path; }
             }
             ScheduleSave();
@@ -254,18 +287,46 @@ internal static class ScrolllerDiskCache
         catch { return null; }
     }
 
-    /// <summary>True when a complete copy is cached and its file is still there (no LRU touch).
-    /// False while the switch is off.</summary>
+    /// <summary>True when a complete copy is cached, not past the max age, and its file is still
+    /// there (no LRU touch). False while the switch is off.</summary>
     public static bool Contains(string? url)
     {
         if (string.IsNullOrEmpty(url) || !ScrolllerPolicy.Enabled) return false;
         try
         {
             string? path;
-            lock (Gate) path = Book()?.Get(url!)?.Path;
+            bool dropped = false;
+            lock (Gate)
+            {
+                var book = Book();
+                var e = book?.Get(url!);
+                if (book != null && e != null && DropIfExpiredLocked(book, e)) { dropped = true; e = null; }
+                path = e?.Path;
+            }
+            if (dropped) ScheduleSave();
             return path != null && File.Exists(path);
         }
         catch { return false; }
+    }
+
+    /// <summary>When the bytes of <paramref name="url"/>'s cached copy came from Scrolller, or
+    /// null. For a copy held elsewhere (memory) so it expires with the disk one, not a day later.</summary>
+    internal static DateTime? DownloadedUtcOf(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+        try { lock (Gate) return Book()?.Get(url!)?.DownloadedUtc; }
+        catch { return null; }
+    }
+
+    /// <summary>The max-age rule on one row: an expired row leaves the book and its file is
+    /// deleted (a file a player still holds stays until the orphan sweep: the row is gone, so it
+    /// never serves again). True when it was expired. Caller holds <see cref="Gate"/>.</summary>
+    private static bool DropIfExpiredLocked(ScrolllerCacheBook book, ScrolllerCacheEntry e)
+    {
+        if (!ScrolllerCacheBook.IsExpired(e, UtcNow())) return false;
+        book.Remove(e.Url);
+        TryDelete(e.Path);
+        return true;
     }
 
     /// <summary>The cached copy, else a fresh download into the cache (refused, null, when
@@ -324,14 +385,23 @@ internal static class ScrolllerDiskCache
     }
 
     /// <summary>Complete entries, most recently used first, optionally filtered. For reuse picks.
-    /// Empty while the switch is off.</summary>
+    /// Empty while the switch is off. A row past the max age is never listed (it is dropped, so a
+    /// reuse pick can never replay it).</summary>
     public static IReadOnlyList<ScrolllerCacheEntry> Entries(Func<ScrolllerCacheEntry, bool>? filter = null)
     {
         if (!ScrolllerPolicy.Enabled) return Array.Empty<ScrolllerCacheEntry>();
         try
         {
             List<ScrolllerCacheEntry> all;
-            lock (Gate) all = Book()?.Snapshot() ?? new List<ScrolllerCacheEntry>();
+            bool dropped = false;
+            lock (Gate)
+            {
+                var book = Book();
+                if (book != null)
+                    foreach (var e in book.Expired(UtcNow())) dropped |= DropIfExpiredLocked(book, e);
+                all = book?.Snapshot() ?? new List<ScrolllerCacheEntry>();
+            }
+            if (dropped) ScheduleSave();
             if (filter == null) return all;
             var picked = new List<ScrolllerCacheEntry>();
             foreach (var e in all)
@@ -363,6 +433,97 @@ internal static class ScrolllerDiskCache
             lock (Gate) return Book() != null ? Task.CompletedTask : _warm ?? Task.CompletedTask;
         }
         catch { return Task.CompletedTask; }
+    }
+
+    /// <summary>Drops every row that is past the max age, or will be before the next sweep, and
+    /// deletes its file, then deletes every file in the folder no row names (the index and a part
+    /// younger than ten minutes stay). Returns how many went. Never throws. Runs at launch (after
+    /// the load) and hourly.</summary>
+    public static int SweepExpired()
+    {
+        int count = 0;
+        try
+        {
+            bool dropped = false;
+            lock (Gate)
+            {
+                var book = Book();
+                var root = _bookRoot;
+                if (book == null || root == null) return 0;
+                // One period ahead: what would pass the max age before the next sweep goes now,
+                // so no file sits on disk past it waiting for a read that never comes.
+                foreach (var e in book.Expired(UtcNow() + SweepPeriod))
+                {
+                    book.Remove(e.Url);
+                    TryDelete(e.Path);
+                    dropped = true;
+                    count++;
+                }
+                var known = new HashSet<string>(book.Snapshot().Select(e => Path.GetFileName(e.Path)), StringComparer.OrdinalIgnoreCase);
+                foreach (var file in Directory.GetFiles(root))
+                {
+                    var name = Path.GetFileName(file);
+                    if (known.Contains(name) || name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (name.EndsWith(PartSuffix, StringComparison.OrdinalIgnoreCase) && UtcNow() - File.GetCreationTimeUtc(file) < PartGrace) continue;
+                    if (TryDelete(file)) count++;
+                }
+            }
+            if (dropped) ScheduleSave();
+            if (count > 0) App.Logger?.Information("[scrolller cache] swept {Count} file(s) past the day limit or unknown", count);
+        }
+        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] sweep failed: {E}", ex.Message); }
+        return count;
+    }
+
+    /// <summary>The off switch: every row goes, every file in the folder is deleted (a file a
+    /// player still holds is left for the next sweep) and the index is written empty. A folder
+    /// that does not exist is left alone (never created). Never throws.</summary>
+    public static void PurgeAll(string reason)
+    {
+        try
+        {
+            var root = RootProvider();
+            if (string.IsNullOrEmpty(root)) return;
+            Task? warm;
+            lock (Gate) warm = _warm;
+            try { warm?.Wait(TimeSpan.FromSeconds(5)); } catch { }   // a load in flight must not reinstall old rows
+            int deleted = 0;
+            lock (Gate)
+            {
+                if (_book != null && SameRoot(_bookRoot, root))
+                    foreach (var e in _book.Snapshot()) _book.Remove(e.Url);
+                if (!Directory.Exists(root)) return;
+                foreach (var file in Directory.GetFiles(root))
+                {
+                    var name = Path.GetFileName(file);
+                    if (name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (TryDelete(file)) deleted++;
+                }
+                WriteIndex(new ScrolllerCacheBook().ToJson(), Path.Combine(root, IndexFileName), Interlocked.Increment(ref _saveSeq));
+            }
+            if (deleted > 0) App.Logger?.Information("[scrolller cache] {Reason}: deleted {Count} cached file(s)", reason, deleted);
+        }
+        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] purge failed: {E}", ex.Message); }
+    }
+
+    /// <summary>Starts the hourly sweep of every Scrolller copy (<see cref="ScrolllerCopySweeper"/>);
+    /// its first tick runs as soon as the background load is done. Call once, after
+    /// <see cref="WarmAsync"/>. Never throws.</summary>
+    public static void StartSweeper()
+    {
+        try
+        {
+            lock (SaveLock)
+            {
+                if (_sweepTimer != null) return;
+                _sweepTimer = new Timer(_ => ScrolllerCopySweeper.SweepAll(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            }
+            _ = WarmAsync().ContinueWith(_ =>
+            {
+                lock (SaveLock) { try { _sweepTimer?.Change(TimeSpan.Zero, SweepPeriod); } catch { } }
+            }, TaskScheduler.Default);
+        }
+        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] sweeper start failed: {E}", ex.Message); }
     }
 
     // ---- pure helpers ---------------------------------------------------------------
@@ -582,6 +743,12 @@ internal static class ScrolllerDiskCache
         try { if (File.Exists(indexPath)) json = File.ReadAllText(indexPath); } catch { }
         var book = ScrolllerCacheBook.FromJson(json, root);
 
+        // Past the day limit, or from a build that kept no download time: the row goes here and
+        // the orphan pass below deletes its file.
+        var expired = book.Expired(UtcNow());
+        foreach (var e in expired) book.Remove(e.Url);
+        if (expired.Count > 0) App.Logger?.Information("[scrolller cache] {Count} cached file(s) past the day limit: deleted", expired.Count);
+
         // Records whose file is gone, has the wrong size, or whose bytes are not what the url and
         // label say (an error page, a still under a gif label: kept by builds before the format
         // check) go, so each misses once and is fetched again; files the index does not know
@@ -660,7 +827,8 @@ internal static class ScrolllerDiskCache
             lock (Gate)
             {
                 var book = Book();
-                if (book == null || _bookRoot == null) { TryDelete(part); return null; }
+                // The switch went off mid-download: the purge already ran, so nothing new is kept.
+                if (book == null || _bookRoot == null || !ScrolllerPolicy.Enabled) { TryDelete(part); return null; }
                 final = Path.Combine(_bookRoot, FileNameFor(url));
                 try { File.Move(part, final, overwrite: true); }
                 catch
@@ -668,10 +836,15 @@ internal static class ScrolllerDiskCache
                     // The same url is already cached and open in a player: keep that copy.
                     TryDelete(part);
                     var existing = book.Get(url);
-                    if (existing != null && File.Exists(existing.Path)) { book.Touch(url, UtcNow()); return existing.Path; }
+                    if (existing != null && !DropIfExpiredLocked(book, existing) && File.Exists(existing.Path))
+                    {
+                        book.Touch(url, UtcNow());
+                        return existing.Path;
+                    }
                     return null;
                 }
-                book.Put(new ScrolllerCacheEntry(url, final, len, UtcNow(), meta));
+                var now = UtcNow();
+                book.Put(new ScrolllerCacheEntry(url, final, len, now, meta, DownloadedUtc: now));
                 EvictLocked(url);
             }
             ScheduleSave();
@@ -853,6 +1026,7 @@ internal static class ScrolllerDiskCache
         lock (Gate) { _book = null; _bookRoot = null; _warm = null; _warmRoot = null; }
         InFlight.Clear();
         CapBytes = DefaultCapBytes;
+        MaxAge = DefaultMaxAge;
         WarmInline = true;
         FormatCheck = false;
         RemoteConsent = () => true;

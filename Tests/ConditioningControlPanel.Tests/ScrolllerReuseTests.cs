@@ -145,7 +145,7 @@ public sealed class ScrolllerReuseTests : IDisposable
     // ---- cached file -> entry ----------------------------------------------------------
 
     private static ScrolllerCacheEntry Cached(string url, ScrolllerCacheMeta meta)
-        => new(url, "C:/cache/" + ScrolllerReuse.StableHash(url), 1000, DateTime.UtcNow, meta);
+        => new(url, "C:/cache/" + ScrolllerReuse.StableHash(url), 1000, DateTime.UtcNow, meta, DateTime.UtcNow);
 
     [Fact]
     public void ToEntry_ACachedGif_IsAClipWithItsPoster()

@@ -15,7 +15,8 @@ public sealed class ScrolllerCacheBookTests
     private readonly DateTime _now = new(2026, 10, 19, 12, 0, 0, DateTimeKind.Utc);
 
     private static ScrolllerCacheEntry E(string url, long bytes, int minute)
-        => new(url, "x", bytes, new DateTime(2026, 10, 19, 10, minute, 0, DateTimeKind.Utc), new ScrolllerCacheMeta("clip"));
+        => new(url, "x", bytes, new DateTime(2026, 10, 19, 10, minute, 0, DateTimeKind.Utc), new ScrolllerCacheMeta("clip"),
+           new DateTime(2026, 10, 19, 10, 0, 0, DateTimeKind.Utc));
 
     [Fact]
     public void Evictions_drop_oldest_use_first_until_under_the_cap()
@@ -61,7 +62,7 @@ public sealed class ScrolllerCacheBookTests
         var book = new ScrolllerCacheBook();
         var file = ScrolllerDiskCache.FileNameFor("https://a.scrolller.com/1.jpg");
         book.Put(new ScrolllerCacheEntry("https://a.scrolller.com/1.jpg", Path.Combine(_root, file), 10, _now,
-            new ScrolllerCacheMeta("picture", "sub", null, 640, 480, "t")));
+            new ScrolllerCacheMeta("picture", "sub", null, 640, 480, "t"), _now));
         var back = ScrolllerCacheBook.FromJson(book.ToJson(), _root);
         var e = back.Get("https://a.scrolller.com/1.jpg");
         Assert.NotNull(e);

@@ -1976,6 +1976,9 @@ namespace ConditioningControlPanel
             Services.Fyp.Online.ScrolllerAwayWatcher.Start();
             // The Scrolller device cache loads its books in the background: no UI-thread folder scan.
             _ = Services.Fyp.Online.ScrolllerDiskCache.WarmAsync();
+            // Licence: no Scrolller copy outlives a day from its download. Sweeps once the load is
+            // done, then hourly.
+            Services.Fyp.Online.ScrolllerDiskCache.StartSweeper();
 
             // Initialize localization (must be after settings, before UI)
             LocalizationManager.Instance.Initialize(Settings?.Current?.Language ?? "en");
