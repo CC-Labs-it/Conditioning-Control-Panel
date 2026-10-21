@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -25,6 +26,7 @@ public sealed class WhatMovedCardParityTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        LocalizationManager.Instance.SetLanguage("en");
         var previous = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -56,6 +58,11 @@ public sealed class WhatMovedCardParityTests
         Assert.Equal(WhatMovedPlan.Rows.Count, buttons.Count);
         foreach (var button in buttons)
             Assert.Equal(((WhatMovedRow)button.Tag!).ShowMeName, AutomationProperties.GetName(button));
+        // Every row icon is a Fluent glyph, never the emoji drawn as text (WPF draws Twemoji images).
+        var icons = card.GetVisualDescendants().OfType<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>()
+            .Where(g => g.Classes.Contains("rowIcon")).ToList();
+        Assert.Equal(WhatMovedPlan.Rows.Count, icons.Count);
+        Assert.All(icons, g => Assert.False(g.IsFallback, $"unmapped row icon {g.Emoji}"));
         var show = buttons.Single(b => ((WhatMovedRow)b.Tag!).Id == id);
         show.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, show));
         Dispatcher.UIThread.RunJobs();
