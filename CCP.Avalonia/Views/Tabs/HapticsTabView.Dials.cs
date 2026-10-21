@@ -28,8 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _attached;
         internal DispatcherTimer? LiveStatusTimer { get; private set; }
 
-        // Every buzz this page starts (toy Test, pattern Play) hangs off this, so leaving the page ends
-        // it. Panic ends it too: PanicSurfaces "haptics" -> HapticService.PanicStop.
+        // Every buzz this page starts (toy Test, pattern Play) hangs off this, so switching rack module
+        // (the page is hidden) or detaching it ends it; leaving Studio only hides StudioTab and does not. Panic ends it too: PanicSurfaces "haptics" -> HapticService.PanicStop.
         private System.Threading.CancellationTokenSource? _previewCts;
         internal bool PreviewRunning => _previewCts is { IsCancellationRequested: false };
         internal System.Threading.Tasks.Task LastPreview { get; private set; } = System.Threading.Tasks.Task.CompletedTask;   // test seam (P56)
