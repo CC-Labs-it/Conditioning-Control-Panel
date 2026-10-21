@@ -128,7 +128,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return false;
                 }
                 _lastPbpEscapeClaimUtc = nowUtc;
-                if (PanicPolicy.KeptEscapeGoesTo(true, false, false, true, board!.IsReady, false, false)
+                if (PanicPolicy.KeptEscapeGoesTo(claimed: true,
+                        raceInFront: false, raceReady: false,
+                        boardInFront: true, boardReady: board!.IsReady,
+                        breakoutInFront: false, breakoutReady: false)
                     == PanicPolicy.KeptEscapePage.Board) board.PostPbpKeptEscape();
                 return true;
             }
