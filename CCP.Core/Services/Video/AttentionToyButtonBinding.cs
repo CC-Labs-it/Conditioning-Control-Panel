@@ -29,6 +29,7 @@ public sealed class AttentionToyButtonBinding : IDisposable
         if (service == null) return;
         if (!_isLive()) { Dispose(); return; }
         Dispose(); // one reward per batch, even if the hit callback causes another input event
+        Serilog.Log.Information("ATTENTION: satisfied by toy button press");
         _hit();
         _ = service.PostEvent(HapticEventKind.ToyButtonReward);
     }

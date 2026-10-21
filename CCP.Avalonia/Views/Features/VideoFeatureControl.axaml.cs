@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -412,7 +413,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             await new AttentionTargetEditorDialog().ShowDialogSafe(owner);
         }
 
-        private async void BtnTestVideo_Click(object? sender, RoutedEventArgs e)
+        /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
+        internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
+
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = TestVideoAsync();
+
+        private async Task TestVideoAsync()
         {
             // WPF BtnTestVideo_Click -> TriggerVideo(userInitiated: true), after its stuck-video prompt.
             // ponytail: WPF's second prompt ("another interaction is in progress") needs the interaction

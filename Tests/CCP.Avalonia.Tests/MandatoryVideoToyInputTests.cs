@@ -102,7 +102,7 @@ public sealed class MandatoryVideoToyInputTests
                 var no = dialog.FindControl<Button>("BtnCancel")!;
                 Assert.Equal("No", Assert.IsType<TextBlock>(no.Content).Text);
                 no.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await Task.Yield();
+                await card.TestVideoRun;   // the click's own completion, not a yield (P57)
                 Assert.True(scheduler.IsPlaying);
                 Assert.Equal(0, fake.Closed);
             }

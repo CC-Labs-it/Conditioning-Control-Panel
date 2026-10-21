@@ -562,6 +562,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void ReleaseToyBatches()
         {
+            if (_toyBatches.Count == 0) return;   // per-frame path: no allocation when no toy is armed
             foreach (var batch in _toyBatches.ToList())
                 if (!batch.Targets.Any(t => _targets.Contains(t)))
                 {
