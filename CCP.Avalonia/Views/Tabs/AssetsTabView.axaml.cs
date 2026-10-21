@@ -36,10 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
-    /// ponytail: not on this head yet - pack cards (ContentPackService
-    /// is seeded but builds no cards; the section is hidden in WPF too), video thumbnails (WPF uses the
-    /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
-    /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
+    /// ponytail: platform video thumbnails, online flash/video consumption and pack preview
+    /// decoding/rotation/card sheen remain in wire-views-tab-assets-c.
     /// </summary>
     public partial class AssetsTabView : UserControl
     {
@@ -86,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             IsVisibleChanged(this);
             BtnPickAssetsFolder.Click += BtnPickAssetsFolder_Click;
+            InitializePackCatalogue();
             InitializeRemoteMediaPicker();   // AssetsTabView.MediaPicker.cs; re-syncs on every show
         }
 
@@ -144,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshAssetTree();
             InitializeAssetPresets();
             PulseMediaLogIfUnseen();
+            if (PacksSection.IsVisible) _ = RefreshPacksAsync();
         }
 
         private static AppSettings S => CoreSettings.Current;
@@ -732,52 +732,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Error(ex, "Failed to open the assets folder");
             }
         }
-    }
-
-    /// <summary>
-    /// The hidden packs strip's placeholder cards (no pack cards are built from the seeded ContentPackService; the
-    /// section is IsVisible="False" in WPF too). The asset browser and presets are filled from
-    /// code-behind, not from here.
-    /// </summary>
-    public sealed class AssetsTabViewModel
-    {
-        public IReadOnlyList<PackCardViewModel> Packs { get; } = new[]
-        {
-            new PackCardViewModel { Name = "Starter Pack", Description = "A small first-run set: soft imagery and two short loops.", SizeDisplay = "42 MB", ImageCount = 120, VideoCount = 4, IsDownloaded = true },
-            new PackCardViewModel { Name = "Deep Focus", Description = "Slow spirals and long-form video for extended sessions.", SizeDisplay = "310 MB", ImageCount = 640, VideoCount = 22 },
-            new PackCardViewModel { Name = "Community Mix", Description = "Hosted off-site; download it yourself and drop it in.", SizeDisplay = "1.2 GB", ImageCount = 2100, VideoCount = 90, IsExternal = true },
-        };
-    }
-
-    /// <summary>One card in the (hidden) content-packs strip.</summary>
-    public sealed class PackCardViewModel
-    {
-        public string Name { get; set; } = "";
-        public string Description { get; set; } = "";
-        public string SizeDisplay { get; set; } = "";
-        public int ImageCount { get; set; }
-        public int VideoCount { get; set; }
-        public bool IsDownloaded { get; set; }
-        public bool IsExternal { get; set; }
-        public bool IsDownloading { get; set; }
-        public double DownloadProgress { get; set; }
-
-        /// <summary>WPF used a MultiBinding with StringFormat "{0} images, {1} videos"; Avalonia has
-        /// no MultiBinding StringFormat, and the string was hardcoded English there too.</summary>
-        public string CountsDisplay => $"{ImageCount} images, {VideoCount} videos";
-
-        public bool ShowExternalButtons => IsExternal && !IsDownloaded;
-        public bool IsNotDownloading => !IsDownloading;
-        public string DownloadButtonText => IsDownloaded ? "Uninstall" : "Install";
-        public string ActivateButtonText => "Deactivate";
-
-        // IImage, not a URL string: Avalonia will not convert one, and pack:// is WPF-only. Null
-        // until the pack service (and its image cache) moves to Core - the "No Preview" branch
-        // is what draws meanwhile, which is also the honest state for a pack with no preview.
-        public IImage? CurrentPreviewImage => null;
-        public IImage? PreviewImage => null;
-        public bool HasPreviewImages => false;
-        public bool HasAnyPreview => false;
     }
 
     /// <summary>One tile in the thumbnail grid (WPF Models/AssetFileItem, with an Avalonia bitmap).</summary>

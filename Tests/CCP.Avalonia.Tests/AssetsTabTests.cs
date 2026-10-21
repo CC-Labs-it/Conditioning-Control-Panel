@@ -2,6 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.IO.Compression;
+using ConditioningControlPanel.Services.Packs;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
@@ -289,6 +295,229 @@ public sealed class AssetsTabTests
             Assert.Empty(Directory.GetFiles(Path.Combine(root, ".temp")));
         }
         finally { ContentPackStore.Current = oldStore; store.CleanupTempFiles(); }
+    });
+
+    [Fact]
+    public Task PackRefreshUsesTheCatalogueAndActivationPreservesDownloadedFiles() => Run(async (shell, tab, s) =>
+    {
+        await WithPackService(tab, s, async (store, service) =>
+        {
+            tab.BtnRefreshPacks.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Pump(() => tab.PackCardsItemsControl.Items.Count == 2);
+            var card = Assert.IsType<PackCardViewModel>(tab.PackCardsItemsControl.Items[0]);
+            Assert.Equal("Basic Bimbo Starter Pack", card.Name);
+            Assert.True(card.IsDownloaded);
+            Assert.Equal("Deactivate", card.ActivateButtonText);
+            var folder = store.GetPackFolder("basic-bimbo-starter");
+            // The section ships hidden in WPF too. Reveal only in this sandbox to exercise its real buttons.
+            tab.PacksSection.IsVisible = true;
+            var activate = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+                .OfType<Button>().FirstOrDefault(b => b.Tag == card && b.Content is TextBlock { Text: "Deactivate" }));
+            activate.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Pump(() => !card.IsActive);
+            Assert.Equal("Activate", card.ActivateButtonText);
+            Assert.Empty(store.GetActivePackIds());
+            Assert.True(Directory.Exists(folder));
+            Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);
+            activate.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Pump(() => card.IsActive);
+            Assert.Single(store.GetActivePackIds());
+            Assert.Contains(tab.AssetTree, n => n.IsPackFolder);
+            var vm = (AssetsTabViewModel)tab.DataContext!;
+            for (var i = 0; i < 8; i++) vm.Packs.Add(new PackCardViewModel(new ContentPack { Id = "wheel-" + i }));
+            shell.UpdateLayout();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            var point = tab.PacksScrollViewer.TranslatePoint(new Point(30, 30), shell)!.Value;
+            shell.MouseWheel(point, new Vector(0, -1), RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(120, tab.PacksScrollViewer.Offset.X);
+        });
+    });
+
+    [Fact]
+    public Task DeleteDownloadedPacksRequiresConfirmationAndPreservesLooseAssets() => Run(async (shell, tab, s) =>
+    {
+        await WithPackService(tab, s, async (store, service) =>
+        {
+            var messages = new List<string>();
+            tab.Inform = (_, message) => { messages.Add(message); return Task.CompletedTask; };
+            tab.Confirm = (_, _) => Task.FromResult(false);
+            tab.BtnDeleteDownloadedPacks.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(store.IsPackInstalled("basic-bimbo-starter"));
+            tab.Confirm = (_, _) => Task.FromResult(true);
+            tab.BtnDeleteDownloadedPacks.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Pump(() => messages.Count == 1);
+            Assert.Empty(s.InstalledPackIds);
+            Assert.Empty(s.ActivePackIds);
+            Assert.True(File.Exists(Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png")));
+            Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);
+            tab.BtnDeleteDownloadedPacks.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Pump(() => messages.Count == 2);
+            Assert.Equal(Loc.Get("msg_no_downloaded_packs_to_delete"), messages[1]);
+        });
+    });
+
+    [Fact]
+    public Task PackDownloadButtonInstallsThroughCoreAndResetsProgressOnAuthFailure() => Run(async (shell, tab, s) =>
+    {
+        await WithPackService(tab, s, async (store, service) =>
+        {
+            await tab.RefreshPacksAsync();
+            var card = (PackCardViewModel)tab.PackCardsItemsControl.Items[1]!;
+            var told = new List<string>();
+            tab.Confirm = (_, _) => Task.FromResult(true);
+            var installed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            tab.Inform = (title, _) => { told.Add(title); installed.TrySetResult(); return Task.CompletedTask; };
+            tab.PacksSection.IsVisible = true;
+            var download = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+                .OfType<Button>().FirstOrDefault(b => b.Tag == card && b.Content is TextBlock { Text: "Install" }));
+            download.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await installed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(store.IsPackInstalled(card.Id));
+            Assert.True(card.IsActive);
+            Assert.False(card.IsDownloading);
+            Assert.Equal(0, card.DownloadProgress);
+            Assert.Single(store.GetPackFiles(card.Id, "image"));
+            Assert.Contains(Loc.Get("title_success"), told);
+            // Uninstall uses the same button and asks before it removes encrypted content.
+            tab.Confirm = (_, _) => Task.FromResult(false);
+            await tab.ChangePackDownloadAsync(card);
+            Assert.True(card.IsDownloaded);
+            tab.Confirm = (_, _) => Task.FromResult(true);
+            await tab.ChangePackDownloadAsync(card);
+            Assert.False(store.IsPackInstalled(card.Id));
+            Assert.False(card.IsDownloaded);
+
+            var old = ContentPackService.Current;
+            ContentPackService.Current = new ContentPackService(store, baseUrl: () => "https://packs.test",
+                settings: () => s, save: () => { }, patreonToken: () => null);
+            try
+            {
+                await tab.ChangePackDownloadAsync(card);
+                Assert.Contains(Loc.Get("title_login_required"), told);
+                Assert.False(card.IsDownloading);
+                Assert.Equal(0, card.DownloadProgress);
+                Assert.False(store.IsPackInstalled(card.Id));
+            }
+            finally { ContentPackService.Current = old; }
+        });
+    });
+
+    [Fact]
+    public Task ExternalPackDownloadsAllowOnlyHttpsAndCreatorUsesDiscordInvite() => Run(async (shell, tab, s) =>
+    {
+        var opened = new List<string>();
+        tab.OpenPackLink = url => { opened.Add(url); return Task.CompletedTask; };
+        var pack = new ContentPack { Id = "external", IsExternalFlag = true, ExternalUrl = "http://unsafe.test/" };
+        var card = new PackCardViewModel(pack);
+        await tab.ChangePackDownloadAsync(card);
+        Assert.Empty(opened);
+        pack.ExternalUrl = "https://safe.test/";
+        await tab.ChangePackDownloadAsync(card);
+        Assert.Equal(new[] { pack.ExternalUrl }, opened);
+        tab.BtnCreatorDiscord.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(DiscordLinks.Invite, opened.Last());
+    });
+
+    [Fact]
+    public Task PackRateLimitShowsTheServerRefusalAndClearsDownloadState() => Run(async (shell, tab, s) =>
+    {
+        await WithPackService(tab, s, async (store, service) =>
+        {
+            using var http = new HttpClient(new PackHttp { RateLimited = true });
+            ContentPackService.Current = new ContentPackService(store, http, () => "https://packs.test", () => s, () => { }, () => "sandbox-token");
+            await tab.RefreshPacksAsync();
+            var card = (PackCardViewModel)tab.PackCardsItemsControl.Items[1]!;
+            var messages = new List<(string Title, string Body)>();
+            tab.Confirm = (_, _) => Task.FromResult(true);
+            tab.Inform = (title, body) => { messages.Add((title, body)); return Task.CompletedTask; };
+            await tab.ChangePackDownloadAsync(card);
+            var message = Assert.Single(messages);
+            Assert.Equal(Loc.Get("title_download_limit_reached"), message.Title);
+            Assert.Contains("sandbox quota reached", message.Body);
+            Assert.False(card.IsDownloading);
+            Assert.Equal(0, card.DownloadProgress);
+            Assert.False(store.IsPackInstalled(card.Id));
+        });
+    });
+
+    [Fact]
+    public Task PackProgressNotificationsReturnToTheUiThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var model = new ContentPack();
+        var card = new PackCardViewModel(model);
+        var threads = new List<bool>();
+        card.PropertyChanged += (_, _) => threads.Add(Dispatcher.UIThread.CheckAccess());
+        await Task.Run(() => { model.IsDownloading = true; model.DownloadProgress = 37; });
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotEmpty(threads);
+        Assert.All(threads, onUi => Assert.True(onUi));
+        Assert.Equal("Downloading... 37%", card.DownloadButtonText);
+        Assert.False(card.IsNotDownloading);
+    });
+
+    private static async Task WithPackService(AssetsTabView tab, AppSettings s,
+        Func<ContentPackStore, ContentPackService, Task> action)
+    {
+        var root = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var dir = Path.Combine(root, ".packs", "catalogue-test");
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        var file = new PackFileEntry { OriginalName = "face.png", ObfuscatedName = "one.enc", Extension = ".png", FileType = "image" };
+        File.WriteAllBytes(Path.Combine(dir, "content", file.ObfuscatedName),
+            PackEncryptionService.Encrypt(File.ReadAllBytes(Path.Combine(root, "images", "a.png"))));
+        PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(new InstalledPackManifest
+        {
+            PackId = "basic-bimbo-starter", PackGuid = "catalogue-test", PackName = "Basic Bimbo Starter Pack", Files = new() { file }
+        }), Path.Combine(dir, ".manifest.enc"));
+        var oldStore = ContentPackStore.Current;
+        var oldService = ContentPackService.Current;
+        var store = new ContentPackStore(() => root, () => s, () => { });
+        using var http = new HttpClient(new PackHttp());
+        var service = new ContentPackService(store, http, () => "https://packs.test", () => s, () => { }, () => "sandbox-token");
+        ContentPackStore.Current = store;
+        ContentPackService.Current = service;
+        try { await action(store, service); }
+        finally { ContentPackStore.Current = oldStore; ContentPackService.Current = oldService; }
+    }
+
+    private sealed class PackHttp : HttpMessageHandler
+    {
+        internal bool RateLimited;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            if (RateLimited && request.RequestUri!.AbsolutePath == "/pack/download-url")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent(
+                    Newtonsoft.Json.JsonConvert.SerializeObject(new { message = "sandbox quota reached", resetTime = DateTime.UtcNow.AddHours(3) })) });
+            if (request.RequestUri!.AbsolutePath == "/pack/download-url")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+                    "{\"success\":true,\"downloadUrl\":\"https://packs.test/clip.zip\"}", Encoding.UTF8, "application/json") });
+            if (request.RequestUri.AbsolutePath != "/clip.zip")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)); // real built-in fallback
+            using var ms = new MemoryStream();
+            using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            {
+                using var entry = zip.CreateEntry("images/face.png", CompressionLevel.NoCompression).Open();
+                entry.Write(new byte[2048]);
+            }
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(ms.ToArray()) });
+        }
+    }
+
+    [Fact]
+    public Task CatalogueRefreshReplacesScaffoldCards() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var oldService = ContentPackService.Current;
+        var store = new ContentPackStore(() => ConditioningControlPanel.CorePaths.EffectiveAssets, () => s, () => { });
+        ContentPackStore.Current = store;
+        ContentPackService.Current = new ContentPackService(store, baseUrl: () => null);
+        try
+        {
+            tab.BtnRefreshPacks.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Pump(() => tab.PackCardsItemsControl.Items.Count == 2);
+            Assert.Equal("Basic Bimbo Starter Pack", ((PackCardViewModel)tab.PackCardsItemsControl.Items[0]!).Name);
+        }
+        finally { ContentPackStore.Current = oldStore; ContentPackService.Current = oldService; }
     });
 
     // ---- harness ----------------------------------------------------------------------
