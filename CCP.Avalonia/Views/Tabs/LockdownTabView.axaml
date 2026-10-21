@@ -27,8 +27,9 @@
                                           transform cannot be an animation target - same call
                                           Theme/Styles.xaml's ToggleStyle already made)
        DropShadowEffect ShadowDepth/Direction -> OffsetX/OffsetY; the two named effects
-                                          (EEGlow, LockdownImageGlow) lose their x:Name for the
-                                          same AVLN2000 reason; EEGlow is reached via its Border EEPlate
+                                          lose their x:Name for the same AVLN2000 reason: EEGlow is
+                                          reached via its Border EEPlate; LockdownImageGlow is now a
+                                          sibling Border carrying a BoxShadow, pulsed by the shell
        RadiusX="1.05"                 ->  RadiusX="105%" (a bare RelativeScalar is absolute px)
        x:FieldModifier="internal"     ->  dropped; no host re-publishes these fields on this head.
                                           x:Names are kept so the wiring is a one-line change.
