@@ -1,7 +1,5 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
-using OpenCvSharp;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -30,12 +28,6 @@ public sealed class QuickRecalHotkeyTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
-    private sealed class BlankSource : IFrameSource
-    {
-        public bool Open() => true;
-        public bool Read(Mat bgr) { bgr.Create(480, 640, MatType.CV_8UC3); bgr.SetTo(Scalar.All(0)); Thread.Sleep(20); return true; }
-        public void Dispose() { }
-    }
 
     [Fact]
     public Task Invocation_PreservesRunningTracker_AndRefusesASecondDialog() => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -53,7 +45,7 @@ public sealed class QuickRecalHotkeyTests
         {
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion) =
                 (true, true, "Escape", "", true, WebcamConsent.ConsentVersion);
-            WebcamTracker.SourceFactory = () => new BlankSource();
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
             tracker.Calibration = new WebcamCalibrationData();
             Assert.True(await tracker.StartAsync(), tracker.LastError);
             var first = shell.OpenQuickRecalFromHotkeyAsync();
@@ -95,7 +87,7 @@ public sealed class QuickRecalHotkeyTests
         {
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion) =
                 (true, true, "Escape", "", true, WebcamConsent.ConsentVersion);
-            WebcamTracker.SourceFactory = () => new BlankSource();
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
             tracker.Calibration = new WebcamCalibrationData();
             Assert.False(tracker.IsRunning);
             await shell.OpenQuickRecalFromHotkeyAsync();
@@ -240,6 +232,88 @@ public sealed class QuickRecalHotkeyTests
             shell.Close();
             tracker.Calibration = oldCal;
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion) = old;
+        }
+    });
+
+    [Fact]
+    public Task MinimizedShell_DoesNotOwnTheDialog_ShownShellDoes() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        var tracker = WebcamTracker.Instance;
+        var oldCal = tracker.Calibration;
+        var shell = new MainShellWindow();
+        var owners = new System.Collections.Generic.List<WindowBase?>();
+        // The real show path; the effective Owner is read before the dialog is closed again.
+        shell.ShowQuickRecal = (dialog, owner) =>
+        {
+            var shown = MainShellWindow.ShowQuickRecalDialog(dialog, owner);
+            owners.Add(owner);
+            owners.Add(dialog.Owner);
+            dialog.Close();
+            return shown;
+        };
+        try
+        {
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion) =
+                (true, true, "Escape", "", true, WebcamConsent.ConsentVersion);
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+            tracker.Calibration = new WebcamCalibrationData();
+            Assert.True(await tracker.StartAsync(), tracker.LastError);
+            shell.Show();
+            shell.WindowState = WindowState.Minimized;
+            Assert.True(shell.IsVisible); // a minimized shell is still "visible"; only WindowState says otherwise
+            await shell.OpenQuickRecalFromHotkeyAsync();
+            shell.WindowState = WindowState.Normal;
+            await shell.OpenQuickRecalFromHotkeyAsync();
+            Assert.Equal(4, owners.Count);
+            Assert.Null(owners[0]);
+            Assert.Null(owners[1]);
+            Assert.Same(shell, owners[2]);
+            Assert.Same(shell, owners[3]);
+        }
+        finally
+        {
+            await tracker.StopAsync();
+            tracker.Calibration = oldCal;
+            shell.StopQuickRecalHotkey();
+            shell.Close();
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+        }
+    });
+
+    [Fact]
+    public void StartQuickRecalHotkey_ArmsOnlyWhereSupported_AndShellCloseReleasesIt() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var shell = new MainShellWindow();
+        var registration = new Registration();
+        int attempts = 0;
+        shell.RegisterQuickRecal = (_, _) => { attempts++; return registration; };
+        try
+        {
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, true, "Escape", "");
+            shell.Show();
+            shell.QuickRecalPlatformSupported = false;
+            shell.StartQuickRecalHotkey();
+            Assert.Equal(0, attempts);
+            shell.QuickRecalPlatformSupported = true;
+            shell.StartQuickRecalHotkey();
+            shell.StartQuickRecalHotkey(); // idempotent: one watch, one registration
+            Assert.Equal(1, attempts);
+            Assert.True(shell.QuickRecalHotkeyArmed);
+            shell.Close();
+            Assert.True(registration.Disposed);
+            Assert.False(shell.QuickRecalHotkeyArmed);
+        }
+        finally
+        {
+            shell.StopQuickRecalHotkey();
+            shell.Close();
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = old;
         }
     });
 }

@@ -22,13 +22,26 @@ public partial class MainShellWindow
 
     // Native seam: headless tests never register a shortcut on the real desktop.
     internal Func<Window, Action, IDisposable?> RegisterQuickRecal = Win32QuickRecalHotkey.Register;
-    internal Func<WebcamQuickRecalWindow, Window?, Task> ShowQuickRecal = (dialog, owner) => dialog.ShowDialogSafe(owner);
+    internal Func<WebcamQuickRecalWindow, Window?, Task> ShowQuickRecal = ShowQuickRecalDialog;
+    internal bool QuickRecalPlatformSupported = OperatingSystem.IsWindows();
     internal bool QuickRecalHotkeyArmed => _quickRecalRegistration != null;
+
+    /// <summary>WPF MainWindow.xaml.cs:1455-1459: a hidden or minimized shell must not own the dialog.
+    /// No owner means a plain Show(), not ShowDialogSafe(null), which would adopt any visible window,
+    /// a minimized shell included.</summary>
+    internal static Task ShowQuickRecalDialog(WebcamQuickRecalWindow dialog, Window? owner)
+    {
+        if (owner != null) return dialog.ShowDialogSafe(owner);
+        var closed = new TaskCompletionSource();
+        dialog.Closed += (_, _) => closed.TrySetResult();
+        dialog.Show();
+        return closed.Task;
+    }
 
     /// <summary>WPF MainWindow.ApplyGlobalQuickRecalHotkey. Desktop startup only; render/tests do not arm keys.</summary>
     internal void StartQuickRecalHotkey()
     {
-        if (!OperatingSystem.IsWindows() || _quickRecalBindingWatch != null) return;
+        if (!QuickRecalPlatformSupported || _quickRecalBindingWatch != null) return;
         ApplyQuickRecalHotkey();
         // ponytail: observe preset/remote binding changes on one slow timer instead of adding
         // callbacks to every setting writer. Invocation rechecks immediately, including during this gap.
