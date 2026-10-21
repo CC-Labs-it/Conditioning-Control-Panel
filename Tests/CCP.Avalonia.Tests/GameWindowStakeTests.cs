@@ -71,10 +71,14 @@ public sealed partial class GameWindowTests
             CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;   // P02: never the keyring
             var settlement = new StakeSettlement((row, sec) => { Assert.Equal("pvp_loss", row); books++; return sec; },
                 StakeHead.AdoptSp, StakeHead.Account);
+            // The settle watch's wait is stepped (P08): open unless a test holds it.
+            TaskCompletionSource? hold = null;
+            var waits = 0;
             // StakeBridge.ForApp's shape with the faked server; the seeded head hooks stay in the path.
             GameWindow.PbpStakeBridge = (game, post) => new StakeBridge(game, post,
                 new StakeApi(http, FriendsHead.Identity, "http://stakes.test"), settlement,
-                () => StakeBridge.TimeOkHook(), () => StakeBridge.EnableLossRowHook());
+                () => StakeBridge.TimeOkHook(), () => StakeBridge.EnableLossRowHook(),
+                settleDelay: (_, _) => { Interlocked.Increment(ref waits); return hold?.Task ?? Task.CompletedTask; });
             MainShellWindow.LeashGateDueProvider = () => false;
             var w = GameWindow.Launch(GameWindow.PbpId)!;
             Dispatcher.UIThread.RunJobs();
@@ -119,12 +123,17 @@ public sealed partial class GameWindowTests
             Assert.Equal(1, books);
 
             // Panic mid-watch: the board closes, the watch still books (WPF's static bridge), nothing is posted to it.
+            hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             w.Web.OnWebMessage("{\"type\":\"stake-settle\",\"match\":\"m2\"}");
             var watch = GameWindow.PbpStakePending;
             PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(watch.IsCompleted);                               // still waiting when panic landed
+            Assert.Equal(1, books);
+            Assert.True(Volatile.Read(ref waits) >= 2);                    // m1's watch and m2's both used the stepped wait
             var before = sent.Count;
+            hold.SetResult();
             Assert.True(watch.Wait(TimeSpan.FromSeconds(10)));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(2, books);
