@@ -1,6 +1,4 @@
 using System;
-using System.Linq;
-using Avalonia.LogicalTree;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
@@ -47,9 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 try
                 {
-                    if (CompanionCore.SwitchCompanion((CompanionId)index))
-                        TopLevel.GetTopLevel(this)?.GetLogicalDescendants().OfType<CompanionHeroCard>()
-                            .FirstOrDefault()?.ApplyAvatarArt();
+                    // The hero follows through its own CompanionCore.Switched hook (WPF SyncHero).
+                    CompanionCore.SwitchCompanion((CompanionId)index);
                     // ponytail: the tube's SwitchToCompanionAvatar still needs its head port.
                 }
                 catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }

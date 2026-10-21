@@ -40,6 +40,7 @@ public sealed class WorkshopRosterSwitchTests
         s.ActiveCompanionId = 0;
         s.CompanionProgressData[2] = new CompanionProgress { Level = 7 };
         var shell = new MainShellWindow();
+        bool closed = false;
         try
         {
             shell.Show();
@@ -48,6 +49,7 @@ public sealed class WorkshopRosterSwitchTests
             shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal("roster");
             Dispatcher.UIThread.RunJobs();
             var cell = shell.GetLogicalDescendants().OfType<WorkshopRosterCell>().Single();
+            var hero = shell.GetLogicalDescendants().OfType<CompanionHeroCard>().First().ViewModel!;
             void Press(Control target, MouseButton button)
             {
                 target.BringIntoView();
@@ -64,6 +66,7 @@ public sealed class WorkshopRosterSwitchTests
             Assert.Equal(0, s.ActiveCompanionId); // button never also switches the card
             Press(name, MouseButton.Left);
             Assert.Equal(2, s.ActiveCompanionId);
+            Assert.Equal(7, hero.Level); // hero follows the click (WPF SyncHero)
             Assert.NotEqual(DateTime.MinValue, s.CompanionProgressData[2].FirstActivated);
             Color Ring(int i) => ((ISolidColorBrush)cell.FindControl<Border>($"CompanionCard{i}")!.BorderBrush!).Color;
             Assert.NotEqual(Colors.Transparent, Ring(2));
@@ -74,15 +77,20 @@ public sealed class WorkshopRosterSwitchTests
             Dispatcher.UIThread.RunJobs();
             Assert.NotEqual(Colors.Transparent, Ring(3));
             Assert.Equal(Colors.Transparent, Ring(2));
+            var heroName = hero.Name;
+            Assert.Equal(s.ActiveCompanionProgress.Level, hero.Level); // hero follows a Core switch too
             var progress = s.ActiveCompanionProgress;
             int previous = progress.Level;
             await Task.Run(() => CompanionCore.AddCompanionXP(progress.XPForNextLevel * 4, "roster-test"));
             Dispatcher.UIThread.RunJobs();
             Assert.True(progress.Level > previous);
             Assert.Equal($"Lv.{progress.Level}", cell.FindControl<TextBlock>("TxtCompanion3Level")!.Text);
+            Assert.Equal(progress.Level, hero.Level); // and a Core level-up
+            Assert.Equal(heroName, hero.Name);
 
             shell.Close();
             Dispatcher.UIThread.RunJobs();
+            closed = true;
             var closedLevel = cell.FindControl<TextBlock>("TxtCompanion3Level")!.Text;
             CompanionCore.AddCompanionXP(progress.XPForNextLevel * 4, "closed-roster-test");
             CompanionCore.SwitchCompanion((CompanionId)0);
@@ -92,7 +100,7 @@ public sealed class WorkshopRosterSwitchTests
         }
         finally
         {
-            shell.Close();
+            if (!closed) shell.Close();
             Dispatcher.UIThread.RunJobs();
             // The private service's level/XP writes armed a debounced save; drop it here, not via the hook.
             SettingsService.DisarmAllPendingSaves();
