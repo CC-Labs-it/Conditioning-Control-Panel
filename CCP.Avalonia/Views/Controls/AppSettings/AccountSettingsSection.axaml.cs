@@ -321,11 +321,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             using var cts = _linkCts = new System.Threading.CancellationTokenSource();
             var ct = cts.Token;
             var top = TopLevel.GetTopLevel(this);
-            Action<string> open = url =>
+            Action<string> open = OpenProviderForTest ?? (url =>
             {
                 if (Platform.ExternalOpener.Allowed(url))
                     global::Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = Platform.ExternalOpener.OpenAsync(top, url));
-            };
+            });
             try
             {
                 // No network: fail now with the link-failed copy rather than wait out the 5-minute OAuth.
@@ -370,6 +370,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 else
                     await Tell(Owner, Loc.Get("account_linked_title"), Loc.GetF("account_linked_success", provider));
                 Shell?.UpdateQuickLoginUI();
+                if (provider == "discord" && Shell is { } shell)
+                    await shell.OfferAchievementSharingAfterDiscordLink();
             }
             catch (OperationCanceledException) { }
             // Core ends a cancelled browser wait as a timeout; here that is the page going away, not a failure.
@@ -386,6 +388,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Refresh();
             }
         }
+
+        // Tests drive a real loopback callback without opening a browser or a provider website.
+        internal Action<string>? OpenProviderForTest;
 
         private System.Threading.CancellationTokenSource? _linkCts;
 

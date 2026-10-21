@@ -7,7 +7,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <summary>
     /// The Profile tab's "Privacy &amp; Sharing" body, ported from the WPF head.
     ///
-    /// Only the two Rich Presence switches are wired (WirePresence). The rest: the refusal STANDS - but not for the reason first written. The
+    /// The two Rich Presence switches and the local achievement-sharing opt-in are wired.
+    /// The remaining server-backed privacy switches still wait for their sync paths. The
     /// original note blamed MainWindow being a <c>System.Windows.Window</c>; that is stale. Every
     /// flag these twelve toggles write (DiscordShareAchievements, PublicShareRealAvatar,
     /// GoonShareAvatar, GoonShareDiscordDm, GoonRichPresence, ...) is on <c>CoreSettings.Current</c>
@@ -43,6 +44,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             AvaloniaXamlLoader.Load(this);
             DataContext = new ProfilePrivacyPanelViewModel();
             WirePresence();
+            WireAchievementSharing();
+        }
+
+        private bool _paintingAchievementSharing;
+
+        // WPF ChkShareAchievements_Changed writes this local opt-in only (no profile push).
+        // Kept separate from the privacy switches whose immediate server push is still missing.
+        private void WireAchievementSharing()
+        {
+            if (this.FindControl<CheckBox>("ChkDiscordTabShareAchievements") is not { } share) return;
+            RefreshAchievementSharing();
+            share.IsCheckedChanged += (_, _) =>
+            {
+                if (_paintingAchievementSharing) return;
+                CoreSettings.Current.DiscordShareAchievements = share.IsChecked == true;
+                CoreSettings.Save();
+            };
+            AttachedToVisualTree += (_, _) => RefreshAchievementSharing();
+        }
+
+        internal void RefreshAchievementSharing()
+        {
+            _paintingAchievementSharing = true;
+            try
+            {
+                if (this.FindControl<CheckBox>("ChkDiscordTabShareAchievements") is { } share)
+                    share.IsChecked = CoreSettings.Current.DiscordShareAchievements;
+            }
+            finally { _paintingAchievementSharing = false; }
         }
 
         private bool _paintingPresence;

@@ -1,18 +1,5 @@
 namespace ConditioningControlPanel.Services
 {
-    /// <summary>Where the "post your achievements to Discord?" offer goes right now.</summary>
-    public enum AchievementSharePromptRouting
-    {
-        /// <summary>Nothing to ask: sharing is already on.</summary>
-        Skip,
-
-        /// <summary>Ask now, as a dialog owned by the panel.</summary>
-        Ask,
-
-        /// <summary>Park it as an Inbox row and ask when the user comes back.</summary>
-        Inbox,
-    }
-
     /// <summary>
     /// Whether the app may ask about achievement sharing at this moment.
     ///
@@ -53,12 +40,6 @@ namespace ConditioningControlPanel.Services
         /// visibility check too: a row can only be clicked on a panel that is on screen.</param>
         public static AchievementSharePromptRouting Decide(bool alreadySharing, bool gameHostUp,
             bool launcherHasTheScreen, bool panelOnScreen, bool userAsked = false)
-        {
-            if (alreadySharing) return AchievementSharePromptRouting.Skip;
-            if (userAsked) return AchievementSharePromptRouting.Ask;
-            return gameHostUp || launcherHasTheScreen || !panelOnScreen
-                ? AchievementSharePromptRouting.Inbox
-                : AchievementSharePromptRouting.Ask;
-        }
+            => AchievementSharePromptDecision.Decide(alreadySharing, gameHostUp, launcherHasTheScreen, panelOnScreen, userAsked);
     }
 }
