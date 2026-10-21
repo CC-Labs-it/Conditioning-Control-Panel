@@ -28,9 +28,13 @@ public sealed class CompanionRosterSwitchTests
         int switches = 0;
         void Switched(CompanionId _) => switches++;
         CompanionCore.Switched += Switched;
+        CoreSettings.Current.AvatarEnabled = true;   // fixture parks her off; this fact needs the tube
+        shell.ShowAvatarTube();
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(shell.Tube);
         try
         {
-            foreach (int index in new[] { 2, 4 })
+            foreach (var (index, set) in new[] { (2, 5), (4, 7) })
             {
                 var card = roster.FindControl<Border>($"CompanionCard{index}")!;
                 Click(shell, card, MouseButton.Left);
@@ -42,6 +46,9 @@ public sealed class CompanionRosterSwitchTests
                 Assert.NotEqual(Colors.Transparent, ((ISolidColorBrush)card.BorderBrush!).Color);
                 Assert.Equal(Colors.Transparent, ((ISolidColorBrush)roster.FindControl<Border>("CompanionCard0")!.BorderBrush!).Color);
                 Assert.NotEqual(DateTime.MinValue, CoreSettings.Current.ActiveCompanionProgress.FirstActivated);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(set, shell.Tube!.CurrentAvatarSet); // WPF SwitchToCompanionAvatar
+                Assert.Equal(set, CoreSettings.Current.SelectedAvatarSet);
             }
             Assert.Equal(2, switches);
             Click(shell, roster.FindControl<Border>("CompanionCard4")!, MouseButton.Left);
@@ -62,26 +69,10 @@ public sealed class CompanionRosterSwitchTests
         Assert.Equal(0, CoreSettings.Current.ActiveCompanionId);
     });
 
-    [Fact]
-    public async Task ExistingHeroActionsAndVisibilityLifecycleRemainLive()
-    {
-        // Existing fixtures use a bare AppBuilder. Seed the shipped font configuration first,
-        // then exercise their real shell paths without changing or weakening their assertions.
-        await AvaloniaTestDispatcher.RunAsync(() =>
-        {
-            if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            return Task.CompletedTask;
-        });
-        await new CompanionHeroSyncTests().HeroSyncsFromSettingsAndQuickActionsWriteThroughTheShell();
-        await new CompanionTabVisibilityTests().TabEdgesPersistRestoreConsentAndModRepaint();
-    }
-
     private static Task WithRoster(Action<MainShellWindow, CompanionRoomView, WorkshopRosterCell> test) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreSettings.ServiceProvider;
         var service = new SettingsService();
@@ -90,11 +81,14 @@ public sealed class CompanionRosterSwitchTests
         var oldMotion = s.MotionLevel;
         var oldActive = s.ActiveCompanionId;
         var oldAvatar = s.AvatarEnabled;
+        var oldSet = s.SelectedAvatarSet;
+        var oldModSets = new System.Collections.Generic.Dictionary<string, int>(s.ModAvatarSet);
         var oldSlutMode = s.SlutModeEnabled;
         var oldProgress = s.CompanionProgressData;
         s.CompanionProgressData = new();
         s.MotionLevel = MotionLevel.Off;
         s.ActiveCompanionId = 0;
+        s.SelectedAvatarSet = 1;
         s.AvatarEnabled = false;
         s.SlutModeEnabled = false;
         for (int i = 0; i < 5; i++) s.CompanionProgressData[i] = new CompanionProgress { Level = i + 2 };
@@ -119,6 +113,8 @@ public sealed class CompanionRosterSwitchTests
             Dispatcher.UIThread.RunJobs();
             s.ActiveCompanionId = oldActive;
             s.AvatarEnabled = oldAvatar;
+            s.SelectedAvatarSet = oldSet;
+            s.ModAvatarSet = oldModSets;
             s.SlutModeEnabled = oldSlutMode;
             s.CompanionProgressData = oldProgress;
             s.MotionLevel = oldMotion;

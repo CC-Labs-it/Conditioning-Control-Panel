@@ -13,10 +13,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (index is < 0 or > 4) return;
             var id = (CompanionId)index;
             if (CoreMods.Service?.IsCompanionSupported(id) == false) return;
-            if (CompanionCore.SwitchCompanion(id)) room.RefreshCompanionIdentity();
-            // ponytail: AvatarTubeWindow's avatar-set switching is still absent. Keep its
-            // existing set until wire-views-tab-companion-b ports WPF SwitchToCompanionAvatar
-            // together with the unlock and pinned single-emote-mod guards.
+            if (!CompanionCore.SwitchCompanion(id)) return;
+            room.RefreshCompanionIdentity();
+            _avatarTubeWindow?.SwitchToCompanionAvatar(id);   // WPF MainWindow.CompanionTab.cs:327-361
         }
 
         // ponytail: the runtime aggregate/compat accessors, personality prompt assignment,
