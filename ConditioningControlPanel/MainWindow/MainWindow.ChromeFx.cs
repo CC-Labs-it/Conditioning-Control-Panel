@@ -45,7 +45,6 @@ namespace ConditioningControlPanel
         private const double StartSheenSeconds = 0.85;
         private const int StartSheenIntervalSeconds = 8;
         private const double BannerSheenSeconds = 0.75;
-
         private const double XpSheenSeconds = 6.0;
 
         // Nav order, slide direction and the WebView2 airspace list are pure decisions and live in
