@@ -126,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // behind a Core seam.
             ShowTrophyStats = true;
 
+            InitializeLeaderboardFx();
             Loaded += OnLeaderboardTabLoaded;
             PropertyChanged += OnLeaderboardTabPropertyChanged;
 
@@ -271,8 +272,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>
         /// MainWindow.Leaderboard.cs:953 RefreshLeaderboardAsync + RankLeaderboardEntries. Offline or a failed fetch leaves
         /// the board empty and says so in the status line, as WPF does. Never throws.
-        /// ponytail: no profile push before the fetch (write, unit 7), no rank snapshot (LeaderboardRankSnapshotService
-        /// is WPF-only), so every arrow is the muted dash; no Bark hook.
+        /// ponytail: no profile push before the fetch (write, unit 7); no Bark hook.
         /// </summary>
         internal async Task RefreshLeaderboardAsync()
         {
@@ -304,6 +304,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.UpdateStatPills();
                 _ranked.Clear();
                 _ranked.AddRange(LeaderboardClient.Rank(page.Entries!, allTime));
+                var mode = allTime ? "all-time" : "monthly";
+                // Materialize every delta before recording: otherwise virtualized rows read their own new ranks.
+                foreach (var row in _ranked)
+                    row.ApplyRankDelta(string.IsNullOrEmpty(row.UnifiedId) ? null
+                        : LeaderboardRankSnapshotService.GetPreviousRank(mode, row.UnifiedId),
+                        !string.IsNullOrEmpty(row.UnifiedId));
+                LeaderboardRankSnapshotService.RecordIfDue(mode, _ranked);
+                _rankFlashPending = true;
                 _sortKey = "rank";
                 RebuildLeaderboardView();
                 status.Text = Loc.GetF("lb_online_and_total", page.OnlineUsers, page.TotalUsers);
@@ -407,14 +415,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// heterogeneous ItemsSource at the roster. Ported whole from
         /// MainWindow.Leaderboard.cs:RebuildLeaderboardView.
         ///
-        /// <para>Left out: the FX pass and the rank-flash bookkeeping around it
-        /// (MainWindow.LeaderboardFx.cs), and UpdateYourRankDisplay/UpdateYouBar, which read the
-        /// service's own YourRank rather than the view.</para>
+        /// The FX pass lives in LeaderboardTabView.Fx.cs, beside the data and generated containers it decorates.
         /// </summary>
         private void RebuildLeaderboardView()
         {
             try
             {
+                ClearRankFlashes();
                 IEnumerable<LeaderboardRow> query = _ranked;
                 switch (_filter)
                 {
@@ -475,6 +482,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _empty.IsVisible = view.Count == 0 && _ranked.Count > 0;
                 UpdateYourRankDisplay();
                 UpdateYouBar();
+                var moved = _rankFlashPending
+                    ? display.OfType<LeaderboardRow>().Where(r => r.DeltaState is "up" or "down").Take(12).ToList()
+                    : null;
+                _rankFlashPending = false;
+                RunLeaderboardFxPass(moved);
             }
             catch (Exception ex)
             {
