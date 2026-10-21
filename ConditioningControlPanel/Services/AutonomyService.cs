@@ -575,8 +575,11 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         /// <param name="overlayWasRunningBeforePulse">OverlayService.IsRunning as captured when the pulse began.</param>
         /// <param name="otherPulseActive">True while the sibling pulse (spiral for pink, pink for spiral) still runs.</param>
-        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive)
-            => !overlayWasRunningBeforePulse && !otherPulseActive;
+        /// <param name="engineRunning">App.IsEngineRunning when the pulse ends. START pressed inside the
+        /// 30 s found the service already up and borrowed it, so the pulse no longer owns it: stopping
+        /// it then took the run's own spiral and pink filter away until the next START.</param>
+        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive, bool engineRunning = false)
+            => !overlayWasRunningBeforePulse && !otherPulseActive && !engineRunning;
 
         /// <summary>
         /// Should an action that was queued behind an announcement still fire? (#1153)
@@ -1785,7 +1788,7 @@ namespace ConditioningControlPanel.Services
                         App.Overlay?.RefreshOverlays();
 
                         // Ownership, not the toggles (#1180).
-                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _pinkFilterPulseActive))
+                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _pinkFilterPulseActive, App.IsEngineRunning))
                         {
                             App.Overlay?.Stop();
                             App.Logger?.Information("AutonomyService: Spiral pulse - stopped overlay service");
@@ -1915,7 +1918,7 @@ namespace ConditioningControlPanel.Services
                         // feature toggles here was the bug: with the engine off they say "armed",
                         // not "on screen", so an armed Pink Filter card kept the service alive and
                         // the pink never went away.
-                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _spiralPulseActive))
+                        if (ShouldStopOverlayAfterPulse(overlayWasRunning, _spiralPulseActive, App.IsEngineRunning))
                         {
                             App.Overlay?.Stop();
                             App.Logger?.Information("AutonomyService: Pink filter pulse - stopped overlay service");

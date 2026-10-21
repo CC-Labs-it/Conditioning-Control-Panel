@@ -5768,6 +5768,10 @@ Application State:
             // Save settings FIRST (before cloud sync) to persist the user's current local state.
             // This prevents cloud sync from overwriting local values with stale data before save.
             // Use SaveImmediate to flush any pending debounced writes and ensure final state is on disk.
+            // Temporary values (ramp, Takeover pulse, remote controller) go back first: the restores
+            // further down in this method are never saved (MainWindow.SettleTemporarySettingsForExit).
+            try { MainWindowRef?.SettleTemporarySettingsForExit(); }
+            catch (Exception ex) { Logger?.Warning(ex, "Exit: temporary settings settle failed"); }
             Settings?.SaveImmediate();
 
             // Sync profile to cloud on exit (short timeout to avoid blocking shutdown)

@@ -187,6 +187,23 @@ namespace ConditioningControlPanel.Services
             App.Settings.Save();
         }
 
+        /// <summary>
+        /// The app is exiting while a controller is still connected. Dispose only stops the poll,
+        /// so the strict lock the controller switched on, the Brain Drain it switched on and the
+        /// opacities Easy faded were written by the final save as the wearer's own, for good. Hands
+        /// them back the way the controller leaving does, BEFORE that save. Nothing when no remote
+        /// session is live (ReleaseRemoteSafetyState also turns the panic key back on, which only a
+        /// remote session may do).
+        /// </summary>
+        public void ReleaseHoldingsForExit()
+        {
+            if (!IsActive) return;
+            RestoreRemoteBrainDrainSetting();
+            ReleaseRemoteSafetyState();
+            RestoreEasedOpacities();
+            App.Logger?.Information("[RemoteControl] Exit with a controller connected: its holdings handed back");
+        }
+
         // ------------------------------------------------------------------ bookkeeping
 
         private void NoteLandedCommand(string action)
