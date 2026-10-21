@@ -392,9 +392,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Test seam: the bytes behind an online still (WPF RemoteMediaCache.OpenAsync), at most
         /// <see cref="WelcomeShow.FirstShowStageWindow.MaxPictureBytes"/>; null when the host refused or sent no image.</summary>
-        internal static Func<string, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte[]?>> FetchRemote = async (url, token) =>
+        internal static Func<string, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte[]?>> FetchRemote =
+            (url, token) => FetchFollowingRedirectsAsync(
+                (u, t) => Http.GetAsync(u, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, t), url, token);
+
+        /// <summary>WPF RemoteMediaCache follows redirects (CDNs answer 302). The guarded handler cannot, so each
+        /// hop is followed here and re-runs the handler's connect-time private-IP guard; http(s) only, 5 hops.</summary>
+        internal static async System.Threading.Tasks.Task<byte[]?> FetchFollowingRedirectsAsync(
+            Func<Uri, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage>> get,
+            string url, System.Threading.CancellationToken token)
         {
-            using var response = await Http.GetAsync(url, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, token);
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var current)) return null;
+            for (int hop = 0; ; hop++)
+            {
+                if (current.Scheme != Uri.UriSchemeHttps && current.Scheme != Uri.UriSchemeHttp) return null;
+                using var response = await get(current, token);
+                int code = (int)response.StatusCode;
+                if (code >= 300 && code < 400 && response.Headers.Location is { } location)
+                {
+                    if (hop >= 5) return null;
+                    var next = location.IsAbsoluteUri ? location : new Uri(current, location);
+                    if (current.Scheme == Uri.UriSchemeHttps && next.Scheme == Uri.UriSchemeHttp) return null; // .NET's auto-redirect refuses this downgrade too
+                    current = next;
+                    continue;
+                }
+                return await ReadCappedAsync(response, token);
+            }
+        }
+
+        private static async System.Threading.Tasks.Task<byte[]?> ReadCappedAsync(System.Net.Http.HttpResponseMessage response, System.Threading.CancellationToken token)
+        {
             if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > WelcomeShow.FirstShowStageWindow.MaxPictureBytes) return null;
             await using var body = await response.Content.ReadAsStreamAsync(token);
             using var copy = new MemoryStream();
@@ -406,12 +433,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 copy.Write(buffer, 0, n);
             }
             return copy.ToArray();
-        };
+        }
 
         /// <summary>WPF PreviewLoad_Click / ShowRemotePreview(fetch: true): the only way this window reaches out,
         /// and only on a press, behind consent. One still, 720 wide, decoded off the UI thread; the generation
         /// guard drops a result whose row was deselected meanwhile. A failed draw puts the retry back.</summary>
-        internal async System.Threading.Tasks.Task LoadPreviewAsync()
+        private async System.Threading.Tasks.Task LoadPreviewAsync()
         {
             if (_mediaList.SelectedItem is not MediaHistoryRow row) return;
             var url = row.Entry.FilePath;

@@ -37,7 +37,8 @@ public static class RevealArguments
     {
         "--session", "--print-reply", "--dest=org.freedesktop.FileManager1", "--type=method_call",
         "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
-        "array:string:" + new Uri(fullPath).AbsoluteUri.Replace(",", "%2C", StringComparison.Ordinal),
+        // Built per segment, not with new Uri(path): that throws on Windows for a rooted Unix path.
+        "array:string:file://" + string.Join('/', fullPath.Split('/').Select(Uri.EscapeDataString)),
         "string:",
     };
 

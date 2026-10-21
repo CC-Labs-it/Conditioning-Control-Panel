@@ -154,6 +154,13 @@ public sealed class MediaHistoryWindowTests
             bool Shown(string name) => w.FindControl<Control>(name)!.IsVisible;
             string Missing() => w.FindControl<TextBlock>("PreviewMissing")!.Text ?? "";
             void Click(string name) { w.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+            void Press()                                                     // the user's click; pumps until the off-thread decode lands
+            {
+                Click("BtnPreviewLoad");
+                var sw = System.Diagnostics.Stopwatch.StartNew();           // P73: bounded by time, not turns
+                while (Shown("PreviewMissing") && Missing() == Loc.Get("label_media_loading_preview") && sw.Elapsed < System.TimeSpan.FromSeconds(10))
+                    Dispatcher.UIThread.RunJobs();
+            }
 
             list.SelectedIndex = 3;                                          // the still on disk: selected, not just its folder
             Click("BtnPreviewOpenFolder");
@@ -177,12 +184,12 @@ public sealed class MediaHistoryWindowTests
             Assert.Equal(Loc.Get("label_media_streamed_only"), Missing());
 
             served = new byte[] { 1, 2, 3 };                                  // bytes came, none readable
-            await w.LoadPreviewAsync();
+            Press();
             Assert.Equal(Loc.Get("label_no_preview"), Missing());
             Assert.True(Shown("BtnPreviewLoad"));                            // the retry is back
 
             served = File.ReadAllBytes(png);
-            await w.LoadPreviewAsync();
+            Press();
             Assert.True(Shown("PreviewImage"));
             Assert.NotNull(w.FindControl<Image>("PreviewImage")!.Source);
             Assert.False(Shown("PreviewMissing"));
@@ -192,7 +199,7 @@ public sealed class MediaHistoryWindowTests
             list.SelectedIndex = 1;
             list.SelectedIndex = 0;
             served = File.ReadAllBytes(png);
-            await w.LoadPreviewAsync();
+            Press();
             Assert.False(Shown("PreviewImage"));
         }
         finally
@@ -205,4 +212,40 @@ public sealed class MediaHistoryWindowTests
             Directory.Delete(dir, true);
         }
     });
+
+    [Fact]
+    public async Task Online_still_fetch_follows_redirects_by_hand_and_stops_at_five_hops()
+    {
+        var hops = new System.Collections.Generic.List<string>();
+        int redirects = 2;
+        Task<System.Net.Http.HttpResponseMessage> Get(System.Uri u, System.Threading.CancellationToken _)
+        {
+            hops.Add(u.ToString());
+            if (hops.Count <= redirects)
+            {
+                var r = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.Found);
+                r.Headers.Location = hops.Count == 1 ? new System.Uri("https://cdn2.example.com/a.jpg") : new System.Uri("/b.jpg", System.UriKind.Relative);
+                return Task.FromResult(r);
+            }
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.ByteArrayContent(new byte[] { 7, 8 }) });
+        }
+        var bytes = await MediaHistoryWindow.FetchFollowingRedirectsAsync(Get, "https://cdn.example.com/x.jpg", default);
+        Assert.Equal(new byte[] { 7, 8 }, bytes);
+        Assert.Equal(new[] { "https://cdn.example.com/x.jpg", "https://cdn2.example.com/a.jpg", "https://cdn2.example.com/b.jpg" }, hops);
+
+        (hops, redirects) = (new(), 99);                                    // a redirect loop gives up, never spins
+        Assert.Null(await MediaHistoryWindow.FetchFollowingRedirectsAsync(Get, "https://cdn.example.com/x.jpg", default));
+        Assert.Equal(6, hops.Count);
+
+        hops = new();                                                       // https -> http is refused, as .NET's auto-redirect does
+        Task<System.Net.Http.HttpResponseMessage> Downgrade(System.Uri u, System.Threading.CancellationToken _)
+        {
+            hops.Add(u.ToString());
+            var r = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.Found);
+            r.Headers.Location = new System.Uri("http://cdn.example.com/x.jpg");
+            return Task.FromResult(r);
+        }
+        Assert.Null(await MediaHistoryWindow.FetchFollowingRedirectsAsync(Downgrade, "https://cdn.example.com/x.jpg", default));
+        Assert.Single(hops);
+    }
 }

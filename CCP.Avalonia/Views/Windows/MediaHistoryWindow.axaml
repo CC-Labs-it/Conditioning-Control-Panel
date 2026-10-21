@@ -286,7 +286,7 @@
                             <Button x:Name="BtnPreviewLoad" Theme="{StaticResource MlChip}"
                                     Margin="0,0,8,6" IsVisible="False"
                                     ToolTip.Tip="{loc:Str tooltip_load_preview}">
-                                <TextBlock Text="{loc:Str btn_load_preview}"/>
+                                <fx:IconLabel Key="btn_load_preview"/>
                             </Button>
                             <Button x:Name="BtnPreviewCopyLink" Theme="{StaticResource MlChip}"
                                     Margin="0,0,8,6" IsVisible="False">
