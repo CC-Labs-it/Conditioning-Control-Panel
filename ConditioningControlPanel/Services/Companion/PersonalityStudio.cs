@@ -36,10 +36,13 @@ internal static class PersonalityStudio
         var settings = App.Settings?.Current;
         if (service == null || settings == null) return;
         var source = service.GetActivePreset();
-        var draft = Draft(source, settings.CompanionPrompt?.UseCustomPrompt == true ? settings.CompanionPrompt : null);
+        var overridden = settings.CompanionPrompt?.UseCustomPrompt == true;
+        var draft = Draft(source, overridden ? settings.CompanionPrompt : null);
         // One of the user's own: Save updates it in place and Delete is offered. Saving always
         // added a copy before, so editing piled up same-named duplicates nothing could remove (#1481).
-        var own = OwnPreset(source, settings.UserPersonalityPresets);
+        // Not while a community or hand-edited prompt holds the wire: the boxes then show THAT text,
+        // and saving it in place would overwrite the preset's own voice for good. That stays a copy.
+        var own = overridden ? null : OwnPreset(source, settings.UserPersonalityPresets);
         var dialog = new Window
         {
             Owner = owner, Title = L("title"), Width = 660, Height = 650, MinWidth = 460, MinHeight = 400,
@@ -68,18 +71,19 @@ internal static class PersonalityStudio
         form.Children.Add(advanced);
         var scroller = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroller, 1); grid.Children.Add(scroller);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+        // Delete docks left, the actions right: one row that never lets them overlap.
+        var footer = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 18, 0, 0) };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        DockPanel.SetDock(actions, Dock.Right);
         var cancel = new Button { Content = L("cancel"), IsCancel = true, Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 10, 0) };
         var save = new Button { Content = L(own != null ? "update" : "save"), Padding = new Thickness(16, 8, 16, 8) };
         actions.Children.Add(cancel); actions.Children.Add(save);
-        Grid.SetRow(actions, 2); grid.Children.Add(actions);
+        footer.Children.Add(actions);
+        Grid.SetRow(footer, 2); grid.Children.Add(footer);
         if (own != null)
         {
-            var delete = new Button
-            {
-                Content = L("delete"), Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 18, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
+            var delete = new Button { Content = L("delete"), Padding = new Thickness(16, 8, 16, 8), Margin = new Thickness(0, 0, 10, 0) };
+            DockPanel.SetDock(delete, Dock.Left);
             delete.Click += (_, _) =>
             {
                 var asked = MessageBox.Show(dialog, string.Format(L("delete_confirm"), own.Name), L("title"),
@@ -88,7 +92,7 @@ internal static class PersonalityStudio
                 BambiSprite.InvalidateStablePrompt();
                 dialog.Close();
             };
-            Grid.SetRow(delete, 2); grid.Children.Add(delete);
+            footer.Children.Add(delete);
         }
         void Validate() => save.IsEnabled = !string.IsNullOrWhiteSpace(name.Text) && !string.IsNullOrWhiteSpace(voice.Text);
         name.TextChanged += (_, _) => Validate(); voice.TextChanged += (_, _) => Validate(); Validate();

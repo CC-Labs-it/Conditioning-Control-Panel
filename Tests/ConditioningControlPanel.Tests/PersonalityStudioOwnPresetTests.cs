@@ -38,6 +38,8 @@ public class PersonalityStudioOwnPresetTests
         Assert.Contains("own.PromptSettings = draft.PromptSettings;", src);
         Assert.Contains("service.SetActivePreset(own.Id)", src);
         Assert.Contains("service.DeletePreset(own.Id)", src);
+        // A community or hand-edited prompt fills the boxes: saving that in place would overwrite the preset.
+        Assert.Contains("var own = overridden ? null : OwnPreset(source, settings.UserPersonalityPresets);", src);
         // The name box is one line that sizes to its text, never the fixed 34 px wrap.
         Assert.Contains("Field(form, L(\"name\"), source.Name, 60, SingleLine)", src);
         Assert.DoesNotContain("source.Name, 60, 34)", src);
