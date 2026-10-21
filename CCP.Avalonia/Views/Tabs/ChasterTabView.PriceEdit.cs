@@ -58,6 +58,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PaintMenuHelp();
         }
 
+        // One cursor for every stamp; lazy because Cursor needs the platform (P26).
+        private static readonly Lazy<Cursor> IbeamCursor = new(() => new Cursor(StandardCursorType.Ibeam));
+
         private void PaintStamp(string id)
         {
             if (!_stamps.TryGetValue(id, out var stamp) || TabPrices.Find(id) is not { } price) return;
@@ -67,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             stamp.FontStyle = edited ? FontStyle.Italic : FontStyle.Normal;
             if (!TabPriceEdit.Editable(id)) return;
             var open = FiguresEditable();
-            stamp.Cursor = open ? new Cursor(StandardCursorType.Ibeam) : null;
+            stamp.Cursor = open ? IbeamCursor.Value : null;
             stamp.TextDecorations = open ? TextDecorations.Underline : null;
             ToolTip.SetTip(stamp, open
                 ? Loc.Get("chaster_price_edit_tip").Replace("{0}", CircesTab.Format(price.Seconds, signed: false))

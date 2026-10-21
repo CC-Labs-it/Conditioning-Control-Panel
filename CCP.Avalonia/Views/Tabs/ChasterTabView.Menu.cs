@@ -78,7 +78,13 @@ public partial class ChasterTabView
         var stamp = new TextBlock { FontFamily = new FontFamily("Consolas, Courier New"), FontSize = 12.5, FontWeight = FontWeight.Bold, Foreground = brush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         Grid.SetColumn(stamp, 2); grid.Children.Add(stamp); WireStamp(price, stamp);
         var row = new ToggleButton { Theme = (ControlTheme)Resources["CirceRow"]!, Tag = price.Id, BorderBrush = brush, BorderThickness = new Thickness(1), Background = brush, Content = grid, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(8, 6), Margin = new Thickness(0, 0, 8, 8) };
-        if (price.Id == CircesMisses.EventId) ToolTip.SetTip(row, Loc.Get("chaster_misses_hint"));
+        if (price.Id == CircesMisses.EventId)
+        {
+            // WPF (ChasterTabView.xaml.cs:1271): a bound, wrapping tip, so it follows a language switch.
+            var tip = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
+            tip.Bind(TextBlock.TextProperty, new Binding("[chaster_misses_hint]") { Source = LocalizationManager.Instance });
+            ToolTip.SetTip(row, tip);
+        }
         row.Click += PriceToggle_Changed;
         _priceToggles[price.Id] = row;
         return row;

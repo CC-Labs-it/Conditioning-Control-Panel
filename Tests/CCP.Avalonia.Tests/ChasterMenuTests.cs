@@ -36,12 +36,12 @@ public sealed class ChasterMenuTests
         ChasterBillTests.Click(window, control);
     }
 
-    private sealed class FakeChaster : HttpMessageHandler
+    private sealed class FakeChaster(bool locked) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var body = request.RequestUri!.AbsolutePath == "/locks"
-                ? "[{\"_id\":\"l1\",\"title\":\"Test Cage\",\"status\":\"locked\",\"role\":\"wearer\",\"endDate\":\"" + DateTime.UtcNow.AddDays(2).ToString("o") + "\"}]" : "{}";
+                ? !locked ? "[]" : "[{\"_id\":\"l1\",\"title\":\"Test Cage\",\"status\":\"locked\",\"role\":\"wearer\",\"endDate\":\"" + DateTime.UtcNow.AddDays(2).ToString("o") + "\"}]" : "{}";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
         }
     }
@@ -54,10 +54,10 @@ public sealed class ChasterMenuTests
         public void Clear() => _tokens = null;
     }
 
-    private static async Task Run(Func<ChasterService, ChasterTabView, Window, Task> body)
+    private static async Task Run(Func<ChasterService, ChasterTabView, Window, Task> body, bool locked = true)
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var oldProvider = CoreSettings.ServiceProvider;
         var oldHead = ChasterHead.Service;
@@ -74,7 +74,7 @@ public sealed class ChasterMenuTests
         s.ChasterRelockPastEnd = false;
         s.ChasterFlashDodge = false;
         var directory = Directory.CreateTempSubdirectory("ccp-chaster-menu-").FullName;
-        var chaster = new ChasterService(new ChasterClient(new FakeChaster()), new MemoryTokens(), Path.Combine(directory, "tab.json"),
+        var chaster = new ChasterService(new ChasterClient(new FakeChaster(locked)), new MemoryTokens(), Path.Combine(directory, "tab.json"),
             () => new ChasterOptions(s.ChasterTabEnabled, s.ChasterLockId, new HashSet<string>(s.ChasterPrices),
                 TabLimits.FromMinutes(LimitChange.Effective(s.ChasterDayLimit, DateTime.UtcNow), LimitChange.Effective(s.ChasterBacklogLimit, DateTime.UtcNow)),
                 Paused: s.ChasterPaused, PriceOverrides: s.ChasterPriceOverrides));
@@ -108,6 +108,9 @@ public sealed class ChasterMenuTests
         Assert.Equal(costs.Select(p => p.Id), costRows.Select(r => r.Tag));
         Assert.Equal(earns.Select(p => p.Id), tab.FindControl<UniformGrid>("EarnRows")!.Children.Select(r => r.Tag));
         var attention = costRows.Single(r => (string)r.Tag! == "attention");
+        var missesTip = Assert.IsType<TextBlock>(ToolTip.GetTip(tab.FindControl<UniformGrid>("EarnRows")!.Children.OfType<ToggleButton>()
+            .Concat(costRows).Single(r => (string)r.Tag! == CircesMisses.EventId)));
+        Assert.Equal((Loc.Get("chaster_misses_hint"), 320d, TextWrapping.Wrap), (missesTip.Text, missesTip.MaxWidth, missesTip.TextWrapping));
         Assert.True(attention.IsChecked);
         var before = CoreSettings.Current.ChasterPrices;
         Click(w, attention);
@@ -130,11 +133,20 @@ public sealed class ChasterMenuTests
     [Fact]
     public Task StampEnterCommitsEscapeCancelsAndEmptyRestoresDefault() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
     {
-        ChasterHead.Service = null; // unlinked: WPF allows editing before linking
+        // WPF shows the menu only while linked (LinkedPanel, ChasterTabView.xaml:642), so editing runs linked with no lock.
+        ChasterHead.Service = null;
         try
+        {
+            tab.Refresh();
+            Assert.False(tab.FindControl<StackPanel>("LinkedMenuPanel")!.IsVisible);
+        }
+        finally { ChasterHead.Service = chaster; }
+        await chaster.RefreshLockAsync();
+        Assert.Equal(LockLookup.None, chaster.LockLookup);
         {
             CoreSettings.Current.ChasterPriceOverrides = new();
             tab.Refresh();
+            Assert.True(tab.FindControl<StackPanel>("LinkedMenuPanel")!.IsVisible);
             var stamp = tab.StampFor("attention")!;
             var row = stamp.GetVisualAncestors().OfType<ToggleButton>().First();
             var rowOn = row.IsChecked;
@@ -172,9 +184,7 @@ public sealed class ChasterMenuTests
             Click(w, tab.FindControl<Button>("BtnResetPrices")!);
             Assert.Empty(CoreSettings.Current.ChasterPriceOverrides);
         }
-        finally { ChasterHead.Service = chaster; }
-        await Task.CompletedTask;
-    }));
+    }, locked: false));
 
     [Fact]
     public Task ARunningLockRefusesEditingAndClosesAnExistingEditor() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, _) =>
