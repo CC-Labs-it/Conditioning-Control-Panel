@@ -86,19 +86,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 Log.Information("[Startup] '{Key}' went to the Inbox ({Count} waiting)", item.Key, Inbox.UnreadCount);
         }
 
-        // WPF's presenter holds IsStartupDialogShowing around these surfaces. Until the full
-        // modal ladder is ported, their real open/close lifecycle provides the same guard.
-        // ponytail: registration supplies only the modal gate, not the missing startup callers.
-        private static readonly HashSet<Window> _startupModalsUp = new();
-
-        internal static void TrackStartupModal(Window window)
-        {
-            window.Opened += (_, _) => _startupModalsUp.Add(window);
-            window.Closed += (_, _) => _startupModalsUp.Remove(window);
-        }
-
-        internal static bool StartupModalWindowUp() => _startupModalsUp.Any(w => w.IsVisible);
-
         // Passive windows open right now. Tracked by class handler rather than read from the
         // desktop lifetime, so it holds for any host (and headless tests, which have none).
         private static readonly HashSet<Window> _passiveUp = new();

@@ -46,7 +46,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                               Action? tourAction = null, string? tourButtonText = null)
         {
             AvaloniaXamlLoader.Load(this);
-            Platform.StartupLadder.TrackStartupModal(this);
 
             this.FindControl<TextBlock>("TxtTitle")!.Text = title;
             this.FindControl<TextBlock>("TxtNotes")!.Text = notes;

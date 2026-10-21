@@ -21,7 +21,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         public WelcomeDialog()
         {
             AvaloniaXamlLoader.Load(this);
-            Platform.StartupLadder.TrackStartupModal(this);
 
             this.FindControl<TextBlock>("TxtWelcomeHeading")!.Text =
                 Loc.GetF("label_welcome", CoreMods.Affirmation);

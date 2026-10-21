@@ -66,15 +66,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>
         /// True while a startup modal owns the screen. FeatureIntroPopup reads this to refuse to
-        /// stack a card on a modal. The caller's wizard/offer gate and the presenter's open
-        /// windows are independent: closing one window cannot release another startup surface.
+        /// stack a card on a modal. Set around the first-run wizard and the welcome-back offer;
+        /// WPF's other startup modals (What's New, season recap) have no startup caller here yet.
         /// </summary>
-        private static bool _startupDialogShowing;
-        public static bool IsStartupDialogShowing
-        {
-            get => _startupDialogShowing || Platform.StartupLadder.StartupModalWindowUp();
-            set => _startupDialogShowing = value;
-        }
+        public static bool IsStartupDialogShowing { get; set; }
 
         private const int BannerFadeMs = 500;
         private static readonly TimeSpan BannerRotationInterval = TimeSpan.FromSeconds(4);
