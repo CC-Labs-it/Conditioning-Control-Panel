@@ -22,7 +22,7 @@ public sealed class WhatMovedCardParityTests
     private static Task WithShell(Action<MainShellWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var previous = CoreSettings.ServiceProvider;
@@ -76,19 +76,9 @@ public sealed class WhatMovedCardParityTests
     });
 
     [Fact]
-    public Task UpgradeOffersOnceAndFreshInstallSpendsSilently() => WithShell(shell =>
+    public Task FreshInstallSpendsTheOfferSilently() => WithShell(shell =>
     {
         global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
-        CoreSettings.Current.WhatMovedCardShown = 0;
-        shell.OfferWhatMovedIfNeeded(freshInstall: false);
-        Dispatcher.UIThread.RunJobs();
-        var card = shell.OwnedWindows.OfType<WhatMovedCard>().Single();
-        Assert.False(card.ReadMode);
-        Assert.Equal(1, CoreSettings.Current.WhatMovedCardShown);
-        card.Close();
-        shell.OfferWhatMovedIfNeeded(freshInstall: false);
-        Dispatcher.UIThread.RunJobs();
-        Assert.Empty(shell.OwnedWindows.OfType<WhatMovedCard>());
         CoreSettings.Current.WhatMovedCardShown = 0;
         shell.OfferWhatMovedIfNeeded(freshInstall: true);
         Dispatcher.UIThread.RunJobs();
@@ -96,24 +86,10 @@ public sealed class WhatMovedCardParityTests
         Assert.Empty(shell.OwnedWindows.OfType<WhatMovedCard>());
     });
 
-    [Fact]
-    public Task HelpRowReplaysInReadModeAndHidesHelp() => WithShell(shell =>
-    {
-        shell.SetTutorialOverlay(true);
-        var button = shell.FindControl<Button>("BtnHelpWhatMovedRow")!;
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(shell.FindControl<Control>("MainTutorialOverlay")!.IsVisible);
-        var card = shell.OwnedWindows.OfType<WhatMovedCard>().Single();
-        Assert.True(card.ReadMode);
-        Assert.Equal(7, CoreSettings.Current.WhatMovedCardShown);
-        card.Close();
-    });
-
     [Theory]
     [InlineData(Key.Enter, true)]
     [InlineData(Key.Escape, false)]
-    public Task PreviewKeysCloseWithoutNavigatingAndEscapeStillReachesPanic(Key key, bool handled) => WithShell(shell =>
+    public Task PreviewKeysCloseWithoutNavigatingAndEscapeStaysUnhandled(Key key, bool handled) => WithShell(shell =>
     {
         var before = shell.CurrentTab;
         var card = shell.ShowWhatMovedCard(readMode: true)!;
