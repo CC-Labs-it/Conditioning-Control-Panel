@@ -234,7 +234,15 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var original = _originalWallpaperPath;
-                    if (string.IsNullOrWhiteSpace(original) || !File.Exists(original))
+                    if (MustCoverRemote(original, _currentImagePath))
+                    {
+                        // The user's own is gone and an online picture is up: it must not stay
+                        // set in Windows (licence 3.4). A neutral picture goes up instead.
+                        var neutral = NeutralWallpaperPath(WindowsDefaultWallpaper(), App.UserDataPath);
+                        if (neutral != null) SetWallpaper(neutral, "neutral");
+                        App.Logger?.Warning("[Wallpaper] No usable original to restore: an online picture was up, a neutral one replaces it");
+                    }
+                    else if (string.IsNullOrWhiteSpace(original) || !File.Exists(original))
                     {
                         // Never hand SPI_SETDESKWALLPAPER an empty/missing path: Windows clears the
                         // desktop to a flat colour and writes that to the registry (#692).
@@ -337,8 +345,12 @@ namespace ConditioningControlPanel.Services
         private static bool RemoteMediaEnabled()
         {
             var s = App.Settings?.Current;
-            return s != null && s.MediaSource != "local" && s.HasRemoteMediaConsent;
+            return s != null && RemoteMediaEnabled(s.MediaSource, s.HasRemoteMediaConsent);
         }
+
+        /// <summary>The rule itself, pure: also what shows the wallpaper card's credit.</summary>
+        internal static bool RemoteMediaEnabled(string? mediaSource, bool hasRemoteMediaConsent)
+            => mediaSource != null && mediaSource != "local" && hasRemoteMediaConsent;
 
         /// <summary>Our channel set. Niche selection is app-wide by design; only rotation and
         /// dwell are per-consumer, which is what asking for our own tenant buys.</summary>
@@ -583,6 +595,67 @@ namespace ConditioningControlPanel.Services
             foreach (var temp in toRelease) SafeRelease(temp);
             if (toRelease.Count > 0)
                 App.Logger?.Debug("[Wallpaper] Released {Count} materialized remote wallpapers", toRelease.Count);
+        }
+
+        /// <summary>Deactivating with no usable original of the user's own while an online picture is
+        /// on the desktop: the picture may not stay set (Windows keeps its own copy of it), so a
+        /// neutral one goes up. Pure.</summary>
+        internal static bool MustCoverRemote(string? original, string? current)
+        {
+            bool usable;
+            try { usable = !string.IsNullOrWhiteSpace(original) && File.Exists(original); }
+            catch { usable = false; }
+            return !usable && Video.ScrolllerCredit.IsScrolllerMedia(current);
+        }
+
+        private static string? WindowsDefaultWallpaper()
+        {
+            try { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Web", "Wallpaper", "Windows", "img0.jpg"); }
+            catch { return null; }
+        }
+
+        /// <summary>A neutral picture for <see cref="MustCoverRemote"/>: Windows' own default when it
+        /// is there, else a plain dark file written once into <paramref name="fallbackDir"/>. Null
+        /// when neither can be had (the desktop is then left as it is, never cleared).</summary>
+        internal static string? NeutralWallpaperPath(string? windowsDefault, string? fallbackDir)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(windowsDefault) && File.Exists(windowsDefault)) return windowsDefault;
+                if (string.IsNullOrEmpty(fallbackDir)) return null;
+                var path = Path.Combine(fallbackDir, "wallpaper-neutral.bmp");
+                if (!File.Exists(path))
+                {
+                    Directory.CreateDirectory(fallbackDir);
+                    File.WriteAllBytes(path, SolidBmp(16, 16, 0x22, 0x20, 0x24));
+                }
+                return path;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>A 24-bit BMP of one colour.</summary>
+        internal static byte[] SolidBmp(int width, int height, byte r, byte g, byte b)
+        {
+            int row = (width * 3 + 3) & ~3;
+            int size = 54 + row * height;
+            var bmp = new byte[size];
+            bmp[0] = (byte)'B'; bmp[1] = (byte)'M';
+            BitConverter.GetBytes(size).CopyTo(bmp, 2);
+            BitConverter.GetBytes(54).CopyTo(bmp, 10);
+            BitConverter.GetBytes(40).CopyTo(bmp, 14);
+            BitConverter.GetBytes(width).CopyTo(bmp, 18);
+            BitConverter.GetBytes(height).CopyTo(bmp, 22);
+            BitConverter.GetBytes((short)1).CopyTo(bmp, 26);
+            BitConverter.GetBytes((short)24).CopyTo(bmp, 28);
+            BitConverter.GetBytes(row * height).CopyTo(bmp, 34);
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int i = 54 + y * row + x * 3;
+                    bmp[i] = b; bmp[i + 1] = g; bmp[i + 2] = r;
+                }
+            return bmp;
         }
 
         /// <summary>The day limit on a remote wallpaper file, pure: its creation time is its

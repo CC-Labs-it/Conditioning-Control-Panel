@@ -453,10 +453,15 @@
                                    TextWrapping="Wrap" Margin="2,0,0,2" Visibility="Collapsed"/>
                         <!-- Credit for the online source (owner, 2026-10-17). Inside the fold on
                              purpose: the closed block stays one glance (AssetsMediaBlockRenderTests).
-                             Once the licence is official the stamped line under the meter replaces it. -->
+                             Licence 3.2 (2026-10-21): the linked "Media from Scrolller" stays here
+                             official or not (the stamped line under the meter carries no link text),
+                             with the day limit on the copies under it (licence 3.4). -->
                         <TextBlock x:Name="TxtScrolllerCredit" x:FieldModifier="internal"
-                                   Margin="2,10,0,4" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
+                                   Margin="2,10,0,0" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondaryBrush}"><Hyperlink Click="ScrolllerLink_Click" Foreground="{DynamicResource TextSecondaryBrush}">Media from Scrolller</Hyperlink><Run Text=". "/><Run Text="{loc:Str label_online_media_credit}"/></TextBlock>
+                        <TextBlock x:Name="TxtOnlineCacheDay" x:FieldModifier="internal" Text="{loc:Str online_cache_day_line}"
+                                   Margin="2,3,0,4" FontSize="11.5" Opacity="0.75" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                     </ScrollViewer>
                 </Grid>
