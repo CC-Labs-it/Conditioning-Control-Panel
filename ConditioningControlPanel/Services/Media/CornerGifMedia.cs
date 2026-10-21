@@ -95,7 +95,7 @@ namespace ConditioningControlPanel.Services
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("CornerGifMedia: header read failed for {Uri} ({Error}) - retrying via stream", uri, ex.Message);
+                App.Logger?.Debug("CornerGifMedia: header read failed for {Where} ({Error}) - retrying via stream", LogWhere(uri), ex.Message);
                 try
                 {
                     using var stream = OpenSource(uri);
@@ -111,12 +111,21 @@ namespace ConditioningControlPanel.Services
                 }
                 catch (Exception ex2)
                 {
-                    App.Logger?.Warning("CornerGifMedia: could not read corner GIF dimensions for {Uri}: {Error}", uri, ex2.Message);
+                    App.Logger?.Warning("CornerGifMedia: could not read corner GIF dimensions for {Where}: {Error}", LogWhere(uri), ex2.Message);
                     return false;
                 }
             }
 
             return width > 0 && height > 0;
+        }
+
+        /// <summary>What a log line may say about a source: its host, or for a file only that it is
+        /// one and its extension. Never the path or the url (a remote item's id is content).</summary>
+        internal static string LogWhere(Uri? uri)
+        {
+            if (uri == null) return Logging.UrlLog.Empty;
+            try { return uri.IsAbsoluteUri && uri.IsFile ? "file " + Path.GetExtension(uri.LocalPath) : Logging.UrlLog.Host(uri); }
+            catch { return Logging.UrlLog.Invalid; }
         }
 
         /// <summary>Opens a corner-GIF source, handling pack:// resources and plain files alike.</summary>
@@ -139,7 +148,7 @@ namespace ConditioningControlPanel.Services
 
             App.Logger?.Warning(
                 "{Tag}: source GIF is {W}x{H} ({MP:F1}MP) but the overlay draws it at {TW}x{TH} ({Path}) - frames are decoded down to the overlay size, but a smaller source GIF would still be cheaper to load.",
-                tag, (int)srcW, (int)srcH, sourcePixels / 1_000_000.0, (int)dstW, (int)dstH, uri);
+                tag, (int)srcW, (int)srcH, sourcePixels / 1_000_000.0, (int)dstW, (int)dstH, LogWhere(uri));
         }
 
         /// <summary>

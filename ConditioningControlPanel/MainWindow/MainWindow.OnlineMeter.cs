@@ -379,8 +379,9 @@ namespace ConditioningControlPanel
             if (tab == null) return;
             tab.OnlineMeterCard.Visibility = st.Show ? Visibility.Visible : Visibility.Collapsed;
             tab.OnlineMeterStamped.Visibility = st.ShowStampedLine ? Visibility.Visible : Visibility.Collapsed;
-            // The stamped line replaces the plain credit in the fold while the licence is official.
-            tab.TxtScrolllerCredit.Visibility = st.ShowStampedLine ? Visibility.Collapsed : Visibility.Visible;
+            // The linked "Media from Scrolller" in the fold stays up official or not (licence 3.2):
+            // the stamped line under the meter does not carry the credit's own words.
+            tab.TxtScrolllerCredit.Visibility = Visibility.Visible;
             PaintOnlineOfficialNote(st);
             if (!st.Show) return;
 

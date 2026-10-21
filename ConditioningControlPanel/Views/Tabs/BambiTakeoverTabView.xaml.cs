@@ -231,6 +231,8 @@ namespace ConditioningControlPanel.Views.Tabs
             if (Window.GetWindow(this) is MainWindow mw)
                 mw.ChkAutonomyBehavior_Changed(sender, e);
         }
+        // The wallpaper card's credit link; OpenHome refuses under Strict Lock, Lockdown and Chaos.
+        private void ScrolllerLink_Click(object sender, RoutedEventArgs e) => Services.Video.ScrolllerCredit.OpenHome();
         private void BtnWallpaperFolder_Click(object sender, RoutedEventArgs e)
         {
             if (Window.GetWindow(this) is MainWindow mw)
