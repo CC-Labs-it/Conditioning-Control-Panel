@@ -106,14 +106,7 @@ namespace ConditioningControlPanel.Services.Descent
         /// as not withheld.
         /// </summary>
         internal static bool SpiralWithheldFor(Models.AppSettings? settings, bool offerInHand, bool ceremonyOpen)
-        {
-            if (settings is null) return false;
-
-            if (settings.DescentMigrationCompleted) return false;
-            if (DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) return false;
-
-            return offerInHand || ceremonyOpen || settings.DescentMigrationOffered;
-        }
+            => ProfileSpiral.IsWithheld(settings, offerInHand, ceremonyOpen);
 
         /// <summary>
         /// Tell every spiral surface to look again. They all re-read their gates on

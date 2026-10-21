@@ -1,0 +1,20 @@
+- Moved the existing WPF `DescentService` into CCP.Core, retaining its read-only profile endpoint, throttling/deferred retry, failed-read retention, block withdrawal and logout generation fence. UI dispatch uses CoreDispatch; the WPF head retains its progression-adoption callback.
+- Shared native-door visibility, migration withhold and localized day/stage summary rules through Core `ProfileSpiral`; WPF delegates to that same copy.
+- Wired Avalonia Trainer Card and account-menu doors to the real profile reader, own-card gate and persisted migration gate. Card/menu navigation enters the existing Spiral Room tab; its map integration remains a follow-up. Window teardown unsubscribes callbacks and resets account state; the visible card only polls after a block has been seen.
+- Added four Core tests for gate/reader behavior and a headless UI regression for live glyph/summary paint, self/withhold gates, withdrawal and navigation. No parity/trunk implementation imported; the code is adapted from this base's frozen WPF references.
+- Kept ledger row `shell-profile-spiral` at **stub**. **wire-shell-profile-spiral-b** must connect the Spiral Room's currently-placeholder block/migration/WebHost path, migration offer/choice events, post-sync refresh and Avalonia progression adoption. No new panic-owned window or capture surface is introduced.
+
+## Verification limits
+
+Commands used .NET 10.0.402 (`PATH=/workspace/dotnet:$PATH`) and `DiffEngine_Disabled=true`. Builds used `-m:1 -nr:false`; hardlink copy flags and a shared temporary OutDir reduced disk duplication. Test execution was separated from head rebuilds, with copied stable head assemblies for the final regression run.
+
+- `dotnet build CCP.Core/CCP.Core.csproj` and `dotnet build CCP.Avalonia/CCP.Avalonia.csproj`: succeeded, zero errors.
+- Built all eleven Linux test projects listed in `.github/workflows/build.yml`: Core, Core.Settings, Core.Content, Avalonia, Avalonia.CatalogueStartup, Avalonia.Consent, Avalonia.GeneralSettings, Avalonia.Language, Avalonia.Report, Avalonia.Scheduler and Avalonia.Snapshot. All succeeded with zero errors. Scheduler and Snapshot initially ran out of disk space; both passed after cleanup and retry.
+- `dotnet build Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`: succeeded, **509 warnings, 0 errors**, 11m41s. WPF head and tests compiled for Windows, not executed.
+- `bash .github/scripts/core-guards.sh`: `All Core guards passed.`
+- `dotnet test Tests/CCP.Core.Tests --filter FullyQualifiedName~ProfileSpiralTests`: **4 passed, 0 failed, 0 skipped**. Initial fixture lacked the memory-only CoreSecrets seam; fixed the fixture to store fake tokens without accessing a real secret store.
+- `dotnet test Tests/CCP.Core.Tests --no-build --no-restore`: **2819 passed, 0 failed, 1 skipped, 2820 total**. Existing BoardTiles frame-budget test dynamically skipped itself. The Vosk model was fetched using the repository's pinned fetch script; no tests were deleted or weakened.
+- `dotnet test Tests/CCP.Avalonia.Tests --filter FullyQualifiedName~ProfileSpiralTests`: **1 passed, 0 failed**, including actual pointer navigation from the Trainer Card and account-menu navigation. Regression proof rebuilt the head with only the old empty menu handler restored: **1 failed, 0 passed**, expected `spiral`, actual `discord`. Restoring the final implementation/compiled head passed again: **1 passed, 0 failed, 0 skipped**, 26 seconds.
+- `dotnet run --project CCP.Avalonia --no-build -- --render-all /workspace/scratch/root-render`: exit 0, **224/224 views**. `MainShellWindow.png` is the shell render; the standalone profile defaults to no server block, as required. The fake-wire UI test also captured `/workspace/scratch/profile-spiral.png`, inspected with the visible native spiral plate and its stage III glyph.
+
+Windows runtime, live server/accounts, the real-browser map and migration ceremony were not run here. The named follow-up above remains necessary; the row is not promoted.

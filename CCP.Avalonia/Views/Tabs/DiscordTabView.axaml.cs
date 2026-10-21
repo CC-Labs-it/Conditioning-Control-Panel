@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <see cref="Host"/>, and the host is <see cref="MainShellWindow"/>, so a handler whose WPF
     /// target has been restored on the shell is now a forward again rather than a no-op: Privacy
     /// and Clear. The card itself (own card, search, lookup) lives on this tab, not the shell, so it
-    /// reaches its controls through the generated fields. The vat, faucet, wardrobe and spiral map
+    /// reaches its controls through the generated fields. The vat, faucet and wardrobe
     /// handlers are still empty - each says which symbol it is waiting on.
     ///
     /// THE CTOR CALLS <c>InitializeComponent()</c>, NOT <c>AvaloniaXamlLoader.Load(this)</c>, and
@@ -372,9 +372,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (e.Key == Key.Enter) _ = SearchAsync(TxtProfileSearch.Text);
         }
 
-        /// <summary>The Trainer Card's spiral plate. Opens the expanded map window — the same door
-        /// the nav rail's miniature uses (MainWindow.ProfileSpiral.cs).</summary>
-        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e) { }
+        /// <summary>The Trainer Card's spiral plate opens the Spiral Room tab (WPF MainWindow.ProfileSpiral.cs).</summary>
+        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e)
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left) Host?.OpenSpiralMapFromProfile();
+        }
 
         /// <summary>Left-click on a badge pins or unpins it (own card only). The tile is reached
         /// through the sender's DataContext exactly as the WPF handler reads it.</summary>

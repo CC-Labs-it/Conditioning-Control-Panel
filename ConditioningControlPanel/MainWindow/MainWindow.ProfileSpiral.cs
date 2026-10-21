@@ -128,7 +128,7 @@ namespace ConditioningControlPanel
             try
             {
                 var block = App.Descent?.Current;
-                bool show = block is not null && _profileViewingSelf && !SpiralWithheld;
+                bool show = ProfileSpiral.IsVisible(block, SpiralWithheld, _profileViewingSelf);
                 plate.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
                 if (!show) return;
 
@@ -153,7 +153,7 @@ namespace ConditioningControlPanel
             try
             {
                 var block = App.Descent?.Current;
-                bool show = block is not null && !SpiralWithheld;
+                bool show = ProfileSpiral.IsVisible(block, SpiralWithheld);
                 ProfileMenuSpiralRow.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
                 if (!show || block is null) return;
 
@@ -180,10 +180,7 @@ namespace ConditioningControlPanel
         /// anywhere a word fits, the word wins.</para>
         /// </summary>
         private static string BuildSpiralSummary(DescentBlock block)
-        {
-            string day = string.Format(Loc.Get("programs_card_day"), block.DevotionDays);
-            return day + " · " + DescentStageCopy.Name(block.Stage?.N ?? 0);
-        }
+            => ProfileSpiral.Summary(block);
 
         // ============================== the door ==============================
 

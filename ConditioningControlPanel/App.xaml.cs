@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -7,6 +7,7 @@ using System.Media;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.Http;
+using Newtonsoft.Json.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -3028,7 +3029,19 @@ namespace ConditioningControlPanel
             // retired in the Redis bandwidth pass (2026-09-15) - the cross-device XP adopt
             // it fed now reads level/xp off the heartbeat response instead
             // (ProfileSyncService.SendHeartbeatAsync -> TryAdoptFromProfilePoll).
-            Descent = new Services.Descent.DescentService();
+            Descent = new Services.Descent.DescentService
+            {
+                AdoptProgression = userNode =>
+                {
+                    var level = userNode["level"]?.Value<int?>() ?? 0;
+                    var xp = userNode["xp"]?.Value<double?>();
+                    if (level <= 0 || xp is null) return;
+                    var season = userNode["current_season"]?.Type == Newtonsoft.Json.Linq.JTokenType.String
+                        ? userNode["current_season"]?.Value<string>() : null;
+                    ProfileSync?.ApplyServerCurveEpoch(Services.ProfileSyncService.ParseCurveEpoch(userNode["curve_epoch"]), "profile poll");
+                    ProfileSync?.TryAdoptFromProfilePoll(level, xp.Value, season);
+                }
+            };
             // Costs one allocation and issues nothing. See the property doc: it cannot act until
             // a server offer arrives.
             DescentMigration = new Services.Descent.DescentMigrationService();

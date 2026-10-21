@@ -1,10 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services.Descent
 {
@@ -28,6 +27,17 @@ namespace ConditioningControlPanel.Services.Descent
     /// </summary>
     public sealed class DescentService
     {
+        private readonly Func<AppSettings?> _settings;
+        private readonly V2AuthService _client;
+        // The head owns progression adoption; this reader never writes the ledger itself.
+        public Action<JObject>? AdoptProgression { get; set; }
+
+        public DescentService(Func<AppSettings?>? settings = null, V2AuthService? client = null)
+        {
+            _settings = settings ?? (() => CoreSettings.Service?.Current);
+            _client = client ?? new V2AuthService(_settings);
+        }
+
         /// <summary>One fetch in the air at a time.</summary>
         private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -129,7 +139,7 @@ namespace ConditioningControlPanel.Services.Descent
             // SendHeartbeatAsync): a user who turned the app's networking off must
             // not be able to see a request leave for a decorative meter. The gate
             // answers it with Skip and, unlike the other skips, does not remember it.
-            var settings = App.Settings?.Current;
+            var settings = _settings();
             bool offline = settings?.OfflineMode == true;
             string? unifiedId = settings?.UnifiedId;
             string? authToken = settings?.AuthToken;
@@ -157,7 +167,7 @@ namespace ConditioningControlPanel.Services.Descent
                 int generation = Volatile.Read(ref _generation);
                 lock (_refreshGate) _refreshGate.BeginFetch(DateTime.UtcNow, unifiedId!, authToken!);
 
-                var userNode = await new V2AuthService().GetUserProfileNodeAsync(unifiedId!).ConfigureAwait(false);
+                var userNode = await _client.GetUserProfileNodeAsync(unifiedId!).ConfigureAwait(false);
 
                 if (generation != Volatile.Read(ref _generation))
                 {
@@ -246,21 +256,11 @@ namespace ConditioningControlPanel.Services.Descent
         /// <see cref="ProfileSyncService.TryAdoptFromProfilePoll"/>. Absent or
         /// malformed fields mean no offer — never a guess.
         /// </summary>
-        private static void TryHandOffProgression(JObject userNode)
+        private void TryHandOffProgression(JObject userNode)
         {
             try
             {
-                var level = userNode["level"]?.Value<int?>() ?? 0;
-                var xp = userNode["xp"]?.Value<double?>();
-                if (level <= 0 || xp is null) return;
-
-                var season = userNode["current_season"]?.Type == JTokenType.String
-                    ? userNode["current_season"]?.Value<string>()
-                    : null;
-
-                // The curve before the level: an adopt prices the server's total on OUR curve.
-                App.ProfileSync?.ApplyServerCurveEpoch(ProfileSyncService.ParseCurveEpoch(userNode["curve_epoch"]), "profile poll");
-                App.ProfileSync?.TryAdoptFromProfilePoll(level, xp.Value, season);
+                AdoptProgression?.Invoke(userNode);
             }
             catch (Exception ex)
             {
@@ -333,20 +333,11 @@ namespace ConditioningControlPanel.Services.Descent
         {
             try
             {
-                var dispatcher = Application.Current?.Dispatcher;
-                if (dispatcher is null || dispatcher.HasShutdownStarted) return;
-
-                if (dispatcher.CheckAccess())
-                {
-                    BlockChanged?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
-
-                dispatcher.BeginInvoke(new Action(() =>
+                CoreDispatch.Post(() =>
                 {
                     try { BlockChanged?.Invoke(this, EventArgs.Empty); }
                     catch (Exception ex) { Log.Debug("[Descent] BlockChanged handler threw: {Error}", ex.Message); }
-                }));
+                });
             }
             catch (Exception ex)
             {

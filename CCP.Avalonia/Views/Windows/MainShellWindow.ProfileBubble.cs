@@ -12,8 +12,7 @@
 // ponytail: still missing vs WPF - the equipped preset bust (CosmeticsCatalog is WPF-only, row
 // shell-profile-cosmetics), the tier badge's hover blow-up (MainWindow.ProfileBubbleTierFx.cs),
 // the level-up spark burst (FireBurstAt, shell-event-fx), the flash wobble and subliminal shimmer
-// (no FlashDisplayed / SubliminalDisplayed event on this head), the spiral row (shell-profile-spiral,
-// no DescentService here) and BrowserLauncher's copy-the-link prompt when the browser cannot open.
+// (no FlashDisplayed / SubliminalDisplayed event on this head), the Spiral Room live map (shell-profile-spiral-b) and BrowserLauncher's copy-the-link prompt when the browser cannot open.
 // PlaceProfileBubblePopup is dropped: Placement="BottomEdgeAlignedRight" is the same result.
 //
 // Controls are reached with Named<T>(name): the window loads with AvaloniaXamlLoader.Load.
@@ -119,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (popup == null) return;
             try
             {
+                RefreshProfileSpiralAccount();
                 RefreshProfileMenu();
                 UpdateLevelDisplay();   // the rail's "Level"/"XP" words follow a language switch
                 SubscribeProfileBubbleWatchers();
@@ -176,6 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                 }
 
+                RefreshProfileMenuSpiral();
                 if (Named<Button>("ProfileMenuAccountBtn") is { } account)
                     account.Content = loggedIn ? Loc.Get("btn_logout") : Loc.Get("account_chip_sign_in");
             }
@@ -352,6 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshProfileBubbleTierBadge();
                 RefreshPremiumSpark();   // WPF UpdatePatreonUI: the spark wears the same tier
                 RefreshProfileShareButton();
+                RefreshProfileSpiralAccount();
                 if (ProfileBubblePopupHost?.IsOpen == true) RefreshProfileMenu();
             }
             catch (Exception ex) { Log.Debug("RefreshProfileBubble: {E}", ex.Message); }
