@@ -20,13 +20,22 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.13";
+        public const string AppVersion = "7.1.14";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.13 - Bring a Friend
+        public const string CurrentPatchNotes = @"v7.1.14 - Bring a Friend
+
+NEW IN 7.1.14
+
+ONLINE MEDIA
+- online media kept on your PC now clears itself 24 hours after it was downloaded. switching online media off clears it at once.
+- the built-in browser pages clear their own copies of online media too.
+- the ""Media from Scrolller"" line now sits on the Assets card and on the wallpaper credit.
+- a Scrolller picture is never left behind as your Windows wallpaper. a plain one takes its place when the wallpaper switches off.
+- bug reports no longer carry which online posts you looked at.
 
 NEW IN 7.1.13
 
@@ -39,7 +48,7 @@ FRIENDS
 ONLINE MEDIA, GOING OFFICIAL
 - we're finalising a commercial licence with Scrolller and starting the work now. every online picture, GIF and clip carries a small ""via Scrolller"" mark.
 - each plan gets a daily share of online media. the meter in the title bar shows today's use in percent and resets at midnight, your time.
-- anything you've already seen is kept on your PC and replays free. sessions mix it with fresh picks, so the share goes further.
+- anything you've seen in the last 24 hours is kept on your PC and replays free. sessions mix it with fresh picks, so the share goes further.
 - when the share runs out, kept media and your own files keep playing. fresh online media is back at midnight.
 - Basic gets more each day than Free, and Prime the most. a new install gets extra on its first day.
 - the meter is counted on your PC only. a one-time card explains all this the first time you use online media.
