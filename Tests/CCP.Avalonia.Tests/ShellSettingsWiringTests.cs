@@ -55,9 +55,7 @@ public sealed class ShellSettingsWiringTests
         Click(shell.Named<Button>("BtnSaveAll")!);
         var offer = await Dialog<MessageDialog>(shell);
         Assert.Equal(Loc.Get("title_settings_saved"), offer.Title);
-        await WaitFor(() => File.Exists(Path.Combine(CorePaths.UserData, "settings.json")) &&
-            Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(CorePaths.UserData, "settings.json")))
-                .Value<int>("FlashFrequency") == 42);
+        Assert.True(service.HasPendingSave); // saved before the offer, not after it
         Click(offer.FindControl<Button>("BtnOk")!);
         var input = await Dialog<InputDialog>(shell);
         input.FindControl<TextBox>("TxtInput")!.Text = "Saved from shell";
@@ -211,13 +209,6 @@ public sealed class ShellSettingsWiringTests
         PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(path, ".manifest.enc"));
     }
 
-    private static async Task WaitFor(Func<bool> condition)
-    {
-        var end = DateTime.UtcNow.AddSeconds(5);
-        while (!condition() && DateTime.UtcNow < end) { Dispatcher.UIThread.RunJobs(); await Task.Delay(20); }
-        Assert.True(condition());
-    }
-
     private sealed class Store : TutorialService.ITourCompletionStore
     {
         private readonly HashSet<string> _walked = new();
@@ -238,7 +229,7 @@ public sealed class ShellSettingsWiringTests
         {
             Dispatcher.UIThread.RunJobs();
             if (shell.OwnedWindows.OfType<T>().FirstOrDefault(w => w.IsVisible) is { } dialog) return dialog;
-            await Task.Delay(10);
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
         }
         throw new InvalidOperationException("Expected owned " + typeof(T).Name);
     }

@@ -32,33 +32,15 @@ public partial class MainShellWindow
         else if (choice == false) await page.PromptSaveNewPreset(this);
     }
 
-    /// <summary>The WPF Yes/No/Cancel offer, using the existing message-box chrome.
+    /// <summary>WPF Settings.cs:398 (YesNo) and :413 (YesNoCancel).
     /// True = overwrite; false = save new; null = leave presets alone.</summary>
     private async Task<bool?> OfferPresetSave(Preset? current)
     {
-        var message = current == null ? Loc.Get("msg_settings_saved_offer_preset")
-            : Loc.GetF("msg_settings_saved_offer_overwrite_format", current.Name);
-        var dialog = new MessageDialog(Loc.Get("title_settings_saved"), message, showCancel: true,
-            okText: "Yes", cancelText: current == null ? "No" : Loc.Get("btn_cancel"));
-        var yes = dialog.FindControl<Button>("BtnOk")!;
-        var cancel = dialog.FindControl<Button>("BtnCancel")!;
-        var footer = (Grid)yes.Parent!;
-        Grid.SetColumn(yes, 1);
-        Grid.SetColumn(cancel, 2);
-        yes.Margin = new Thickness(0, 0, 10, 0);
-        cancel.Margin = default;
-        var saveNew = false;
+        var title = Loc.Get("title_settings_saved");
         if (current != null)
-        {
-            footer.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            Grid.SetColumn(cancel, 3);
-            var no = new Button { Name = "BtnNo", Content = new TextBlock { Text = "No" },
-                Theme = cancel.Theme, Margin = new Thickness(0, 0, 10, 0) };
-            Grid.SetColumn(no, 2);
-            no.Click += (_, _) => { saveNew = true; dialog.Close(false); };
-            footer.Children.Add(no);
-        }
-        var yesChosen = await dialog.ShowDialogSafe<bool?>(this) == true;
-        return yesChosen ? current != null : saveNew ? false : null;
+            return await MessageDialog.AskYesNoCancelAsync(this, title,
+                Loc.GetF("msg_settings_saved_offer_overwrite_format", current.Name));
+        return await MessageDialog.ConfirmAsync(this, title, Loc.Get("msg_settings_saved_offer_preset"),
+            okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no")) ? false : null;
     }
 }

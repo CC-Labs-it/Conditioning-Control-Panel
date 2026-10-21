@@ -112,7 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var move = packs.Count > 0 && await MessageDialog.ConfirmAsync(owner,
                 Loc.Get("title_move_downloaded_packs"), Loc.GetF("msg_move_packs_confirm", packs.Count,
                     PackFolderMover.FormatSize(bytes), string.Join("\n• ", packs.Select(p => p.PackName)),
-                    bytes > 500_000_000 ? Loc.Get("msg_may_take_a_moment") : ""));
+                    bytes > 500_000_000 ? ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("msg_may_take_a_moment") : ""));
             Directory.CreateDirectory(Path.Combine(selected, "images"));
             Directory.CreateDirectory(Path.Combine(selected, "videos"));
             var moved = false;

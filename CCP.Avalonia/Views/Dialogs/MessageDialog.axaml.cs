@@ -1,5 +1,7 @@
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 {
@@ -71,5 +73,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                                                     string? cancelText = null)
             => await new MessageDialog(title, message, showCancel: true, defaultToCancel, okText, cancelText)
                 .ShowDialogSafe<bool?>(owner) == true;
+
+        /// <summary>WPF <c>MessageBoxButton.YesNoCancel</c>, in WPF's Yes/No/Cancel order.
+        /// True = Yes, false = No, null = Cancel or the X.</summary>
+        public static async Task<bool?> AskYesNoCancelAsync(Window owner, string title, string message)
+        {
+            var dialog = new MessageDialog(title, message, showCancel: true,
+                okText: Loc.Get("btn_yes"));
+            var ok = dialog.FindControl<Button>("BtnOk")!;
+            var no = dialog.FindControl<Button>("BtnNo")!;
+            var cancel = dialog.FindControl<Button>("BtnCancel")!;
+            no.IsVisible = true;
+            Grid.SetColumn(ok, 1);
+            Grid.SetColumn(cancel, 3);
+            ok.Margin = new Thickness(0, 0, 10, 0);
+            cancel.Margin = default;
+            var saidNo = false;
+            no.Click += (_, _) => { saidNo = true; dialog.Close(false); };
+            return await dialog.ShowDialogSafe<bool?>(owner) == true ? true : saidNo ? false : null;
+        }
     }
 }

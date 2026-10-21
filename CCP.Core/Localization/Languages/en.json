@@ -4503,6 +4503,8 @@
   "title_save_asset_preset": "Save Asset Preset",
   "title_save_phrase_preset": "Save Phrase Preset",
   "btn_ok": "OK",
+  "btn_yes": "Yes",
+  "btn_no": "No",
   "skill_mult_streak_power_days": "Streak Power ({0} days)",
   "skill_streak_bonus_name": "Day {0} Streak Bonus!",
   "skill_streak_bonus_flavor": "Welcome back! +{0} XP for your {1}-day streak~",
