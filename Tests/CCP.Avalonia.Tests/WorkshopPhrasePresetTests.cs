@@ -85,6 +85,38 @@ public sealed class WorkshopPhrasePresetTests
         Assert.Null(parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!.SelectedItem);
     });
 
+    [Fact]
+    public Task ReturningToTheCompanionTabRereadsPresets() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        s.PhrasePresets.Clear(); s.CurrentPhrasePresetId = null;
+        var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        try
+        {
+            shell.Show(); shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
+            var drawer = shell.GetVisualDescendants().OfType<WorkshopAccordion>().Single();
+            var combo = ((WorkshopRuntimeVm)drawer.DataContext!).Parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!;
+            shell.ShowTab("achievements"); Dispatcher.UIThread.RunJobs();
+            var added = new PhrasePreset { Name = "Added elsewhere" };
+            s.PhrasePresets.Add(added); s.CurrentPhrasePresetId = added.Id;
+            shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();   // CompanionRoomView.ResumeClocks
+            Assert.Contains(added, combo.Items.OfType<PhrasePreset>());
+            Assert.Equal(added, combo.SelectedItem);
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+            service.SealForReset(); CoreSettings.ServiceProvider = previous;
+        }
+        return Task.CompletedTask;
+    });
+
     private static Task Run(Func<WorkshopAccordion, WorkshopShelfParts, Window, AppSettings, Task> body) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
     {
