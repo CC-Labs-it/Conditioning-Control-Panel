@@ -1,9 +1,8 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.Login.cs (399 lines): the login dialog,
 // logout and the painting of signed-in state.
 //
-// Deliberately NOT here yet (units 6-7 of the account plan): ProfileSyncService (heartbeat, profile
-// load, sync push), the account-switch progression wipe (ClearProgressionData, XP watermark #865),
-// quest/achievement resets and the Descent/V2Purchase caches. Logout clears tokens and identity only.
+// Profile load / known-fields sync and account-switch clearing live in AccountSeed / LoginDialog.
+// ponytail: broader profile fields are still pending their read-before-write port (see shell-login ledger).
 
 using System;
 using Avalonia.Controls;
@@ -11,6 +10,8 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Startup;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -76,6 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _notRememberedShown = true;
                     await MessageDialog.ShowAsync(owner ?? this, Loc.Get("login_not_remembered_title"), Loc.Get("login_not_remembered_body"));
                 }
+                // WPF Login.cs:214: the sharing question does not wait for the background profile load.
+                if (AccountSeed.Discord?.IsAuthenticated == true)
+                    await OfferAchievementSharingAfterDiscordLink();
                 // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
                 try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
                 UpdateLevelDisplay();
@@ -91,6 +95,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateQuickLoginUI(accountChanged: true);
             if (SecretStore.ClearFailed)
                 await MessageDialog.ShowAsync(this, Loc.Get("title_error"), Loc.Get("logout_not_complete_body"));
+        }
+
+        private bool _achievementShareOfferUp;
+
+        /// <summary>WPF Patreon.cs:836, called after sign-in (Login.cs:214). A provider link is not
+        /// consent to sharing: ask separately, with the panel as owner. A game or a hidden panel
+        /// parks a keyed Inbox row; only its explicit Open bypasses that deferral.</summary>
+        internal async Task OfferAchievementSharingAfterDiscordLink(bool userAsked = false)
+        {
+            if (AccountSeed.Discord?.IsAuthenticated != true || _achievementShareOfferUp) return;
+            var s = CoreSettings.Current;
+            var routing = AchievementSharePromptDecision.Decide(s.DiscordShareAchievements,
+                PanicSurfaces.AnyOwnsTheScreen(), LauncherWindow.Instance is { IsVisible: true },
+                IsVisible && WindowState != WindowState.Minimized, userAsked);
+            if (routing == AchievementSharePromptRouting.Skip) return;
+            if (routing == AchievementSharePromptRouting.Inbox)
+            {
+                // File directly: the passive presenter does not yet sample game / launcher state.
+                // Re-routing through PresentOrInbox could open precisely over the game we just saw.
+                StartupLadder.Inbox.File(new InboxItem
+                {
+                    Key = "discord-share-achievements",
+                    Title = Loc.Get("inbox_discord_share_title"),
+                    Summary = Loc.Get("inbox_discord_share_summary"),
+                    Open = () => _ = OfferAchievementSharingAfterDiscordLink(userAsked: true),
+                });
+                return;
+            }
+            _achievementShareOfferUp = true;
+            try
+            {
+                if (!await MessageDialog.ConfirmAsync(this, Loc.Get("title_discord_linked"),
+                    Loc.Get("msg_discord_share_achievements_prompt"),
+                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("leash_cut_confirm_no"))) return;
+                s.DiscordShareAchievements = true;
+                CoreSettings.Save();
+                if (ProfilePage?.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabShareAchievements") is { } checkbox)
+                    checkbox.IsChecked = true;
+                UpdateProfileSharingSummary();
+            }
+            finally { _achievementShareOfferUp = false; }
         }
 
         private static void SetVisible(Control? control, bool visible)

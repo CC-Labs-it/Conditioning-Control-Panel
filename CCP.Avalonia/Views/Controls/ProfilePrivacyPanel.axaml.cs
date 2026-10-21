@@ -7,9 +7,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <summary>
     /// The Profile tab's "Privacy &amp; Sharing" body, ported from the WPF head.
     ///
-    /// Only the two Rich Presence switches are wired (WirePresence). The rest: the refusal STANDS - but not for the reason first written. The
+    /// Presence and achievement sharing switches are wired (WirePresence / WireAchievementSharing). The rest: the refusal STANDS - but not for the reason first written. The
     /// original note blamed MainWindow being a <c>System.Windows.Window</c>; that is stale. Every
-    /// flag these twelve toggles write (DiscordShareAchievements, PublicShareRealAvatar,
+    /// flag those toggles write (PublicShareRealAvatar,
     /// GoonShareAvatar, GoonShareDiscordDm, GoonRichPresence, ...) is on <c>CoreSettings.Current</c>
     /// today, so the SETTINGS half is trivially reachable.
     ///
@@ -43,6 +43,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             AvaloniaXamlLoader.Load(this);
             DataContext = new ProfilePrivacyPanelViewModel();
             WirePresence();
+            WireAchievementSharing();
+        }
+
+        // WPF ChkShareAchievements_Changed (MainWindow.Patreon.cs:884): this choice is local,
+        // unlike the avatar/DM flags below it, which must revoke on the server immediately.
+        private void WireAchievementSharing()
+        {
+            if (this.FindControl<CheckBox>("ChkDiscordTabShareAchievements") is not { } sharing) return;
+            sharing.IsChecked = CoreSettings.Current.DiscordShareAchievements;
+            sharing.IsCheckedChanged += (_, _) =>
+            {
+                var on = sharing.IsChecked == true;
+                if (CoreSettings.Current.DiscordShareAchievements == on) return;
+                CoreSettings.Current.DiscordShareAchievements = on;
+                CoreSettings.Save();
+            };
+            AttachedToVisualTree += (_, _) => sharing.IsChecked = CoreSettings.Current.DiscordShareAchievements;
         }
 
         private bool _paintingPresence;

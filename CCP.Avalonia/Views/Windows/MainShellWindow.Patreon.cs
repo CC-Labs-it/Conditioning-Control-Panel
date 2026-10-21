@@ -18,7 +18,6 @@
 //   private void UpdateAccountLinkingUI(…)
 //   internal async void BtnLinkPatreon_Click(…)
 //   internal async void BtnLinkDiscord_Click(…)
-//   internal void OfferAchievementSharingAfterDiscordLink(…)
 //   internal void ChkShareAchievements_Changed(…)
 //   internal void ChkShareLevelUps_Changed(…)
 //   internal void ChkShowLevelInPresence_Changed(…)

@@ -32,6 +32,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
