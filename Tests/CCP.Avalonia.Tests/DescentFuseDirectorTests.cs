@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -18,96 +17,48 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class DescentFuseDirectorTests
 {
+    // WPF DescentFuseWindow.ShowsRetired (DescentFuseWindow.xaml.cs:173): every show refuses to open,
+    // so nothing is marked played and no retry starts behind a show that never was.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task StartupAndSleepAcrossZeroOpenCatchUp_AndMarkOnlyAfterClose(bool late) => Run(late, (shell, fuse, s) =>
+    [InlineData("startup-catch-up")]
+    [InlineData("late-catch-up")]
+    [InlineData("live")]
+    public Task RetiredShowsOpenNothing_MarkNothing_AndStartNoRetry(string path) => Run(path != "startup-catch-up", (shell, fuse, s) =>
     {
-        shell.Show();
-        if (late)
+        shell.Show(); Dispatcher.UIThread.RunJobs();
+        if (path != "startup-catch-up")
         {
-            s.DescentCeremonyAtUtc = DateTime.UtcNow.AddHours(-1).ToString("o");
+            s.DescentCeremonyAtUtc = DateTime.UtcNow.Add(path == "live" ? TimeSpan.FromSeconds(-1) : TimeSpan.FromHours(-1)).ToString("o");
             fuse.OnTimerTick();
+            Dispatcher.UIThread.RunJobs();
         }
-        Dispatcher.UIThread.RunJobs();
-        var show = Assert.Single(DescentFuseWindow.OnScreen);
-        Assert.Equal(DescentShowKind.CatchUp, typeof(DescentFuseWindow)
-            .GetField("_kind", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(show));
+        Assert.Equal(path != "live", fuse.ShouldPlayCatchUp);
+        Assert.Null(DescentFuseWindow.Open(DescentShowKind.Live));
+        Assert.Empty(DescentFuseWindow.OnScreen);
         Assert.False(s.DescentCatchUpCrackPlayed);
         Assert.False(s.DescentLastNightWitnessed);
-        show.Close();
-        Assert.True(s.DescentCatchUpCrackPlayed);
-        Assert.False(s.DescentLastNightWitnessed);
+        Assert.False(shell.FuseRetryRunning);
+    });
+
+    [Fact]
+    public Task LateZeroWithNoCrackOwedRetriesBoundedly() => Run(true, (shell, fuse, s) =>
+    {
+        LateZeroNoCrackOwed(shell, fuse, s);
+        Assert.Empty(DescentFuseWindow.OnScreen);
         Assert.True(shell.FuseRetryRunning);
         for (var i = 0; i < DescentPostZeroRetry.MaxAttempts; i++) shell.TickFuseRetry();
         Assert.Equal(DescentPostZeroRetry.MaxAttempts, shell.FuseRetryAttempts);
         shell.TickFuseRetry();
         Assert.False(shell.FuseRetryRunning);
-        var next = new MainShellWindow();
-        try { next.Show(); Dispatcher.UIThread.RunJobs(); Assert.Empty(DescentFuseWindow.OnScreen); }
-        finally { next.Close(); }
-    });
-
-    [Fact]
-    public Task LiveZeroRaisedDuringStartupBeforeTheShellExistsIsNotLost() => Run(true, (shell, fuse, s) =>
-    {
-        shell.Show(); Dispatcher.UIThread.RunJobs();
-        var show = Assert.Single(DescentFuseWindow.OnScreen);
-        Assert.Equal(DescentShowKind.Live, typeof(DescentFuseWindow)
-            .GetField("_kind", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(show));
-        fuse.OnTimerTick();
-        Dispatcher.UIThread.RunJobs();
-        Assert.Same(show, Assert.Single(DescentFuseWindow.OnScreen));
-        show.Close();
-        fuse.ApplyCeremonyAt(DateTime.UtcNow.AddHours(2).ToString("o"));
-        s.DescentCeremonyAtUtc = DateTime.UtcNow.AddSeconds(-2).ToString("o");
-        fuse.OnTimerTick(); // the owner's postponed instant still gets its own live zero
-        Assert.NotSame(show, Assert.Single(DescentFuseWindow.OnScreen));
-    }, ZeroBeforeShell);
-
-    [Fact]
-    public Task PanicDropsAQueuedStartupLiveZero() => Run(true, (shell, fuse, s) =>
-    {
-        PanicSurfaces.StopAll("startup-live-test", shell);
-        shell.Show(); Dispatcher.UIThread.RunJobs();
-        Assert.Empty(DescentFuseWindow.OnScreen);
-    }, ZeroBeforeShell);
-
-    private static void ZeroBeforeShell(DescentCountdownService fuse, AppSettings s)
-    {
-        s.DescentCeremonyAtUtc = DateTime.UtcNow.AddSeconds(-1).ToString("o");
-        fuse.OnTimerTick();
-        Assert.False(fuse.ZeroPassedWhileAway);
-        Assert.Equal(DescentFusePhase.Zero, fuse.LastAnnouncedPhase);
-    }
-
-    [Fact]
-    public Task PanicClosesTheLiveShow() => Run(true, (shell, fuse, s) =>
-    {
-        shell.Show();
-        Assert.NotNull(MainShellWindow.OpenLiveFuseShow());
-        PanicSurfaces.StopAll("fuse-test", shell);
-        Assert.Empty(DescentFuseWindow.OnScreen);
-    });
-
-    [Fact]
-    public Task PanicDropsAQueuedCatchUpWithoutMarkingItPlayed() => Run(false, (shell, fuse, s) =>
-    {
-        PanicSurfaces.StopAll("queued-fuse-test", shell);
-        shell.Show();
-        Dispatcher.UIThread.RunJobs();
-        Assert.Empty(DescentFuseWindow.OnScreen);
-        Assert.False(s.DescentCatchUpCrackPlayed);
     });
 
     [Theory]
     [InlineData("completed")]
     [InlineData("pending")]
     [InlineData("dark")]
-    public Task RetryStopsWhenTheAccountAnswersOrTheFuseGoesDark(string reason) => Run(false, (shell, fuse, s) =>
+    public Task RetryStopsWhenTheAccountAnswersOrTheFuseGoesDark(string reason) => Run(true, (shell, fuse, s) =>
     {
-        shell.Show(); Dispatcher.UIThread.RunJobs();
-        Assert.Single(DescentFuseWindow.OnScreen).Close();
+        LateZeroNoCrackOwed(shell, fuse, s);
         Assert.True(shell.FuseRetryRunning);
         if (reason == "completed") s.DescentMigrationCompleted = true;
         else if (reason == "pending") s.PendingDescentMigrationChoice = DescentMigrationChoices.Restore;
@@ -118,18 +69,27 @@ public sealed class DescentFuseDirectorTests
     });
 
     [Fact]
-    public Task AnExistingShowPreventsCatchUpAndDoesNotMarkItPlayed() => Run(false, (shell, fuse, s) =>
+    public Task PanicClosesAnyShow() => Run(true, (shell, fuse, s) =>
     {
-        Assert.NotNull(MainShellWindow.OpenLiveFuseShow());
-        shell.Show(); Dispatcher.UIThread.RunJobs();
-        Assert.Single(DescentFuseWindow.OnScreen);
-        Assert.False(s.DescentCatchUpCrackPlayed);
-        DescentFuseWindow.ForceCloseAll();
-        Assert.False(s.DescentCatchUpCrackPlayed);
+        shell.Show();
+        Assert.NotNull(DescentFuseWindow.OpenShow(DescentShowKind.Live));
+        Assert.Null(DescentFuseWindow.OpenShow(DescentShowKind.CatchUp)); // single-open guard
+        PanicSurfaces.StopAll("fuse-test", shell);
+        Assert.Empty(DescentFuseWindow.OnScreen);
     });
 
-    private static Task Run(bool future, Action<MainShellWindow, DescentCountdownService, AppSettings> body,
-        Action<DescentCountdownService, AppSettings>? beforeShell = null) =>
+    // Sleep across zero after the catch-up already played: WPF DescentShowDirector.cs:192-196.
+    private static void LateZeroNoCrackOwed(MainShellWindow shell, DescentCountdownService fuse, AppSettings s)
+    {
+        s.DescentCatchUpCrackPlayed = true;
+        shell.Show(); Dispatcher.UIThread.RunJobs();
+        s.DescentCeremonyAtUtc = DateTime.UtcNow.AddHours(-1).ToString("o");
+        fuse.OnTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(fuse.ShouldPlayCatchUp);
+    }
+
+    private static Task Run(bool future, Action<MainShellWindow, DescentCountdownService, AppSettings> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
@@ -154,7 +114,6 @@ public sealed class DescentFuseDirectorTests
             MainShellWindow? shell = null;
             try
             {
-                beforeShell?.Invoke(fuse, s);
                 shell = new MainShellWindow();
                 body(shell, fuse, s);
             }
@@ -187,9 +146,10 @@ public sealed partial class AccountSeedTests
         var now = DateTime.UtcNow;
         sync.UtcNow = () => now;
         // Keep the timestamp armed: an absent countdown on the fake response is a real kill switch.
-        var at = now.AddSeconds(-1).ToString("o");
-        s.DescentCeremonyAtUtc = at;
-        s.DescentCatchUpCrackPlayed = s.DescentLastNightWitnessed = false;
+        var at = now.AddHours(-1).ToString("o");
+        s.DescentCeremonyAtUtc = now.AddHours(1).ToString("o");
+        s.DescentCatchUpCrackPlayed = true; // late zero, no crack owed: the one path WPF still retries
+        s.DescentLastNightWitnessed = false;
         s.PendingDescentMigrationChoice = null;
         s.MotionLevel = MotionLevel.Reduced;
         s.AvatarEnabled = false;
@@ -203,7 +163,8 @@ public sealed partial class AccountSeedTests
         {
             shell = new MainShellWindow();
             shell.Show(); Dispatcher.UIThread.RunJobs();
-            Assert.Single(DescentFuseWindow.OnScreen).Close();
+            s.DescentCeremonyAtUtc = at;
+            fuse.OnTimerTick();
             Assert.True(shell.FuseRetryRunning);
             var before = wire.Syncs.Count();
             s.OfflineMode = false; // only the injected HTTP handler may service the sync
@@ -213,7 +174,7 @@ public sealed partial class AccountSeedTests
             Assert.Equal(before + 1, wire.Syncs.Count());
 
             now = now.AddMinutes(1);
-            var live = MainShellWindow.OpenLiveFuseShow()!;
+            var live = DescentFuseWindow.OpenShow(DescentShowKind.Live)!; // the retired show still resyncs at its bloom
             live.FrameCrack(DescentFuseTimeline.LiveSeconds); // reduced/full both reached bloom
             await live.LastResync;
             Assert.Equal(before + 2, wire.Syncs.Count());

@@ -10,78 +10,41 @@ public partial class MainShellWindow
 {
     private DescentCountdownService? _showCountdown;
     private DispatcherTimer? _fuseRetryTimer;
-    private int _fuseRetryAttempts, _fuseShowGeneration;
-    private bool _catchUpQueued;
-    private DateTime? _handledLiveZeroAt;
+    private int _fuseRetryAttempts;
 
     internal bool FuseRetryRunning => _fuseRetryTimer != null;
     internal int FuseRetryAttempts => _fuseRetryAttempts;
 
-    // WPF DescentShowDirector.Arm: the service has settled ShouldPlayCatchUp before the shell exists.
-    // ponytail: no ceremony holds are needed here: WPF retired that window, and this head never opens it.
+    // WPF DescentShowDirector with DescentFuseWindow.ShowsRetired: the Live and CatchUp shows refuse
+    // to open, so a startup catch-up and a live zero do nothing (no mark, no retry). The only path
+    // that still acts is the late zero with no crack owed (DescentShowDirector.cs:192-196).
     private void InitializeFuseShows(DescentCountdownService fuse)
     {
         _showCountdown = fuse;
         fuse.ZeroReached += OnFuseZeroReached;
         fuse.ZeroObservedLate += OnFuseZeroObservedLate;
-        if (fuse.ShouldPlayCatchUp) QueueFuseCatchUp();
-        else if (!fuse.ZeroPassedWhileAway && fuse.LastAnnouncedPhase == DescentFusePhase.Zero)
-        {
-            // The countdown starts before async account startup. Its live event can precede the shell.
-            // Recover only an ANNOUNCED zero, and deduplicate it against an event arriving before this post.
-            var generation = _fuseShowGeneration;
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (generation == _fuseShowGeneration && !fuse.ZeroPassedWhileAway
-                    && fuse.LastAnnouncedPhase == DescentFusePhase.Zero)
-                    OnFuseZeroReached(fuse, EventArgs.Empty);
-            }, DispatcherPriority.Normal);
-        }
         Closed += (_, _) =>
         {
             fuse.ZeroReached -= OnFuseZeroReached;
             fuse.ZeroObservedLate -= OnFuseZeroObservedLate;
-            CancelQueuedFuseShow();
             StopFuseRetry();
         };
     }
 
+    // WPF OnZeroReached: Open(Live) returns null, so no Closed handler and no retry.
     private void OnFuseZeroReached(object? sender, EventArgs e)
     {
-        if (_windowClosed || _showCountdown?.CeremonyAtUtc is not { } instant || _handledLiveZeroAt == instant) return;
-        _handledLiveZeroAt = instant; // a postponed instant remains eligible for its own live zero
-        if (OpenLiveFuseShow() is { } show)
-            show.Closed += (_, _) => BeginFuseRetry();
+        if (!_windowClosed) _ = OpenLiveFuseShow();
     }
 
+    // WPF OnZeroObservedLate: an owed catch-up goes to the retired opener (nothing plays, nothing is
+    // marked); otherwise the post-zero retry makes sure the sync conversation happens.
     private void OnFuseZeroObservedLate(object? sender, EventArgs e)
     {
         if (_windowClosed) return;
-        if (_showCountdown?.ShouldPlayCatchUp == true) QueueFuseCatchUp();
+        if (_showCountdown?.ShouldPlayCatchUp == true) _ = DescentFuseWindow.Open(DescentShowKind.CatchUp);
         else BeginFuseRetry();
     }
-
-    private void QueueFuseCatchUp()
-    {
-        if (_windowClosed || _catchUpQueued) return;
-        _catchUpQueued = true;
-        var generation = _fuseShowGeneration;
-        Dispatcher.UIThread.Post(() =>
-        {
-            _catchUpQueued = false;
-            if (_windowClosed || generation != _fuseShowGeneration) return;
-            var show = DescentFuseWindow.Open(DescentShowKind.CatchUp);
-            if (show == null) return; // WPF: no window played, so the next launch still owes the crack.
-            show.Closed += (_, _) =>
-            {
-                _showCountdown?.MarkCatchUpCrackPlayed(); // WPF: mark on EVERY exit, including panic.
-                BeginFuseRetry();
-            };
-        }, DispatcherPriority.Normal);
-    }
-
-    // The registered panic stop cancels an opener still queued behind startup work as well as a live show.
-    internal void CancelQueuedFuseShow() => _fuseShowGeneration++;
 
     private bool FuseRetryShouldContinue() => DescentPostZeroRetry.ShouldContinue(
         _fuseRetryAttempts,

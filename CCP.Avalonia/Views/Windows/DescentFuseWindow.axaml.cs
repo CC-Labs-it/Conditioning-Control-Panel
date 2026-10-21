@@ -36,9 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    Avalonia has no settable <c>Owner</c>, so ownership is <c>Show(parent)</c>.
     ///  - Room sounds remain a follow-up; the existing CoreAudio backend is the playback seam.
     ///
-    /// <para>Live and CatchUp enter through MainShellWindow.DescentFuseShows and the Core
-    /// countdown. The ceremony/Year One Ignition entry was retired in WPF; no replacement door
-    /// is invented. PanicSurfaces closes the show and cancels an opener queued behind startup.</para>
+    /// <para>Retired like WPF (<see cref="ShowsRetired"/>): <see cref="Open"/> refuses every
+    /// kind, so the Live zero and late zero open nothing. PanicSurfaces still closes any show.</para>
     /// </summary>
     public partial class DescentFuseWindow : Window
     {
@@ -146,9 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (kind == DescentShowKind.Live)
             {
-                // ponytail: needs DescentMigrationService.HoldOffers from
-                // ConditioningControlPanel/Services/Descent/DescentMigrationService.cs (reached as
-                // App.DescentMigration). No Core seam exposes it.
+                // No offer hold to take: WPF retired the ceremony, so there is no offer to hold.
                 // Holding the ceremony back until the light returns is choreography, not defence:
                 // without it an offer answered during the drain drops the ceremony on top of a
                 // crack that is four seconds from finishing.
@@ -161,11 +158,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             lock (Live) Live.Add(this);
         }
 
-        /// <summary>
-        /// Open a show, or return null if one is already up. The single-open guard is the point:
-        /// two fullscreen topmost windows over each other is unrecoverable without the panic key.
-        /// </summary>
+        /// <summary>THE CEREMONY IS OVER - WPF DescentFuseWindow.xaml.cs:168-181 (owner, 6.11.0: the
+        /// cracked-screen animation "might just confuse people now"). Every show refuses to open;
+        /// each caller treats null as "nothing played".</summary>
+        internal const bool ShowsRetired = true;
+
         public static DescentFuseWindow? Open(DescentShowKind kind)
+        {
+            if (ShowsRetired)
+            {
+                Log.Information("[Fuse] The {Kind} show is retired (the ceremony is over) - not opening it.", kind);
+                return null;
+            }
+            return OpenShow(kind);
+        }
+
+        /// <summary>
+        /// The pre-retirement opener, kept so the drawn show stays testable. Returns null if one is
+        /// already up: two fullscreen topmost windows over each other is unrecoverable without the panic key.
+        /// </summary>
+        internal static DescentFuseWindow? OpenShow(DescentShowKind kind)
         {
             try
             {
@@ -437,8 +449,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_holdingOffers) return;
             _holdingOffers = false;
-            // ponytail: needs DescentMigrationService.ReleaseOffers - the paired release for the
-            // HoldOffers above, same file, same missing seam.
+            // Nothing to release: the ceremony (and its offers) is retired on both heads.
         }
 
         private void SafeClose()

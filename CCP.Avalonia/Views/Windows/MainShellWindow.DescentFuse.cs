@@ -4,8 +4,8 @@
 //
 // ponytail: the chrome dimming is not ported - DescentFuseChrome (WPF head) and this head's
 // RefreshThemeAwareElements do not share a dim step, so the neutral chrome never darkens here.
-// Live and CatchUp openers / bounded post-zero retry are in MainShellWindow.DescentFuseShows.cs.
-// The ceremony focus / Ignition path was retired on both heads; room SFX remain a follow-up.
+// Zero handling and the bounded post-zero retry are in MainShellWindow.DescentFuseShows.cs. The
+// shows themselves are retired on both heads (DescentFuseWindow.ShowsRetired); room SFX remain a follow-up.
 using System;
 using Avalonia.Animation;
 using Avalonia.Controls;

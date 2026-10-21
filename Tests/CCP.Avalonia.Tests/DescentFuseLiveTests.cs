@@ -98,7 +98,7 @@ public sealed class DescentFuseShellTests
     });
 
     [Fact]
-    public Task ZeroOpensTheLiveShow_OnlyForAnUnansweredAccount() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ZeroOpensNoLiveShow_RetiredLikeWpf() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -114,7 +114,8 @@ public sealed class DescentFuseShellTests
             service.Current.PendingDescentMigrationChoice = DescentMigrationChoices.Restore;
             Assert.Null(MainShellWindow.OpenLiveFuseShow());
             service.Current.PendingDescentMigrationChoice = null;
-            Assert.NotNull(MainShellWindow.OpenLiveFuseShow());
+            Assert.Null(MainShellWindow.OpenLiveFuseShow()); // WPF DescentFuseWindow.ShowsRetired
+            Assert.Empty(DescentFuseWindow.OnScreen);
         }
         finally { DescentFuseWindow.ForceCloseAll(); service.SaveImmediate(); CoreSettings.ServiceProvider = null; }
         return Task.CompletedTask;
