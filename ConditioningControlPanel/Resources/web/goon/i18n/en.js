@@ -238,6 +238,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "clip {n}",
   gg_report_thumbLabel_image: "image {n}",
   gg_report_evidenceNote: "a small thumbnail is made here and sent with the report, so a human can check without asking you for the file.",
+  gg_report_evidenceNoteHost: "no thumbnail leaves your device for this one. the report names the post and goes to the media host too.",
+  gg_report_hostToo: "sent to the media host too.",
   gg_options_headline: "options",
   gg_options_master: "Master",
   gg_options_music: "Music",

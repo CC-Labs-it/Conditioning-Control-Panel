@@ -479,6 +479,10 @@ export const RAW = {
 
     thumbLabel: tpl({ video: 'clip {n}', image: 'image {n}' }, (kind, n) => ({ n }), (kind) => (kind === 'video' ? 'video' : 'image')),
     evidenceNote: 'a small thumbnail is made here and sent with the report, so a human can check without asking you for the file.',
+    /* Scrolller media (licence clause 3.4): no frames leave the device unless the
+     * reason is csam / illegal, and the report is passed on to the host. */
+    evidenceNoteHost: 'no thumbnail leaves your device for this one. the report names the post and goes to the media host too.',
+    hostToo: 'sent to the media host too.',
   },
 
   /* -------------------------------------------------------------- options */

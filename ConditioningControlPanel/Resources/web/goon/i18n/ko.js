@@ -237,6 +237,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "클립 {n}",
   gg_report_thumbLabel_image: "이미지 {n}",
   gg_report_evidenceNote: "작은 썸네일이 여기서 만들어져 신고와 함께 간다. 사람이 파일을 요청하지 않고도 확인할 수 있도록.",
+  gg_report_evidenceNoteHost: "이 건은 썸네일이 기기 밖으로 나가지 않는다. 신고는 게시물을 가리키고 미디어 호스트에도 간다.",
+  gg_report_hostToo: "미디어 호스트에도 보냈다.",
   gg_options_headline: "설정",
   gg_options_master: "전체",
   gg_options_music: "음악",

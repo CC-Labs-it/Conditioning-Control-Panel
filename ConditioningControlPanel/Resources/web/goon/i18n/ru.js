@@ -237,6 +237,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "клип {n}",
   gg_report_thumbLabel_image: "картинка {n}",
   gg_report_evidenceNote: "маленькая миниатюра делается здесь и уходит вместе с жалобой, чтобы человек мог проверить, не спрашивая у тебя файл.",
+  gg_report_evidenceNoteHost: "здесь ни одна миниатюра не покидает твоё устройство. жалоба указывает пост и уходит также хостингу медиа.",
+  gg_report_hostToo: "жалоба ушла и хостингу медиа.",
   gg_options_headline: "настройки",
   gg_options_master: "Общая",
   gg_options_music: "Музыка",

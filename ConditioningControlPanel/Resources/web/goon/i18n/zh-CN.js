@@ -237,6 +237,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "视频 {n}",
   gg_report_thumbLabel_image: "图片 {n}",
   gg_report_evidenceNote: "会在这里生成一张小缩略图，随举报一起发送，这样审核的人不用问你要文件就能核实。",
+  gg_report_evidenceNoteHost: "这一条不会有缩略图离开你的设备。举报会注明帖子，也会发给媒体托管方。",
+  gg_report_hostToo: "也已发送给媒体托管方。",
   gg_options_headline: "设置",
   gg_options_master: "总音量",
   gg_options_music: "音乐",

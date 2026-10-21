@@ -237,6 +237,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "クリップ{n}",
   gg_report_thumbLabel_image: "画像{n}",
   gg_report_evidenceNote: "小さなサムネイルをここで作って報告と一緒に送る。人がファイルを求めずに確認できるように。",
+  gg_report_evidenceNoteHost: "この件ではサムネイルは端末の外に出ない。報告は投稿を示して、メディアのホストにも届く。",
+  gg_report_hostToo: "メディアのホストにも送った。",
   gg_options_headline: "設定",
   gg_options_master: "全体",
   gg_options_music: "音楽",

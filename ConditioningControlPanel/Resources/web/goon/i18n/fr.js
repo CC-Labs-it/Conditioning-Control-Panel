@@ -237,6 +237,8 @@ export default Object.freeze({
   gg_report_thumbLabel_video: "clip {n}",
   gg_report_thumbLabel_image: "image {n}",
   gg_report_evidenceNote: "une petite miniature est créée ici et envoyée avec le signalement, pour qu'un humain puisse vérifier sans te demander le fichier.",
+  gg_report_evidenceNoteHost: "ici, aucune miniature ne quitte ton appareil. le signalement nomme la publication et part aussi chez l'hébergeur du média.",
+  gg_report_hostToo: "envoyé aussi à l'hébergeur du média.",
   gg_options_headline: "options",
   gg_options_master: "Général",
   gg_options_music: "Musique",
