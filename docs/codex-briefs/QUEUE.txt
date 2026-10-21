@@ -142,3 +142,13 @@ wire-dialogs-username-picker-b
 wire-views-settings-performance-b
 wire-views-tab-quests-b
 wire-win-webcam-calibration-b
+wire-shell-browser
+wire-shell-companion
+wire-shell-event-fx
+wire-shell-just-drop
+possession-head-b
+wire-shell-session-feature-lock
+wire-shell-ui-updates
+wire-dialogs-welcome-back-sheet
+wire-feat-feature-card
+wire-ctrl-friends-rail-chip
