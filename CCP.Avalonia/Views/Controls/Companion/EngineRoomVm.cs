@@ -67,9 +67,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 CoreSettings.Save();
                 Serilog.Log.Information("Companion room: provider set to {Mode}", value);
                 Sync();
-                if (value == Mode.LocalOllama) _ = MaybeOfferLocalSetupAsync();
+                if (value == Mode.LocalOllama && MaybeOfferLocalSetupAsync() is { IsCompleted: false } offer) LocalOffer = offer;
             }
         }
+
+        /// <summary>The offer still in flight (detect + dialog); tests await it instead of yielding.</summary>
+        internal Task? LocalOffer { get; private set; }
 
         public string DrawerNote => Loc.Get("companion_engine_drawer_note");
         public bool IsLoggedIn { get => _isLoggedIn; private set => Set(ref _isLoggedIn, value); }

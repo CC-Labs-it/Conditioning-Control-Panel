@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading.Tasks;
 using CCP.Tests.Shared;
@@ -75,4 +77,16 @@ public sealed class CompanionCloudModerationTests
             CoreSettings.ServiceProvider = oldSettings;
         }
     }
+
+    /// <summary>Startup itself seeds moderation (the test above calls the helper directly).</summary>
+    [Fact]
+    public void StartupSeedsModerationBeforeTheAiProvider()
+    {
+        var src = Regex.Replace(File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs")),
+            @"//[^\n]*|/\*.*?\*/|@?""(?:[^""\\]|\\.)*""", " ", RegexOptions.Singleline);
+        Assert.Matches(@"\bSeedModeration\(\);\s*CoreAi\.IsAvailableProvider\s*=", src);
+    }
+
+    private static string Root([CallerFilePath] string here = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }

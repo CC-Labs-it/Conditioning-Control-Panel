@@ -123,8 +123,8 @@ public sealed class CompanionLocalSetupOfferTests
             Assert.Equal(1, probes);
             if (closeOwner) owner.Close(); else vm.Provider = Mode.Cloud;
             gate.SetResult(new OllamaSetupService.StatusSnapshot { Status = Status.NotInstalled });
-            await Task.Yield();
-            Dispatcher.UIThread.RunJobs();
+            // P57: await the offer itself; a shown dialog would keep it pending and time out here.
+            await vm.LocalOffer!.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Empty(owner.OwnedWindows.OfType<MessageDialog>());
         }
         finally
