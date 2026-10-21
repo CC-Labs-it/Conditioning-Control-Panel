@@ -507,8 +507,10 @@ public partial class FriendsDrawerTests
         public FriendLink? Fresh { get; set; }
         public ClaimResult NextClaim { get; set; } = ClaimResult.Friends;
         public List<string> Claims { get; } = new();
-        public Task<FriendLink?> GetLinkAsync() => Task.FromResult(Link);
-        public Task<FriendLink?> NewLinkAsync() { Link = Fresh; return Task.FromResult(Fresh); }
+        public TaskCompletionSource<FriendLink?>? LinkGate { get; set; }
+        public int NewLinkCalls { get; private set; }
+        public Task<FriendLink?> GetLinkAsync() => LinkGate?.Task ?? Task.FromResult(Link);
+        public Task<FriendLink?> NewLinkAsync() { NewLinkCalls++; Link = Fresh; return Task.FromResult(Fresh); }
         public Task<ClaimResult> ClaimLinkAsync(string linkOrToken) { Claims.Add(linkOrToken); return Task.FromResult(NextClaim); }
     }
 }

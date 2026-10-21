@@ -31,6 +31,13 @@ public sealed partial class FriendsDrawer
         try { Clipboard.SetText(text); return true; } catch { return false; }
     };
 
+    /// <summary>The clock the copied note counts from. The suite pins it.</summary>
+    internal Func<DateTimeOffset> LinkClock { get; set; } = () => Services.ServerClock.UtcNow;
+
+    /// <summary>A Copy link or New link call is out: another press is ignored until it lands, so a
+    /// late reply never copies a token a newer press retired.</summary>
+    private bool _linkBusy;
+
     private Button LinkPill()
     {
         var pill = FriendsLook.Pill(Loc.Get("friends_link_copy"), FriendsLook.RaisedBrush, FriendsLook.TextBrush,
@@ -92,9 +99,11 @@ public sealed partial class FriendsDrawer
     /// be had (offline, an old server), and the line under the code says which. Internal for the suite.</summary>
     internal async Task<bool> CopyLinkAsync(FrameworkElement? from = null)
     {
-        if (_svc == null) return false;
+        if (_svc == null || _linkBusy) return false;
         FriendLink? link = null;
+        _linkBusy = true;
         try { link = await _svc.GetLinkAsync(); } catch { }
+        finally { _linkBusy = false; }
         var (text, isLink) = FriendsLinkRules.CopyChoice(link, _last.MyCode);
         if (text == null || !CopyText(text))
         {
@@ -103,7 +112,13 @@ public sealed partial class FriendsDrawer
             return false;
         }
         FriendsSfx.Click();
-        SetLinkNote(Loc.Get(isLink ? "friends_link_copied" : "friends_link_offline"), isLink);
+        if (isLink)
+        {
+            // Worded from the link itself: the server hands back the live link with what it has left.
+            var (key, left, uses) = FriendsLinkRules.CopiedNote(link!, LinkClock());
+            SetLinkNote(Loc.GetF(key, left, uses), true);
+        }
+        else SetLinkNote(Loc.Get("friends_link_offline"), false);
         // SetLinkNote redrew the foot, so `from` is detached: pop the pill that replaced it, once laid out.
         if (from != null && _linkPill is { } pill)
             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
@@ -116,9 +131,11 @@ public sealed partial class FriendsDrawer
     /// <summary>New link: retire the old one, copy the fresh one. Worded under the add box.</summary>
     internal async Task<bool> NewLinkAsync()
     {
-        if (_svc == null) return false;
+        if (_svc == null || _linkBusy) return false;
         FriendLink? link = null;
+        _linkBusy = true;
         try { link = await _svc.NewLinkAsync(); } catch { }
+        finally { _linkBusy = false; }
         bool good = link != null && CopyText(link.Url);
         if (good) FriendsSfx.Click(); else FriendsSfx.Denied();
         if (_addResult != null)
