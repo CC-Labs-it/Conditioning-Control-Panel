@@ -70,6 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             double visible = progress * units;
             double gap = Math.Max(0.001, units - visible);
             _dotRingFg.StrokeDashArray = new AvaloniaList<double> { visible, gap };
+            // The glow already shows this progress (attach draws the current value); skip the redraw.
+            if (progress == _progress)
+                return;
             _progress = progress;
             RefreshGlow();
         }

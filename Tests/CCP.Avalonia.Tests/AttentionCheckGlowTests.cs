@@ -69,7 +69,9 @@ public sealed class AttentionCheckGlowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
             control.SetProgress(0.5);
-            Assert.IsType<Bitmap>(glow.Source);
+            var drawn = Assert.IsType<Bitmap>(glow.Source);
+            control.SetProgress(0.5);
+            Assert.Same(drawn, glow.Source);
             var ringCenter = ring.TranslatePoint(new Point(42, 42), control)!.Value;
             var glowCenter = glow.TranslatePoint(new Point(56, 56), control)!.Value;
             Assert.Equal(ringCenter.X, glowCenter.X, precision: 10);
