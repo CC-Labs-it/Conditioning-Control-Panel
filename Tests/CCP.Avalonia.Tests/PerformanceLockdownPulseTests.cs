@@ -8,7 +8,6 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Helpers;
-using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -24,7 +23,6 @@ public sealed class PerformanceLockdownPulseTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
