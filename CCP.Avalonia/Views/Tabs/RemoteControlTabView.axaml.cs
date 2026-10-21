@@ -138,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             await StartAsync(owner, tier);
         }
 
-        private async Task StartAsync(Window owner, string tier)
+        internal async Task StartAsync(Window owner, string tier)
         {
             var r = Relay.Value;
             var code = await r.StartAsync(tier);
@@ -152,8 +152,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             ShowSession(code);
-            _ = RunOptInChainAsync();
+            OptInChain = RunOptInChainAsync();
         }
+
+        /// <summary>The opt-in chain the last session start kicked off (fire-and-forget; a test seam).</summary>
+        internal Task? OptInChain;
 
         /// <summary>The session panels on (a code) or off (null): WPF's enable path and StopRemoteControl/OnRemoteSessionEnded.</summary>
         private void ShowSession(string? code)

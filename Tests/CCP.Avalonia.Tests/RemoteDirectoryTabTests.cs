@@ -166,6 +166,18 @@ public sealed class RemoteDirectoryTabTests
             Assert.False(listed.IsVisible);
             Assert.False(optIn.IsChecked);
             Assert.True(section.IsEnabled);
+
+            // A session started from the tab runs the chain itself: ticked beforehand, it is listed.
+            optIn.IsChecked = true;
+            Dispatcher.UIThread.RunJobs();
+            var before = f.At("/v2/directory/opt-in").Count;
+            await view.StartAsync(host, "light");
+            Assert.NotNull(view.OptInChain);
+            await view.OptInChain!;
+            Assert.Equal(before + 1, f.At("/v2/directory/opt-in").Count);
+            Assert.True(listed.IsVisible);
+            await relay.StopAsync();
+            Dispatcher.UIThread.RunJobs();
         }
         finally
         {
