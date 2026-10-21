@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -201,7 +202,8 @@ public sealed class FriendsApi : IFriendsApi
     public async Task<FriendsPollReply?> PollAsync(PresenceActivity? activity, int? lockDay, bool shared, JObject? leashReport,
         JArray? receipts, CancellationToken ct = default)
     {
-        var body = new JObject { ["shared"] = shared };
+        // platform: one presence key per device (Friends Everywhere S3); shared:false clears only ours.
+        var body = new JObject { ["shared"] = shared, ["platform"] = FriendPlatform.Desktop };
         if (leashReport != null) body["leash_report"] = leashReport;
         if (receipts is { Count: > 0 }) body["receipts"] = receipts;
         if (shared)
@@ -370,7 +372,12 @@ public sealed class FriendsApi : IFriendsApi
                     IntOrNull(fo["lock_day"]),
                     ParseTime(fo["last_seen"], DateTimeOffset.MinValue));
                 friends.Add(new Friend(fid, Str(fo["name"]) ?? "", Str(fo["avatar"]),
-                    Math.Clamp(IntOrNull(fo["tier"]) ?? 0, 0, 2), online, presence, fo.Value<bool?>("squelched") == true));
+                    Math.Clamp(IntOrNull(fo["tier"]) ?? 0, 0, 2), online, presence, fo.Value<bool?>("squelched") == true)
+                {
+                    Platforms = online && fo["platforms"] is JArray pa
+                        ? FriendPlatform.Normalise(pa.Select(Str))
+                        : Array.Empty<string>(),
+                });
             }
 
         var me = FriendPresence.None;

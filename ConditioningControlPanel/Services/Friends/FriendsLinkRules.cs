@@ -65,8 +65,10 @@ public static class FriendsLinkRules
 
     /// <summary>What the add box shows for what was typed or pasted, and whether it is a link
     /// token rather than a friend code. A whole link becomes its token; up to five characters (or
-    /// a pasted <c>CCP-</c> code) stay a code; six to twelve from the alphabet are a token on its way.</summary>
-    public static (string Text, bool IsToken) BoxText(string? typed)
+    /// a pasted <c>CCP-</c> code) stay a code; six to twelve from the alphabet are a token on its way.
+    /// <paramref name="oneKeystroke"/>: the text grew by one character, so a dashless <c>CCP</c> code
+    /// is not read into it (a token that starts with C, C, P must stay typeable by hand).</summary>
+    public static (string Text, bool IsToken) BoxText(string? typed, bool oneKeystroke = false)
     {
         if (string.IsNullOrEmpty(typed)) return ("", false);
         if (ParseToken(typed) is { } t) return (t, true);
@@ -85,7 +87,7 @@ public static class FriendsLinkRules
             if (sb.Length == TokenLength) break;
         }
         var f = sb.ToString();
-        if (f.Length == 8 && f.StartsWith("CCP", StringComparison.Ordinal)) return (f.Substring(3), false);
+        if (!oneKeystroke && f.Length == 8 && f.StartsWith("CCP", StringComparison.Ordinal)) return (f.Substring(3), false);
         return f.Length <= Controls.Friends.FriendsDrawerRules.CodeLength ? (f, false) : (f, true);
     }
 

@@ -20,7 +20,7 @@ Ids on the wire are unified ids (`u_...`). The client never shows one.
 | op | body | reply |
 |---|---|---|
 | `state` | | `{ ok, code, me:{activity,lock_day,shared}, friends:[F], incoming:[R], outgoing:[R], blocked:[B] }` |
-| `poll` | `{ activity?, lock_day?, shared, receipts?:[RQ], leash_report? }` | `{ ok, online:[id], inbox:[I], receipts:[RC], leash? }` |
+| `poll` | `{ platform, activity?, lock_day?, shared, receipts?:[RQ], leash_report? }` | `{ ok, online:[id], inbox:[I], receipts:[RC], leash? }` |
 | `request` | `{ code }` | `{ ok, status }` status: `sent` `accepted` `already` `not_found` `blocked` `self` `full` |
 | `accept` | `{ id }` | `{ ok }` |
 | `decline` | `{ id }` | `{ ok }` |
@@ -35,7 +35,7 @@ Ids on the wire are unified ids (`u_...`). The client never shows one.
 | `link_revoke` | `{}` | `{ ok }`: deletes the live link; the next `link` mints a new one |
 | `claim` | `{ token }` | `{ ok, status }` status: `friends` `already` `self` `full` `unusable` |
 
-`F` = `{ id, name, avatar, tier, online, activity, lock_day, last_seen, squelched }`
+`F` = `{ id, name, avatar, tier, online, platforms, activity, lock_day, last_seen, squelched }`
 `R` = `{ id, name, avatar, via, at }`
 `I` = `{ id, kind, from, from_name, from_avatar, poke, destination, code, watch, at, expires_at }`
 `B` = `{ id, name }`: an account this one blocked, newest 200 (FRIENDS-RECEIPTS v1). A reply
@@ -62,7 +62,9 @@ link then copies the code and says so.
   a pasted link (any case, scheme optional, trailing `/`, `?` or `#` dropped) or a bare token in
   the Add friend box, which then `claim`s instead of `request`ing.
 - Life: 7 days (`expires_at`, ISO) and 25 uses (`uses_left`). At the 25th claim or at expiry it is
-  unusable. The client caches the live link per account and asks again within 5 minutes of the end.
+  unusable. The client asks `link` on every Copy link press (a link renewed on another device or
+  spent at 25 claims is replaced at once); the per-account cache answers only when that call fails,
+  and never within 5 minutes of the end.
 - `claim` = the same checks as `accept` (not self, no block either way, both under 100 friends, not
   already friends). On `friends` the pair is mutual at once, any pending request between them goes,
   and the link OWNER gets the existing receipt `{ id: null, kind: "request", to: <claimer>,
@@ -73,14 +75,16 @@ link then copies the code and says so.
   token, same EX. Nothing on the `user:` record.
 - Public lookup (web only, never called by this client): `GET /v2/public/friend-link/:token` ->
   `{ ok, state: "live" | "unusable", name, avatar }`, gated like `/v2/public/taste/:code`.
-- Invite destinations gain `race` and `breakout` (no `code`). Until the desktop learns them (D2)
-  `ParseItem` drops such an inbox item as outside the grammar; it never throws.
+- Invite destinations gain `race` and `breakout` (no `code`, sent from the web). This client
+  (D2) shows them on the knock card and Join opens `https://app.cclabs.app/race` in the browser
+  (race) or the Breakout station, full when the account has it, else the demo (breakout). It
+  does not send them. An older desktop drops such an item in `ParseItem`; it never throws.
 
 ## Grammar (refuse anything else with `refused`)
 
 - `kind`: `poke` `invite` `watch`
 - `poke`: `hi wp tut gl oops thanks drop peek deeper still more sleepy`
-- `destination`: `goon backroom remote ramp chess`; `remote` is grammar only: since 2026-09-28 the
+- `destination`: `goon backroom remote ramp chess race breakout`; `remote` is grammar only: since 2026-09-28 the
   server answers `refused` to a remote invite and the client neither offers nor shows one
 - `code` (only with `goon` or `remote`): `^[A-Z0-9-]{4,12}$`, system-generated join codes
 - `code` with `chess`: a Piece by Piece challenge id `^c_[0-9a-f]{16}$` minted by `POST /v2/pbp/challenge` (target = the friend's unified id, allowed only between friends both ways with no block). `send` answers `refused` unless that challenge is the sender's own, still pending, and pointed at `to`. The receiver accepts it with `/v2/pbp/challenge/:id/accept`.
@@ -109,6 +113,14 @@ link then copies the code and says so.
 is true, else deletes it. Online = key exists. The client polls every 20 s while the drawer is
 open or any friend is online and the app is in the foreground, else every 120 s; never when
 signed out. `state` is the full list; the drawer calls it on open and every fifth poll.
+
+Per platform (Friends Everywhere S3, 2026-10-20): every `poll` body carries `platform`
+(`desktop` here; the phone sends `phone`, the web `web`; absent = `desktop`, old clients). The
+server keeps one key per device, `friend_presence:<uid>:<platform>` EX 180, and `shared:false`
+deletes only the caller's platform key. `F.platforms` is the subset of `desktop phone web` that
+is online, in that order, `[]` when offline; `online` = any key; `activity` / `lock_day` come
+from the key with the newest `at`. This client reads a missing `platforms` as `[]`, drops
+unknown ids and draws one mark per platform after the name (tooltip "On their phone").
 
 ## Receipts (FRIENDS-RECEIPTS v1, 2026-09-28)
 
