@@ -50,6 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             set { if (_face == value) return; _face = value; InvalidateVisual(); }
         }
 
+        // ponytail: nothing sets Small/Flat yet (the dock does not mirror the widget's mood
+        // flags, WPF EmiDock binds them); left to the dock-mirroring lane.
         public bool Small
         {
             get => _small;

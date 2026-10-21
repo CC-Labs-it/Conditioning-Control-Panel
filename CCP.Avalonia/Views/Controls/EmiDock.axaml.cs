@@ -42,6 +42,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private bool _knocking;
         private CancellationTokenSource? _knock;
 
+        /// <summary>Test seam: the running knock's timelines (null at rest). Avalonia 12 keeps
+        /// IClock/ClockBase internal, so tests read the timelines instead of stepping time (P08).</summary>
+        internal Animation? KnockRing { get; private set; }
+        internal Animation? KnockGlow { get; private set; }
+        internal bool IsKnocking => _knocking;
+
         public EmiDock()
         {
             AvaloniaXamlLoader.Load(this);
@@ -151,6 +157,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // count is spent, and StopKnock is idempotent, so a click landing mid-pulse and
                 // the natural end both arrive at the same place.
                 var token = _knock.Token;
+                KnockRing = ring;
+                KnockGlow = glowAnim;
                 _ = glowAnim.RunAsync(_glow, token);
                 ring.RunAsync(_ring, token).ContinueWith(_ => global::Avalonia.Threading.Dispatcher.UIThread.Post(StopKnock));
 
@@ -181,6 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _knock?.Cancel();
                 _knock?.Dispose();
                 _knock = null;
+                KnockRing = KnockGlow = null;
 
                 _ring.Stroke = new SolidColorBrush(RestPink);
                 _ring.StrokeThickness = RestThickness;
