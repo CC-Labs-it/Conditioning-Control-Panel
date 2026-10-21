@@ -438,9 +438,8 @@
                           <Grid Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
                             <Border x:Name="WeeklyXpDrop" CornerRadius="9" Margin="1,3,1,-3"
                                     IsHitTestVisible="False" Background="{StaticResource DepthDropBand}"/>
-                          <Border x:Name="WeeklyXpChip" BorderBrush="{StaticResource DepthRaisedBevel}" BorderThickness="1" Background="#B01A1A2E" CornerRadius="9" Padding="7,2"
->
-                            <Grid><Border CornerRadius="8" IsHitTestVisible="False" Background="{StaticResource DepthRaisedSheen}"/><StackPanel Orientation="Horizontal">
+                          <Border x:Name="WeeklyXpChip" BorderBrush="{StaticResource DepthRaisedBevel}" BorderThickness="1" Background="#B01A1A2E" CornerRadius="9">
+                            <Grid><Border CornerRadius="8" IsHitTestVisible="False" Background="{StaticResource DepthRaisedSheen}"/><StackPanel Orientation="Horizontal" Margin="7,2">
                               <fx:IconGlyph x:Name="WeeklyXpIcon" Kind="Gift" Size="11"
                                             Foreground="{DynamicResource PinkBrush}" Margin="0,0,4,0"/>
                               <TextBlock x:Name="TxtWeeklyXP" Text="{loc:StrBare label_0_xp}"
