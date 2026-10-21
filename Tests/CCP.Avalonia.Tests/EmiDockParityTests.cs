@@ -62,6 +62,21 @@ public sealed class EmiDockParityTests
         Assert.True(normal.FontSize > small.FontSize);
         Assert.True(Math.Abs(sideways.Place.M12) > 0.9);
         Assert.Equal(0, flat.Place.M12);
+
+        // Locked numbers (EMI-DESIGN-LOCK.md): ink fits 95 % of the canvas minus the 5 px stroke on both
+        // sides; lift +2 % of the height (+12 % for a kaomoji), +2 % of the width for a sideways face.
+        double w = EmiFace.VirtualWidth, h = EmiFace.VirtualHeight;
+        Assert.True(normal.Ink.Width <= w * 0.95 - 10 + 0.01 && normal.Ink.Height <= h * 0.95 - 10 + 0.01);
+        Assert.True(Math.Max(normal.Ink.Width / (w * 0.95 - 10), normal.Ink.Height / (h * 0.95 - 10)) > 0.9);
+        static Point Centre(Rect r) => new(r.X + r.Width / 2, r.Y + r.Height / 2);
+        var n = normal.Place.Transform(Centre(normal.Ink));
+        Assert.Equal(w / 2, n.X, 3);
+        Assert.Equal(h / 2 - 0.02 * h, n.Y, 3);
+        var kao = EmiFace.Layout("(\u00AC\u203F\u00AC)", false, false);
+        Assert.Equal(h / 2 - 0.12 * h, kao.Place.Transform(Centre(kao.Ink)).Y, 3);
+        var s = sideways.Place.Transform(Centre(sideways.Ink));
+        Assert.Equal(w / 2 + 0.02 * w, s.X, 3);
+        Assert.Equal(h / 2, s.Y, 3);
         var dock = new EmiDock();
         Assert.Equal("0_0", dock.FindControl<EmiFace>("MiniFace")!.Face);
         return Task.CompletedTask;

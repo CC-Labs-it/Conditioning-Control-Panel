@@ -4,6 +4,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
@@ -32,12 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private static readonly IPen PinkPen = new ImmutablePen(new SolidColorBrush(Pink).ToImmutable(), Thick,
             lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
 
-        public static bool IsSide(string? text) => ConditioningControlPanel.Services.EmiDesk.EmiFaceRules.IsSide(text);
-        public static bool IsKao(string? text) => ConditioningControlPanel.Services.EmiDesk.EmiFaceRules.IsKao(text);
-
         // The bundled Noto Sans Mono first, then the WPF system fallback chain.
         public static readonly FontFamily FaceFont = new(
-            "avares://CCP.Avalonia/Resources/emi/fonts#Noto Sans Mono, Noto Sans Mono, Cascadia Mono, Consolas, " +
+            AppFonts.Mono + ", Noto Sans Mono, Cascadia Mono, Consolas, " +
             "Noto Sans Symbols 2, Segoe UI Symbol, Segoe UI Emoji, Nirmala UI, MS Gothic, Courier New, monospace");
 
         private string? _face = "0_0";
@@ -91,8 +90,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             const double W = VirtualWidth;
             double H = VirtualHeight;
 
-            bool side = !flat && IsSide(t);
-            bool kao = IsKao(t);
+            bool side = !flat && EmiFaceRules.IsSide(t);
+            bool kao = EmiFaceRules.IsKao(t);
             double fill = FillFrac * (kao ? 1.10 : 1.0);
 
             double boxW = (side ? H : W) * fill;
