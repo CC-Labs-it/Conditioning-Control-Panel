@@ -61,6 +61,15 @@ public sealed class LauncherPresetDropTests
             var data = new DataTransfer();
             data.Add(DataTransferItem.CreateFile(storageFile!));
             launcher.DragDrop(new Point(400, 300), RawDragEventType.DragEnter, data, DragDropEffects.Copy, RawInputModifiers.None);
+            // Registered after Launcher_DragOver, so it reads the effect that handler chose.
+            var over = (DragDropEffects)(-1);
+            launcher.AddHandler(DragDrop.DragOverEvent, (_, e) => over = e.DragEffects, handledEventsToo: true);
+            var text = new DataTransfer();
+            text.Add(DataTransferItem.CreateText("not a file"));
+            launcher.DragDrop(new Point(400, 300), RawDragEventType.DragOver, text, DragDropEffects.Copy, RawInputModifiers.None);
+            Assert.Equal(DragDropEffects.None, over);
+            launcher.DragDrop(new Point(400, 300), RawDragEventType.DragOver, data, DragDropEffects.Copy, RawInputModifiers.None);
+            Assert.Equal(DragDropEffects.Copy, over);
             launcher.DragDrop(new Point(400, 300), RawDragEventType.Drop, data, DragDropEffects.Copy, RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
             Assert.True(shell.IsVisible);
