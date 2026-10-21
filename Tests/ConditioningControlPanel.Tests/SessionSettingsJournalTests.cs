@@ -104,6 +104,49 @@ public class SessionSettingsJournalTests
     }
 
     [Fact]
+    public void The_ramp_journal_carries_exactly_what_the_ramp_stores_and_is_written_and_cleared()
+    {
+        var ss = Read("MainWindow", "MainWindow.StartStop.cs");
+        var start = Member(ss, "private void StartRampTimer()");
+        var stored = Regex.Matches(start, @"_rampBaseValues\[""(\w+)""\] = settings\.\1;").Select(m => m.Groups[1].Value);
+        Assert.Equal(stored.OrderBy(x => x), SessionSettingsJournal.RampFields.OrderBy(x => x));
+        Assert.Contains("SessionSettingsJournal.WriteRamp(App.UserDataPath", start);
+        Assert.Contains("SessionSettingsJournal.ClearRamp(App.UserDataPath);", Member(ss, "private void StopRampTimer()"));
+    }
+
+    [Fact]
+    public void A_ramp_journal_round_trips_its_bases()
+    {
+        var json = SessionSettingsJournal.BuildRamp(new Dictionary<string, double>
+        {
+            ["FlashOpacity"] = 40, ["SubAudioVolume"] = 30, ["MasterVolume"] = 55, ["NotARampField"] = 1,
+        });
+        var ramped = new AppSettings { FlashOpacity = 80, SubAudioVolume = 60, MasterVolume = 100 };
+        Assert.Equal(3, SessionSettingsJournal.ApplyRamp(json, ramped));
+        Assert.Equal(40, ramped.FlashOpacity);
+        Assert.Equal(30, ramped.SubAudioVolume);
+        Assert.Equal(55, ramped.MasterVolume);
+    }
+
+    [Fact]
+    public void Two_journals_unwind_newest_first()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-journal-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // The ramp started first (base 20), the session second (snapshot 50 = the ramped value).
+            SessionSettingsJournal.WriteRamp(dir, SessionSettingsJournal.BuildRamp(new Dictionary<string, double> { ["FlashOpacity"] = 20 }, atTicks: 100));
+            SessionSettingsJournal.Write(dir, SessionSettingsJournal.Build(new AppSettings { FlashOpacity = 50 }, null, null, null, null, atTicks: 200));
+            var s = new AppSettings { FlashOpacity = 90 };
+            Assert.True(SessionSettingsJournal.HealOnLaunch(dir, s));
+            Assert.Equal(20, s.FlashOpacity);
+            Assert.Empty(Directory.GetFiles(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void A_takeover_pulse_is_settled_before_the_session_snapshot()
     {
         var engine = Read("Services", "Session", "SessionEngine.cs");

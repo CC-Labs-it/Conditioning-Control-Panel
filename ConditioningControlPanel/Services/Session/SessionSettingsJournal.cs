@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -8,22 +9,25 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services
 {
     /// <summary>
-    /// The user's own values from before a session, kept on disk while it runs (ccp-bugs #1488 and
-    /// perly, 2026-10-21: "Audio Ducking turns itself on, flash opacity and pink filter get stronger,
-    /// Hydra mode turns itself on").
+    /// The user's own values from before a session or an intensity ramp, kept on disk while it runs
+    /// (ccp-bugs #1488 and perly, 2026-10-21: "Audio Ducking turns itself on, flash opacity and pink
+    /// filter get stronger, subliminal volume never adjusts back, Hydra mode turns itself on").
     ///
-    /// ApplySessionSettings writes the session's values straight into AppSettings, which auto-saves,
-    /// and RestoreSettings hands the user's back only on a clean stop. A crash, a kill or a hang the
-    /// user ends from Task Manager left the session's values in settings.json for good. The engine
-    /// writes this file right after its snapshot and deletes it after RestoreSettings; a file still
-    /// there at the next launch is applied before anything reads the settings.
+    /// ApplySessionSettings and the engine's intensity ramp (MainWindow RampTimer_Tick) both write
+    /// their values straight into AppSettings, which auto-saves, and hand the user's back only on a
+    /// clean stop. A crash, a kill or a hang the user ends from Task Manager left them in
+    /// settings.json for good. Each writes its journal right after its snapshot and deletes it after
+    /// its own restore; a journal still there at the next launch is applied before anything reads
+    /// the settings, newest first, so two of them unwind in the right order.
     ///
-    /// <see cref="Fields"/> is exactly what RestoreSettings restores (SessionSettingsJournalTests).
-    /// The three phrase pools come back only when the same mod is still active.
+    /// <see cref="Fields"/> is exactly what RestoreSettings restores and <see cref="RampFields"/>
+    /// exactly what the ramp stores (SessionSettingsJournalTests). The three phrase pools come back
+    /// only when the same mod is still active.
     /// </summary>
     internal static class SessionSettingsJournal
     {
         public const string FileName = "session_restore.json";
+        public const string RampFileName = "ramp_restore.json";
 
         public static readonly IReadOnlyList<string> Fields = new[]
         {
@@ -45,11 +49,16 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PopQuizFrequency), nameof(AppSettings.BubbleCountEnabled), nameof(AppSettings.BubbleCountFrequency),
         };
 
-        private static string PathIn(string dir) => Path.Combine(dir, FileName);
+        public static readonly IReadOnlyList<string> RampFields = new[]
+        {
+            nameof(AppSettings.FlashOpacity), nameof(AppSettings.SpiralOpacity), nameof(AppSettings.PinkFilterOpacity),
+            nameof(AppSettings.MasterVolume), nameof(AppSettings.SubAudioVolume), nameof(AppSettings.BrainDrainBlurStrength),
+        };
 
-        /// <summary>The journal for this snapshot, as JSON. Pure.</summary>
+        /// <summary>The session journal for this snapshot, as JSON. Pure.</summary>
         public static string Build(AppSettings saved, string? modId,
-            IDictionary<string, bool>? subliminalPool, IDictionary<string, bool>? bouncingTextPool, IDictionary<string, bool>? lockCardPool)
+            IDictionary<string, bool>? subliminalPool, IDictionary<string, bool>? bouncingTextPool, IDictionary<string, bool>? lockCardPool,
+            long? atTicks = null)
         {
             var fields = new JObject();
             foreach (var name in Fields)
@@ -57,22 +66,37 @@ namespace ConditioningControlPanel.Services
                 var p = typeof(AppSettings).GetProperty(name);
                 if (p != null) fields[name] = JToken.FromObject(p.GetValue(saved) ?? JValue.CreateNull());
             }
-            var o = new JObject { ["mod"] = modId, ["fields"] = fields };
+            var o = new JObject { ["at"] = atTicks ?? DateTime.UtcNow.Ticks, ["mod"] = modId, ["fields"] = fields };
             if (subliminalPool != null) o["subliminal_pool"] = JObject.FromObject(subliminalPool);
             if (bouncingTextPool != null) o["bouncing_text_pool"] = JObject.FromObject(bouncingTextPool);
             if (lockCardPool != null) o["lock_card_pool"] = JObject.FromObject(lockCardPool);
             return o.ToString(Formatting.None);
         }
 
-        /// <summary>Puts the journal's values back into <paramref name="current"/>. Returns how many
-        /// fields it wrote. Unknown or unreadable fields are skipped. Pure.</summary>
-        public static int Apply(string json, AppSettings current, string? activeModId)
+        /// <summary>The ramp journal from the ramp's base values (keyed by setting name). Pure.</summary>
+        public static string BuildRamp(IReadOnlyDictionary<string, double> bases, long? atTicks = null)
         {
-            var o = JObject.Parse(json);
+            var fields = new JObject();
+            foreach (var name in RampFields)
+                if (bases.TryGetValue(name, out var v)) fields[name] = (int)v;
+            return new JObject { ["at"] = atTicks ?? DateTime.UtcNow.Ticks, ["fields"] = fields }.ToString(Formatting.None);
+        }
+
+        /// <summary>Puts a session journal's values back into <paramref name="current"/>. Returns how
+        /// many fields it wrote. Unknown or unreadable fields are skipped. Pure.</summary>
+        public static int Apply(string json, AppSettings current, string? activeModId)
+            => Apply(JObject.Parse(json), current, activeModId, Fields);
+
+        /// <summary>Puts a ramp journal's base values back. Pure.</summary>
+        public static int ApplyRamp(string json, AppSettings current)
+            => Apply(JObject.Parse(json), current, null, RampFields);
+
+        private static int Apply(JObject o, AppSettings current, string? activeModId, IReadOnlyList<string> allowed)
+        {
             var applied = 0;
             if (o["fields"] is JObject fields)
             {
-                foreach (var name in Fields)
+                foreach (var name in allowed)
                 {
                     if (fields[name] is not { } token) continue;
                     var p = typeof(AppSettings).GetProperty(name);
@@ -81,7 +105,7 @@ namespace ConditioningControlPanel.Services
                     catch { /* one bad field never costs the others */ }
                 }
             }
-            if (string.Equals((string?)o["mod"], activeModId, StringComparison.Ordinal))
+            if (o["mod"] != null && string.Equals((string?)o["mod"], activeModId, StringComparison.Ordinal))
             {
                 Refill(current.SubliminalPool, o["subliminal_pool"]);
                 Refill(current.BouncingTextPool, o["bouncing_text_pool"]);
@@ -99,42 +123,63 @@ namespace ConditioningControlPanel.Services
             foreach (var kv in map) pool[kv.Key] = kv.Value;
         }
 
-        public static void Write(string dir, string json)
+        public static void Write(string dir, string json) => WriteFile(dir, FileName, json);
+        public static void Clear(string dir) => ClearFile(dir, FileName);
+        public static void WriteRamp(string dir, string json) => WriteFile(dir, RampFileName, json);
+        public static void ClearRamp(string dir) => ClearFile(dir, RampFileName);
+
+        private static void WriteFile(string dir, string name, string json)
         {
             try
             {
-                var path = PathIn(dir);
+                var path = Path.Combine(dir, name);
                 var tmp = path + ".tmp";
                 File.WriteAllText(tmp, json);
                 File.Move(tmp, path, overwrite: true);
             }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[Session] Could not write the settings journal"); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "[Session] Could not write {Journal}", name); }
         }
 
-        public static void Clear(string dir)
+        private static void ClearFile(string dir, string name)
         {
-            try { File.Delete(PathIn(dir)); }
-            catch (Exception ex) { App.Logger?.Debug("[Session] Could not delete the settings journal: {E}", ex.Message); }
+            try { File.Delete(Path.Combine(dir, name)); }
+            catch (Exception ex) { App.Logger?.Debug("[Session] Could not delete {Journal}: {E}", name, ex.Message); }
         }
 
-        /// <summary>Launch: a journal left behind means the last session never stopped cleanly.
-        /// Put the user's own values back and delete it. True when anything was healed.</summary>
+        /// <summary>Launch: a journal left behind means a session or a ramp never stopped cleanly.
+        /// Put the user's own values back, newest journal first, and delete them. True when
+        /// anything was healed.</summary>
         public static bool HealOnLaunch(string dir, AppSettings? current)
         {
-            var path = PathIn(dir);
-            if (current == null || !File.Exists(path)) return false;
-            try
+            if (current == null) return false;
+            var found = new List<(string Name, JObject Json, long At)>();
+            foreach (var name in new[] { FileName, RampFileName })
             {
-                var n = Apply(File.ReadAllText(path), current, current.ActiveModId);
-                App.Logger?.Information("[Session] The last session did not stop cleanly; restored {Count} of the user's settings", n);
-                return n > 0;
+                var path = Path.Combine(dir, name);
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    var o = JObject.Parse(File.ReadAllText(path));
+                    found.Add((name, o, (long?)o["at"] ?? 0));
+                }
+                catch (Exception ex) { App.Logger?.Warning(ex, "[Session] {Journal} could not be read; left as is", name); }
+                finally { ClearFile(dir, name); }
             }
-            catch (Exception ex)
+
+            var healed = 0;
+            foreach (var j in found.OrderByDescending(j => j.At))
             {
-                App.Logger?.Warning(ex, "[Session] The settings journal could not be read; left as is");
-                return false;
+                try
+                {
+                    var n = j.Name == RampFileName
+                        ? Apply(j.Json, current, null, RampFields)
+                        : Apply(j.Json, current, current.ActiveModId, Fields);
+                    healed += n;
+                    App.Logger?.Information("[Session] {Journal}: the last run did not stop cleanly; restored {Count} of the user's settings", j.Name, n);
+                }
+                catch (Exception ex) { App.Logger?.Warning(ex, "[Session] {Journal} could not be applied", j.Name); }
             }
-            finally { Clear(dir); }
+            return healed > 0;
         }
     }
 }
