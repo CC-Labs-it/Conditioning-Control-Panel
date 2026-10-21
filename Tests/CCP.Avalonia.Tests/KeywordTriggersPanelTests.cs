@@ -40,7 +40,7 @@ public sealed class KeywordTriggersPanelTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers.ToList(), s.CustomTriggers.ToList(), s.ScreenOcrEnabled, s.OcrConfirmationScans,
@@ -181,15 +181,17 @@ public sealed class KeywordTriggersPanelTests
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
-    public Task RevealPulsesTwiceAndReclickRestartsThenDetachStops(MotionLevel motion) => Run((_, panel, s) =>
+    public Task RevealPulsesTwiceAndReclickRestartsThenDetachStops(MotionLevel motion) => Run((view, panel, s) =>
     {
         var saved = (s.MotionLevel, BeatLoop.Time);
+        var presets = s.KeywordTriggerPresets.ToList();
         var time = new SteppedTime();
         try
         {
             s.MotionLevel = motion;
             BeatLoop.Time = time;
-            panel.RevealTriggerEditor();
+            s.KeywordTriggerPresets.Clear();
+            Click(Find<Button>(view, "LnkAwarenessAdvanced"));
             var glow = panel.FindControl<Border>("KeywordDrawerGlow");
             Assert.NotNull(glow);
             Assert.True(Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded);
@@ -205,7 +207,7 @@ public sealed class KeywordTriggersPanelTests
             Assert.Equal(0, glow.Opacity, 5);
             time.Advance(TimeSpan.FromMilliseconds(220)); BeatLoop.StepAll();
             Assert.Equal(0.9, glow.Opacity, 5);
-            panel.RevealTriggerEditor();
+            Click(Find<Button>(view, "LnkAwarenessAdvanced"));
             Assert.Equal(0, glow.Opacity);
             time.Advance(TimeSpan.FromMilliseconds(880)); BeatLoop.StepAll();
             Assert.Equal(0, glow.Opacity);
@@ -215,7 +217,11 @@ public sealed class KeywordTriggersPanelTests
             Assert.False(beat.IsRunning);
             Assert.Equal(0, glow.Opacity);
         }
-        finally { (s.MotionLevel, BeatLoop.Time) = saved; }
+        finally
+        {
+            (s.MotionLevel, BeatLoop.Time) = saved;
+            s.KeywordTriggerPresets.Clear(); s.KeywordTriggerPresets.AddRange(presets);
+        }
     });
 
     [Fact]
@@ -228,6 +234,12 @@ public sealed class KeywordTriggersPanelTests
             s.MotionLevel = MotionLevel.Off;
             s.KeywordTriggerPresets.Clear();
             Click(Find<Button>(view, "LnkAwarenessAdvanced"));
+            view.UpdateLayout();
+            var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First(v => panel.GetVisualAncestors().Contains(v));
+            // The real tab's ScrollViewer moves; the drawer sits in its last page, so the 24px target clamps to the end
+            // (exact 24px is asserted against a taller host in RevealScrollsTheHeaderTo24Pixels...).
+            Assert.True(scroll.Offset.Y > 0);
+            Assert.Equal(scroll.Extent.Height - scroll.Viewport.Height, scroll.Offset.Y, 1);
             Assert.True(Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded);
             Assert.Equal(0, Find<Border>(panel, "KeywordDrawerGlow").Opacity);
             Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, panel));
