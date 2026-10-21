@@ -256,7 +256,15 @@ internal static class DtrhAssetManifest
     private const string RemoteConsumerId = "dtrh";
     private const int MaxRemoteEntries = 60;
     private const int RemoteKindLowWater = 12;           // refill a kind when it drops under this
-    private static readonly TimeSpan RemoteEntryTtl = TimeSpan.FromDays(3);
+    /// <summary>Licence day limit (owner, 2026-10-21): a remote entry, and any copy of its bytes,
+    /// lives at most a day.</summary>
+    internal static readonly TimeSpan RemoteEntryTtl = TimeSpan.FromHours(24);
+
+    /// <summary>The day limit on one entry, pure: fresh while younger than
+    /// <see cref="RemoteEntryTtl"/>. No time (0) or a time more than an hour ahead (the clock went
+    /// back) is stale.</summary>
+    internal static bool RemoteEntryFresh(RemoteEntry e, long nowUnix)
+        => e.AtUnix > 0 && e.AtUnix - nowUnix <= 3600 && nowUnix - e.AtUnix < (long)RemoteEntryTtl.TotalSeconds;
 
     private static readonly object RemoteLock = new();
     private static List<RemoteEntry>? _remoteCache;      // null = not loaded from disk yet
@@ -307,7 +315,7 @@ internal static class DtrhAssetManifest
             {
                 var name = $"{RemoteNamePrefix}{pct}:{(e.IsLoop ? LoopNamePrefix : "")}{NameFor(e)}";
                 var url = e.Url;
-                if (LocalCopies.TryGetValue(e.Url, out var copy) && File.Exists(copy))
+                if (LocalCopies.TryGetValue(e.Url, out var copy) && File.Exists(copy) && !DropStaleCopy(e.Url, copy, DateTime.UtcNow))
                 {
                     url = ToAssetUrl(root, copy);
                     copies++;
@@ -351,6 +359,44 @@ internal static class DtrhAssetManifest
     private const int OnlineOnlyMinCopies = 8;
     private const int MaxClipCopies = 24;                // clips are the heavy ones
     private const int CopyReadyEvery = 10;               // tell the host as they land, not only at the end
+
+    /// <summary>The day limit on one copy: a file whose creation time (its download time) is a
+    /// day old at <paramref name="nowUtc"/> leaves the map and is deleted. True when it went.</summary>
+    private static bool DropStaleCopy(string url, string path, DateTime nowUtc)
+    {
+        DateTime born;
+        try { born = File.GetCreationTimeUtc(path); } catch { born = DateTime.MinValue; }
+        if (!ScrolllerCacheBook.IsExpiredAt(born, nowUtc)) return false;
+        if (LocalCopies.TryRemove(new KeyValuePair<string, string>(url, path)))
+            RemoteMediaCache.ReleaseTempFile(path);
+        return true;
+    }
+
+    /// <summary>The hourly sweep: every copy past the day limit, or past it before the next
+    /// sweep, is dropped and deleted. <paramref name="all"/> drops every copy (the off switch).
+    /// Returns how many went; never throws.</summary>
+    internal static int SweepLocalCopies(bool all = false)
+    {
+        int gone = 0;
+        try
+        {
+            var ahead = DateTime.UtcNow + ScrolllerDiskCache.SweepPeriod;
+            foreach (var kvp in LocalCopies.ToArray())
+            {
+                if (all ? LocalCopies.TryRemove(kvp) && Release(kvp.Value) : DropStaleCopy(kvp.Key, kvp.Value, ahead)) gone++;
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("DtrhAssetManifest: copy sweep failed: {E}", ex.Message); }
+        return gone;
+
+        static bool Release(string path) { RemoteMediaCache.ReleaseTempFile(path); return true; }
+    }
+
+    /// <summary>Tests only: park a copy as <see cref="KickLocalCopies"/> would.</summary>
+    internal static bool AddLocalCopyForTests(string url, string path) => LocalCopies.TryAdd(url, path);
+
+    /// <summary>Tests only: is <paramref name="url"/> still mapped to a copy?</summary>
+    internal static bool HasLocalCopyForTests(string url) => LocalCopies.ContainsKey(url);
 
     /// <summary>Raised off the UI thread when new copies landed: the host re-posts the manifest
     /// so a page that is already up starts drawing them.</summary>
@@ -462,8 +508,8 @@ internal static class DtrhAssetManifest
     private static void PruneRemoteLocked()
     {
         if (_remoteCache == null) return;
-        long cutoff = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (long)RemoteEntryTtl.TotalSeconds;
-        _remoteCache.RemoveAll(e => e.AtUnix < cutoff);
+        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        _remoteCache.RemoveAll(e => !RemoteEntryFresh(e, now));
 
         // Oldest first, per kind, so a run of clips can never push the last stills out.
         foreach (var kind in new Func<RemoteEntry, bool>[]
