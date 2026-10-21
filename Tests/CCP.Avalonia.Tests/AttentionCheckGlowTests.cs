@@ -21,29 +21,37 @@ public sealed class AttentionCheckGlowTests
         var control = new AttentionCheckControl();
         var glow = control.FindControl<Image>("DotRingGlow");
         Assert.NotNull(glow);
-        control.SetProgress(0);
-        using (var pixels = Pixels(glow))
+        // The glow is rasterized only once attached, at the top level's density.
+        var window = new Window { Width = 180, Height = 180, Content = control };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
         {
-            Assert.Equal((byte)0, pixels.GetPixel(pixels.Width / 2, pixels.Height / 2 + 40).Alpha);
-            Assert.True(pixels.GetPixel(pixels.Width / 2 + 40, pixels.Height / 2).Alpha > 5);
-        }
+            control.SetProgress(0);
+            using (var pixels = Pixels(glow))
+            {
+                Assert.Equal((byte)0, pixels.GetPixel(pixels.Width / 2, pixels.Height / 2 + 40).Alpha);
+                Assert.True(pixels.GetPixel(pixels.Width / 2 + 40, pixels.Height / 2).Alpha > 5);
+            }
 
-        control.SetProgress(0.5);
-        using (var pixels = Pixels(glow))
-        {
-            int center = pixels.Width / 2;
-            Assert.True(pixels.GetPixel(center, center + 40).Alpha > 10);
-            Assert.Equal((byte)0, pixels.GetPixel(center, center - 40).Alpha);
-            Assert.Equal((byte)0, pixels.GetPixel(center, center).Alpha);
+            control.SetProgress(0.5);
+            using (var pixels = Pixels(glow))
+            {
+                int center = pixels.Width / 2;
+                Assert.True(pixels.GetPixel(center, center + 40).Alpha > 10);
+                Assert.Equal((byte)0, pixels.GetPixel(center, center - 40).Alpha);
+                Assert.Equal((byte)0, pixels.GetPixel(center, center).Alpha);
+            }
+            control.SetProgress(1);
+            using (var pixels = Pixels(glow))
+            {
+                int center = pixels.Width / 2;
+                Assert.True(pixels.GetPixel(center, center + 40).Alpha > 10);
+                Assert.True(pixels.GetPixel(center, center - 40).Alpha > 10);
+                Assert.Equal((byte)0, pixels.GetPixel(center, center).Alpha);
+            }
         }
-        control.SetProgress(1);
-        using (var pixels = Pixels(glow))
-        {
-            int center = pixels.Width / 2;
-            Assert.True(pixels.GetPixel(center, center + 40).Alpha > 10);
-            Assert.True(pixels.GetPixel(center, center - 40).Alpha > 10);
-            Assert.Equal((byte)0, pixels.GetPixel(center, center).Alpha);
-        }
+        finally { window.Close(); }
     });
 
     [Fact]

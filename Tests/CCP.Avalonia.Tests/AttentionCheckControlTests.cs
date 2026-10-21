@@ -45,7 +45,8 @@ public sealed class AttentionCheckControlTests
         Assert.DoesNotContain(visuals, visual => visual.Effect != null);
         Assert.Equal(2, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0)
             + visuals.OfType<Image>().Count(image => image.Name == "DotRingGlow"));
-        Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(control.FindControl<Image>("DotRingGlow")!.Source);
+        // Nothing is rasterized before attach, even after SetProgress: the density is unknown until then.
+        Assert.Null(control.FindControl<Image>("DotRingGlow")!.Source);
         Assert.Same(group, control.FindControl<Image>("DotRingGlow")!.RenderTransform);
     });
 
@@ -64,6 +65,10 @@ public sealed class AttentionCheckControlTests
         {
             window.Show();
             Dispatcher.UIThread.RunJobs();
+            var glow = control.FindControl<Image>("DotRingGlow")!;
+            // Attach rasterizes the glow at the top level's density (headless = 1): 84 + 2*14 px.
+            var bitmap = Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(glow.Source);
+            Assert.Equal(new PixelSize(112, 112), bitmap.PixelSize);
             control.StartPulse();
             var pulse = Assert.Single(BeatLoop.Running.Where(p => p.Owner == control));
             Assert.True(pulse.OnFrameBeat);
@@ -85,6 +90,7 @@ public sealed class AttentionCheckControlTests
             BeatLoop.StepAll();
             Assert.Equal(1.18, scale.ScaleX, 8);
             window.Content = null;
+            Assert.Null(glow.Source);
             Assert.DoesNotContain(BeatLoop.Running, p => p.Owner == control);
             Assert.Equal(1, scale.ScaleX);
             Assert.Equal(1, scale.ScaleY);

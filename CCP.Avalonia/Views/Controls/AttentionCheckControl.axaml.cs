@@ -7,6 +7,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using SkiaSharp;
 using ConditioningControlPanel.Avalonia.Helpers;
 
@@ -39,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private Bitmap? _glowBitmap;
         private double _progress;
         private BeatLoop? _pulse;
+        private TopLevel? _topLevel;
 
         public AttentionCheckControl()
         {
@@ -51,7 +53,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _dotRingScale = ((TransformGroup)_dotRingFg.RenderTransform!).Children.OfType<ScaleTransform>().First();
             _dotRingGlow = this.FindControl<Image>("DotRingGlow")!;
             _dotRingGlow.RenderTransform = _dotRingFg.RenderTransform;
-            RefreshGlow();
         }
 
         /// <summary>
@@ -73,19 +74,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             RefreshGlow();
         }
 
-        // Rasterize only the filled stroke, not a full circular halo. The immutable SKImage is
-        // decoded into an immutable Avalonia Bitmap before publication; the pulse reuses it.
+        // Rasterize only the filled stroke, not a full circular halo. The surface pixels are
+        // copied straight into an immutable Avalonia Bitmap before publication; the pulse reuses it.
         private void RefreshGlow()
         {
+            // Density is unknown until attach; OnAttachedToVisualTree draws the current progress.
+            if (_topLevel == null)
+                return;
             const float padding = 14;
             float width = (float)_dotRingFg.Width;
             float extent = width + 2 * padding;
-            float density = (float)(TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
+            float density = (float)_topLevel.RenderScaling;
             int pixels = (int)Math.Ceiling(extent * density);
             using var surface = SKSurface.Create(new SKImageInfo(pixels, pixels, SKColorType.Rgba8888, SKAlphaType.Premul));
             surface.Canvas.Clear(SKColors.Transparent);
             surface.Canvas.Scale(density);
-            if (_progress >= 0)
             {
                 // ponytail: Gaussian three-sigma extent maps WPF BlurRadius=14 to sigma=14/3;
                 // exact Windows blur-kernel pixels still need comparison on a Windows renderer.
@@ -103,10 +106,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     surface.Canvas.DrawArc(new SKRect(inset, inset, extent - inset, extent - inset),
                         0, (float)(_progress * 360), false, paint);
             }
-            using var image = surface.Snapshot();
-            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-            using var stream = data.AsStream();
-            var next = new Bitmap(stream);
+            surface.Canvas.Flush();
+            using var pixmap = surface.PeekPixels();
+            var next = new Bitmap(PixelFormat.Rgba8888, AlphaFormat.Premul, pixmap.GetPixels(),
+                new PixelSize(pixels, pixels), new Vector(96, 96), pixmap.RowBytes);
             var previous = _glowBitmap;
             _glowBitmap = next;
             _dotRingGlow.Source = next;
@@ -116,8 +119,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            _topLevel = TopLevel.GetTopLevel(this);
+            if (_topLevel != null)
+                _topLevel.ScalingChanged += OnScalingChanged;
             RefreshGlow();
         }
+
+        // Moving to a monitor with another scale redraws the glow at the new density.
+        private void OnScalingChanged(object? sender, EventArgs e) => RefreshGlow();
 
         public void StartPulse()
         {
@@ -136,6 +145,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             StopPulse();
+            if (_topLevel != null)
+                _topLevel.ScalingChanged -= OnScalingChanged;
+            _topLevel = null;
             _dotRingGlow.Source = null;
             _glowBitmap?.Dispose();
             _glowBitmap = null;
