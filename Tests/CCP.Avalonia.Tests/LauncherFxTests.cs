@@ -101,8 +101,26 @@ public sealed class LauncherFxTests
         Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
         launcher.OnFxActivated(true);
         cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        // WPF StartWanderingSheen returns on _perfLow: the Performance tier closes the ambient gate.
+        CoreSettings.Current.PerformanceMode = true;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(launcher.WanderTicking); Assert.Null(launcher.CtaSheen);
+        CoreSettings.Current.PerformanceMode = false;
         launcher.Hide();
         Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+    });
+
+    [Fact]   // The glow sits in the adorner layer, outside RootGrid: it must follow the open fade itself.
+    public void TileGlowFollowsTheRootGridFade() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        var root = launcher.FindControl<Panel>("RootGrid")!;
+        var tile = Tile(launcher);
+        launcher.StepFx(0.05);
+        Assert.InRange(root.Opacity, 0.01, 0.99);
+        Assert.Equal(0.35 * root.Opacity * tile.Opacity, launcher.TileGlow(tile)!.Opacity, 3);
+        Step(launcher, 0.6);
+        Assert.Equal(1, root.Opacity, 3);
+        Assert.Equal(0.35, launcher.TileGlow(tile)!.Opacity, 3);
     });
 
     [Fact]
@@ -187,7 +205,7 @@ public sealed class LauncherFxTests
         Assert.Equal(0.55, card.Opacity, 2);             // the rest stepped back
         var other = launcher.FindControl<UniformGrid>("GamesGrid")!.Children.OfType<Border>().First();
         Assert.Equal(0.55, other.Opacity, 2);
-        Assert.Equal(0.35 * other.Opacity, launcher.TileGlow(other)!.Opacity, 3);
+        Assert.Equal(0.35 * other.Opacity * launcher.FindControl<Panel>("RootGrid")!.Opacity, launcher.TileGlow(other)!.Opacity, 3);   // and the exit fade
         Assert.True(launcher.IsVisible);
 
         Step(launcher, 0.3);                             // FadeLeadMs + FadeOutMs = 450 ms

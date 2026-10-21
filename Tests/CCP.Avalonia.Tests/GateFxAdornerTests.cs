@@ -163,7 +163,7 @@ public sealed class GateFxAdornerTests
         var preset = tab.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(c => c.Tag is string);
         var point = preset.TranslatePoint(new Point(preset.Bounds.Width / 2, preset.Bounds.Height / 2), shell)!.Value;
         shell.MouseMove(point); shell.MouseDown(point, global::Avalonia.Input.MouseButton.Left); shell.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
-        Settle(shell); tab.RefreshCardSheen();
+        Settle(shell);
         Assert.Equal(preset.Tag, tab.SelectedSheenHost?.Tag);
         var first = Assert.IsType<CardSheenAdorner>(tab.SelectedCardSheen);
         Assert.True(first.IsTicking);

@@ -214,9 +214,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _shakeT = _ringT = _echoIn = -1;
                 ShakeSlide.X = ShakeSlide.Y = 0;
                 foreach (var r in _rings) r.Opacity = 0;
-                foreach (var t in _tileFx) SettleTile(t);
                 _fade.On = false;
                 RootGrid.Opacity = 1;
+                foreach (var t in _tileFx) SettleTile(t);
                 FinishExit();
             }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] FxPark failed"); }
@@ -433,8 +433,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (t.Lean.On || dt == 0) t.Tilt.Angle = t.Lean.Step(dt);
             if (t.Shine.On || dt == 0) t.GlowOpacity = t.Shine.Step(dt);
             if (t.Dim.On) t.Tile.Opacity = t.Dim.Step(dt);
-            // The old Effect inherited the tile’s exit dim; its sibling must inherit it too.
-            if (t.Glow != null) t.Glow.Opacity = t.GlowOpacity * t.Tile.Opacity;
+            // The old Effect inherited the tile's dim and the RootGrid fade; the glow sits in the
+            // window's adorner layer, outside RootGrid, so it multiplies them in itself.
+            if (t.Glow != null)
+            {
+                double o = t.GlowOpacity;
+                for (Visual? v = t.Tile; v != null && v is not TopLevel; v = v.GetVisualParent()) o *= v.Opacity;
+                t.Glow.Opacity = o;
+            }
             if (t.PopT >= 0)
             {
                 // Choreo.cs Pop: to the peak by 35 % (quad out), back to 1 by 100 % (quad in-out).

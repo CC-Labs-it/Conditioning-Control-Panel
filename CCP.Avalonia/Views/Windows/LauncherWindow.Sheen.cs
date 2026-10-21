@@ -35,7 +35,8 @@ public partial class LauncherWindow
         if (!FxLive || !_fxActive || !AmbientFxCanvas.Env.AllowAmbientLoops) return;
         CtaSheen = CardSheenAdorner.Attach(PanelCta, 12);
         _wanderTimer.Interval = TimeSpan.FromSeconds(_sheenRandom.Next(6, 11));
-        _wanderTimer.Start();
+        // WPF Choreo.cs:439 returns on _perfLow; AllowAmbientLoops already implies it here.
+        if (!PerfLow) _wanderTimer.Start();
     }
 
     private void StopSheens()
