@@ -40,8 +40,14 @@ internal sealed partial class EmiDeskService
         {
             Interval = TimeSpan.FromMilliseconds(EmiSpeechCadence.SummonGreetingMs)
         };
-        _greetingTimer.Tick += (_, _) => GreetNow();
+        _greetingTimer.Tick += (_, _) => GreetingDue();
         _greetingTimer.Start();
+    }
+
+    // The timer and the headless tests drive the same step: nothing greets unless Summon scheduled it.
+    internal void GreetingDue()
+    {
+        if (_greetingTimer != null) GreetNow();
     }
 
     internal void GreetNow()
