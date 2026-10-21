@@ -29,6 +29,10 @@ public sealed class WorkshopRosterSwitchTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        // P02: CoreMods.Service is process-global and cannot be detached; a mod that hides cards 2/3
+        // would make every switch below vacuous, so state that precondition instead of inheriting it.
+        Assert.False(CoreMods.Service?.IsCompanionSupported((CompanionId)2) == false, "active mod hides companion card 2");
+        Assert.False(CoreMods.Service?.IsCompanionSupported((CompanionId)3) == false, "active mod hides companion card 3");
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -90,6 +94,8 @@ public sealed class WorkshopRosterSwitchTests
         {
             shell.Close();
             Dispatcher.UIThread.RunJobs();
+            // The private service's level/XP writes armed a debounced save; drop it here, not via the hook.
+            SettingsService.DisarmAllPendingSaves();
             CoreSettings.ServiceProvider = old;
         }
     });
