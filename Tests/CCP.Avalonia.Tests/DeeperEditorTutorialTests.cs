@@ -30,6 +30,10 @@ public sealed class DeeperEditorTutorialTests
 
     private static void Setup()
     {
+        // Production builder (app fonts registered), so the overlay lays out as in the app. Only the
+        // first class to run in a testhost builds the app, so DeeperHub/DeeperRows/
+        // DeeperOverlayOpacityLabel/TutorialTour use the same builder: otherwise this class's
+        // result would depend on which class ran first in its shard.
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();

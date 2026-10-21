@@ -43,7 +43,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///   <item><b>The auto-advance subscriptions are still stubs</b> (OnButtonClick, OnTextEquals,
     ///     OnSelectionEquals, OnSliderAtLeast, OnEvent), and so is the WindowLoaded:* retarget.
     ///     Those are not seam calls: each hooks a real control in a real window and the OnEvent one
-    ///     needs <c>TutorialEventBus</c>, which stayed in the WPF head. A step whose
+    ///     needs a subscription to Core <c>CoreTutorialEvents</c> (the WPF TutorialEventBus now
+    ///     delegates to it), which this overlay does not make yet. A step whose
     ///     <c>Advance</c> is anything but Manual therefore shows no Next button and nothing
     ///     advances it — it is honest about waiting and wrong about what it waits for, so it stops
     ///     the tour rather than skipping a card. <c>AllowManualSkip</c> steps still have their
@@ -314,9 +315,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Core and StepCounterText below already reads it. What is missing is the STEP LIST
             // (CoreTutorial exposes CurrentStep only, so "the next step's TargetWindowTypeName"
             // cannot be looked ahead) and the WindowLoaded:* bus event that says the other window
-            // has opened - ConditioningControlPanel/Services/TutorialEventBus.cs, which has no Core
-            // seam to emit into. Both live with
-            // ConditioningControlPanel/Services/TutorialService.cs.
+            // has opened. That event now exists on Core CoreTutorialEvents (the Deeper editor emits
+            // "WindowLoaded:DeeperEditorWindow"), but this overlay does not subscribe to it yet.
 
             // A new card: the once-per-step advance latch reopens. WPF does this inside
             // SubscribeAdvanceTrigger, which is the only thing UpdateStep calls after this point
@@ -375,7 +375,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // OnTextEquals (TextBox.TextChanged, with the numeric/substring match),
             // OnSelectionEquals (Selector.SelectionChanged, by Content or Tag) and
             // OnSliderAtLeast (advance on pointer release, not on every ValueChanged), and
-            // OnEvent came off the static TutorialEventBus, which stayed in the WPF head. Every
+            // OnEvent came off the static TutorialEventBus (now Core CoreTutorialEvents, which
+            // this overlay does not subscribe to yet). Every
             // one of them needs a real control in a real window, which is why none of it crossed
             // with the seam. The consequence is written into the class header.
         }

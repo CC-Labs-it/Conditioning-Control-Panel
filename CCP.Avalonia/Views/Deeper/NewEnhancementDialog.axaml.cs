@@ -102,10 +102,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         ///     ConditioningControlPanel/Services/TutorialService.cs. <c>Start</c> is a silent
         ///     no-op, so showing the overlay would dim this dialog behind an empty card, which is
         ///     worse than the button doing nothing visible.</item>
-        ///   <item>Part 2 needs <c>TutorialEventBus.PendingPart2Tutorial</c>
-        ///     (ConditioningControlPanel/Services/TutorialEventBus.cs). <c>CoreTutorial</c> carries
-        ///     no event bus by design, so that hand-off has no seam at all - it is an addition to
-        ///     Core, not a call into it. The WPF original sets it in BtnCreate_Click, after
+        ///   <item>Part 2 needs <c>PendingPart2Tutorial</c>, which now lives on Core
+        ///     <c>CoreTutorialEvents</c> (WPF TutorialEventBus delegates to it), but this dialog
+        ///     does not set it yet and the editor does not dispatch it (follow-up
+        ///     wire-views-deeper-editor-window-b). The WPF original sets it in BtnCreate_Click, after
         ///     validation, precisely so a fumbled first click cannot leave the flag armed forever.</item>
         /// </list>
         ///
