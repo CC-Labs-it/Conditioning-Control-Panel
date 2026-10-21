@@ -6,7 +6,6 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
-using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Haptics.Core;
 using Xunit;
 
@@ -15,13 +14,16 @@ namespace CCP.Avalonia.Tests;
 public sealed class HapticMockToastTests
 {
     [Fact]
-    public Task ProviderFeedbackReusesOneWindowRefreshesExpiryAndPanicDropsQueuedPosts() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task ProviderFeedbackReusesOneWindowRefreshesExpiryAndExitDropsQueuedPosts() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = MockProviderV2.Toast;
+        var oldTime = HapticMockToast.Time;
+        var clock = new SteppedClock();
+        HapticMockToast.Time = clock;
         using var mock = new MockProviderV2();
         try
         {
@@ -37,39 +39,40 @@ public sealed class HapticMockToastTests
             Assert.False(first.ShowInTaskbar);
             Assert.False(first.ShowActivated);
             Assert.True(first.Topmost);
-            await Task.Delay(600);
-            // Mixer callbacks arrive from a worker thread, never the window thread.
+            clock.Now += TimeSpan.FromSeconds(0.6).Ticks;
+            // Mixer callbacks arrive from a worker thread, never the window thread. WPF panic reaches
+            // the mock through this same StopAll, so ALL STOP stays visible after a panic (WPF MockToast).
             await Task.Run(() => mock.StopAllAsync());
             Dispatcher.UIThread.RunJobs();
             Assert.Same(first, HapticMockToast.Window);
             Assert.Equal("Mock haptics: ALL STOP", Assert.IsType<TextBlock>(first.Content).Text);
-            await Task.Delay(600); // past original expiry, before refreshed expiry
-            Dispatcher.UIThread.RunJobs();
+            clock.Now += TimeSpan.FromSeconds(0.6).Ticks; // past original expiry, before refreshed expiry
+            HapticMockToast.Tick();
             Assert.Same(first, HapticMockToast.Window);
-            await Task.Delay(600);
-            Dispatcher.UIThread.RunJobs();
+            clock.Now += TimeSpan.FromSeconds(0.6).Ticks;
+            HapticMockToast.Tick();
             Assert.Null(HapticMockToast.Window);
 
             HapticMockToast.Post("running");
             Dispatcher.UIThread.RunJobs();
             Assert.NotNull(HapticMockToast.Window);
-            HapticMockToast.Post("queued before panic");
-            // Exercise the real registered stop without stopping unrelated global test services.
-            foreach (var surface in PanicSurfaces.All)
-                if (surface.Id == "haptics-mock-toast") surface.Stop(null);
+            HapticMockToast.Post("queued before exit");
+            HapticMockToast.Close();   // App exit
             Dispatcher.UIThread.RunJobs();
             Assert.Null(HapticMockToast.Window);
-            await mock.StopAllAsync(); // late mixer retry must stay closed
-            Dispatcher.UIThread.RunJobs();
-            Assert.Null(HapticMockToast.Window);
-            HapticMockToast.Post("Lush V50%");
-            Dispatcher.UIThread.RunJobs();
-            Assert.NotNull(HapticMockToast.Window);
         }
         finally
         {
             HapticMockToast.Close();
+            HapticMockToast.Time = oldTime;
             MockProviderV2.Toast = old;
         }
     });
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
 }

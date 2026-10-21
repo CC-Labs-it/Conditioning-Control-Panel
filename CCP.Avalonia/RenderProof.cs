@@ -100,8 +100,8 @@ namespace ConditioningControlPanel.Avalonia
                         // labels with exit code 0 - the exact class of bug this flag exists to catch.
                         window = w;
                         if (double.IsNaN(w.Width) || w.Width < 200) w.Width = 1100;
-                        // The fixed-size mock feedback toast is intentionally smaller than a dialog.
-                        if (double.IsNaN(w.Height) || (w.Height < 200 && w is not global::ConditioningControlPanel.Avalonia.Views.Overlays.HapticMockToastWindow)) w.Height = 780;
+                        // A fixed-size window (CanResize false, e.g. the mock haptics toast) keeps its own height.
+                        if (double.IsNaN(w.Height) || (w.Height < 200 && w.CanResize)) w.Height = 780;
                     }
                     else
                     {

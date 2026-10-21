@@ -11,23 +11,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal static class HapticMockToast
 {
     internal static Window? Window { get; private set; }
+    /// <summary>Test seam: expiry is measured on this clock, so a test steps it instead of sleeping.</summary>
+    internal static TimeProvider Time { get; set; } = TimeProvider.System;
+    private static readonly TimeSpan Expiry = TimeSpan.FromSeconds(1);
     private static TextBlock? _text;
     private static DispatcherTimer? _timer;
+    private static long _shownAt;
     private static int _generation;
-    private static int _ignoreStopFeedback;
 
     internal static void Seed() => Services.Haptics.Core.MockProviderV2.Toast = Post;
 
     public static void Post(string message)
     {
         if (Application.Current == null) return;
-        // Mixer panic retries publish ALL STOP again after the window has closed.
-        if (message == "Mock haptics: ALL STOP" && System.Threading.Volatile.Read(ref _ignoreStopFeedback) != 0) return;
-        if (message != "Mock haptics: ALL STOP") System.Threading.Interlocked.Exchange(ref _ignoreStopFeedback, 0);
         var generation = System.Threading.Volatile.Read(ref _generation);
         Dispatcher.UIThread.Post(() =>
         {
-            // A panic/exit invalidates already queued provider callbacks as well as closing the window.
+            // Exit invalidates already queued provider callbacks as well as closing the window.
             if (generation != _generation) return;
             try { Show(message); }
             catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback could not be shown"); }
@@ -58,19 +58,27 @@ internal static class HapticMockToast
             window.Show();
         }
         _text!.Text = message;
+        _shownAt = Time.GetTimestamp();
         if (_timer == null)
         {
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _timer.Tick += (_, _) => Close();
+            _timer = new DispatcherTimer();
+            _timer.Tick += (_, _) => Tick();
         }
         _timer.Stop();
+        _timer.Interval = Expiry;
         _timer.Start();
     }
 
-    internal static void StopForPanic()
+    /// <summary>WPF's 1 s timer tick: close once a full second has passed since the last message.</summary>
+    internal static void Tick()
     {
-        System.Threading.Interlocked.Exchange(ref _ignoreStopFeedback, 1);
-        Close();
+        if (Window == null) return;
+        var left = Expiry - Time.GetElapsedTime(_shownAt);
+        if (left <= TimeSpan.Zero) { Window.Close(); return; }
+        if (_timer == null) return;
+        _timer.Stop();
+        _timer.Interval = left;
+        _timer.Start();
     }
 
     internal static void Close()
