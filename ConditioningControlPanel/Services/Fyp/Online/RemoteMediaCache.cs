@@ -60,7 +60,7 @@ internal static class RemoteMediaCache
 
     /// <summary>Filename prefix. The <c>ccp_temp_</c> half is load-bearing — see the class
     /// remarks — and <c>remote_</c> is what makes our sweep ours alone.</summary>
-    private const string TempPrefix = "ccp_temp_remote_";
+    internal const string TempPrefix = "ccp_temp_remote_";
 
     private const int CopyBufferBytes = 81920;
 

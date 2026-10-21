@@ -81,17 +81,19 @@ public sealed class ScrolllerDiskCacheLoadTests : IDisposable
     }
 
     [Fact]
-    public void Moving_the_root_writes_the_old_index_first()
+    public void Moving_the_root_deletes_what_the_old_folder_held()
     {
         var url = "https://images.scrolller.com/w/2.jpg";
         Put(url, 64);
+        var path = ScrolllerDiskCache.TryGetPath(url)!;
         var other = _root + "-b";
         try
         {
             ScrolllerDiskCache.RootProvider = () => other;
             Assert.False(ScrolllerDiskCache.Contains(url));
+            Assert.False(File.Exists(path));
             Restart();
-            Assert.NotNull(ScrolllerDiskCache.TryGetPath(url));
+            Assert.Null(ScrolllerDiskCache.TryGetPath(url));
         }
         finally { try { Directory.Delete(other, true); } catch { } }
     }

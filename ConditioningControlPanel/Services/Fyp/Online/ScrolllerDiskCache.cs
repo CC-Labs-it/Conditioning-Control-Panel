@@ -441,7 +441,7 @@ internal static class ScrolllerDiskCache
     /// the load) and hourly.</summary>
     public static int SweepExpired()
     {
-        int count = 0;
+        int count = SweepOldRoots(offSwitch: false);
         try
         {
             bool dropped = false;
@@ -463,7 +463,7 @@ internal static class ScrolllerDiskCache
                 foreach (var file in Directory.GetFiles(root))
                 {
                     var name = Path.GetFileName(file);
-                    if (known.Contains(name) || name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (known.Contains(name) || IsBookFile(name)) continue;
                     if (name.EndsWith(PartSuffix, StringComparison.OrdinalIgnoreCase) && UtcNow() - File.GetCreationTimeUtc(file) < PartGrace) continue;
                     if (TryDelete(file)) count++;
                 }
@@ -480,6 +480,8 @@ internal static class ScrolllerDiskCache
     /// that does not exist is left alone (never created). Never throws.</summary>
     public static void PurgeAll(string reason)
     {
+        var old = SweepOldRoots(offSwitch: true);
+        if (old > 0) App.Logger?.Information("[scrolller cache] {Reason}: deleted {Count} file(s) in folders no longer used", reason, old);
         try
         {
             var root = RootProvider();
@@ -496,7 +498,7 @@ internal static class ScrolllerDiskCache
                 foreach (var file in Directory.GetFiles(root))
                 {
                     var name = Path.GetFileName(file);
-                    if (name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (IsBookFile(name)) continue;
                     if (TryDelete(file)) deleted++;
                 }
                 WriteIndex(new ScrolllerCacheBook().ToJson(), Path.Combine(root, IndexFileName), Interlocked.Increment(ref _saveSeq));
@@ -526,6 +528,169 @@ internal static class ScrolllerDiskCache
         catch (Exception ex) { App.Logger?.Debug("[scrolller cache] sweeper start failed: {E}", ex.Message); }
     }
 
+    // ---- folders no longer used ------------------------------------------------------
+    // A new CustomAssetsPath (or a custom drive that fell back to the default) moves the cache.
+    // The folder left behind is never read again, so its media and its .temp remote copies are
+    // deleted whole, at the move and on every sweep until it is empty (a file a player still
+    // holds is retried). Every folder ever used is remembered under the user data folder.
+
+    internal const string RootsFileName = "scrolller-cache-roots.json";
+
+    /// <summary>Where the list of cache folders ever used is kept, or null for none. Replaceable by tests.</summary>
+    internal static Func<string?> RootsFileProvider = () =>
+    {
+        try { return Path.Combine(App.UserDataPath, RootsFileName); }
+        catch { return null; }
+    };
+
+    /// <summary>Cache folders a build before the list may have used (the default assets folder
+    /// and the configured custom one): always swept as if remembered. Replaceable by tests.</summary>
+    internal static Func<IEnumerable<string>> SeedRootsProvider = () =>
+    {
+        var list = new List<string>();
+        try { list.Add(Path.Combine(App.UserAssetsPath, FolderName)); } catch { }
+        try
+        {
+            var custom = App.Settings?.Current?.CustomAssetsPath;
+            if (!string.IsNullOrWhiteSpace(custom)) list.Add(Path.Combine(custom, FolderName));
+        }
+        catch { }
+        return list;
+    };
+
+    private static readonly object RootsLock = new();
+
+    /// <summary>Every cache folder remembered (and the seeds), current one included.</summary>
+    internal static IReadOnlyList<string> KnownRoots()
+    {
+        var all = new List<string>();
+        lock (RootsLock) all.AddRange(ReadRoots());
+        try { all.AddRange(SeedRootsProvider()); } catch { }
+        return all.Where(r => !string.IsNullOrWhiteSpace(r))
+                  .Select(NormalRoot)
+                  .Distinct(StringComparer.OrdinalIgnoreCase)
+                  .ToList();
+    }
+
+    private static string NormalRoot(string root)
+    {
+        try { return Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch { return root; }
+    }
+
+    private static List<string> ReadRoots()
+    {
+        try
+        {
+            var file = RootsFileProvider();
+            if (string.IsNullOrEmpty(file) || !File.Exists(file)) return new List<string>();
+            return JArray.Parse(File.ReadAllText(file)).Select(t => (string?)t).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!).ToList();
+        }
+        catch { return new List<string>(); }
+    }
+
+    private static void WriteRoots(List<string> roots)
+    {
+        try
+        {
+            var file = RootsFileProvider();
+            if (string.IsNullOrEmpty(file)) return;
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            var tmp = file + ".tmp";
+            File.WriteAllText(tmp, new JArray(roots).ToString(Newtonsoft.Json.Formatting.None));
+            File.Move(tmp, file, overwrite: true);
+        }
+        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] roots save failed: {E}", ex.Message); }
+    }
+
+    /// <summary>Remembers <paramref name="root"/> as a folder this install used. Never throws.</summary>
+    private static void RememberRoot(string root)
+    {
+        lock (RootsLock)
+        {
+            var roots = ReadRoots();
+            var norm = NormalRoot(root);
+            if (roots.Any(r => SameRoot(NormalRoot(r), norm))) return;
+            roots.Add(norm);
+            WriteRoots(roots);
+        }
+    }
+
+    private static void ForgetRoot(string root)
+    {
+        lock (RootsLock)
+        {
+            var roots = ReadRoots();
+            var norm = NormalRoot(root);
+            if (roots.RemoveAll(r => SameRoot(NormalRoot(r), norm)) > 0) WriteRoots(roots);
+        }
+    }
+
+    /// <summary>The <c>.temp</c> folder beside a cache folder (both live in the assets folder).</summary>
+    internal static string? TempDirBeside(string root)
+    {
+        try
+        {
+            var parent = Path.GetDirectoryName(NormalRoot(root));
+            return string.IsNullOrEmpty(parent) ? null : Path.Combine(parent, ".temp");
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Deletes every media file in a folder the cache no longer uses (its books stay,
+    /// the index is written empty) and every remote temp copy beside it. Returns how many went
+    /// and whether anything is left (a file still open). Never creates a folder. Never throws.</summary>
+    internal static (int Deleted, bool Left) PurgeFolder(string root)
+    {
+        int deleted = 0;
+        bool left = false;
+        try
+        {
+            if (Directory.Exists(root))
+            {
+                foreach (var file in Directory.GetFiles(root))
+                {
+                    if (IsBookFile(Path.GetFileName(file))) continue;
+                    if (TryDelete(file)) deleted++; else left = true;
+                }
+                var index = Path.Combine(root, IndexFileName);
+                if (File.Exists(index)) WriteIndex(new ScrolllerCacheBook().ToJson(), index, Interlocked.Increment(ref _saveSeq));
+            }
+            var temp = TempDirBeside(root);
+            if (temp != null && Directory.Exists(temp))
+                foreach (var file in Directory.GetFiles(temp, RemoteMediaCache.TempPrefix + "*"))
+                    if (TryDelete(file)) deleted++; else left = true;
+        }
+        catch { left = true; }
+        return (deleted, left);
+    }
+
+    /// <summary>Purges every known folder that is not the current one (the off switch: every one
+    /// when none is current); a folder left empty is forgotten. Runs on every sweep and on the off
+    /// switch. Returns how many files went.</summary>
+    internal static int SweepOldRoots(bool offSwitch)
+    {
+        int count = 0;
+        try
+        {
+            string? current = null;
+            try { var r = RootProvider(); if (!string.IsNullOrEmpty(r)) current = NormalRoot(r); } catch { }
+            // No current folder (none resolvable): an ordinary sweep cannot tell old from live and
+            // leaves them; the off switch deletes in every one.
+            if (current == null && !offSwitch) return 0;
+            foreach (var root in KnownRoots())
+            {
+                if (current != null && SameRoot(root, current)) continue;
+                var (deleted, left) = PurgeFolder(root);
+                count += deleted;
+                if (!left) ForgetRoot(root);
+            }
+            if (count > 0) App.Logger?.Information("[scrolller cache] deleted {Count} file(s) in cache folders no longer used", count);
+        }
+        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] old folder sweep failed: {E}", ex.Message); }
+        return count;
+    }
+
     // ---- pure helpers ---------------------------------------------------------------
 
     /// <summary>sha256 of the url, lowercase hex, plus the url's extension (".bin" when it has
@@ -548,6 +713,10 @@ internal static class ScrolllerDiskCache
     }
 
     internal static bool IsCacheFileName(string name) => CacheFile.IsMatch(name);
+
+    /// <summary>The folder's own books (the index): never media, never swept as strangers.</summary>
+    internal static bool IsBookFile(string name)
+        => name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Check every body's own bytes before it becomes (or stays) an entry. Tests that
     /// write placeholder bytes switch it off through <see cref="ResetForTests"/>.</summary>
@@ -679,8 +848,9 @@ internal static class ScrolllerDiskCache
 
     /// <summary>The book for the current root, or null when there is no folder or it is still
     /// loading (the load runs in the background: never a disk scan on the caller's thread). When
-    /// the root moved, the old book's index is written first so its fresh files are not swept as
-    /// strangers the next time that folder loads. Caller holds <see cref="Gate"/>.</summary>
+    /// the root moved, the old folder is never read again: its media and its remote temp copies
+    /// are deleted now (it stays remembered, so the sweep retries a file a player still holds).
+    /// Caller holds <see cref="Gate"/>.</summary>
     private static ScrolllerCacheBook? Book()
     {
         var root = RootProvider();
@@ -688,7 +858,9 @@ internal static class ScrolllerDiskCache
         if (_book != null && SameRoot(root, _bookRoot)) return _book;
         if (_book != null && _bookRoot != null)
         {
-            WriteIndex(_book.ToJson(), Path.Combine(_bookRoot, IndexFileName), Interlocked.Increment(ref _saveSeq));
+            RememberRoot(_bookRoot);
+            var (deleted, _) = PurgeFolder(_bookRoot);
+            if (deleted > 0) App.Logger?.Information("[scrolller cache] the cache folder moved: deleted {Count} file(s) left behind", deleted);
             _book = null;
             _bookRoot = null;
         }
@@ -738,6 +910,7 @@ internal static class ScrolllerDiskCache
     private static ScrolllerCacheBook LoadBook(string root)
     {
         Directory.CreateDirectory(root);
+        RememberRoot(root);
         var indexPath = Path.Combine(root, IndexFileName);
         string? json = null;
         try { if (File.Exists(indexPath)) json = File.ReadAllText(indexPath); } catch { }
@@ -774,7 +947,7 @@ internal static class ScrolllerDiskCache
             foreach (var file in Directory.GetFiles(root))
             {
                 var name = Path.GetFileName(file);
-                if (string.Equals(name, IndexFileName, StringComparison.OrdinalIgnoreCase) || known.Contains(name)) continue;
+                if (IsBookFile(name) || known.Contains(name)) continue;
                 TryDelete(file);
             }
         }
