@@ -27,9 +27,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
         public event EventHandler? ChatShortcutRequested;
         public event EventHandler? CameraShortcutRequested;
-        /// <summary>Raised with the new IsChecked of the browser-pause switch. Not a setting: WPF
-        /// mutes and suspends the WebView2 live and persists nothing.</summary>
-        public event EventHandler<bool>? PauseBrowserChanged;
 
         public WorkshopBehaviorCell()
         {
@@ -52,7 +49,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 {
                     if (_isLoading) return;
                     var paused = ChkPauseBrowserCompanion.IsChecked == true;
-                    PauseBrowserChanged?.Invoke(this, paused);
                     if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
                         await shell.SetBrowserPausedFromWorkshopAsync(paused);
                 };

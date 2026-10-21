@@ -162,6 +162,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
         internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
 
+        /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
+        /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
+        internal bool MediaPaused { get; set; }
+
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
         /// The stand-in for <c>CoreWebView2.ExecuteScriptAsync</c>.

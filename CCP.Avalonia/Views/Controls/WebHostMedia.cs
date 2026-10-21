@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// It does not alter the saved Home mute preference.</summary>
         internal static async Task<bool> SetPausedAsync(this WebHost host, bool paused)
         {
+            host.MediaPaused = paused;
             if (!host.HasEngine) return false;
             var muted = await host.SetMutedAsync(paused);
             var result = await host.InvokeScriptAsync(Services.BrowserMediaPlaybackScript.ForPaused(paused));
