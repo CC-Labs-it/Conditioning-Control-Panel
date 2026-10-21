@@ -90,8 +90,8 @@ namespace ConditioningControlPanel.Services.Banner
         {
             try
             {
-                var settings = App.Settings?.Current;
-                if (settings == null || !settings.BannerPoolEnabled) return null;
+                var settings = CoreSettings.Current;
+                if (!settings.BannerPoolEnabled) return null;
 
                 lock (_gate)
                 {
@@ -105,15 +105,15 @@ namespace ConditioningControlPanel.Services.Banner
 
                         _lastBucket = candidate;
                         settings.RecordBannerSeen(picked.Value.Line.Id);
-                        App.Settings?.Save();
-                        App.Logger?.Debug("[BannerPool] line {Id}", picked.Value.Line.Id);
+                        CoreSettings.Save();
+                        Serilog.Log.Debug("[BannerPool] line {Id}", picked.Value.Line.Id);
                         return picked.Value.Text;
                     }
                 }
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("[BannerPool] NextLine failed: {E}", ex.Message);
+                Serilog.Log.Debug("[BannerPool] NextLine failed: {E}", ex.Message);
             }
             return null;
         }
@@ -214,7 +214,7 @@ namespace ConditioningControlPanel.Services.Banner
 
         // ------------------------------------------------------------------ conditions + tokens
 
-        private static bool Passes(BannerPoolCond? cond, AppSettings settings)
+        internal static bool Passes(BannerPoolCond? cond, AppSettings settings)
         {
             if (cond == null) return true;
             var value = Resolve(cond.Key, settings);
@@ -230,7 +230,7 @@ namespace ConditioningControlPanel.Services.Banner
         /// key we do not hold or one that reads zero: a line built around a number is a lie without
         /// the number.
         /// </summary>
-        private static string? Render(string text, AppSettings settings)
+        internal static string? Render(string text, AppSettings settings)
         {
             if (text.IndexOf('{') < 0) return text;
 
@@ -279,7 +279,7 @@ namespace ConditioningControlPanel.Services.Banner
 
             _loadedLanguage = lang;
             _pool = ReadFile(lang) ?? (lang == "en" ? null : ReadFile("en"));
-            if (_pool == null) App.Logger?.Debug("[BannerPool] no pool file for {Lang}", lang);
+            if (_pool == null) Serilog.Log.Debug("[BannerPool] no pool file for {Lang}", lang);
         }
 
         private static BannerPoolFile? ReadFile(string lang)
@@ -292,7 +292,7 @@ namespace ConditioningControlPanel.Services.Banner
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("[BannerPool] {Lang} pool unreadable: {E}", lang, ex.Message);
+                Serilog.Log.Debug("[BannerPool] {Lang} pool unreadable: {E}", lang, ex.Message);
                 return null;
             }
         }
@@ -319,7 +319,7 @@ namespace ConditioningControlPanel.Services.Banner
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("[BannerPool] pool probe failed: {E}", ex.Message);
+                Serilog.Log.Debug("[BannerPool] pool probe failed: {E}", ex.Message);
             }
             return null;
         }

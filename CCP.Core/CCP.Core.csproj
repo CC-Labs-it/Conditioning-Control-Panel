@@ -97,6 +97,13 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- Header banner line pool (Resources\banner\lines.<lang>.json): read from disk at
+         runtime by BannerPoolService, so it ships next to the exe like the EMI lines above. -->
+    <Content Include="..\Assets\banner\*.json" Link="Resources\banner\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
     <!-- Awareness v2 angle cards: the fail-closed floor AwarenessAngleCards reads with
          typeof(AwarenessAngleCards).Assembly, so it lives in the same assembly as that class.
          Each head still ships the on-disk override copy as Content. -->
