@@ -34,7 +34,8 @@ internal static class ScrolllerPolicy
 
     private static int _official;
 
-    /// <summary>True once the Scrolller licence is signed (server <c>official: true</c>): the
+    /// <summary>True when the server says so (<c>official: true</c>, the owner's switch; it may flip
+    /// while the licence is still in the works, the copy says so): the
     /// Assets tab shows the one-time "official" note and the stamped credit line. False by
     /// default and on any answer that does not say an explicit true.</summary>
     public static bool Official
