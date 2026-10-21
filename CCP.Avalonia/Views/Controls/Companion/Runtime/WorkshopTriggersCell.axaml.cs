@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         private readonly StackPanel _panel;
         private readonly Slider _slider;
         private readonly TextBlock _intervalText;
-        private bool _loading, _attached;
+        private bool _loading, _attached, _writing;
         private CoreAppSettings? _settings;
         private SettingsService? _service;
 
@@ -35,15 +35,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             {
                 _panel.IsVisible = _toggle.IsChecked == true;
                 if (_loading) return;
-                CoreSettings.Current.TriggerModeEnabled = _toggle.IsChecked == true;
-                CoreSettings.Save();
+                Write(() => CoreSettings.Current.TriggerModeEnabled = _toggle.IsChecked == true);
             };
             _slider.ValueChanged += (_, _) =>
             {
                 _intervalText.Text = $"{(int)_slider.Value}s";
                 if (_loading) return;
-                CoreSettings.Current.TriggerIntervalSeconds = (int)_slider.Value;
-                CoreSettings.Save();
+                Write(() => CoreSettings.Current.TriggerIntervalSeconds = (int)_slider.Value);
             };
             this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += (_, _) => EditTriggers();
             // ponytail: tube timer, CompanionPhraseService count/management and phrase presets
@@ -83,16 +81,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             if (_service != null) _service.CurrentReplaced += QueueRefresh;
         }
 
+        // The cell's own writes must not echo back as a refresh: that would snap a dragging slider to an int.
+        private void Write(Action write)
+        {
+            _writing = true;
+            try { write(); CoreSettings.Save(); }
+            finally { _writing = false; }
+        }
+
         private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (!_loading && e.PropertyName is null or "" or nameof(CoreAppSettings.TriggerModeEnabled)
+            if (!_loading && !_writing && e.PropertyName is null or "" or nameof(CoreAppSettings.TriggerModeEnabled)
                 or nameof(CoreAppSettings.TriggerIntervalSeconds)) QueueRefresh();
         }
 
         private void QueueRefresh() => Dispatcher.UIThread.Post(() =>
         {
             if (!_attached) return;
-            Rebind();
+            if (!ReferenceEquals(_settings, CoreSettings.Current)) Rebind();
             SyncFromSettings();
         });
 

@@ -40,7 +40,8 @@ public sealed class WorkshopTriggersWiringTests
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static async Task Until(Func<bool> done)
     {
-        for (var i = 0; i < 300 && !done(); i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!done() && clock.Elapsed < TimeSpan.FromSeconds(10)) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
         Assert.True(done());
     }
 
@@ -55,6 +56,8 @@ public sealed class WorkshopTriggersWiringTests
         Assert.Equal(90, slider.Value);
         Assert.Equal("90s", label.Text);
         slider.Value = 73.9;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(73.9, slider.Value); // own write must not echo back and snap the drag
         toggle.IsChecked = false;
         Assert.Equal(73, service.Current.TriggerIntervalSeconds);
         Assert.False(service.Current.TriggerModeEnabled);
@@ -124,12 +127,14 @@ public sealed class WorkshopTriggersWiringTests
         original.CustomTriggers = new List<string> { "OLD" };
         Click(cell.FindControl<Button>("BtnEditTriggersCompanion")!);
         var dialog = Assert.Single(window.OwnedWindows.OfType<TextEditorDialog>());
+        var closed = false;
+        dialog.Closed += (_, _) => closed = true;
         dialog.FindControl<TextBox>("TxtNewItem")!.Text = "stale edit";
         Click(dialog.FindControl<Button>("BtnAdd")!);
         service.RestoreFrom(new AppSettings { CustomTriggers = new List<string> { "RESTORED" } });
         Click(dialog.FindControl<Button>("BtnSave")!);
-        await Task.Yield();
-        Dispatcher.UIThread.RunJobs();
+        await Until(() => closed);
+        Dispatcher.UIThread.RunJobs(); // let EditTriggers' continuation after the dialog finish
         Assert.False(dialog.IsVisible);
         Assert.Equal(new[] { "RESTORED" }, service.Current.CustomTriggers);
         Assert.Equal(new[] { "OLD" }, original.CustomTriggers);
