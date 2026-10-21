@@ -161,7 +161,9 @@ public sealed class ProgramsRunControlsTests
 
     private static async Task<T> Owned<T>(Window owner) where T : Window
     {
-        for (var i = 0; i < 250 && !owner.OwnedWindows.OfType<T>().Any(); i++)
+        // P73: bounded by wall time, not by a count of dispatcher turns.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < deadline && !owner.OwnedWindows.OfType<T>().Any())
         {
             Dispatcher.UIThread.RunJobs();
             await Task.Yield();
