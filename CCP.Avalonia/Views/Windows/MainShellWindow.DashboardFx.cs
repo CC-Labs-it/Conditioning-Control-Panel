@@ -179,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                 }
                 if (status == null) return;
-                bool loading = string.Equals(status.Text?.Trim(), Loc.Get("label_loading")?.Trim(), StringComparison.OrdinalIgnoreCase);
+                bool loading = string.Equals(IconText.Bare(status.Text).Trim(), IconText.BareLoc("label_loading").Trim(), StringComparison.OrdinalIgnoreCase);
                 bool pulse = loading && ambient && Env.AllowTransitions;
                 if (!pulse)
                 {

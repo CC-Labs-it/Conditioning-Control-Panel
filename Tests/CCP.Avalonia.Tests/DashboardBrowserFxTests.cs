@@ -88,7 +88,9 @@ public sealed class DashboardBrowserFxTests
             Assert.Contains(BeatLoop.Running, l => l.Owner == status);
             shell.ShowTab("appsettings");
             Dispatcher.UIThread.RunJobs();
-            Assert.All(BeatLoop.Running.Where(l => l.Owner == frame || l.Owner == status), l => Assert.False(l.IsTicking));
+            var parked = BeatLoop.Running.Where(l => l.Owner == frame || l.Owner == status).ToList();
+            Assert.NotEmpty(parked);
+            Assert.All(parked, l => Assert.False(l.IsTicking));
             shell.ShowTab("settings");
             shell.WindowState = WindowState.Minimized;
             Dispatcher.UIThread.RunJobs();
