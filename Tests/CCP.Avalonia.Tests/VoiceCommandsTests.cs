@@ -314,7 +314,7 @@ public sealed class VoiceCommandsTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var mic = new WavMic(pcm ?? LockCardVoiceTests.Wav());   // pcm: zeros = a silent room

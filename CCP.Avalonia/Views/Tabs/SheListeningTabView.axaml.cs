@@ -32,7 +32,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SheListeningTabView : UserControl
     {
         private bool _isLoading;
-        private bool _sideArtCollapsed;
 
         private Windows.MainShellWindow? Main => TopLevel.GetTopLevel(this) as Windows.MainShellWindow;
 
@@ -72,7 +71,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public SheListeningTabView()
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
-            SL_SettingsColumns.SizeChanged += (_, _) => RefreshSideArtLayout();
 
             BtnSL_MicMaster.Click += (_, _) => Main?.ToggleVoiceMic();
             BtnSL_OpenDeviceSettings.Click += (_, _) => Main?.OpenDeviceSettings();
@@ -98,19 +96,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _isLoading = false;
 
             ApplyFeatureArt();
-        }
-
-        // WPF AdaptiveSideArt: lift the settings cap while compact, and restore the authored
-        // 2* art rail only after the 48px scrollbar hysteresis gap. No animation on resize.
-        private void RefreshSideArtLayout()
-        {
-            var width = SL_SettingsColumns.Bounds.Width;
-            if (width <= 0) return;
-            _sideArtCollapsed = Services.UI.SideArtRules.ShouldCollapse(width, 1000, _sideArtCollapsed);
-            SL_SettingsColumns.ColumnDefinitions[0].MaxWidth = _sideArtCollapsed ? double.PositiveInfinity : 780;
-            SL_SettingsColumns.ColumnDefinitions[1].Width = _sideArtCollapsed
-                ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
-            SheListeningSideArt.IsVisible = !_sideArtCollapsed;
         }
 
         protected override void OnAttachedToVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)

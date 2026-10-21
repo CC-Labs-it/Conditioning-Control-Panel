@@ -23,7 +23,7 @@
                                             Avalonia does not have.
        <Slider> (unstyled)               -> Theme="{StaticResource PinkSlider}" (the WPF theme applies
                                             PinkSlider implicitly to every Slider: Resources/Theme/MainWindow.xaml:341)
-       feat:AdaptiveSideArt.CollapseBelow-> SizeChanged + shared Core hysteresis rule
+       feat:AdaptiveSideArt.CollapseBelow-> unchanged (shared head port, Views/Features/AdaptiveSideArt.cs)
        x:FieldModifier="internal"        -> dropped; x:Names kept
        Click= / ValueChanged= / Checked= -> wired in the constructor
 
@@ -34,6 +34,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Avalonia.Views.Features"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.SheListeningTabView"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
@@ -111,7 +112,7 @@
                      slider is not a 1100px runway, and the width that buys back becomes one art
                      plate instead of dead margin. Every instructional card lives in column 0, not
                      the rail, because the rail is the half that collapses on a narrow window. -->
-                <Grid x:Name="SL_SettingsColumns">
+                <Grid x:Name="SL_SettingsColumns" feat:AdaptiveSideArt.CollapseBelow="1000">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" MaxWidth="780"/>
                         <ColumnDefinition Width="2*"/>
@@ -550,7 +551,9 @@
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,16,0,14"/>
 
-                            <!-- ponytail: split mixed WPF phrase lines by intent so unsupported alternatives can be hidden. -->
+                            <!-- ponytail: WPF shows each of these on one line; split by intent so phrases
+                                 this head cannot run yet are hidden. Rejoin to one line once lane
+                                 wire-views-tab-she-listening-b wires session pause/resume and volume. -->
                             <!-- Session, audio and handy verbs -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
