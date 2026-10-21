@@ -33,8 +33,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// here; the shimmer is a <see cref="DoubleTransition"/> exactly as <see cref="MakeHerYoursView"/>
     /// does it.</para>
     ///
-    /// <para>The bounded thread forwards spent wheel notches to its page using the shared Core
-    /// edge rule. Live assistant turns resolve sanctioned watch chips through the Core index.</para>
+    /// <para>WPF's CompanionWheelRelay is not ported: the thread's ScrollViewer keeps Avalonia's
+    /// default IsScrollChainingEnabled, which already hands a spent notch to the page. Live
+    /// assistant turns resolve sanctioned watch chips through the Core index.</para>
     ///
     /// <para>Sending is the viewmodel's. The WPF <c>IChatThresholdVm</c> is routed through
     /// <c>CompanionBrain.ChatAsync</c>; <see cref="ChatThresholdViewModel.CreateLive"/> sends through
@@ -58,11 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 WatchTurns(_vm?.Turns);
             };
             Loaded += OnLoaded;
-            Unloaded += (_, _) =>
-            {
-                WatchTurns(null);
-                if (this.FindControl<ItemsControl>("ThreadList") is { } thread) CompanionWheelRelay.Detach(thread);
-            };
+            Unloaded += (_, _) => WatchTurns(null);
         }
 
         /// <summary>Convenience for hosts that hand in a viewmodel rather than setting DataContext.</summary>
@@ -74,7 +71,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
-            if (this.FindControl<ItemsControl>("ThreadList") is { } thread) CompanionWheelRelay.Attach(thread);
             WatchTurns(ViewModel?.Turns);
             ScrollThreadToEnd();
             PlayDormantShimmer();

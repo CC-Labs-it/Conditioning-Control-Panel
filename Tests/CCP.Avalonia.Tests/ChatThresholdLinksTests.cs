@@ -84,7 +84,7 @@ public sealed class ChatThresholdLinksTests
             Dispatcher.UIThread.RunJobs();
             using var frame = window.GetLastRenderedFrame();
             Assert.NotNull(frame);
-            frame.Save(Path.Combine(Path.GetTempPath(), "ccp-chat-threshold-link-chip.png"), PngBitmapEncoderOptions.Default);
+            frame.Save(Path.Combine(CorePaths.UserData, "ccp-chat-threshold-link-chip.png"), PngBitmapEncoderOptions.Default);
             return Task.CompletedTask;
         }
         finally
