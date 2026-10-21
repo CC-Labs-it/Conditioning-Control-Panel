@@ -188,11 +188,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Grid.SetColumn(keyBox, 0);
             row.Children.Add(keyBox);
 
-            var arrow = new TextBlock
+            var arrow = new ConditioningControlPanel.Avalonia.Controls.IconGlyph
             {
-                Text = "→",
+                Kind = IconKind.ArrowRight,
                 Foreground = Brush.Parse("#808080"),
-                FontSize = 16,
+                Size = 16,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 8, 0),
             };
