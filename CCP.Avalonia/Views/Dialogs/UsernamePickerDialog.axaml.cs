@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     {
         private static readonly HttpClient _http = new();
         private readonly HttpClient _client;
+        private readonly TimeProvider _time;
         private readonly string _serverUrl = "https://codebambi-proxy.vercel.app";
         private CancellationTokenSource? _checkCts;
 
@@ -53,12 +54,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// </summary>
         public string? ChosenDisplayName { get; private set; }
 
-        public UsernamePickerDialog() : this(_http) { }
+        /// <summary>The latest availability check (tests await it instead of the wall clock).</summary>
+        internal Task? Check { get; private set; }
 
-        // Test transport seam: the production endpoint, debounce and response rules stay unchanged.
-        internal UsernamePickerDialog(HttpClient client)
+        public UsernamePickerDialog() : this(_http, TimeProvider.System) { }
+
+        // Test seams (transport + debounce clock): the production endpoint, 500 ms debounce and
+        // response rules stay unchanged.
+        internal UsernamePickerDialog(HttpClient client, TimeProvider time)
         {
             _client = client;
+            _time = time;
             AvaloniaXamlLoader.Load(this);
 
             _txtUsername = this.FindControl<TextBox>("TxtUsername")!;
@@ -90,7 +96,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 BeginMoveDrag(e);
         }
 
-        private async void TxtUsername_TextChanged(object? sender, TextChangedEventArgs e)
+        private void TxtUsername_TextChanged(object? sender, TextChangedEventArgs e) => Check = CheckAsync();
+
+        private async Task CheckAsync()
         {
             var name = (_txtUsername.Text ?? "").Trim();
 
@@ -123,7 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             try
             {
-                await Task.Delay(500, token); // Debounce
+                await Task.Delay(TimeSpan.FromMilliseconds(500), _time, token); // Debounce
                 if (token.IsCancellationRequested) return;
 
                 var available = await CheckNameAvailabilityAsync(name);

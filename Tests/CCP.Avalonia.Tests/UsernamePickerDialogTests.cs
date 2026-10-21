@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -96,6 +95,43 @@ public sealed class UsernamePickerDialogTests
             }
             finally { owner.Close(); }
         });
+
+    private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>Stepped clock whose timers fire only on <see cref="Advance"/> (as LoginDeviceCodeTests).</summary>
+    private sealed class Clock : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 10, 9, 12, 0, 0, TimeSpan.Zero);
+        private readonly List<T> _timers = new();
+        public override DateTimeOffset GetUtcNow() => _now;
+        public override ITimer CreateTimer(TimerCallback cb, object? state, TimeSpan due, TimeSpan period)
+        {
+            var t = new T(this, () => cb(state));
+            _timers.Add(t);
+            t.Change(due, period);
+            return t;
+        }
+        public void Advance(TimeSpan by)
+        {
+            var end = _now + by;
+            for (T? next; (next = _timers.Find(t => t.Due <= end)) != null;)
+            {
+                _now = next.Due!.Value;
+                next.Due = null;
+                next.Fire();
+            }
+            _now = end;
+        }
+        private sealed class T(Clock clock, Action fire) : ITimer
+        {
+            public DateTimeOffset? Due;
+            public void Fire() => fire();
+            public bool Change(TimeSpan due, TimeSpan period) { Due = due == Timeout.InfiniteTimeSpan ? null : clock._now + due; return true; }
+            public void Dispose() => Due = null;
+            public ValueTask DisposeAsync() { Dispose(); return default; }
+        }
+    }
+
     private sealed class AvailabilityTransport : HttpMessageHandler
     {
         internal readonly List<(Uri Uri, TaskCompletionSource<HttpResponseMessage> Response)> Requests = new();
@@ -109,11 +145,15 @@ public sealed class UsernamePickerDialogTests
             Requests[index].Response.SetResult(new HttpResponseMessage(code) { Content = new StringContent(json) });
     }
 
-    private static async Task Until(Func<bool> condition)
+    /// <summary>Runs dispatcher work until <paramref name="done"/>; bounded, no wall-clock waits.</summary>
+    private static async Task Until(Func<bool> done)
     {
-        var watch = Stopwatch.StartNew();
-        while (!condition() && watch.Elapsed < TimeSpan.FromSeconds(8)) await Task.Delay(10);
-        Assert.True(condition());
+        for (var i = 0; i < 500 && !done(); i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Yield();
+        }
+        Assert.True(done());
     }
 
     [Fact]
@@ -123,8 +163,9 @@ public sealed class UsernamePickerDialogTests
             SetupHeadless();
             using var transport = new AvailabilityTransport();
             using var client = new HttpClient(transport);
+            var clock = new Clock();
             var owner = new Window(); owner.Show();
-            var dlg = new UsernamePickerDialog(client);
+            var dlg = new UsernamePickerDialog(client, clock);
             var shown = dlg.ShowDialog<bool?>(owner);
             try
             {
@@ -136,18 +177,24 @@ public sealed class UsernamePickerDialogTests
                 Assert.Equal(Loc.Get("login_checking_availability"), status.Text);
                 Assert.Same(Brushes.Gray, status.Foreground);
                 Assert.False(confirm.IsEnabled);
-                Assert.Empty(transport.Requests); // still inside the 500 ms WPF debounce
+                var stale = dlg.Check!;
                 box.Text = "  New Name+  ";
+                await stale; // the superseded debounce was cancelled and sent nothing
+                clock.Advance(Debounce - TimeSpan.FromMilliseconds(1));
                 Dispatcher.UIThread.RunJobs();
+                Assert.Empty(transport.Requests); // still inside the 500 ms WPF debounce
+                clock.Advance(TimeSpan.FromMilliseconds(1));
                 await Until(() => transport.Requests.Count == 1);
                 Assert.Equal("https://codebambi-proxy.vercel.app/user/check-display-name?display_name=New%20Name%2B", transport.Requests[0].Uri.AbsoluteUri);
                 transport.Reply(0, "{\"available\":true}");
-                await Until(() => confirm.IsEnabled);
+                await dlg.Check!;
+                Assert.True(confirm.IsEnabled);
                 Assert.Equal(Loc.GetF("login_name_available", "New Name+"), status.Text);
                 Assert.Same(Brushes.LightGreen, status.Foreground);
                 Click(confirm);
                 Assert.True(await shown);
                 Assert.Equal("New Name+", dlg.ChosenDisplayName);
+                Assert.Single(transport.Requests);
             }
             finally { dlg.Close(); owner.Close(); }
         });
@@ -162,14 +209,18 @@ public sealed class UsernamePickerDialogTests
             SetupHeadless();
             using var transport = new AvailabilityTransport();
             using var client = new HttpClient(transport);
-            var dlg = new UsernamePickerDialog(client); dlg.Show();
+            var clock = new Clock();
+            var dlg = new UsernamePickerDialog(client, clock); dlg.Show();
             try
             {
                 dlg.FindControl<TextBox>("TxtUsername")!.Text = "SomeName";
+                Dispatcher.UIThread.RunJobs(); // TextChanged is posted, so the debounce timer starts here
+                clock.Advance(Debounce);
                 await Until(() => transport.Requests.Count == 1);
                 transport.Reply(0, body, code);
+                await dlg.Check!;
                 var status = dlg.FindControl<TextBlock>("TxtAvailability")!;
-                await Until(() => status.Text == Loc.GetF("login_name_already_taken", "SomeName"));
+                Assert.Equal(Loc.GetF("login_name_already_taken", "SomeName"), status.Text);
                 Assert.Same(Brushes.Orange, status.Foreground);
                 var confirm = dlg.FindControl<Button>("BtnConfirm")!;
                 Assert.False(confirm.IsEnabled);
@@ -187,26 +238,33 @@ public sealed class UsernamePickerDialogTests
             SetupHeadless();
             using var transport = new AvailabilityTransport();
             using var client = new HttpClient(transport);
-            var dlg = new UsernamePickerDialog(client); dlg.Show();
+            var clock = new Clock();
+            var dlg = new UsernamePickerDialog(client, clock); dlg.Show();
             var box = dlg.FindControl<TextBox>("TxtUsername")!;
             var status = dlg.FindControl<TextBlock>("TxtAvailability")!;
             var confirm = dlg.FindControl<Button>("BtnConfirm")!;
             try
             {
                 box.Text = "PreviousName";
+                Dispatcher.UIThread.RunJobs();
+                clock.Advance(Debounce);
                 await Until(() => transport.Requests.Count == 1);
+                var previous = dlg.Check!;
                 box.Text = "ab";
                 Dispatcher.UIThread.RunJobs();
                 transport.Reply(0, "{\"available\":true}");
-                await Task.Delay(100);
+                await previous; // the stale reply has been fully handled
                 Assert.Equal(Loc.Get("login_name_min_3_chars"), status.Text);
                 Assert.False(confirm.IsEnabled);
                 box.Text = "ClosingName";
+                Dispatcher.UIThread.RunJobs();
+                clock.Advance(Debounce);
                 await Until(() => transport.Requests.Count == 2);
+                var closing = dlg.Check!;
                 var beforeClose = status.Text;
                 dlg.Close();
                 transport.Reply(1, "{\"available\":true}");
-                await Task.Delay(100);
+                await closing; // the post-close reply has been fully handled
                 Assert.False(dlg.IsVisible);
                 Assert.False(confirm.IsEnabled);
                 Assert.Equal(beforeClose, status.Text);
@@ -214,5 +272,4 @@ public sealed class UsernamePickerDialogTests
             }
             finally { dlg.Close(); }
         });
-
 }
