@@ -63,6 +63,26 @@ public static class FriendsLinkRules
         return IsToken(s) ? s : null;
     }
 
+    /// <summary>
+    /// Our link inside a pasted message ("add me https://app.cclabs.app/f/..." from a share sheet
+    /// or a chat): the token of the first whole word that is itself our link, else null. A word
+    /// must carry a slash, so a bare twelve-letter word in the message never reads as a token, and
+    /// <see cref="ParseToken"/> still refuses every other host.
+    /// </summary>
+    public static string? LinkInText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        foreach (var raw in text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var word = raw.Trim(WordWrappers);
+            if (word.IndexOf('/') >= 0 && ParseToken(word) is { } t) return t;
+        }
+        return null;
+    }
+
+    // Brackets, quotes and sentence punctuation around a link in a message, in any order.
+    private static readonly char[] WordWrappers = { '<', '>', '(', ')', '[', ']', '"', '\'', '.', ',', ';', ':', '!', '?' };
+
     /// <summary>What the add box shows for what was typed or pasted, and whether it is a link
     /// token rather than a friend code. A whole link becomes its token; up to five characters (or
     /// a pasted <c>CCP-</c> code) stay a code; six to twelve from the alphabet are a token on its way.
@@ -72,6 +92,7 @@ public static class FriendsLinkRules
     {
         if (string.IsNullOrEmpty(typed)) return ("", false);
         if (ParseToken(typed) is { } t) return (t, true);
+        if (LinkInText(typed) is { } inText) return (inText, true);
         var s = typed.Trim().ToUpperInvariant();
         if (s.StartsWith("CCP-", StringComparison.Ordinal)) return (Controls.Friends.FriendsDrawerRules.NormaliseCode(s), false);
         if (s.Contains('/') || s.Contains(':'))

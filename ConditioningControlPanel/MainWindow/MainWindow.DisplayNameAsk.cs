@@ -39,8 +39,15 @@ namespace ConditioningControlPanel
             if (!NeedsDisplayNameRule.ShouldAsk(true, App.Settings?.Current?.UserDisplayName, null)) return;
             _nameAskedForUid = uid;
             App.Logger?.Information("Display name: account has none, queueing the ask");
+            // The ladder's modal pump never waits for a session or a Lockdown, and a first profile
+            // load can land mid-run (offline at launch): a hold at show time puts the ask back, for
+            // the next profile load or the next launch.
             if (App.StartupLadder != null)
-                App.StartupLadder.EnqueueModal("display-name", 40, owner => ShowDisplayNameAsk(owner ?? this, null));
+                App.StartupLadder.EnqueueModal("display-name", 40, owner =>
+                {
+                    if (Services.Friends.FriendsLanding.Holding()) { _nameAskedForUid = null; return; }
+                    ShowDisplayNameAsk(owner ?? this, null);
+                });
             else
                 Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => ShowDisplayNameAsk(this, null)));
         }
@@ -71,11 +78,17 @@ namespace ConditioningControlPanel
         private async Task<string?> SaveRequiredDisplayNameAsync(string name)
         {
             if (App.ProfileSync == null) return Loc.Get("msg_failed_to_change_display_name");
-            if (await App.ProfileSync.IsDisplayNameAvailableAsync(name) == false)
-                return Loc.GetF("login_name_already_taken", name);
 
+            // The change first: check-name says "taken" for the asker's OWN name, and a veteran whose
+            // stored name is their patron name types exactly that (the change route accepts it, and a
+            // refused name never starts its cooldown). Only a refusal asks which line to show.
             var (ok, error, saved) = await App.ProfileSync.ChangeDisplayNameAsync(name);
-            if (!ok) return error ?? Loc.Get("msg_failed_to_change_display_name");
+            if (!ok)
+            {
+                if (await App.ProfileSync.IsDisplayNameAvailableAsync(name) == false)
+                    return Loc.GetF("login_name_already_taken", name);
+                return error ?? Loc.Get("msg_failed_to_change_display_name");
+            }
 
             if (App.Settings?.Current != null)
             {
