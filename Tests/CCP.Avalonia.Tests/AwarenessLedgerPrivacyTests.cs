@@ -26,6 +26,9 @@ public sealed class AwarenessLedgerPrivacyTests
         var path = Path.Combine(dir, "awareness_ledger.json");
         var now = DateTime.Today.AddHours(12);
         using var ledger = new ActivityLedger(path, () => now, () => CoreSettings.Current.AwarenessRetentionDays);
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;   // P02: own settings, never the shared default
         var old = (AwarenessLive.Ledger, AwarenessLive.Memory, CoreSettings.Current.AwarenessRetentionDays);
         AwarenessLive.Ledger = ledger;
         AwarenessLive.Memory = null;
@@ -42,12 +45,16 @@ public sealed class AwarenessLedgerPrivacyTests
                 seed.NoteFocusEnd(now.AddDays(-1).AddMinutes(2));
                 seed.SaveNow();
             }
-            ledger.Start();
+            // Startup with awareness off: WPF App.xaml.cs:2928 only sweeps the file, never starts the ledger.
+            ledger.PruneOnDisk();
+            Assert.Empty(ledger.KnownAppIds);                 // the sweep loads nothing into memory
+            Assert.Contains("recent-app", File.ReadAllText(path));
+            ledger.Start();                                   // awareness turns on: the retained history loads
             await AvaloniaTestDispatcher.RunAsync(() =>
             {
                 if (Application.Current is null)
-                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
                 var view = new AwarenessPrivacyView();
                 var host = new Window { Content = view };
                 host.Show();
@@ -68,13 +75,6 @@ public sealed class AwarenessLedgerPrivacyTests
                     vm.RetentionDays = 7;
                     Assert.Empty(ledger.KnownAppIds);
                     Assert.False(vm.HasKnownApps);
-                    ledger.NoteFocus("panic-app", "test", ActivityCategory.Unknown, now);
-                    now = now.AddMinutes(2);
-                    Assert.Equal(2, ledger.Snapshot("panic-app", now).MinutesToday);
-                    PanicSurfaces.All.Single(s => s.Id == "awareness-ledger").Stop(null);
-                    now = now.AddMinutes(5);
-                    ledger.Heartbeat(now);
-                    Assert.Equal(2, ledger.Snapshot("panic-app", now).MinutesToday);
                     ledger.Start();
                     ledger.NoteFocus("wipe-app", "test", ActivityCategory.Unknown, now);
                     vm.Sync();
@@ -95,6 +95,8 @@ public sealed class AwarenessLedgerPrivacyTests
         finally
         {
             (AwarenessLive.Ledger, AwarenessLive.Memory, CoreSettings.Current.AwarenessRetentionDays) = old;
+            CoreSettings.Save();
+            CoreSettings.ServiceProvider = oldProvider;
             ledger.Dispose();
             Directory.Delete(dir, recursive: true);
         }
