@@ -151,7 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 track = card?.ProgressTrack ?? DailyCardsGrid;
             }
             if (fill is { Bounds.Width: > 1 } && _burst.Fire(fill, QuestBurstCount, rightEdge: true)) return;
-            if (track != null && _burst.Fire(track, QuestBurstCount, rightEdge: true)) return;
+            // WPF EventFx.cs:224-228: fallbacks after the fill burst from their centre.
+            if (track != null && _burst.Fire(track, QuestBurstCount)) return;
             (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.CelebrateQuestNav();
         }
     }

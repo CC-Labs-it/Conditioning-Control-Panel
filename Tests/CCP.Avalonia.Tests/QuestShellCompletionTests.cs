@@ -62,7 +62,7 @@ public sealed class QuestShellCompletionTests
         OverlayLayer.GetOverlayLayer(anchor)!.Children.OfType<AmbientFxCanvas>().Where(c => c.Width == 560).ToArray();
 
     [Fact]
-    public void OffTabCompletionBurstsAtTheOwningNavRowsRightEdge() => Run((shell, quests) =>
+    public void OffTabCompletionBurstsAtTheOwningNavRowsCentre() => Run((shell, quests) =>
     {
         var anchor = shell.NavAnchorForTab("quests")!;
         Assert.Equal("you", CoreNavSection(anchor));
@@ -71,7 +71,7 @@ public sealed class QuestShellCompletionTests
         quests.TrackBubblesPopped(QuestDefinition.DailyQuests.Find(d => d.Id == "pop_parade_d")!.TargetValue);
         Dispatcher.UIThread.RunJobs();
         var layer = Assert.Single(BurstLayers(anchor));
-        var expected = anchor.TranslatePoint(new Point(anchor.Bounds.Width, anchor.Bounds.Height / 2), OverlayLayer.GetOverlayLayer(anchor)!)!.Value;
+        var expected = anchor.TranslatePoint(new Point(anchor.Bounds.Width / 2, anchor.Bounds.Height / 2), OverlayLayer.GetOverlayLayer(anchor)!)!.Value;
         Assert.Equal(expected.X, Canvas.GetLeft(layer) + 280, 3);
         Assert.Equal(expected.Y, Canvas.GetTop(layer) + 280, 3);
         Assert.True(shell.Named<QuestsTabView>("QuestsTab")!.FindControl<Border>("QuestCompleteBanner")!.IsVisible);

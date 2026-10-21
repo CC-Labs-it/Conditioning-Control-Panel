@@ -9,12 +9,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.EventFx.cs CelebrateQuestComplete: the nav row is the last
         /// anchor when the quest's own bar is off screen or unmeasured. NavAnchorForTab maps
-        /// Quests to its owning section (You); the authored burst spot is RightEdge, even here.
+        /// Quests to its owning section (You). Like WPF FireBurstAtFirstVisible (EventFx.cs:224-228),
+        /// only the primary anchor gets the authored RightEdge spot; a fallback bursts from its centre.
         /// EventBurstLayer owns the motion, active-window and visible-anchor gates.</summary>
         internal void CelebrateQuestNav()
         {
             if (NavAnchorForTab("quests") is { } anchor)
-                _questCompletionBurst.Fire(anchor, QuestsTabView.QuestBurstCount, rightEdge: true);
+                _questCompletionBurst.Fire(anchor, QuestsTabView.QuestBurstCount);
         }
 
         // ponytail: flash voice lines still need the FlashService audio pool, and header stamps
