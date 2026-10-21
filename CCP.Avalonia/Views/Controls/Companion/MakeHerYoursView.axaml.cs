@@ -102,6 +102,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     public sealed class MakeHerYoursViewModel : INotifyPropertyChanged
     {
         private readonly global::Avalonia.Visual? _host;
+        internal CommunityPromptService? PromptService;
+        private CommunityPromptService Prompts => PromptService ??= Runtime.WorkshopCommunityCell.CreateService(Owner);
+        private Window? Owner() => _host == null ? null : TopLevel.GetTopLevel(_host) as Window;
         private readonly ObservableCollection<PresetChip> _presets = new();
         private bool _isSpiceOn;
         private string _activeLine = string.Empty;
@@ -115,6 +118,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             OpenTraitDashboardCommand = new CompanionRelayCommand(OpenPromptEditor);
             ViewCompiledPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
             ForkPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
+            // WPF BtnBrowsePrompts_Click: same flow as the Workshop cell's Browse; installing never activates.
+            CommunityPromptsCommand = new CompanionRelayCommand(() => _ = Runtime.WorkshopCommunityCell.BrowseAsync(Owner, Prompts, Sync));
             ResetPersonalityCommand = new CompanionRelayCommand(() =>
             {
                 // WPF BtnDeactivatePrompt_Click -> CommunityPromptService.DeactivatePrompt.
@@ -187,10 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public ICommand ResetPersonalityCommand { get; }
         public ICommand ViewCompiledPromptCommand { get; }
         public ICommand ForkPromptCommand { get; }
-        // ponytail: WPF BtnBrowsePrompts_Click opens the community prompt browser. CommunityPromptService is
-        // in Core now and the browser lives in the Workshop's COMMUNITY cell (WorkshopCommunityCell); this
-        // link is not routed there yet, so it stays a null command (disabled) rather than a dead button.
-        public ICommand? CommunityPromptsCommand => null;
+        public ICommand CommunityPromptsCommand { get; }
 
         /// <summary>Re-reads settings and the personality service (WPF MakeHerYoursRuntimeVm.SyncCore).</summary>
         public void Sync()
@@ -210,9 +212,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             var communityId = settings.ActiveCommunityPromptId;
             if (!string.IsNullOrEmpty(communityId))
             {
-                // ponytail: WPF shows the installed prompt's NAME (CommunityPromptService.GetInstalledPrompt,
-                // now in Core); this viewmodel holds no service instance yet, so the id stands in.
-                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", communityId);
+                // WPF MakeHerYoursRuntimeVm: the installed prompt's NAME, id when the file is missing.
+                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", Prompts.GetInstalledPrompt(communityId)?.Name ?? communityId);
                 CanResetPersonality = true;
                 return;
             }
