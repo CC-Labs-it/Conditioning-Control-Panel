@@ -51,6 +51,7 @@ public sealed class SubliminalStealsFocusTests
         }
         var settings = global::ConditioningControlPanel.CoreSettings.Current;
         var font = settings.SubliminalFont;
+        var steals = settings.SubliminalStealsFocus;
         settings.SubliminalFont = AppFonts.Inter;
         var before = SubliminalOverlay.ActivateCard;
         var activated = 0;
@@ -60,11 +61,13 @@ public sealed class SubliminalStealsFocusTests
         try
         {
             Assert.False(X11Overlay.ActivateClickThrough(off)); // headless never invokes native APIs
-            SubliminalOverlay.Present(off, stealsFocus: false);
+            settings.SubliminalStealsFocus = false;
+            SubliminalOverlay.Present(off);
             Assert.True(off.IsVisible);
             Assert.Equal(0, activated);
 
-            SubliminalOverlay.Present(on, stealsFocus: true);
+            settings.SubliminalStealsFocus = true; // the Advanced ChkStealsFocus setting
+            SubliminalOverlay.Present(on);
             Assert.True(on.IsVisible);
             Assert.Equal(1, activated);
             Assert.False(on.IsHitTestVisible);
@@ -74,7 +77,7 @@ public sealed class SubliminalStealsFocusTests
             // A platform that refuses the focus never breaks the card.
             SubliminalOverlay.ActivateCard = _ => throw new InvalidOperationException("refused");
             var refused = new SubliminalOverlayWindow("OBEY");
-            SubliminalOverlay.Present(refused, stealsFocus: true);
+            SubliminalOverlay.Present(refused);
             Assert.True(refused.IsVisible);
             SubliminalOverlay.CloseAll(); // existing engine Stop / Panic desktop-overlays path
             Assert.False(off.IsVisible);
@@ -84,6 +87,7 @@ public sealed class SubliminalStealsFocusTests
         finally
         {
             settings.SubliminalFont = font;
+            settings.SubliminalStealsFocus = steals;
             SubliminalOverlay.ActivateCard = before;
             off.Close(); on.Close();
         }

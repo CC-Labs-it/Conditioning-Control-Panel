@@ -62,18 +62,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     w.Close();
                     return;
                 }
-                Present(w, s.SubliminalStealsFocus);
+                Present(w);
                 w.Run(alpha, hold);
             }
         }
 
         /// <summary>Native focus request; tests substitute it without touching a desktop.</summary>
-        internal static Action<Window> ActivateCard = w => X11Overlay.ActivateClickThrough(w);
-
-        /// <summary>WPF ShowSubliminalVisuals: show passively, then optionally activate. A refused
-        /// focus request never prevents the card's visual envelope or its Stop lifecycle.</summary>
-        internal static void Present(Window card, bool stealsFocus)
+        internal static Action<Window> ActivateCard = w =>
         {
+            // X11: a focus request can race the map and be refused (BadMatch); the card still shows.
+            if (!X11Overlay.ActivateClickThrough(w)) Log.Debug("Subliminal: platform refused the focus request");
+        };
+
+        /// <summary>WPF ShowSubliminalVisuals: show passively, then activate when SubliminalStealsFocus
+        /// is on (SubliminalService.cs:661-662). A refused focus request never prevents the card's
+        /// visual envelope or its Stop lifecycle.</summary>
+        internal static void Present(Window card)
+        {
+            var stealsFocus = CoreSettings.Current.SubliminalStealsFocus;
             if (card is SubliminalOverlayWindow overlay)
             {
                 overlay.Closed += (_, _) => Active.Remove(overlay);
