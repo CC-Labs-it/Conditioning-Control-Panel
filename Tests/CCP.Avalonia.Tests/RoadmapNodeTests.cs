@@ -101,8 +101,10 @@ public sealed class RoadmapNodeTests
         var progressFile = System.IO.Path.Combine(CorePaths.UserData, "roadmap.json");
         var progressBefore = System.IO.File.Exists(progressFile) ? System.IO.File.ReadAllText(progressFile) : null;
         string? stepId = null;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
         try
         {
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };   // SubmitPhoto chimes; keep it off the device
             host.Show();
             var view = (QuestsTabView)host.Content!;
             Click(view, "BtnQuestSubRoadmap");
@@ -139,6 +141,7 @@ public sealed class RoadmapNodeTests
         }
         finally
         {
+            CoreAudio.PlayOneShotProvider = oldAudio;
             foreach (var w in opened.ToArray()) w.Close();
             host.Close();
             Dispatcher.UIThread.RunJobs();
