@@ -41,8 +41,11 @@ public sealed class RevealArgumentsTests
             var ftyp = new byte[] { 0, 0, 0, 0x18, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'i', (byte)'s', (byte)'o', (byte)'m', 0, 0, 0, 0 };
 
             Assert.True(MediaHistoryPreviewRules.VideoLooksBroken(Make("empty.mp4", Array.Empty<byte>())));
-            Assert.True(MediaHistoryPreviewRules.VideoLooksBroken(Make("text.mp4", "not a video at all"u8.ToArray())));
             Assert.True(MediaHistoryPreviewRules.VideoLooksBroken(Make("png.webm", new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })));
+            Assert.True(MediaHistoryPreviewRules.VideoLooksBroken(Make("song.mp4", "ID3\x04\0\0\0\0"u8.ToArray())));
+            // Playable heads the sniffer cannot name: a transport stream saved as .mp4, an mp4 opening on a free atom.
+            Assert.False(MediaHistoryPreviewRules.VideoLooksBroken(Make("ts.mp4", new byte[] { 0x47, 0x40, 0x00, 0x10, 0x00, 0x00, 0xB0, 0x0D })));
+            Assert.False(MediaHistoryPreviewRules.VideoLooksBroken(Make("free.mp4", "\0\0\0\x0008free\0\0\0\x08mdat"u8.ToArray())));
             Assert.False(MediaHistoryPreviewRules.VideoLooksBroken(Make("real.mp4", ftyp)));
             Assert.False(MediaHistoryPreviewRules.VideoLooksBroken(Make("mp4-named.mkv", ftyp)));     // the bytes decide, not the name
             // Formats the sniffer cannot name are left to the player.

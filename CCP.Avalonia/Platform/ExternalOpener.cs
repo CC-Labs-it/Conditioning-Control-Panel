@@ -97,7 +97,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 using var p = Process.Start(psi);
                 // dbus-send --print-reply answers at once; a missing service is a non-zero exit, so the folder opens instead.
-                return p != null && p.WaitForExit(3000) && p.ExitCode == 0;
+                // A file manager still starting after the wait counts as taken: falling back would open a second window.
+                return p != null && (!p.WaitForExit(3000) || p.ExitCode == 0);
             }
             catch (System.ComponentModel.Win32Exception) { return false; }   // swallow: no dbus-send / open here, the folder opens instead
         }

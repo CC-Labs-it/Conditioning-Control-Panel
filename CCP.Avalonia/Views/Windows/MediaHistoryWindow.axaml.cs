@@ -388,7 +388,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return s.MediaSource != "local" && s.HasRemoteMediaConsent;
         }
 
-        private static readonly System.Net.Http.HttpClient Http = new(ConditioningControlPanel.Services.Deeper.UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
+        private static readonly System.Net.Http.HttpClient Http = CreateClient();
+
+        // WPF RemoteMediaCache.CreateClient's headers: CDNs that refuse a request without a User-Agent must not
+        // drop this head to the streamed-only card.
+        private static System.Net.Http.HttpClient CreateClient()
+        {
+            var c = new System.Net.Http.HttpClient(ConditioningControlPanel.Services.Deeper.UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
+            c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
+            c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
+            c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
+            return c;
+        }
 
         /// <summary>Test seam: the bytes behind an online still (WPF RemoteMediaCache.OpenAsync), at most
         /// <see cref="WelcomeShow.FirstShowStageWindow.MaxPictureBytes"/>; null when the host refused or sent no image.</summary>

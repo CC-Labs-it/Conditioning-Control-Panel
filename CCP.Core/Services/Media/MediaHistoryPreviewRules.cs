@@ -180,17 +180,19 @@ namespace ConditioningControlPanel.Services
             };
         }
 
-        // Containers whose signature sits at byte 0 by spec, so a head that is not one means the file is not
-        // one. QuickTime .mov is left out: an old .mov can open on a moov/mdat/wide atom the sniffer cannot read.
-        private static readonly System.Collections.Generic.HashSet<string> StrictVideo =
-            new(StringComparer.OrdinalIgnoreCase) { ".mp4", ".m4v", ".webm", ".mkv", ".avi", ".flv" };
+        // Heads that are positively a still or a sound, never a clip. Ogg is left out: it can carry Theora video.
+        // An unrecognised head is NOT on this list: a transport stream named .mp4, or an mp4 opening on a
+        // free/wide/mdat atom, sniffs as nothing and LibVLC still plays it.
+        private static readonly System.Collections.Generic.HashSet<string> NotVideo =
+            new(StringComparer.OrdinalIgnoreCase)
+            { ".png", ".jpg", ".gif", ".webp", ".bmp", ".heic", ".avif", ".wav", ".flac", ".mp3", ".m4a" };
 
         /// <summary>
-        /// True when a local video clearly cannot play: empty, sniffed as something that is not a video, or
-        /// a strict container (<see cref="StrictVideo"/>) whose head is no video at all. WPF's MediaElement
-        /// raises MediaFailed for such a file and the pane shows "file not found"; LibVLC (the Avalonia
-        /// head) raises nothing and paints a blank pane, so that head asks first. Formats the sniffer cannot
-        /// name (.wmv, .mpg, .3gp) are left to the player. A missing or unreadable file is the plan's case.
+        /// True when a local video clearly cannot play: empty, or its bytes say it is an image or audio
+        /// file (<see cref="NotVideo"/>). WPF's MediaElement raises MediaFailed for such a file and the pane
+        /// shows "file not found"; LibVLC (the Avalonia head) raises nothing and paints a blank pane, so that
+        /// head asks first. Anything the sniffer cannot name is left to the player. A missing or unreadable
+        /// file is the plan's case.
         /// </summary>
         public static bool VideoLooksBroken(string? path)
         {
@@ -202,8 +204,7 @@ namespace ConditioningControlPanel.Services
             }
             catch (Exception) { return false; }   // swallow: an unreadable path is the plan's "file not found"
             var sniffed = Helpers.MediaTypeSniffer.FromFileHead(path);
-            if (sniffed != null) return !StrictVideo.Contains(sniffed) && sniffed != ".mov";
-            return StrictVideo.Contains(System.IO.Path.GetExtension(path!));
+            return sniffed != null && NotVideo.Contains(sniffed);
         }
     }
 }
