@@ -28,13 +28,9 @@ public sealed class SpiralFirstLightVisualTests
         var first = new SpiralFirstLightVisual(Colors.HotPink);
         var second = new SpiralFirstLightVisual(Colors.HotPink);
         var fog = Draw(first, .30, 0);
-        var evidence = Path.Combine(Directory.GetCurrentDirectory(), ".pi", "avalonia-port", "first-light");
-        Directory.CreateDirectory(evidence);
-        File.WriteAllBytes(Path.Combine(evidence, "fog-canvas.png"), fog);
         Assert.Equal(fog, Draw(second, .30, 0));
         Assert.NotEqual(fog, Draw(first, .30, 10)); // wall clock moves only the fog
         var arm = Draw(first, 1.5, 0);
-        File.WriteAllBytes(Path.Combine(evidence, "first-light-arm.png"), arm);
         Assert.NotEqual(fog, arm);
         Assert.Equal(arm, Draw(second, 1.5, 0));
         Assert.NotEqual(arm, Draw(first, SpiralFirstLightTimeline.HandoffStartSeconds(false), 0));
@@ -64,6 +60,8 @@ public sealed class SpiralFirstLightVisualTests
         var settings = CoreSettings.Current;
         var before = settings.MotionLevel;
         settings.MotionLevel = motion;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
         var tab = new SpiralTabView();
         var window = new Window { Content = tab, Width = 800, Height = 500 };
         try
@@ -78,6 +76,11 @@ public sealed class SpiralFirstLightVisualTests
             Assert.Equal(SpiralFirstLightTimeline.DrawStartSeconds, visual.ElapsedSeconds);
             Assert.Equal(0, visual.AmbientSeconds);
             Assert.Equal(ticks, BeatLoop.Running.Any(loop => loop.Owner == visual));
+            // The shared beat really moves the fog clock (Full only); the reveal stays held.
+            time.Advance(TimeSpan.FromSeconds(1.5));
+            BeatLoop.StepAll();
+            Assert.Equal(ticks ? 1.5 : 0, visual.AmbientSeconds, 3);
+            Assert.Equal(SpiralFirstLightTimeline.DrawStartSeconds, visual.ElapsedSeconds);
             var frame = Draw(visual, visual.ElapsedSeconds, 0);
             visual.Begin(false); // reduced fog must never snap to the revealed spiral
             Assert.Equal(frame, Draw(visual, SpiralFirstLightTimeline.DrawStartSeconds, 0));
@@ -89,7 +92,7 @@ public sealed class SpiralFirstLightVisualTests
             window.Content = null;
             Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == visual);
         }
-        finally { window.Close(); settings.MotionLevel = before; }
+        finally { window.Close(); settings.MotionLevel = before; BeatLoop.Time = TimeProvider.System; }
     });
 
     private static byte[] Draw(SpiralFirstLightVisual control, double elapsed, double ambient)
