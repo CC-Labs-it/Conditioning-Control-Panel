@@ -8511,12 +8511,19 @@
   "online_hover_title": "I media online di oggi sono finiti",
   "online_hover_body": "Quello che hai già visto e i tuoi file continuano. Si riparte a mezzanotte.",
   "online_toast_spent": "I media online sono finiti per oggi. Si passa a quello che hai già visto e ai tuoi file.",
-  "online_official_stamp": "UFFICIALE",
-  "online_official_title": "I media online sono ufficiali",
-  "online_official_body": "CCP ora ha una vera licenza da Scrolller. Il feed online è pagato, accreditato su ogni immagine e clip, e resta.",
+  "online_official_stamp": "IN CORSO",
+  "online_official_title": "I media online diventano ufficiali",
+  "online_official_body": "Stiamo chiudendo una licenza commerciale con Scrolller. Il feed online sarà pagato, accreditato e resterà. Iniziamo già da ora.",
+  "online_official_why_title": "Perché c'è una quota giornaliera",
+  "online_official_why": "CCP ha preso dal feed molto più di quanto avessimo mai previsto. Pagarlo come si deve vuol dire una quota giornaliera per piano, così il conto resta sostenibile.",
+  "online_official_flow_title": "Cosa lo tiene scorrevole",
+  "online_official_flow_kept": "Quello che hai visto resta su questo PC e si riguarda gratis.",
+  "online_official_flow_mix": "Le sessioni mescolano media salvati e novità, così la quota dura di più.",
+  "online_official_flow_spent": "Quando finisce, i media salvati e i tuoi file continuano. Le novità tornano a mezzanotte.",
+  "online_official_flow_local": "Il contatore vive su questo PC. Non viene inviato nulla.",
   "online_official_plan_free": "Ogni account ha una quota giornaliera, con un extra il primo giorno. Quello che hai già visto si riguarda gratis.",
   "online_official_plan_basic": "Basic ha una quota giornaliera ampia. Quello che hai già visto si riguarda gratis.",
   "online_official_plan_prime": "Prime ha la quota giornaliera più ampia. Quello che hai già visto si riguarda gratis.",
   "online_official_nice": "Bello",
-  "online_official_stamped_line": "Media online su licenza di Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\"."
+  "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\"."
 }

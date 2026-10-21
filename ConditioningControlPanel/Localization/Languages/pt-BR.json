@@ -7756,12 +7756,19 @@
   "online_hover_title": "A mídia online de hoje acabou",
   "online_hover_body": "O que você já viu e seus próprios arquivos continuam tocando. Volta à meia-noite.",
   "online_toast_spent": "A mídia online acabou por hoje. Mudando para o que você já viu e seus próprios arquivos.",
-  "online_official_stamp": "OFICIAL",
-  "online_official_title": "A mídia online é oficial",
-  "online_official_body": "O CCP agora tem uma licença de verdade do Scrolller. O feed online é pago, creditado em cada imagem e clipe, e veio para ficar.",
+  "online_official_stamp": "EM ANDAMENTO",
+  "online_official_title": "A mídia online está virando oficial",
+  "online_official_body": "Estamos fechando uma licença comercial com o Scrolller. O feed online vai ser pago, creditado e veio para ficar. Já estamos começando.",
+  "online_official_why_title": "Por que existe uma cota diária",
+  "online_official_why": "O CCP puxou do feed muito mais do que a gente planejou. Pagar direito significa uma cota diária por plano, para a conta continuar cabendo no bolso.",
+  "online_official_flow_title": "O que mantém tudo fluindo",
+  "online_official_flow_kept": "O que você viu fica neste PC e toca de novo de graça.",
+  "online_official_flow_mix": "As sessões misturam o que está guardado com novidades, então a cota rende mais.",
+  "online_official_flow_spent": "Quando acaba, o que está guardado e seus próprios arquivos continuam. As novidades voltam à meia-noite.",
+  "online_official_flow_local": "O medidor fica neste PC. Nada dele é enviado para lugar nenhum.",
   "online_official_plan_free": "Todo mundo recebe uma cota diária, com um extra no primeiro dia. O que você já viu repete de graça.",
   "online_official_plan_basic": "O Basic recebe uma cota diária grande. O que você já viu repete de graça.",
   "online_official_plan_prime": "O Prime recebe a maior cota diária. O que você já viu repete de graça.",
   "online_official_nice": "Legal",
-  "online_official_stamped_line": "Mídia online licenciada do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\"."
+  "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\"."
 }

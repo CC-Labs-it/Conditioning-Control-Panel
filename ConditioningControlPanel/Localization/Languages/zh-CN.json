@@ -8268,12 +8268,19 @@
   "online_hover_title": "今日在线媒体已用完",
   "online_hover_body": "看过的内容和你自己的文件会继续播放。午夜恢复。",
   "online_toast_spent": "今日在线媒体已用完。正在切换到看过的内容和你自己的文件。",
-  "online_official_stamp": "官方",
-  "online_official_title": "在线媒体现已正式授权",
-  "online_official_body": "CCP 现已获得 Scrolller 的正式授权。在线内容已付费，每张图片和每段短片都有署名，并会长期保留。",
+  "online_official_stamp": "进行中",
+  "online_official_title": "在线媒体即将正式授权",
+  "online_official_body": "我们正在与 Scrolller 敲定商业授权。在线内容将付费使用、注明出处，并会长期保留。我们现在就开始。",
+  "online_official_why_title": "为什么有每日额度",
+  "online_official_why": "CCP 从内容源拉取的量远远超出了我们的预期。要正规付费，就需要给每个方案设定每日额度，让费用保持在可承受范围内。",
+  "online_official_flow_title": "如何保持流畅",
+  "online_official_flow_kept": "看过的内容保存在这台电脑上，重播免费。",
+  "online_official_flow_mix": "会话会把已保存的内容和新内容混在一起，让额度更耐用。",
+  "online_official_flow_spent": "用完后，已保存的内容和你自己的文件会继续播放。新内容午夜恢复。",
+  "online_official_flow_local": "计量在这台电脑上进行，不会发送到任何地方。",
   "online_official_plan_free": "每个人都有每日额度，第一天更多。看过的内容重播免费。",
   "online_official_plan_basic": "Basic 每日额度较大。看过的内容重播免费。",
   "online_official_plan_prime": "Prime 每日额度最大。看过的内容重播免费。",
   "online_official_nice": "好的",
-  "online_official_stamped_line": "在线媒体由 Scrolller 授权。每张图片和短片都带有一个小小的“via Scrolller”标记。"
+  "online_official_stamped_line": "在线媒体来自 Scrolller。每张图片和短片都带有一个小小的“via Scrolller”标记。"
 }
