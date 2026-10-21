@@ -72,7 +72,7 @@ internal readonly record struct ScrolllerByteRange(long Start, long End)
 /// Network domain on the same core (<see cref="ScrolllerRealBytesMeter"/>); a core where
 /// Network.enable fails falls back to the response's declared length.
 /// </summary>
-internal static class ScrolllerWebGate
+internal static partial class ScrolllerWebGate
 {
     internal const string OurReferer = "https://cclabs.app/";
 
@@ -236,12 +236,14 @@ internal static class ScrolllerWebGate
     };
 
     /// <summary>Headers for a response the gate answers itself. Pages load Scrolller cross-origin
-    /// (ccp.game, fetch and WebGL textures), so it allows any origin as the CDN does.</summary>
+    /// (ccp.game, fetch and WebGL textures), so it allows any origin as the CDN does. No-store:
+    /// the device cache already holds these bytes under the day limit, and Chromium must not keep
+    /// a second copy of its own (licence 3.4).</summary>
     internal static string ResponseHeaders(string contentType, long length, ScrolllerByteRange? range = null, long total = 0)
     {
         var s = $"Content-Type: {contentType}\r\nContent-Length: {length}\r\nAccept-Ranges: bytes\r\n";
         if (range is ScrolllerByteRange r) s += $"Content-Range: bytes {r.Start}-{r.End}/{total}\r\n";
-        return s + $"Access-Control-Allow-Origin: *\r\n{MarkerHeader}: local";
+        return s + $"Cache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\n{MarkerHeader}: local";
     }
 
     /// <summary>Headers for the gate's own refusals (403, 416, 502): any origin may read them, so a
@@ -360,6 +362,9 @@ internal static class ScrolllerWebGate
             core.WebResourceRequested += (_, e) => Handle(core, e);
             core.WebResourceResponseReceived += (_, e) => OnResponse(state, e);
             AttachRealBytes(core, state);
+            // Clips pass to the network and land in Chromium's own disk cache: this core's profile
+            // is cleared under the day limit (now when due, hourly, and on the off switch).
+            TrackForCacheClears(core);
         }
         catch (Exception ex)
         {

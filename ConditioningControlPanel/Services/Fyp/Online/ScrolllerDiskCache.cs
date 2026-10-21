@@ -714,9 +714,11 @@ internal static class ScrolllerDiskCache
 
     internal static bool IsCacheFileName(string name) => CacheFile.IsMatch(name);
 
-    /// <summary>The folder's own books (the index): never media, never swept as strangers.</summary>
+    /// <summary>The folder's own books (the index, the browser cache-clear stamps): never media,
+    /// never swept as strangers.</summary>
     internal static bool IsBookFile(string name)
-        => name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase);
+        => name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase)
+           || name.StartsWith(ScrolllerWebGate.ClearsFileName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Check every body's own bytes before it becomes (or stays) an entry. Tests that
     /// write placeholder bytes switch it off through <see cref="ResetForTests"/>.</summary>
