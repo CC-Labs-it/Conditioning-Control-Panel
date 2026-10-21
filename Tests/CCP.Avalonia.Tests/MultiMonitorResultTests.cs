@@ -19,6 +19,8 @@ public sealed class MultiMonitorResultTests
     {
         // Avalonia's reference assembly hides the runtime platform-screen constructor.
         // These synthetic handles never reach a native backend or the real desktop.
+        // Pinned to Avalonia 12.1 internals (PlatformScreen ctor, Screen setters): an Avalonia
+        // upgrade that renames them throws here; fix this factory, not the assertions.
         var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
             new object[] { new PlatformHandle(new IntPtr(bounds.X), "headless-test") })!;
         typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, scaling);
@@ -32,7 +34,7 @@ public sealed class MultiMonitorResultTests
     {
         if (Application.Current == null)
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 

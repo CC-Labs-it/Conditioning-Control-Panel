@@ -121,9 +121,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Avalonia's Position is in the same physical pixels Screen.Bounds reports, so the
             // conversion - and BubbleCountWindow.GetDpiForScreen with it - disappears. Screens is
             // only populated once the window has a platform impl, hence Opened rather than the ctor.
+            // The primary is placed by ShowOnAllMonitors after Show (same primary/fallback choice).
             Opened += (_, _) =>
             {
-                PositionOnScreen(_screen ?? Screens?.Primary);
+                if (!_isPrimary) PositionOnScreen(_screen);
             };
 
             // Focus input on primary
