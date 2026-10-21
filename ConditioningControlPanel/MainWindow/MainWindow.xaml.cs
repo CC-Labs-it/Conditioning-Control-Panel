@@ -246,7 +246,9 @@ namespace ConditioningControlPanel
         private DateTime _conditioningStartTime;
         private double _conditioningBaselineMinutes; // TotalConditioningMinutes at session start (avoids double-counting)
         private DispatcherTimer? _conditioningTimeSyncTimer; // Server sync every 15 minutes
-        private int _conditioningTimeSecondCounter; // Count seconds for minute-based saves
+        private int _conditioningTimeSecondCounter; // Ticks, for the debug line only
+        private double _conditioningPendingSeconds; // Real seconds not yet credited (ConditioningClock)
+        private DateTime _conditioningLastTickUtc;
 
         public MainWindow()
         {

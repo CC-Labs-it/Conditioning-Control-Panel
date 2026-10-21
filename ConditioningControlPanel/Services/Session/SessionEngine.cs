@@ -1143,6 +1143,7 @@ namespace ConditioningControlPanel.Services
             _savedSettings.SubliminalEnabled = current.SubliminalEnabled;
             _savedSettings.SubliminalFrequency = current.SubliminalFrequency;
             _savedSettings.SubliminalOpacity = current.SubliminalOpacity;
+            _savedSettings.SubliminalDuration = current.SubliminalDuration;
 
             // Save subliminal pool (deep copy)
             _savedSubliminalPool = new Dictionary<string, bool>(current.SubliminalPool);
@@ -1185,6 +1186,15 @@ namespace ConditioningControlPanel.Services
             _savedSettings.PopQuizFrequency = current.PopQuizFrequency;
             _savedSettings.BubbleCountEnabled = current.BubbleCountEnabled;
             _savedSettings.BubbleCountFrequency = current.BubbleCountFrequency;
+
+            // On disk too, so a crash or kill mid-session cannot leave the session's values in
+            // settings.json for good (SessionSettingsJournal; healed at the next launch).
+            try
+            {
+                SessionSettingsJournal.Write(App.UserDataPath, SessionSettingsJournal.Build(
+                    _savedSettings, current.ActiveModId, _savedSubliminalPool, _savedBouncingTextPool, _savedLockCardPool));
+            }
+            catch (Exception ex) { App.Logger?.Warning(ex, "[Session] Settings journal not written"); }
         }
         
         private Dictionary<string, bool>? _savedBouncingTextPool;
@@ -1754,6 +1764,7 @@ namespace ConditioningControlPanel.Services
             current.SubliminalEnabled = _savedSettings.SubliminalEnabled;
             current.SubliminalFrequency = _savedSettings.SubliminalFrequency;
             current.SubliminalOpacity = _savedSettings.SubliminalOpacity;
+            current.SubliminalDuration = _savedSettings.SubliminalDuration;
 
             // Restore subliminal pool
             if (_savedSubliminalPool != null)
@@ -1854,6 +1865,7 @@ namespace ConditioningControlPanel.Services
             if (IsMainWindowValid) _mainWindow.ApplySessionSettings();
 
             _savedSettings = null;
+            SessionSettingsJournal.Clear(App.UserDataPath);
         }
         
         /// <summary>How many times a corner-GIF spawn may be pushed back because a display change is

@@ -3433,8 +3433,9 @@ namespace ConditioningControlPanel.Services
                         // Ambient bubble game: pause + clear so it doesn't fight the video for
                         // clicks / z-order (no-op during a chaos run, which isn't "running").
                         // A chaos run keeps its bubbles + HUD alive and lifts them back above the
-                        // video itself — see ChaosModeService's VideoStarted handler.
-                        App.Bubbles?.PauseAndClear();
+                        // video itself — see ChaosModeService's VideoStarted handler. A floating
+                        // video leaves them up, like the flashes (VideoFlashRule.ClearsBubbles).
+                        if (Video.VideoFlashRule.ClearsBubbles(floating: IsFloating)) App.Bubbles?.PauseAndClear();
                         VideoDiag.Log("VIDEO", $"bubbles paused +{showSw.ElapsedMilliseconds}ms");
 
                         if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating))
