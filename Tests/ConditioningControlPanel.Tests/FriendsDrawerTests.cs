@@ -501,5 +501,14 @@ public partial class FriendsDrawerTests
         public void MoveTrail(SentTrail t) { Trails[t.FriendId] = t; SentTrailsChanged?.Invoke(); }
         public List<ReceiptReport> Reports { get; } = new();
         public void ReportReceipt(ReceiptReport report) => Reports.Add(report);
+
+        // ---- friend links (D1) ----
+        public FriendLink? Link { get; set; }
+        public FriendLink? Fresh { get; set; }
+        public ClaimResult NextClaim { get; set; } = ClaimResult.Friends;
+        public List<string> Claims { get; } = new();
+        public Task<FriendLink?> GetLinkAsync() => Task.FromResult(Link);
+        public Task<FriendLink?> NewLinkAsync() { Link = Fresh; return Task.FromResult(Fresh); }
+        public Task<ClaimResult> ClaimLinkAsync(string linkOrToken) { Claims.Add(linkOrToken); return Task.FromResult(NextClaim); }
     }
 }
