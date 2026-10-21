@@ -169,12 +169,7 @@ public sealed class ProgramIgnitionTests
         Assert.Equal(.95, glow.Opacity, 3);
         Assert.Equal(1.12, scale.ScaleX, 3);
         using (var image = shell.CaptureRenderedFrame())
-        {
             Assert.NotNull(image);
-            var evidence = System.IO.Path.Combine(AppContext.BaseDirectory, ".pi", "program-pips");
-            Directory.CreateDirectory(evidence);
-            image!.Save(System.IO.Path.Combine(evidence, "program-pip-breath.png"));
-        }
         CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Dispatcher.UIThread.RunJobs();

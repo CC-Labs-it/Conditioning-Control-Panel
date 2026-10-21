@@ -262,7 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var glow = MainShellWindow.ProgramRadialGlowBrush(accent, 170);
             var pips = new List<ProgramDayPip>(Math.Max(0, program.LengthDays));
             _ignitedPips.Clear(); // new containers, new one-shot carriers
-            var igniteBrush = MainShellWindow.ProgramRadialGlowBrush(accent, 210);
+            var igniteBrush = MainShellWindow.ProgramRadialGlowBrush(accent, 220); // WPF MainWindow.ProgramsTab.cs:777
 
             for (int i = 1; i <= program.LengthDays; i++)
             {
@@ -290,7 +290,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     pip.NodeSize = 42;
                     pip.LabelSize = 15;
                     pip.IsCurrent = true;
-                    pip.Breathe = AmbientOn && _tier >= ProgramHeatTier.Warm;
                     pip.GlowBrush = glow;
                     pip.GlowVisible = true;
                     tip = Loc.GetF(stale ? "programs_pip_last_saved" : "programs_pip_today", i);
