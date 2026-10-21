@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "테이블 닫기",
   gg_table_closed: "테이블 닫힘",
   gg_table_listFailed: "목록에 올라가지 않았다. 코드는 여전히 된다.",
+  gg_table_listedAnyone: "누구나에 올라갔다. 내 테이블은 내 목록에 보이지 않는다.",
+  gg_table_listedFriends: "친구에게 올라갔다. 내 테이블은 내 목록에 보이지 않는다.",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "대전 만들기는 후원자용",
   gg_prime_line: "유료 등급이면 누구나 테이블을 열 수 있다. 참가는 무료, 연습도 무료.",

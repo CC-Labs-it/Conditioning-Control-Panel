@@ -603,6 +603,8 @@ export default Object.freeze({
   gg_table_close: "Close the table",
   gg_table_closed: "Table closed",
   gg_table_listFailed: "The list did not take it. The code still works.",
+  gg_table_listedAnyone: "Listed for Anyone. You never see your own table in the list.",
+  gg_table_listedFriends: "Listed for your friends. You never see your own table in the list.",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "Hosting is for supporters",
   gg_prime_line: "Any paid tier can open a table. Joining one is free, and so is practice.",

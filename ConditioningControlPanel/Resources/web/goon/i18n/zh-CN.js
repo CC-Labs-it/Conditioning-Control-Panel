@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "关闭牌桌",
   gg_table_closed: "牌桌已关闭",
   gg_table_listFailed: "列表没有收录。邀请码仍然可用。",
+  gg_table_listedAnyone: "已列在「所有人」下。你自己的牌桌不会出现在你的列表里。",
+  gg_table_listedFriends: "已列给好友。你自己的牌桌不会出现在你的列表里。",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "创建对局是给支持者的",
   gg_prime_line: "任何付费档位都能开牌桌。加入免费，练习也免费。",

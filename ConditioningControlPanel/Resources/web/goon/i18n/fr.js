@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "Fermer la table",
   gg_table_closed: "Table fermée",
   gg_table_listFailed: "La liste ne l'a pas prise. Le code marche toujours.",
+  gg_table_listedAnyone: "Listée pour Tout le monde. Ta propre table n'apparaît jamais dans ta liste.",
+  gg_table_listedFriends: "Listée pour tes amis. Ta propre table n'apparaît jamais dans ta liste.",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "Héberger, c'est pour ceux qui soutiennent",
   gg_prime_line: "Tous les paliers payants peuvent ouvrir une table. Rejoindre est gratuit, s'entraîner aussi.",

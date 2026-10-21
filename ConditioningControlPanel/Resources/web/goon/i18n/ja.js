@@ -602,6 +602,8 @@ export default Object.freeze({
   gg_table_close: "テーブルを閉じる",
   gg_table_closed: "テーブルを閉じた",
   gg_table_listFailed: "一覧に載らなかった。コードは使える。",
+  gg_table_listedAnyone: "「誰でも」に掲載中。自分のテーブルは自分の一覧には出ない。",
+  gg_table_listedFriends: "フレンドに掲載中。自分のテーブルは自分の一覧には出ない。",
   gg_prime_badge: "BASIC SUBJECT",
   gg_prime_headline: "対戦の作成はサポーター向け",
   gg_prime_line: "有料プランならどれでもテーブルを開ける。参加は無料、練習も無料。",

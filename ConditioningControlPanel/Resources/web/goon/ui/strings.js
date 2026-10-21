@@ -1381,6 +1381,8 @@ export const RAW = {
     close: 'Close the table',
     closed: 'Table closed',
     listFailed: 'The list did not take it. The code still works.',
+    listedAnyone: 'Listed for Anyone. You never see your own table in the list.',
+    listedFriends: 'Listed for your friends. You never see your own table in the list.',
   },
 
   /* ---------------------------------------------- the patron sheet (hosting) */

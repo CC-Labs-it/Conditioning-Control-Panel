@@ -146,7 +146,22 @@ export function mount(container, ctx) {
     // A listing that could not land is a quiet line, and only when it matters: a room
     // that filled or went away stops renewing, the rest keep trying on the clock.
     if (kind === 'not_lobby' || kind === 'no_room' || kind === 'not_host') { renew?.stop(); return; }
-    listNote.hidden = !failed || visibility === VISIBILITY.Off || kind === 'not_deployed';
+    paintListNote(failed ? null : (res.data && res.data.visibility) || visibility, kind);
+  }
+
+  /**
+   * The line under "Who can see it". A listing that landed says so, and that the host never sees
+   * their own table in the list (Doik, 2026-10-20: the server leaves the caller's own row out, so
+   * a host checking the list read a live table as "not listed"). A failed one says the code still
+   * works. Off says nothing.
+   * @param {string|null} landed the visibility the server took, or null when the call failed
+   * @param {string|undefined} kind the failure kind
+   */
+  function paintListNote(landed, kind) {
+    if (visibility === VISIBILITY.Off || kind === 'not_deployed') { listNote.hidden = true; return; }
+    listNote.textContent = landed == null ? S.table.listFailed
+      : (landed === VISIBILITY.Anyone ? S.table.listedAnyone : S.table.listedFriends);
+    listNote.hidden = false;
   }
 
   function setVisibility(v) {
