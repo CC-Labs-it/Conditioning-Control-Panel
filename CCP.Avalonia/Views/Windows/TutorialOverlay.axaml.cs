@@ -672,9 +672,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             double scale = RenderScaling;
             if (_inputHole is Rect hole)
             {
-                rects = SpotlightInputRegion.Create(Math.Max(Bounds.Width, Width), Math.Max(Bounds.Height, Height),
+                // An unset Width/Height is NaN, and Math.Max(x, NaN) is NaN: fall back to Bounds.
+                rects = SpotlightInputRegion.Create(Extent(Bounds.Width, Width), Extent(Bounds.Height, Height),
                     scale, scale, hole.X, hole.Y, hole.Width, hole.Height)
                     .Select(r => new PixelRect(r.X, r.Y, r.Width, r.Height)).ToArray();
+                // No measurable window yet: keep all input rather than an empty region that would
+                // also swallow the card's Skip buttons.
+                if (rects.Length == 0) rects = null;
             }
             else if (_cardInputOnly)
             {
@@ -687,6 +691,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 rects is not null && InputRectangles is not null && rects.SequenceEqual(InputRectangles)) return;
             InputRectangles = rects;
             X11Overlay.SetWindowInputRegion(this, rects);
+
+            static double Extent(double laidOut, double set) => double.IsNaN(set) ? laidOut : Math.Max(laidOut, set);
         }
 
         // ---- Card placement ---------------------------------------------------------
