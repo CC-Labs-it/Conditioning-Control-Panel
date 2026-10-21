@@ -21,8 +21,9 @@ public sealed class SpiralRoomAudioTests
     public Task ShellSpiralDoorPlaysFogCueOncePerVisit() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         var oldAudio = CoreAudio.PlayOneShotProvider;
         var oldFuse = global::ConditioningControlPanel.Avalonia.App.DescentCountdown;
         var settings = CoreSettings.Current;
@@ -73,8 +74,9 @@ public sealed class SpiralRoomAudioTests
     public Task RepaintIsSilentAndLeavingRearmsFogAndSplash() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         var oldAudio = CoreAudio.PlayOneShotProvider;
         var oldVolume = CoreSettings.Current.MasterVolume;
         var oldEnabled = CoreSettings.Current.DescentCountdownAudio;
