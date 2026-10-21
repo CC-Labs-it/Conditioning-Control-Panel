@@ -273,6 +273,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                // A sandbox refuses the link; never fall through to the real desktop clipboard (LoginDialog.OpenBrowserAsync).
+                if (!ProfileLinkAllowed(ProfileSharingUrl)) return;
                 bool opened;
                 try { opened = OpenProfileLink(ProfileSharingUrl); }
                 catch { opened = false; }
@@ -283,6 +285,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Test seam: the sandbox guard refuses web links under test.</summary>
         internal static Func<string, bool> OpenProfileLink = ExternalOpener.Open;
+
+        /// <summary>Test seam for the sandbox check (SandboxNet.Active is process-global).</summary>
+        internal static Func<string, bool> ProfileLinkAllowed = url => ExternalOpener.Allowed(url);
 
         /// <summary>WPF MainWindow.TabNavigation.cs:676.</summary>
         internal const string ProfileSharingUrl = "https://app.cclabs.app/dashboard/profile-sharing";

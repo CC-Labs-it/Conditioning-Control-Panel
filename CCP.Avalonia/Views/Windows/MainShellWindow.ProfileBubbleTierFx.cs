@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private BeatLoop? _profileTierBeat;
+        internal DispatcherTimer? _profileTierTimer;
         private CancellationTokenSource? _profileTierGrow;
         private Image? ProfileTierBadgeSmall => Named<Image>("ProfileBubbleTierBadge");
         private Popup? ProfileTierBadgePopupHost => Named<Popup>("ProfileTierBadgePopup");
@@ -31,13 +32,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_profileTierBeat != null || ProfileTierBadgeSmall is not { } small || ProfileTierBadgeBigImage is not { } big) return;
             small.RenderTransform = new RotateTransform(-12);
             big.RenderTransform = new ScaleTransform(1, 1);
-            // Same eight-second / 700ms WPF wobble, on the existing shared frame clock.
+            // WPF: an 8 s Background timer starts one 700 ms wobble; frames tick only during the wobble.
             _profileTierBeat = new BeatLoop(small, seconds =>
             {
-                if (small.RenderTransform is RotateTransform tilt)
-                    tilt.Angle = seconds < 8 || ProfileTierBadgePopupHost?.IsOpen == true
-                        ? -12 : BeatLoop.Keys((seconds - 8) % 8, ProfileTierWobbleKeys);
+                if (small.RenderTransform is not RotateTransform tilt) return;
+                if (seconds >= 0.7 || ProfileTierBadgePopupHost?.IsOpen == true)
+                {
+                    tilt.Angle = -12;
+                    _profileTierBeat?.Stop();
+                }
+                else tilt.Angle = BeatLoop.Keys(seconds, ProfileTierWobbleKeys);
             });
+            _profileTierTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(8) };
+            _profileTierTimer.Tick += (_, _) => ProfileTierWobble();
             AmbientFxCanvas.Env.MotionGateChanged += SyncProfileTierMotion;
             if (ProfileBubblePopupHost is { } menu) menu.Opened += (_, _) =>
             {
@@ -53,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Closed += (_, _) =>
             {
                 AmbientFxCanvas.Env.MotionGateChanged -= SyncProfileTierMotion;
+                _profileTierTimer?.Stop();
                 _profileTierBeat.Stop();
                 _profileTierGrow?.Cancel();
                 _profileTierGrow?.Dispose();
@@ -65,12 +73,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_profileTierBeat == null) return;
             if (AmbientFxCanvas.Env.AllowAmbientLoops && ProfileTierBadgeSmall?.IsVisible == true)
-                _profileTierBeat.Start();
+                _profileTierTimer?.Start();
             else
             {
+                _profileTierTimer?.Stop();
                 _profileTierBeat.Stop();
                 if (ProfileTierBadgeSmall?.RenderTransform is RotateTransform tilt) tilt.Angle = -12;
             }
+        }
+
+        /// <summary>WPF ProfileTierWobble: one 700 ms shake unless hidden, motion-gated or enlarged.</summary>
+        internal void ProfileTierWobble()
+        {
+            if (_profileTierBeat == null || ProfileTierBadgeSmall?.IsVisible != true) return;
+            if (!AmbientFxCanvas.Env.AllowAmbientLoops || ProfileTierBadgePopupHost?.IsOpen == true) return;
+            _profileTierBeat.Stop();
+            _profileTierBeat.Start();
         }
 
         private void ProfileTierBadge_MouseEnter(object? sender, PointerEventArgs e)

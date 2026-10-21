@@ -36,6 +36,7 @@ public sealed class ProfileBubbleParityTests : IDisposable
     private readonly Func<bool>? _loginBefore = CoreAccount.IsLoggedInProvider;
     private readonly Func<string>? _nameBefore = CoreAccount.DisplayNameProvider;
     private readonly Func<string, bool> _openBefore = MainShellWindow.OpenProfileLink;
+    private readonly Func<string, bool> _allowedBefore = MainShellWindow.ProfileLinkAllowed;
 
     private MainShellWindow Shell(MotionLevel motion = MotionLevel.Off)
     {
@@ -68,6 +69,7 @@ public sealed class ProfileBubbleParityTests : IDisposable
         CoreAccount.IsLoggedInProvider = _loginBefore;
         CoreAccount.DisplayNameProvider = _nameBefore;
         MainShellWindow.OpenProfileLink = _openBefore;
+        MainShellWindow.ProfileLinkAllowed = _allowedBefore;
     }
 
     [Fact]
@@ -129,6 +131,29 @@ public sealed class ProfileBubbleParityTests : IDisposable
     });
 
     [Fact]
+    public Task OpeningTheMenuRestacksTheEnlargedTierArtOnTop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell();
+        try
+        {
+            var badge = shell.FindControl<Image>("ProfileBubbleTierBadge")!;
+            shell.MouseMove(badge.TranslatePoint(new Point(badge.Bounds.Width / 2, badge.Bounds.Height / 2), shell)!.Value);
+            Dispatcher.UIThread.RunJobs();
+            var tier = shell.FindControl<Popup>("ProfileTierBadgePopup")!;
+            Assert.True(tier.IsOpen);
+            int reopened = 0;
+            tier.Opened += (_, _) => reopened++;
+            shell.FindControl<Popup>("ProfileBubblePopup")!.IsOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            // WPF RaiseProfileTierPopup: the later menu must not cover the badge; a reopen puts it on top.
+            Assert.Equal(1, reopened);
+            Assert.True(tier.IsOpen);
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task FullMotionHoverThenCloseDoesNotThrow() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var shell = Shell(MotionLevel.Full);
@@ -177,14 +202,24 @@ public sealed class ProfileBubbleParityTests : IDisposable
             var badge = shell.FindControl<Image>("ProfileBubbleTierBadge")!;
             var tilt = (RotateTransform)badge.RenderTransform!;
             Assert.Equal(-12, tilt.Angle);
-            time.Advance(TimeSpan.FromSeconds(8.105));
+            // WPF: an 8 s timer, and no frames between wobbles.
+            Assert.True(shell._profileTierTimer!.IsEnabled);
+            Assert.Equal(TimeSpan.FromSeconds(8), shell._profileTierTimer.Interval);
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, badge));
+            shell.ProfileTierWobble();
+            Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, badge));
+            time.Advance(TimeSpan.FromSeconds(0.105));
             BeatLoop.StepAll();
             Assert.Equal(-3, tilt.Angle, 3);
             time.Advance(TimeSpan.FromSeconds(0.595));
             BeatLoop.StepAll();
             Assert.Equal(-12, tilt.Angle, 3);
+            // The 700 ms one-shot stops its own frame clock.
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, badge));
             _settings.Current.MotionLevel = MotionLevel.Reduced;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(shell._profileTierTimer.IsEnabled);
+            shell.ProfileTierWobble();
             Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, badge));
             Assert.Equal(-12, tilt.Angle);
         }
@@ -203,6 +238,7 @@ public sealed class ProfileBubbleParityTests : IDisposable
         var shell = Shell();
         try
         {
+            MainShellWindow.ProfileLinkAllowed = _ => true;
             MainShellWindow.OpenProfileLink = _ => false;
             shell.OpenPublicProfilePage();
             Dispatcher.UIThread.RunJobs();
@@ -213,6 +249,25 @@ public sealed class ProfileBubbleParityTests : IDisposable
                 dialog.FindControl<TextBlock>("TxtMessage")!.Text);
             Assert.Equal(MainShellWindow.ProfileSharingUrl, await shell.Clipboard!.TryGetTextAsync());
             dialog.Close();
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+    });
+
+    [Fact]
+    public Task SandboxRefusedProfileLinkNeverTouchesTheClipboard() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var shell = Shell();
+        try
+        {
+            await shell.Clipboard!.SetTextAsync("untouched");
+            bool opened = false;
+            MainShellWindow.ProfileLinkAllowed = _ => false;
+            MainShellWindow.OpenProfileLink = _ => { opened = true; return false; };
+            shell.OpenPublicProfilePage();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(opened);
+            Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal("untouched", await shell.Clipboard.TryGetTextAsync());
         }
         finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
     });
