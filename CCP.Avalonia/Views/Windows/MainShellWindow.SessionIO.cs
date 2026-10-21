@@ -129,30 +129,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var dialog = new Dialogs.MediaDropDialog(files[0]);
                 await dialog.ShowDialogSafe(this);
-                try
+                // Error text per action as WPF MainWindow.DeeperTab.cs:612-615 / :663-666 (literal English there too).
+                switch (dialog.Choice)
                 {
-                    switch (dialog.Choice)
-                    {
-                        case Dialogs.MediaDropChoice.Play:
-                            ShowOrActivateDeeperPlayer().OpenLocalMediaFile(files[0]);
-                            break;
-                        case Dialogs.MediaDropChoice.Edit:
+                    case Dialogs.MediaDropChoice.Play:
+                        try { ShowOrActivateDeeperPlayer().OpenLocalMediaFile(files[0]); }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "Failed to open Deeper player for {Path}", files[0]);
+                            await Dialogs.MessageDialog.ShowAsync(this, "Open Player failed",
+                                $"Couldn't open Deeper Player:\n\n{ex.GetType().Name}: {ex.Message}");
+                        }
+                        break;
+                    case Dialogs.MediaDropChoice.Edit:
+                        try
+                        {
                             OpenDeeperEditor(new Models.Deeper.Enhancement
                             {
                                 MediaType = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(files[0]))
                                     ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio,
                                 MediaSource = files[0],
                             }, null);
-                            break;
-                        case Dialogs.MediaDropChoice.Library:
-                            await HandleAssetDropAsync(files);
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to open dropped media");
-                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_error"), ex.Message);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "Failed to open Deeper editor for media");
+                            await Dialogs.MessageDialog.ShowAsync(this, "Open Editor failed",
+                                $"Couldn't open Deeper Editor:\n\n{ex.GetType().Name}: {ex.Message}");
+                        }
+                        break;
+                    case Dialogs.MediaDropChoice.Library:
+                        await HandleAssetDropAsync(files);
+                        break;
                 }
                 return;
             }

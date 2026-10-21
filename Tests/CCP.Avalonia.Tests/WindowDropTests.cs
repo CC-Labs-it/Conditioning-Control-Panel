@@ -16,7 +16,6 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
-using System.Reflection;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -108,8 +107,7 @@ public sealed class WindowDropTests
         Drop(shell, media);
         Click(await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault()), "BtnEdit");
         var editor = await WaitFor(() => shell.OwnedWindows.OfType<DeeperEditorWindow>().SingleOrDefault());
-        var project = (ConditioningControlPanel.Models.Deeper.Enhancement)typeof(DeeperEditorWindow)
-            .GetField("_enhancement", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(editor)!;
+        var project = editor.Project;
         Assert.Null(editor.LoadedFilePath);
         Assert.Equal(type, project.MediaType);
         Assert.Equal(media, project.MediaSource);
@@ -251,7 +249,7 @@ public sealed class WindowDropTests
     private static Task Run(Func<MainShellWindow, string, string, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Directory.CreateTempSubdirectory("ccp-window-drop-").FullName;
