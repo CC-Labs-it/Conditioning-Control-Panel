@@ -52,8 +52,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// PORTED from ConditioningControlPanel/Windows/FeatureIntroPopup.xaml.cs. Deviations:
     ///  - The show gate is ported. <c>App.Tutorial.IsActive</c> is the <see cref="CoreTutorial"/>
     ///    seam; <c>App.IsUpdateDialogActive</c> is <see cref="Platform.AppUpdater.IsUpdateDialogActive"/>
-    ///    and <c>MainWindow.IsStartupDialogShowing</c> is the shell's twin (caller-owned wizard/offer
-    ///    gate plus the presenter's currently open What's New, season recap and welcome windows).
+    ///    and <c>MainWindow.IsStartupDialogShowing</c> is the shell's twin, set by the first-run
+    ///    wizard and the welcome-back offer. A manually opened What's New / season recap does not
+    ///    hold it, as in WPF (only RunModal sets it); their startup callers are not on this head.
     ///  - Shown through <c>ShowDialogSafe</c>, so a tray-hidden shell does not throw and
     ///    <c>_opening</c> clears when the card closes.
     ///  - The One Account card's CTA is live: <c>Launcher.LaunchUriAsync</c> stands in for
