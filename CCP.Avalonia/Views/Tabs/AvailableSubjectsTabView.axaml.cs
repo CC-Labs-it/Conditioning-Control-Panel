@@ -11,9 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// PORTED from ConditioningControlPanel/Views/Tabs/AvailableSubjectsTabView.xaml.cs.
     ///
     /// <para>The WPF code-behind owns no logic of its own: every handler looks up the hosting
-    /// MainWindow and forwards. Two of those forwards ARE ported, because what they forwarded to
-    /// is canvas tuning rather than a service - the ambient fog's layers and intensity, copied
-    /// from MainWindow.SubjectsFx (two puffs, 0.40). The rest are stubs.</para>
+    /// MainWindow and forwards. The ambient fog tuning, roster entrance and Connect press motion
+    /// are ported beside the view. The remaining service actions are stubs.</para>
     ///
     /// <para>Dropped: AvailableSubjectsScroller_PreviewMouseWheel. It existed only to turn a
     /// vertical wheel notch into horizontal scrolling on a scroller whose vertical axis is
@@ -35,10 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ambientFx = this.FindControl<AmbientFxCanvas>("SubjectsAmbientFx")!;
 
             LoadPlaceholderRoster();
+            InitializeSubjectsMotion();
 
             // WPF hooked IsVisibleChanged and let MainWindow start/park the canvas through
-            // RegisterTabFx. There is no tab host on this head, so the view starts its own fog
-            // and stops it on unload - the canvas self-gates on motion and window focus anyway.
+            // RegisterTabFx. The view owns fog tuning; MainShellWindow.SubjectsFx registers
+            // the canvas for tab parking. It also self-gates on motion and window focus.
             Loaded += OnTabLoaded;
             Unloaded += OnTabUnloaded;
         }

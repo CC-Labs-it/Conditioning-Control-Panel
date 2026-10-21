@@ -20,8 +20,8 @@
        PreviewMouseWheel on the scroller - it forwarded to MainWindow only to turn a vertical
          wheel notch into horizontal scrolling. Avalonia's ScrollViewer already scrolls
          horizontally when it cannot scroll vertically, so there is nothing to undo.
-       PreviewMouseLeftButtonDown/Up + MouseLeave on Connect - MotionFx.PressSquish, which lives
-         in the WPF head. See the code-behind.
+     Connect press/release use tunneled pointer handlers; exit/capture-loss restore the scale.
+     AvailableSubjectsTabView.Fx owns the finite interaction clock.
 
      The roster is placeholder data built in the code-behind (App.AvailableSubjects is a WPF-head
      service): four rows covering every branch the template carries - status text, tags, a claimed
@@ -235,6 +235,9 @@
                                         Tag="{Binding UnifiedId}"
                                         IsEnabled="{Binding IsConnectEnabled}"
                                         Click="BtnConnectSubject_Click"
+                                        Loaded="SubjectConnect_Loaded"
+                                        PointerExited="SubjectConnect_PointerExited"
+                                        PointerCaptureLost="SubjectConnect_PointerCaptureLost"
                                         FontSize="13" FontWeight="Bold"
                                         Padding="0,8" BorderThickness="0" Cursor="Hand"
                                         HorizontalAlignment="Stretch"
