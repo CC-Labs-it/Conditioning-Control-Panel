@@ -199,6 +199,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private Spark[]? _burst;
         private int _burstN;
 
+        /// <summary>Sparks in the live burst (tests).</summary>
+        internal int BurstCount => _burstN;
+
         /// <summary>
         /// One banked token. It carries its whole bezier rather than a velocity because the flight
         /// is AUTHORED, not simulated: position is a pure function of elapsed time, so a dropped

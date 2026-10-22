@@ -4,6 +4,8 @@
 // RefreshExclusiveTierPlates, Start/StopExclusivesMotion, Restart/AttachExclusiveSheens, VaultLivery.Apply.
 // wire-shell-exclusives adds mod-aware accent edges and badge/pill gradients in that same view;
 // the HSV hue rotation is shared with WPF through Core Services/UI/VaultColor.cs.
+// wire-shell-exclusives-b ports MainWindow.Exclusives.Flair.cs (entrance, sign shimmer, VaultCardAura, click burst)
+// and OnExclusiveCardHover's lift + bloom into ExclusivesTabView.Flair.cs; VaultMotes stay with -b-next.
 // ponytail: stub except RefreshExclusivesTab (the roster/gate repaint now lives in ExclusivesTabView). Every member below reaches App.*, a service, a device, a
 // WebView2 or Win32 - none of which this head may touch (see the layer rules: "Do not
 // move services"). The file exists and each member is NAMED so nothing disappears
