@@ -1070,7 +1070,9 @@ public class AchievementService : IDisposable
     /// </summary>
     public void TrackVideoAttentionCheckFailed()
     {
-        try { App.Chaster?.Note("attention"); } catch (Exception ex) { Diag.Swallowed(ex, "chaster attention hook"); }
+        // No Chaster booking here: the video's end calls TrackAttentionCheckFailed first, which
+        // books the "attention" row. Booking it here too charged one failed check twice
+        // (+10:00, more with heat on).
         _progress.VideoAttentionChecksFailed++;
         _isDirty = true;
     }
