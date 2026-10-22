@@ -15,7 +15,8 @@ namespace ConditioningControlPanel.Services
 {
     /// <summary>
     /// <c>POST /v2/user/sync</c> for a head that loaded only <c>GET /v2/user/profile</c> (WPF ProfileSyncService.SyncProfileAsync,
-    /// cut to what is known): the body carries ONLY <see cref="Sent"/>, achievements = server-loaded ∪ local. Gates, all
+    /// cut to what is known): the body carries ONLY <see cref="Sent"/> (+ <see cref="AfterAdopt"/> once a response's skills
+    /// were adopted, the cosmetics loadout and the web XP claim ack), achievements = server-loaded ∪ local. Gates, all
     /// required: signed in, loaded THIS session (<see cref="MarkLoaded"/>; stricter than WPF's defaults-guard), the 30 s
     /// cooldown and the XP watermark. Also the 120 s heartbeat and the coalesced XP nudge. No periodic push (WPF has none).
     /// ponytail: no restore-from-backup reconcile, 401 recovery or heartbeat adopt - add with the features that need them.
@@ -24,6 +25,9 @@ namespace ConditioningControlPanel.Services
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
             | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
+        /// <summary>Sent only once a sync response this session carried the server's skill_points and unlocked_skills and
+        /// they were adopted (MergeMax / union): a fresh install never pushes its defaults before it has read them.</summary>
+        public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(30);
         public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(120);
         private static readonly TimeSpan NudgeSettle = TimeSpan.FromSeconds(3), NudgeCooldownSlack = TimeSpan.FromSeconds(2);
@@ -39,6 +43,10 @@ namespace ConditioningControlPanel.Services
         private int _nudgePending;
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
+        private volatile bool _adopted;   // WPF _hasLoadedProfile for the skills and the empty-loadout send
+
+        /// <summary>A response this session carried the server's skills and they were adopted.</summary>
+        public bool Adopted => _adopted;
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -96,6 +104,7 @@ namespace ConditioningControlPanel.Services
         {
             StopHeartbeat();
             Loaded = false;
+            _adopted = false;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
@@ -107,10 +116,19 @@ namespace ConditioningControlPanel.Services
         /// shrunk to local-only). Xp is the TOTAL, as WPF sends it.</summary>
         /// <param name="cosmetics">An explicit loadout save (WPF BuildCosmeticsPayload after a load: the sanitized
         /// loadout, the empty one included - that is the unequip-everything clear). Null leaves the key out.</param>
-        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null) => new()
+        /// <param name="adopted">The server's skills were adopted this session: send <see cref="AfterAdopt"/>, and the
+        /// force_skills_reset ack (false) while one is pending (WPF SyncProfileAsync:1698-1756).</param>
+        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null, bool adopted = false) => new()
         {
             Known = (achievements == null ? Sent & ~SyncBody.Field.Achievements : Sent)
-                    | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics),
+                    | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics)
+                    | (adopted ? AfterAdopt : SyncBody.Field.None)
+                    | (adopted && s.PendingSkillsResetAck ? SyncBody.Field.ForceSkillsReset : SyncBody.Field.None)
+                    | (s.LastWebXpClaimId == null ? SyncBody.Field.None : SyncBody.Field.WebXpClaimAck),
+            WebXpClaimAck = s.LastWebXpClaimId,
+            UnlockedSkills = s.UnlockedSkills?.ToList() ?? new List<string>(),
+            SkillPoints = s.SkillPoints,
+            ForceSkillsReset = false,
             UnifiedId = s.UnifiedId,
             Xp = (int)ProfileAdopt.TotalXp(s),
             Level = s.PlayerLevel,
@@ -128,17 +146,17 @@ namespace ConditioningControlPanel.Services
             return PushAsync("cosmetics");
         }
 
-        /// <summary>WPF BuildCosmeticsPayload: the sanitized settings loadout. An empty one goes only as the explicit
-        /// clear - WPF also sends it after a load because it adopted the cloud loadout first (AdoptCloudCosmetics);
-        /// this head does not adopt, so an empty push would wipe the account's cosmetics from a fresh install.
-        /// Any failure leaves the key out ("no change" never destroys anything).</summary>
+        /// <summary>WPF BuildCosmeticsPayload: the sanitized settings loadout. An empty one goes as the explicit clear, or
+        /// once a response this session was adopted (<see cref="AdoptFromResponse"/> filled an empty loadout from the
+        /// cloud first), as WPF sends it after a load; before that an empty push would wipe the account's cosmetics from
+        /// a fresh install. Any failure leaves the key out ("no change" never destroys anything).</summary>
         private ProfileCosmetics? CosmeticsPayload(AppSettings s, bool clear)
         {
             if (_sanitizeCosmetics == null) return null;
             try
             {
                 var clean = _sanitizeCosmetics(s.ProfileCosmetics);
-                return !clean.IsEmpty || clear ? clean : null;
+                return !clean.IsEmpty || clear || _adopted ? clean : null;
             }
             catch (Exception ex) { Log.Debug("SyncPush cosmetics payload: {E}", ex.Message); return null; }
         }
@@ -169,7 +187,7 @@ namespace ConditioningControlPanel.Services
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
-                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics));
+                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, _adopted));
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -225,7 +243,9 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    if (AdoptFromResponse(s, reply)) _adopted = true;
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
+                    ClaimWebXp(s, reply);
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);
@@ -248,6 +268,83 @@ namespace ConditioningControlPanel.Services
             }
             finally { _gate.Release(); }
         }
+
+        /// <summary>
+        /// WPF SyncProfileAsync:1897-1954, in its order: the force_skills_reset (clear the tree, take the server's points,
+        /// or level x PointsPerLevel; ack pending until a response no longer carries the flag), else skill points
+        /// MergeMax; the unlocked-skills union (skipped on level_reset, whose own branch unions); then the cloud loadout
+        /// into an EMPTY local one only (WPF AdoptCloudCosmetics). Does not save. True when the response carried both
+        /// skill_points and unlocked_skills, i.e. the server's skills are now known.
+        /// </summary>
+        internal bool AdoptFromResponse(AppSettings s, JObject reply)
+        {
+            bool Flag(string k) => reply[k]?.Type == JTokenType.Boolean && reply.Value<bool>(k);
+            int? points = reply["skill_points"]?.Type == JTokenType.Integer ? reply.Value<int>("skill_points") : null;
+            var forceReset = Flag("force_skills_reset");
+            if (forceReset && !s.PendingSkillsResetAck)
+            {
+                var refunded = points ?? s.PlayerLevel * PointsPerLevel;
+                Log.Information("V2 Sync: Force skills reset - clearing {Count} skills, setting points to {Points}", s.UnlockedSkills?.Count ?? 0, refunded);
+                s.UnlockedSkills = new List<string>();
+                s.SkillPoints = refunded;
+                s.PendingSkillsResetAck = true;
+            }
+            else if (s.PendingSkillsResetAck && !forceReset)
+                s.PendingSkillsResetAck = false;   // the server flag was cleared by our ack
+            else if (points is int p)
+            {
+                var max = SparklePoints.MergeMax(p, s.SkillPoints);
+                if (max != s.SkillPoints)
+                {
+                    Log.Information("V2 Sync: Skill points server={Server}, local={Local} - taking max ({Max})", p, s.SkillPoints, max);
+                    s.SkillPoints = max;
+                }
+            }
+            var skills = reply["unlocked_skills"] as JArray;
+            if (skills is { Count: > 0 } && !Flag("level_reset"))
+            {
+                var local = s.UnlockedSkills ?? new List<string>();
+                var add = skills.Values<string>().OfType<string>().Where(k => k.Length > 0 && !local.Contains(k)).Distinct().ToList();
+                if (add.Count > 0)
+                {
+                    Log.Information("V2 Sync: Adding {Count} unlocked skills from server: {Skills}", add.Count, string.Join(", ", add));
+                    s.UnlockedSkills = local.Concat(add).ToList();
+                }
+            }
+            try
+            {
+                if (_sanitizeCosmetics != null && reply["cosmetics"] is JObject c && s.ProfileCosmetics.IsEmpty)
+                {
+                    var clean = _sanitizeCosmetics(c.ToObject<ProfileCosmetics>());
+                    if (!clean.IsEmpty)
+                    {
+                        s.ProfileCosmetics = clean;
+                        Log.Information("Adopted cloud profile cosmetics (banner {Banner}, accent {Accent}, {Pins} pinned) into an empty local loadout",
+                            clean.BannerId ?? "none", clean.Accent ?? "none", clean.PinnedAchievements.Count);
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Debug("AdoptCloudCosmetics skipped: {E}", ex.Message); }
+            return points != null && skills != null;
+        }
+
+        /// <summary>WPF SyncProfileAsync:1970-1985: a new web XP claim is persisted (and saved) BEFORE its XP is added, so a
+        /// crash under-pays once instead of paying twice; skipped on level_reset, whose level/XP overwrite would eat it. The
+        /// id then goes back as <c>web_xp_claim_ack</c> on every push.</summary>
+        internal static void ClaimWebXp(AppSettings s, JObject reply)
+        {
+            if (reply["web_xp"]?["claim"] is not JObject claim || reply["level_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("level_reset")) return;
+            var id = claim["id"]?.Type == JTokenType.String ? (string?)claim["id"] : null;
+            var amount = claim["amount"]?.Type == JTokenType.Integer ? (int)claim["amount"]! : 0;
+            if (string.IsNullOrEmpty(id) || amount <= 0 || id == s.LastWebXpClaimId) return;
+            Log.Information("V2 Sync: Web XP claim {ClaimId} - applying +{Amount} XP", id, amount);
+            s.LastWebXpClaimId = id;
+            CoreSettings.Save();
+            CoreDispatch.Post(() => ProgressionBank.AddClaimed(amount));   // level-up listeners draw
+        }
+
+        /// <summary>WPF SkillTreeService.PointsPerLevel (the force-reset refund when the server sends no balance).</summary>
+        private const int PointsPerLevel = 1;
 
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>
         public void Nudge(string reason)

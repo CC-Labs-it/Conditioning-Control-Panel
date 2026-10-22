@@ -45,6 +45,27 @@ namespace ConditioningControlPanel
             Log.Information("XP awarded: +{Amount} from {Source} (now {Now})", adjusted, source, s.PlayerXP);
             // WPF AddXP:117: the active companion gets the BASE amount, after the gates, before the level loop.
             Services.Companion.CompanionCore.AddCompanionXP(amount, source);
+            SpendAndRaise(s, amount, source);
+        }
+
+        /// <summary>WPF ProgressionService.AddClaimedXP: web XP the server already earned - the login gate and the level
+        /// loop, no multipliers, no companion share. ponytail: no first-claim toast (AnnounceFirstWebXpClaim).</summary>
+        public static void AddClaimed(double amount)
+        {
+            var s = CoreSettings.Current;
+            if (amount <= 0) return;
+            if (!CoreAccount.IsLoggedIn && !(s.OfflineMode && !string.IsNullOrWhiteSpace(s.OfflineUsername)))
+            {
+                Log.Debug("Web XP claim not applied - user not logged in and not in offline mode");
+                return;
+            }
+            s.PlayerXP += amount;
+            Log.Information("Web XP claim applied: +{Amount} (now {Now})", amount, s.PlayerXP);
+            SpendAndRaise(s, amount, null);   // not Awarded: WPF counts no quest for it (AddClaimedXP has no TrackXPEarned)
+        }
+
+        private static void SpendAndRaise(Models.AppSettings s, double amount, string? source)
+        {
             var epoch = ProfileAdopt.Epoch(s);
             var levels = new System.Collections.Generic.List<int>();
             for (var need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch); s.PlayerXP >= need; need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch))
@@ -57,7 +78,7 @@ namespace ConditioningControlPanel
             }
             CoreSettings.Save();
             foreach (var l in levels) LevelUp?.Invoke(l);
-            Awarded?.Invoke(amount, source);
+            if (source != null) Awarded?.Invoke(amount, source);
         }
     }
 }

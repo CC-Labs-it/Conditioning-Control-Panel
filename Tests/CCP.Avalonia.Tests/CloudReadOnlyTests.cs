@@ -78,7 +78,7 @@ public sealed partial class AccountSeedTests
         "LastConfirmedServerXpAccount", "LastConfirmedServerXpSeason", "PatreonTier", "UnifiedId", "UserDisplayName",
         "HasLinkedPatreon", "HasLinkedDiscord", "IsSeason0Og", "PatreonPremiumValidUntil", "PatreonLabValidUntil",
         "PendingDescentMigrationChoice", "DescentMigrationCompleted", "DescentMigrationChoice", "DescentMigrationOffered",
-        "DescentCycleXpBonus", "DescentCycle",
+        "DescentCycleXpBonus", "DescentCycle", "SkillPoints", "UnlockedSkills", "PendingSkillsResetAck", "ProfileCosmetics", "LastWebXpClaimId",
     };
 
     private static JToken Get(AppSettings s, string n) =>

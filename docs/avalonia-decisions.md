@@ -1200,3 +1200,19 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-22: Skills, skill points and the cloud loadout join the push only after an adopt; web XP claims (avalonia-port/wire-shell-login-b)
+- Question: the Avalonia `/v2/user/sync` push carried five fields; the row held any wider payload for owner confirmation (P44).
+- Answer (supervisor, 2026-10-22): port WPF's skills/points/force_skills_reset ack and cosmetics 1:1 (ProfileSyncService.cs:1698-1756
+  body, :1897-1954 response, :2331 level_reset union, :2708 AdoptCloudCosmetics, :2749 BuildCosmeticsPayload), gated like WPF's
+  `_hasLoadedProfile`: Core `SyncPush` sends `unlocked_skills`/`skill_points` (and `force_skills_reset: false` while an ack is
+  pending, and an empty loadout) only once a sync response THIS session carried `skill_points` and `unlocked_skills` and they were
+  adopted (MergeMax / union, fill-if-empty loadout). A fresh install never pushes its defaults before that; logout disarms it.
+  Stricter than WPF, which sends the skills on its first post-read push: the GET profile carries no skills, so the first push stays
+  the five fields and the next one carries the merged values.
+- Web XP (WPF :1728 ack, :1970-1985 claim): a new `web_xp.claim` (not on level_reset) persists its id and saves BEFORE
+  `ProgressionBank.AddClaimed` adds the amount (no multipliers, no quest credit, as WPF AddClaimedXP); the id then goes up as
+  `web_xp_claim_ack` on every push (key left out until a claim was ever applied). No first-claim toast yet.
+- Not in this layer (row shell-login, `wire-shell-login-b-next`): stats, consents, companion progress, quest logs, the first web XP
+  claim toast, and the provider-link achievement-sharing caller.
+- Tests: `Tests/CCP.Avalonia.Tests/SyncPushSkillsTests.cs` (fail-proven).
