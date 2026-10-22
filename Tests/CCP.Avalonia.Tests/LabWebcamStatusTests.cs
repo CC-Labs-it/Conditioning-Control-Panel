@@ -63,7 +63,7 @@ public sealed class LabWebcamStatusTests
         finally { host.Close(); tracker.SetTrackingState(oldState); Dispatcher.UIThread.RunJobs(); }
     });
 
-    private static void Setup()
+    internal static void Setup()
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()

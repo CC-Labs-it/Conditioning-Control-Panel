@@ -209,12 +209,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (IsRunning) return true;
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
             var run = new Run();
+            bool began = false;
             try
             {
                 LastError = null;
-                SetTrackingState(WebcamTrackingState.Starting);
                 StartWasStopped = false;
+                // WPF WebcamTrackingService.cs:838-843 refuses before any state change: no consent stays Stopped.
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current)) { LastError = "Webcam consent is not current."; return false; }
+                SetTrackingState(WebcamTrackingState.Starting);
+                began = true;
                 // WPF #743: a loop a timed-out Stop gave up on may still hold the camera.
                 if (IsClosing)
                 {
@@ -280,7 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 Interlocked.Exchange(ref _busy, 0);
-                if (!IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
+                if (began && !IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
                 Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
             }
         }
