@@ -165,6 +165,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 PaintChrome(s);
                 RebuildCustomSubRows(s);
                 SetFineTuneOpen(_fineTuneOpen);
+                // The online media card and the title bar pill follow the source (WPF MainWindow.Assets.cs, 76cb2f8b0).
+                (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.RefreshOnlineMeter();
             }
             catch (Exception ex) { Log.Warning(ex, "Remote media picker refresh failed"); }
             finally { _pickerSyncing = false; }

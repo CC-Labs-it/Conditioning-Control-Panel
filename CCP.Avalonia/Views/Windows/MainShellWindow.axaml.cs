@@ -133,6 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitDashboardBrowserFold(); // MainShellWindow.DashboardFold.cs (WPF MainWindow.xaml.cs:3505)
             InitializeRememberButton(); // MainShellWindow.Remember.cs (WPF MainWindow.xaml.cs:3508)
             InitializeMicActivePill(); // MainShellWindow.SheListening.cs (WPF MainWindow.xaml.cs:3594 WireMicActivePill)
+            InitializeOnlineMeter(); // MainShellWindow.OnlineMeter.cs (WPF MainWindow.xaml.cs:3699 WireOnlineMeter)
             InitializeStatPills(); // MainShellWindow.UiUpdates.cs (WPF MainWindow.xaml.cs:3726 StartStatPillUpdateTimer)
             InitializeWebcamActivePill(); // MainShellWindow.SafetyPills.cs (WPF LabTab.cs:134 WireWebcamActivePill)
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)

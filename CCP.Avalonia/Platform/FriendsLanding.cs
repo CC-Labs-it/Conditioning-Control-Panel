@@ -91,6 +91,19 @@ internal static class FriendsLanding
             SessionRunning: session);
     }
 
+    /// <summary>WPF Holding (main 6ea63f274): a session, Lockdown, Strict Lock or program holds, so a notice
+    /// that is not from a friend (the online meter's spent notice) waits until this reads false.</summary>
+    internal static bool Holding()
+    {
+        try { return World().Holding; } catch { return true; }
+    }
+
+    /// <summary>WPF LockdownActive (main 6ea63f274): a Lockdown runs, so a corner notice offers no "See plans".</summary>
+    internal static bool LockdownActive()
+    {
+        try { return LockdownService.Current?.IsActive == true; } catch { return false; }
+    }
+
     private static Window? DefaultAnchor()
     {
         var mw = MainShellWindow.Current;
