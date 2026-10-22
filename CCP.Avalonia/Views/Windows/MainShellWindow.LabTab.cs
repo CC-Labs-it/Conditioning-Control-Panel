@@ -56,10 +56,8 @@
 //   private void UpdateWebcamDebugCounters(…)
 //   internal async void BtnWebcamDebugCalibrate_Click(…)
 //   internal void BtnGazeMinigame_Click(…)
-//   private bool _focusGazeSyncing
-//   private void HookFocusGazeService(…)
-//   private void SyncFocusGazeToggle(…)
-//   internal async void ChkFocusGaze_Changed(…)
+//   (_focusGazeSyncing / HookFocusGazeService / SyncFocusGazeToggle / ChkFocusGaze_Changed: PORTED, InitializeFocusGaze
+//    below + PlayTabView; the engine is Platform/GazeFocus.cs, bubbles only so far)
 //   private DispatcherTimer? _blinkTrainerTickTimer
 //   private void HookBlinkTrainerService(…)
 //   private void OnBlinkTrainerServiceStateChanged(…)
@@ -89,6 +87,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        /// <summary>WPF HookFocusGazeService (LabTab.cs:819): the engine follows the camera for this
+        /// window's life, and the saved switch intent is restored (MasterEnabled + the no-prompt boot
+        /// camera restart). The Play tab's switch and status line read the same engine.</summary>
+        private void InitializeFocusGaze()
+        {
+            var gaze = Platform.GazeFocus.Instance;
+            gaze.Attach();
+            // WPF: Closing += GazeFocus.Stop, so nothing it holds outlives the window.
+            Closed += (_, _) => gaze.Detach();
+            if (!CoreSettings.Current.FocusGazeEnabled) return;
+            gaze.MasterEnabled = true;
+            _ = RestartFocusGazeCameraAtBootAsync();
+        }
+
+        /// <summary>WPF RestartFocusGazeCameraAtBoot (#1106): opens the camera behind the switch's own
+        /// gates and never asks for consent at boot; a missing tier, consent or calibration leaves the
+        /// status on "waiting" and the switch does the asking. The engine re-evaluates on the camera's
+        /// own state change.</summary>
+        internal static async System.Threading.Tasks.Task RestartFocusGazeCameraAtBootAsync()
+        {
+            try
+            {
+                var webcam = Platform.WebcamTracker.Instance;
+                if (webcam.IsRunning) return;
+                if (!Services.TierGate.RequiresLab(global::ConditioningControlPanel.Localization.Loc.Get("label_focus_gaze")).Allowed) return;
+                if (!Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current)) return;
+                if (!CoreSettings.Current.WebcamCalibrated) return;
+                if (!await webcam.StartAsync())
+                    Serilog.Log.Information("Focus Gaze: webcam did not start at boot ({State})", webcam.State);
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Focus Gaze: webcam start at boot failed"); }
+        }
+
         // WPF MainWindow.LabTab.cs MicActivePill_Click: the mic's privacy stop. Not Lockdown-gated, as WPF.
         private void MicActivePill_Click(object? sender, global::Avalonia.Input.PointerPressedEventArgs e)
         {

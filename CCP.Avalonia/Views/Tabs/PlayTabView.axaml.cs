@@ -57,6 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnAttachedToVisualTree(e);
             Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
             RefreshWebcamStatus();
+            Gaze.ActiveChanged += OnGazeActiveChanged;
+            SyncFocusGazeToggle(CoreSettings.Current.FocusGazeEnabled);
             CoreMods.ModChanged += OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
@@ -66,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
+            Gaze.ActiveChanged -= OnGazeActiveChanged;
             CoreMods.ModChanged -= OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged -= OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged -= OnIntakePassStateChanged;
@@ -251,13 +254,88 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             new Lab.GazeMinigame.GazeMinigameWindow().Show(owner);
         }
 
-        /// <summary>The only Focus Gaze switch in the app. ponytail: needs
-        /// ConditioningControlPanel/Services/Tracking/GazeFocusService.cs and WebcamTrackingService.
-        /// The Tier 2 half is available now (TierGate is CCP.Core/Services/TierGate.cs), but
-        /// MainWindow.LabTab.cs:817 gates the ON edge on the tier AND on webcam consent before it
-        /// arms anything, and there is nothing safe to write without them. Turning the box
-        /// OFF is never gated on WPF either, but there is no consumer here to release.</summary>
-        private void ChkFocusGaze_Changed(object? sender, RoutedEventArgs e) { }
+        // ---- Focus Gaze (WPF MainWindow.LabTab.cs:816-1001) -----------------------------
+        private bool _focusGazeSyncing;
+        private static Platform.GazeFocus Gaze => Platform.GazeFocus.Instance;
+
+        private void OnGazeActiveChanged(bool _) => RefreshFocusGazeStatus();
+
+        /// <summary>WPF SyncFocusGazeToggle: the argument is the ENABLED setting (user intent), never
+        /// the engine's IsActive (#1116).</summary>
+        internal void SyncFocusGazeToggle(bool enabled)
+        {
+            var s = CoreSettings.Current;
+            if (s.FocusGazeEnabled != enabled) { s.FocusGazeEnabled = enabled; CoreSettings.Save(); }
+            if (ChkPlayFocusGaze.IsChecked != enabled)
+            {
+                _focusGazeSyncing = true;
+                try { ChkPlayFocusGaze.IsChecked = enabled; }
+                finally { _focusGazeSyncing = false; }
+            }
+            RefreshFocusGazeStatus();
+        }
+
+        /// <summary>WPF RefreshFocusGazeStatus: the switch says ENABLED, this line says RUNNING.</summary>
+        internal void RefreshFocusGazeStatus()
+        {
+            if (!CoreSettings.Current.FocusGazeEnabled) { TxtPlayFocusGazeStatus.Text = ""; return; }
+            TxtPlayFocusGazeStatus.Text = Loc.Get(Gaze.IsActive ? "label_focus_gaze_active" : "label_focus_gaze_waiting");
+        }
+
+        /// <summary>The only Focus Gaze switch in the app (WPF ChkFocusGaze_Changed). ON is gated on the
+        /// Lab tier, then consent, then a running camera, then the engine actually starting; OFF is
+        /// never gated (releasing a camera consumer is not a premium act).</summary>
+        private async void ChkFocusGaze_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_focusGazeSyncing) return;
+            if (ChkPlayFocusGaze.IsChecked != true)
+            {
+                Gaze.MasterEnabled = false;
+                SyncFocusGazeToggle(false);
+                return;
+            }
+            try
+            {
+                // Revert first, then tell (WPF order): the switch never sits ON behind a refusal.
+                var verdict = TierGate.RequiresLab(Loc.Get("label_focus_gaze"));
+                if (!verdict.Allowed) { SyncFocusGazeToggle(false); TierGate.ShowDenied(verdict); return; }
+
+                if (!Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current))
+                {
+                    var dlg = new Dialogs.WebcamConsentDialog();
+                    await dlg.ShowDialogSafe(TopLevel.GetTopLevel(this) as Window);
+                    if (!dlg.ConsentGiven)
+                    {
+                        SyncFocusGazeToggle(false);
+                        TxtPlayFocusGazeStatus.Text = Loc.Get("label_focus_gaze_consent_required");
+                        return;
+                    }
+                }
+
+                // Pre-warm the camera off the UI thread; the engine only rides a running camera.
+                var tracker = Platform.WebcamTracker.Instance;
+                if (!tracker.IsRunning)
+                {
+                    TxtPlayFocusGazeStatus.Text = "Starting webcam…";   // WPF literal (LabTab.cs:963)
+                    if (!await tracker.StartAsync())
+                    {
+                        SyncFocusGazeToggle(false);
+                        TxtPlayFocusGazeStatus.Text = Loc.GetF("label_focus_gaze_webcam_failed_format", tracker.State);
+                        return;
+                    }
+                }
+
+                Gaze.MasterEnabled = true;
+                if (Gaze.IsActive) { SyncFocusGazeToggle(true); return; }
+                // Couldn't start (almost always: no calibration). Disarm so it isn't silently wanted.
+                Gaze.MasterEnabled = false;
+                SyncFocusGazeToggle(false);
+                TxtPlayFocusGazeStatus.Text = tracker.Calibration == null
+                    ? Loc.Get("label_focus_gaze_calibrate_first")
+                    : Loc.GetF("label_focus_gaze_webcam_failed_format", tracker.State);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Focus Gaze switch failed"); SyncFocusGazeToggle(false); }
+        }
 
         /// <summary>WPF MainWindow.LabTab.cs:1061 is ShowTab("blinktrainer"); the page owns its gate.</summary>
         private void BtnLabBlinkTrainerOpenNew_Click(object? sender, RoutedEventArgs e) => Owner?.ShowTab("blinktrainer");
