@@ -112,6 +112,31 @@ public class LockdownService : IDisposable
 
     public bool IsActive => _isActive;
 
+    /// <summary>While active: the strict lock value Lockdown recorded as the user's own (it puts it
+    /// back on Deactivate).</summary>
+    public bool RecordedStrictLock => _preStrictLock;
+
+    /// <summary>While active: Lockdown switched strict lock on itself (the Safeties toggle).</summary>
+    public bool ForcedStrictLock { get; private set; }
+
+    /// <summary>While active: Lockdown switched the panic key off itself (the Safeties toggle). A remote
+    /// session ending leaves it off until this Lockdown ends (owner, 2026-10-22).</summary>
+    public bool DisabledPanicKey { get; private set; }
+
+    /// <summary>
+    /// A Remote Control session ended while this Lockdown runs and the strict lock Lockdown recorded
+    /// as the user's own was really the controller's (owner, 2026-10-22). Corrects the record (and
+    /// the recovery file) so Deactivate puts the wearer's real value back. The live switch stays
+    /// Lockdown's. No-op when inactive.
+    /// </summary>
+    public void CorrectRecordedStrictLock(bool wearersOwn)
+    {
+        if (!_isActive || _preStrictLock == wearersOwn) return;
+        _preStrictLock = wearersOwn;
+        WriteRecoveryFile(_preStrictLock, _prePanicKeyEnabled);
+        App.Logger?.Information("Lockdown: recorded strict lock corrected to the wearer's own ({Value})", wearersOwn);
+    }
+
     /// <summary>
     /// How long the most recently ended lockdown stayed active (set on Deactivate).
     /// This is the single source of truth for "how long did the user sit through a
@@ -150,6 +175,8 @@ public class LockdownService : IDisposable
         // Force lockdown settings — do NOT call Save() so these are never persisted. Since the
         // Possession rework these are the default-on "Safeties" toggles on the Lockdown card; a
         // toggle the user switched off leaves the real value alone (and restore is then a no-op).
+        ForcedStrictLock = settings.LockdownForceStrictLock;
+        DisabledPanicKey = settings.LockdownDisablePanicKey;
         if (settings.LockdownForceStrictLock) settings.StrictLockEnabled = true;
         if (settings.LockdownDisablePanicKey) settings.PanicKeyEnabled = false;
         // Move the keyboard hook and the Settings ▸ Devices checkbox with the flag. Without this

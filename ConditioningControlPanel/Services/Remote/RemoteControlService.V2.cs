@@ -93,8 +93,8 @@ namespace ConditioningControlPanel.Services
             if (s != null)
             {
                 var changed = false;
-                if (_easedSpiral.Rescale(s.SpiralOpacity, s.SpiralEnabled, next) is int sv) { s.SpiralOpacity = sv; changed = true; }
-                if (_easedPink.Rescale(s.PinkFilterOpacity, s.PinkFilterEnabled, next) is int pv) { s.PinkFilterOpacity = pv; changed = true; }
+                if (_easedSpiral.Rescale(s.SpiralOpacity, s.SpiralEnabled, next) is int sv) { NoteRemoteWrite(RemoteHeld.SpiralOpacity, sv); s.SpiralOpacity = sv; changed = true; }
+                if (_easedPink.Rescale(s.PinkFilterOpacity, s.PinkFilterEnabled, next) is int pv) { NoteRemoteWrite(RemoteHeld.PinkOpacity, pv); s.PinkFilterOpacity = pv; changed = true; }
                 if (changed)
                 {
                     App.Overlay?.RefreshOverlays();
@@ -105,16 +105,81 @@ namespace ConditioningControlPanel.Services
             EasyChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        /// <summary>Session end: where Easy faded the subject's own opacity, hand it back.</summary>
-        private void RestoreEasedOpacities()
+        /// <summary>Session end: Easy forgets its asks. An opacity it faded is a controller write in
+        /// the wearer's snapshot, so <see cref="HandBackWearerVisuals"/> already put the wearer's own back.</summary>
+        private void ResetEasedOpacities()
         {
-            var s = App.Settings?.Current;
-            var changed = false;
-            if (s != null && _easedSpiral.SubjectOriginal is int so) { s.SpiralOpacity = so; changed = true; }
-            if (s != null && _easedPink.SubjectOriginal is int po) { s.PinkFilterOpacity = po; changed = true; }
             _easedSpiral.Reset();
             _easedPink.Reset();
-            if (changed) App.Settings!.Save();
+        }
+
+        // ------------------------------------------------------------------ the wearer's own values
+
+        // Owner, 2026-10-22: the wearer's own strict lock / spiral / pink / opacities / Melt are
+        // snapshotted when the session starts and handed back at every end. On disk while it runs, so
+        // a crash heals at the next launch (RemoteHoldings.HealOnLaunch). Null when no session runs.
+        private RemoteHoldings? _holdings;
+
+        private static bool LockdownActive => App.Lockdown?.IsActive == true;
+
+        /// <summary>Session start. While a Lockdown runs, its recorded strict lock is the wearer's own.</summary>
+        private void TakeWearerSnapshot()
+        {
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            _holdings = RemoteHoldings.Take(f => f == RemoteHeld.StrictLock
+                ? RemoteHoldings.StrictBefore(s.StrictLockEnabled, LockdownActive, App.Lockdown?.RecordedStrictLock == true)
+                : RemoteHoldings.Read(s, f), DateTime.UtcNow.Ticks);
+            RemoteHoldings.Save(App.UserDataPath, _holdings);
+        }
+
+        /// <summary>Every controller write to a held setting comes here first, before the value lands.</summary>
+        private void NoteRemoteWrite(RemoteHeld field, int after)
+        {
+            var s = App.Settings?.Current;
+            if (s == null || _holdings == null) return;
+            var before = field == RemoteHeld.StrictLock
+                ? RemoteHoldings.StrictBefore(s.StrictLockEnabled, LockdownActive, App.Lockdown?.RecordedStrictLock == true)
+                : RemoteHoldings.Read(s, field);
+            _holdings.NoteWrite(field, before, after);
+            RemoteHoldings.Save(App.UserDataPath, _holdings);
+        }
+
+        /// <summary>The strict lock goes back to the wearer's own. A running Lockdown keeps the one it
+        /// forced and gets its record corrected instead. True when the live switch moved (not saved).</summary>
+        private bool HandBackStrictLock()
+        {
+            var s = App.Settings?.Current;
+            if (s == null || _holdings == null || !_holdings.Holds(RemoteHeld.StrictLock)) return false;
+            var ld = App.Lockdown;
+            var back = _holdings.HandBackStrict(s.StrictLockEnabled, LockdownActive,
+                ld?.ForcedStrictLock == true, ld?.RecordedStrictLock == true);
+            RemoteHoldings.Save(App.UserDataPath, _holdings);
+            if (back.LockdownRecorded is bool recorded) ld?.CorrectRecordedStrictLock(recorded);
+            if (back.Live is not bool live) return false;
+            s.StrictLockEnabled = live;
+            return true;
+        }
+
+        /// <summary>Spiral, pink, their opacities and Melt go back to the wearer's own values where they
+        /// still hold what the controller wrote. Saves when anything moved.</summary>
+        private void HandBackWearerVisuals()
+        {
+            _remoteTurnedOnBrainDrain = false;
+            var s = App.Settings?.Current;
+            if (s == null || _holdings == null) return;
+            var n = _holdings.HandBackAllButStrict(s);
+            RemoteHoldings.Save(App.UserDataPath, _holdings);
+            if (n == 0) return;
+            App.Settings!.Save();
+            App.Logger?.Information("[RemoteControl] Handed back {Count} of the wearer's own settings", n);
+        }
+
+        /// <summary>The session is over: nothing is held any more and the recovery file goes.</summary>
+        private void DropWearerSnapshot()
+        {
+            _holdings = null;
+            RemoteHoldings.Clear(App.UserDataPath);
         }
 
         // ------------------------------------------------------------------ remote haptics
@@ -158,6 +223,7 @@ namespace ConditioningControlPanel.Services
         {
             var s = App.Settings?.Current;
             if (s == null) return;
+            NoteRemoteWrite(RemoteHeld.BrainDrain, on ? 1 : 0);
             if (on)
             {
                 if (!s.BrainDrainEnabled) _remoteTurnedOnBrainDrain = true;
@@ -176,17 +242,6 @@ namespace ConditioningControlPanel.Services
             App.Settings!.Save();
         }
 
-        /// <summary>Stop-all paths: Brain Drain is already stopped; give the setting back if the
-        /// controller was the one who turned it on.</summary>
-        private void RestoreRemoteBrainDrainSetting()
-        {
-            if (!_remoteTurnedOnBrainDrain) return;
-            _remoteTurnedOnBrainDrain = false;
-            if (App.Settings?.Current == null) return;
-            App.Settings.Current.BrainDrainEnabled = false;
-            App.Settings.Save();
-        }
-
         /// <summary>
         /// The app is exiting while a controller is still connected. Dispose only stops the poll,
         /// so the strict lock the controller switched on, the Brain Drain it switched on and the
@@ -198,9 +253,9 @@ namespace ConditioningControlPanel.Services
         public void ReleaseHoldingsForExit()
         {
             if (!IsActive) return;
-            RestoreRemoteBrainDrainSetting();
+            HandBackWearerVisuals();
             ReleaseRemoteSafetyState();
-            RestoreEasedOpacities();
+            DropWearerSnapshot();
             App.Logger?.Information("[RemoteControl] Exit with a controller connected: its holdings handed back");
         }
 
@@ -216,7 +271,8 @@ namespace ConditioningControlPanel.Services
         private void ResetV2SessionState()
         {
             _remoteTurnedOnBrainDrain = false;
-            RestoreEasedOpacities();
+            ResetEasedOpacities();
+            DropWearerSnapshot();
             ControllerName = null;
             ControllerConnectedSinceUtc = null;
             if (LastActionLabel != null)
