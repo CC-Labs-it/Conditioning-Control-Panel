@@ -65,6 +65,10 @@ public sealed class CloudSettingsBackupTests : IDisposable
         s.CustomAssetsPath = "/home/me/assets";
         s.DisabledAssetPaths = new HashSet<string> { "images/a.png" };
         s.AssetPresets = new List<AssetPreset> { new() { Name = "p" } };
+        // List settings whose items carry an absolute path (review P1/P2).
+        s.AudioLayers = new List<AudioLayerTrack> { new() { Path = "/home/me/layer.mp3" } };
+        s.CornerGifOverlays = new List<CornerGifOverlaySetting> { new() { GifPath = "/home/me/corner.gif" } };
+        s.KeywordTriggers = new List<KeywordTrigger> { new() { Keyword = "k", Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = "/home/me/k.mp3" } } } };
         return s;
     }
 
@@ -104,6 +108,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
         foreach (var path in CloudSettingsBackup.AbsolutePathFields) Assert.DoesNotContain(path, keys, StringComparer.OrdinalIgnoreCase);
         Assert.DoesNotContain(keys, k => CloudSettingsBackup.IsExcludedFromBackup(k));
         Assert.DoesNotContain("OpenRouterApiKey", keys);
+        foreach (var list in new[] { "AudioLayers", "CornerGifOverlays", "KeywordTriggers" }) Assert.DoesNotContain(list, keys);
         Assert.DoesNotContain("/home/me", sent.ToString());
         Assert.False((bool)sent["FlashEnabled"]!);
         Assert.Contains("images/a.png", sent["DisabledAssetPaths"]!.Values<string>());
@@ -120,6 +125,9 @@ public sealed class CloudSettingsBackupTests : IDisposable
             BlinkTrainerFolders = new List<string> { @"C:\blink" }, DeeperRecentFiles = new List<string> { @"C:\d.json" },
             DeeperLastDirectory = @"C:\deep", PlayerLevel = 99, FlashEnabled = false,
             DisabledAssetPaths = new HashSet<string> { "videos/w.mp4" },
+            AudioLayers = new List<AudioLayerTrack> { new() { Path = @"C:\Users\me\layer.mp3" } },
+            CornerGifOverlays = new List<CornerGifOverlaySetting> { new() { GifPath = @"C:\Users\me\corner.gif" } },
+            KeywordTriggers = new List<KeywordTrigger> { new() { Keyword = "w", Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = @"C:\k.mp3" } } } },
         };
         _fake.Body = new JObject
         {
@@ -141,7 +149,10 @@ public sealed class CloudSettingsBackupTests : IDisposable
             var p = typeof(AppSettings).GetProperty(name)!;
             Assert.Equal(JsonConvert.SerializeObject(p.GetValue(here)), JsonConvert.SerializeObject(p.GetValue(restored)));
         }
-        Assert.Equal(5, restored!.PlayerLevel);
+        Assert.Equal("/home/me/layer.mp3", Assert.Single(restored!.AudioLayers).Path);
+        Assert.Equal("/home/me/corner.gif", Assert.Single(restored.CornerGifOverlays).GifPath);
+        Assert.Equal("/home/me/k.mp3", ((PlayAudioAction)Assert.Single(Assert.Single(restored.KeywordTriggers).Actions)).FilePath);
+        Assert.Equal(5, restored.PlayerLevel);
         Assert.Equal("u_abc", restored.UnifiedId);
         Assert.False(restored.FlashEnabled);                       // the backup's own settings do come back
         Assert.Contains("videos/w.mp4", restored.DisabledAssetPaths); // relative asset lists travel

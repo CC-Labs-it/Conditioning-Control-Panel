@@ -1206,8 +1206,10 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   paths in it mean nothing on the other OS. Design asked of oracle-deep (Q1, ~/ccp-port/briefs/oracle-cloud-backup-contract-d.md).
 - Option A (chosen, oracle-deep): a Core list of absolute-path fields (`CloudSettingsBackup.AbsolutePathFields`:
   CustomAssetsPath, StartupVideoPath, SpiralPath, MindWipeAudioPath, WallpaperOriginalPath, WallpaperSourceFolder,
-  BlinkTrainerFolders, DeeperRecentFiles, DeeperLastDirectory) is stripped on upload, and every restore copies this
-  machine's values back. The restore rule is the guard that matters: frozen WPF keeps uploading Windows paths.
+  BlinkTrainerFolders, DeeperRecentFiles, DeeperLastDirectory, plus the whole lists whose items carry one:
+  AudioLayers[].Path, CornerGifOverlays[].GifPath, KeywordTriggers[].Actions[].filePath / AudioFilePath) is stripped on
+  upload, and every restore copies this machine's values back. KeywordTriggers go as a whole list, not just the file
+  field: blanking only the field would make a restore of this machine's own backup drop each trigger's sound file. The restore rule is the guard that matters: frozen WPF keeps uploading Windows paths.
   The asset lists (DisabledAssetPaths, ActiveAssetPaths, AssetPresets) stay in the backup: they are relative.
 - Option B (rejected): a path translation table; drive letters and home folders cannot be mapped reliably.
 - Option C (rejected): per-OS sections; WPF restores the whole blob and the server keeps one opaque slot.
@@ -1216,4 +1218,17 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   Same endpoints, bodies and X-Auth-Token as WPF; 409 goes to the contract D seam when seeded, else a failure.
 - Not in this lane (wire-views-settings-account-b-next): GDPR export, 401 token recovery, automatic backup, startup
   restore prompt. The server contract is still pending owner confirmation (2026-10-09 entry).
+- Accepted consequences (review FIX, 2026-10-22):
+  - Frozen WPF restoring a backup made on Linux keeps only CustomAssetsPath of its own (WPF PreserveLocalOnlyFields), so
+    the other stripped settings fall to their defaults there: StartupVideoPath, SpiralPath, MindWipeAudioPath,
+    WallpaperOriginalPath, WallpaperSourceFolder, BlinkTrainerFolders, DeeperRecentFiles, DeeperLastDirectory, and the
+    AudioLayers / CornerGifOverlays / KeywordTriggers lists. WPF is frozen (P118); the user re-picks them on Windows.
+  - Keyword triggers, audio layers and corner GIFs no longer restore onto this head from any backup (the restore keeps
+    this machine's lists); they sync between Linux machines only by hand.
+  - Device choices travel unchanged: AudioOutputDeviceId/Name, SpeechInputDeviceIndex/Name, WebcamDeviceIndex/Name,
+    WebcamCalibrationScreen, Global/Spiral/PinkFilter/VideoTargetMonitor, FocusGameMonitor. Each runtime already falls
+    back when the saved device or screen is absent (audio output by id then name then default, camera to the first
+    listed, a saved monitor index that does not exist shows "Default" in its picker; runtime screen resolution not re-checked), and a same-machine reinstall gets them back.
+  - WPF keeps its own copy of the exclusion list (P118: frozen, not rewired), so the two can drift; a change to one
+    must be mirrored by hand.
 - Tests: `Tests/CCP.Core.Tests/CloudSettingsBackupTests.cs`, `AccountSettingsSectionTests.CloudRestoreAsksFirstAndKeepsThisMachinesPaths`.

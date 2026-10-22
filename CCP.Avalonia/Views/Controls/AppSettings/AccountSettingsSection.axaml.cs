@@ -518,7 +518,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// the sections repaint (CurrentReplaced + the per-open refresh).</summary>
         internal async Task RestoreAsync()
         {
-            if (Shell?.RefuseActionIfSessionLocked("cloud-restore-settings") == true) return;
+            if (Shell?.RefuseActionIfSessionLocked("cloud-restore-settings") ?? CoreSession.IsSessionRunning) return;
             if (!await Confirm(Owner, Loc.Get("title_restore_settings_from_cloud"), Loc.Get("msg_restore_settings_confirm"))) return;
             var button = Find<Button>("BtnRestoreSettings");
             var label = Find<TextBlock>("TxtBtnRestoreSettings");

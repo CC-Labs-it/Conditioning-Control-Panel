@@ -128,6 +128,7 @@ public sealed class AccountSettingsSectionTests
         var oldBackup = AccountSettingsSection.NewBackup;
         var oldTell = AccountSettingsSection.Tell;
         var oldConfirm = AccountSettingsSection.Confirm;
+        var oldSession = CoreSession.IsSessionRunningProvider;
         var dialogs = new List<string>();
         var answer = false;
         AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
@@ -156,9 +157,16 @@ public sealed class AccountSettingsSectionTests
             await section.BackupNowAsync();
             lock (server.Paths) Assert.Contains("/v2/user/backup-settings", server.Paths);
             Assert.Contains(Loc.Get("title_backup_complete"), dialogs);
+
+            // A section with no shell above it still refuses mid-session (PresetsTabView's `?? IsSessionRunning`).
+            dialogs.Clear();
+            CoreSession.IsSessionRunningProvider = () => true;
+            await new AccountSettingsSection().RestoreAsync();
+            Assert.Empty(dialogs);
         }
         finally
         {
+            CoreSession.IsSessionRunningProvider = oldSession;
             AccountSettingsSection.NewBackup = oldBackup;
             AccountSettingsSection.Tell = oldTell;
             AccountSettingsSection.Confirm = oldConfirm;

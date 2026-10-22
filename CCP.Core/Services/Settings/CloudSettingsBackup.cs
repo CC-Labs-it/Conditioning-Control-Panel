@@ -27,11 +27,13 @@ namespace ConditioningControlPanel.Services
     public sealed class CloudSettingsBackup
     {
         private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
+        // One client for the process: the section builds a CloudSettingsBackup on every refresh.
+        private static readonly Lazy<HttpClient> Shared = new(() => V2AuthService.Configure(new HttpClient()));
         private readonly HttpClient _http;
 
         /// <param name="handler">Tests only; null is the real network.</param>
         public CloudSettingsBackup(HttpMessageHandler? handler = null) =>
-            _http = V2AuthService.Configure(handler == null ? new HttpClient() : new HttpClient(handler));
+            _http = handler == null ? Shared.Value : V2AuthService.Configure(new HttpClient(handler));
 
         // ---- copied unchanged from WPF ProfileSyncService.cs:4553-4635 ----
 
@@ -118,14 +120,17 @@ namespace ConditioningControlPanel.Services
 
         // ---- new: absolute paths are machine-local ----
 
-        /// <summary>Settings that hold an absolute path (or a list of them). Never uploaded; a restore keeps
-        /// this machine's values, whatever the backup carries (frozen WPF still uploads its Windows paths).
+        /// <summary>Settings that hold an absolute path, a list of them, or list items carrying one
+        /// (AudioLayerTrack.Path, CornerGifOverlaySetting.GifPath, PlayAudioAction.FilePath). Never uploaded; a
+        /// restore keeps this machine's values, whatever the backup carries (frozen WPF still uploads its Windows
+        /// paths). Whole lists, so a restore never drops this machine's file from an item.
         /// The asset lists are NOT here: they are relative and forward-slashed, so they travel.</summary>
         public static readonly IReadOnlyList<string> AbsolutePathFields = new[]
         {
             nameof(AppSettings.CustomAssetsPath), nameof(AppSettings.StartupVideoPath), nameof(AppSettings.SpiralPath),
             nameof(AppSettings.MindWipeAudioPath), nameof(AppSettings.WallpaperOriginalPath), nameof(AppSettings.WallpaperSourceFolder),
             nameof(AppSettings.BlinkTrainerFolders), nameof(AppSettings.DeeperRecentFiles), nameof(AppSettings.DeeperLastDirectory),
+            nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays), nameof(AppSettings.KeywordTriggers),
         };
 
         private static readonly System.Reflection.PropertyInfo[] PathProperties =
