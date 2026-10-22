@@ -88,6 +88,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
+            ("PlayBackRoomHeroPlate", "features/backroom.png",          Stretch.UniformToFill),
+            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
+            ("PlayArcademyHeroPlate", "features/arcademy.png",          Stretch.UniformToFill),
+            ("PlayRaceHeroPlate",     "features/race.png",              Stretch.UniformToFill),
+            ("PlayWebAppHeroPlate",   "billboard/webapp.png",           Stretch.UniformToFill),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
             ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
@@ -165,6 +170,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
+                PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
@@ -176,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 bool premium = CoreEntitlement.HasPremium;
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
+                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }
@@ -211,6 +219,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BtnPlayBreakoutDemo_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayBreakoutDemo();
 
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayChess();
+
+        // Nav rework 2026-10-06 doors. Back Room, DtRH and Arcademy have no host here (buttons disabled).
+        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
+
+        private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- TOGETHER --------------------------------------------------------------------
 
