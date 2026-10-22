@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -37,17 +38,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns only treat variants until they land; every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
-    /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
+    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, aftermath,
+    /// ripple, the narrative, the treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off); every
     /// chaos bark (run started/completed, gold-first, defuse/detonate) waits for lane chaos-payout-barks
     /// (stacked after companion-barks + barks-wpf: this base has no Core BarkEngine and Avalonia never
     /// seeds CoreBark); the announcer banners (NO FOCUS TO DEFUSE, last breath, UNLEASHED) wait for
-    /// the announcer overlay. The colour pulse and screen shake are called with WPF's values through
-    /// <see cref="PulseFx"/>/<see cref="ShakeFx"/>, unseeded until the fx window and shake land
-    /// (chaos-payout-fallin-d). The hold and the Snap Chain window run on wall time
+    /// the announcer overlay. Every WPF Pulse/Shake call lands on the run's
+    /// <see cref="ChaosFxWindow"/> and <see cref="ScreenShake"/> (tests swap in
+    /// <see cref="PulseFx"/>/<see cref="ShakeFx"/>); regen, the first-time bonuses, the defuse
+    /// lessons and the combo milestones run as WPF's. The hold and the Snap Chain window run on wall time
     /// (<c>BubbleOverlay.Field.Clock</c>), as WPF does (:4531, ChaosModeService :2000).</para>
     ///
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
@@ -60,6 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosOverlayWindow? _overlay;
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
+        private static int _regenPopCount, _lastComboBigFired;   // WPF :2422, :86
+        private static ChaosFxWindow? _fx;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -67,10 +71,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ChaosPopText.Show(xDip, yDip, text, color); seeded by the pop-text lane,
         /// a no-op until then.</summary>
         internal static Action<double, double, string, Color>? PopText;
-        /// <summary>WPF <c>_fx.Pulse(color, strength)</c> (ChaosFxWindow); unseeded until it lands.</summary>
+        /// <summary>Test seam over WPF <c>_fx.Pulse(color, strength)</c>; null = the run's <see cref="ChaosFxWindow"/>.</summary>
         internal static Action<Color, double>? PulseFx;
-        /// <summary>WPF <c>App.ScreenShake.Shake(intensity, ms)</c>; unseeded until it lands.</summary>
+        /// <summary>Test seam over WPF <c>App.ScreenShake.Shake(intensity, ms)</c>; null = <see cref="ScreenShake"/>.</summary>
         internal static Action<double, int>? ShakeFx;
+        internal static ChaosFxWindow? Fx => _fx;
         private static bool _active, _spawning, _manualPaused;
 
         internal static ChaosRunState? State => _state;
@@ -116,9 +121,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state.StartShields = _state.Shields;
             _waveDetonatedAt = _state.Detonated;
             _invulnUntilUtc = DateTime.MinValue;
+            _regenPopCount = _lastComboBigFired = 0;   // WPF :396, :459
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
+            _fx ??= ChaosFxWindow.TryCreate();   // WPF :500
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
             _runTimer.Tick += (_, _) => Tick();
             _runTimer.Start();
@@ -182,22 +189,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused) return;
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
+            CountRegenPop();   // WPF :1768 Slow Recovery: every pop feeds the regen counter
             if (spec.IsPrism)
             {
+                ChaosLessons.Tick("taking_chances");   // WPF :1824 ChaosLessonHooks.OnPrismPopped
                 FireScaledPayload(spec.Payload);
                 double prismPts = ChaosFieldMath.ApplyPrismPop(_state, spec);
                 ShowPopScore(prismPts);
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
+                Pulse(Color.FromRgb(0xC8, 0xA8, 0xFF), 0.40);   // WPF :1836
+                CheckComboMilestone();
                 return;
             }
             spec.Payload.Fire();   // benign pop = a treat
+            FirstTime(ChaosFirstTimes.Taste);   // WPF :1844
             bool focusWasLow = _state.FocusLow;
             double pts = ChaosFieldMath.ApplyTreatPop(_state, spec, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
             if (focusWasLow)
                 PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 34,
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
+            Pulse(Color.FromRgb(255, 200, 235), 0.10);   // WPF :1867 BENIGN_POP pulse
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+            _state.PushEvent($"○ popped {spec.Payload.DisplayName}");   // WPF :1891
+            CheckComboMilestone();
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
@@ -213,6 +228,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Label(b, "SNAP", SnapColor);   // WPF CompleteDefuse :4577 / Pop :4684
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
+            CountRegenPop();   // WPF :2001 snaps count toward the regen threshold too
+            FirstTime(ChaosFirstTimes.Snap);
+            ChaosRunLessons.OnDefuseCompleted(fuseSecLeft, b.DefusedViaChannel);   // snap_field / last_breath
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
             ShowPopScore(pts);
@@ -233,8 +251,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else Pulse(Color.FromRgb(90, 255, 150), 0.16);   // soft green confirm
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
-            // ponytail: defuse lessons, first-times, regen, aftermath, ripple, combo milestones and
-            // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
+            CheckComboMilestone();   // WPF :2052
+            // ponytail: aftermath, ripple, the brink narrative, the last-breath banner and the
+            // slow_fuses/blindfold lessons -> chaos-payout-fallin-d-next; the defuse barks -> chaos-payout-barks.
         }
 
         /// <summary>WPF OnDetonated (:2055) + OnChannelBroken's feed line: the payload fires, the loop
@@ -288,6 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     }
                     break;
                 default:   // WPF :2126
+                    _lastComboBigFired = 0;   // combo broke: reset the big-streak crossings (WPF :2124)
                     _hud?.FlashShields(false);
                     _state.PushEvent($"💥 {name} triggered!");
                     ChaosOverlayWindow.ChaosSfx.Play("trigger", 0.55f);
@@ -316,14 +336,66 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Pulse (:1672): gated by the run's colour-flash toggle.</summary>
         private static void Pulse(Color color, double strength)
         {
-            if (_state?.Config.ColorFlashesEnabled == true) PulseFx?.Invoke(color, strength);
+            if (_state?.Config.ColorFlashesEnabled != true) return;
+            if (PulseFx != null) PulseFx(color, strength);
+            else _fx?.Pulse(color, strength);
         }
 
         /// <summary>WPF Shake (:1676): gated and scaled by the run's shake settings.</summary>
         private static void Shake(double baseIntensity, int durMs)
         {
             var cfg = _state?.Config;
-            if (cfg?.ScreenShakeEnabled == true) ShakeFx?.Invoke(Math.Clamp(baseIntensity * cfg.ShakeIntensity, 0, 1), durMs);
+            if (cfg?.ScreenShakeEnabled != true) return;
+            double intensity = Math.Clamp(baseIntensity * cfg.ShakeIntensity, 0, 1);
+            if (ShakeFx != null) ShakeFx(intensity, durMs);
+            else ScreenShake.Shake(intensity, durMs);
+        }
+
+        /// <summary>WPF CountRegenPop (:2427), Slow Recovery: every N pops regrow one resistance,
+        /// up to what the run descended with.</summary>
+        private static void CountRegenPop()
+        {
+            if (_state == null || _state.ShieldRegenPops <= 0) return;
+            if (_state.Shields >= _state.StartShields) { _regenPopCount = 0; return; }
+            if (++_regenPopCount < _state.ShieldRegenPops) return;
+            _regenPopCount = 0;
+            _state.Shields += 1;
+            _state.PushEvent("♥ resistance regrows");
+            Pulse(Color.FromRgb(120, 220, 160), 0.18);   // SHIELD_GAIN_COLOR
+        }
+
+        /// <summary>WPF CheckComboMilestone (:3067): a big beat once per 25/50/100 crossing per
+        /// streak, a gold flash every x10, a micro pulse growing toward the next x10 between.</summary>
+        private static void CheckComboMilestone()
+        {
+            if (_state == null) return;
+            int combo = _state.Combo;
+            if (combo <= 0) return;
+            foreach (int t in new[] { 25, 50, 100 })
+            {
+                if (combo < t || _lastComboBigFired >= t) continue;
+                _lastComboBigFired = t;
+                _state.PushEvent($"🔥🔥 STREAK x{combo}!");
+                ChaosOverlayWindow.ChaosSfx.Play("streak_milestone", 0.5f);
+                Pulse(Color.FromRgb(255, 230, 120), 0.55);   // COMBO_BIG
+            }
+            if (combo % 10 == 0)
+            {
+                _state.PushEvent($"🔥 streak x{combo}!");
+                Pulse(Color.FromRgb(255, 200, 60), 0.4);   // gold combo flash
+            }
+            else Pulse(Color.FromRgb(255, 170, 80), 0.04 + (0.12 - 0.04) * (combo % 10) / 10.0);   // COMBO_MICRO
+        }
+
+        /// <summary>WPF ChaosFirstTimes.TryAward + OnFirstTimeAwarded (:209): bank once, then a feed
+        /// line and a float where the hand was.</summary>
+        private static void FirstTime(string bonusId)
+        {
+            if (_state == null || ChaosFirstTimes.IsAwarded(bonusId) || !ChaosFirstTimes.TryAward(bonusId)) return;
+            int amount = ChaosFirstTimes.Amounts[bonusId];
+            string text = $"+{amount} {ChaosGlyphs.Drops} {ChaosFirstTimes.Labels.GetValueOrDefault(bonusId, bonusId)}";
+            _state.PushEvent(text);
+            PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY - 30, text, Color.FromRgb(0xC8, 0xA8, 0xFF));
         }
 
         /// <summary>WPF ShowPopScore (:1685), Blank Eyes.</summary>
@@ -457,6 +529,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
+            CloseFx();   // WPF EndRun :3239
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned, rankUp);
             Log.Information("Chaos run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks",
                 baseXp, skillMult, finalXp, sparksEarned);
@@ -477,9 +550,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CleanupAfterRun();
         }
 
+        private static void CloseFx()
+        {
+            try { _fx?.Close(); } catch (Exception ex) { Log.Debug("Chaos FX close: {E}", ex.Message); }
+            _fx = null;
+        }
+
         private static void CleanupAfterRun()
         {
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
+            CloseFx();
             _runTimer = null;
             _hud = null;
             _overlay = null;

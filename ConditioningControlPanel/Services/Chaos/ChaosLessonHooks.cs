@@ -32,9 +32,6 @@ public static class ChaosLessonHooks
     /// every 250ms; a too-fresh sample can't witness real movement).</summary>
     private const double PULL_SAMPLE_MIN_AGE_SEC = 0.15;
     private const double PULL_SAMPLE_MAX_AGE_SEC = 0.60;
-    /// <summary>last_breath: the channel must have STARTED with at most this much fuse left
-    /// (the same brink signal "playing with fire" judges — DefuseJudgeFuseSec).</summary>
-    private const double LAST_BREATH_BRINK_SEC = 0.8;
     /// <summary>slow_fuses: stale-hold clamp — a channel can't honestly run much past the hold.</summary>
     private const double CHANNEL_MAX_SEC = ChaosTuning.DEFUSE_HOLD_MS / 1000.0 + 0.25;
     // blindfold: estimated on-screen lifetime per payload family (the heavy ones — video,
@@ -56,8 +53,7 @@ public static class ChaosLessonHooks
     private static DateTime? _channelStartUtc;                                    // slow_fuses / time held
     private static double _channelFraction;                                       // sub-second tick remainder
     private static DateTime _busyUntilUtc = DateTime.MinValue;                    // blindfold derive
-    private static int _loopDefuses;                                              // snap_field per-loop
-    // silk_touch's per-loop flag lives in Core ChaosRunLessons (shared with the Avalonia head).
+    // snap_field's per-loop count, last_breath and silk_touch's per-loop flag live in Core ChaosRunLessons (shared with the Avalonia head).
 
     /// <summary>Fresh descent: clear every per-run tracker (nothing leaks across runs).</summary>
     public static void OnRunStarted()
@@ -69,7 +65,6 @@ public static class ChaosLessonHooks
         _channelStartUtc = null;
         _channelFraction = 0;
         _busyUntilUtc = DateTime.MinValue;
-        _loopDefuses = 0;
         ChaosRunLessons.OnRunStarted();
     }
 
@@ -151,15 +146,8 @@ public static class ChaosLessonHooks
     {
         try
         {
-            if (viaChannel)
-            {
-                EndChannel();
-                // last_breath: the hold STARTED on the brink (DefuseJudgeFuseSec is the
-                // channel-start fuse for channel defuses — the same playing-with-fire signal).
-                if (fuseSecLeft <= LAST_BREATH_BRINK_SEC) ChaosLessons.Tick("last_breath");
-            }
-            _loopDefuses++;
-            ChaosLessons.RaiseTo("snap_field", _loopDefuses);
+            if (viaChannel) EndChannel();
+            ChaosRunLessons.OnDefuseCompleted(fuseSecLeft, viaChannel);   // last_breath / snap_field
             if (!ChaosLessons.IsComplete("blindfold") && IsScreenBusy()) ChaosLessons.Tick("blindfold");
         }
         catch (Exception ex) { App.Logger?.Debug("ChaosLessonHooks.OnDefuseCompleted: {E}", ex.Message); }
@@ -190,11 +178,7 @@ public static class ChaosLessonHooks
     public static void OnDetonation() => Safe(ChaosRunLessons.OnDetonation);
 
     /// <summary>A loop (wave) finished: judge silk_touch, reset the per-loop tallies.</summary>
-    public static void OnLoopCompleted()
-    {
-        ChaosRunLessons.OnLoopCompleted();
-        _loopDefuses = 0;
-    }
+    public static void OnLoopCompleted() => ChaosRunLessons.OnLoopCompleted();
 
     /// <summary>The descent ended. <paramref name="ranFullCourse"/> = the clock ran out (a quit
     /// mid-fall still pays drops, but doesn't teach end-of-run lessons or count its part-loop).</summary>
@@ -203,7 +187,6 @@ public static class ChaosLessonHooks
         try
         {
             EndChannel();   // a hold can be live at the buzzer
-            if (ranFullCourse) _loopDefuses = 0;   // the final loop ends at the buzzer
             ChaosRunLessons.OnRunCompleted(shieldsLeft, difficulty, ranFullCourse);
         }
         catch (Exception ex) { App.Logger?.Debug("ChaosLessonHooks.OnRunCompleted: {E}", ex.Message); }

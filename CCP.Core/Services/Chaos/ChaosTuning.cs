@@ -91,7 +91,7 @@ public static class ChaosTuning
     /// <summary>Fuse remaining (ms) at which the ring starts flashing yellow↔red.</summary>
     public const double RING_FLASH_FROM_MS = 2400;
     /// <summary>Fuse remaining (ms) at which the ring goes solid red — kept in step with
-    /// the 0.8s brink signal (ChaosLessonHooks.LAST_BREATH_BRINK_SEC / Last Breath max).</summary>
+    /// the 0.8s brink signal (ChaosRunLessons.LAST_BREATH_BRINK_SEC / Last Breath max).</summary>
     public const double RING_BRINK_MS = 800;
 
     // ---- The Chaperone: a live bubble shielded by an orbiting escort treat ----
