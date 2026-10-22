@@ -104,6 +104,32 @@ public sealed class ContentPackStoreTests : IDisposable
     }
 
     [Fact]
+    public void VideoDecryptStreamsToTempWithoutWholeFileManagedCopies()
+    {
+        WritePack(_root, "p1", "One", ("a.mp4", "video"));
+        var store = NewStore();
+        var entry = Assert.Single(store.GetPackFiles("p1"));
+        var source = store.GetEncryptedPath("p1", entry)!;
+        var plain = new byte[8 * 1024 * 1024];
+        new Random(17).NextBytes(plain);
+        File.WriteAllBytes(source, PackEncryptionService.Encrypt(plain));
+        // Warm the shared crypto buffer pool; measure what the store caller allocates.
+        PackEncryptionService.DecryptFileTo(source, Stream.Null);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var temp = store.GetPackFileTempPath("p1", entry);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.NotNull(temp);
+        try
+        {
+            Assert.Equal(plain, File.ReadAllBytes(temp!));
+            Assert.True(allocated < 4 * 1024 * 1024, $"Decrypt allocated {allocated:N0} bytes for an 8 MB video");
+            Assert.True(store.TryGetSourceKey(temp!, out _));
+        }
+        finally { store.DeleteTempFile(temp!); }
+        Assert.False(File.Exists(temp));
+    }
+
+    [Fact]
     public void DecryptToTemp_IsAFreshPathEachTime_ButOneSourceIdentity()
     {
         var (_, plain) = WritePack(_root, "p1", "One", ("a.png", "image"), ("b.png", "image"));

@@ -294,12 +294,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 return "Say the phrase out loud instead of typing it (offline mic). Falls back to typing if no mic.";
             var folder = System.IO.Path.Combine(CorePaths.UserData, "Models", "vosk");
             if (CoreSpeech.IsAvailable)
-                return "On — speak the phrase to dismiss the card. Typing stays available if the mic can't hear you.";
+                return "On. Speak the phrase to dismiss the card. Typing stays available if the mic can't hear you.";
             if (!CoreSpeech.HasCaptureDevice)
-                return "No microphone detected — lock cards will use typing until one is connected.";
+                return "No microphone detected. Lock cards will use typing until one is connected.";
             if (CoreSpeech.ModelStatus == CoreSpeechModelStatus.LoadFailed)
-                return $"Speech model found but it would not load — remove any extra model you added under {folder}, then restart.";
-            return $"Speech model not installed yet — lock cards will use typing until it is. Unzip vosk-model-small-en-us-0.15 into {folder}";
+                return $"Speech model found but it would not load. Remove any extra model you added under {folder}, then restart.";
+            return $"Speech model not installed yet. Lock cards will use typing until it is. Unzip vosk-model-small-en-us-0.15 into {folder}";
         }
 
         private async void BtnManagePhrases_Click(object? sender, RoutedEventArgs e)

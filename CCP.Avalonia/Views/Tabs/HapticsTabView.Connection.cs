@@ -221,6 +221,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 await ShowAsync("label_test_failed", Loc.Get("msg_haptic_test_failed_vpn"));
             else if (result == HapticTestResult.NotConnected)
                 await ShowAsync("label_not_connected", Loc.Get("msg_connect_to_a_device_first"));
+            else NoteTestWhileHapticsOff();
+        }
+
+        private void NoteTestWhileHapticsOff()
+        {
+            if (Haptics?.IsMasterOff != true) return;
+            // After the test's activity event, matching WPF's queued status message.
+            Dispatcher.UIThread.Post(() => SetKey(TxtHapticActivity, "haptics_test_while_off"));
         }
 
         private DispatcherTimer? _intensityDebounce;

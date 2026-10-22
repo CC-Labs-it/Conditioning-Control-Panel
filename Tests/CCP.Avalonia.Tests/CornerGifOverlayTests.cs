@@ -44,12 +44,14 @@ public sealed class CornerGifOverlayTests
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
             var saved = (s.CornerGifOverlays, s.PanicKeyEnabled, s.PanicKey);
             var handler = CoreCornerGif.RefreshHandler;
+            var engineProvider = CoreSession.IsEngineRunningProvider;
+            CoreSession.IsEngineRunningProvider = () => true;
             var clock = new SteppedClock();
             var shell = new MainShellWindow();
             CornerGifWindow? dialog = null;
@@ -122,12 +124,64 @@ public sealed class CornerGifOverlayTests
                 CornerGifOverlay.ManualFramesForTests = false;
                 CornerGifOverlay.Clock = TimeProvider.System;
                 CoreCornerGif.RefreshHandler = handler;
+                CoreSession.IsEngineRunningProvider = engineProvider;
                 (s.CornerGifOverlays, s.PanicKeyEnabled, s.PanicKey) = saved;
                 shell.Close();
                 Directory.Delete(dir, true);
             }
         });
     }
+
+    [Fact]
+    public Task EnabledSlotStaysDownUntilEngineRunsAndStopCancelsQueuedWork() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
+        var provider = CoreSession.IsEngineRunningProvider;
+        var session = CoreSession.IsSessionRunningProvider;
+        var settings = CoreSettings.Current.CornerGifOverlays;
+        var dir = Directory.CreateTempSubdirectory("ccp-corner-engine-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        var shell = new MainShellWindow();
+        var running = false;
+        shell.Show();
+        try
+        {
+            CornerGifOverlay.StopAll();
+            CornerGifOverlay.SkipPlatformChecksForTests = true;
+            CornerGifOverlay.ManualFramesForTests = true;
+            CoreSession.IsEngineRunningProvider = () => running;
+            CoreSession.IsSessionRunningProvider = () => false;
+            CoreSettings.Current.CornerGifOverlays = new() { new() { Enabled = true, GifPath = gif } };
+            CornerGifOverlay.RestoreOnStartup(shell);
+            await Settle();
+            Assert.False(CornerGifOverlay.HasActiveOverlays);
+            running = true;
+            CornerGifOverlay.Refresh(shell);
+            await Settle();
+            Assert.Single(CornerGifOverlay.ShownSlots);
+            running = false;
+            shell.OnEngineStopped();
+            await Settle();
+            Assert.False(CornerGifOverlay.HasActiveOverlays);
+            Assert.True(CoreSettings.Current.CornerGifOverlays[0].Enabled);
+            CornerGifOverlay.Refresh(shell, 0); // a stopped-engine slider edit must not reopen it
+            await Settle();
+            Assert.False(CornerGifOverlay.HasActiveOverlays);
+        }
+        finally
+        {
+            CornerGifOverlay.StopAll();
+            CoreSession.IsEngineRunningProvider = provider;
+            CoreSession.IsSessionRunningProvider = session;
+            CoreSettings.Current.CornerGifOverlays = settings;
+            CornerGifOverlay.SkipPlatformChecksForTests = false;
+            CornerGifOverlay.ManualFramesForTests = false;
+            shell.Close();
+            Directory.Delete(dir, true);
+        }
+    });
 
     /// <summary>P04: the seam is seeded from App startup, not only by this test.</summary>
     [Fact]

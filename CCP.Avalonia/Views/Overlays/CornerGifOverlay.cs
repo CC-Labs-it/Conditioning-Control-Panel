@@ -69,6 +69,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static long NowMs => (long)Clock.GetElapsedTime(0).TotalMilliseconds;
 
+        // ponytail: this head has no session-scoped corner GIF yet; the shared rule can yield
+        // to that owner when it is ported (the existing shell-presets follow-up).
+        private static bool Admitted(CornerGifOverlaySetting? setting) =>
+            CornerGifPlanner.AllowStandaloneCornerGif(setting?.Enabled == true, false,
+                CoreSession.IsEngineRunning || CoreSession.IsSessionRunning);
+
         /// <summary>WPF App.xaml.cs:480: the <see cref="CoreCornerGif"/> surface seam, on the UI thread.</summary>
         internal static void Seed(Func<Visual?> host) =>
             CoreCornerGif.RefreshHandler = index => Dispatcher.UIThread.Post(() =>
@@ -89,7 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 for (int i = 0; i < overlays.Count; i++)
                 {
                     var o = overlays[i];
-                    if (o is not { Enabled: true }) continue;
+                    if (!Admitted(o)) continue;
                     if (queued >= CornerGifPlanner.MaxOverlays)
                     {
                         Log.Warning("CornerGif: more than {Max} enabled corner-GIF slots - ignoring the rest", CornerGifPlanner.MaxOverlays);
@@ -103,7 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             CloseSlot(index);
             if (overlays == null || index >= overlays.Count || index >= CornerGifPlanner.MaxOverlays) return;
-            if (overlays[index] is { Enabled: true } setting) QueueShow(index, setting);
+            if (overlays[index] is { } setting && Admitted(setting)) QueueShow(index, setting);
         }
 
         /// <summary>WPF StopAll: every window closes and every queued realization is cancelled. Panic,
@@ -194,6 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void Realize(int index, CornerGifOverlaySetting setting)
         {
             if (_host is not { } host) return;
+            if (!Admitted(setting)) return;
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
                 Log.Debug("CornerGif: no composited click-through overlay on this platform, so no corner GIF");
@@ -233,7 +240,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static async Task DecodeThenShow(int index, int seq, string path, PixelRect bounds, double opacity)
         {
             var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, Math.Max(bounds.Width, bounds.Height)));
-            if (Seq.GetValueOrDefault(index) != seq || frames.Count == 0)
+            var slots = CoreSettings.Current.CornerGifOverlays;
+            var admitted = slots != null && index < slots.Count && Admitted(slots[index]);
+            if (Seq.GetValueOrDefault(index) != seq || frames.Count == 0 || !admitted)
             {
                 if (frames.Count == 0) Log.Warning("CornerGif: no frames decoded from {Path}", path);
                 foreach (var f in frames) f.Dispose();

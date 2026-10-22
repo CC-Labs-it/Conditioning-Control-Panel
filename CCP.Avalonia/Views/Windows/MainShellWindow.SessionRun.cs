@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     StartConditioningTimeTracker();   // ... and StartEngine :423
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);
+                    CornerGifOverlay.Refresh(this);
                     Log.Information("Started session: {Name} ({Difficulty}, +{XP} XP)", session.Name, session.Difficulty, session.BonusXP);
                 }
                 catch (Exception ex)
@@ -113,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     r.Resume();
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);
+                    CornerGifOverlay.Refresh(this);
                     SetPauseButton(false);
                     OnSessionTick();
                 });

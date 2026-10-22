@@ -27,6 +27,14 @@ public class LockCardRepeatShapeTests
         => Assert.Equal(3, Default(roll));
 
     [Fact]
+    public void LengthBudgetStillCountsOptionalSentencePunctuation()
+    {
+        const string phrase = "PROCESS. COMPLY. REPEAT.";
+        Assert.Equal(phrase.Length, ConditioningControlPanel.Services.LockCardText.TypedLength(phrase));
+        Assert.Equal(10, ResolveRepeats(-1, phrase, false, 1, 3, true, phrase.Length * 10, 0, 0.5));
+    }
+
+    [Fact]
     public void ExplicitRepeatsWinOverEveryMode()
     {
         // A Goon round, MantraLockScreenCommand and the AI all pass an exact count. Neither new

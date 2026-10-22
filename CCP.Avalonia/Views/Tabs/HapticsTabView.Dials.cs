@@ -123,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (Haptics is not { } h || sender is not Button { Tag: string deviceKey }) return;
             if (!await h.TestDeviceAsync(deviceKey)) SetKey(TxtHapticActivity, "haptics_test_toy_failed");
+            else NoteTestWhileHapticsOff();
         }
 
         /// <summary>The audio-sync tuning sliders (and Advanced) only mean anything while that layer is on.</summary>
@@ -378,10 +379,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var deviceKey = (CmbPatternToy.SelectedItem as ComboBoxItem)?.Tag as string;
             try
             {
-                if (string.IsNullOrEmpty(deviceKey))
-                    await h.PlayPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode, priority: 5);
-                else
-                    await h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500);
+                var ok = string.IsNullOrEmpty(deviceKey)
+                    ? await h.TestPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode)
+                    : await h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500);
+                if (ok) NoteTestWhileHapticsOff();
             }
             catch (Exception ex) { Log.Warning(ex, "Haptics pattern play failed"); }
         }

@@ -243,6 +243,6 @@ namespace ConditioningControlPanel.Services
         /// refreshes the slots when the engine starts and closes them when it stops.</para>
         /// </summary>
         internal static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive, bool engineRunning)
-            => slotEnabled && engineRunning && !sessionCornerGifActive;
+            => CornerGifPlanner.AllowStandaloneCornerGif(slotEnabled, sessionCornerGifActive, engineRunning);
     }
 }

@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Services
         private readonly Action _save;
         private readonly Func<string, string> _loadManifest;
         private readonly Func<string, byte[]> _decryptFile;
+        private readonly Action<string, string> _decryptFileToFile;
         private readonly Func<string>? _tempDir;
         private readonly object _gate = new();
         private readonly Dictionary<string, InstalledPackManifest> _manifests = new(StringComparer.Ordinal);
@@ -75,6 +76,11 @@ namespace ConditioningControlPanel.Services
             _save = save ?? (() => CoreSettings.Save());
             _loadManifest = loadManifest ?? PackEncryptionService.LoadEncryptedManifest;
             _decryptFile = decryptFile ?? PackEncryptionService.DecryptFile;
+            // Preserve the existing byte-decrypt seam for in-process fake stores; real media
+            // always streams through the shared encryption implementation (#1441 / #1442).
+            _decryptFileToFile = decryptFile == null
+                ? PackEncryptionService.DecryptFileToFile
+                : (source, destination) => File.WriteAllBytes(destination, decryptFile(source));
             _tempDir = tempDir;
             Rescan();
         }
@@ -364,7 +370,7 @@ namespace ConditioningControlPanel.Services
                 var encrypted = GetEncryptedPath(packId, file);
                 if (encrypted == null) return null;
                 var temp = Path.GetFullPath(Path.Combine(MediaTempDir(), $"ccp_temp_{Guid.NewGuid():N}{file.Extension}"));
-                File.WriteAllBytes(temp, _decryptFile(encrypted));
+                _decryptFileToFile(encrypted, temp);
                 _tempIdentity[temp] = SourceKey(packId, file);
                 return temp;
             }

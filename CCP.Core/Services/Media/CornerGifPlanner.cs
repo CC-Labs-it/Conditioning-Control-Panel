@@ -12,15 +12,18 @@ namespace ConditioningControlPanel.Services
     /// head.
     ///
     /// <para>What is deliberately NOT here: the layered / click-through window itself, the GIF
-    /// decode, the DPI read and the screen enumeration - all per-platform - and the ADMISSION rule
-    /// ("may a standalone slot realize at all?"), which stays beside the session-side rule it must
-    /// never disagree with, in the head's <c>CornerGifMedia</c>.</para>
+    /// decode, the DPI read and the screen enumeration - all per-platform.</para>
     ///
     /// <para>Pure and static: no clock, no settings read, no I/O beyond a <c>File.Exists</c> probe
     /// on paths the caller hands in. Every value it returns is finite, or null.</para>
     /// </summary>
     public static class CornerGifPlanner
     {
+        /// <summary>A standalone slot belongs to a running engine/session, and yields while a
+        /// session owns the corner. Both heads use this admission rule (#1399).</summary>
+        public static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive, bool engineRunning)
+            => slotEnabled && engineRunning && !sessionCornerGifActive;
+
         /// <summary>Hard cap on simultaneous overlays, independent of what settings.json holds -
         /// the config UI only ever writes two slots, but a hand-edited or migrated file must not be
         /// able to spawn an unbounded number of topmost layered windows.</summary>
