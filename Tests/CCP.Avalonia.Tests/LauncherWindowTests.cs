@@ -114,6 +114,17 @@ public sealed class LauncherWindowTests
     }, pumpUntilIdle: false);
 
     [Fact]
+    public void HideDuringPanelFade_StillOpensTheLauncher() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        LauncherWindow.BackToLauncher(shell);
+        shell.StepLauncherFade(0.09);
+        shell.Hide(); // WPF guard: the pending step still runs
+        Assert.True(LauncherWindow.Instance!.IsVisible);
+        Assert.Equal(1, shell.FindControl<Grid>("RootGrid")!.Opacity);
+    }, pumpUntilIdle: false);
+
+    [Fact]
     public void LockdownStartingDuringPanelFade_KeepsThePanelVisible() => Run(shell =>
     {
         CoreSettings.Current.MotionLevel = MotionLevel.Full;

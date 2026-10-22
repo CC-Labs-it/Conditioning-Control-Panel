@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using Serilog;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
@@ -10,9 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
     // WPF MainWindow.Launcher.cs: the panel fades down for 180 ms, up for 260 ms.
-    // A finite UI clock owns only this transition; no idle composition or Transform animation.
-    private readonly DispatcherTimer _launcherFadeClock = new(DispatcherPriority.Render)
-        { Interval = TimeSpan.FromMilliseconds(1000.0 / 30) };
+    // Rides the window's shared 30 fps frame beat (FrameClock) only while the transition runs.
+    private FrameClock _launcherFadeClock = null!;
     private readonly DispatcherTimer _launcherFadeGuard = new(DispatcherPriority.Normal);
     private Action? _launcherFadeThen;
     private double _launcherFadeElapsed, _launcherFadeSeconds, _launcherFadeFrom, _launcherFadeTo;
@@ -21,6 +21,7 @@ public partial class MainShellWindow
 
     private void HookLauncherPanelFade()
     {
+        _launcherFadeClock = new FrameClock(this) { Interval = TimeSpan.FromSeconds(1.0 / 30) };
         // WPF guard: complete even when render-priority work is starved.
         _launcherFadeGuard.Tick += (_, _) => StepLauncherFade(_launcherFadeSeconds);
         _launcherFadeClock.Tick += (_, _) =>
@@ -32,7 +33,10 @@ public partial class MainShellWindow
         };
         PropertyChanged += (_, e) =>
         {
-            if (e.Property == IsVisibleProperty && !IsVisible) RestoreLauncherPanelOpacity();
+            if (e.Property != IsVisibleProperty || IsVisible) return;
+            // WPF MainWindow.Launcher.cs guard: a hide mid-fade still runs the pending step (opens the launcher).
+            StepLauncherFade(_launcherFadeSeconds);
+            RestoreLauncherPanelOpacity();
         };
         Closed += (_, _) => RestoreLauncherPanelOpacity();
     }

@@ -103,6 +103,7 @@ public sealed class NavSearchTests
         try
         {
             SettingsPaletteWindow.Navigate(shell, SettingsPaletteIndex.ById("chrome.cclabs")!);
+            shell.StepLauncherFade(1); // with motion on the door first fades the panel
             Dispatcher.UIThread.RunJobs();
             Assert.False(shell.IsVisible);
             Assert.True(LauncherWindow.Instance?.IsVisible);
