@@ -4,6 +4,8 @@
  * Bloom reads the raw scene and is added AFTER the screen effect, so rails and the racing line glow
  * through every effect (never fully blind). Every number that moves here comes from FxState, which
  * already asked photosafe and Gentle; fx.screen (fx/effects.js) drives the screen effect.
+ * Polish 2 (perf): MSAA lives on the scene pass only (Q.antialias, 4 samples); the canvas gets the one
+ * composite quad and needs none. compileAsync() builds the scene pass pipelines for its own target.
  */
 import { RenderPipeline, Color } from 'three/webgpu';
 import { pass, uniform, screenUV, smoothstep, mix, vec3, vec4, clamp } from 'three/tsl';
@@ -21,7 +23,8 @@ const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, pre
 export function createPost(three, scene, camera) {
   const pipe = new RenderPipeline(three);
   const u = { strength: uniform(LOOK.bloomStrength), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0) };
-  const col = pass(scene, camera).getTextureNode('output');
+  const scenePass = pass(scene, camera, { samples: Q.antialias ? 4 : 0 });
+  const col = scenePass.getTextureNode('output');
   let screen = null;
   try { screen = screenMod ? screenMod.createScreenFx(three) : null; } catch (e) { console.warn('[glassroad/post] screenfx failed: ' + (e && e.message)); }
   const base = screen ? screen.node(col) : col.rgb;
@@ -48,6 +51,9 @@ export function createPost(three, scene, camera) {
 
   return {
     pipe,
+    antialias: Q.antialias,
+    /** Compile every visible scene object for the scene pass target (no draw). */
+    compileAsync() { return scenePass.compileAsync(three); },
     /** Call after a quality step. */
     retier() { if (builtBloom !== Q.bloom) build(); else if (bloomNode) bloomNode.setResolutionScale(Q.bloomScale); },
     update(fx, dt = 0, aspect = 16 / 9) {

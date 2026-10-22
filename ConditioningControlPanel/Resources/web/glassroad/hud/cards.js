@@ -11,7 +11,7 @@
  * the results wear the SVG kit when it has loaded (the `kit-*` classes on #card).
  */
 import { formatTime, ordinal, pauseLine, resultRows } from './format.js';
-import { cleanOptions, loadOptions, saveOptions, stepVolume } from './options.js';
+import { cleanOptions, loadOptions, saveOptions, stepOption, cycleOption, choiceLabel, STEER_SENS } from './options.js';
 import { controlRows, deviceView, pauseHint } from './labels.js';
 import { PROFILES, nextProfile } from '../input/padmap.js';
 
@@ -19,6 +19,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
 
 const VOL_ROWS = [['volMaster', 'Volume'], ['volMusic', 'Music'], ['volSfx', 'Effects']];
+/** Display rows (polish 2): a button that cycles its values, with a short hint. */
+const CYCLE_ROWS = [['frameCap', 'Frame cap', 'Lower keeps a slow PC steady'], ['renderScale', 'Render scale', 'Auto drops pixels to hold the frame rate'],
+  ['quality', 'Quality', 'Auto follows your PC']];
 
 export function createCards(card, { doc = globalThis.document, emit, devices = null, kit = null } = {}) {
   const body = card.querySelector('.card-body');
@@ -95,8 +98,14 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     return '<div class="c-opts">' +
       tog('gentlePreview', 'Gentle preview', opts.gentlePreview, g ? 'Set in CCP, stays on' : 'Softer effects, no flicker', g) +
       tog('assist', 'Steering assist', opts.assist, 'Soft rails keep you on', false) +
+      '<label class="c-opt"><span>Steering<small>How hard the wheel turns</small></span><input type="range" min="' + STEER_SENS.min + '" max="' +
+        STEER_SENS.max + '" step="' + STEER_SENS.step + '" data-key="steerSens" value="' + opts.steerSens + '" aria-label="Steering"></label>' +
       VOL_ROWS.map(([key, label]) => '<label class="c-opt"><span>' + label + '</span><input type="range" min="0" max="1" step="0.05" data-key="' +
-        key + '" value="' + opts[key] + '" aria-label="' + label + '"></label>').join('') + '</div>';
+        key + '" value="' + opts[key] + '" aria-label="' + label + '"></label>').join('') +
+      CYCLE_ROWS.map(([key, label, hint]) => '<div class="c-opt"><span>' + label + '<small>' + hint + '</small></span>' +
+        btn('cycle', choiceLabel(key, opts[key]), 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"') + '</div>').join('') +
+      tog('shadows', 'Shadows', opts.shadows, 'Off is lighter on the GPU', false) +
+      tog('showFps', 'Show fps', opts.showFps, 'A small counter in the corner', false) + '</div>';
   }
 
   /** The controls table for the device used last, plus the layout button for a non-standard pad. */
@@ -154,6 +163,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       el.textContent = on ? 'On' : 'Off'; el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on));
       return;
     }
+    if (a === 'cycle') { cycle(el, 1); return; }
     if (a === 'online') { note.textContent = 'Online opens later'; emit('online', {}); return; }
     if (a === 'layout') {
       const pad = devices && devices.pad;
@@ -168,6 +178,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     }
     if (a === 'back' && (kind === 'options' || kind === 'controls')) { back(); return; }
     emit(a, a === 'back' ? { from: kind } : {});
+  }
+
+  function cycle(el, dir) {
+    const key = el.dataset.key;
+    setOption(key, cycleOption(key, opts[key], dir));
+    el.textContent = choiceLabel(key, opts[key]);
   }
 
   function back() {
@@ -203,13 +219,15 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       return;
     }
     if ((dir === 'left' || dir === 'right') && cur && cur.type === 'range') {
-      cur.value = String(stepVolume(Number(cur.value), dir === 'left' ? -1 : 1));
+      cur.value = String(stepOption(cur.dataset.key, Number(cur.value), dir === 'left' ? -1 : 1));
       setOption(cur.dataset.key, Number(cur.value));
       return;
     }
+    if ((dir === 'left' || dir === 'right') && cur && cur.dataset && cur.dataset.act === 'cycle') { cycle(cur, dir === 'left' ? -1 : 1); return; }
     const step = dir === 'up' || dir === 'left' ? -1 : 1;
     const next = list[i < 0 ? 0 : (i + step + list.length) % list.length];
     next.focus?.({ preventScroll: true });
+    if (kind === 'options') next.scrollIntoView?.({ block: 'nearest' });   // the options list scrolls in the card
   }
 
   doc.addEventListener('keydown', (e) => {
