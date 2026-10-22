@@ -2479,3 +2479,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaster-help-price-edit: +693
 - Chaster tab: menu boards (rows write ChasterPrices, red flash switch), how-it-works card, menu hint, Reset times and a per-row price editor on Core TabPriceEdit. Esc belongs to the box (Windows only; X11 has no claim yet), and a starting lock closes and freezes it.
 - `ChasterMenuTests` (2 tests, 6 breaks each turned a test red); the render frame shows the menu states; views-chaster-help-price-edit -> wired.
+
+## avalonia-port/marquee-reads: +490
+- Home marquee Barnum interludes are wired: cadence, split, picker and banner pool are in Core; only one act (NeonWarmUp, fade path) is ported. Row shell-marquee-reads missing -> stub.
+- The loop clock stops while Home is hidden (as in WPF). Rest of the acts and FX: marquee-reads-b.
