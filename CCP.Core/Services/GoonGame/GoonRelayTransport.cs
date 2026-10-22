@@ -1,4 +1,5 @@
 using System;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -85,7 +86,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
             var invite = await _signaling.CreateInviteAsync(
-                App.Settings?.Current?.UserDisplayName ?? "", preferRelay: true, _cts.Token).ConfigureAwait(false);
+                CoreSettings.Current.UserDisplayName ?? "", preferRelay: true, _cts.Token).ConfigureAwait(false);
 
             if (invite == null)
             {
@@ -108,7 +109,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
             var join = await _signaling.JoinAsync(
-                inviteCode, App.Settings?.Current?.UserDisplayName ?? "", _cts.Token).ConfigureAwait(false);
+                inviteCode, CoreSettings.Current.UserDisplayName ?? "", _cts.Token).ConfigureAwait(false);
 
             if (join == null)
             {
@@ -211,7 +212,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             catch (OperationCanceledException) { /* closing */ }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[{Tag}] Relay loop died", Tag);
+                Log.Error(ex, "[{Tag}] Relay loop died", Tag);
                 LastError = "relay_error";
                 SetState(GoonTransportState.Disconnected, "relay_error");
             }
@@ -227,7 +228,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 _backoffSeconds = _backoffSeconds <= 0
                     ? RelayMinGapMs / 1000.0 * 2
                     : Math.Min(_backoffSeconds * 2, BackoffMaxSeconds);
-                App.Logger?.Warning("[{Tag}] Relay rate limited (429) — backing off to {Seconds}s", Tag, _backoffSeconds);
+                Log.Warning("[{Tag}] Relay rate limited (429) — backing off to {Seconds}s", Tag, _backoffSeconds);
             }
 
             if (_signaling.LastError == GoonSignalingClient.ErrorExpired ||
@@ -269,7 +270,7 @@ namespace ConditioningControlPanel.Services.GoonGame
 
             if (_outbox.Count >= OutboxMax)
             {
-                App.Logger?.Warning("[{Tag}] Outbox full ({Max}) — dropping a frame", Tag, OutboxMax);
+                Log.Warning("[{Tag}] Outbox full ({Max}) — dropping a frame", Tag, OutboxMax);
                 return Task.CompletedTask;
             }
 

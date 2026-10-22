@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.GoonGame
 {
@@ -62,7 +63,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (System.Text.Encoding.UTF8.GetByteCount(json) > GoonWire.MaxWireBytes)
             {
                 // Our own bug, not the peer's. Dropping beats wedging the channel.
-                App.Logger?.Error("[{Tag}] Refusing to send oversize {Type} ({Chars} chars)",
+                Log.Error("[{Tag}] Refusing to send oversize {Type} ({Chars} chars)",
                     Tag, message.Type, json.Length);
                 return;
             }
@@ -95,9 +96,9 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
 
             if (reason != null)
-                App.Logger?.Information("[{Tag}] State -> {State} ({Reason})", Tag, next, reason);
+                Log.Information("[{Tag}] State -> {State} ({Reason})", Tag, next, reason);
             else
-                App.Logger?.Information("[{Tag}] State -> {State}", Tag, next);
+                Log.Information("[{Tag}] State -> {State}", Tag, next);
 
             GoonDispatch.Post(() => StateChanged?.Invoke(this, next));
         }
@@ -111,7 +112,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 {
                     var ok = await MatchClock.SyncAsync(ct).ConfigureAwait(false);
                     if (!ok)
-                        App.Logger?.Warning("[{Tag}] Initial clock sync did not converge — retrying once", Tag);
+                        Log.Warning("[{Tag}] Initial clock sync did not converge — retrying once", Tag);
                     else
                         return;
 
@@ -121,7 +122,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    App.Logger?.Error(ex, "[{Tag}] Clock sync threw", Tag);
+                    Log.Error(ex, "[{Tag}] Clock sync threw", Tag);
                 }
             }, ct);
         }
@@ -135,7 +136,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (_disposed) return;
             _disposed = true;
             try { DisposeCore(); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "[{Tag}] Dispose failed", Tag); }
+            catch (Exception ex) { Log.Warning(ex, "[{Tag}] Dispose failed", Tag); }
             try { MatchClock.Dispose(); } catch { }
             MessageReceived = null;
             StateChanged = null;

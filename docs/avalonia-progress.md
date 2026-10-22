@@ -2540,3 +2540,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/chaos-bubble-host: +1
 - chaos-bubble-host row missing -> stub: ambient half mapped onto BubbleOverlay; chaos bubbles, flash/subliminal hosting, z fixer and the shared-host toggle listed as missing (pending lane chaos-bubble-field-b).
+
+## avalonia-port/goongame-core-d: +194
+- Cloud session unit (goongame-core-d); reviewed and gated locally.
