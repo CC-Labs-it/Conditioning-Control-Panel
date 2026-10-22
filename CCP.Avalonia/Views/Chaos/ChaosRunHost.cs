@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -59,6 +60,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired;
+        private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
+        internal static IReadOnlyList<ChaosToyButtonWindow> ToyButtons => _toyButtons;
 
         internal static ChaosRunState? State => _state;
         internal static ChaosOverlayWindow? Overlay => _overlay;
@@ -69,6 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
         internal static bool IsManuallyPaused => _manualPaused;
+        /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
+        internal static void StopTimerForTests() => _runTimer?.Stop();
 
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
@@ -96,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>The countdown's completion. WPF BeginRun also applies the start boon and
-        /// lifetime boons and builds the toys; only the clock half is here.</summary>
+        /// lifetime boons and builds the toys; the clock, lifetime boons and toy buttons are here.</summary>
         internal static void BeginRun()
         {
             if (!_active || _state == null || _spawning) return;
@@ -112,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             _state.StartShields = _state.Shields;
+            StartToys();
             _waveDetonatedAt = _state.Detonated;
             _spawning = true;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
@@ -227,6 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
+            TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
             {
@@ -344,6 +351,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawning = false;
             _runTimer?.Stop();
             EndField();
+            StopToys();
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF EndRun :3241
 
             var (baseXp, skillMult, finalXp) = ChaosPayout.Xp(_state.RunDurationSec,
@@ -377,6 +385,84 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 baseXp, skillMult, finalXp, sparksEarned);
         }
 
+        /// <summary>WPF BeginRun :483-496: build the toys, listen for their keys, park one hero button
+        /// per toy. The keys ride the panic key's own listener (X11PanicKey / Win32PanicKey), which
+        /// hands the press to panic first.</summary>
+        private static void StartToys()
+        {
+            if (_state == null) return;
+            var s = CoreSettings.HasProvider ? CoreSettings.Current : null;
+            ChaosToyRules.Build(_state, ChaosMeta.SlotsFor(ChaosBoonCategory.Skill), ChaosMeta.IsBoonActive,
+                s?.ChaosAccessoryKey1, s?.ChaosAccessoryKey2);
+            var state = _state;
+            X11PanicKey.ToyKeys = () => ToyKeyLabels(state);
+            X11PanicKey.ToyKey = key => Dispatcher.UIThread.Post(() => OnToyKey(key));
+            for (int i = 0; i < _state.ActiveToys.Count; i++)
+            {
+                try
+                {
+                    var btn = new ChaosToyButtonWindow(_state.ActiveToys[i], i);
+                    btn.Show();
+                    _toyButtons.Add(btn);
+                }
+                catch (Exception ex) { Log.Debug("Toy button: {E}", ex.Message); }
+            }
+        }
+
+        private static string[] ToyKeyLabels(ChaosRunState state)
+        {
+            var keys = new List<string>();
+            foreach (var t in state.ActiveToys) if (!string.IsNullOrEmpty(t.KeyLabel)) keys.Add(t.KeyLabel);
+            return keys.ToArray();
+        }
+
+        /// <summary>WPF StopKeyHook + CloseToyButtons (EndRun / ForceShutdown / overlay closed). Idempotent.</summary>
+        private static void StopToys()
+        {
+            X11PanicKey.ToyKey = null;
+            X11PanicKey.ToyKeys = null;
+            foreach (var b in _toyButtons.ToArray())
+                try { b.Close(); } catch (Exception ex) { Log.Debug("Toy button close: {E}", ex.Message); }
+            _toyButtons.Clear();
+        }
+
+        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
+        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        private static void TickToys()
+        {
+            if (_state == null) return;
+            foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
+                ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
+            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+        }
+
+        /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
+        internal static void OnToyKey(string key)
+        {
+            if (_state == null) return;
+            var s = CoreSettings.HasProvider ? CoreSettings.Current : null;
+            var toy = ChaosToyRules.Match(_state.ActiveToys, key, s?.PanicKeyEnabled == true, s?.PanicKey);
+            if (toy != null) UseToy(toy);
+        }
+
+        /// <summary>WPF UseToyById: the hero button's click.</summary>
+        internal static void UseToyById(string id)
+        {
+            if (_state == null) return;
+            foreach (var t in _state.ActiveToys)
+                if (t.Id == id) { UseToy(t); return; }
+        }
+
+        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
+        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award wait for the bubble
+        /// field and the payout, which this head's run does not have yet.</summary>
+        private static void UseToy(ChaosToyState toy)
+        {
+            if (_state == null) return;
+            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused);
+            if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+        }
+
         private static void RunAgain()
         {
             _overlay?.Close();   // OnOverlayClosed -> CleanupAfterRun
@@ -402,6 +488,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            StopToys();
             Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175
             ChaosDvdOverlay.CloseActive();   // WPF CleanupAfterRun (:3319), ForceShutdown (:3179)
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330

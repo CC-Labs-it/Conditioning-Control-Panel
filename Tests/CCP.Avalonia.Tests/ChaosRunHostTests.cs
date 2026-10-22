@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using ConditioningControlPanel.Services;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -86,6 +88,99 @@ public sealed class ChaosRunHostTests
             finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask;
         });
+    }
+
+    /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
+    /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
+    /// key's listener; panic closes every button and unhooks the key.</summary>
+    [Fact]
+    public async Task Toy_button_fires_on_click_counts_down_and_panic_closes_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var meta = ChaosMeta.State;
+            int pockets = meta.ToyPockets;
+            bool hadActive = meta.ActiveLifetimeBoons.Contains("vibe_popping");
+            bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("vibe_popping", out int level);
+            var s = CoreSettings.Current;
+            (bool pe, string pk, string k1) = (s.PanicKeyEnabled, s.PanicKey, s.ChaosAccessoryKey1);
+            s.PanicKeyEnabled = true;
+            s.PanicKey = "F8";
+            s.ChaosAccessoryKey1 = "Q";
+            meta.ToyPockets = 1;
+            meta.ActiveLifetimeBoons.Add("vibe_popping");
+            meta.LifetimeBoonLevels["vibe_popping"] = 1;
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();   // P08: only stepped Ticks move the run clock
+                var btn = Assert.Single(ChaosRunHost.ToyButtons);
+                Assert.True(btn.IsVisible);
+                Assert.Equal("ready", btn.Status.Text);
+                Assert.Equal(new[] { "Q" }, ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys!());
+
+                // Hit testing reads the compositor's last frame: wait until a frame with the button is drawn
+                // (one forced tick is not enough once the run opens its other overlay windows).
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                var batch = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(btn)!.Compositor.RequestCompositionBatchCommitAsync();
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (!batch.Rendered.IsCompleted)
+                {
+                    Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never drew the toy button");
+                    global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                }
+                var mid = new Point(btn.Width / 2, btn.Height / 2);
+                btn.MouseDown(mid, global::Avalonia.Input.MouseButton.Left);
+                btn.MouseUp(mid, global::Avalonia.Input.MouseButton.Left);
+                Assert.Equal(20, btn.Toy.CooldownRemainingSec);   // VibePopping's 20 s cooldown
+                Assert.Equal("20s", btn.Status.Text);
+                Ticks(4);   // one run-clock second
+                Assert.Equal("19s", btn.Status.Text);
+
+                ChaosRunHost.OnToyKey("F8");   // the panic key never fires a toy
+                ChaosRunHost.OnToyKey("Q");    // cooling: denied, the cooldown is untouched
+                Assert.Equal(19, btn.Toy.CooldownRemainingSec, 3);
+
+                shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
+                Assert.False(btn.IsVisible);
+                Assert.Empty(ChaosRunHost.ToyButtons);
+                Assert.Null(ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); shell.Close();
+                meta.ToyPockets = pockets;
+                if (!hadActive) meta.ActiveLifetimeBoons.Remove("vibe_popping");
+                if (hadLevel) meta.LifetimeBoonLevels["vibe_popping"] = level; else meta.LifetimeBoonLevels.Remove("vibe_popping");
+                (s.PanicKeyEnabled, s.PanicKey, s.ChaosAccessoryKey1) = (pe, pk, k1);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>The hub offers digit toy keys ("1"-"4"); on the Win32 hook the digit row is D1..D4.</summary>
+    [Fact]
+    public void Win32_hook_fires_a_digit_toy_key()
+    {
+        var fired = new List<string>();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys = () => new[] { "1" };
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey = fired.Add;
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnDown(0x31, DateTime.UtcNow);   // VK '1'
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnUp(0x31);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKey = null;
+            ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys = null;
+        }
+        Assert.Equal(new[] { "1" }, fired);
     }
 
     /// <summary>WPF EndRun (ChaosModeService.cs:3228) closes the braindrain wash itself, so it never sits over the results card.</summary>
