@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var k = screens[primary].Scaling > 0 ? screens[primary].Scaling : 1.0;
-            var targets = PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary)
+            var targets = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary)
                 .Select(i => screens[i]).ToList();
 
             var (minX, minY, maxX, maxY) = Bounds(targets.Select(t => t.Bounds), k);
@@ -423,7 +423,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public FontFamily Family { get; set; } = new("Segoe UI");
         public IBrush Fill { get; set; } = Brushes.White;
         public IBrush Stroke { get; set; } = Brushes.Black;
-        /// <summary>WPF StrokeThickness; null keeps the bouncing text's size-relative stroke.</summary>
+        /// <summary>WPF OutlinedText.StrokeThickness; null keeps the bouncing-text default (FontSize / 22, min 2).</summary>
         public double? StrokeThickness { get; set; }
         public double Pad { get; private set; }
         private Geometry? _geo;

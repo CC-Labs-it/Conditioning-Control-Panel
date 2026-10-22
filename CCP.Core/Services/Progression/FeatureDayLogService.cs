@@ -212,6 +212,15 @@ public class FeatureDayLogService : IDisposable
         lock (_lock) return Log.Days.FirstOrDefault(d => d?.D == dayKey)?.Cm ?? 0;
     }
 
+    /// <summary>Earliest day key (yyyy-MM-dd) with conditioning minutes credited, or null if none: the first
+    /// day the minutes source is known to have run. Days before it read 0 without meaning "idle".</summary>
+    public string? FirstConditioningDay()
+    {
+        lock (_lock)
+            return Log.Days.Where(d => d != null && d.Cm > 0 && !string.IsNullOrEmpty(d.D))
+                .Select(d => d.D).Min(StringComparer.Ordinal);
+    }
+
     #region Persistence
 
     private FeatureDayLog LoadLog()

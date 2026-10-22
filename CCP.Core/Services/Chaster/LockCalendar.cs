@@ -5,8 +5,10 @@ namespace ConditioningControlPanel.Services.Chaster;
 
 /// <summary>One square of the lock calendar. A served day is crossed out, today is the cell
 /// tonight's push lands on, a locked day still waits with its little padlock, and the one
-/// extra cell after the last day is the key. Pure data: the page only draws it.</summary>
-public readonly record struct LockDay(DateTime Date, int DayOfMonth, bool Served, bool Today, bool Locked, bool IsKey, bool Elided);
+/// extra cell after the last day is the key. <see cref="RaffleCounted"/> marks a day the raffle
+/// counted (CCP time landed on the lock that day), so a served day and a counted day never read
+/// as the same thing. Pure data: the page only draws it.</summary>
+public readonly record struct LockDay(DateTime Date, int DayOfMonth, bool Served, bool Today, bool Locked, bool IsKey, bool Elided, bool RaffleCounted = false);
 
 /// <summary>
 /// The lock as a calendar: one cell per day of the lock, first day to last, then the key. A lock
@@ -20,8 +22,13 @@ public static class LockCalendar
     public const int MaxDays = 31;
     public const int Columns = 12;
 
-    public static IReadOnlyList<LockDay> CellsFor(DateTime start, DateTime end, DateTime today)
+    /// <param name="raffleDays">The raffle's counted dates (<see cref="ChasterRaffle.CountedDates"/>),
+    /// matched by date (<see cref="CountsForRaffle"/>).</param>
+    /// <param name="utcNow">The raffle's clock; null = now.</param>
+    public static IReadOnlyList<LockDay> CellsFor(DateTime start, DateTime end, DateTime today,
+        IReadOnlySet<DateTime>? raffleDays = null, DateTime? utcNow = null)
     {
+        var utc = utcNow ?? DateTime.UtcNow;
         var first = start.Date;
         var last = end.Date;
         if (last < first) last = first;
@@ -43,12 +50,18 @@ public static class LockCalendar
                 Today: date == now,
                 Locked: date > now,
                 IsKey: false,
-                Elided: elided && i == 0));
+                Elided: elided && i == 0,
+                RaffleCounted: CountsForRaffle(date, raffleDays, utc)));
         }
         var opens = last.AddDays(1);
         cells.Add(new LockDay(opens, opens.Day, Served: false, Today: false, Locked: false, IsKey: true, Elided: false));
         return cells;
     }
+
+    /// <summary>Whether the raffle counted this date. Raffle days are UTC days and the server never
+    /// counts one ahead of the UTC date, so nothing past it carries the mark.</summary>
+    public static bool CountsForRaffle(DateTime date, IReadOnlySet<DateTime>? raffleDays, DateTime utcNow) =>
+        raffleDays != null && date.Date <= utcNow.Date && raffleDays.Contains(date.Date);
 
     /// <summary>How many days the elided marker stands for: the days before the first shown cell.</summary>
     public static int ElidedDays(DateTime start, DateTime end)
