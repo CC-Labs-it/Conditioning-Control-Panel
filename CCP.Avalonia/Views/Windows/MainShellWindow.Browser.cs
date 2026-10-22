@@ -48,10 +48,8 @@
 //     TrainerCardText. Still missing: BtnDiscordTabLogin_Click, UpdateDiscordTabUI,
 //     ResolveProfilePictureUnavailable, LoadPatreonBadgeImage, ProfileDiscordHandle_Click,
 //     BtnProfileDiscord_Click (art). Change name / delete profile are ported below.
-//   * CoreMods (1): SyncSiteRadiosToActiveMod needs ShowBambiCloudOption() and
-//     GetDefaultBrowserUrl(); CCP.Core/CoreMods.cs carries neither yet. Its IsBrowserShowingKnownSite
-//     helper is NOT restored either: WebHost.CurrentUrl now answers it, but its only caller is
-//     SyncSiteRadiosToActiveMod, so write it with that caller.
+//   * (Resolved) SyncSiteRadiosToActiveMod + IsBrowserShowingKnownSite are ported below, read
+//     off Core ModService and WebHost.CurrentUrl; ApplyActiveModChange calls them.
 
 using System;
 using Avalonia.Controls;
@@ -191,6 +189,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
 
             return NavigateBrowser(url);
+        }
+
+        /// <summary>WPF IsBrowserShowingKnownSite (MainWindow.Browser.cs:504): the page on screen is one of
+        /// the two sites, so the radios are a readout rather than a preference.</summary>
+        private bool IsBrowserShowingKnownSite()
+        {
+            var host = BrowserView?.CurrentUrl?.Host;
+            return host != null && (host.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                || host.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>WPF SyncSiteRadiosToActiveMod (#867, MainWindow.Browser.cs:533): point the radios at
+        /// the active mod's own site. Selection only unless <paramref name="navigateIfChanged"/>.</summary>
+        internal void SyncSiteRadiosToActiveMod(bool navigateIfChanged = false)
+        {
+            try
+            {
+                var bambi = BrowserPage?.FindControl<RadioButton>("RbBambiCloud");
+                var hypno = BrowserPage?.FindControl<RadioButton>("RbHypnoTube");
+                if (bambi == null || hypno == null) return;
+
+                var modWantsBambiCloud = App.Mods?.ShowBambiCloudOption() ?? true;
+                // Never re-point the radios away from a page already on screen, unless the mod hides BambiCloud.
+                if (modWantsBambiCloud && IsBrowserShowingKnownSite()) return;
+
+                var defaultUrl = App.Mods?.GetDefaultBrowserUrl() ?? BambiCloudHome;
+                var onBambiCloud = modWantsBambiCloud
+                    && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase);
+                var target = onBambiCloud ? bambi : hypno;
+                var moved = target.IsChecked != true;   // also true when an external link left both off
+                target.IsChecked = true;
+
+                if (moved && navigateIfChanged && !CoreSettings.Current.OfflineMode)
+                    NavigateBrowserToCurrentSiteHome();
+            }
+            catch (Exception ex) { Log.Debug("SyncSiteRadiosToActiveMod: {Error}", ex.Message); }
         }
 
         // ============================== the profile viewer ==============================
