@@ -11,14 +11,14 @@
  */
 import { Mesh, BufferGeometry, BufferAttribute, DynamicDrawUsage, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide,
   RingGeometry, PlaneGeometry, Color, Vector3, Quaternion } from 'three/webgpu';
-import { attribute, smoothstep, abs, uniform, vec3, float } from 'three/tsl';
+import { attribute, smoothstep, abs, uniform, vec3, float, positionView } from 'three/tsl';
 import { S, BOOST } from '../sim/state.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
 import { createGlowMaterial } from './materials/glow.js';
 import { currentArt } from './art.js';
 import { atlasOf, atlasCoverage } from './particles.js';
-import { FXART_LOOK, cellIndex, juiceLook, juiceHues, gentleGrow } from './atlas.js';
+import { FXART_LOOK, cellIndex, juiceLook, juiceHues, gentleGrow, p4Look, tierColour } from './atlas.js';
 
 /** A flat ring card: the atlas ring cell, its ring at radius 1 of the mesh scale; u.col tints it. */
 function atlasRing(at, hex, A) {
@@ -47,7 +47,10 @@ export function createWakes(feel, count = 8, art = currentArt()) {
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
   const c = attribute('aCol', 'vec4');
   m.colorNode = c.rgb;
-  m.opacityNode = c.a.mul(smoothstep(0.35, 1, abs(attribute('aSide', 'float'))).oneMinus());
+  // the lens rule: the player's own ribbon runs back under the camera, so it fades out before it gets there
+  // (fully gone within LOOK.trailLensM[0] of the eye, whole past [1]; the kart itself sits about 6 m out)
+  const [l0, l1] = LOOK.trailLensM || [2.5, 7];
+  m.opacityNode = c.a.mul(smoothstep(0.35, 1, abs(attribute('aSide', 'float'))).oneMinus()).mul(smoothstep(l0, l1, positionView.z.negate()));
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false; mesh.renderOrder = 1;
 
@@ -55,8 +58,8 @@ export function createWakes(feel, count = 8, art = currentArt()) {
   const tmp = new Vector3(), right = new Vector3(), cc = new Color();
 
   function colourOf(bk) {
-    const colours = feel.get('juice.sparkColours');
-    return bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? colours[bk - 1] : bk === BOOST.LAUNCH ? LOOK.launchTrail : LOOK.padTrail;
+    // polish 4: drift tier boosts wear the tier colour (blue, orange, pink) like the sparks and skid marks
+    return bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? tierColour(bk - BOOST.DRIFT1 + 1, p4Look(LOOK)) : bk === BOOST.LAUNCH ? LOOK.launchTrail : LOOK.padTrail;
   }
 
   /** Per kart k and frame. obj = its Object3D (matrixWorld current), st = interpolated state. */
@@ -65,7 +68,8 @@ export function createWakes(feel, count = 8, art = currentArt()) {
     tmp.set(0, LOOK.trailUpM, LOOK.saucerR * 0.9).applyMatrix4(obj.matrixWorld);
     right.set(1, 0, 0).applyQuaternion(obj.quaternion);
     const p = t.pts, last = t.n ? (t.n - 1) * 6 : 0;
-    const jump = t.n && Math.hypot(p[last] - tmp.x, p[last + 1] - tmp.y, p[last + 2] - tmp.z) > 20;
+    // a long step (a respawn, or a slow frame at speed) restarts the ribbon: never one straight beam across the view
+    const jump = t.n && Math.hypot(p[last] - tmp.x, p[last + 1] - tmp.y, p[last + 2] - tmp.z) > LOOK.trailStepM * 8;
     if ((on && t.a < 0.05) || jump || !visible) t.n = 0;             // a new boost grows from the kart
     if (on) { cc.set(colourOf(bk)); t.rgb[0] = cc.r; t.rgb[1] = cc.g; t.rgb[2] = cc.b; }
     t.a += ((on ? 1 : 0) - t.a) * (1 - Math.exp(-dt / (on ? 0.05 : LOOK.trailFadeTcS)));

@@ -294,3 +294,149 @@ export const gentleGrow = (mul, gentle, J = JUICE_LOOK) => (gentle && mul > 1 ? 
 
 /** The count share of a quality tier: high 1, mid midMul, phone phoneMul. */
 export const tierShare = (name, J = JUICE_LOOK) => (name === 'phone' ? J.phoneMul : name === 'mid' ? J.midMul : 1);
+
+// ---- polish 4 "control and payoff" (PARTICLES lane): depth speed field, skid marks, tier sparks, bursts ----
+
+/**
+ * Polish 4 particle numbers; LOOK.p4 (render/look.js, integrator) overrides any of them.
+ * Drift tiers wear blue, orange, pink everywhere (sparks, skid marks, ribbons, the mini-turbo burst).
+ * The speed field lives in camera space: each element is born fieldNearM..fieldFarM ahead at a screen
+ * position whose |x| is never inside the centre third, then streams toward the camera, so it only ever
+ * moves outward on screen and leaves past the edge long before it is near the lens.
+ */
+export const P4_LOOK = Object.freeze({
+  tierColours: Object.freeze(['#3da9ff', '#ff8c1a', '#ff2bd6']), slideColour: '#bfe4ff',
+  // speed field (render/speedlines.js)
+  // fixer: the owner still read polish 4's streaks as long straight white lines near the eye, so streaks are
+  // short dashes (a fifth of the field, about 2 m at most), the field ends further out, and glitter and soft
+  // orbs at depth carry the speed; colours lean on the spectrum tint, not white
+  fieldNearM: 8, fieldFarM: 40, fieldEndM: 6, fieldNdcX: Object.freeze([0.38, 1]), fieldNdcY: Object.freeze([-0.75, 0.9]), fieldCentre: 1 / 3,
+  fieldShare: Object.freeze({ streak: 0.22, glitter: 0.48, orb: 0.3 }), fieldCountMul: 1.6, fieldCruise: 0.55,
+  fieldAlpha: 0.7, fieldFromPct: 0.45, fieldGain: 1.9, fieldBoostFloor: Object.freeze([0.7, 0.85, 1]), boostRiseS: 0.15, boostFallS: 0.45,
+  streakLenM: Object.freeze([0.4, 1.1]), streakSpeedLen: 0.8, streakBoostLen: 0.7, streakWidthM: Object.freeze([0.035, 0.08]), streakTaper: 0.85,
+  glitterSizeM: Object.freeze([0.09, 0.22]), glitterTwinkleHz: 1.5, orbSizeM: Object.freeze([0.5, 1.4]), orbAlpha: 0.3,
+  curveGain: 0.6, curveMaxNdc: 0.22, curveTcS: 0.25, fieldGentle: 0.5, fieldTint: 0.9, fieldBoostTint: 0.6,
+  // skid marks (render/skids.js): a pooled ring of ribbon segments, one draw call
+  skidCap: Object.freeze({ high: 1200, mid: 720, phone: 360 }), skidStepM: 0.7, skidBreakM: 6, skidWidthM: 0.26, skidLiftM: 0.1,
+  skidWheelX: 0.42, skidWheelZ: 0.38, skidRiseS: 0.05, skidHoldS: 1.6, skidLifeS: 3.8, skidAlpha: 0.9, skidHotS: 0.35, skidGentle: 0.5, skidSlideAlpha: 0.8,
+  skidGlow: 1.7,
+  // drift sparks per tier: size, rate and a share of stars grow with the tier
+  sparkTierSize: Object.freeze([1, 1.3, 1.7]), sparkTierRate: Object.freeze([1, 1.25, 1.6]), sparkTierStars: Object.freeze([0, 0.08, 0.18]),
+  // mini-turbo burst on drift-boost: a cone thrown back, stars round the saucer, a halo in the tier colour
+  turboCount: Object.freeze([24, 40, 64]), turboSpeedMps: Object.freeze([7, 9, 12]), turboRingM: Object.freeze([2.6, 3.6, 5]), turboRingS: 0.42, turboSizeM: 0.42,
+  // tricks: confetti thrown up at takeoff, a ring and confetti at the landing
+  trickCount: Object.freeze({ good: 22, great: 40 }), trickLandCount: Object.freeze({ good: 30, great: 56 }),
+  trickRingM: Object.freeze({ good: 3.4, great: 5.2 }), trickRingS: 0.5, trickSpeedMps: 7, confettiSizeM: 0.5,
+  confettiLifeS: 1.3, confettiDrag: 0.25, confettiGrav: 1, turboWhite: 0.12, turboAccent: 0.18,
+  confettiCells: Object.freeze(['petal', 'heart', 'glitter', 'star']),
+});
+
+/** The polish 4 numbers with LOOK.p4 over them. */
+export const p4Look = (L = LOOK) => (L && L.p4 ? { ...P4_LOOK, ...L.p4 } : P4_LOOK);
+
+/** The colour of a drift tier 1..3; tier 0 (sliding, no tier yet) is the pale slide colour. */
+export function tierColour(tier, P = P4_LOOK) {
+  const t = tier | 0;
+  return t >= 1 ? P.tierColours[Math.min(t, 3) - 1] : P.slideColour;
+}
+
+const lerpR = (a, r) => a[0] + (a[1] - a[0]) * r;
+
+/** A speed field element from three randoms (0..1) and a side (-1 left, else right): its birth screen spot and depth. */
+export function fieldBirth(r1, r2, r3, side, P = P4_LOOK) {
+  return { nx: (side < 0 ? -1 : 1) * lerpR(P.fieldNdcX, r1), ny: lerpR(P.fieldNdcY, r2), depth: P.fieldNearM + (P.fieldFarM - P.fieldNearM) * r3 };
+}
+
+/**
+ * Camera-space point of an element at flow t (0..1) plus `back` metres further along its streak, with the
+ * track curve (rad per m, + right) bending the far end. tanH, tanV = half-fov tangents. Mirrors the
+ * speedlines.js shader: x never enters the centre third, whatever the curve.
+ */
+export function fieldPoint(e, t, back, curve, tanH, tanV, P = P4_LOOK) {
+  const d = e.depth - t * (e.depth - P.fieldEndM) + back;
+  const x0 = e.nx * e.depth * tanH, lim = P.curveMaxNdc * d * tanH, sg = x0 < 0 ? -1 : 1;
+  const bend = Math.max(-lim, Math.min(lim, 0.5 * curve * d * d * P.curveGain));
+  const x = sg * Math.max((x0 + bend) * sg, d * tanH * P.fieldCentre);
+  return { x, y: e.ny * e.depth * tanV, z: -d };
+}
+
+/** Speed field density 0..1 from speed share and the eased boost (0..1): cruising tops out at fieldCruise, a boost fills it. */
+export function fieldDensity(speedPct, boost, P = P4_LOOK) {
+  return Math.min(1, Math.max(0, Math.max(boost, Math.min(P.fieldCruise, ((speedPct || 0) - P.fieldFromPct) * P.fieldGain))));
+}
+
+/** Streak length (m) for a length seed 0..1, speed share and eased boost 0..1. */
+export function streakLen(r, speedPct, boost, P = P4_LOOK) {
+  return lerpR(P.streakLenM, r) * (0.35 + Math.max(0, speedPct || 0) * P.streakSpeedLen) * (1 + boost * P.streakBoostLen);
+}
+
+/** The boost target 0..1 of a boost kind: a drift tier boost by its tier floor, any other boost full. */
+export function boostTarget(kind, BOOST) {
+  if (!kind) return 0;
+  return kind >= BOOST.DRIFT1 && kind <= BOOST.DRIFT3 ? P4_LOOK.fieldBoostFloor[kind - BOOST.DRIFT1] : 1;
+}
+
+/** The per-tick skid flag: the sim's own field when it has one, else a grounded drift. */
+export function skidOn(st, S) {
+  if (!st || st[S.respawnPhase] > 0) return false;
+  if (S.skid !== undefined) return st[S.skid] > 0.5;
+  return st[S.driftDir] !== 0 && st[S.grounded] > 0.5 && !(st[S.airborne] > 0.5);
+}
+
+/** Skid mark alpha share at age (s): a quick rise, a hold, then an eased fade to zero at skidLifeS. */
+export function skidFade(age, P = P4_LOOK) {
+  if (!(age >= 0) || age >= P.skidLifeS) return 0;
+  if (age < P.skidRiseS) return age / P.skidRiseS;
+  if (age <= P.skidHoldS) return 1;
+  const k = (age - P.skidHoldS) / (P.skidLifeS - P.skidHoldS);
+  return (1 - k) ** 1.5;
+}
+
+/**
+ * The skid ring buffer: cap quads of 4 vertices (from left, from right, to left, to right), plain arrays,
+ * three-free. pos xyz, meta (birth s, side -1 or 1), col rgb. lay() writes one quad at the head and wraps.
+ */
+export function createSkidBuffer(cap) {
+  const pos = new Float32Array(cap * 12), meta = new Float32Array(cap * 8), col = new Float32Array(cap * 12);
+  for (let i = 0; i < cap * 4; i++) { meta[i * 2] = -1e6; meta[i * 2 + 1] = i & 1 ? 1 : -1; }
+  const index = new Uint32Array(cap * 6);
+  for (let i = 0; i < cap; i++) index.set([0, 1, 2, 2, 1, 3].map((v) => v + i * 4), i * 6);
+  let head = 0, laid = 0;
+  /** a, b = [x, y, z] ends; ra, rb = unit right vectors; ta, tb = birth times; w = half width; rgb = [r, g, b]. */
+  function lay(a, b, ra, rb, ta, tb, w, rgb) {
+    const i = head; head = (head + 1) % cap; laid++;
+    for (let e = 0; e < 2; e++) {
+      const p = e ? b : a, r = e ? rb : ra, t = e ? tb : ta;
+      for (let s = 0; s < 2; s++) {
+        const v = i * 4 + e * 2 + s, sg = s ? 1 : -1;
+        pos[v * 3] = p[0] + r[0] * w * sg; pos[v * 3 + 1] = p[1] + r[1] * w * sg; pos[v * 3 + 2] = p[2] + r[2] * w * sg;
+        meta[v * 2] = t; col[v * 3] = rgb[0]; col[v * 3 + 1] = rgb[1]; col[v * 3 + 2] = rgb[2];
+      }
+    }
+    return i;
+  }
+  function clear() { for (let i = 0; i < cap * 4; i++) meta[i * 2] = -1e6; laid = 0; }
+  return { cap, pos, meta, col, index, lay, clear, get head() { return head; }, get laid() { return laid; } };
+}
+
+/**
+ * One rear wheel's mark: w = its memory ({} at first). Returns the segment start ({ a, ra, ta }) to lay up to
+ * p once the wheel has moved skidStepM, else null; a break (off, or a jump over skidBreakM) starts fresh.
+ */
+export function stepWheel(w, p, right, on, t, P = P4_LOOK) {
+  if (!on) { w.has = false; return null; }
+  if (w.has) {
+    const d = Math.hypot(p[0] - w.p[0], p[1] - w.p[1], p[2] - w.p[2]);
+    if (d < P.skidStepM) return null;
+    if (d <= P.skidBreakM) {
+      const out = { a: w.p, ra: w.r, ta: w.t };
+      w.p = p.slice(); w.r = right.slice(); w.t = t;
+      return out;
+    }
+  }
+  w.has = true; w.p = p.slice(); w.r = right.slice(); w.t = t;
+  return null;
+}
+
+/** Trick grade key: 'great', anything else reads as 'good'. */
+export const trickKey = (grade) => (grade === 'great' ? 'great' : 'good');
