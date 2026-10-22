@@ -779,7 +779,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (isPb)
             {
                 var pbTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
-                pbTimer.Tick += (_, _) => { pbTimer.Stop(); ChaosSfx.Play("pb_fanfare", 0.6f); };
+                pbTimer.Tick += (_, _) => { pbTimer.Stop(); if (!_closed) ChaosSfx.Play("pb_fanfare", 0.6f); };
                 pbTimer.Start();
             }
 
@@ -963,7 +963,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             timer.Tick += (_, _) =>
             {
                 elapsed += FRAME_MS;
-                if (elapsed >= DURATION_MS || !_resultsPanel.IsVisible)
+                if (_closed || elapsed >= DURATION_MS || !_resultsPanel.IsVisible)   // a closed recap must not tick on
                 {
                     timer.Stop();
                     line.Text = $"score {score:N0}";
