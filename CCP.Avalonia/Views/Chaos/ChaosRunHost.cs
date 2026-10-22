@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosRunState? _state;
         private static ChaosHudWindow? _hud;
         private static ChaosOverlayWindow? _overlay;
+        private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer;
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
@@ -39,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosRunState? State => _state;
         internal static ChaosOverlayWindow? Overlay => _overlay;
         internal static ChaosHudWindow? Hud => _hud;
+        internal static ChaosBoonBarOverlay? BoonBar => _boonBar;
         internal static ChaosFxWindow? Fx => _fx;
         internal static bool IsActive => _active;
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
@@ -78,6 +80,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
+            // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
+            var picks = _state.RunPickTiles;
+            _boonBar = ChaosBoonBarOverlay.ForRun();
+            _boonBar.SetPicks(picks);
+            _boonBar.Show();
+            picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
             _state.StartShields = _state.Shields;
             _spawning = true;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
@@ -153,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             ChaosGifCascadeOverlay.CloseActive();   // WPF ForceShutdown :3176
+            CloseBoonBar();   // WPF ForceShutdown :3181
             CloseFx();   // WPF ForceShutdown :3189
             CleanupAfterRun();
         }
@@ -176,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _hud = null;
             ChaosGifCascadeOverlay.CloseActive();   // WPF EndRun :3229
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
+            CloseBoonBar();   // WPF EndRun :3235
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
             Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
@@ -196,10 +206,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CleanupAfterRun();
         }
 
+        private static void CloseBoonBar()
+        {
+            try { _boonBar?.Close(); } catch (Exception ex) { Log.Debug("Chaos boon bar close: {E}", ex.Message); }
+            _boonBar = null;
+        }
+
+        /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
+            CloseBoonBar();
             CloseFx();   // WPF CleanupAfterRun :3338 (also covers an overlay closed mid-run)
             _runTimer = null;
             _hud = null;
