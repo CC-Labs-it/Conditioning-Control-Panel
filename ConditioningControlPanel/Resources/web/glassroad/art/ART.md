@@ -1001,3 +1001,27 @@ The separate desktop launcher tile is prepared at the existing race.png size,
 are art assumptions. No game or launcher code is changed.
 
 Generated source images are 1672 x 941 and 940 x 1672; export resizing produces the requested wide and phone dimensions.
+## Wave 3 section road bands and rim
+
+Three linear R8 ETC1S fields extend the existing road material. Sample .r.
+road-bands-deep and road-bands-afterglow are 512 square; road-rim-mask is
+1024 x 128. Total conservative RGBA8 residency with mips is 3.333 MiB.
+
+Keep the Wave 1 coordinate contract: U across 12 metres, V along 16 metres.
+Deep has four tighter, squared crests across U with a gentle periodic bend.
+Afterglow has two broader swells; its warmth comes from the host palette.
+Both band masks repeat in U and V, with exact matching source-edge samples.
+The rim is zero inward of the last 0.6 m at each road edge, rising smoothly to
+one at U=0 and U=1. Clamp U for the finite road width and repeat V.
+For road widths other than 12 m, remap the edge distance in the host to keep the
+physical 0.6 m extent. White means full highlight or band strength.
+
+No colour, temporal motion, flash or strobe is baked into these masks. The host
+owns palette, band scrolling, brightness and Gentle Visuals. Keep its contrast
+limiter active; these masks supply shape only. The new crests remain broad.
+
+Original procedural fields for CCP. No third-party images or copied patterns.
+Private scripts, masters and static coloured preview stay in glassroad-art/w3/road.
+All final KTX2 files pass strict validation and were decoded for seam and visual
+review. Pattern frequencies and 512px band resolution are art choices; they leave
+additional room under the brief's approximate texture allowance.
