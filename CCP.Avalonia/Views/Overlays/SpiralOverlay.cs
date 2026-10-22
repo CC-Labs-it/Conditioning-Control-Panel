@@ -87,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var opacity = PaintedOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))

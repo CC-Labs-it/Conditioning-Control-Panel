@@ -27,11 +27,8 @@ export const WASH_MS = 900, WORD_MS = 830, WORD_GAP_MS = 500, SPIRAL_STRETCH = 1
 const SPIRAL_EDGE = 512, SPIRAL_FPS = 30;
 const SPIRAL_PRESETS = ['screen', 'candy', 'pinwheel', 'mint', 'ribbon', 'star'];
 
-/** True inside a desktop host: WPF's WebView2 (chrome.webview) or the Avalonia head's WebKitGTK
- *  string carrier (invokeCSharpAction, as bridge.js reads it). The web and dev.html are neither. */
-export function desktopHosted(g = globalThis) {
-  return !!(g?.chrome?.webview || typeof g?.invokeCSharpAction === 'function');
-}
+/** True inside a desktop host (WebView2 or the WebKitGTK string carrier); the web and dev.html are neither. */
+export { desktopHosted } from '../../../shared/carrier.js';
 
 /**
  * routeFx({ hosted, fx, page }) -> a ctx.fx shaped function, or null.

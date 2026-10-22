@@ -25,9 +25,21 @@ namespace ConditioningControlPanel.Services
         private const int SPI_SETDESKWALLPAPER = 0x0014;
         private const int SPI_GETDESKWALLPAPER = 0x0073;
         private const int SPIF_UPDATEINIFILE = 0x01;
-        private const int SPIF_SENDCHANGE = 0x02;
+
+        // WM_SETTINGCHANGE goes out with SendNotifyMessage, never SPIF_SENDCHANGE: SENDCHANGE
+        // SENDS to every top-level window and waits on each, which hung the app (#1453).
+        // SendNotifyMessage returns at once for other threads' windows; lParam stays null
+        // because the async send functions refuse pointers below WM_USER.
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SendNotifyMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        private static readonly IntPtr HWND_BROADCAST = new(0xffff);
+        private const uint WM_SETTINGCHANGE = 0x001A;
 
         private static readonly string[] SupportedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
+
+        /// <summary>Every wallpaper write goes through here, off the calling thread (#1453).</summary>
+        private readonly WallpaperSetQueue _setQueue = new(ApplyWallpaperNow);
 
         private string? _originalWallpaperPath;
         private string? _currentImagePath;
@@ -121,6 +133,14 @@ namespace ConditioningControlPanel.Services
             {
                 if (_isActive) return true;
 
+                // A write still in flight (a restore, most often) means the desktop may not show
+                // the user's own wallpaper yet, and capturing it now would strand theirs (#692).
+                if (_setQueue.IsBusy)
+                {
+                    App.Logger?.Debug("[Wallpaper] A wallpaper write is still running - skipping this activation");
+                    return false;
+                }
+
                 try
                 {
                     // Save current wallpaper path. If Windows can't hand back a usable one we do
@@ -180,12 +200,10 @@ namespace ConditioningControlPanel.Services
                     // there strands them permanently (#692). Write first, undo if the set fails.
                     var image = PickImage();
                     if (image == null) return false;
+                    // The write itself runs on the queue. If Windows refuses it, the desktop still
+                    // shows the original, so the breadcrumb and the later restore stay harmless.
                     PersistOriginal(original);
-                    if (!SetWallpaper(image))
-                    {
-                        PersistOriginal(null);
-                        return false;
-                    }
+                    SetWallpaper(image, "activate");
 
                     _originalWallpaperPath = original;
                     _currentImagePath = image;
@@ -216,22 +234,44 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var original = _originalWallpaperPath;
-                    if (string.IsNullOrWhiteSpace(original) || !File.Exists(original))
+                    if (MustCoverRemote(original, _currentImagePath))
+                    {
+                        // The user's own is gone and an online picture is up: it must not stay
+                        // set in Windows (licence 3.4). A neutral picture goes up instead.
+                        var neutral = NeutralWallpaperPath(WindowsDefaultWallpaper(), App.UserDataPath);
+                        if (neutral != null) SetWallpaper(neutral, "neutral");
+                        App.Logger?.Warning("[Wallpaper] No usable original to restore: an online picture was up, a neutral one replaces it");
+                    }
+                    else if (string.IsNullOrWhiteSpace(original) || !File.Exists(original))
                     {
                         // Never hand SPI_SETDESKWALLPAPER an empty/missing path: Windows clears the
                         // desktop to a flat colour and writes that to the registry (#692).
                         App.Logger?.Warning("[Wallpaper] No usable original to restore ({Path}) — leaving the desktop as-is", original ?? "<null>");
                     }
-                    else if (SetWallpaper(original))
-                    {
-                        App.Logger?.Information("[Wallpaper] Restored original wallpaper");
-                        // Restored for real — drop the crash-recovery breadcrumb.
-                        PersistOriginal(null);
-                    }
                     else
                     {
-                        // Keep the persisted path so the next launch gets another go at it.
-                        App.Logger?.Warning("[Wallpaper] Windows refused to restore {Path} (win32 {Err})", original, Marshal.GetLastWin32Error());
+                        // Queued, never waited on (#1453). The breadcrumb is dropped only once
+                        // Windows took the restore, and only if nothing re-activated meanwhile; a
+                        // refusal keeps it so the next launch gets another go at it.
+                        _setQueue.Enqueue(original).ContinueWith(t =>
+                        {
+                            if (t.Result)
+                            {
+                                App.Logger?.Information("[Wallpaper] Restored original wallpaper");
+                                OnUi(() =>
+                                {
+                                    lock (_lock)
+                                    {
+                                        if (!_isActive && App.Settings?.Current?.WallpaperOriginalPath == original)
+                                            PersistOriginal(null);
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                App.Logger?.Warning("[Wallpaper] Windows refused to restore {Path}", original);
+                            }
+                        }, TaskScheduler.Default);
                     }
                 }
                 catch (Exception ex)
@@ -260,6 +300,9 @@ namespace ConditioningControlPanel.Services
             {
                 if (!_isActive) return Activate();
 
+                // Never stack writes behind a slow one: a shuffle is cosmetic, skip it.
+                if (_setQueue.IsBusy) return false;
+
                 try
                 {
                     // Keep the remote pool topped up across a long shuffling session, not just at
@@ -280,7 +323,7 @@ namespace ConditioningControlPanel.Services
                             image = PickImage() ?? image;
                     }
 
-                    if (!SetWallpaper(image)) return false;
+                    SetWallpaper(image, "shuffle");
 
                     _currentImagePath = image;
                     App.Logger?.Debug("[Wallpaper] Shuffled to {File}", Path.GetFileName(image));
@@ -302,8 +345,12 @@ namespace ConditioningControlPanel.Services
         private static bool RemoteMediaEnabled()
         {
             var s = App.Settings?.Current;
-            return s != null && s.MediaSource != "local" && s.HasRemoteMediaConsent;
+            return s != null && RemoteMediaEnabled(s.MediaSource, s.HasRemoteMediaConsent);
         }
+
+        /// <summary>The rule itself, pure: also what shows the wallpaper card's credit.</summary>
+        internal static bool RemoteMediaEnabled(string? mediaSource, bool hasRemoteMediaConsent)
+            => mediaSource != null && mediaSource != "local" && hasRemoteMediaConsent;
 
         /// <summary>Our channel set. Niche selection is app-wide by design; only rotation and
         /// dwell are per-consumer, which is what asking for our own tenant buys.</summary>
@@ -550,12 +597,150 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Debug("[Wallpaper] Released {Count} materialized remote wallpapers", toRelease.Count);
         }
 
+        /// <summary>Deactivating with no usable original of the user's own while an online picture is
+        /// on the desktop: the picture may not stay set (Windows keeps its own copy of it), so a
+        /// neutral one goes up. Pure.</summary>
+        internal static bool MustCoverRemote(string? original, string? current)
+        {
+            bool usable;
+            try { usable = !string.IsNullOrWhiteSpace(original) && File.Exists(original); }
+            catch { usable = false; }
+            return !usable && Video.ScrolllerCredit.IsScrolllerMedia(current);
+        }
+
+        private static string? WindowsDefaultWallpaper()
+        {
+            try { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Web", "Wallpaper", "Windows", "img0.jpg"); }
+            catch { return null; }
+        }
+
+        /// <summary>A neutral picture for <see cref="MustCoverRemote"/>: Windows' own default when it
+        /// is there, else a plain dark file written once into <paramref name="fallbackDir"/>. Null
+        /// when neither can be had (the desktop is then left as it is, never cleared).</summary>
+        internal static string? NeutralWallpaperPath(string? windowsDefault, string? fallbackDir)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(windowsDefault) && File.Exists(windowsDefault)) return windowsDefault;
+                if (string.IsNullOrEmpty(fallbackDir)) return null;
+                var path = Path.Combine(fallbackDir, "wallpaper-neutral.bmp");
+                if (!File.Exists(path))
+                {
+                    Directory.CreateDirectory(fallbackDir);
+                    File.WriteAllBytes(path, SolidBmp(16, 16, 0x22, 0x20, 0x24));
+                }
+                return path;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>A 24-bit BMP of one colour.</summary>
+        internal static byte[] SolidBmp(int width, int height, byte r, byte g, byte b)
+        {
+            int row = (width * 3 + 3) & ~3;
+            int size = 54 + row * height;
+            var bmp = new byte[size];
+            bmp[0] = (byte)'B'; bmp[1] = (byte)'M';
+            BitConverter.GetBytes(size).CopyTo(bmp, 2);
+            BitConverter.GetBytes(54).CopyTo(bmp, 10);
+            BitConverter.GetBytes(40).CopyTo(bmp, 14);
+            BitConverter.GetBytes(width).CopyTo(bmp, 18);
+            BitConverter.GetBytes(height).CopyTo(bmp, 22);
+            BitConverter.GetBytes((short)1).CopyTo(bmp, 26);
+            BitConverter.GetBytes((short)24).CopyTo(bmp, 28);
+            BitConverter.GetBytes(row * height).CopyTo(bmp, 34);
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int i = 54 + y * row + x * 3;
+                    bmp[i] = b; bmp[i + 1] = g; bmp[i + 2] = r;
+                }
+            return bmp;
+        }
+
+        /// <summary>The day limit on a remote wallpaper file, pure: its creation time is its
+        /// download time, and it goes once it would be a day old before the next hourly sweep.</summary>
+        internal static bool RemoteWallpaperStale(DateTime createdUtc, DateTime nowUtc)
+            => Fyp.Online.ScrolllerCacheBook.IsExpiredAt(createdUtc, nowUtc + Fyp.Online.ScrolllerDiskCache.SweepPeriod);
+
+        /// <summary>
+        /// Licence day limit (owner, 2026-10-21): no remote wallpaper stays set, or on disk, past a
+        /// day from its download, and Windows' own copy goes with it. Stale files leave the pool;
+        /// if one is on the desktop it rotates to another image, or the user's own wallpaper is put
+        /// back. <paramref name="all"/> treats every remote file as stale (the off switch). Call on
+        /// the UI thread (a rotation may persist settings). Returns how many files went.
+        /// </summary>
+        public int EnforceRemoteMaxAge(bool all = false)
+        {
+            List<string> stale;
+            bool onDesktop;
+            lock (_lock)
+            {
+                if (_disposed) return 0;
+                var now = DateTime.UtcNow;
+                stale = _remotePool.Where(p => all || RemoteWallpaperStale(CreatedUtc(p), now)).ToList();
+                if (stale.Count == 0) return 0;
+                _remotePool.RemoveAll(stale.Contains);
+                onDesktop = _isActive && _currentImagePath != null && stale.Contains(_currentImagePath);
+            }
+            if (onDesktop)
+            {
+                // Shuffle draws from the trimmed pools; with nothing else to show, the original returns.
+                bool moved = false;
+                try { moved = Shuffle(); } catch { }
+                if (!moved) Deactivate();
+            }
+            foreach (var temp in stale) SafeRelease(temp);
+            App.Logger?.Information("[Wallpaper] {Count} online wallpaper(s) past the day limit removed{Desk}",
+                stale.Count, onDesktop ? " (desktop moved off it)" : "");
+            return stale.Count;
+
+            static DateTime CreatedUtc(string p)
+            {
+                try { return File.Exists(p) ? File.GetCreationTimeUtc(p) : DateTime.MinValue; }
+                catch { return DateTime.MinValue; }
+            }
+        }
+
         #endregion
 
-        private static bool SetWallpaper(string path)
+        /// <summary>Queue a wallpaper write and return at once (#1453); a refusal is only logged.</summary>
+        private void SetWallpaper(string path, string why)
         {
-            var result = SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-            return result != 0;
+            _setQueue.Enqueue(path).ContinueWith(t =>
+            {
+                if (!t.Result)
+                    App.Logger?.Warning("[Wallpaper] Windows refused the {Why} wallpaper {File}", why, Path.GetFileName(path));
+            }, TaskScheduler.Default);
+        }
+
+        /// <summary>The write itself, on the queue's worker. SPIF_UPDATEINIFILE only: the
+        /// desktop repaints without SENDCHANGE, and the notify broadcast below never waits.</summary>
+        private static bool ApplyWallpaperNow(string path)
+        {
+            if (SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, SPIF_UPDATEINIFILE) == 0)
+            {
+                App.Logger?.Warning("[Wallpaper] SPI_SETDESKWALLPAPER failed (win32 {Err})", Marshal.GetLastWin32Error());
+                return false;
+            }
+            try { SendNotifyMessage(HWND_BROADCAST, WM_SETTINGCHANGE, new IntPtr(SPI_SETDESKWALLPAPER), IntPtr.Zero); }
+            catch { }
+            return true;
+        }
+
+        /// <summary>Run on the UI thread when it is there, inline when the app is shutting down.</summary>
+        private static void OnUi(Action action)
+        {
+            try
+            {
+                var d = System.Windows.Application.Current?.Dispatcher;
+                if (d != null && !d.HasShutdownStarted && !d.CheckAccess()) { d.BeginInvoke(action); return; }
+                action();
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning(ex, "[Wallpaper] Breadcrumb update failed");
+            }
         }
 
         /// <summary>
@@ -616,19 +801,38 @@ namespace ConditioningControlPanel.Services
         /// Put back a wallpaper a previous session captured but never restored (crash / kill).
         /// Clears the breadcrumb either way once we've had our go at it.
         /// </summary>
-        private static void RestoreStaleOriginal()
+        private void RestoreStaleOriginal()
         {
             var s = App.Settings?.Current;
             var stale = s?.WallpaperOriginalPath;
             if (s == null || string.IsNullOrWhiteSpace(stale)) return;
 
-            if (File.Exists(stale) && SetWallpaper(stale))
-                App.Logger?.Information("[Wallpaper] Previous session never restored — put {File} back", Path.GetFileName(stale));
-            else
-                App.Logger?.Warning("[Wallpaper] Stale original {Path} could not be restored (gone or refused)", stale);
+            if (!File.Exists(stale))
+            {
+                App.Logger?.Warning("[Wallpaper] Stale original {Path} could not be restored (gone)", stale);
+                s.WallpaperOriginalPath = "";
+                App.Settings?.Save();
+                return;
+            }
 
-            s.WallpaperOriginalPath = "";
-            App.Settings?.Save();
+            // Queued: this runs at startup on the UI thread, and the old synchronous SENDCHANGE
+            // write is what froze the first seconds of a launch (#1453). Activate refuses while
+            // it is in flight, so the restore can never be captured as "the original".
+            _setQueue.Enqueue(stale).ContinueWith(t =>
+            {
+                if (t.Result)
+                    App.Logger?.Information("[Wallpaper] Previous session never restored - put {File} back", Path.GetFileName(stale));
+                else
+                    App.Logger?.Warning("[Wallpaper] Stale original {Path} could not be restored (refused)", stale);
+                OnUi(() =>
+                {
+                    var cur = App.Settings?.Current;
+                    if (cur == null || cur.WallpaperOriginalPath != stale) return;
+                    lock (_lock) { if (_isActive) return; }
+                    cur.WallpaperOriginalPath = "";
+                    App.Settings?.Save();
+                });
+            }, TaskScheduler.Default);
         }
 
         public void Dispose()
@@ -638,6 +842,10 @@ namespace ConditioningControlPanel.Services
             // Order matters: Deactivate puts the user's own wallpaper back on the desktop, and
             // only then is it safe to delete the temp file the desktop was pointing at.
             Deactivate();
+            // The restore is queued; give it a bounded moment before the temp files go. A timeout
+            // keeps the breadcrumb, so the next launch puts the wallpaper back.
+            if (!_setQueue.Flush(TimeSpan.FromSeconds(3)))
+                App.Logger?.Warning("[Wallpaper] Restore still running at exit - the next launch finishes it");
             ReleaseRemotePool();
         }
     }
