@@ -9,6 +9,9 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.UI;
+using System.Threading.Tasks;
+using Avalonia.VisualTree;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
@@ -19,29 +22,74 @@ public partial class AvailableSubjectsTabView : UserControl
     internal int SelectedColumn { get; private set; }
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+    /// <summary>WPF App.Lobby. Null (no startup) leaves the page on its empty snapshot.</summary>
+    internal Func<LobbyPoller?> ReadLobby = () => Platform.LobbyHead.Service;
+    /// <summary>WPF ClaimRemoteSubjectAsync's claim; the url goes to <see cref="Platform.ExternalOpener"/>.</summary>
+    internal Func<string, Task<string?>> ClaimRemote = id => new RemoteDirectoryApi().ClaimAsync(id);
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
+    private LobbyPoller? _hooked;
+    private IDisposable? _lease;
 
     public AvailableSubjectsTabView()
     {
         InitializeComponent();
         Repaint();
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
-        // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
-        // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) Repaint(); };
+        // The shell hides tabs with IsVisible, so Loaded fires once; WPF EnterLobbyTab/LeaveLobbyTab
+        // (MainWindow.Lobby.cs:83-96) run on every open/leave: paint what we have, lease the poll.
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { if (IsVisible) EnterLobby(); else LeaveLobby(); } };
+        AddHandler(Button.ClickEvent, LobbyRow_Click);
         Loaded += (_, _) =>
         {
-            Repaint();
+            if (IsVisible) EnterLobby(); else Repaint();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
-        Unloaded += (_, _) => SubjectsAmbientFx.Stop();
+        Unloaded += (_, _) =>
+        {
+            LeaveLobby();
+            if (_hooked != null) { _hooked.Changed -= OnLobbyChanged; _hooked = null; }
+            SubjectsAmbientFx.Stop();
+        };
+    }
+
+    internal bool IsWatching => _lease != null;
+
+    private void EnterLobby()
+    {
+        var lobby = ReadLobby();
+        if (lobby != null)
+        {
+            if (_hooked != lobby)
+            {
+                if (_hooked != null) _hooked.Changed -= OnLobbyChanged;
+                lobby.Changed += OnLobbyChanged;
+                _hooked = lobby;
+            }
+            _snapshot = lobby.Snapshot;
+        }
+        Repaint();
+        if (lobby != null) _lease ??= lobby.Watch();
+    }
+
+    private void LeaveLobby()
+    {
+        _lease?.Dispose();
+        _lease = null;
+    }
+
+    private void OnLobbyChanged(LobbySnapshot snap)
+    {
+        // WPF OnLobbyChanged (MainWindow.Lobby.cs:98): the rail badge, then the page on the UI thread.
+        try { NavBadges.Set(NavSections.Social, snap.OpenCount); } catch { }
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { _snapshot = snap; Repaint(); });
     }
 
     private void Repaint()
     {
         var gates = ReadGates();
-        PaintSnapshot(_snapshot with { SignedIn = gates.SignedIn }, gates);
+        var snap = _snapshot with { SignedIn = gates.SignedIn };
+        PaintSnapshot(snap, gates, error: snap.SignedIn && ReadLobby()?.LastRoundOk == false);
     }
 
     internal void SetNarrow(bool narrow)
@@ -90,11 +138,44 @@ public partial class AvailableSubjectsTabView : UserControl
         TabOpen.Content = Loc.Get("lobby_list_open") + "  " + snapshot.Open.Count;
         TabPlaying.Content = Loc.Get("lobby_list_playing") + "  " + snapshot.Playing.Count;
         TabFriends.Content = Loc.Get("lobby_list_friends") + "  " + snapshot.Friends.Count;
+        // WPF PaintLobbyHostBar (MainWindow.Lobby.cs:224): a closed gate shows the lock at 0.7.
+        ChessHostLock.IsVisible = !gates.CanHost(LobbyGame.Chess);
+        BtnHostChess.Opacity = gates.CanHost(LobbyGame.Chess) ? 1 : 0.7;
+        GoonHostLock.IsVisible = !gates.CanHost(LobbyGame.Goon);
+        BtnHostGoon.Opacity = gates.CanHost(LobbyGame.Goon) ? 1 : 0.7;
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
-        // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+        // ponytail: Chess/Goon host and row Join wait for those game hosts on this head
+        // (wire-views-tab-available-subjects-b-next); their buttons stay disabled.
+    }
+
+    /// <summary>WPF OnLobbyRowClick (MainWindow.Lobby.cs:241) for the rows this head can seat:
+    /// signed out or refused asks to sign in; a Remote row claims, opens the session, refreshes.</summary>
+    private async void LobbyRow_Click(object? sender, RoutedEventArgs e)
+    {
+        if (e.Source is not Control src || src.FindAncestorOfType<Button>(includeSelf: true) is not { DataContext: LobbyCardView view } button) return;
+        e.Handled = true;
+        var row = view.Row;
+        if (!row.CanJoin || string.IsNullOrEmpty(row.Key)) return;
+        var gates = ReadGates();
+        if (!gates.SignedIn || !gates.CanJoin(row.Game))
+        {
+            if (TopLevel.GetTopLevel(this) is MainShellWindow shell) _ = shell.OpenUnifiedLoginDialog();
+            return;
+        }
+        if (row.Game != LobbyGame.Remote) return;
+        button.IsEnabled = false;
+        try
+        {
+            // Privacy (WPF MainWindow.RemoteControl.cs:499): the url carries the PIN; opened once, never logged.
+            var url = await ClaimRemote(row.Key!);
+            if (string.IsNullOrEmpty(url)) return;
+            if (!Platform.ExternalOpener.Open(url)) Serilog.Log.Warning("[Lobby] failed to open browser for claimed session");
+            _ = ReadLobby()?.RefreshAsync();
+        }
+        catch (Exception ex) { Serilog.Log.Warning(ex, "[Lobby] join {Game} failed", row.Game); }
+        finally { button.IsEnabled = true; }
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -111,6 +192,9 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
+        // Only the Remote claim has a destination on this head; chess/Goon joins wait for their hosts.
+        CanPress = row.CanJoin && row.Game == LobbyGame.Remote;
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -119,6 +203,8 @@ public sealed class LobbyCardView
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
+    public LobbyRow Row { get; }
+    public bool CanPress { get; }
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

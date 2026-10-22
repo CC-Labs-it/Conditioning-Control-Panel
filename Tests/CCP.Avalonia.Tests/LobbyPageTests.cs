@@ -12,6 +12,12 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.UI;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Avalonia.VisualTree;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -82,6 +88,10 @@ public sealed class LobbyPageTests
         Assert.False(Named<Border>(page, "AvailableSubjectsEmptyPanel").IsVisible);
         Assert.True(Named<Border>(page, "AvailableSubjectsErrorPanel").IsVisible);
         Assert.True(Named<TextBlock>(page, "TxtBecomeASubjectSubtitle").IsVisible);
+        Assert.False(page.FindControl<Control>("ChessHostLock")!.IsVisible);
+        Assert.Equal(1, Named<Button>(page, "BtnHostChess").Opacity);
+        Assert.True(page.FindControl<Control>("GoonHostLock")!.IsVisible);
+        Assert.Equal(0.7, Named<Button>(page, "BtnHostGoon").Opacity);
         var row = Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "LobbyPlayingList").Items.Single());
         Assert.Equal("A vs B", row.Title);
         Assert.False(row.HasButton);
@@ -165,6 +175,83 @@ public sealed class LobbyPageTests
             CoreEntitlement.HasPremiumProvider = premium;
             CoreEntitlement.IsFreeTodayProvider = free;
             CoreEntitlement.ShowDeniedHandler = refusal;
+        }
+    });
+
+    private sealed class FakeTimer : IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public bool Running;
+        public event EventHandler? Tick { add { } remove { } }
+        public void Start() => Running = true;
+        public void Stop() => Running = false;
+        public void OnUiThread(Action action) => action();
+    }
+
+    [Fact]
+    public void VisibleTabLeasesTheLobbyPaintsItsRoundsAndReleasesOnHide() => Run(() =>
+    {
+        var timer = new FakeTimer();
+        IReadOnlyList<RemoteSeat> seats = new[] { new RemoteSeat("u1", "Kitten", 3, "light", Array.Empty<string>(), false) };
+        var lobby = new LobbyPoller(() => timer)
+        {
+            SignedIn = () => true,
+            FetchChess = _ => Task.FromResult(PbpLobbyReply.Empty),
+            FetchGoon = () => Task.FromResult(OpenTablesReply.Empty),
+            FetchRemote = () => Task.FromResult((seats, true)),
+        };
+        var page = new AvailableSubjectsTabView { ReadLobby = () => lobby, ReadGates = () => LobbyGates.From(true, false, false) };
+        try
+        {
+            page.IsVisible = false;
+            page.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(page.IsWatching);
+            Assert.True(timer.Running);
+            var row = Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single());
+            Assert.Equal("Kitten", row.Title);
+            Assert.True(row.CanPress);
+            Assert.Equal(1, NavBadges.Get(NavSections.Social));
+            page.IsVisible = false;
+            Assert.False(page.IsWatching);
+            Assert.False(timer.Running);
+        }
+        finally { NavBadges.Set(NavSections.Social, 0); }
+    });
+
+    [Fact]
+    public void RemoteRowJoinClaimsAndOpensTheSessionChessRowStaysDisabled() => Run(() =>
+    {
+        var previous = global::ConditioningControlPanel.Avalonia.Platform.ExternalOpener.Shell;
+        string? opened = null, claimed = null;
+        global::ConditioningControlPanel.Avalonia.Platform.ExternalOpener.Shell = u => { opened = u; return true; };
+        var page = new AvailableSubjectsTabView
+        {
+            ReadLobby = () => null,
+            ReadGates = () => LobbyGates.From(true, false, false),
+            ClaimRemote = id => { claimed = id; return Task.FromResult<string?>("http://127.0.0.1:9/s#pin"); },
+        };
+        var window = new Window { Width = 1200, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            var remote = new LobbyRow { Game = LobbyGame.Remote, Key = "u1", HostName = "Kitten", RemoteTier = "light" };
+            var chess = new LobbyRow { Game = LobbyGame.Chess, Key = "p_1", HostName = "Rook", InitialMs = 300000 };
+            page.PaintSnapshot(new LobbySnapshot(new[] { remote, chess }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var buttons = Named<ItemsControl>(page, "AvailableSubjectsList").GetVisualDescendants().OfType<Button>().ToList();
+            Assert.Equal(2, buttons.Count);
+            Assert.False(buttons[1].IsEnabled);
+            buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("u1", claimed);
+            Assert.Equal("http://127.0.0.1:9/s#pin", opened);
+        }
+        finally
+        {
+            window.Close();
+            global::ConditioningControlPanel.Avalonia.Platform.ExternalOpener.Shell = previous;
         }
     });
 
