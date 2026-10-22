@@ -88,10 +88,24 @@ public sealed class ProfilePrivacyPanelTests
                     var box = panel.FindControl<CheckBox>(names[i])!;
                     box.IsChecked = box.IsChecked != true;
                     Assert.Equal(expected[i], fields[i]);
-                    box.IsChecked = box.IsChecked; // programmatic echo is inert
                     Assert.Equal(i + 1, fields.Count);
                 }
                 var s = settings.Current;
+                // A real programmatic repaint (attach -> RefreshPrivacy) flips every box and must push nothing.
+                s.ShowOnlineStatus = !s.ShowOnlineStatus; s.AllowDiscordDm = !s.AllowDiscordDm;
+                s.ShareProfilePicture = !s.ShareProfilePicture; s.PublicShareRealAvatar = !s.PublicShareRealAvatar;
+                s.GoonShareAvatar = !s.GoonShareAvatar; s.GoonShareDiscordDm = !s.GoonShareDiscordDm;
+                var host = new Window { Content = panel };
+                host.Show();
+                try
+                {
+                    var flipped = new[] { s.ShowOnlineStatus, s.AllowDiscordDm, s.ShareProfilePicture,
+                        s.PublicShareRealAvatar, s.GoonShareAvatar, s.GoonShareDiscordDm };
+                    for (int i = 0; i < names.Length; i++)
+                        Assert.Equal(flipped[i], panel.FindControl<CheckBox>(names[i])!.IsChecked);
+                    Assert.Equal(6, fields.Count);
+                }
+                finally { host.Close(); }
                 var persisted = new[] { s.ShowOnlineStatus, s.AllowDiscordDm, s.ShareProfilePicture,
                     s.PublicShareRealAvatar, s.GoonShareAvatar, s.GoonShareDiscordDm };
                 var reopened = new ProfilePrivacyPanel();

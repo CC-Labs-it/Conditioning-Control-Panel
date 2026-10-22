@@ -1200,3 +1200,16 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-13: Privacy sync sends only owned fields (interim; wire-views-profile-privacy-panel)
+
+- Question: WPF sends all six privacy fields (`allow_discord_dm`, `show_online_status`, `share_profile_picture`,
+  `public_share_avatar`, `goon_share_avatar`, `goon_share_dm`) on every `/v2/user/sync` (ProfileSyncService.cs:1710) and never
+  reads them back from `GET /v2/user/profile`. Avalonia's `SyncPush.ConsentFields` sends only the fields toggled on this head
+  while signed in. A fresh install, or a toggle made signed out, can therefore show a switch off while an earlier server grant
+  (avatar, DM) stays in force.
+- Option A (WPF parity): send all six after load. A fresh Avalonia install would revoke earlier server grants down to local
+  defaults (all off, ShowOnlineStatus on), a user-visible payload change (P44).
+- Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
+- Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
+  oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
