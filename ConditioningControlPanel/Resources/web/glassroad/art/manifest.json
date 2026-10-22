@@ -1,0 +1,833 @@
+[
+  {
+    "id": "road-bands-mask",
+    "file": "textures/road-bands-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "road_bands"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      12,
+      16
+    ],
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 1398128
+  },
+  {
+    "id": "road-glass-roughness",
+    "file": "textures/road-glass-roughness.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "road_glass"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      4,
+      4
+    ],
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 349552
+  },
+  {
+    "id": "road-glass-normal",
+    "file": "textures/road-glass-normal.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "road_glass"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "UASTC",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      4,
+      4
+    ],
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 349552
+  },
+  {
+    "id": "rail-glow-mask",
+    "file": "textures/rail-glow-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 699052,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "rail_glow"
+    ],
+    "palette": "all",
+    "width": 256,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      0.9,
+      8
+    ],
+    "wrap": [
+      "clamp",
+      "repeat"
+    ],
+    "texBytesBlock16": 174800
+  },
+  {
+    "id": "boost-chevron-mask",
+    "file": "textures/boost-chevron-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "boost"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      4,
+      6
+    ],
+    "wrap": [
+      "clamp",
+      "repeat"
+    ],
+    "texBytesBlock16": 349552
+  },
+  {
+    "id": "jump-lip-mask",
+    "file": "textures/jump-lip-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 699052,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "jump_lip"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 256,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      12,
+      3
+    ],
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 174800
+  },
+  {
+    "id": "sky-dawn-galaxy",
+    "file": "textures/sky-dawn-galaxy.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 11184812,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-dawn-galaxy"
+    ],
+    "palette": "dawn",
+    "width": 2048,
+    "height": 1024,
+    "mipLevels": 12,
+    "encoding": "UASTC",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 2796240,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-dawn-stars",
+    "file": "textures/sky-dawn-stars.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 2796204,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-dawn-stars"
+    ],
+    "palette": "dawn",
+    "width": 1024,
+    "height": 512,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 699088,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-deep-galaxy",
+    "file": "textures/sky-deep-galaxy.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 11184812,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-deep-galaxy"
+    ],
+    "palette": "deep",
+    "width": 2048,
+    "height": 1024,
+    "mipLevels": 12,
+    "encoding": "UASTC",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 2796240,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-deep-stars",
+    "file": "textures/sky-deep-stars.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 2796204,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-deep-stars"
+    ],
+    "palette": "deep",
+    "width": 1024,
+    "height": 512,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 699088,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-afterglow-galaxy",
+    "file": "textures/sky-afterglow-galaxy.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 11184812,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-afterglow-galaxy"
+    ],
+    "palette": "afterglow",
+    "width": 2048,
+    "height": 1024,
+    "mipLevels": 12,
+    "encoding": "UASTC",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 2796240,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-afterglow-stars",
+    "file": "textures/sky-afterglow-stars.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 2796204,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-afterglow-stars"
+    ],
+    "palette": "afterglow",
+    "width": 1024,
+    "height": 512,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 699088,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-spiral-open-mask",
+    "file": "textures/sky-spiral-open-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-spiral-open-mask"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 1398128,
+    "uvMode": "disc"
+  },
+  {
+    "id": "sky-spiral-deep-mask",
+    "file": "textures/sky-spiral-deep-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-spiral-deep-mask"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 1398128,
+    "uvMode": "disc"
+  },
+  {
+    "id": "emi-teacup-kart",
+    "file": "models/emi-teacup-kart.glb",
+    "kind": "kart",
+    "tris": 4722,
+    "texBytes": 2796200,
+    "boundRadiusM": 1.274,
+    "materialSlots": [
+      "kart_surface",
+      "emi_screen"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "texBytesBlock16": 699104,
+    "textureEncoding": "UASTC",
+    "skins": 1,
+    "joints": 13,
+    "sizeM": [
+      1.52835,
+      1.26305,
+      1.44
+    ]
+  },
+  {
+    "id": "bubble",
+    "file": "models/bubble.glb",
+    "kind": "prop",
+    "tris": 960,
+    "texBytes": 0,
+    "boundRadiusM": 1.002,
+    "materialSlots": [
+      "bubble_iridescent"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "id": "card-drop",
+    "file": "models/card-drop.glb",
+    "kind": "prop",
+    "tris": 464,
+    "texBytes": 0,
+    "boundRadiusM": 1.043,
+    "materialSlots": [
+      "card_porcelain"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.65999,
+      1,
+      0.01999
+    ]
+  },
+  {
+    "id": "card-lens",
+    "file": "models/card-lens.glb",
+    "kind": "prop",
+    "tris": 486,
+    "texBytes": 0,
+    "boundRadiusM": 1.043,
+    "materialSlots": [
+      "card_porcelain"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.65999,
+      1,
+      0.021
+    ]
+  },
+  {
+    "id": "card-orbit",
+    "file": "models/card-orbit.glb",
+    "kind": "prop",
+    "tris": 486,
+    "texBytes": 0,
+    "boundRadiusM": 1.043,
+    "materialSlots": [
+      "card_porcelain"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.65999,
+      1,
+      0.021
+    ]
+  },
+  {
+    "id": "card-petal",
+    "file": "models/card-petal.glb",
+    "kind": "prop",
+    "tris": 476,
+    "texBytes": 0,
+    "boundRadiusM": 1.043,
+    "materialSlots": [
+      "card_porcelain"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.65999,
+      1,
+      0.01999
+    ]
+  },
+  {
+    "id": "chess-bishop-lod0",
+    "file": "models/chess-bishop-lod0.glb",
+    "kind": "prop",
+    "tris": 5798,
+    "texBytes": 0,
+    "boundRadiusM": 1.004,
+    "materialSlots": [
+      "bishop_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.45222,
+      1.00053,
+      0.48901
+    ],
+    "lod": 0
+  },
+  {
+    "id": "chess-bishop-lod1",
+    "file": "models/chess-bishop-lod1.glb",
+    "kind": "prop",
+    "tris": 1448,
+    "texBytes": 0,
+    "boundRadiusM": 1.01,
+    "materialSlots": [
+      "bishop_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.45361,
+      1.00619,
+      0.48653
+    ],
+    "lod": 1
+  },
+  {
+    "id": "chess-king-lod0",
+    "file": "models/chess-king-lod0.glb",
+    "kind": "prop",
+    "tris": 5799,
+    "texBytes": 0,
+    "boundRadiusM": 1.288,
+    "materialSlots": [
+      "gold",
+      "king_silicone"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      0.51579,
+      1.28387,
+      0.44613
+    ],
+    "lod": 0
+  },
+  {
+    "id": "chess-king-lod1",
+    "file": "models/chess-king-lod1.glb",
+    "kind": "prop",
+    "tris": 1432,
+    "texBytes": 0,
+    "boundRadiusM": 1.285,
+    "materialSlots": [
+      "gold",
+      "king_silicone"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      0.51563,
+      1.28061,
+      0.45443
+    ],
+    "lod": 1
+  },
+  {
+    "id": "chess-knight-lod0",
+    "file": "models/chess-knight-lod0.glb",
+    "kind": "prop",
+    "tris": 5720,
+    "texBytes": 0,
+    "boundRadiusM": 1.008,
+    "materialSlots": [
+      "knight_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.50758,
+      1,
+      0.45488
+    ],
+    "lod": 0
+  },
+  {
+    "id": "chess-knight-lod1",
+    "file": "models/chess-knight-lod1.glb",
+    "kind": "prop",
+    "tris": 1370,
+    "texBytes": 0,
+    "boundRadiusM": 1.008,
+    "materialSlots": [
+      "knight_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.50813,
+      1.00016,
+      0.45437
+    ],
+    "lod": 1
+  },
+  {
+    "id": "chess-pawn-lod0",
+    "file": "models/chess-pawn-lod0.glb",
+    "kind": "prop",
+    "tris": 5088,
+    "texBytes": 0,
+    "boundRadiusM": 0.552,
+    "materialSlots": [
+      "pawn_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.34358,
+      0.55,
+      0.34358
+    ],
+    "lod": 0
+  },
+  {
+    "id": "chess-pawn-lod1",
+    "file": "models/chess-pawn-lod1.glb",
+    "kind": "prop",
+    "tris": 1450,
+    "texBytes": 0,
+    "boundRadiusM": 0.552,
+    "materialSlots": [
+      "pawn_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.34371,
+      0.55,
+      0.34371
+    ],
+    "lod": 1
+  },
+  {
+    "id": "chess-queen-lod0",
+    "file": "models/chess-queen-lod0.glb",
+    "kind": "prop",
+    "tris": 5796,
+    "texBytes": 0,
+    "boundRadiusM": 1.171,
+    "materialSlots": [
+      "queen_silicone",
+      "silver"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      0.34201,
+      1.16957,
+      0.60064
+    ],
+    "lod": 0
+  },
+  {
+    "id": "chess-queen-lod1",
+    "file": "models/chess-queen-lod1.glb",
+    "kind": "prop",
+    "tris": 1443,
+    "texBytes": 0,
+    "boundRadiusM": 1.171,
+    "materialSlots": [
+      "queen_silicone",
+      "silver"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      0.34142,
+      1.16935,
+      0.60214
+    ],
+    "lod": 1
+  },
+  {
+    "id": "chess-rook-lod0",
+    "file": "models/chess-rook-lod0.glb",
+    "kind": "prop",
+    "tris": 5744,
+    "texBytes": 0,
+    "boundRadiusM": 1.004,
+    "materialSlots": [
+      "rook_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.54293,
+      1.00012,
+      0.4509
+    ],
+    "lod": 0
+  },
+  {
+    "id": "chess-rook-lod1",
+    "file": "models/chess-rook-lod1.glb",
+    "kind": "prop",
+    "tris": 1393,
+    "texBytes": 0,
+    "boundRadiusM": 1.006,
+    "materialSlots": [
+      "rook_silicone"
+    ],
+    "palette": "all",
+    "draws": 1,
+    "sizeM": [
+      0.54313,
+      1.00084,
+      0.45095
+    ],
+    "lod": 1
+  },
+  {
+    "id": "pocket-watch",
+    "file": "models/pocket-watch.glb",
+    "kind": "prop",
+    "tris": 1258,
+    "texBytes": 0,
+    "boundRadiusM": 1.158,
+    "materialSlots": [
+      "watch_gold",
+      "watch_enamel"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      0.92002,
+      1.156,
+      0.16299
+    ]
+  },
+  {
+    "id": "slot-cabinet-lod0",
+    "file": "models/slot-cabinet-lod0.glb",
+    "kind": "prop",
+    "tris": 5571,
+    "texBytes": 0,
+    "boundRadiusM": 1.959,
+    "materialSlots": [
+      "slot_cabinet",
+      "credit",
+      "emi_screen",
+      "slot_lamps",
+      "screen"
+    ],
+    "palette": "all",
+    "draws": 5,
+    "sizeM": [
+      1.66563,
+      1.88752,
+      1.21574
+    ],
+    "lod": 0
+  },
+  {
+    "id": "slot-cabinet-lod1",
+    "file": "models/slot-cabinet-lod1.glb",
+    "kind": "prop",
+    "tris": 1349,
+    "texBytes": 0,
+    "boundRadiusM": 1.955,
+    "materialSlots": [
+      "slot_cabinet",
+      "credit",
+      "emi_screen",
+      "slot_lamps",
+      "screen"
+    ],
+    "palette": "all",
+    "draws": 5,
+    "sizeM": [
+      1.66258,
+      1.87608,
+      1.21873
+    ],
+    "lod": 1
+  },
+  {
+    "id": "spiral-disc",
+    "file": "models/spiral-disc.glb",
+    "kind": "prop",
+    "tris": 572,
+    "texBytes": 0,
+    "boundRadiusM": 0.922,
+    "materialSlots": [
+      "disc_rim",
+      "spiral_mask"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      0.92,
+      0.92,
+      0.04599
+    ]
+  },
+  {
+    "id": "countdown-ring",
+    "file": "models/countdown-ring.glb",
+    "kind": "prop",
+    "tris": 1224,
+    "texBytes": 0,
+    "boundRadiusM": 2.912,
+    "materialSlots": [
+      "portal_trim",
+      "portal_glass",
+      "spiral_mask"
+    ],
+    "palette": "all",
+    "draws": 3,
+    "sizeM": [
+      2.91,
+      2.91,
+      0.26999
+    ]
+  },
+  {
+    "id": "finish-portal-lod0",
+    "file": "models/finish-portal-lod0.glb",
+    "kind": "prop",
+    "tris": 2876,
+    "texBytes": 0,
+    "boundRadiusM": 10.923,
+    "materialSlots": [
+      "portal_trim",
+      "portal_glass",
+      "spiral_mask"
+    ],
+    "palette": "all",
+    "draws": 3,
+    "sizeM": [
+      16.21235,
+      10.92004,
+      0.71991
+    ],
+    "lod": 0
+  },
+  {
+    "id": "finish-portal-lod1",
+    "file": "models/finish-portal-lod1.glb",
+    "kind": "prop",
+    "tris": 780,
+    "texBytes": 0,
+    "boundRadiusM": 10.86,
+    "materialSlots": [
+      "portal_trim",
+      "portal_glass",
+      "spiral_mask"
+    ],
+    "palette": "all",
+    "draws": 3,
+    "sizeM": [
+      16.18966,
+      10.83006,
+      0.71991
+    ],
+    "lod": 1
+  }
+]
