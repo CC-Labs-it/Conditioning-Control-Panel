@@ -172,3 +172,4 @@ sync7-account
 sync7-game-hosts
 sync7-local-ai
 sync7-webcam
+companion-barks-b
