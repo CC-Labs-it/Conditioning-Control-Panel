@@ -58,7 +58,9 @@ public sealed class BrowserPopoutTests
         var requests = host.NavigationRequests;
         Assert.True(page.FindControl<Button>("BtnPopOutBrowser")!.IsEnabled);
         Click(page, "BtnPopOutBrowser");
-        var popout = Assert.Single(shell.OwnedWindows.Where(w => w.Title == Loc.Get("title_browser_window")));
+        var popout = shell.BrowserPopoutWindow!;
+        Assert.Equal(Loc.Get("title_browser_window"), popout.Title);
+        Assert.Null(popout.Owner); // unowned as WPF: survives minimising the shell
         Assert.Same(host, popout.Content);
         Assert.Equal(1024, popout.Width);
         Assert.Equal(768, popout.Height);
@@ -68,9 +70,11 @@ public sealed class BrowserPopoutTests
         Assert.True(host.IsVisible);
         Assert.True(page.FindControl<TextBlock>("BrowserLoadingText")!.IsVisible);
         Assert.Equal(IconText.BareLoc("btn_focus"), ((TextBlock)page.FindControl<Button>("BtnPopOutBrowser")!.Content!).Text);
+        popout.WindowState = WindowState.Minimized;
         Click(page, "BtnPopOutBrowser");
+        Assert.Equal(WindowState.Normal, popout.WindowState); // Focus un-minimises, WPF :329-330
         page.OnBrowserPromptClick();
-        Assert.Single(shell.OwnedWindows.Where(w => w.Title == Loc.Get("title_browser_window")));
+        Assert.Same(popout, shell.BrowserPopoutWindow);
         Assert.Equal(requests, host.NavigationRequests);
 
         popout.Close();
@@ -87,11 +91,11 @@ public sealed class BrowserPopoutTests
         var requests = host.NavigationRequests;
         CoreSettings.Current.OfflineMode = true;
         Click(page, "BtnPopOutBrowser");
-        Assert.Empty(shell.OwnedWindows.Where(w => w.Title == Loc.Get("title_browser_window")));
+        Assert.Null(shell.BrowserPopoutWindow);
         Assert.Equal(requests, host.NavigationRequests);
         CoreSettings.Current.OfflineMode = false;
         Click(page, "BtnPopOutBrowser");
-        Assert.Single(shell.OwnedWindows.Where(w => w.Title == Loc.Get("title_browser_window")));
+        Assert.NotNull(shell.BrowserPopoutWindow);
         Assert.Equal(requests + 1, host.NavigationRequests);
         Assert.Equal(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked == true
             ? "hypnotube.com" : "bambicloud.com", host.Source!.Host);
@@ -101,35 +105,33 @@ public sealed class BrowserPopoutTests
     public Task LinkNavigationKeepsUsingThePoppedOutHost() => WithShell((shell, page, host) =>
     {
         Click(page, "BtnPopOutBrowser");
-        var popout = shell.OwnedWindows.Single(w => w.Title == Loc.Get("title_browser_window"));
+        var popout = shell.BrowserPopoutWindow!;
         var requests = host.NavigationRequests;
         Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/next"));
         Assert.Same(host, popout.Content);
         Assert.Equal(requests + 1, host.NavigationRequests);
         Assert.Equal("/next", host.Source!.AbsolutePath);
-        Assert.Single(shell.OwnedWindows.Where(w => w.Title == Loc.Get("title_browser_window")));
+        Assert.Same(popout, shell.BrowserPopoutWindow);
     });
 
     [Fact]
-    public Task PanicClosesPopoutAndUnloadsMediaEvenWhenOffline() => WithShell((shell, page, host) =>
+    public Task PanicLeavesTheUsersOwnPageAndPopoutAlone() => WithShell((shell, page, host) =>
     {
+        // WPF MainWindow.Browser.cs:3044-3046: panic never stops the page the user browses themselves.
         Click(page, "BtnPopOutBrowser");
-        var popout = shell.OwnedWindows.Single(w => w.Title == Loc.Get("title_browser_window"));
-        CoreSettings.Current.OfflineMode = true;
-        var surface = PanicSurfaces.All.Single(s => s.Id == "browser");
-        surface.Stop(shell);
-        Assert.False(popout.IsVisible);
-        Assert.Equal("about:blank", host.Source!.AbsoluteUri);
-        Assert.Contains(host, page.FindControl<Grid>("BrowserContainer")!.Children);
-        surface.Stop(shell); // safe when already stopped
-        Assert.Equal("about:blank", host.Source.AbsoluteUri);
+        var popout = shell.BrowserPopoutWindow!;
+        var source = host.Source;
+        PanicSurfaces.StopAll("browser test", shell);
+        Assert.True(popout.IsVisible);
+        Assert.Same(host, popout.Content);
+        Assert.Equal(source, host.Source);
     });
 
     [Fact]
     public Task ClosingShellClosesItsPopoutAndUnloadsThePage() => WithShell((shell, page, host) =>
     {
         Click(page, "BtnPopOutBrowser");
-        var popout = shell.OwnedWindows.Single(w => w.Title == Loc.Get("title_browser_window"));
+        var popout = shell.BrowserPopoutWindow!;
         shell.Close();
         Assert.False(popout.IsVisible);
         Assert.Equal("about:blank", host.Source!.AbsoluteUri);

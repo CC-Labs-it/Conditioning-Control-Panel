@@ -31,7 +31,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
-            new("browser", sh => sh?.StopBrowserForPanic()), // unload media and return the Home browser from its pop-out
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             new("voice-capture", sh => sh?.CancelVoicePrompt()),

@@ -12,16 +12,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private Window? _browserPopoutWindow;
+        internal Window? BrowserPopoutWindow => _browserPopoutWindow;
         internal bool IsBrowserPoppedOut => _browserPopoutWindow != null;
 
-        private void InitializeBrowserSurfaceLifecycle() => Closed += (_, _) => StopBrowserForPanic();
+        // Panic never touches this page (WPF MainWindow.Browser.cs:3044-3046); only shell teardown does.
+        private void InitializeBrowserSurfaceLifecycle() => Closed += (_, _) => CloseBrowserSurfaces();
 
         internal void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e)
         {
             if (BrowserBlockedOffline()) return;
-            if (_browserPopoutWindow is { } existing)
+            if (_browserPopoutWindow != null)
             {
-                existing.Activate();
+                FocusBrowserSurface();
                 return;
             }
             var page = BrowserPage;
@@ -54,7 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     RevealDashboardBrowser("popout-closed");
                 };
                 page.SyncBrowserPopout();
-                popout.Show(this);
+                popout.Show(); // unowned as WPF :2711, so it survives minimising the shell
                 // WPF's first pop-out lazily initializes the browser and selected homepage.
                 // Existing pages are moved without a reload, preserving media position.
                 if (host.Source == null) NavigateBrowser(SiteHomeUrl());
@@ -70,9 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>A panic must end the document even if its scripts are hung or reject a pause.
-        /// ponytail: unload to about:blank; native media pause/fullscreen signaling remains a follow-up.</summary>
-        internal void StopBrowserForPanic()
+        /// <summary>Shell teardown: the unowned pop-out would otherwise outlive the shell and keep playing.</summary>
+        private void CloseBrowserSurfaces()
         {
             if (BrowserView is { Source: not null } host) host.Navigate(new Uri("about:blank"));
             _browserPopoutWindow?.Close();
@@ -80,7 +81,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void FocusBrowserSurface()
         {
-            if (_browserPopoutWindow is { } popout) { popout.Activate(); return; }
+            if (_browserPopoutWindow is { } popout)
+            {
+                if (popout.WindowState == WindowState.Minimized) popout.WindowState = WindowState.Normal; // WPF :329-330
+                popout.Activate();
+                return;
+            }
             ShowTab("settings");
             RevealDashboardBrowser("focus-surface");
             Activate();
