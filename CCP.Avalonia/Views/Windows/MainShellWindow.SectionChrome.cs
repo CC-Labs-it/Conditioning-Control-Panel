@@ -15,7 +15,7 @@
 // ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
 // motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
+// (PaintDepthRail/Hud/Home/Quests), and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
 using System;
@@ -37,6 +37,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _sectionStripWired;
 
         internal SectionTabStrip? PageStrip => Named<SectionTabStrip>("SectionStrip");
+
+        /// <summary>Old keys that land on a new home with a "Moved" note. WPF :39.</summary>
+        internal static readonly string[] MovedRedirectKeys = { "together" };
+
+        /// <summary>How many times the "Moved" note shows across the app's life, then never. WPF :47.</summary>
+        internal const int NavMovedNoteLimit = 3;
+
+        /// <summary>
+        /// An old ShowTab key with a new home: navigate there and, the first three times, say so
+        /// (and glow the new home). True when the key was a redirect and has been handled. WPF :68.
+        /// </summary>
+        private bool TryRedirectMovedTab(string tab)
+        {
+            if (Array.IndexOf(MovedRedirectKeys, tab) < 0) return false;
+            if (!NavSections.Redirects.TryGetValue(tab, out var to)) return false;
+
+            if (to.Section == NavSections.Settings) OpenAppSettingsSection(to.Tab);
+            else ShowTab(to.Tab);
+
+            try
+            {
+                var s = CoreSettings.Current;
+                if (s.NavMovedToastHits < NavMovedNoteLimit)
+                {
+                    s.NavMovedToastHits++;
+                    CoreSettings.Save();
+                    var section = Loc.Get(NavSections.Find(to.Section)?.LabelKey ?? string.Empty);
+                    var page = to.Section == NavSections.Settings
+                        ? Loc.Get(SettingsSectionLabelKey(to.Tab) ?? string.Empty)
+                        : Loc.Get(NavStripTable.PageLabelKey(to.Tab) ?? string.Empty);
+                    PageStrip?.ShowMovedNote(string.Format(Loc.Get("nav_moved_toast"), section, page));
+
+                    // The one-time "moved here" shimmer rides the same three hits as the note.
+                    var glowKey = to.Tab;
+                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() => GlowNavTarget(glowKey));
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Moved note failed: {E}", ex.Message); }
+            return true;
+        }
 
         /// <summary>The tab a section returns to (its remembered tab, else its default). WPF :97.</summary>
         internal static string NavLastTabFor(string section) =>
