@@ -36,6 +36,7 @@ internal static class KeywordTriggerHead
         else Stop();
     }
 
+    // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
     internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
@@ -63,11 +64,13 @@ internal static class KeywordTriggerHead
             };
             var generation = Volatile.Read(ref _generation);
             var ch = special == null ? Translate(vk) : null;
-            GetWindowThreadProcessId(GetForegroundWindow(), out var processId);
+            uint processId = 0;
+            var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
+            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
-                var foreground = Foreground(processId);
+                var foreground = needsForeground ? Foreground(processId) : (null, false);
                 if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
                 else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
                 else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
@@ -170,12 +173,9 @@ internal sealed class KeywordAudioRuntime
         if (audio != null) Play(audio);
     }
 
-    internal void FireDemo(string keyword, string source)
-    {
-        var t = CoreSettings.Current.KeywordTriggers.FirstOrDefault(t =>
-            string.Equals(t.Keyword, keyword, StringComparison.OrdinalIgnoreCase));
-        if (t?.Actions?.OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled) is { } audio) Play(audio);
-    }
+    // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
+    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
+    internal void FireDemo(string keyword, string source) { }
 
     internal void StopAudio()
     {

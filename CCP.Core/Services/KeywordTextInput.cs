@@ -85,8 +85,12 @@ public static class KeywordMatchRules
             return entry.Length > 0 && string.Equals(entry, processName, StringComparison.OrdinalIgnoreCase);
         });
 
+    /// <summary>WPF KeywordTriggerService :677-681: the default Everywhere scope never resolves the foreground app.</summary>
+    public static bool NeedsForeground(AppSettings settings) =>
+        settings.KeywordTriggerAppScope != AwarenessAppScope.Everywhere || settings.KeywordTriggerIgnoreOwnFocus;
+
     public static bool AppAllowed(AppSettings settings, string? process, bool isOwn) =>
-        settings.KeywordTriggerAppScope == AwarenessAppScope.Everywhere && !settings.KeywordTriggerIgnoreOwnFocus ||
+        !NeedsForeground(settings) ||
         (process == null ? settings.KeywordTriggerAppScope != AwarenessAppScope.OnlyListed :
          !(isOwn && settings.KeywordTriggerIgnoreOwnFocus) && (settings.KeywordTriggerAppScope switch
          {

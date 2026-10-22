@@ -83,6 +83,15 @@ public sealed class KeywordTextInputTests
         Assert.Equal(allowed, KeywordMatchRules.AppAllowed(settings, process, own));
     }
 
+    [Theory]   // WPF :677-681: the default skips the per-keystroke foreground lookup
+    [InlineData(AwarenessAppScope.Everywhere, false, false)]
+    [InlineData(AwarenessAppScope.Everywhere, true, true)]
+    [InlineData(AwarenessAppScope.OnlyListed, false, true)]
+    [InlineData(AwarenessAppScope.ExceptListed, false, true)]
+    public void ForegroundIsResolvedOnlyWhenScopeNeedsIt(AwarenessAppScope scope, bool ignoreOwn, bool needed) =>
+        Assert.Equal(needed, KeywordMatchRules.NeedsForeground(
+            new AppSettings { KeywordTriggerAppScope = scope, KeywordTriggerIgnoreOwnFocus = ignoreOwn }));
+
     [Fact]
     public void AudioUsesWpfMasterCurveAndFivePercentFloor()
     {

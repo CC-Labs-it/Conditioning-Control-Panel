@@ -87,6 +87,16 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal((float)Math.Pow(0.5, 1.5), Assert.Single(played).Volume);
     });
 
+    [Fact]   // WPF FireDemoTrigger never reads saved triggers or plays audio (#887 back door)
+    public void TutorialDemoNeverPlaysTheSavedTriggerAudio() => Run((engine, _, played) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => false;
+        engine.FireDemo("sit", "tutorial");
+        CoreEntitlement.HasPremiumProvider = () => true;
+        engine.FireDemo("sit", "tutorial");
+        Assert.Empty(played);
+    });
+
     [Fact]
     public void StopCancelsPendingAudioRepeats() => Run((engine, s, played) =>
     {
