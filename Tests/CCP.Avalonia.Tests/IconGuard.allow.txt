@@ -44,6 +44,7 @@ Controls/SpiralGlyph.cs :: * :: path: D6 art - spiral glyph drawing
 Controls/ChasterRailChip.cs :: * :: path: D6 art - Chaster rail chip lock drawing
 Controls/DescentFuseRailChip.cs :: * :: path: D6 art - descent fuse rail chip drawing
 Views/Controls/SeasonRecapCard. :: * :: path: D6 art - season recap card illustration
+Views/Controls/Leash/LeashHelpSlip.cs :: * :: path: D6 art - leash ink-slip pictograms (WPF owner-approved mockup drawings)
 Helpers/BreakoutCardArt.cs :: * :: path: D6 art - breakout card art
 Views/Features/SplitFeatureCard. :: * :: path: D6 art - split feature card illustration
 Views/Windows/TutorialOverlay. :: * :: path: D6 art - tutorial overlay spotlight/arrows
