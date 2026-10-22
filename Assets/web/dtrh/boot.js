@@ -139,6 +139,7 @@ const leave = createExit({
 
 bridge.on('init', (m) => {
   initMsg = m;
+  hostState.plans = (m.plans && typeof m.plans === 'object') ? m.plans : null;   // brief C1/C10: the payout card's price, when sent
   // The app's Motion setting ('full' | 'reduced' | 'off'). Absent (older host) = follow the OS.
   setMotionLevel(m.motionLevel);
   setModContent(m.modContent);   // creator mods: the mod's own DTRH content (or null)

@@ -18,6 +18,7 @@ import { disposeTextures } from '../shared/assets.js';
 import { buildLoopLayout, createTunnel, FOG_COLOR, FOG_DENSITY } from './tunnel.js';
 import { createFallNav } from './fallNav.js';
 import { createSpawner } from './spawner.js';
+import { stageClosedFor } from './videoStage.js';
 import { createWallPosters } from './wallPosters.js';
 import { createJunctions } from './junctions.js';
 import { createBoonPick } from './boonPick.js';
@@ -736,6 +737,8 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
   // ONLY inside a descent in game mode, plus the usual ESC-pause / hidden-tab
   // parks. One source of truth so the Warren hub never plays video behind it.
   function syncSpawner() {
+    // a run standing down also takes its clip off the stage: parked, it froze there (#1470)
+    spawner.setStageClosed(stageClosedFor(!!game, runActive));
     // a soft (un-held) pause leaves the conveyor running - the fall doesn't wait
     spawner.setPaused((gamePaused && pauseHeld) || document.hidden || (game && !runActive));
   }

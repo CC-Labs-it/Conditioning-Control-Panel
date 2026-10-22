@@ -171,7 +171,7 @@ public partial class LauncherWindow
         shortcutBtn.Click += (_, _) =>
         {
             LauncherSfx.Click();
-            ShowShortcutResult(LauncherShortcuts.TryCreateDesktopShortcut(entry.Id));
+            ShowShortcutResult(LauncherShortcutWriter.TryCreateDesktopShortcut(entry.Id));
         };
         if (revealed) plate.Children.Add(shortcutBtn);
         body.Children.Add(plate);

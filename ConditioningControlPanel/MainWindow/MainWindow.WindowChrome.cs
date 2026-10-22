@@ -151,6 +151,7 @@ namespace ConditioningControlPanel
 
                 // Same reason for the remote HUD pill: unowned and topmost by design.
                 DisposeRemoteHud();
+                try { Controls.ScrolllerCreditChip.Dispose(); } catch { }
 
                 // Kill all audio and effects first - ensures clean exit
                 App.KillAllAudio();

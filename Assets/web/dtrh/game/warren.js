@@ -1193,7 +1193,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
   /** POCKETS pane: consumable HUD slots. Start with one, sew the rest. */
   function renderHandsWin(body, v) {
     const handsCard = el('wr-card', body);
-    el('wr-card-sub', handsCard, `${v.consumableSlots} pocket${v.consumableSlots === 1 ? '' : 's'} · grab toys in the fall and fire them from the dock.`);
+    el('wr-card-sub', handsCard, `${v.consumableSlots} pocket${v.consumableSlots === 1 ? '' : 's'} · grab toys in the fall. they dock and wake on their own.`);
     const handsRow = el('wr-pockets', handsCard);
     for (let i = 0; i < MAX_CONSUMABLE_SLOTS; i++) {
       const owned = i < v.consumableSlots;
