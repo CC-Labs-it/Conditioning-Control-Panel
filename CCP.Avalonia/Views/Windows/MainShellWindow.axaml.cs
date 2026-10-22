@@ -119,11 +119,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)
+            InitializeServerBanners(); // MainShellWindow.ServerBanners.cs (WPF MainWindow.Marquee.cs:649-826)
+            InitializeJustDropDoor(); // MainShellWindow.JustDrop.cs (WPF MainWindow.xaml.cs:3793)
             InitializeLockdownGreys(); // MainShellWindow.Lockdown.cs (WPF Lab.cs:612/707)
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
             InitializePremiumCelebration(); // MainShellWindow.Patreon.cs (WPF InitializePatreonTab + MainWindow.xaml.cs:3559)
             InitializePremiumSpark();       // MainShellWindow.PremiumSpark.cs (WPF MainWindow.PremiumSpark.cs)
+            InitializeSparkleWallet();      // MainShellWindow.SparkleWallet.cs (WPF MainWindow.SparkleWallet.cs)
             InitializeWebcamLoadingSplash(); // MainShellWindow.WebcamSplash.cs (WPF MainWindow.xaml.cs:3631)
             InitializeOfflineModeUI(); // MainShellWindow.OfflineMode.cs (WPF MainWindow.Settings.cs:122)
             InitializeHelpButtons(); // MainShellWindow.HelpButtons.cs (WPF MainWindow.Presets.cs:35 SetupHelpButtons)
@@ -135,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeWebcamActivePill(); // MainShellWindow.SafetyPills.cs (WPF LabTab.cs:134 WireWebcamActivePill)
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
+            InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
             Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
             Closed += (_, _) => _avatarTubeWindow?.Close();
@@ -325,7 +329,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   internal void SyncNoPanicState(…)
 //   internal void SyncOfflineModeState(…)
 //   internal bool RequestToggleWindowsStartup(…)
-//   private void LoadLogo(…)
 //   private void LoadTakeoverImage(…)
 //   private void RefreshThemeAwareElements(…)
 //   private static Color LightenColor(…)

@@ -48,7 +48,7 @@ public sealed class FallEffect : PossessionEffectBase
         var el = target?.Element;
         if (el == null) return false;
         if (PossessionVisual.IsWindowChrome(el)) return false;
-        if (PossessionOffLimits.IsOffLimits(el)) return false;
+        if (PossessionOffLimitsTree.IsOffLimits(el)) return false;
         return true;
     }
 
