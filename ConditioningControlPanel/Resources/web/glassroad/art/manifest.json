@@ -1,0 +1,5 @@
+[
+  {"id":"countdown-ring","file":"models/countdown-ring.glb","kind":"prop","tris":1224,"texBytes":0,"boundRadiusM":2.912,"materialSlots":["portal_trim","portal_glass","spiral_mask"],"palette":"all","draws":3,"sizeM":[2.91,2.91,0.26999]},
+  {"id":"finish-portal-lod0","file":"models/finish-portal-lod0.glb","kind":"prop","tris":2876,"texBytes":0,"boundRadiusM":10.923,"materialSlots":["portal_trim","portal_glass","spiral_mask"],"palette":"all","draws":3,"sizeM":[16.21235,10.92004,0.71991],"lod":0},
+  {"id":"finish-portal-lod1","file":"models/finish-portal-lod1.glb","kind":"prop","tris":780,"texBytes":0,"boundRadiusM":10.86,"materialSlots":["portal_trim","portal_glass","spiral_mask"],"palette":"all","draws":3,"sizeM":[16.18966,10.83006,0.71991],"lod":1}
+]
