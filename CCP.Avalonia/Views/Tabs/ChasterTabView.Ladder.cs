@@ -34,6 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private DispatcherTimer? _addedRoll;
         private bool _ladderPinned, _overLadder, _ladderLoading, _ladderBoardLoading;
         private RaffleCard? _raffleCard;
+        private int _raffleCardEpoch;
+        private RaffleCard? PageRaffleCard => ChasterHead.Service is { } chaster
+            && chaster.RaffleEpoch != _raffleCardEpoch ? null : _raffleCard;
         private LadderBoard? _ladderBoard;
         private string? _scrapSignature;
         private DateTime _ladderFetchedUtc = DateTime.MinValue;
@@ -88,6 +91,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtBalanceCaption.Text = Loc.Get("chaster_balance_caption");
             Receipt.Show(new TabBill(new[] { new TabBillLine("attention", 2, 300), new TabBillLine("typo", 1, -60) }, 300, -60, 0));
             BuildCalendar((DateTime.Today.AddDays(-3), DateTime.Today.AddDays(4)), DateTime.Today);
+            var utc = DateTime.UtcNow;
+            ShowRaffleCard(new RaffleCard(utc.ToString("yyyy-MM"), DateTime.DaysInMonth(utc.Year, utc.Month),
+                utc.Day, new[] { utc.Day }, 7200, 25, 36000, false, false, null));
             // Circe's mood meter and a line of hers on the page
             MoodMeter.Apply(new CircesMood(MoodLevel.Hot));
             PageSays.Say(Loc.Get(CirceLines.Key(CirceMoment.Popped, 1)));
@@ -97,6 +103,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void LadderOnShown()
         {
             ScrapSettle();
+            PaintLadder();
+            RefreshCalendarRaffle();
             if (ChasterHead.Service?.IsLinked != true) { PaintScrap(); return; }
             _ = FetchScrapAsync();
             _ = FetchLadderAsync(force: true);
@@ -254,10 +262,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ladderLoading = true;
             try
             {
+                var epoch = chaster.RaffleEpoch;
                 var card = await Task.Run(() => chaster.RaffleAsync());
                 _raffleCard = card;
+                _raffleCardEpoch = epoch;
                 _ladderFetchedUtc = DateTime.UtcNow;
                 PaintLadder();
+                RefreshCalendarRaffle();
                 if (LadderPopup.IsOpen) UnrollLadder();
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] raffle fetch"); }
@@ -274,12 +285,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void ShowRaffleCard(RaffleCard? card)
         {
             _raffleCard = card;
+            _raffleCardEpoch = ChasterHead.Service?.RaffleEpoch ?? 0;
             PaintLadder();
+            RefreshCalendarRaffle();
         }
 
         private void PaintLadder()
         {
-            var card = _raffleCard;
+            var card = PageRaffleCard;
             RafflePips.Children.Clear();
             string? state = null;
             LadderRows.IsVisible = card != null;

@@ -78,6 +78,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _subscribed = c;
                 c.LinkChanged += OnLinkChanged;
                 c.LockChanged += OnLockChanged;
+                c.RaffleChanged += OnRaffleChanged;
+                OnRaffleChanged();
                 c.Booked += OnBooked;
                 _tick.Start();
                 SlowTick.Start();
@@ -86,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 s.LinkChanged -= OnLinkChanged;
                 s.LockChanged -= OnLockChanged;
+                s.RaffleChanged -= OnRaffleChanged;
                 s.Booked -= OnBooked;
                 _subscribed = null;
                 _tick.Stop();
@@ -94,6 +97,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         // All three arrive on whatever thread found out.
+        private void OnRaffleChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raffleCard != null && PageRaffleCard == null)
+            {
+                _raffleCard = null;
+                PaintLadder();
+            }
+            RefreshCalendarRaffle();
+        });
+
         private void OnLinkChanged() => Dispatcher.UIThread.Post(OnTabShown);
         private void OnLockChanged() => Dispatcher.UIThread.Post(RefreshHero);
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() => { RefreshHero(); RefreshAdded(); RefreshNumbers(); });

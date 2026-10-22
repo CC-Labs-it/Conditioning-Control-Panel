@@ -42,7 +42,7 @@ internal static class ChasterHead
         };
         var target = Target(userDataDir, overrideUrl);
         inner ??= new HttpClientHandler();
-        return new ChasterService(
+        var service = new ChasterService(
             new ChasterClient(new Route(target, inner), $"ConditioningControlPanel/{CoreReleaseContent.AppVersion}"),
             new SecretChasterTokenStore(),
             Path.Combine(CorePaths.UserData, "chaster_tab.json"),
@@ -62,6 +62,8 @@ internal static class ChasterHead
                                   && string.CompareOrdinal(dayKey, first) >= 0
                 ? log.ConditioningMinutesOn(dayKey) : null,
         };
+        service.WatchIdentity();
+        return service;
     }
 
     /// <summary>WPF ChasterHooks.Attach, for the events this head raises: quests (and the dailies
