@@ -1280,6 +1280,23 @@ passes strict validation, is decoded, and is reviewed alone and over the existin
 galaxy. Private checks record seams, poles, error and exact file hashes.
 Artwork is original deterministic spherical density fields using project palettes.
 No third-party imagery or runtime text. Sources, masters and contacts stay private.
+## Wave 4 reaction sprites
+
+Ten original wordless marks extend the existing paper, dark ink, pink and gold UI:
+anger puff, sweat drop, question curl, heart, sleepy swirl, sparkle, dizzy spiral,
+musical note, surprise burst and oops swirl. No letters or baked labels.
+
+Files are SVG paths and simple shapes in a 64-square viewBox, readable at 32px.
+Desktop and phone share the same files. There are zero baked texture bytes or tris.
+No fonts, images, external references, filters or scripts appear in runtime SVGs.
+
+The host owns placement above the kart, lifetime, scale, entry/exit and motion
+settings. Preserve the viewBox aspect ratio. The curl symbols are original marks,
+not literal punctuation or text. Paper strokes preserve contrast over the sky.
+
+Validation rasterizes every file at native 32px, checks clear exterior borders,
+and reviews the contact on both paper and dark backgrounds. Editable path sources,
+raster proofs and hashes remain private. No third-party assets were added.
 
 ### Tier residency and running budget
 
@@ -1299,6 +1316,8 @@ is resident on either tier; release the previous palette layer before loading an
 | phone | 0.000000 | 7.083340 | 116.416656 | 124.326813 |
 | desktop | 10.750008 | 87.083347 | 196.416664 | 205.416664 |
 | phone | 2.687508 | 9.770847 | 119.104164 | 127.014320 |
+| desktop | 0.000000 | 87.083347 | 196.416664 | 205.416664 |
+| phone | 0.000000 | 9.770847 | 119.104164 | 127.014320 |
 
 Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
 Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
