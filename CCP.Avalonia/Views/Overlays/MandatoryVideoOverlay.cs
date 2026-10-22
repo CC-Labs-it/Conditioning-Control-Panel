@@ -782,20 +782,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         });
 
         /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
-        private void ShowNoVideos() => Dispatcher.UIThread.Post(() =>
+        private void ShowNoVideos()
         {
-            var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-            if (owner == null) return;
-            _ = ShowNoVideosAsync(owner, Scheduler);
-        });
+            // WPF VideoService.cs:2474 reads the funnel at trigger time; a refill before the post runs must not flip it.
+            var s = Scheduler;
+            var filterEmptied = NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration);
+            Dispatcher.UIThread.Post(() =>
+            {
+                var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                if (owner == null) return;
+                _ = ShowNoVideosAsync(owner, s, filterEmptied);
+            });
+        }
 
         /// <summary>WPF VideoService.cs:2486-2495: the guidance box, then - AFTER it closes, and only when
         /// the length filter did not cause the empty library - the remote-media offer.</summary>
-        internal static async System.Threading.Tasks.Task ShowNoVideosAsync(Window owner, MandatoryVideoScheduler s)
+        internal static async System.Threading.Tasks.Task ShowNoVideosAsync(Window owner, MandatoryVideoScheduler s, bool filterEmptied)
         {
             try
             {
-                var filterEmptied = NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration);
                 await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(s));
                 if (!filterEmptied) RemoteMediaOffer.Offer("videos", owner);
             }

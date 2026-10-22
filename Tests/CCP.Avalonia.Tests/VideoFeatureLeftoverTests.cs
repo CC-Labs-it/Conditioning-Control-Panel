@@ -103,7 +103,11 @@ public sealed class VideoFeatureLeftoverTests
             try
             {
                 Assert.False(scheduler.Trigger());   // runs the funnel, nothing to play
-                var run = MandatoryVideoOverlay.ShowNoVideosAsync(owner, scheduler);
+                // Read at trigger time (WPF VideoService.cs:2474), then let the funnel flip before the box shows.
+                var atTrigger = NoVideosReason.LengthFilterEmptied(scheduler.LastFunnelEnabled, scheduler.LastFunnelDuration);
+                s.VideoMinDurationSeconds = filterEmptied ? 0 : 100;
+                scheduler.Trigger();
+                var run = MandatoryVideoOverlay.ShowNoVideosAsync(owner, scheduler, atTrigger);
                 Dispatcher.UIThread.RunJobs();
                 var dialog = Assert.Single(owner.OwnedWindows.OfType<MessageDialog>());
                 Assert.Equal(0, opened);   // never before the box closes
