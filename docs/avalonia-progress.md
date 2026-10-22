@@ -2346,3 +2346,74 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/main-20261015-compat: +317
 - Compat for main sync #7: Scrolller cluster + 13 helpers into Core (licence switch now reaches the Avalonia online-media path), App.* in Core as seams, head hooks (sweeper, idle voice, funnel), Avalonia vault card/update button follow 7.1.14, WPF scan tests via SourceRoots/Assets. rgate green except the listed RaceTrackPlayer flake (run 39709240603).
+
+## avalonia-port/possession-core-c: +319 vs base
+- Cloud session unit (possession-core-c); reviewed and gated locally.
+
+## avalonia-port/deeper-core-b: +337
+- Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
+
+## avalonia-port/deeper-core-b: +342
+- Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
+## avalonia-port/video-core-b: +334
+- Cloud session unit (video-core-b); reviewed and gated locally.
+
+## avalonia-port/video-core-b: +334
+- Cloud session unit (video-core-b); reviewed and gated locally.
+
+## avalonia-port/emidesk-core-c: +47
+- Cloud session unit (emidesk-core-c); reviewed and gated locally.
+
+## avalonia-port/emidesk-core-c: +47
+- Cloud session unit (emidesk-core-c); reviewed and gated locally.
+## avalonia-port/dtrh-feel-sync: merge of 46e9e908d
+- Imports the head dev's DTRH feel rework (dtrh-feel/01..17, 27 commits). It had one conflict, in DtrhAssetManifest (resolved by keeping both the loop field and CorePaths.UserData). The 24 new web files are under Assets/web/dtrh, KeptEscapePage.Dtrh is in Core PanicPolicy, and the node tests pass 81/81.
+
+## avalonia-port/dtrh-feel-port: +77
+- DTRH feel rework delta ledger (27 rows: 22 ported-by-merge, 5 needs-port -> lane game-dtrh-host), parity row game-dtrh (missing), DtrhMotionWire git mv to Core with fail-proven Core tests. Local gate GATE-OK (P97 fallback; Windows runs in PR CI).
+
+## avalonia-port/sparkle-wallet: +688
+- Header Sparkle wallet + invite/help popups on BeatLoops; balance from SkillPoints, award cue via SparklePointRewards (moved to Core).
+- ctrl-sparkle-wallet -> stub (EmiFace), shell-sparkle-wallet -> stub (no Avalonia award producer yet).
+
+## avalonia-port/chaos-bubble-field: +458
+- Chaos bubble variants and payloads moved to CCP.Core (uint tints; Fire goes through the head-seeded EffectPayload.Firer). WPF fire bodies are now in EffectPayloadFiring.
+- New ChaosFieldMath (spawn cadence, pop points) is used by WPF ChaosModeService and has tests proven to fail when broken. Avalonia seeds Firer with a logging no-op; the bubble field is the next lane.
+
+## avalonia-port/chaos-pop-text: +440
+- Chaos pop text ported: pooled click-through combat-text overlay with WPF timing/tint, pool closed on run teardown.
+- Row stays stub until bubble field/toys/payout callers are ported; live overlay steps queued.
+
+## avalonia-port/overlay-speak-cue: +499
+- Speak cue overlay + Core SpeakCueState ported (fade, anchor, panic, render-all); row stays stub until Deeper runtime gives it a caller.
+
+## avalonia-port/ci-skip-cloud: +19
+- Push-triggered port workflows (distro-check, reference-render, snapshot-lock) skip avalonia-port/cloud-** and gate-** branches; workflow_dispatch kept.
+- Decision entry reserves the cloud-/gate- prefixes for throwaway branches and notes that gate pushes already carry [skip ci].
+
+## avalonia-port/flake-clocks: +52
+- ChasterFlash coalescing and MatchClock scheduled fire run on a TimeProvider seam; ChasterBill coalescing test and the P108 GoonClock dispatch test are deterministic (stepped clocks), both fail-proven; rgate 39687660015 green.
+
+## avalonia-port/panic-key-sweep: +185
+- Panic key matched by Key value (alias-aware, Enter/Return) on MandatoryVideoOverlay, BubbleCount game/result, FirstShowStage via one helper `Platform/HotkeyNames`.
+- Panic bound to Enter now beats the focused control; headless tests fail-proven.
+
+## avalonia-port/chaos-fx-window: +498
+- Chaos FX window (vignette, edge glow, heat tint) ported with Core envelope maths; heat tint wired into ChaosRunHost; run-end close tested (fail-proven).
+- Row chaos-fx-window: missing -> stub (no user path to StartRun yet).
+
+## avalonia-port/launcher-edge: +134
+- Rounded launcher (DWM round on Windows, transparent + 8 px clip elsewhere, square when maximised); glint turns in the unit box like WPF RelativeTransform.
+- Edge timing (flare/breath/glint/idle 14 s/focus 4 s/park) covered by 4 fail-proven tests (focus gap on a stepped clock); win-launcher-edge -> wired.
+
+## avalonia-port/v2-get-it-row: +290
+- V2GetItRow ported (Core V2PurchaseRule via git mv); Flashes v2 box shows the Get it row: owned hides it, signed out offers sign-in, signed in reads "Not available" until feat-backroom-counter-buy.
+- ctrl-v2-get-it-row missing -> stub; new row feat-backroom-counter-buy.
+
+## avalonia-port/inline-loop-video: +362
+- InlineLoopVideo (muted looping LibVLC surface via VlcFrameSink) is now in the HelpPopover clip poster; ctrl-inline-loop-video -> wired, lifecycle and leak tests fail-proven; review fixes drop wall-clock asserts.
+
+## avalonia-port/overlay-takeover-announcer: +617
+- Takeover cue overlay ported: Core TakeoverCueQueue (queue + WPF timings), Skia bloom/sparks + shake on a click-through X11 window, shown on the announce roll.
+- Panic and shell close clear the queue and close it; ledger overlay-takeover-announcer -> wired.
+- Review fixes: the topmost re-raise runs on real elapsed time and the alpha is written only when it changes; the test drives performable actions.

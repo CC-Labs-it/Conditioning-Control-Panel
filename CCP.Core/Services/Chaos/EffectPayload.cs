@@ -1,11 +1,11 @@
 using System;
-using System.Windows;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Chaos;
 
 /// <summary>
 /// The kinds of one-shot effect a Chaos bubble can carry. Each maps to a
-/// concrete <see cref="EffectPayload"/> that wraps an existing App.* trigger.
+/// concrete <see cref="EffectPayload"/> that a head fires through an existing one-shot trigger.
 /// </summary>
 public enum EffectBubblePayloadKind
 {
@@ -28,9 +28,10 @@ public enum EffectBubblePayloadKind
 /// (0..100, derived from bubble size at spawn) scales the effect: bigger bubble
 /// ⇒ stronger payload.
 ///
-/// All <see cref="Fire"/> implementations are invoked on the UI thread (from a
-/// DispatcherTimer tick or a click handler) and must be self-contained — the
-/// underlying App.* services own their own dispatching/threading.
+/// <see cref="Fire"/> is invoked on the UI thread (from a timer tick or a click handler).
+/// The payloads are data here; what firing DOES is head-side, through <see cref="Firer"/>,
+/// which each head seeds at startup (WPF: EffectPayloadFiring; Avalonia: a logging no-op
+/// until its effect runner lands). The head's services own their own dispatching/threading.
 /// </summary>
 public abstract class EffectPayload
 {
@@ -60,14 +61,21 @@ public abstract class EffectPayload
     /// </summary>
     public static double GlobalDurationMult { get; set; } = 1.0;
 
+    /// <summary>The head's effect runner. Unseeded = firing does nothing (a head with no effects yet).</summary>
+    public static Action<EffectPayload>? Firer { get; set; }
+
     /// <summary>Run the wrapped one-shot effect, scaled by <see cref="Strength"/>.</summary>
-    public abstract void Fire();
+    public void Fire()
+    {
+        try { Firer?.Invoke(this); }
+        catch (Exception ex) { Log.Debug("{Payload}: {E}", GetType().Name, ex.Message); }
+    }
 
     /// <summary>Lerp helper: map Strength 0..100 onto [min,max].</summary>
-    protected int Scale(int min, int max) =>
+    internal int Scale(int min, int max) =>
         min + (int)Math.Round((max - min) * Math.Clamp(Strength, 0, 100) / 100.0);
 
-    protected double ScaleD(double min, double max) =>
+    internal double ScaleD(double min, double max) =>
         min + (max - min) * Math.Clamp(Strength, 0, 100) / 100.0;
 }
 
@@ -76,7 +84,7 @@ public sealed class FlashPayload : EffectPayload
 {
     internal bool UseFlashSettings { get; set; }
     internal string? ImagePath { get; set; }
-    internal Point? OriginPx { get; set; }
+    internal (double X, double Y)? OriginPx { get; set; }
     internal double FaceDiameterPx { get; set; }
     public override string DisplayName => "flash";
     public override EffectBubblePayloadKind Kind => EffectBubblePayloadKind.Flash;
@@ -96,19 +104,6 @@ public sealed class FlashPayload : EffectPayload
         return (Scale(1, 3), (int)(Scale(900, 2000) * GlobalDurationMult * DurationMult), Scale(68, 143));
     }
 
-    public override void Fire()
-    {
-        try
-        {
-            var (amount, duration, size) = ResolveBurst(App.Settings?.Current);
-            if (ImagePath != null && OriginPx is { } origin)
-                App.Flash?.TriggerFlashOnceWithImage(ImagePath, duration, playSound: true,
-                    bubbleOrigin: origin, bubbleDiameter: FaceDiameterPx, size: size, amount: amount);
-            else
-                App.Flash?.TriggerFlashOnce(amount, duration, size, suppressHaptic: false);
-        }
-        catch (Exception ex) { App.Logger?.Debug("FlashPayload: {E}", ex.Message); }
-    }
 }
 
 /// <summary>Flashes a subliminal from the active pool.</summary>
@@ -116,50 +111,24 @@ public sealed class SubliminalPayload : EffectPayload
 {
     public override string DisplayName => "subliminal";
     public override EffectBubblePayloadKind Kind => EffectBubblePayloadKind.Subliminal;
-
-    public override void Fire()
-    {
-        try { App.Subliminal?.FlashSubliminal(); }
-        catch (Exception ex) { App.Logger?.Debug("SubliminalPayload: {E}", ex.Message); }
-    }
 }
 
 /// <summary>Snaps an overlay (pink_filter / spiral / braindrain) on for a few seconds.</summary>
 public sealed class OverlayPayload : EffectPayload
 {
-    private readonly string _kind;
-    private readonly double? _braindrainOpacity;
+    internal string OverlayKind { get; }
+    internal double? BraindrainOpacity { get; }
     // braindrainOpacity: when set, the braindrain wash uses this opacity (0..1) for the
     // computed duration instead of its faint ~10%/10s default. Used by the dashboard "glitch"
     // trigger bubble (~30%); null keeps chaos's original faint wash untouched.
     public OverlayPayload(string overlayKind, double? braindrainOpacity = null)
     {
-        _kind = overlayKind;
-        _braindrainOpacity = braindrainOpacity;
+        OverlayKind = overlayKind;
+        BraindrainOpacity = braindrainOpacity;
     }
 
-    public override string DisplayName => _kind;
+    public override string DisplayName => OverlayKind;
     public override EffectBubblePayloadKind Kind => EffectBubblePayloadKind.Overlay;
-
-    public override void Fire()
-    {
-        try
-        {
-            int duration = (int)(Scale(1500, 4500) * GlobalDurationMult * DurationMult);
-            if (_kind == "braindrain")
-            {
-                // braindrain = a full-screen wash of a random flash-pool image/gif.
-                if (_braindrainOpacity is double o) ChaosFlashOverlay.Show(duration, o);  // glitch: ~30%
-                else ChaosFlashOverlay.Show();                                            // chaos: faint ~10%/10s default
-            }
-            else
-            {
-                double opacity = ScaleD(0.25, 0.70);   // pink_filter / spiral take a plain 0..1 opacity
-                App.Overlay?.ShowOverlayTimed(_kind, duration, opacity);
-            }
-        }
-        catch (Exception ex) { App.Logger?.Debug("OverlayPayload: {E}", ex.Message); }
-    }
 }
 
 /// <summary>
@@ -174,39 +143,6 @@ public sealed class BrainDrainMeltPayload : EffectPayload
 {
     public override string DisplayName => "braindrain melt";
     public override EffectBubblePayloadKind Kind => EffectBubblePayloadKind.Overlay;
-
-    public override void Fire()
-    {
-        try
-        {
-            var overlay = App.Overlay;
-            if (overlay == null) return;
-
-            // One drain at a time. The user's own loop wins outright - it has no duration, so a
-            // timed overlay landing on top of it would end by tearing THEIR drain down ten seconds
-            // later. The pop still paid its XP before we got here, so nothing is lost.
-            bool userDrainUp = App.BrainDrain?.IsRunning == true || overlay.BrainDrainVisualUp;
-            if (!BrainDrainBubble.ShouldPlayOverlay(overlay.TimedBrainDrainActive, userDrainUp))
-            {
-                App.Logger?.Information("Bubble: brain drain pop paid XP only - a drain is already up");
-                return;
-            }
-
-            // The pop borrows the user's own blur dial, so a dial at 0 means this bubble has no
-            // picture to show either. XP is already paid; the bubble is its own reward.
-            var strength = App.Settings?.Current?.BrainDrainBlurStrength ?? 50;
-            if (BrainDrainVisualPolicy.IsSilent(strength))
-            {
-                App.Logger?.Information("Bubble: brain drain pop paid XP only - the blur dial is at 0");
-                return;
-            }
-
-            var kind = BrainDrainBubble.OverlayKindFor(MotionFx.Level);
-            overlay.ShowOverlayTimed(kind, BrainDrainBubble.OverlayMs,
-                                     BrainDrainBubble.OverlayOpacity(strength));
-        }
-        catch (Exception ex) { App.Logger?.Debug("BrainDrainMeltPayload: {E}", ex.Message); }
-    }
 }
 
 /// <summary>Triggers a mandatory video (silent no-op if the video pool is empty).</summary>
@@ -226,36 +162,6 @@ public sealed class VideoPayload : EffectPayload
     /// </summary>
     public int ChaosToken { get; set; }
 
-    public override void Fire()
-    {
-        try
-        {
-            // Only chaos caps playback at ~15s, making a random start a "random slice".
-            // Dashboard trigger bubbles reuse this payload uncapped, so arming there made
-            // the full mandatory video start midway (#456/#458).
-            if (!Ambient)
-                App.Video?.ArmRandomSegment(SEGMENT_SEC);
-
-            if (App.Video == null)
-            {
-                // Was a silent null-conditional: the pop simply evaporated (#1135).
-                App.Logger?.Information("VideoPayload: nothing to fire - the video service is not available");
-                return;
-            }
-
-            // userEarned: a human popped this bubble on purpose. It is the one thing that separates
-            // this call from the background scheduler, and the guards inside TriggerVideo that exist
-            // to keep the SCHEDULER out of the user's way read it so they no longer eat a video the
-            // user asked for (#1135).
-            App.Video.TriggerVideo(silentIfEmpty: true, userEarned: true, chaosToken: ChaosToken);
-        }
-        catch (Exception ex)
-        {
-            // Information, not Debug: a Debug line is below the default log level, so this was the
-            // second place a popped video bubble could fail leaving nothing behind at all (#1135).
-            App.Logger?.Information(ex, "VideoPayload: firing the video failed - the pop produced nothing");
-        }
-    }
 }
 
 /// <summary>Opens a HypnoTube link from the pool in the embedded browser, auto-fullscreen.</summary>
@@ -263,34 +169,6 @@ public sealed class HtLinkPayload : EffectPayload
 {
     public override string DisplayName => "HT link";
     public override EffectBubblePayloadKind Kind => EffectBubblePayloadKind.HtLink;
-
-    public override void Fire()
-    {
-        try
-        {
-            // Never navigate over a video that's already playing — this payload used to fire
-            // blind, which is the "AI effects just stop your video halfway through" report.
-            if (App.BrowserMedia?.ShouldDeferNewVideo == true)
-            {
-                App.Logger?.Debug("HtLinkPayload: browser media active (or in cool-off) - skipping");
-                return;
-            }
-
-            var url = HtLinkPool.PickRandom();
-            if (string.IsNullOrWhiteSpace(url)) return;
-            if (Application.Current?.MainWindow is MainWindow mw)
-            {
-                // Claim the slot before navigating so nothing else stacks on the clip we open.
-                if (App.BrowserMedia?.BeginTakeover(
-                        Services.Browser.BrowserMediaService.MediaOwner.Chaos) == false)
-                    return;
-                // userInitiated: false - a chaos payload fires on its own schedule, so an offline
-                // block here has no click to explain and must not toast.
-                mw.NavigateToUrlInBrowser(url!, autoPlayFullscreen: true, userInitiated: false);
-            }
-        }
-        catch (Exception ex) { App.Logger?.Debug("HtLinkPayload: {E}", ex.Message); }
-    }
 }
 
 /// <summary>Plays a one-shot subliminal whisper (reuses the subliminal audio path).</summary>
@@ -298,13 +176,6 @@ public sealed class AudioPayload : EffectPayload
 {
     public override string DisplayName => "whisper";
     public override EffectBubblePayloadKind Kind => EffectBubblePayloadKind.Audio;
-
-    public override void Fire()
-    {
-        // No dedicated SFX pool yet — reuse the subliminal whisper for an audio sting.
-        try { App.Subliminal?.FlashSubliminal(); }
-        catch (Exception ex) { App.Logger?.Debug("AudioPayload: {E}", ex.Message); }
-    }
 }
 
 /// <summary>Triggers a Bambi Freeze (special subliminal + audio).</summary>
@@ -312,12 +183,6 @@ public sealed class BambiFreezePayload : EffectPayload
 {
     public override string DisplayName => "freeze";
     public override EffectBubblePayloadKind Kind => EffectBubblePayloadKind.BambiFreeze;
-
-    public override void Fire()
-    {
-        try { App.Subliminal?.TriggerBambiFreeze(); }
-        catch (Exception ex) { App.Logger?.Debug("BambiFreezePayload: {E}", ex.Message); }
-    }
 }
 
 /// <summary>
@@ -338,54 +203,6 @@ public sealed class BouncingTextPayload : EffectPayload
     public const double OPACITY      = 0.85;  // text opacity (informational; service reads its own setting)
     public const int    TEXT_SIZE    = 120;   // % of base font (informational tunable)
     public const int    SPEED        = 5;     // 1..10 bounce speed (informational tunable)
-
-    public override void Fire()
-    {
-        try
-        {
-            var svc = App.BouncingText;
-            if (svc == null || svc.IsRunning) return;   // don't hijack a user-started bouncer
-
-            // Source a single affirmation from the existing enabled phrase pool.
-            string? phrase = PickAffirmation();
-            var pool = phrase != null ? new System.Collections.Generic.List<string> { phrase } : null;
-            svc.Start(bypassLevelCheck: true, pool: pool);
-
-            int bounces = 0;
-            EventHandler? onBounce = null;
-            var life = new System.Windows.Threading.DispatcherTimer
-            { Interval = TimeSpan.FromSeconds(Math.Max(0.5, DURATION_SEC * GlobalDurationMult)) };
-
-            void StopOnce()
-            {
-                try { life.Stop(); } catch { }
-                if (onBounce != null) { try { svc.OnBounce -= onBounce; } catch { } }
-                try { svc.Stop(); } catch { }
-            }
-
-            onBounce = (_, _) => { if (++bounces >= MAX_BOUNCES) StopOnce(); };
-            svc.OnBounce += onBounce;
-            life.Tick += (_, _) => StopOnce();
-            life.Start();
-        }
-        catch (Exception ex) { App.Logger?.Debug("BouncingTextPayload: {E}", ex.Message); }
-    }
-
-    private static string? PickAffirmation()
-    {
-        try
-        {
-            var pool = App.Settings?.Current?.BouncingTextPool;
-            if (pool == null) return null;
-            var enabled = new System.Collections.Generic.List<string>();
-            foreach (var kv in pool) if (kv.Value) enabled.Add(kv.Key);
-            if (enabled.Count == 0) return null;
-            return enabled[_rng.Next(enabled.Count)];
-        }
-        catch { return null; }
-    }
-
-    private static readonly Random _rng = new();
 }
 
 /// <summary>
@@ -406,18 +223,4 @@ public sealed class GifCascadePayload : EffectPayload
     public const double FALL_SPEED         = 3.6;   // DIPs per ~16ms frame — a quick, lively slide
     public const double OPACITY            = 0.9;   // per-image opacity
 
-    public override void Fire()
-    {
-        try
-        {
-            ChaosGifCascadeOverlay.Show(
-                spawnRatePerSec: SPAWN_RATE_PER_SEC,
-                durationSec: DURATION_SEC * GlobalDurationMult,
-                gifSize: GIF_SIZE,
-                fallSpeed: FALL_SPEED,
-                opacity: OPACITY,
-                startScale: START_SCALE);
-        }
-        catch (Exception ex) { App.Logger?.Debug("GifCascadePayload: {E}", ex.Message); }
-    }
 }
