@@ -6,7 +6,13 @@
  * opens the low-pass and it eases back over boost.tailTcS. The duck pulls engine and pad
  * down to a floor while the rescue holds its one tone. Every change is a setTargetAtTime
  * glide, never a step.
+ *
+ * Recorded engine (useSamples): once the three loops (idle hum, cruise, high-speed air) decode,
+ * they take over and the saws fall silent; the saws stay as the fallback when a file fails.
+ * The loops crossfade by speedPct and their pitch travels at most audio.engPitchTravelSemis.
  */
+import { engineLayers, enginePitchSemis, engineCutHz, semisToRate } from './sfxmap.js';
+import { mixGet } from './mix.js';
 
 // feel gap: sound design numbers have no feel.json group yet (reported).
 export const SOUND = {
@@ -55,11 +61,34 @@ export function createEngine(ctx, out, feel) {
     o.connect(padGain); o.start(); return o;
   });
 
+  // the recorded engine: three loops through one low-pass into the same duck
+  let rec = null;
+  const LAYERS = ['idle', 'cruise', 'air'];
+  function useSamples(samples) {
+    if (rec || !samples || !LAYERS.every((k) => samples.has('engine-' + k))) return false;
+    const lp2 = ctx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.Q.value = 0.5; lp2.frequency.value = mixGet(feel, 'engLpLowHz');
+    const g2 = ctx.createGain(); g2.gain.value = mixGet(feel, 'engSampleGain');
+    lp2.connect(g2); g2.connect(duck);
+    const v = {};
+    for (const k of LAYERS) v[k] = samples.loop('engine-' + k, lp2);
+    if (!LAYERS.every((k) => v[k])) { for (const k of LAYERS) v[k]?.stop(); try { g2.disconnect(); } catch (e) { /* gone */ } return false; }
+    rec = { lp: lp2, v };
+    glide(gain.gain, 0, 0.2);                      // the saws step aside (they keep running as the fallback)
+    return true;
+  }
+
   let on = false;
   function update(speedPct, flags = {}) {
     const maxPct = feel.get('speed.maxPct');
     const p = Math.max(0, Math.min(speedPct || 0, maxPct));
     if (!on) { on = true; glide(padGain.gain, SOUND.padGain, 0.8); }
+    if (rec) {
+      const tc = mixGet(feel, 'engGlideS');
+      const w = engineLayers(p, flags, feel), rate = semisToRate(enginePitchSemis(p, flags, feel));
+      const road = flags.onRoad === false ? 0.7 : 1;
+      for (const k of LAYERS) { glide(rec.v[k].gain, w[k] * rec.v[k].level * road, tc); glide(rec.v[k].rate, rate, tc); }
+      glide(rec.lp.frequency, engineCutHz(p, flags, feel), flags.boosting ? feel.get('boost.riseS') : feel.get('boost.tailTcS'));
+    }
     let semis = 0;
     if (flags.drifting && flags.driftTier > 0) semis += (Math.min(flags.driftTier, 3) / 3) * feel.get('juice.driftPitchSemis');
     if (flags.airborne) semis += SOUND.airSemis;
@@ -72,7 +101,7 @@ export function createEngine(ctx, out, feel) {
     glide(bp.frequency, SOUND.noiseLowHz + (SOUND.noiseHighHz - SOUND.noiseLowHz) * clamp01(p));
     const road = flags.onRoad === false ? 0.5 : 1;
     glide(nzGain.gain, (SOUND.noiseGain[0] + (SOUND.noiseGain[1] - SOUND.noiseGain[0]) * clamp01(p)) * road);
-    glide(gain.gain, SOUND.gain[0] + (SOUND.gain[1] - SOUND.gain[0]) * clamp01(p));
+    glide(gain.gain, rec ? 0 : SOUND.gain[0] + (SOUND.gain[1] - SOUND.gain[0]) * clamp01(p));
     glide(duck.gain, 1 - clamp01(flags.duck || 0) * (1 - SOUND.duckFloor));
   }
 
@@ -84,8 +113,9 @@ export function createEngine(ctx, out, feel) {
 
   function dispose() {
     for (const o of [...oscs, ...voices, nz]) { try { o.stop(); } catch (e) { /* already stopped */ } }
+    if (rec) for (const k of LAYERS) rec.v[k].stop();
     try { duck.disconnect(); } catch (e) { /* gone */ }
   }
 
-  return { update, chord, dispose };
+  return { update, chord, dispose, useSamples, get recorded() { return !!rec; } };
 }

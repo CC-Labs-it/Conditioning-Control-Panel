@@ -13,6 +13,11 @@
  *        master <- music (volume music) <- musicDuck (effect duck) <- audio/music.js
  * B1 events are heard when they name racer 0 (full) or one of the nearest rivals from the last
  * update (quieter with distance, panned); far ones stay silent.
+ *
+ * Recorded sounds (audio/samples.js, files in audio/sfx/): the context's first ensure() starts
+ * loading them. A cue with a sample plan (audio/sfxmap.js sfxPlan) plays its files when every one
+ * decoded, else its synth figure plays as before; the engine and rival loops take over from the
+ * saws once they decode. Samples ride the same sfx bus, levels and pans as the synth cues.
  */
 import { createEngine } from './engine.js';
 import { AUDIO_CUES, makeSynth } from './cues.js';
@@ -20,6 +25,8 @@ import { B1_CUES, UI_CUES } from './cues-b1.js';
 import { createRivals } from './rivals.js';
 import { createMusic } from './music.js';
 import { mixGet, eventLevel } from './mix.js';
+import { createSamples } from './samples.js';
+import { sfxPlan, resolvePlan, jitterRate } from './sfxmap.js';
 
 const GESTURES = ['pointerdown', 'touchstart', 'keydown'];
 const clamp01 = (x) => (x > 0 ? (x < 1 ? x : 1) : 0);
@@ -30,8 +37,10 @@ const LOCAL = new Set(['effect-start', 'effect-end', 'race-result']);
  *   cue(name: string, opts?: {volume?: number, pitch?: number}): void, reset(sectionIdx?: number): void,
  *   setPaused(on: boolean): void, setVolumes(v: {master?: number, music?: number, sfx?: number}): void,
  *   readonly music: object|null, dispose(): void}} */
-export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCtx = null } = {}) {
+export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCtx = null, fetchFn = globalThis.fetch, laps = 3, sfxBase } = {}) {
   let ctx = null, engine = null, syn = null, rivals = null, music = null, paused = false, dead = false;
+  let samples = null, samplesReady = Promise.resolve(0), plays = 0, lapCount = laps;
+  const popSt = { rung: -1, t: -1e9 };
   let master = null, sfx = null, bed = null, musicBus = null, musicDuck = null;
   const vol = { master: 1, music: 1, sfx: 1 };
   const near = new Map();
@@ -64,6 +73,8 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     syn = makeSynth(ctx, sfx, feel, engine);
     syn.duck = duck;
     try { music = createMusic(ctx, musicBus, feel); } catch (e) { music = null; }
+    samples = createSamples(ctx, sfx, { fetchFn, ...(sfxBase ? { base: sfxBase } : {}) });
+    samplesReady = samples.load().then((n) => { engine?.useSamples(samples); rivals?.useSamples(samples); return n; }).catch(() => 0);
     return ctx;
   }
 
@@ -87,7 +98,20 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
   };
   for (const ev of GESTURES) win?.addEventListener?.(ev, unlock, { passive: true });
 
+  /** The recorded plan for a cue, when every file it needs decoded. @returns {boolean} played */
+  function sample(name, payload, volume, pitch, pan) {
+    if (!samples || !samples.loaded) return false;
+    const n = typeof lapCount === 'function' ? lapCount() : lapCount;
+    const plan = sfxPlan(name, payload || {}, { feel, laps: n, now: ctx.currentTime, st: popSt });
+    if (resolvePlan(plan, samples.has) !== 'sample') return false;
+    for (const x of plan) {
+      samples.play(x.id, { vol: x.vol * volume, rate: x.rate * pitch * jitterRate(x.id, plays++), pan, at: x.at });
+    }
+    return true;
+  }
+
   function run(name, fn, payload, volume, pitch, pan, me) {
+    if (sample(name, payload, volume, pitch, pan)) return;
     syn.volume = volume; syn.pitch = pitch; syn.pan = pan; syn.me = me;
     try { fn(syn, payload || {}); } catch (e) { console.warn('[audio] cue', name, e); }
     syn.volume = 1; syn.pitch = 1; syn.pan = 0; syn.me = true;
@@ -150,6 +174,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     reset(sectionIdx = 0) {
       syn?.releaseAll(0.1);
       if (syn) syn.b1 = null;
+      popSt.rung = -1; popSt.t = -1e9;
       engine?.chord(sectionIdx);
       rivals?.silence();
       near.clear();
@@ -162,6 +187,12 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       else ctx.resume?.().catch?.(() => {});
     },
     get music() { return music; },
+    /** Laps in this race (a number or a getter), so the last lap gets its own sound. */
+    setLaps(n) { lapCount = n; },
+    /** Resolves when every sound file loaded or failed (the count that loaded). */
+    get samplesReady() { return samplesReady; },
+    /** Which files loaded and which fell back to the synth. */
+    get sfx() { return { loaded: samples ? samples.loaded : 0, failed: samples ? samples.failed : [], engine: !!engine?.recorded }; },
     dispose() {
       offs.forEach((off) => off());
       for (const ev of GESTURES) win?.removeEventListener?.(ev, unlock);
@@ -169,7 +200,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       rivals?.dispose();
       engine?.dispose();
       if (ctx) { try { ctx.close(); } catch (e) { /* gone */ } }
-      ctx = engine = syn = rivals = music = null;
+      ctx = engine = syn = rivals = music = samples = null;
     },
     get state() { return ctx ? ctx.state : (dead ? 'unavailable' : 'not created'); },
   };

@@ -35,6 +35,27 @@ export const MIX = {
   popStreakS: 1.5,            // bubble pops inside this climb the pentatonic ladder
   popRungs: 8,
   slipAirGain: 0.035,         // slipstream air while charging
+  // recorded engine (audio/sfxmap.js engineLayers / enginePitchSemis); speeds are speedPct 0..1
+  engIdleOutPct: 0.45,        // the idle hum is gone by here
+  engCruiseFromPct: 0.05,     // cruise rises from here
+  engCruiseFullPct: 0.5,      // to full here
+  engCruiseDipPct: 0.6,       // then dips from here
+  engCruiseDip: 0.4,          // by this much at full speed (the air layer takes over)
+  engAirFromPct: 0.45,        // the air layer rises from here
+  engAirFullPct: 1,           // to full here
+  engBoostAir: 0.35,          // a boost adds this much air
+  engSemisLow: -1,            // pitch at a standstill, semitones
+  engSemisHigh: 2,            // pitch at full speed (3 semitones of speed travel)
+  engDriftSemis: 0.8,         // drift tier 3 adds this
+  engAirborneSemis: 0.5,
+  engBoostSemis: 0.5,
+  engPitchTravelSemis: 4,     // the whole engine pitch never travels more than this
+  engLpLowHz: 2600,           // engine low-pass at idle
+  engLpHighHz: 16000,         // and at full speed (squared ease)
+  engLpBoostMul: 1.3,
+  engGlideS: 0.08,            // layer and pitch glide
+  engSampleGain: 1,           // the whole recorded engine, against SFX_GAIN per layer
+  rivalSampleGain: 0.32,      // one rival's recorded engine at 0 m (cruise + air layers)
 };
 
 /** @returns {number} feel 'audio.<key>' when it exists, else MIX[key]. */

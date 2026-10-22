@@ -42,6 +42,7 @@ test('every audio cue is a CONTRACT event', () => {
 test('no speech anywhere in fx, audio, hud or host', () => {
   for (const dir of ['fx', 'audio', 'hud', 'host']) {
     for (const f of readdirSync(new URL('../' + dir + '/', import.meta.url))) {
+      if (!/\.(m?js|html)$/.test(f)) continue;            // audio/sfx/ holds the sound files
       const src = readFileSync(new URL('../' + dir + '/' + f, import.meta.url), 'utf8');
       assert.ok(!/speechSynthesis|SpeechSynthesisUtterance/.test(src), dir + '/' + f);
     }
