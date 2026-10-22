@@ -86,7 +86,7 @@ public sealed class VaultGateTests
 
             card = VaultGateDialog.ShowOffer(null, "lockdown", 1, () => { });
             Dispatcher.UIThread.RunJobs();
-            var cur = VaultOffer.LocalCurrency();
+            var cur = VaultOffer.HeadlineCurrency();   // WPF 5265111bc: the plan list's headline currency
             var struck = card.GetVisualDescendants().OfType<TextBlock>().Single(t => "struck".Equals(t.Tag));
             Assert.Equal(VaultOffer.Money(VaultOffer.PriceFor(1, cur).MonthlyCents, cur), struck.Text);
             Assert.Contains(Loc.Get("vaultgate_sale_first"), Texts(card));

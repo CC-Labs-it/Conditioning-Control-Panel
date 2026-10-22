@@ -32,6 +32,17 @@ namespace ConditioningControlPanel.Services
         internal static int Cap(int baseCap, bool stay, bool sharedHost) =>
             stay && sharedHost ? MaxOnScreen : baseCap;
 
+        /// <summary>
+        /// The player's "Max on screen" slider (HydraLimit, 1..20) is the ceiling for every spawn
+        /// path (Oct 14: bursts, bubble pops and hydra clicks stacked past it up to the 30/40 mode
+        /// cap). The mode cap still wins when it is lower (classic windows: 10).
+        /// A stay-until-popped spawn is the exception: its copy promises "Up to 40 at once", so
+        /// its own ceiling (<see cref="Cap"/>: 40 on a shared host) stands and the 1..20 slider
+        /// never trims it (ccp-bugs #1452, a regression of the Oct 14 change).
+        /// </summary>
+        internal static int OnScreen(int modeCap, int maxOnScreen, bool stay = false) =>
+            stay ? modeCap : System.Math.Min(modeCap, System.Math.Clamp(maxOnScreen, 1, 20));
+
         /// <summary>True when the scheduler should skip this tick: the screen is already full.</summary>
         internal static bool ScreenFull(bool stay, int activeCount, int cap) => stay && activeCount >= cap;
     }

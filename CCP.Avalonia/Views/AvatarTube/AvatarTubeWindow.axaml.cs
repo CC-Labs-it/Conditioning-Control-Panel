@@ -341,6 +341,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
             _speechTimer?.Stop();
+            ClearSpeechQueue();
             _cooldownTickTimer?.Stop();
             _possessionGlitchTimer?.Stop();
             _bounceTimer?.Stop();
@@ -403,6 +404,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // the user a few seconds after they opened it. WPF's EnterChatHistoryMode kills the
             // same two timers for the same reason.
             _speechTimer?.Stop();
+            _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
+            _cancelSpeechDelay = static () => { };
             _isGiggling = false;
 
             _isShowingChatHistory = true;
@@ -1151,9 +1154,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///
         /// <para><b>What it drops, and why each is safe to drop rather than fake.</b></para>
         /// <list type="bullet">
-        ///   <item>The speech QUEUE and its post-line delay. Priority speech CLEARS the queue on
-        ///         WPF, so the priority path never reads it; there is nothing here to enqueue
-        ///         behind, and the delay only spaces lines this head cannot yet emit.</item>
         ///   <item>The typewriter. Cosmetic, and WPF adds its runtime to the display duration - so
         ///         dropping it shortens the window rather than truncating the line. The reading
         ///         floor below is kept, which is the half that protects a long reply.</item>
@@ -1175,21 +1175,33 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // onSpoken: fires once her voiced clip has finished (at once when nothing plays) - the
             // spoken mantra holds the mic shut on it so the recognizer never hears her (SpokenMantra).
             if (_isPlayingUninterruptibleClip) { onSpoken?.Invoke(); return; }
-            RunOnAvatar(() => ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken));
+            RunOnAvatar(() =>
+            {
+                ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
+                _isGiggling = false;
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken);
+            });
         }
 
         private int _presetGiggleCounter;
 
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
-        /// flight or an AI bubble is up, never logged to chat history, sound on every fifth.
-        /// ponytail: WPF queues a preset behind a line still speaking; this tube has no speech
-        /// queue, so the preset replaces it.</summary>
+        /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
+        /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
         public void Giggle(string text)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
+                if (_isGiggling) { _speechQueue.Enqueue(text); return; }
+                if (!IsSpeechReady())
+                {
+                    _speechQueue.Enqueue(text);
+                    _isGiggling = true;
+                    ProcessNextSpeech();
+                    return;
+                }
                 ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
             });
         }
@@ -1211,7 +1223,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _speechTimer?.Stop();
                     if (!preset) AddToChatHistory(text, isUser: false);   // WPF Giggle logs nothing
 
-                    if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted) { _isGiggling = false; return; }
+                    var source = preset ? SpeechSource.Preset : SpeechSource.AI;
+                    if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
+                    {
+                        _isGiggling = false;   // WPF Speech.cs:452-460: skipped, but it still spaces the next
+                        NoteSpeechEnded(source, text.Length);
+                        return;
+                    }
+                    _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
+                    _stopSpoken = static () => { };
 
                     // The chat log owns the bubble while it is up - take it back before rendering.
                     if (_isShowingChatHistory)
@@ -1236,6 +1256,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _speechBubble.IsVisible = true;
                     _isGiggling = true;
                     _isShowingAiBubble = !preset;
+                    _currentSpeechSource = source;
+                    _currentSpeechLength = text.Length;
 
                     StartBubbleHideTimer(text);
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
@@ -1256,6 +1278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RunOnAvatar(() =>
             {
                 if (_isPlayingUninterruptibleClip) return;
+                ClearSpeechQueue();   // WPF Speech.cs:719-721: nothing queued talks over the open mic
                 _speechTimer?.Stop();
                 _isGiggling = false;
                 _isShowingAiBubble = false;
@@ -1321,7 +1344,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>
         /// Auto-hide, at the user's Bubble Duration (1-10s). A long line gets an ESL-friendly
         /// reading floor of ~12 chars/sec capped at 30s, so a 200-char reply is not gone in two
-        /// seconds (bug #193). Hovering the bubble holds it open, re-checked every second.
+        /// seconds (bug #193). Hovering the bubble holds it open, re-checked every second, for at
+        /// most two minutes (WPF SpeechLatchRule.HoldForHover, Speech.cs:579).
         /// </summary>
         private void StartBubbleHideTimer(string text)
         {
@@ -1329,13 +1353,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             seconds = Math.Max(seconds, Math.Min(30.0, text.Length / 12.0));
 
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+            DateTime? hoverHoldSince = null;
             timer.Tick += (_, _) =>
             {
-                if (_isMouseOverSpeechBubble) { timer.Interval = TimeSpan.FromSeconds(1); return; }
-                timer.Stop();
-                _speechBubble.IsVisible = false;
-                _isShowingAiBubble = false;
-                _isGiggling = false;
+                hoverHoldSince ??= DateTime.UtcNow;
+                if (ConditioningControlPanel.Services.Companion.SpeechLatchRule.HoldForHover(
+                        _isMouseOverSpeechBubble, DateTime.UtcNow - hoverHoldSince.Value))
+                { timer.Interval = TimeSpan.FromSeconds(1); return; }
+                if (_speechTimer == timer) EndSpeechBubble(); else timer.Stop();
             };
             _speechTimer = timer;
             timer.Start();

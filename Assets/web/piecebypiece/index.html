@@ -6,6 +6,7 @@
 <title>Piece by Piece</title>
 <link rel="stylesheet" href="./styles.css">
 <link rel="stylesheet" href="./door/door.css">
+<link rel="stylesheet" href="./ui/ladder.css">
 <!--
   Piece by Piece - a 3D chess board for the in-app browser games.
   Standard chess rules, no house rules. three.js is resolved from the shared
@@ -34,11 +35,13 @@
       <div class="player-head"><span class="seat-dot" aria-hidden="true"></span><span class="who" id="name-b">Black</span><span class="seat-label">Black</span></div>
       <div class="player-clock"><span class="time" id="time-b">15:00</span><span class="turn-tag" id="turn-b"></span></div>
       <div class="player-material"><span class="captured" id="captured-b" aria-label="No captures"></span><span class="tally" id="tally-b">even</span></div>
+      <div class="player-heat" id="heat-b" role="img" aria-label="Distraction" hidden><i></i></div>
     </section>
     <section class="chip chip-w" id="chip-w" data-side="w" aria-label="White player">
       <div class="player-head"><span class="seat-dot" aria-hidden="true"></span><span class="who" id="name-w">White</span><span class="seat-label">White</span></div>
       <div class="player-clock"><span class="time" id="time-w">15:00</span><span class="turn-tag" id="turn-w"></span></div>
       <div class="player-material"><span class="captured" id="captured-w" aria-label="No captures"></span><span class="tally" id="tally-w">even</span></div>
+      <div class="player-heat" id="heat-w" role="img" aria-label="Distraction" hidden><i></i></div>
     </section>
 
     <!-- the light that moves between the chips IS the turn indicator -->
@@ -71,6 +74,10 @@
           <!-- Distraction's pictures (ui/pictures.js). Hidden until the host says
                what it holds, so a plain browser shows nothing half-built. -->
           <div class="pictures" id="game-pictures" hidden></div>
+          <!-- the crowd (ui/reactions.js, ui/reactions-prefs.js): a seat's own say over what the stands send -->
+          <strong>Crowd</strong>
+          <label data-seat-only><input type="checkbox" id="game-react-show" checked> Play watchers' reactions</label>
+          <label><input type="checkbox" id="game-react-sound" checked> Reaction sounds</label>
         </div>
         <div class="opt-col">
           <!-- Distraction's dials (owner, 2026-10-02): how many pictures, how strong, how fast it climbs. -->
@@ -82,10 +89,12 @@
               <button type="button" class="hud-btn" data-amount="normal" aria-pressed="true">Normal</button>
               <button type="button" class="hud-btn" data-amount="more" aria-pressed="false">More</button>
             </div>
-            <label class="dial-slider" for="game-strength"><span>Strength</span>
+            <!-- The stands only (ramp/ambient.js): players whose page sends no effects get calm pictures of ours. -->
+            <label data-watch-only><input type="checkbox" id="game-watch-ambient" checked> Players on older versions: ambient pictures</label>
+            <label class="dial-slider" for="game-strength" data-seat-only><span>Strength</span>
               <input type="range" id="game-strength" min="10" max="200" step="5" value="100" aria-describedby="game-strength-out">
               <output id="game-strength-out">100%</output></label>
-            <div class="turncard-pick" role="group" aria-label="Ramp">
+            <div class="turncard-pick" role="group" aria-label="Ramp" data-seat-only>
               <span>Ramp</span>
               <button type="button" class="hud-btn" data-ramp="slow" aria-pressed="false">Slow</button>
               <button type="button" class="hud-btn" data-ramp="normal" aria-pressed="true">Normal</button>
@@ -95,14 +104,18 @@
           <strong>Camera</strong>
           <label><input type="checkbox" id="game-follow" checked> Follow the move</label>
           <label><input type="checkbox" id="game-replays" checked> Replay captures</label>
+          <label><input type="checkbox" id="game-open-intro" checked> Opening intro</label>
+          <label><input type="checkbox" id="game-board-intro" checked> Board intro</label>
+          <label><input type="checkbox" id="game-name-tags" checked> Name tags</label>
           <label><input type="checkbox" id="game-invert-x"> Invert left/right</label>
           <label><input type="checkbox" id="game-invert-y"> Invert up/down</label>
-          <div class="turncard-pick" role="group" aria-label="Turn card">
+          <div class="turncard-pick" role="group" aria-label="Turn card" data-seat-only>
             <span>Turn card</span>
             <button type="button" class="hud-btn" data-turncard="slam" aria-pressed="true">Slam</button>
             <button type="button" class="hud-btn" data-turncard="ribbon" aria-pressed="false">Ribbon</button>
             <button type="button" class="hud-btn" data-turncard="tag" aria-pressed="false">Tag</button>
           </div>
+          <label data-seat-only><input type="checkbox" id="game-watchable" checked> Let people watch my games</label>
           <label><input type="checkbox" id="game-sound" checked> Sound effects</label>
           <label><input type="checkbox" id="game-reduced"> Reduce motion</label>
           <small id="game-preference-note" hidden></small>
@@ -124,12 +137,18 @@
     <div class="statuscol" id="status-col">
       <p class="status" id="status" role="status" aria-live="polite">White to move</p>
       <p class="game-notice" id="game-notice" role="status" hidden></p>
+      <p class="watchers" id="hud-watchers" role="status" hidden></p>
+      <!-- The stands with effects on and no picture source (ui/watch-hud.js): said once, with the picker. -->
+      <div class="watch-media" id="hud-nomedia" role="status" hidden>
+        <p id="hud-nomedia-msg">No pictures picked yet. The effects run without them.</p>
+        <div class="online-row"><button type="button" class="hud-btn warm" id="hud-nomedia-pick">Pick pictures</button><button type="button" class="hud-btn" id="hud-nomedia-later">Not now</button></div>
+      </div>
       <div class="intensity" id="game-intensity" hidden><div><span>Distraction</span><span id="intensity-label">Calm</span></div><meter id="intensity-meter" min="0" max="1" value="0" aria-label="Distraction intensity"></meter></div>
       <p class="hint" id="hud-hint" hidden>Hold Esc to open the menu</p>
       <div class="dots" id="hud-dots" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     </div>
 
-    <p class="piece-focus" id="piece-focus" role="status" aria-live="polite">Click a piece, then a square. Or drag.</p>
+    <p class="piece-focus" data-seat-only id="piece-focus" role="status" aria-live="polite">Click a piece, then a square. Or drag.</p>
 
     <!-- Resign and the draw: the two things a player can say to the referee
          in an online game that are not a move. hud.js shows this block only
@@ -156,6 +175,22 @@
         <button type="button" class="hud-btn" id="hud-resign">resign</button>
       </div>
     </div>
+
+    <!-- The stands (net/watch.js, ui/watch-hud.js): shown in place of the block above while a
+         watched game is in the chair. Nobody here moves, so the only buttons are the seat
+         swap and the way out. -->
+    <div class="online" id="hud-watch" hidden>
+      <div class="online-row">
+        <span class="word" id="hud-watch-tag">15 s behind</span>
+        <button type="button" class="hud-btn" id="hud-flip">Watch from Black</button>
+        <button type="button" class="hud-btn" id="hud-leave">Leave</button>
+      </div>
+    </div>
+
+    <!-- The crowd (ui/reactions.js): six presets for the stands, never free text, and what the
+         room sent floating up the right edge for the stands and the players alike. -->
+    <div class="react-bar" id="hud-react" role="group" aria-label="Reactions" hidden></div>
+    <div class="react-floats" id="hud-floats" aria-hidden="true"></div>
   </div>
 
   <div id="fx"></div>
