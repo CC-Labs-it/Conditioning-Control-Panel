@@ -113,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AttachModSwitch();
             HookWallRings();   // MainShellWindow.Presets.cs: wall tile rings follow the flags
             HookLevelDisplay(); // MainShellWindow.HeroFx.cs: header level/XP follow ProgressionBank
+            InitializeEventFx(); // MainShellWindow.EventFx.cs: hidden-tab rail celebrations
             HookAutonomy();     // MainShellWindow.Autonomy.cs: Takeover seeds; starts only on the user's switch
             InitializeDescentFuse(); // MainShellWindow.DescentFuse.cs (WPF MainWindow ctor); no-op without App.DescentCountdown
             InitializeProfileBubble(); // MainShellWindow.ProfileBubble.cs (WPF MainWindow ctor): face + reactions

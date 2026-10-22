@@ -12,7 +12,7 @@
 //
 // STILL MISSING vs WPF, so the row stays a stub:
 //   the XP odometer (MotionFx.Odometer - the readout snaps), the meniscus (AnimateXpMeniscus,
-//   ApplyXpMeniscusPulse), PopLevelChip, the level-up burst (FireBurstAt) and THE BANK hold
+//   ApplyXpMeniscusPulse), PopLevelChip and THE BANK hold
 //   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
 //   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
 //   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); UpdateLevelDisplay(); });
+            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { CelebrateLevelUp(); UpdateLevelDisplay(); });
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
             Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; };

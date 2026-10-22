@@ -20,6 +20,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Bursts fired (test hook).</summary>
         internal int Count { get; private set; }
 
+        /// <summary>End transient sparks on panic/close and release their overlay surface.</summary>
+        internal void Stop()
+        {
+            _layer?.Stop();
+            if (_layer?.Parent is Panel host) host.Children.Remove(_layer);
+            _layer = null;
+        }
+
         /// <summary>Bursts <paramref name="count"/> sparks on <paramref name="anchor"/>'s centre, or on its right
         /// edge (FxBurstSpot.RightEdge: the cap of a bar that just filled), in <paramref name="color"/> (null: the
         /// theme particle colour, as WPF FireBurstAt(color: null)). False when refused.</summary>

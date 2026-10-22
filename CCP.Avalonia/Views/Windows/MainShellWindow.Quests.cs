@@ -3,7 +3,7 @@
 // control they paint is that view's own x:Name field, so the view owns them.
 // CelebrateQuestComplete's on-tab burst is QuestsTabView.Fx.cs; the haptic post is App.PlayQuestCompletionEffects.
 // ponytail: still missing from OnQuestCompleted - App.Flash.PlayRandomSound (no FlashService audio
-// on this head), the off-tab nav-button burst (shell-event-fx) and RefreshQuestStamps.
+// on this head) and RefreshQuestStamps. Off-tab rail bursts live in MainShellWindow.EventFx.cs.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

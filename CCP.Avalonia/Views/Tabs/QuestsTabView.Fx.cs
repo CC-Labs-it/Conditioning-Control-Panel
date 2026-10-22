@@ -130,8 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF CelebrateQuestComplete: sparks at the cap of the bar that just filled - the weekly fill, or the
         /// daily card showing <paramref name="definitionId"/>; an unmeasured fill falls back to its track.
-        /// ponytail: off-tab WPF bursts on the Quests nav button instead; that needs the shell's event-burst layer
-        /// (shell-event-fx). The popup and chime still announce it.</summary>
+        /// Off-tab MainShellWindow.EventFx.cs owns the burst on the Quests nav anchor.</summary>
         private void CelebrateQuestComplete(QuestType type, string? definitionId)
         {
             if (!IsEffectivelyVisible) return;
