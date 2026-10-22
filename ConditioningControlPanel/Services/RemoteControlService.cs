@@ -1174,14 +1174,14 @@ namespace ConditioningControlPanel.Services
                 LockCardWindow.ForceCloseAll();
                 BubbleCountWindow.ForceCloseAll();
 
-                // Reset overlays that were enabled by remote
+                // Reset overlays that were enabled by remote. Strict lock and panic are NOT touched
+                // here: ReleaseRemoteSafetyState (just before) already put panic back on and released
+                // the controller's own strict lock, and a strict lock the wearer set themselves stays
+                // (ccp-bugs #1340). This line used to switch it off and save that.
                 if (App.Settings?.Current != null)
                 {
                     App.Settings.Current.PinkFilterEnabled = false;
                     App.Settings.Current.SpiralEnabled = false;
-                    App.Settings.Current.StrictLockEnabled = false;
-                    App.Settings.Current.PanicKeyEnabled = true;
-                    SyncPanicKeyUi();
                 }
                 RestoreRemoteBrainDrainSetting();
                 App.Overlay?.RefreshOverlays();
