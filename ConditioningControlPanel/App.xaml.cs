@@ -2851,6 +2851,10 @@ namespace ConditioningControlPanel
             };
             Services.Companion.Brain.CompanionBrain.ClearLegacyLocalHistoryHook = () => (Ai as AiServiceStrategy)?.ClearLocalHistory();
             Services.Companion.Brain.CompanionBrain.MemoryRecalled = LocalAiService.SignalPersistentMemoryRecalled;
+            // The Back Room page's end-card funnel message (Core BackRoomBridge) counts and opens checkouts here.
+            Services.BackRoom.BackRoomBridge.FunnelMessage = (m, mayOpen) => Services.Funnel.FunnelPageMessage.Handle(m, mayOpen);
+            Services.Companion.Brain.CompanionBrain.IdleLineVoiced = trigger =>
+                Services.Companion.CompanionIdleVoice.ShouldVoiceNow(Services.Companion.CompanionIdleVoice.IsUnprompted(trigger));
             Services.Companion.Brain.CompanionBrain.ActivitiesProvider = Services.Companion.CompanionActivities.Current;
             Services.Companion.ConversationDelivery.AskCardsShown = _ => true;   // ChatInput.cs OfferForRequest
             SeedAskSeams();

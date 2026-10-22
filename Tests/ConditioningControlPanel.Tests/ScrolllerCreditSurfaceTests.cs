@@ -55,8 +55,11 @@ public class ScrolllerCreditSurfaceTests
     [Fact]
     public void TempPrefix_StaysInStepWithRemoteMediaCache()
     {
+        // The one copy is CCP.Core's ScrolllerDiskCache; RemoteMediaCache forwards to it.
+        var core = SourceRoots.ReadProductFile("Services", "Fyp", "Online", "ScrolllerDiskCache.cs");
+        Assert.Contains("TempPrefix = \"" + ScrolllerCredit.RemoteTempPrefix + "\"", core);
         var src = Read("ConditioningControlPanel", "Services", "Fyp", "Online", "RemoteMediaCache.cs");
-        Assert.Contains("TempPrefix = \"" + ScrolllerCredit.RemoteTempPrefix + "\"", src);
+        Assert.Contains("TempPrefix = ScrolllerDiskCache.TempPrefix", src);
     }
 
     [Theory]
@@ -96,7 +99,7 @@ public class ScrolllerCreditSurfaceTests
     [Fact]
     public void CreditLine_IsInEveryLanguageFile()
     {
-        var dir = Path.Combine(Root(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var f in files)

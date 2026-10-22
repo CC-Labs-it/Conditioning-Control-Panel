@@ -65,7 +65,7 @@ public class CompanionIdleVoiceTests
     [InlineData("builtin-sissyhypno")]
     public void The_logged_idle_clips_ride_the_Idle_trigger_and_the_webcam_reactions_do_not(string pack)
     {
-        var path = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "sounds", "companion_audio",
+        var path = Path.Combine(RepoRoot(), "Assets", "sounds", "companion_audio",   // art and audio live in /Assets
             "mods", pack, "bark_rules.json");
         var rules = JArray.Parse(File.ReadAllText(path).TrimStart('﻿'));
 

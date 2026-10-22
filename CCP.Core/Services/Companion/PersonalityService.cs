@@ -349,7 +349,7 @@ namespace ConditioningControlPanel.Services
                         ? PersonalityPresets.NeutralDefaultId
                         : PersonalityPresets.BambiSpriteId;
                     // A different voice from here on, as a pick: fence the deleted one's replies off the wire.
-                    App.Settings.Current.PersonaVoiceFenceUtc = DateTime.UtcNow;
+                    CoreSettings.Service!.Current.PersonaVoiceFenceUtc = DateTime.UtcNow;
                 }
 
                 CoreSettings.Service?.Save();

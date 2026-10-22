@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
 
@@ -92,7 +93,7 @@ internal sealed class ScrolllerLedger
 ///
 /// The ledger is PER ACCOUNT (owner, 2026-10-19: a second account on the same PC inherited the
 /// first one's usage). One book (<c>scrolller-accounts.json</c> under the user data folder) holds a
-/// ledger per account key: the first 16 hex of the SHA-256 of <see cref="App.UnifiedUserId"/> (the
+/// ledger per account key: the first 16 hex of the SHA-256 of <c>App.UnifiedUserId</c> (the
 /// id itself never lands on disk), or <see cref="AnonymousKey"/> while signed out. It lives on this
 /// machine only and is never sent anywhere: the no-tracking promise holds. The machine-wide ledger
 /// of earlier builds (<c>scrolller-today.json</c>) is adopted ONCE by whoever is signed in at the
@@ -153,19 +154,19 @@ internal static class ScrolllerAllowance
     internal static Func<DateTime> Now = () => DateTime.Now;
 
     /// <summary>The signed-in account's id, null or empty when signed out. Replaceable by tests.</summary>
-    internal static Func<string?> AccountProvider = () => App.UnifiedUserId;
+    internal static Func<string?> AccountProvider = () => CoreAccount.UnifiedUserId;
 
     /// <summary>Where the per-account book is kept. Replaceable by tests; null = memory only.</summary>
     internal static Func<string?> LedgerPath = () =>
     {
-        try { return Path.Combine(App.UserDataPath, "scrolller-accounts.json"); }
+        try { return Path.Combine(CorePaths.UserData, "scrolller-accounts.json"); }
         catch { return null; }
     };
 
     /// <summary>The machine-wide ledger of earlier builds, adopted once. Replaceable by tests.</summary>
     internal static Func<string?> LegacyLedgerPath = () =>
     {
-        try { return Path.Combine(App.UserDataPath, "scrolller-today.json"); }
+        try { return Path.Combine(CorePaths.UserData, "scrolller-today.json"); }
         catch { return null; }
     };
 
@@ -339,7 +340,7 @@ internal static class ScrolllerAllowance
     private static void OnTicker()
     {
         try { Tick(); }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: tick failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerAllowance: tick failed: {E}", ex.Message); }
         lock (TickLock)
         {
             try { _ticker?.Change(NextTickDue(), Timeout.InfiniteTimeSpan); }
@@ -395,10 +396,9 @@ internal static class ScrolllerAllowance
 
     private static ScrolllerPlan DefaultPlan()
     {
-        var p = App.Patreon;
-        if (p == null) return ScrolllerPlan.Free;
-        if (p.HasLabAccess) return ScrolllerPlan.Prime;
-        if (p.HasPremiumAccess) return ScrolllerPlan.Basic;
+        // WPF read App.Patreon; unseeded providers answer false, which is the Free plan as before.
+        if (CoreAccount.HasLabAccess) return ScrolllerPlan.Prime;
+        if (CoreAccount.HasPremiumAccess) return ScrolllerPlan.Basic;
         return ScrolllerPlan.Free;
     }
 
@@ -472,7 +472,7 @@ internal static class ScrolllerAllowance
             foreach (var (k, l) in _book)
                 loaded[k] = loaded.TryGetValue(k, out var disk) ? ScrolllerLedger.Merge(disk, l) : l;
             _ledger = null; // re-fetched from the merged book by the caller
-            App.Logger?.Information("ScrolllerAllowance: the book read on a retry; merged {N} interim ledgers", _book.Count);
+            Log.Information("ScrolllerAllowance: the book read on a retry; merged {N} interim ledgers", _book.Count);
         }
         _legacyAdopted = adopted;
         _book = loaded;
@@ -493,7 +493,7 @@ internal static class ScrolllerAllowance
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            App.Logger?.Debug("ScrolllerAllowance: book locked, will retry: {E}", ex.Message);
+            Log.Debug("ScrolllerAllowance: book locked, will retry: {E}", ex.Message);
             return BookRead.Locked;
         }
         catch { return BookRead.Ok; }
@@ -507,7 +507,7 @@ internal static class ScrolllerAllowance
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("ScrolllerAllowance: book unreadable, kept as .bad: {E}", ex.Message);
+            Log.Warning("ScrolllerAllowance: book unreadable, kept as .bad: {E}", ex.Message);
             try { File.Copy(path!, path + ".bad", overwrite: true); } catch { }
             book.Clear();
             adopted = false;
@@ -530,7 +530,7 @@ internal static class ScrolllerAllowance
                 var mine = _book.TryGetValue(key, out var have) ? ScrolllerLedger.Merge(have, old) : old;
                 _book[key] = mine;
                 if (_ledgerKey == key) _ledger = mine;
-                App.Logger?.Information("ScrolllerAllowance: adopted the machine-wide ledger for the {Who} account",
+                Log.Information("ScrolllerAllowance: adopted the machine-wide ledger for the {Who} account",
                     key == AnonymousKey ? "signed-out" : "signed-in");
             }
             _legacyAdopted = true; // written with the next save, never by a mere read
@@ -541,7 +541,7 @@ internal static class ScrolllerAllowance
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ScrolllerAllowance: old ledger unreadable: {E}", ex.Message);
+            Log.Debug("ScrolllerAllowance: old ledger unreadable: {E}", ex.Message);
             _legacyAdopted = true;
         }
     }
@@ -575,13 +575,13 @@ internal static class ScrolllerAllowance
         catch { return null; }
     }
 
-    /// <summary>Hooks <see cref="App.UnifiedIdentityChanged"/> (sign-in, sign-out, account switch,
+    /// <summary>Hooks <c>App.UnifiedIdentityChanged</c> (sign-in, sign-out, account switch,
     /// a session the server refused). Idempotent; called once at startup. Never throws.</summary>
     internal static void WatchAccount()
     {
         if (Interlocked.Exchange(ref _watchingAccount, 1) != 0) return;
-        try { App.UnifiedIdentityChanged += (_, _) => AccountChanged(); }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: account watch failed: {E}", ex.Message); }
+        try { CoreAccount.UnifiedIdentityChanged += (_, _) => AccountChanged(); }
+        catch (Exception ex) { Log.Debug("ScrolllerAllowance: account watch failed: {E}", ex.Message); }
     }
 
     private static int _watchingAccount;
@@ -669,12 +669,12 @@ internal static class ScrolllerAllowance
                 }
             }
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: save failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerAllowance: save failed: {E}", ex.Message); }
     }
 
     private static void Raise(EventHandler? handler)
     {
         try { handler?.Invoke(null, EventArgs.Empty); }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerAllowance: handler failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerAllowance: handler failed: {E}", ex.Message); }
     }
 }

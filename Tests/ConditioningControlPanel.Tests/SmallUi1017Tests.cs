@@ -111,7 +111,7 @@ public class SmallUi1017Tests
     }
 
     private static string LanguagesDir =>
-        Path.Combine(RepoRoot, "ConditioningControlPanel", "Localization", "Languages");
+        SourceRoots.LanguagesDirectory;
 
     private static string[] LanguageFiles()
     {

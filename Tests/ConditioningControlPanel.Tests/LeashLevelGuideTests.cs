@@ -21,11 +21,7 @@ public sealed class LeashLevelGuideTests
 {
     private static string LanguageDir()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization", "Languages")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages");
+        return SourceRoots.LanguagesDirectory;
     }
 
     [Fact]

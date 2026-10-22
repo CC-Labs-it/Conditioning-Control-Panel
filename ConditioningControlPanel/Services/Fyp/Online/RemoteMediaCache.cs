@@ -61,7 +61,7 @@ internal static class RemoteMediaCache
 
     /// <summary>Filename prefix. The <c>ccp_temp_</c> half is load-bearing — see the class
     /// remarks — and <c>remote_</c> is what makes our sweep ours alone.</summary>
-    internal const string TempPrefix = "ccp_temp_remote_";
+    internal const string TempPrefix = ScrolllerDiskCache.TempPrefix;
 
     private const int CopyBufferBytes = 81920;
 
@@ -96,13 +96,7 @@ internal static class RemoteMediaCache
 
     /// <summary>The same honest identity <see cref="ScrolllerSource"/> uses for the API: the
     /// app's own user-agent and no Referer.</summary>
-    internal static HttpClient CreateClient()
-    {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ScrolllerSource.HonestUserAgent);
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
-        return c;
-    }
+    internal static HttpClient CreateClient() => ScrolllerDiskCache.CreateClient();
 
     // ---- public surface ------------------------------------------------------------
 

@@ -69,7 +69,7 @@ public class DtrhVideoTeardownTests
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        var root = Path.Combine(dir!.FullName, "ConditioningControlPanel", "Resources", "web", "dtrh");
+        var root = Path.Combine(dir!.FullName, "Assets", "web", "dtrh");
         return File.ReadAllText(Path.Combine(root, Path.Combine(parts)));
     }
 

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
 
@@ -43,7 +44,7 @@ internal static class ScrolllerPolicyService
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ScrolllerPolicy: poll did not start: {E}", ex.Message);
+            Log.Debug("ScrolllerPolicy: poll did not start: {E}", ex.Message);
         }
     }
 
@@ -54,11 +55,11 @@ internal static class ScrolllerPolicyService
         try
         {
             // Offline mode promises no external connections at all.
-            if (App.Settings?.Current?.OfflineMode == true) return;
+            if (CoreSettings.Service?.Current?.OfflineMode == true) return;
             using var res = await Http.GetAsync($"{BackRoomApi.BaseUrl}/config/scrolller").ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
             {
-                App.Logger?.Debug("ScrolllerPolicy: /config/scrolller returned {Status}; policy unchanged", (int)res.StatusCode);
+                Log.Debug("ScrolllerPolicy: /config/scrolller returned {Status}; policy unchanged", (int)res.StatusCode);
                 return;
             }
             var answer = Parse(await res.Content.ReadAsStringAsync().ConfigureAwait(false));
@@ -67,12 +68,12 @@ internal static class ScrolllerPolicyService
             int capWas = ScrolllerPolicy.MaxClipShortSide;
             Accept(answer);
             if (was != ScrolllerPolicy.Enabled || capWas != ScrolllerPolicy.MaxClipShortSide)
-                App.Logger?.Information("ScrolllerPolicy: enabled={Enabled}, clip cap={Cap}",
+                Log.Information("ScrolllerPolicy: enabled={Enabled}, clip cap={Cap}",
                     ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ScrolllerPolicy: read failed ({E}); policy unchanged", ex.Message);
+            Log.Debug("ScrolllerPolicy: read failed ({E}); policy unchanged", ex.Message);
         }
         finally
         {
@@ -117,13 +118,17 @@ internal static class ScrolllerPolicyService
         ScrolllerPolicy.Official = answer.Official;
         ScrolllerAllowance.ApplyLimits(answer.FreeMb, answer.BasicMb, answer.PrimeMb, answer.FreeFirstDayMb);
         _minVersion = answer.MinVersion;
-        if (!answer.Enabled) ScrolllerCopySweeper.PurgeAll("policy off");
+        if (!answer.Enabled)
+        {
+            if (ScrolllerDiskCache.PurgeAllCopies is { } purge) purge("policy off");
+            else ScrolllerDiskCache.PurgeAll("policy off");
+        }
     }
 
     /// <summary>True when the switch is off and <paramref name="url"/> is on scrolller.com or a
     /// subdomain: the native fetchers refuse it as if the network had failed.</summary>
     internal static bool Blocks(string? url)
-        => !ScrolllerPolicy.Enabled && global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url);
+        => !ScrolllerPolicy.Enabled && ScrolllerPolicy.IsScrolllerUrl(url);
 
     /// <summary>
     /// May <paramref name="url"/> be fetched FRESH from the network right now? Not a Scrolller
@@ -136,7 +141,7 @@ internal static class ScrolllerPolicyService
     /// </summary>
     internal static bool MayFetchFresh(string? url)
     {
-        if (!global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url)) return true;
+        if (!ScrolllerPolicy.IsScrolllerUrl(url)) return true;
         var spent = ScrolllerAllowance.Spent;
         return FreshRule(ScrolllerPolicy.Enabled, spent || !ScrolllerAllowance.BookSettled, ScrolllerPolicy.Away);
     }

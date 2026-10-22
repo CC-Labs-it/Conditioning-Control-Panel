@@ -1120,7 +1120,7 @@ public class ProgramService : IDisposable
         var progressed = ApplyVerifiedProgress(day, record, category, amount, IsTaskBlocked, out var finished);
         var taskFinished = finished.Count > 0;
         foreach (var id in finished)
-            App.Logger?.Information("Program {Program} day {Day}: task '{Task}' completed",
+            Log.Information("Program {Program} day {Day}: task '{Task}' completed",
                 enrollment.ProgramId, day.DayIndex, id);
 
         if (!progressed) return;

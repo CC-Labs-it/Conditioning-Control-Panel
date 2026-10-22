@@ -82,7 +82,7 @@ public class ConversionPipeTests
     {
         foreach (var lang in Languages)
         {
-            var json = JObject.Parse(Read("Localization", "Languages", lang + ".json"));
+            var json = JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json")));
             foreach (var key in new[] { "quest_reroll_see_basic", "quest_reroll_daily_none_free", "quest_reroll_weekly_none_free" })
             {
                 var v = json.Value<string>(key);
@@ -95,5 +95,5 @@ public class ConversionPipeTests
 
     [Fact]
     public void TheDailyFeatureCommentNoLongerSaysTheRouteIsMissing()
-        => Assert.DoesNotContain("does not exist yet", Read("Services", "DailyFreeService.cs"));
+        => Assert.DoesNotContain("does not exist yet", SourceRoots.ReadProductFile("Services", "DailyFreeService.cs"));
 }

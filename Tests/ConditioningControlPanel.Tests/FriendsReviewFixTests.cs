@@ -34,7 +34,7 @@ public class FriendsReviewFixTests
     [Fact]
     public void Going_online_or_offline_drops_the_old_platform_marks()
     {
-        var src = Source("ConditioningControlPanel", "Services", "Friends", "FriendsService.cs");
+        var src = SourceRoots.ReadProductFile("Services", "Friends", "FriendsService.cs");
         Assert.Contains("return f with { Online = on, Presence = p, Platforms = Array.Empty<string>() };", src);
     }
 

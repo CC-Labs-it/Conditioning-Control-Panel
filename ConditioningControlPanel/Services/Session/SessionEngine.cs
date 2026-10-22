@@ -614,7 +614,7 @@ namespace ConditioningControlPanel.Services
             var settings = _currentSession.Settings;
             void Step(string name, Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("resume:" + name, ex));
 
-            foreach (var name in _pendingFeatureStarts.Select(p => p.Name).Distinct().ToList())
+            foreach (var name in _pendingFeatureStarts.PendingNames.Distinct().ToList())
             {
                 Action? stop = name switch
                 {

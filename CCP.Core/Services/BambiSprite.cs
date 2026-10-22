@@ -686,7 +686,7 @@ Example responses with REAL video names:
             var custom = settings?.CompanionPrompt;
             if (custom == null || !string.IsNullOrEmpty(settings!.ActiveCommunityPromptId)) return custom;
             Models.CompanionPromptSettings? persona = null;
-            try { persona = App.Personality?.GetActivePreset()?.PromptSettings; } catch { }
+            try { persona = PersonalityService.Shared.GetActivePreset()?.PromptSettings; } catch { }
             return Companion.ActivePersonaPromptText.WireFields(custom, persona);
         }
 
@@ -802,7 +802,7 @@ Example responses with REAL video names:
                 {
                     Id = CoreSettings.Service?.Current?.ActiveCommunityPromptId ?? "custom",
                     Name = "Community Prompt",
-                    PromptSettings = CustomPromptOnWire(App.Settings?.Current)
+                    PromptSettings = CustomPromptOnWire(CoreSettings.Service?.Current)
                 };
                 assembled = BuildPromptFromPreset(communityPreset);
             }

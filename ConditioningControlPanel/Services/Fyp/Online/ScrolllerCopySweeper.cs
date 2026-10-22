@@ -16,6 +16,17 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 /// </summary>
 internal static class ScrolllerCopySweeper
 {
+    /// <summary>The Core device cache (CCP.Core ScrolllerDiskCache) sweeps and purges every copy this head
+    /// holds through here, and the honest user-agent reads this head's release constant. Seeded when
+    /// this assembly loads, so the app and the WPF tests (which never run App startup) both get it.</summary>
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void SeedCoreHooks()
+    {
+        ScrolllerDiskCache.SweepAllCopies = SweepAll;
+        ScrolllerDiskCache.PurgeAllCopies = PurgeAll;
+        CoreReleaseContent.AppVersionProvider ??= () => UpdateService.AppVersion;
+    }
+
     /// <summary>The hourly pass. Never throws.</summary>
     public static void SweepAll()
     {

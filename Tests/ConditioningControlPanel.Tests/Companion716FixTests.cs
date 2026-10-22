@@ -94,8 +94,8 @@ public class Companion716FixTests
     [Fact]
     public void PromptMux_SendsTheFilledCustomPrompt_AndHashesTheSameText()
     {
-        var src = Source("ConditioningControlPanel", "Services", "BambiSprite.cs");
-        Assert.Contains("PromptSettings = CustomPromptOnWire(App.Settings?.Current)", src);
+        var src = SourceRoots.ReadProductFile("Services", "BambiSprite.cs");   // moved to CCP.Core: settings via CoreSettings
+        Assert.Contains("PromptSettings = CustomPromptOnWire(CoreSettings.Service?.Current)", src);
         Assert.Contains("Sections(useCustom ? CustomPromptOnWire(s)", src);
         // A community prompt is its author's whole text: never filled.
         Assert.Contains("!string.IsNullOrEmpty(settings!.ActiveCommunityPromptId)) return custom;", src);

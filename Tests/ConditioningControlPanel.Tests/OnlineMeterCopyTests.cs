@@ -72,13 +72,6 @@ public class OnlineMeterCopyTests
 
     internal static string LanguageDir()
     {
-        var d = new DirectoryInfo(AppContext.BaseDirectory);
-        while (d != null)
-        {
-            var p = Path.Combine(d.FullName, "ConditioningControlPanel", "Localization", "Languages");
-            if (Directory.Exists(p)) return p;
-            d = d.Parent;
-        }
-        throw new InvalidOperationException("language files not found");
+        return SourceRoots.LanguagesDirectory;
     }
 }

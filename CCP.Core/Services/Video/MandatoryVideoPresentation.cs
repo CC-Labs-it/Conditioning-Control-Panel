@@ -114,7 +114,7 @@ namespace ConditioningControlPanel.Services.Video
             var w = Math.Min(areaW, Math.Max(MinWidth, areaW * ClampSizePercent(sizePercent) / 100));
             var h = w * 9 / 16;
             if (h > areaH) { h = areaH; w = Math.Min(areaW, h * 16 / 9); }
-            var (minX, minY, maxX, maxY) = FlashService.SpawnBounds(areaW, areaH, w, h);
+            var (minX, minY, maxX, maxY) = Flash.FlashPlacement.SpawnBounds(areaW, areaH, w, h);   // WPF FlashService.SpawnBounds
             var x = Math.Clamp(random.Next(minX, maxX), 0, areaW - w);
             var y = Math.Clamp(random.Next(minY, maxY), 0, areaH - h);
             if (taken != null)

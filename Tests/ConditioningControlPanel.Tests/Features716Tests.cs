@@ -172,7 +172,7 @@ public class Features716Tests
     {
         foreach (var lang in Languages)
         {
-            var path = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages", lang + ".json");
+            var path = Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json");
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
             foreach (var key in NewKeys)
             {

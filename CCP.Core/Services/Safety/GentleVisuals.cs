@@ -52,15 +52,15 @@ namespace ConditioningControlPanel.Services.Safety
         // ---- live reads ----
 
         /// <summary>True when the player switched gentle visuals on.</summary>
-        public static bool On => App.Settings?.Current?.GentleVisuals == true;
+        public static bool On => CoreSettings.Service?.Current?.GentleVisuals == true;
 
         /// <summary>The fade length in seconds while on; 0 when off (nothing to lengthen to).</summary>
         public static double FadeSeconds
-            => On ? ClampFade(App.Settings?.Current?.GentleFadeSeconds ?? DefaultFadeSeconds) : 0;
+            => On ? ClampFade(CoreSettings.Service?.Current?.GentleFadeSeconds ?? DefaultFadeSeconds) : 0;
 
         /// <summary>Playback speed for GIFs, spirals and videos: 1 when off.</summary>
         public static double Speed
-            => On ? ClampSpeed(App.Settings?.Current?.GentleSpeed ?? DefaultSpeed) : 1.0;
+            => On ? ClampSpeed(CoreSettings.Service?.Current?.GentleSpeed ?? DefaultSpeed) : 1.0;
 
         public static bool AllowFlicker => !On;
 

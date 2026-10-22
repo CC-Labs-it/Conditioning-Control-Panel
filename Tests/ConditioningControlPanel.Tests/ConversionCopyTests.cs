@@ -36,10 +36,6 @@ public class ConversionCopyTests
 
     private static string LangPath(string lang)
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization", "Languages")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages", lang + ".json");
+        return Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json");
     }
 }

@@ -350,7 +350,7 @@ public class FloatingVideoMultiTests
         var keys = new[] { "setting_video_appearance_size", "tooltip_video_appearance_size", "setting_video_appearance_speed",
             "tooltip_video_appearance_speed", "video_appearance_no_checks_note", "setting_video_appearance_count", "tooltip_video_appearance_count" };
         var gone = new[] { "video_appearance_size_small", "video_appearance_size_medium", "video_appearance_size_large" };
-        var files = Directory.GetFiles(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages"), "*.json");
+        var files = Directory.GetFiles(SourceRoots.LanguagesDirectory, "*.json");
         Assert.NotEmpty(files);
         foreach (var file in files)
         {

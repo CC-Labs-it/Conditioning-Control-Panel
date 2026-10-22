@@ -82,7 +82,7 @@ public sealed class LeashHelpSlipTests
     [Fact]
     public void Every_slip_key_is_in_all_ten_languages()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var keys = LeashHelpCatalog.AllKeys().Distinct().ToList();
         Assert.True(keys.Count > 40, "found only " + keys.Count);
         foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
@@ -119,7 +119,7 @@ public sealed class LeashHelpSlipTests
     [Fact]
     public void Slip_copy_says_what_the_player_sees()
     {
-        var en = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages", "en.json")));
+        var en = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, "en.json")));
         foreach (var e in LeashHelpCatalog.All)
             foreach (var k in new[] { e.CaptionKey, e.LimitsKey })
                 Assert.DoesNotContain("gate", ((string)en[k]!).ToLowerInvariant());

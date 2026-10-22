@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>The gain from the live settings. Null settings read as the defaults.</summary>
         public static float Current(float trim)
         {
-            var s = App.Settings?.Current;
+            var s = CoreSettings.Service?.Current;
             return Compute(s?.MasterVolume ?? 100, s?.CompanionVoiceLevel ?? DefaultLevel, trim);
         }
     }

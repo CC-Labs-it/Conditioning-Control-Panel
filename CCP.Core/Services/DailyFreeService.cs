@@ -154,7 +154,7 @@ namespace ConditioningControlPanel.Services
         {
             if (featureKey == null) return false;
             if (string.Equals(TodayKey, featureKey, StringComparison.OrdinalIgnoreCase)) return true;
-            var settings = App.Settings?.Current;
+            var settings = CoreSettings.Service?.Current;
             if (settings == null) return false;
             if (Startup.Conversion.ProfileExtras.GrantOpen(settings.PostGrants, featureKey, DateTime.UtcNow)) return true;
             return settings.PatreonMember && string.Equals(MemberKey, featureKey, StringComparison.OrdinalIgnoreCase);
@@ -169,7 +169,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
-                if (App.Settings?.Current?.PatreonMember != true) return null;
+                if (CoreSettings.Service?.Current?.PatreonMember != true) return null;
                 var stamp = LocalDateStamp();
                 var server = _serverMemberKeyForDate == stamp ? _serverMemberKey : null;
                 var today = TodayKey;
@@ -193,7 +193,7 @@ namespace ConditioningControlPanel.Services
         public void NotifyInputsChanged()
         {
             try { TodayChanged?.Invoke(); }
-            catch (Exception ex) { App.Logger?.Debug("DailyFree: inputs-changed repaint failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("DailyFree: inputs-changed repaint failed: {E}", ex.Message); }
         }
 
         /// <summary>The wheel's own pick for a local date, ignoring any server override. For looking

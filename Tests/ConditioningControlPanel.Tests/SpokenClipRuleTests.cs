@@ -74,15 +74,11 @@ public class SpokenClipRuleTests
     // asks the subliminal player's own lookup (trigger lines speak through PlayTriggerAudio).
     private static string Source(params string[] parts)
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Services")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", Path.Combine(parts)));
+        return SourceRoots.ReadProductFile(parts);   // any product root: the subliminal lookup is CCP.Core's
     }
 
     [Theory]
-    [InlineData("Services", "Subliminal", "SubliminalService.cs")]
+    [InlineData("Services", "SubliminalWhisper.cs")]   // CCP.Core: WPF SubliminalService.FindLinkedAudio delegates here
     [InlineData("Services", "KeywordTriggerService.cs")]
     public void Both_players_resolve_through_the_rule(params string[] parts)
     {
