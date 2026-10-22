@@ -167,7 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             if (!string.IsNullOrEmpty(settings.ActiveCommunityPromptId))
             {
                 var prompt = InstalledCommunityPrompts.Load(
-                    System.IO.Path.Combine(CorePaths.UserData, "community-prompts"),
+                    System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName),
                     settings.ActiveCommunityPromptId, settings.ActiveCommunityPromptId);
                 if (prompt != null)
                 {

@@ -144,7 +144,7 @@ public sealed class CompanionEditorsTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var id = "badge-" + Guid.NewGuid().ToString("N");
-        var folder = System.IO.Path.Combine(CorePaths.UserData, "community-prompts");
+        var folder = System.IO.Path.Combine(CorePaths.UserData, ConditioningControlPanel.Services.Companion.InstalledCommunityPrompts.FolderName);
         var path = System.IO.Path.Combine(folder, id + ".json");
         System.IO.Directory.CreateDirectory(folder);
         try

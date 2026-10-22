@@ -10,6 +10,9 @@ namespace ConditioningControlPanel.Services.Companion;
 /// to show the active prompt's name, and opening the editor does not create a prompt folder.</summary>
 public static class InstalledCommunityPrompts
 {
+    /// <summary>Folder under the user-data root that holds installed prompt JSON files.</summary>
+    public const string FolderName = "community-prompts";
+
     public static CommunityPrompt? Load(string folder, string promptId, string? activePromptId)
     {
         try

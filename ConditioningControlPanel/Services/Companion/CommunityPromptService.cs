@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Services
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-            _promptsFolder = Path.Combine(App.UserDataPath, "community-prompts");
+            _promptsFolder = Path.Combine(App.UserDataPath, Companion.InstalledCommunityPrompts.FolderName);
             _manifestCachePath = Path.Combine(_promptsFolder, "manifest-cache.json");
 
             // Create prompts folder if needed
