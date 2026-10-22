@@ -21,9 +21,9 @@ public partial class AudioPlaylistCard : UserControl
     private bool _refreshing;
     public AudioPlaylistCard() { InitializeComponent(); Refresh(); }
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
-    { base.OnAttachedToVisualTree(e); Bind(App.AudioPlaylist); }
+    { base.OnAttachedToVisualTree(e); LocalizationManager.Instance.LanguageChanged += OnLanguage; Bind(App.AudioPlaylist); }
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
-    { Bind(null); base.OnDetachedFromVisualTree(e); }
+    { LocalizationManager.Instance.LanguageChanged -= OnLanguage; Bind(null); base.OnDetachedFromVisualTree(e); }
     internal void Bind(IAudioPlaylistService? service)
     {
         if (_service != null)
@@ -34,6 +34,8 @@ public partial class AudioPlaylistCard : UserControl
         Refresh();
     }
     private void TrackChanged(string? _) => Refresh();
+    // Code-set strings (nothing loaded, loop label, play tip) follow a language switch, like WPF Rebind (P09).
+    private void OnLanguage(object? sender, EventArgs e) => Refresh();
     private void PositionChanged(double position)
     {
         _refreshing = true;

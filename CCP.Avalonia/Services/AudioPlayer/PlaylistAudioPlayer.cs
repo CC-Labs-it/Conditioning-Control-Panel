@@ -31,6 +31,7 @@ internal sealed class PlaylistAudioPlayer : IPlaylistAudioPlayer
     private MediaPlayer? _player;
     private Media? _media;
     private int _generation, _volume = 80;
+    private volatile bool _pausePending;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     public PlaylistAudioPlayer() => _timer.Tick += (_, _) => PlaybackTimeMsChanged?.Invoke(CurrentTimeMs);
     public string? CurrentPath { get; private set; }
@@ -65,7 +66,7 @@ internal sealed class PlaylistAudioPlayer : IPlaylistAudioPlayer
             p.Playing += (_, _) => ThreadPool.QueueUserWorkItem(_ =>
             {
                 lock (p) if (ReferenceEquals(p, _player))
-                { LibVlcAudio.ApplyPreferredDevice(p); p.Volume = NativeVolume; }
+                { LibVlcAudio.ApplyPreferredDevice(p); p.Volume = NativeVolume; if (_pausePending) p.SetPause(true); }
             });
             // A native callback must return before Stop/Dispose touches LibVLC again.
             p.EndReached += (_, _) => Dispatcher.UIThread.Post(() =>
@@ -80,11 +81,14 @@ internal sealed class PlaylistAudioPlayer : IPlaylistAudioPlayer
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Playlist file could not open"); Stop(); return false; }
     }
-    public void Resume() { _player?.SetPause(false); IsPlaying = _player != null; IsPaused = false; _timer.Start(); }
+    public void Resume() { _pausePending = false; _player?.SetPause(false); IsPlaying = _player != null; IsPaused = false; _timer.Start(); }
     public void Pause()
     {
-        if (_player?.State != VLCState.Playing) { Stop(); return; }
-        _player.SetPause(true); IsPlaying = false; IsPaused = true; _timer.Stop();
+        if (_player == null) return;
+        // WPF pauses whatever is loaded; a file LibVLC is still opening pauses as soon as it plays.
+        _pausePending = true;
+        if (_player.State == VLCState.Playing) _player.SetPause(true);
+        IsPlaying = false; IsPaused = true; _timer.Stop();
     }
     public void Seek(double seconds) { if (_player is { } p && double.IsFinite(seconds)) p.Time = (long)(Math.Max(0, seconds) * 1000); }
     public void Stop()
@@ -93,7 +97,7 @@ internal sealed class PlaylistAudioPlayer : IPlaylistAudioPlayer
         _timer.Stop();
         var p = _player; _player = null;
         var media = _media; _media = null;
-        CurrentPath = null; IsPlaying = IsPaused = false;
+        CurrentPath = null; IsPlaying = IsPaused = _pausePending = false;
         if (p != null) lock (p) { p.Stop(); p.Dispose(); }
         media?.Dispose();
     }

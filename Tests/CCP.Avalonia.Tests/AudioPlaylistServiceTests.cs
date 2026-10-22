@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia;
 using Avalonia.Controls;
@@ -81,6 +83,32 @@ public sealed class AudioPlaylistServiceTests
         finally { App.AudioPlaylist = previous; card.Bind(null); }
         Assert.Single(service.Tracks);
         Assert.Single(settings.AudioPlaylistPaths);
+    });
+    /// <summary>P04 + P09: the shell's own Deeper tab hosts the card bound to App.AudioPlaylist, and its
+    /// code-set loop label follows a language switch.</summary>
+    [Fact]
+    public void ShellDeeperCardDrivesAppPlaylistAndFollowsLanguage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var device = new SilentPlayer();
+        using var service = new AudioPlaylistService(device, new AppSettings());
+        service.Add(new[] { "a.mp3" });
+        var previous = App.AudioPlaylist; App.AudioPlaylist = service;
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        MainShellWindow? w = null;
+        try
+        {
+            loc.SetLanguage("en");
+            w = new MainShellWindow(); w.Show(); w.ShowTab("deeper"); Dispatcher.UIThread.RunJobs();
+            var card = w.Named<ConditioningControlPanel.Avalonia.Views.Tabs.DeeperTabView>("DeeperTab")!
+                .GetLogicalDescendants().OfType<AudioPlaylistCard>().Single();
+            card.FindControl<Button>("PlayButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(device.IsPlaying);
+            var loop = card.FindControl<Button>("LoopButton")!;
+            loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Wiederholen: aus", ((TextBlock)loop.Content!).Text);
+        }
+        finally { w?.Close(); App.AudioPlaylist = previous; loc.SetLanguage(language); }
     });
     [Fact]
     public void WatchdogMutesWhileUiIsBusyThenStopsWithoutWritingSettings() => AvaloniaTestDispatcher.Run(() =>

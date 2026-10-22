@@ -19,9 +19,14 @@ namespace ConditioningControlPanel.Avalonia
 
         internal static void StopAudioPlaylist()
         {
-            if (AudioPlaylist is AudioPlayer.AudioPlaylistService player) player.StopEmergency();
-            else if (Dispatcher.UIThread.CheckAccess()) AudioPlaylist?.Stop();
-            else Dispatcher.UIThread.Post(() => AudioPlaylist?.Stop());
+            // WPF App.xaml.cs:1240 guards this too: it runs first in StopEngine, ahead of CoreEngine.Stop.
+            try
+            {
+                if (AudioPlaylist is AudioPlayer.AudioPlaylistService player) player.StopEmergency();
+                else if (Dispatcher.UIThread.CheckAccess()) AudioPlaylist?.Stop();
+                else Dispatcher.UIThread.Post(() => AudioPlaylist?.Stop());
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "StopAudioPlaylist error"); }
         }
 
         /// <summary>The settings service, or null on the headless render path.</summary>
