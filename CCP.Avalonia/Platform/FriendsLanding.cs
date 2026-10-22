@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -112,6 +113,8 @@ internal static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -211,7 +214,21 @@ internal static class FriendsLanding
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
     /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    internal static bool CanJoin(InboxItem item) => item.Destination is InviteDestination.Ramp or InviteDestination.Race;
+
+    // WPF BrowserLauncher.OpenUrlOrPrompt. Tests substitute this seam: no real browser opens.
+    internal static Action<string> OpenWeb { get; set; } = async url =>
+    {
+        try
+        {
+            var owner = Anchor();
+            if (await ExternalOpener.OpenAsync(owner, url)) return;
+            if (owner?.Clipboard is { } cb) await cb.SetTextAsync(url);
+            if (owner != null) await Views.Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_open_link_in_browser"),
+                Loc.GetF("msg_browser_no_default_for", Loc.Get("friends_land_dest_race")) + Loc.GetF("msg_browser_link_copied", url));
+        }
+        catch (Exception ex) { Log.Debug(ex, "[Friends] race browser launch failed"); }
+    };
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -227,6 +244,8 @@ internal static class FriendsLanding
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        else if (item.Destination == InviteDestination.Race) OpenWeb(InviteDestination.RaceWebUrl);
+        // ponytail: Breakout full/demo selection waits for its missing full host; never report Joined for it.
     }
 
     private static readonly FriendsSfxGate SfxGate = new();
