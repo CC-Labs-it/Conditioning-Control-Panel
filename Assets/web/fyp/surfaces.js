@@ -886,10 +886,10 @@ export function createPage(comp, ctx) {
       const on = ctx.isAutoAdvance();
       slots.forEach((s) => s.surface?.setAutoAdvance(on && !!s.tile?.advances));
     },
-    /** First tile's caption feeds the page chrome. */
+    /** First tile's caption feeds the page chrome. `online` = a Scrolller clip (credited). */
     caption() {
       const t = comp.tiles[0];
-      return t ? { filename: t.cut.asset.filename, folder: t.cut.asset.folder } : null;
+      return t ? { filename: t.cut.asset.filename, folder: t.cut.asset.folder, online: t.cut.asset.origin === 'online' } : null;
     },
     destroy() {
       cancelMorph();
