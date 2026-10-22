@@ -1025,3 +1025,98 @@ Private scripts, masters and static coloured preview stay in glassroad-art/w3/ro
 All final KTX2 files pass strict validation and were decoded for seam and visual
 review. Pattern frequencies and 512px band resolution are art choices; they leave
 additional room under the brief's approximate texture allowance.
+## Wave 4 effect flipbooks
+
+Twelve original grayscale effects, each with 64 frames in an 8 x 8 atlas. Every
+plain ID is tier desktop at 1024 square with 128px cells; its -phone variant is
+tier phone at 256 square with 32px cells. Select one tier per effect. Both tiers
+use ETC1S, linear neutral-white RGB and straight alpha. No colour is baked.
+
+| Effect stem after fx-flip- | FPS | Playback |
+|---|---:|---|
+| impact-burst | 30 | one-shot |
+| shockwave-ring | 30 | one-shot |
+| spiral-swirl | 30 | loop |
+| melt-drip-run | 30 | loop |
+| frost-burst | 30 | one-shot |
+| heart-pop | 30 | one-shot |
+| card-confetti | 30 | one-shot |
+| dust-puff | 24 | one-shot |
+| dizzy-stars-orbit | 30 | loop |
+| sweat-drop-pair | 30 | one-shot |
+| boost-flame-sparkle | 30 | loop |
+| smoke-curl | 24 | one-shot |
+
+The 30 fps clips last 64/30 seconds; dust and smoke last 64/24 seconds. Eight
+one-shots start and finish fully transparent. Four loops have periodic motion,
+with frame 63 blending back to frame 0. First and last loop frames intentionally
+show consecutive times instead of duplicating the same endpoint.
+
+Binding:
+- Frame index is row-major: column = index modulo 8, row = floor(index/8), top-left
+  origin. Retain the full cell including its gutter. Apply the half-texel inset.
+- Blend adjacent frame samples linearly for smooth motion. For one-shots, clamp
+  the next frame at 63 and stop after the lifetime; only the four loops wrap.
+- Desktop has a 12px transparent gutter, 11 supplied mips and maxSafeLod 1.
+  Phone has a 3px gutter, 9 supplied mips and maxSafeLod 0. Clamp both samples'
+  mip selection, including any trilinear upper mip, to the stated safe level.
+- RGB remains neutral white even in transparent texels. Use alpha as coverage;
+  tint in the host and premultiply once if using premultiplied blending.
+- The host controls size, placement, opacity, speed and Gentle Visuals. These
+  are small local effects, with soft entrances/exits and no screen-filling flash.
+- The phone presentation widens orbit stars, falling drops, sweat drops and cards
+  before downsampling. Card symbols simplify at 32px; their tumbling rectangles
+  carry the identity. Do not load desktop and phone variants together.
+- These temporal effects are explicitly requested by the Wave 4 brief. Road and
+  environment patterns retain their separate shader-motion contracts.
+
+| Tier | Assets | Conservative RGBA8 bytes, all mips | 16-byte block bytes | MiB RGBA8 |
+|---|---:|---:|---:|---:|
+| desktop | 12 | 67,108,848 | 16,777,536 | 64.000 |
+| phone | 12 | 4,194,288 | 1,048,896 | 4.000 |
+
+Each desktop atlas accounts for 5,592,404 RGBA8 bytes; each phone atlas accounts
+for 349,524. Download bytes are separate from GPU residency. All 24 rows have
+zero triangles and boundRadiusM 0. The phone family brings the 109.333317 MiB
+Wave 3 persistent baseline, including 17 engine icons, to 113.333302 MiB before
+other Wave 4 families. A concurrent phone menu backdrop adds 7.910156 MiB, for 121.243458 MiB.
+
+Validation:
+- All 24 final KTX2 files pass strict validation and were decoded for review.
+- Every decoded cell has zero alpha throughout its declared base gutter.
+  Desktop mip 1 also has zero gutter alpha; phone sampling stays at mip 0.
+- All eight one-shots retain zero-alpha first and last frames in both tiers.
+- Each loop has an exact periodic source endpoint; decoded wrap-frame changes
+  are below the largest ordinary adjacent-frame change for that effect.
+- White RGB stays exactly neutral after decoding. Private checks record all
+  hashes, alpha packing error, gutter maxima and temporal differences.
+- The contact includes representative frames of every effect. A native 32px
+  phone proof was opened and reviewed. The ten-second timing video uses final
+  decoded cells, linear frame blending and repeated one-shots for review only.
+
+Source: original deterministic analytic fields and vector paths authored for
+this project, without external images, fonts or media in runtime textures.
+Editable Python sources, full masters, decoded evidence and the timing video
+stay in the private art archive. No Blender or image-generation service is used.
+Assumptions: restrained 30 fps loops, slower 24 fps dust/smoke and host-controlled
+particle quantities. Device integration and normal-speed human playback remain
+part of engine review.
+
+### Tier residency and running budget
+
+Load only the selected texture tier: plain IDs on desktop, matching -phone IDs on phone.
+The tiers share GLBs, SVGs and per-vertex sidecars. Only the active sky palette nebula
+is resident on either tier; release the previous palette layer before loading another.
+
+| Tier | This family MiB | W4 cumulative MiB | Running persistent MiB | With one menu backdrop MiB |
+|---|---:|---:|---:|---:|
+| desktop | 63.999985 | 63.999985 | 173.333302 | 182.333302 |
+| phone | 3.999985 | 3.999985 | 113.333302 | 121.243458 |
+
+Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
+Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
+These are conservative decoded RGBA8 allocations including supplied mip chains, not
+compressed download sizes. The one-at-a-time Wave 3 backdrops add 9 MiB on desktop
+and 7.910156 MiB on phone. SVGs have zero baked texture allocation. Per-vertex
+sidecars are separate attribute bytes, never counted as texture memory.
+The combined phone persistent addition stays below 14 MiB; the phone ceiling is 128 MiB.
