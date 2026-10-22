@@ -263,7 +263,7 @@ internal static class RemoteMediaCache
             {
                 try
                 {
-                    if (now - File.GetCreationTimeUtc(file) < age) continue;
+                    if (!TempCopyDue(File.GetCreationTimeUtc(file), now, age)) continue;
                     File.Delete(file);
                     deleted++;
                 }
@@ -274,6 +274,16 @@ internal static class RemoteMediaCache
         if (deleted > 0) App.Logger?.Information("[remote media] {Count} temp file(s) past the day limit deleted", deleted);
         return deleted;
     }
+
+    /// <summary>The day limit on one temp copy, pure: due once its creation time (its download
+    /// time) is <paramref name="age"/> old, always for age zero (the off switch), and also when the
+    /// creation time is more than an hour AHEAD of now (the clock went back, or was wrong when the
+    /// copy was made): the same guard as <see cref="ScrolllerCacheBook.IsExpiredAt"/>. Without it a
+    /// copy stamped "next week" stayed on disk until the clock caught up.</summary>
+    internal static bool TempCopyDue(DateTime createdUtc, DateTime nowUtc, TimeSpan age)
+        => age <= TimeSpan.Zero
+           || createdUtc - nowUtc > TimeSpan.FromHours(1)
+           || nowUtc - createdUtc >= age;
 
     /// <summary>When the in-memory copy of <paramref name="url"/> was downloaded, or null.</summary>
     private static DateTime? DownloadedUtcOfMemory(string url)
