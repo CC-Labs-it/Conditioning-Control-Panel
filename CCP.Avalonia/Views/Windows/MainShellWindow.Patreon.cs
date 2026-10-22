@@ -70,8 +70,8 @@
 //   internal void SyncLabEffectPermsUI(…)
 //   private void SyncAiBrainUI(…)
 //   internal void ChkMuteWhispers_Changed(…)
-//   (ChkPauseBrowser_Changed / SetBrowserPaused: Home browser part ported, WorkshopBehaviorCell ->
-//    MainShellWindow.WorkshopBehavior.cs; the Avatar Tube mirror is not)
+//   (ChkPauseBrowser_Changed / SetBrowserPaused / SyncQuickControlsUI(pauseBrowser): ported in
+//    MainShellWindow.WorkshopBehavior.cs and AvatarTubeWindow.QuickMenu.cs)
 //   internal void ChkVoiceLines_Changed(…)
 //   public void SyncQuickControlsUI(…)
 //   public void SyncWhispersUI(…)
