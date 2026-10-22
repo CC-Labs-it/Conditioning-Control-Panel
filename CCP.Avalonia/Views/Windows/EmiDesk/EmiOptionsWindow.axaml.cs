@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     ///         equivalent in one respect worth naming: WS_EX_NOACTIVATE makes activation
     ///         *impossible*, where <c>ShowActivated="False"</c> only declines it at show time - a
     ///         click on this panel can still focus it on X11.</item>
-    ///   <item><b>Windows has scoped, non-consuming global hooks</b>; X11Pointer polls on Linux. See
+    ///   <item><b>Windows has scoped, non-consuming global hooks</b>; X11 has XInput2 raw events. See
     ///         <see cref="InstallHooks"/> for what that does and does not cover.</item>
     ///   <item><b>The owner is optional.</b> <c>EmiDeskWindow</c> is the widget this panel hangs
     ///         off and it is ported, so the constructor takes it and every <c>_owner.*</c> call is
@@ -114,8 +114,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             _owner = owner;
             // Headless/render test windows never install hooks on the real desktop.
-            StartDismissListener = callback => TryGetPlatformHandle()?.HandleDescriptor == "HWND"
-                ? Win32OptionsDismiss.Start(callback) : null;
+            StartDismissListener = callback => TryGetPlatformHandle()?.HandleDescriptor switch
+            {
+                "HWND" => Win32OptionsDismiss.Start(callback),
+                "XID" => X11OptionsDismiss.Start(callback),
+                _ => null,
+            };
             AvaloniaXamlLoader.Load(this);
 
             _btnPanelClose = this.FindControl<Button>("BtnPanelClose")!;
@@ -657,8 +661,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>The desktop-wide pointer read. A seam only so a test can play a click.</summary>
         internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
 
-        /// <summary>Use the WPF non-consuming hooks on Windows; retain the X11 fallback.
-        /// ponytail: Wayland-native windows and sub-tick X11 presses remain follow-up work.</summary>
+        /// <summary>WPF's non-consuming hooks: Win32 hooks on Windows, XInput2 raw events plus the
+        /// _NET_ACTIVE_WINDOW drop for Wayland-native focus on X11. The 30 ms poll is only the
+        /// fallback when the X server has no XInput 2.2.</summary>
         private void InstallHooks()
         {
             if (_dismissListener != null || _awayPoll != null) return;

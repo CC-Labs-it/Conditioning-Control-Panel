@@ -102,6 +102,27 @@ public sealed class EmiOptionsDismissTests
         return Task.CompletedTask;
     });
 
+    /// <summary>X11 backend rules (WPF LeftDown/RightDown + Escape; Wayland focus drop folds).</summary>
+    [Fact]
+    public void X11ListenerFoldsOnLeftRightAndWaylandFocusOnly()
+    {
+        var x11 = typeof(EmiOptionsWindow).Assembly
+            .GetType("ConditioningControlPanel.Avalonia.Platform.X11OptionsDismiss")!;
+        bool Button(int b) => (bool)x11.GetMethod("IsDismissButton", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .Invoke(null, new object[] { b })!;
+        bool Left(long from, long to) => (bool)x11.GetMethod("FocusLeftX", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .Invoke(null, new object[] { (IntPtr)from, (IntPtr)to })!;
+        Assert.True(Button(1));
+        Assert.True(Button(3));
+        Assert.False(Button(2));   // middle
+        Assert.False(Button(4));   // wheel
+        Assert.True(Left(0x400001, 0));       // a Wayland-native window took focus
+        Assert.False(Left(0x400001, 0x600002)); // another X window: its raw click already decided
+        Assert.False(Left(0, 0));             // repeated None is not a new click
+        var mask = (int)x11.GetField("RawMask", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        Assert.Equal((1 << 13) | (1 << 15), mask); // XI_RawKeyPress | XI_RawButtonPress, nothing that could consume
+    }
+
     private sealed class LogCapture : Serilog.Core.ILogEventSink, IDisposable
     {
         private readonly Serilog.ILogger _previous = Serilog.Log.Logger;
