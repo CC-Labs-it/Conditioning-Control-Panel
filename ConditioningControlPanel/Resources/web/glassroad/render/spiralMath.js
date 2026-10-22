@@ -1,38 +1,54 @@
-/* render/spiralMath.js - the spiral gates' numbers and maths (polish 3, SPIRALS lane). No three.js.
+/* render/spiralMath.js - the spiral gates' numbers and maths (polish 3 and 4, SPIRALS lane). No three.js.
  *
  * Every spiral comes from the Loom (owner law): the real arcademy/engine/loom/loomField.js and its
  * seeded "surprise me" (seeded.js, the Loom's own randomParams2 with the dice handed in), imported by
- * relative path, never forked. loadLoom() is the ONE place that names that path; a page served without
- * the arcademy tree beside it (dev/serve.mjs roots at glassroad/) gets null and the gates draw from the
- * stored params as written.
+ * relative path, never forked. Since polish 4 the band maths (span rule, layer rotation, style mapping,
+ * tunnel helix, band rule, pulse, wobble and hue rotation) are the Loom's own named exports too; this
+ * file only adds the 3D placement, the particle budget and the gate screen's timing.
  *
- * What this file adds on top of the Loom is only the 3D placement. A gate is the Loom field stood up
- * across the road: field x is the road's right (frame b), field y (down on the Loom canvas) is minus the
- * road's up (frame n), so a driver looking down the road sees the field exactly as the Loom draws it,
- * clockwise for direction 1 and reading inward. Particles are sampled ON the covered bands of the field
- * at phase 0 (the band rule of the Loom shader, mirrored by loomCover for the tests) and the GPU turns
- * them with the Loom's own loop timing: the angular styles rotate rigidly by the layer rotation, the
- * tunnel style's bands ride the radius. Pulse zoom, wobble and hue cycles follow the Loom phase.
+ * A gate is the Loom field stood up across the road: field x is the road's right (frame b), field y
+ * (down on the Loom canvas) is minus the road's up (frame n), so a driver looking down the road sees the
+ * field exactly as the Loom draws it, clockwise for direction 1 and reading inward. Particles are sampled
+ * ON the covered bands of the field at phase 0 and the GPU turns them with the Loom's own loop timing:
+ * the angular styles rotate rigidly by the layer rotation, the tunnel style's bands ride the radius.
+ * Three kinds: thin bright cores on the arm centre lines, soft wide glow sprites under them (the halo
+ * that makes an arm read from 100 m), and a little glitter. An aura disc behind each gate dims what is
+ * behind it (dark gaps between arms) and wears a coloured rim.
  */
+
+import {
+  normalizeParams2, loopMs2, LOOM_STYLES, LOOM_GOLDEN_K, loomSpanRad, loomLayerRotationRad, loomHueRows, loomStyleT, loomStyleR,
+  loomHelix, loomBandAt, loomPulseZoom, loomWobble, loomHueRad,
+} from '../../arcademy/engine/loom/loomField.js';
+import * as SEEDED from '../../arcademy/engine/loom/seeded.js';
+import * as SPECTRUM_MOD from './spectrum.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-import * as SPECTRUM_MOD from './spectrum.js';
+export { LOOM_GOLDEN_K };
 
-/** Lane look table (render numbers live here, never in logic). Gentle halves turn and twinkle. */
+/** Lane look table (render numbers live here, never in logic). Gentle halves turn, twinkle and contrast. */
 export const SPIRAL_LOOK = Object.freeze({
-  radiusM: 20, upM: 3.5, holeFrac: 0.06, jitterM: 1.4,
-  perGate: Object.freeze({ high: 8000, mid: 4000, phone: 2000 }),
-  farShare: 0.25, activeM: 400, drawM: 900,
-  // review (polish 3): the particles sit ON the Loom arms (armFill of each covered band, centred), thin and
-  // bright, with almost no halo between them, so a dark gap shows between arms and the spiral reads from 80 m
-  sizeM: Object.freeze([0.2, 0.5]), sizeRimGain: 0.25, armFill: 0.55,
-  glitterShare: 0.08, glitterSize: 1.5, haloShare: 0.02, haloBand: 0.04,
-  alpha: 0.75, layer2Alpha: 0.85, haloAlpha: 0.35, gain: 1.5, glitterGain: 2.0, whiteMix: 0.3, sliceGapM: 8, sliceAlpha: 0.3, radialFloor: 0.35,
-  twinkleHz: Object.freeze([0.5, 2.2]), twinkleAmp: 0.7,
+  radiusM: 20, upM: 3.5, holeFrac: 0.06, jitterM: 0.6,
+  perGate: Object.freeze({ high: 12000, mid: 6000, phone: 3000 }),
+  farShare: 0.3, activeM: 400, drawM: 900,
+  // polish 4 (owner: "dense, with a glow and an aura, so we spot the arms at a glance"): cores sit on the
+  // arm centre line (armFill of each band) sized to the band's real width across the arm, a soft glow
+  // sprite layer under them (glowShare of the budget, glowSpan of the band width, never past glowMaxM)
+  sizeM: Object.freeze([0.16, 0.42]), coreSpan: 0.42, sizeRimGain: 0.2, armFill: 0.32,
+  glitterShare: 0.03, glitterSize: 1.6, haloShare: 0, haloBand: 0.04,
+  glowShare: 0.16, glowSpan: 1.35, glowMinM: 0.7, glowMaxM: 4.5, glowAlpha: 0.16, glowGain: 1.0, glowNearM: 14,
+  alpha: 0.9, layer2Alpha: 0.8, haloAlpha: 0.35, gain: 1.25, glitterGain: 1.8, whiteMix: 0.3, coreWhite: 0.15,
+  sliceGapM: 8, sliceAlpha: 0.3, frontShare: 0.5, radialFloor: 0.35,
+  twinkleHz: Object.freeze([0.5, 2.2]), twinkleAmp: 0.45,
   gentleTwinkleMul: 0.5, gentleTurnMul: 0.5, gentlePartMul: 0.6, gentleAlphaMul: 0.75,
   turnMul: 1, nearM: 2.5, nearSpanM: 4, farFadeM: 900,
+  // the aura disc behind a gate (auraBackM past its far face): dims what is behind it by auraDim (so the
+  // gaps between arms read dark against a bright sky), tinted auraTint of the thread colours, with an
+  // additive rim of auraRing at r = 1 (auraRingW wide) and a faint inner glow; the road window is cut out
+  // and the whole disc fades out within auraNearM of the camera (the gate screen takes over there)
+  aura: Object.freeze({ outer: 1.22, backM: 1.5, dim: 0.7, tint: 0.05, ring: 0.8, ringW: 0.06, inner: 0.03, nearM: 10, nearSpanM: 20, gentleMul: 0.5 }),
   // the road window: particles over the road corridor (road half width + corridorSideM across, up to
   // corridorUpM above the surface, soft over corridorSoftM) fade to corridorAlpha, so the road and the next
   // turn stay readable through the gate from the kart's eye
@@ -44,22 +60,25 @@ export const SPIRAL_LOOK = Object.freeze({
     speedMps: Object.freeze([2.5, 7]), sizeM: Object.freeze([0.03, 0.09]), aheadM: 1.2, refusedMul: 0.4, gentleCountMul: 0.5,
     alpha: 0.9, gain: 1.8,
   }),
+  // the gate screen (render/gateScreen.js): the 2D Loom over the whole view after a pass. riseS at least
+  // 0.3 s, holdS, fallS; the mask is the share of the field shown from the centre (0) to the corners (1),
+  // light over the road, strong at the edges; maxBandHz caps how often an arm sweeps a pixel (photosafe:
+  // under 3 Hz); Gentle halves opacity and speed; a photosafe refusal plays it at refusedMul
+  screen: Object.freeze({
+    riseS: 0.4, holdS: 1.05, fallS: 0.75, peak: 1,
+    mask: Object.freeze([[0, 0.36], [0.3, 0.42], [0.62, 0.7], [1, 0.88]]), centreY: 0.56,
+    maxBandHz: 2.5, gentleAlphaMul: 0.5, gentleSpeedMul: 0.5, refusedMul: 0.5,
+    backLong: Object.freeze({ high: 640, mid: 512, phone: 256 }), frameMs: Object.freeze({ high: 0, mid: 0, phone: 40 }), zIndex: 2,
+  }),
   fallbackLoopMs: 1800,
   /** Full spectrum threads for seeded gates when render/spectrum.js is missing. */
   palette: Object.freeze(['#ff2fb3', '#c13cff', '#7a3cff', '#00e5ff', '#00ffa8', '#9dff2f', '#ffd21f', '#ff7a1a', '#ff2f4f', '#2f6bff']),
 });
 
-/** The Loom modules, or null when the arcademy tree is not served beside glassroad. */
-export async function loadLoom() {
-  try {
-    const field = await import('../../arcademy/engine/loom/loomField.js');
-    let seeded = null;
-    try { seeded = await import('../../arcademy/engine/loom/seeded.js'); } catch (e) { seeded = null; }
-    return { field, seeded };
-  } catch (e) {
-    return null;
-  }
-}
+const LOOM_MODS = Object.freeze({ field: Object.freeze({ normalizeParams2, loopMs2 }), seeded: SEEDED });
+
+/** The Loom modules (imported statically since polish 4; kept async for the callers). */
+export async function loadLoom() { return LOOM_MODS; }
 
 /** render/spectrum.js, the one colour system (static import since the polish 3 integration). */
 export async function loadSpectrum() { return SPECTRUM_MOD; }
@@ -105,102 +124,50 @@ export function hexRgb(h) {
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
-/** The Loom params for one gate: its stored Loom preset, or the seeded surprise-me with the gate's seed. */
+/**
+ * The Loom params for one gate: its stored Loom preset, or the seeded surprise-me with the gate's seed.
+ * `loom` may be null (the static Loom is used then); a seeded gate without seeded.js gets three palette threads.
+ */
 export function gateParams(gate, loom, palette = SPIRAL_LOOK.palette) {
-  const field = loom && loom.field, seeded = loom && loom.seeded;
+  const field = (loom && loom.field) || LOOM_MODS.field, seeded = loom ? loom.seeded : null;
   let q;
   if (gate && gate.seed != null && seeded && seeded.seededParams2) {
     q = seeded.seededParams2(makeRng(gate.seed), { palette: palette.map((c) => toHex(c)), centerpiece: false });
   } else {
     const raw = (gate && gate.seed != null && !gate.loom) ? { layer: { colors: palette.slice(0, 3).map((c) => toHex(c)) } } : (gate && gate.loom) || {};
-    q = field && field.normalizeParams2 ? field.normalizeParams2(raw) : storedParams(raw);
+    q = field.normalizeParams2(raw);
   }
   // handedness law: both layers turn clockwise on screen and read inward
   q = { ...q, layer: { ...q.layer, direction: 1 }, layer2: { ...q.layer2, direction: 1 } };
   return q;
 }
 
-/** No Loom on the page: the stored params as written, with only the shape the GPU path reads. */
-function storedParams(raw) {
-  const lay = (l, on) => ({
-    arms: clamp(Math.round((l && l.arms) || 4), 1, 12), turns: clamp((l && l.turns) || 2, 0.5, 6), duty: clamp((l && l.duty) || 0.5, 0.2, 0.8),
-    style: (l && l.style) || 'log', direction: l && l.direction === -1 ? -1 : 1,
-    colors: (l && Array.isArray(l.colors) && l.colors.length ? l.colors : ['#ff69b4']).slice(0, 6).map((c) => toHex(c)),
-    bandMode: l && l.bandMode === 'gradient' ? 'gradient' : 'hard', speedMul: clamp(Math.round((l && l.speedMul) || 1), 1, 3), enabled: on,
-  });
-  return {
-    schema: 2, speed: clamp(Math.round(raw.speed || 3), 1, 5), layer: lay(raw.layer, true),
-    layer2: lay(raw.layer2, !!(raw.layer2 && raw.layer2.enabled)), glow: clamp(raw.glow || 0, 0, 1),
-    pulse: { amp: clamp((raw.pulse && raw.pulse.amp) || 0, 0, 0.25), cycles: (raw.pulse && raw.pulse.cycles) || 1 },
-    wobble: { amp: clamp((raw.wobble && raw.wobble.amp) || 0, 0, 0.35), freq: (raw.wobble && raw.wobble.freq) || 3, cycles: (raw.wobble && raw.wobble.cycles) || 1 },
-    hueCycles: clamp(Math.round(raw.hueCycles || 0), 0, 2),
-  };
-}
-
-/** One seamless Loom loop in seconds (the Loom's own loopMs2 when it is on the page). */
-export function loopS(params, loom) {
-  const f = loom && loom.field;
-  return (f && f.loopMs2 ? f.loopMs2(params) : SPIRAL_LOOK.fallbackLoopMs) / 1000;
+/** One seamless Loom loop in seconds (the Loom's own loopMs2). */
+export function loopS(params, loom = LOOM_MODS) {
+  const f = (loom && loom.field) || LOOM_MODS.field;
+  return (f.loopMs2 ? f.loopMs2(params) : SPIRAL_LOOK.fallbackLoopMs) / 1000;
 }
 
 /** The Loom span rule: the smallest rotation that maps a layer onto itself (1 to 6 threads). */
-export function spanRad(layer) {
-  const n = Math.max(1, Math.min(layer.colors.length, 6));
-  return (TAU / layer.arms) * (layer.arms % n === 0 ? n : layer.arms);
-}
+export const spanRad = loomSpanRad;
 
 /** Layer rotation at loop phase 0..1 (the Loom's layerRotationRad). */
-export function layerRot(layer, phase) {
-  return layer.direction * phase * spanRad(layer) * layer.speedMul;
-}
+export const layerRot = loomLayerRotationRad;
 
-export const STYLE_INDEX = Object.freeze({ log: 0, arch: 1, ribbon: 2, golden: 3, tunnel: 4, petal: 5 });
-const GOLD_K = 1.9459101;
+/** Style name -> the Loom's style index (LOOM_STYLES order, the shader's u_style). */
+export const STYLE_INDEX = Object.freeze(Object.fromEntries(LOOM_STYLES.map((s, i) => [s, i])));
 
-/** Field radius 0..1 -> band parameter t, per style (the Loom shader's mapping). */
-export function tOfR(rc, style) {
-  const r = clamp(rc, 0, 1), s = STYLE_INDEX[style] ?? 0;
-  if (s === 0) return Math.pow(r, 0.5714286);
-  if (s === 1) return r;
-  if (s === 2) return 0.5 - Math.sin(Math.asin(1 - 2 * r) / 3);
-  return Math.log(1 + r * 6) / GOLD_K;
-}
-
-/** Inverse of tOfR. */
-export function rOfT(t, style) {
-  const x = clamp(t, 0, 1), s = STYLE_INDEX[style] ?? 0;
-  if (s === 0) return Math.pow(x, 1.75);
-  if (s === 1) return x;
-  if (s === 2) return (1 - Math.sin(3 * Math.asin(0.5 - x))) / 2;
-  return (Math.exp(x * GOLD_K) - 1) / 6;
-}
+/** Field radius 0..1 -> band parameter t, per style (the Loom shader's mapping), and its inverse. */
+export const tOfR = loomStyleT;
+export const rOfT = loomStyleR;
 
 /** Tunnel helix shear snapped to whole colour cycles (the Loom shader's rule). */
-export function helixOf(layer) {
-  const count = layer.colors.length;
-  return Math.floor((layer.turns - 0.5) / count + 0.5) * count;
-}
+export const helixOf = loomHelix;
+
+/** The Loom band rule at field point (rc, th): { cov: 0|1, idx } (the Loom's loomBandAt). */
+export const loomCover = loomBandAt;
 
 const fract = (x) => x - Math.floor(x);
-
-/**
- * The Loom band rule at field point (rc, th) for a layer at rotation rot and wobble wob (no anti alias):
- * { cov: 0|1, idx } where idx is the colour thread (hard bands). Mirrors loomField's layer shader.
- */
-export function loomCover(layer, rc, th, rot = 0, wob = 0) {
-  const s = STYLE_INDEX[layer.style] ?? 0, t = tOfR(rc, layer.style), A = layer.arms, C = layer.colors.length;
-  if (s <= 3) {
-    const a = th - rot - TAU * layer.turns * t + wob, qf = fract(a / TAU), pos = qf * A, k = Math.floor(pos);
-    return { cov: pos - k < layer.duty ? 1 : 0, idx: k % C };
-  }
-  if (s === 4) {
-    const pos = t * A - rot * A / TAU + helixOf(layer) * th / TAU + wob * 0.5;
-    return { cov: fract(pos) < layer.duty ? 1 : 0, idx: ((Math.floor(pos) % C) + C) % C };
-  }
-  const a = th - rot - TAU * layer.turns * t * 0.35 + wob, m = 0.5 + 0.5 * Math.cos(a * A);
-  const petal = Math.floor(fract(a / TAU) * A + 0.5);
-  return { cov: m >= 1 - layer.duty && rc > 0.03 ? 1 : 0, idx: petal % C };
-}
 
 /** Thread colour for a layer: hard picks thread idx, gradient blends along g (the Loom's blend). */
 function threadRgb(layer, g, hard) {
@@ -211,25 +178,41 @@ function threadRgb(layer, g, hard) {
 }
 
 /**
- * Sample one particle on a layer's covered bands at phase 0, wobble 0.
+ * The distance between neighbouring arms of one layer, measured ACROSS the arms, at field radius rc
+ * (field units; times the gate radius for metres). 1 / |grad pos| of the Loom's band coordinate: a tight
+ * log spiral packs its arms far closer than the arc between them.
+ */
+export function bandSpacing(layer, rc) {
+  const s = STYLE_INDEX[layer.style] ?? 0, r = clamp(rc, 0.02, 1), h = 1e-3;
+  const dt = (loomStyleT(Math.min(1, r + h), layer.style) - loomStyleT(Math.max(0, r - h), layer.style)) / (Math.min(1, r + h) - Math.max(0, r - h));
+  if (s === 4) {
+    const g = Math.hypot(layer.arms * dt, loomHelix(layer) / (TAU * r));
+    return 1 / Math.max(g, 1e-6);
+  }
+  const k = s === 5 ? 0.35 : 1;
+  return TAU / (layer.arms * Math.hypot(1 / r, TAU * layer.turns * k * dt));
+}
+
+/**
+ * Sample one particle on a layer's covered bands at phase 0, wobble 0. `glow` puts it on the band centre
+ * line (the glow sprite layer); cores spread over the centred armFill share of the band.
  * @returns {{ mode: 0|1, x: number, th: number, rc: number, rgb: number[], halo: boolean }}
  *   mode 0 angular (x = rc, the GPU adds the rotation to th), 1 radial tunnel (x = t, the GPU adds rot/2pi to t)
  */
-export function sampleOnLayer(layer, rnd, L = SPIRAL_LOOK, glow = 0) {
-  const s = STYLE_INDEX[layer.style] ?? 0, A = layer.arms, D = layer.duty, C = layer.colors.length;
+export function sampleOnLayer(layer, rnd, L = SPIRAL_LOOK, glow = 0, centre = false) {
+  const s = STYLE_INDEX[layer.style] ?? 0, A = layer.arms, D = layer.duty;
   const hole = L.holeFrac, rArea = () => Math.sqrt(hole * hole + rnd() * (1 - hole * hole));
-  const halo = glow > 0 && rnd() < glow * L.haloShare;
-  // glitter crowds the middle of each band (still inside it) so the arms read as lines at speed
-  const fill = L.armFill ?? 1;
+  const halo = !centre && glow > 0 && rnd() < glow * L.haloShare;
+  const fill = centre ? 0 : (L.armFill ?? 1);
   const band = () => (halo ? D + rnd() * L.haloBand : D * (0.5 + 0.5 * fill * (rnd() + rnd() - 1)));
   if (s <= 3) {
     const rc = rArea(), t = tOfR(rc, layer.style), k = Math.floor(rnd() * A), f = band();
     const qf = (k + f) / A, th = TAU * qf + TAU * layer.turns * t;
-    const rgb = threadRgb(layer, layer.bandMode === 'gradient' ? fract(qf * A / C) * C : k, layer.bandMode !== 'gradient');
+    const rgb = threadRgb(layer, layer.bandMode === 'gradient' ? fract(qf * A / layer.colors.length) * layer.colors.length : k, layer.bandMode !== 'gradient');
     return { mode: 0, x: rc, th, rc, rgb, halo };
   }
   if (s === 4) {
-    const h = helixOf(layer), tIn = tOfR(hole, 'tunnel');
+    const h = helixOf(layer), tIn = tOfR(hole, 'tunnel'), C = layer.colors.length;
     for (let tries = 0; tries < 12; tries++) {
       const th = (rnd() * 2 - 1) * Math.PI, t0 = tIn + rnd() * (1 - tIn), j = Math.floor(t0 * A + h * th / TAU);
       const pos = j + band(), t = (pos - h * th / TAU) / A;
@@ -241,7 +224,7 @@ export function sampleOnLayer(layer, rnd, L = SPIRAL_LOOK, glow = 0) {
     return { mode: 1, x: t, th: 0, rc: rOfT(t, 'tunnel'), rgb: hexRgb(layer.colors[0]), halo: true };
   }
   // petal: a rose mask that the turns shear into spiral petals
-  const rc = Math.max(0.05, rArea()), t = tOfR(rc, layer.style), k = Math.floor(rnd() * A);
+  const rc = Math.max(0.05, rArea()), t = tOfR(rc, layer.style), k = Math.floor(rnd() * A), C = layer.colors.length;
   const span = Math.acos(clamp(1 - 2 * (halo ? Math.min(0.95, D + L.haloBand) : D), -1, 1));
   const phi = (rnd() + rnd() - 1) * span * (halo ? 1 : fill), a = (TAU * k + phi) / A;
   const th = a + TAU * layer.turns * t * 0.35;
@@ -249,27 +232,38 @@ export function sampleOnLayer(layer, rnd, L = SPIRAL_LOOK, glow = 0) {
   return { mode: 0, x: rc, th, rc, rgb, halo };
 }
 
+/** Kind flags packed in a0.w: layer 2 (+1), glitter (+2), glow sprite (+4). */
+export const KIND = Object.freeze({ layer2: 1, glitter: 2, glow: 4 });
+
 /**
  * Particle buffers for one gate (n at the high budget; any prefix is a fair subset, so a tier draws the
  * first Q of them). Layout per particle, 3 x vec4:
- *   a0 = (x, th, z metres along the road, layer + 2 * glitter)
+ *   a0 = (x, th, z metres along the road, layer + 2 * glitter + 4 * glow)
  *   a1 = (r, g, b, size metres)
  *   a2 = (twinkle phase, twinkle Hz, brightness, mode 0 angular / 1 radial)
  */
 export function buildParticles(params, gate, n, seed = 1, L = SPIRAL_LOOK) {
   const rnd = makeRng(seed), a0 = new Float32Array(n * 4), a1 = new Float32Array(n * 4), a2 = new Float32Array(n * 4);
   const two = !!(params.layer2 && params.layer2.enabled), depth = Math.max(0, gate.depthM || 0), K = sliceCount(depth, L);
+  const R = gate.radiusM || L.radiusM;
   for (let i = 0; i < n; i++) {
     const l2 = two && rnd() < L.layer2Share, layer = l2 ? params.layer2 : params.layer;
-    const p = sampleOnLayer(layer, rnd, L, params.glow || 0);
-    const glitter = rnd() < L.glitterShare;
-    // a deep gate is a short tunnel of spiral slices (a filled volume reads as dust from the front)
-    const z = depth > 0 ? ((K > 1 ? (i % K) / (K - 1) : 0.5) - 0.5) * Math.max(0, depth - L.jitterM) + (rnd() - 0.5) * L.jitterM : (rnd() - 0.5) * L.jitterM;
+    const glow = rnd() < (L.glowShare || 0);
+    const p = sampleOnLayer(layer, rnd, L, params.glow || 0, glow);
+    const glitter = !glow && rnd() < L.glitterShare;
+    // a deep gate is a short tunnel of spiral slices; the front slice (the one a driver meets first) holds
+    // frontShare of the budget so the face reads as one clean spiral, the rest thin out behind it
+    const slice = K > 1 ? (rnd() < L.frontShare ? 0 : Math.floor(rnd() * K)) : 0;
+    const z = depth > 0 ? ((K > 1 ? slice / (K - 1) : 0.5) - 0.5) * Math.max(0, depth - L.jitterM) + (rnd() - 0.5) * L.jitterM : (rnd() - 0.5) * L.jitterM;
     let [r, g, b] = p.rgb;
-    if (glitter) { r += (1 - r) * L.whiteMix; g += (1 - g) * L.whiteMix; b += (1 - b) * L.whiteMix; }
-    const size = (L.sizeM[0] + rnd() * (L.sizeM[1] - L.sizeM[0])) * (1 + L.sizeRimGain * p.rc) * (glitter ? L.glitterSize : 1);
-    const bright = (p.halo ? L.haloAlpha : 1) * (l2 ? L.layer2Alpha : 1);
-    a0.set([p.x, p.th, z, (l2 ? 1 : 0) + (glitter ? 2 : 0)], i * 4);
+    const white = glitter ? L.whiteMix : glow ? 0 : (L.coreWhite || 0);
+    r += (1 - r) * white; g += (1 - g) * white; b += (1 - b) * white;
+    // sized to the band's width across the arm (metres), so a tight inner coil keeps its dark gaps
+    const bandM = layer.duty * bandSpacing(layer, p.rc) * R;
+    const size = glow ? clamp(bandM * L.glowSpan, L.glowMinM, L.glowMaxM)
+      : clamp(bandM * (L.coreSpan ?? 1) * (0.7 + 0.6 * rnd()), L.sizeM[0], L.sizeM[1]) * (1 + L.sizeRimGain * p.rc) * (glitter ? L.glitterSize : 1);
+    const bright = (glow ? L.glowAlpha : p.halo ? L.haloAlpha : 1) * (l2 ? L.layer2Alpha : 1);
+    a0.set([p.x, p.th, z, (l2 ? KIND.layer2 : 0) + (glitter ? KIND.glitter : 0) + (glow ? KIND.glow : 0)], i * 4);
     a1.set([r, g, b, size], i * 4);
     a2.set([rnd(), L.twinkleHz[0] + rnd() * (L.twinkleHz[1] - L.twinkleHz[0]), bright, p.mode], i * 4);
   }
@@ -286,37 +280,31 @@ export function depthAlpha(depthM, L = SPIRAL_LOOK) {
   return 1 / (1 + (sliceCount(depthM, L) - 1) * L.sliceAlpha);
 }
 
-/** The Loom's luma-preserving hue rotation as three rows (loomField rotateHue). */
-export function hueRows(rad) {
-  const c = Math.cos(rad), s = Math.sin(rad);
-  return [
-    [0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928],
-    [0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283],
-    [0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072],
-  ];
-}
+/** The Loom's luma-preserving hue rotation as three rows (loomField loomHueRows). */
+export const hueRows = loomHueRows;
 
 /**
  * The per-frame Loom state of a gate at loop phase 0..1: layer rotations, pulse zoom, wobble phase
- * (radians) and hue rotation, every one a whole number of cycles per loop like the Loom.
+ * (radians, the GPU uniform) and hue rotation, every one a whole number of cycles per loop like the Loom.
  */
 export function loomState(params, phase) {
   const two = !!(params.layer2 && params.layer2.enabled);
   return {
+    phase,
     rot1: layerRot(params.layer, phase), rot2: two ? layerRot(params.layer2, phase) : 0,
-    zoom: 1 + params.pulse.amp * Math.sin(TAU * phase * params.pulse.cycles),
+    zoom: loomPulseZoom(params, phase),
     wobPhase: TAU * phase * params.wobble.cycles,
-    hue: params.hueCycles > 0 ? TAU * params.hueCycles * phase : 0,
+    hue: loomHueRad(params, phase),
   };
 }
 
-/** Wobble at field radius rc (the Loom's: amp sin(2pi (freq rc + phase cycles))). */
-export function wobbleAt(params, rc, wobPhase) {
-  return params.wobble.amp > 0.001 ? params.wobble.amp * Math.sin(TAU * params.wobble.freq * clamp(rc, 0, 1) + wobPhase) : 0;
+/** Wobble at field radius rc for a loomState (the Loom's loomWobble). */
+export function wobbleAt(params, rc, st) {
+  return loomWobble(params, rc, typeof st === 'number' ? st / (TAU * (params.wobble.cycles || 1)) : st.phase);
 }
 
 /**
- * One particle's gate-local point at a Loom state, before parting: [u right, v up, z along the road]
+ * One particle's gate-local point at a Loom state, before parting: [u right, v up, z along the road, rc]
  * in metres. Mirrors the GPU position node (spirals3d.js).
  */
 export function particleLocal(a0, a2, i, params, gate, st) {
@@ -325,10 +313,10 @@ export function particleLocal(a0, a2, i, params, gate, st) {
   let rc, th;
   if (mode > 0.5) {
     const pre = rOfT(fract(x + rot / TAU), 'tunnel');
-    const t = fract(x + rot / TAU - wobbleAt(params, pre, st.wobPhase) * 0.5 / arms);
+    const t = fract(x + rot / TAU - wobbleAt(params, pre, st) * 0.5 / arms);
     rc = rOfT(t, 'tunnel'); th = th0;
   } else {
-    rc = x; th = th0 + rot - wobbleAt(params, x, st.wobPhase);
+    rc = x; th = th0 + rot - wobbleAt(params, x, st);
   }
   const depth = gate.depthM || 0, twist = depth > 0 ? (gate.helixTurns || 0) * TAU / depth : 0;
   th += twist * z;
@@ -338,12 +326,25 @@ export function particleLocal(a0, a2, i, params, gate, st) {
 
 /**
  * The road window share at gate-local u (metres right of the gate axis) and height h above the road
- * surface, for a road of half width halfW: corridorAlpha inside the window, 1 outside. Mirrors the GPU node.
+ * surface, for a road of half width halfW: `inside` in the window (corridorAlpha by default), 1 outside.
+ * Mirrors the GPU nodes (particles and aura).
  */
-export function corridorFade(u, h, halfW, L = SPIRAL_LOOK) {
+export function corridorFade(u, h, halfW, L = SPIRAL_LOOK, inside = L.corridorAlpha) {
   const inU = 1 - sstep(halfW + L.corridorSideM, halfW + L.corridorSideM + L.corridorSoftM, Math.abs(u));
   const inH = 1 - sstep(L.corridorUpM, L.corridorUpM + L.corridorSoftM, h);
-  return 1 - (1 - L.corridorAlpha) * inU * inH;
+  return 1 - (1 - inside) * inU * inH;
+}
+
+/**
+ * The aura disc at field point (x right, y up, both in units of the gate radius): { dim, ring } where dim
+ * is the share it darkens what is behind it and ring the additive rim brightness. Mirrors the GPU node.
+ */
+export function auraAt(x, y, { halfW = 6, upM = SPIRAL_LOOK.upM, radiusM = SPIRAL_LOOK.radiusM, gentle = false } = {}, L = SPIRAL_LOOK) {
+  const A = L.aura, r = Math.hypot(x, y), g = gentle ? A.gentleMul : 1;
+  const win = corridorFade(x * radiusM, y * radiusM + upM, halfW, L, 0);
+  const disc = 1 - sstep(0.96, 1.04, r);
+  const ring = Math.exp(-(((r - 1) / A.ringW) ** 2)) + A.inner * sstep(0.45, 1, r) * disc;
+  return { dim: A.dim * disc * win * g, ring: A.ring * ring * g * (r <= A.outer ? 1 : 0) };
 }
 
 /** Gate-local [u, v, z] -> world, with a gate frame { c, t, b, n }. */
@@ -436,6 +437,43 @@ export function burstEnvelope(age, { gentle = false, riseMs = 300, fadeMs = 600 
   if (!(age >= 0) || age >= life) return 0;
   if (age < rise) return sstep(0, rise, age);
   return 1 - sstep(rise, life, age);
+}
+
+/** The gate screen's stages in seconds { rise, hold, fall, life } (Gentle: at least riseMs and fadeMs). */
+export function screenTimes({ gentle = false, riseMs = 300, fadeMs = 600 } = {}, L = SPIRAL_LOOK) {
+  const S = L.screen, rise = Math.max(0.3, S.riseS, gentle ? riseMs / 1000 : 0), fall = Math.max(S.fallS, gentle ? fadeMs / 1000 : 0);
+  return { rise, hold: S.holdS, fall, life: rise + S.holdS + fall };
+}
+
+/** Gate screen opacity 0..1 at age s: a smooth rise, a hold, a smooth fall, 0 outside. */
+export function screenEnvelope(age, opts = {}, L = SPIRAL_LOOK) {
+  const T = screenTimes(opts, L);
+  if (!(age >= 0) || age >= T.life) return 0;
+  if (age < T.rise) return sstep(0, T.rise, age);
+  if (age < T.rise + T.hold) return 1;
+  return 1 - sstep(T.rise + T.hold, T.life, age);
+}
+
+/**
+ * How often (Hz) an arm of the field sweeps a fixed pixel at the Loom's own speed: per layer, the bands
+ * that pass in one loop (rotation span x speedMul / band period) over the loop length; the larger layer.
+ */
+export function bandHz(params, loopSeconds = loopS(params)) {
+  const one = (l) => (loomSpanRad(l) * l.speedMul * l.arms / TAU) / loopSeconds;
+  return Math.max(one(params.layer), params.layer2 && params.layer2.enabled ? one(params.layer2) : 0);
+}
+
+/** The gate screen's speed multiplier: the Loom's own pace, slowed until no arm sweeps a pixel faster than maxBandHz. */
+export function screenRateMul(params, { gentle = false } = {}, L = SPIRAL_LOOK) {
+  const hz = bandHz(params), S = L.screen;
+  return Math.min(1, S.maxBandHz / Math.max(hz, 1e-6)) * (gentle ? S.gentleSpeedMul : 1);
+}
+
+/** The gate screen's CSS mask: a radial alpha ramp, light at the centre (over the road), strong at the corners. */
+export function screenMaskCss(L = SPIRAL_LOOK) {
+  const S = L.screen;
+  const stops = S.mask.map(([at, a]) => `rgba(0,0,0,${a}) ${Math.round(at * 100)}%`).join(', ');
+  return `radial-gradient(farthest-corner at 50% ${Math.round(S.centreY * 100)}%, ${stops})`;
 }
 
 /** Twinkle multiplier of one particle (1 - amp * wave); a gate's mean stays flat because phases spread. */

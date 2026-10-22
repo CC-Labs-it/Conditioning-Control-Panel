@@ -10,24 +10,31 @@
  * gate's mean brightness stays flat), depth faded near the lens and far away. One draw per visible gate
  * plus one for the burst; only gates within SPIRAL_LOOK.activeM update, farther ones draw a quarter.
  * Gentle: half the turn speed, half the twinkle, a softer parting and a slower, smaller burst.
+ * Polish 4: thin bright cores sized to each arm's real width, a soft glow sprite layer under them (same
+ * draw, shrunk near the lens), and an aura disc behind each gate (one more draw) that dims the sky behind
+ * the arms, wears a turning coloured rim and keeps the road window clear; Gentle halves the aura.
+ * onPass({ id, index, params, gentle }) fires when the player crosses a gate (hand it to gateScreen.play).
  *
  * Use (the integrator wires it):
  *   const layout = await fetchSpiralLayout(track.id);
- *   const spirals = createSpiralGates(scene, track, { layout, photosafe, feel });
+ *   const spirals = createSpiralGates(scene, track, { layout, photosafe, feel, onPass: (g) => bus.emit('gate-pass', g) });
  *   each frame: spirals.update(dt, { camera, karts: kartObjs.map((o) => o.position), player: 0, gentle });
  */
-import { Group, Sprite, SpriteNodeMaterial, InstancedBufferAttribute, AdditiveBlending, Vector3, Vector4, Frustum, Matrix4, Sphere } from 'three/webgpu';
+import {
+  Group, Sprite, SpriteNodeMaterial, InstancedBufferAttribute, AdditiveBlending, Vector3, Vector4, Frustum, Matrix4, Sphere,
+  Mesh, PlaneGeometry, MeshBasicNodeMaterial, DoubleSide, CustomBlending, OneFactor, OneMinusSrcAlphaFactor, AddEquation,
+} from 'three/webgpu';
 import {
   instancedBufferAttribute, uniform, float, vec3, sin, cos, exp, fract, mix, smoothstep, select, dot, cross, length, max, abs, uv,
-  cameraPosition, step, mod,
+  cameraPosition, step, mod, positionWorld,
 } from 'three/tsl';
 import { Q } from './quality.js';
 import {
-  SPIRAL_LOOK, loadLoom, loadSpectrum, paletteFor, gateParams, loopS, buildParticles, loomState, hueRows, gateFrames, axialOf, lateralOf, pickSlots, crossed,
+  SPIRAL_LOOK, LOOM_GOLDEN_K, loadLoom, loadSpectrum, paletteFor, gateParams, loopS, buildParticles, loomState, hueRows, gateFrames, axialOf, lateralOf, pickSlots, crossed,
   budgetFor, burstCount, depthAlpha, burstEnvelope, makeRng, toHex, hexRgb,
 } from './spiralMath.js';
 
-const TAU = Math.PI * 2, GOLD_K = 1.9459101;
+const TAU = Math.PI * 2, GOLD_K = LOOM_GOLDEN_K;
 const LOOM = await loadLoom();
 if (!LOOM) console.warn('[glassroad/spirals] the Loom is not served beside glassroad; gates draw from their stored params');
 // the SPECTRUM lane's colour system; until it lands the seeded gates use the lane's own full spectrum
@@ -43,12 +50,58 @@ export async function fetchSpiralLayout(trackId, base = new URL('../tracks/', im
 
 const xyz = (p) => (!p ? null : Array.isArray(p) ? p : p.position ? [p.position.x, p.position.y, p.position.z] : [p.x, p.y, p.z]);
 
-function particleShape(glitter) {
+function particleShape(glitter, glow = float(0)) {
   const q = uv().sub(0.5).mul(2), r = q.length();
   const disc = smoothstep(0.15, 1, r).oneMinus();
   const arm = (a, b) => smoothstep(0, 0.12, abs(a)).oneMinus().mul(smoothstep(0.1, 1, abs(b)).oneMinus());
   const star = max(smoothstep(0, 0.35, r).oneMinus(), max(arm(q.x, q.y), arm(q.y, q.x)));
-  return mix(disc, star, glitter);
+  // a glow sprite is a soft gaussian (it reaches zero at the rim so the halos overlap smoothly along the arm)
+  const soft = exp(r.mul(r).mul(-4.5)).sub(0.011).max(0);
+  return mix(mix(disc, star, glitter), soft, glow);
+}
+
+/**
+ * The aura disc behind a gate (one quad in the gate plane, auraBackM past its far face). Premultiplied
+ * blend: it darkens what is behind it by `dim` (the dark gaps between arms) and adds the coloured rim.
+ * spiralMath.auraAt mirrors the numbers.
+ */
+function buildAura(g, gf, params, u, L) {
+  const A = L.aura, depth = g.depthM || 0, R = g.radiusM * (1 + (g.taper || 0) * 0.5), ext = R * A.outer;
+  const geo = new PlaneGeometry(2 * ext, 2 * ext);
+  const cols = [0, 1, 2].map((i) => { const c = hexRgb(params.layer.colors[i % params.layer.colors.length]); return vec3(c[0], c[1], c[2]); });
+  const ua = { dim: uniform(A.dim), ring: uniform(A.ring), d0: uniform(new Vector3(1, 0, 0)), d1: uniform(new Vector3(0, 1, 0)), d2: uniform(new Vector3(-1, 0, 0)) };
+  // every node graph is built twice, once for the colour and once for the alpha: on this three build a node
+  // shared by colorNode and opacityNode left the alpha at zero (the disc never dimmed)
+  const halfW = (gf.w || 12) / 2, upM = g.upM ?? L.upM;
+  const shape = () => {
+    const q = uv().sub(0.5).mul(2 * A.outer).div(u.zoom), r = q.length();
+    const inU = smoothstep(halfW + L.corridorSideM, halfW + L.corridorSideM + L.corridorSoftM, abs(q.x.mul(R))).oneMinus();
+    const inH = smoothstep(L.corridorUpM, L.corridorUpM + L.corridorSoftM, q.y.mul(R).add(upM)).oneMinus();
+    const camD = positionWorld.distance(cameraPosition);
+    const fade = smoothstep(A.nearM, A.nearM + A.nearSpanM, camD).mul(smoothstep(L.farFadeM * 0.6, L.farFadeM, camD).oneMinus());
+    const disc = smoothstep(0.96, 1.04, r).oneMinus();
+    // the road window (spiralMath corridorFade with nothing inside), the near and far fades
+    return { q, r, fade, disc, dimA: ua.dim.mul(disc).mul(inU.mul(inH).oneMinus()).mul(fade) };
+  };
+  // thread colours round the rim, turning with layer 1 (weights from three directions set on the CPU)
+  const C = shape(), dir = vec3(C.q.x, C.q.y, 0).div(C.r.max(1e-3));
+  const w0 = dot(dir, ua.d0).max(0).pow(2), w1 = dot(dir, ua.d1).max(0).pow(2), w2 = dot(dir, ua.d2).max(0).pow(2);
+  const base = cols[0].mul(w0).add(cols[1].mul(w1)).add(cols[2].mul(w2)).div(w0.add(w1).add(w2).max(1e-3));
+  const col = vec3(dot(u.h0, base), dot(u.h1, base), dot(u.h2, base)).clamp(0, 1);
+  const rd = C.r.sub(1).div(A.ringW), ringI = exp(rd.mul(rd).negate()).add(smoothstep(0.45, 1, C.r).mul(C.disc).mul(A.inner)).mul(step(C.r, A.outer));
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide, blending: CustomBlending, fog: false });
+  m.blendEquation = AddEquation; m.blendSrc = OneFactor; m.blendDst = OneMinusSrcAlphaFactor;
+  m.blendSrcAlpha = OneFactor; m.blendDstAlpha = OneMinusSrcAlphaFactor;
+  m.premultipliedAlpha = false; m.toneMapped = false;
+  m.colorNode = col.mul(A.tint).mul(C.dimA).add(col.mul(ringI).mul(ua.ring).mul(C.fade));
+  m.opacityNode = shape().dimA;
+  const mesh = new Mesh(geo, m);
+  const back = depth / 2 + A.backM, c = gf.c, t = gf.t;
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.makeBasis(new Vector3(...gf.b), new Vector3(...gf.n), new Vector3(...t)).setPosition(c[0] + t[0] * back, c[1] + t[1] * back, c[2] + t[2] * back);
+  mesh.matrixWorldNeedsUpdate = true;
+  mesh.frustumCulled = false; mesh.renderOrder = 1; mesh.name = 'spiral-aura-' + g.id;
+  return { mesh, material: m, geo, u: ua };
 }
 
 function buildGate(g, gf, params, seed, L) {
@@ -67,7 +120,7 @@ function buildGate(g, gf, params, seed, L) {
   const depth = g.depthM || 0, twist = depth > 0 ? (g.helixTurns || 0) * TAU / depth : 0, taper = depth > 0 ? (g.taper || 0) / depth : 0;
   const W = params.wobble, wobOn = W.amp > 0.001;
   const wob = (rc) => (wobOn ? sin(rc.clamp(0, 1).mul(TAU * W.freq).add(u.wobPhase)).mul(W.amp) : float(0));
-  const l2 = step(0.5, mod(a0.w, 2)), glitter = step(1.5, a0.w), radial = a2.w.greaterThan(0.5);
+  const l2 = step(0.5, mod(a0.w, 2)), glitter = step(1.5, mod(a0.w, 4)), glow = step(3.5, a0.w), radial = a2.w.greaterThan(0.5);
   const rot = mix(u.rot1, u.rot2, l2), arms = mix(float(params.layer.arms), float(params.layer2.arms), l2);
   // tunnel style: the bands ride the radius (t moves by rot / 2pi), else the field turns rigidly
   const rOfT = (t) => exp(t.mul(GOLD_K)).sub(1).div(6);
@@ -93,11 +146,13 @@ function buildGate(g, gf, params, seed, L) {
   m.positionNode = pos;
   const tw = sin(u.time.mul(a2.y).add(a2.x).mul(TAU)).mul(0.5).add(0.5);
   const shine = select(glitter.greaterThan(0.5), tw.mul(tw).mul(tw).mul(1.6).add(0.25).mul(u.twAmp.div(L.twinkleAmp)).add(u.twAmp.div(L.twinkleAmp).oneMinus()),
-    u.twAmp.mul(tw).oneMinus());
-  m.scaleNode = a1.w.mul(tw.mul(0.25).add(0.9));
-  const col = vec3(dot(u.h0, a1.xyz), dot(u.h1, a1.xyz), dot(u.h2, a1.xyz)).clamp(0, 1);
-  m.colorNode = col.mul(mix(float(L.gain), float(L.glitterGain), glitter));
+    mix(u.twAmp.mul(tw).oneMinus(), float(1), glow));
   const camD = pos.distance(cameraPosition);
+  // a glow sprite shrinks to nothing close to the lens (a wide soft sprite at the eye is all overdraw)
+  const glowNear = smoothstep(L.nearM, L.glowNearM, camD);
+  m.scaleNode = a1.w.mul(mix(tw.mul(0.25).add(0.9), glowNear, glow));
+  const col = vec3(dot(u.h0, a1.xyz), dot(u.h1, a1.xyz), dot(u.h2, a1.xyz)).clamp(0, 1);
+  m.colorNode = col.mul(mix(mix(float(L.gain), float(L.glitterGain), glitter), float(L.glowGain), glow));
   const near = smoothstep(L.nearM, L.nearM + L.nearSpanM, camD), far = smoothstep(L.farFadeM * 0.6, L.farFadeM, camD).oneMinus();
   const edge = smoothstep(L.holeFrac * 0.5, L.holeFrac * 1.5, rc).mul(smoothstep(0.93, 1.0, rc).oneMinus());
   // a tunnel field flows outward so its particles crowd the eye: thin them toward the centre
@@ -107,7 +162,7 @@ function buildGate(g, gf, params, seed, L) {
   const inU = smoothstep(halfW + L.corridorSideM, halfW + L.corridorSideM + L.corridorSoftM, abs(dot(rel, u.b))).oneMinus();
   const inH = smoothstep(L.corridorUpM, L.corridorUpM + L.corridorSoftM, dot(rel, u.n).add(upM)).oneMinus();
   const road = float(1).sub(inU.mul(inH).mul(1 - L.corridorAlpha));
-  m.opacityNode = u.alpha.mul(a2.z).mul(shine).mul(near).mul(far).mul(edge).mul(flow).mul(road).mul(particleShape(glitter));
+  m.opacityNode = u.alpha.mul(a2.z).mul(shine).mul(near).mul(far).mul(edge).mul(flow).mul(road).mul(particleShape(glitter, glow));
   const sprite = new Sprite(m);
   sprite.count = Math.min(P.n, budgetFor(Q.name, 0, L));
   sprite.frustumCulled = false; sprite.renderOrder = 2;
@@ -115,9 +170,10 @@ function buildGate(g, gf, params, seed, L) {
   const loop = loopS(params, LOOM);
   // looking down a helix tunnel every depth layer stacks: thin the alpha so it stays coloured, not white
   const depthK = depthAlpha(depth, L);
+  const aura = L.aura ? buildAura(g, gf, params, u, L) : null;
   return {
     id: g.id, g, gf, params, sprite, material: m, u, n: P.n, loop, phaseT: 0, prevAxial: null,
-    depthK,
+    depthK, aura,
     sphere: new Sphere(new Vector3(gf.c[0], gf.c[1], gf.c[2]), g.radiusM * (1 + (g.taper || 0)) * 1.3 + depth / 2 + L.partM),
     burstCols: [0, 1, 2].map((i) => hexRgb(params.layer.colors[i % params.layer.colors.length])),
   };
@@ -155,7 +211,7 @@ function buildBurst(L) {
  * @param {{ layout: object, photosafe?: { request(kind: string): boolean }, feel?: object, look?: object }} opts
  * @returns {{ object: Group, gates: Array<{id, s, centre, radiusM}>, update(dt, view), dispose() } | null}
  */
-export function createSpiralGates(scene, track, { layout = null, photosafe = null, feel = null, look = SPIRAL_LOOK } = {}) {
+export function createSpiralGates(scene, track, { layout = null, photosafe = null, feel = null, look = SPIRAL_LOOK, onPass = null } = {}) {
   const L = look;
   if (!layout || !Array.isArray(layout.gates) || !layout.gates.length) return null;
   const group = new Group();
@@ -170,6 +226,7 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       const params = gateParams(g, LOOM, paletteFor(sec && sec.palette, spectrumMod, L));
       const gate = buildGate(g, frames[i], params, (i + 1) * 7919, L);
       gates.push(gate); group.add(gate.sprite);
+      if (gate.aura) group.add(gate.aura.mesh);
     } catch (e) { console.warn('[glassroad/spirals] gate ' + g.id + ' failed: ' + (e && e.message)); }
   });
   const burst = buildBurst(L);
@@ -205,12 +262,17 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       // the player's crossing (always checked, it is cheap)
       if (me) {
         const a = axialOf(gf, me);
-        if (gate.prevAxial !== null && crossed(gate.prevAxial, a, lateralOf(gf, me), gate.g.radiusM)) fireBurst(gate, gentle);
+        if (gate.prevAxial !== null && crossed(gate.prevAxial, a, lateralOf(gf, me), gate.g.radiusM)) {
+          fireBurst(gate, gentle);
+          // the gate screen hook (render/gateScreen.js play(params, strength)); a throw never stops the frame
+          if (onPass) { try { onPass({ id: gate.id, index: gates.indexOf(gate), params: gate.params, gentle }); } catch (e) { console.warn('[glassroad/spirals] onPass: ' + (e && e.message)); } }
+        }
         gate.prevAxial = a;
       }
       const n = budgetFor(Q.name, dist, L);
       gate.sprite.visible = n > 0 && frustum.intersectsSphere(gate.sphere);
       gate.sprite.count = Math.min(gate.n, n);
+      if (gate.aura) gate.aura.mesh.visible = gate.sprite.visible;
       if (!gate.sprite.visible || dist > L.activeM) continue;
       // the Loom phase: one seamless loop per loopMs2, slowed by Gentle
       gate.phaseT = (gate.phaseT + dt * turn) % (gate.loop * 1000);
@@ -222,6 +284,12 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       u.twAmp.value = L.twinkleAmp * (gentle ? L.gentleTwinkleMul : 1);
       u.alpha.value = L.alpha * gate.depthK * (gentle ? L.gentleAlphaMul : 1);
       u.part.value = gentle ? L.gentlePartMul : 1;
+      if (gate.aura) {
+        // rim colours turn with layer 1 (field y is down on the Loom canvas, the quad's y is up)
+        const ua = gate.aura.u, r0 = st.rot1, k = TAU / 3, gm = gentle ? L.aura.gentleMul : 1;
+        ua.d0.value.set(Math.cos(r0), -Math.sin(r0), 0); ua.d1.value.set(Math.cos(r0 + k), -Math.sin(r0 + k), 0); ua.d2.value.set(Math.cos(r0 + 2 * k), -Math.sin(r0 + 2 * k), 0);
+        ua.dim.value = L.aura.dim * gm; ua.ring.value = L.aura.ring * gm;
+      }
       const slots = pickSlots(gf, gate.g, ks, L, player);
       for (let k = 0; k < u.slots.length; k++) {
         const p = k < slots.length ? ks[slots[k]] : null;
@@ -244,14 +312,15 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
   }
 
   function dispose() {
-    for (const g of gates) g.material.dispose();
+    for (const g of gates) { g.material.dispose(); if (g.aura) { g.aura.material.dispose(); g.aura.geo.dispose(); } }
     burst.material.dispose();
     if (group.parent) group.parent.remove(group);
   }
 
   return {
     object: group, update, dispose,
-    gates: gates.map((g) => ({ id: g.id, s: g.gf.s, centre: g.gf.c.slice(), radiusM: g.g.radiusM, depthM: g.g.depthM || 0 })),
+    /** params: the gate's Loom params (hand them to gateScreen.play) */
+    gates: gates.map((g) => ({ id: g.id, s: g.gf.s, centre: g.gf.c.slice(), radiusM: g.g.radiusM, depthM: g.g.depthM || 0, params: g.params })),
     /** dev: fire the camera burst of gate i now */
     burstNow(i = 0, gentle = false) { if (gates[i]) fireBurst(gates[i], gentle); },
   };

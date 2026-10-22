@@ -38,7 +38,7 @@ test('spirals: the real Loom is imported (not forked) and gives the params and t
   assert.deepEqual(gateParams(seeded, loom), gateParams(seeded, loom), 'a fixed seed weaves the same gate');
   assert.notDeepEqual(gateParams({ seed: 1 }, loom), gateParams({ seed: 2 }, loom));
   const fb = gateParams(layout.gates[0], null);
-  assert.equal(fb.layer.arms, 5, 'without the Loom on the page the stored params still draw');
+  assert.equal(fb.layer.arms, 4, 'without the Loom on the page the stored params still draw');
 });
 
 test('spirals: span rule and style radius maps match the Loom', () => {
@@ -68,7 +68,7 @@ test('spirals: Loom params become 3D points on the covered bands, in the thread 
         total++; on += c.cov;
         if (!glitter && layer.bandMode === 'hard' && layer.style !== 'petal') {
           coloured++;
-          if (hexOf([P.a1[i * 4], P.a1[i * 4 + 1], P.a1[i * 4 + 2]]) === layer.colors[c.idx]) colour++;
+          if (hexOf([P.a1[i * 4], P.a1[i * 4 + 1], P.a1[i * 4 + 2]]) === hexOf(hexRgb(layer.colors[c.idx]).map((v) => v + (1 - v) * L.coreWhite))) colour++;
         }
       }
       assert.ok(total > 1000, g.id + ' sampled');
@@ -128,14 +128,14 @@ test('spirals: slots take the player first, then the nearest, at most L.slots, o
 });
 
 test('spirals: budgets per tier (phone a quarter of high), far gates thin, past drawM none', () => {
-  assert.equal(budgetFor('high'), 8000);
-  assert.equal(budgetFor('mid'), 4000);
-  assert.equal(budgetFor('phone'), 2000);
-  assert.equal(budgetFor('high', L.activeM + 1), 2000);
+  assert.equal(budgetFor('high'), 12000);
+  assert.equal(budgetFor('mid'), 6000);
+  assert.equal(budgetFor('phone'), 3000);
+  assert.equal(budgetFor('high', L.activeM + 1), Math.round(12000 * L.farShare));
   assert.equal(budgetFor('high', L.drawM + 1), 0);
-  const q = gateParams(layout.gates[0], loom), P = buildParticles(q, thin, 8000, 9);
+  const q = gateParams(layout.gates[0], loom), P = buildParticles(q, thin, 12000, 9);
   const meanRc = (n) => { let s = 0; for (let i = 0; i < n; i++) s += P.a0[i * 4]; return s / n; };
-  assert.ok(Math.abs(meanRc(2000) - meanRc(8000)) < 0.03, 'a prefix is a fair subset');
+  assert.ok(Math.abs(meanRc(3000) - meanRc(12000)) < 0.03, 'a prefix is a fair subset');
 });
 
 test('spirals: twinkle never flickers the whole gate, each particle under 3 Hz; Gentle halves it', () => {
@@ -194,4 +194,139 @@ test('spirals: particles hug the Loom arms with a dark gap between them, and the
   assert.ok(Math.abs(corridorFade(0, 3, half) - L.corridorAlpha) < 1e-9);
   assert.equal(corridorFade(half + L.corridorSideM + L.corridorSoftM + 0.1, 3, half), 1);
   assert.equal(corridorFade(0, L.corridorUpM + L.corridorSoftM + 0.1, half), 1);
+});
+
+// ---- polish 4: Loom band maths imported, glow and aura, the gate screen ----
+
+test("spirals p4: the band maths are the Loom's own exports (imported, never mirrored)", async () => {
+  const sm = await import('../render/spiralMath.js');
+  assert.equal(sm.spanRad, loomField.loomSpanRad);
+  assert.equal(sm.layerRot, loomField.loomLayerRotationRad);
+  assert.equal(sm.tOfR, loomField.loomStyleT);
+  assert.equal(sm.rOfT, loomField.loomStyleR);
+  assert.equal(sm.helixOf, loomField.loomHelix);
+  assert.equal(sm.loomCover, loomField.loomBandAt);
+  assert.equal(sm.hueRows, loomField.loomHueRows);
+  assert.equal(sm.LOOM_GOLDEN_K, loomField.LOOM_GOLDEN_K);
+  const src = readFileSync(new URL('../render/spiralMath.js', import.meta.url), 'utf8');
+  for (const k of ['0.5714286', '0.787', '1.9459101']) assert.ok(!src.includes(k), 'no mirrored constant ' + k);
+  // the new Loom exports follow the shader: pulse zoom, wobble, hue angle
+  const q = loomField.normalizeParams2({ layer: { colors: ['#ff0000'] }, pulse: { amp: 0.1, cycles: 2 }, wobble: { amp: 0.2, freq: 3, cycles: 1 }, hueCycles: 1 });
+  assert.ok(Math.abs(loomField.loomPulseZoom(q, 0.125) - 1.1) < 1e-9);
+  assert.ok(Math.abs(loomField.loomWobble(q, 0.5, 0) - 0.2 * Math.sin(TAU * 1.5)) < 1e-9);
+  assert.equal(loomField.loomHueRad(q, 0.5), Math.PI);
+  // an existing export still behaves (v1 sidecars keep their look)
+  const v1 = loomField.normalizeParams2({ schema: 1, arms: 6, turns: 1.5, style: 'arch', speed: 2, colors: ['#ff0000'], bg: '#102030' });
+  assert.deepEqual([v1.layer.arms, v1.layer.turns, v1.layer.style, v1.speed, v1.bg.color], [6, 1.5, 'arch', 2, '#102030']);
+});
+
+test('spirals p4: cores sit on the arm centre lines sized to the band width, a glow layer under them, few strays', async () => {
+  const { bandSpacing, KIND } = await import('../render/spiralMath.js');
+  const tight = { arms: 5, turns: 2.5, duty: 0.45, style: 'log', colors: ['#ffffff'] };
+  assert.ok(bandSpacing(tight, 0.5) < TAU * 0.5 / 5 * 0.5, 'a wound arm is closer across than along the arc');
+  assert.ok(bandSpacing({ ...tight, turns: 0.5 }, 0.5) > bandSpacing(tight, 0.5));
+  for (const g of layout.gates) {
+    const q = gateParams(g, loom), P = buildParticles(q, g, 6000, 3);
+    let glow = 0, glitter = 0;
+    for (let i = 0; i < P.n; i++) {
+      const k = P.a0[i * 4 + 3], size = P.a1[i * 4 + 3];
+      if (k >= KIND.glow) {
+        glow++;
+        assert.ok(size >= L.glowMinM - 1e-6 && size <= L.glowMaxM + 1e-6);
+        assert.ok(Math.abs(P.a2[i * 4 + 2] - L.glowAlpha * ((k % 2) ? L.layer2Alpha : 1)) < 1e-6);
+      } else if ((k % 4) >= 2) glitter++;
+      else assert.ok(size <= L.sizeM[1] * (1 + L.sizeRimGain) + 1e-6, 'thin cores');
+    }
+    assert.ok(Math.abs(glow / P.n - L.glowShare) < 0.03, g.id + ' glow share ' + (glow / P.n).toFixed(3));
+    assert.ok(glitter / P.n < 0.05, g.id + ' few strays');
+  }
+});
+
+test('spirals p4: the aura darkens behind the arms, keeps the road window clear, wears a rim; Gentle halves it', async () => {
+  const { auraAt } = await import('../render/spiralMath.js');
+  const o = { halfW: 6, upM: 3.5, radiusM: 20 };
+  assert.ok(Math.abs(auraAt(0, 0.6, o).dim - L.aura.dim) < 1e-9, 'inside the disc, above the road');
+  assert.equal(auraAt(0, -0.05, o).dim, 0, 'the road window stays clear');
+  assert.equal(auraAt(1.15, 0, o).dim, 0, 'nothing past the rim');
+  assert.ok(auraAt(1, 0, o).ring > auraAt(0.5, 0.3, o).ring * 5, 'a bright rim, a faint inside');
+  assert.ok(Math.abs(auraAt(0, 0.6, { ...o, gentle: true }).dim - L.aura.dim * 0.5) < 1e-9);
+  assert.ok(L.aura.dim <= 0.75 && L.aura.tint <= 0.1, 'dark gaps, not a coloured wash');
+});
+
+test('spirals p4: the gate screen rises over at least 300 ms, holds about a second, falls; photosafe rate cap; Gentle', async () => {
+  const { screenTimes, screenEnvelope, screenRateMul, bandHz, screenMaskCss } = await import('../render/spiralMath.js');
+  const T = screenTimes();
+  assert.ok(T.rise >= 0.3 && T.hold >= 0.8 && T.hold <= 1.3 && T.fall >= 0.3);
+  const G = screenTimes({ gentle: true, riseMs: 900, fadeMs: 1200 });
+  assert.ok(G.rise >= 0.9 && G.fall >= 1.2, 'Gentle stretches the rise and fall');
+  assert.equal(screenEnvelope(-0.01), 0);
+  assert.equal(screenEnvelope(T.life + 0.01), 0);
+  assert.equal(screenEnvelope(T.rise + 0.5), 1);
+  // no step: at 60 fps the level never moves faster than a 300 ms smoothstep ramp allows (peak slope 1.5 / rise)
+  let worst = 0;
+  for (let t = 0; t < T.life; t += 1 / 60) worst = Math.max(worst, Math.abs(screenEnvelope(t + 1 / 60) - screenEnvelope(t)));
+  assert.ok(worst <= 1.5 / (60 * 0.3) + 1e-9, 'smooth ' + worst.toFixed(3));
+  for (const g of layout.gates) {
+    const q = gateParams(g, loom), hz = bandHz(q) * screenRateMul(q);
+    assert.ok(hz <= L.screen.maxBandHz + 1e-9 && L.screen.maxBandHz < 3, g.id + ' arm sweep ' + hz.toFixed(2) + ' Hz');
+    assert.ok(Math.abs(screenRateMul(q, { gentle: true }) - screenRateMul(q) * 0.5) < 1e-9, 'Gentle halves the speed');
+  }
+  const fast = loomField.normalizeParams2({ speed: 5, layer: { arms: 12, colors: ['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#000000'] } });
+  assert.ok(bandHz(fast) > 3 && bandHz(fast) * screenRateMul(fast) <= L.screen.maxBandHz + 1e-9, 'a fast Loom is slowed under the cap');
+  assert.ok(screenMaskCss().startsWith('radial-gradient('));
+  const m = L.screen.mask;
+  assert.ok(m[0][1] >= 0.3 && m[0][1] <= 0.5, 'centre 0.3 to 0.5');
+  assert.ok(m[m.length - 1][1] > m[0][1] + 0.3, 'strong at the edges');
+});
+
+/** A stand-in DOM: elements with style objects; the field renderer is a stub that records its frames. */
+function fakeDom() {
+  const kids = [];
+  const el = () => ({ style: {}, width: 0, height: 0, setAttribute() {}, addEventListener() {}, getContext: () => ({}), parentNode: null });
+  const body = { clientWidth: 1600, clientHeight: 900, appendChild(c) { kids.push(c); c.parentNode = body; }, removeChild(c) { kids.splice(kids.indexOf(c), 1); c.parentNode = null; } };
+  return { doc: { body, hidden: false, createElement: el, defaultView: null }, body, kids };
+}
+
+test('spirals p4: createGateScreen plays the Loom on a DOM canvas, pauses, honours photosafe and Gentle, disposes', async () => {
+  const { createGateScreen } = await import('../render/gateScreen.js');
+  const q = gateParams(layout.gates[0], loom);
+  const run = ({ granted = true, gentle = false, pausedAt = -1 } = {}) => {
+    const { doc, body, kids } = fakeDom(), frames = [];
+    const sc = createGateScreen(body, {
+      doc, tier: 'mid', gentle, photosafe: { request: (k) => { assert.equal(k, 'gate-screen'); return granted; } },
+      makeField: (c) => ({ canvas: c, render: (p, ph) => frames.push([p, ph]) }),
+    });
+    assert.equal(sc.active, false);
+    assert.equal(sc.play(q, 1), true);
+    assert.equal(kids.length, 1);
+    const c = kids[0];
+    assert.equal(c.style.pointerEvents, 'none');
+    assert.equal(c.style.mixBlendMode, 'screen');
+    assert.equal(c.style.position, 'fixed');
+    assert.ok(c.width === 512 && c.height === 288, 'backing store long side by tier ' + c.width + 'x' + c.height);
+    let peak = 0, t = 0;
+    for (let i = 0; i < 600 && sc.active; i++) {
+      if (i === pausedAt) {
+        const before = frames.length, lv = sc.level;
+        sc.update(1 / 60, true);
+        assert.equal(frames.length, before, 'paused: no frame');
+        assert.equal(sc.level, lv, 'paused: nothing moves');
+        continue;
+      }
+      sc.update(1 / 60, false);
+      t += 1 / 60; peak = Math.max(peak, sc.level);
+    }
+    assert.equal(sc.active, false);
+    assert.equal(c.style.display, 'none');
+    assert.ok(frames.length > 60 && frames.every(([p]) => p.layer.arms === q.layer.arms), "the gate's own Loom");
+    assert.ok(frames.some(([, ph]) => ph > 0), 'the field turns');
+    sc.dispose();
+    assert.equal(kids.length, 0);
+    return { peak, t };
+  };
+  const base = run({ pausedAt: 20 });
+  assert.ok(Math.abs(base.peak - 1) < 1e-9 && base.t > 2 && base.t < 2.6, 'peak ' + base.peak + ' life ' + base.t.toFixed(2));
+  assert.ok(Math.abs(run({ granted: false }).peak - L.screen.refusedMul) < 1e-9, 'refused: softer');
+  assert.ok(Math.abs(run({ gentle: true }).peak - L.screen.gentleAlphaMul) < 1e-9, 'Gentle: half');
+  assert.equal(createGateScreen(null, { doc: null }).play(q), false, 'no DOM, no screen');
 });
