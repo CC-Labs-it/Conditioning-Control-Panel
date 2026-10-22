@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _nudges.NoteSummon(summons);
                 RaiseOutChanged();
                 Log.Information("[EmiDesk] summoned ({Why}), firstBoot={First}, summon #{N}", why ?? "user", first, summons);
+                MaybeOfferBookOnSummon(summons);   // WPF EmiDeskService.cs:361, behind the greeting
             }
             catch (Exception ex)
             {
@@ -162,6 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     if (!ReferenceEquals(_window, win)) return;
                     StopRingNudges();
+                    CancelBookOffer();   // the offer rode behind this widget's summon; the next summon re-arms
                     _window = null;
                     IsOut = false;
                     RaiseOutChanged();

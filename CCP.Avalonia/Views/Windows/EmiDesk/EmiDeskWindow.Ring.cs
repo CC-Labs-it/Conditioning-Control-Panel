@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try { _ring?.CloseRing(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring tear-down failed"); }
+            TearDownAsk();   // WPF Glass.cs:141 TearDownGlass -> TearDownBubble, ring first
         }
 
         partial void OnRingOpenQuery(ref bool open)

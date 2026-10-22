@@ -85,13 +85,18 @@ public partial class EmiDeskWindow
         _holdTimer = null;
         _speechDone = null;
         _speechFrames = Array.Empty<EmiSayFrame>();
-        HideSpeechBubble();
+        if (_ask == null) HideSpeechBubble();   // THE OFFER OWNS THE BUBBLE (WPF Bubble.cs:143)
     }
 
     /// <summary>WPF SpeakLine: acknowledge only once the first dot reaches the widget.</summary>
     internal bool SpeakRingLine(LineDraw line, EmiLineEngine engine)
     {
         if (PresentationActive || !IsVisible) return false;
+        if (AskLive && !line.Hold)
+        {
+            _parked = line;   // WPF SpeakLine: parked behind the open ask, one slot
+            return false;
+        }
         if (line.Hold)
         {
             HookSpeechLifetime();
@@ -110,6 +115,12 @@ public partial class EmiDeskWindow
     }
 
     partial void OnBubbleTextCore(string? text)
+    {
+        // A chain frame that lands mid-question is not her voice (WPF Bubble.cs:150).
+        if (_ask == null) PaintBubble(text);
+    }
+
+    private void PaintBubble(string? text)
     {
         if (string.IsNullOrEmpty(text)) { HideSpeechBubble(); return; }
         if (_speechBubble == null)
@@ -170,5 +181,6 @@ public partial class EmiDeskWindow
         _speechTail!.Points = new List<Point>(flip
             ? new[] { new Point(left + w - 22, top + h - 1), new Point(left + w - 12, top + h + 9), new Point(left + w - 12, top + h - 1) }
             : new[] { new Point(left + 12, top + h - 1), new Point(left + 12, top + h + 9), new Point(left + 22, top + h - 1) });
+        LayoutChips(left, top + h, w, flip, workLeft, workRight);
     }
 }

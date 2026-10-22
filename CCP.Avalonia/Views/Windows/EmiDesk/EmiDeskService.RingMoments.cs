@@ -26,6 +26,12 @@ internal sealed partial class EmiDeskService
         if (string.IsNullOrWhiteSpace(id)) return;
         try { MomentFired?.Invoke(this, new EmiMoment(id, context)); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] moment observer failed"); }
+        // WPF Bubble.cs:871 OnMomentForAsk: a full-screen feature takes the open question down.
+        if (EmiDeskWindow.AskKillMoments.Contains(id))
+        {
+            if (Dispatcher.UIThread.CheckAccess()) { if (_window?.AskLive == true) _window.CancelAsk(id); }
+            else Dispatcher.UIThread.Post(() => { if (_window?.AskLive == true) _window.CancelAsk(id); });
+        }
         if (!IsOut && !LineEngine.IsHoldMoment(id)) return;
         if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => DrawRingMoment(id, context)); return; }
         DrawRingMoment(id, context);
@@ -35,10 +41,16 @@ internal sealed partial class EmiDeskService
     {
         try
         {
-            if (_window?.PresentationActive == true) return;
-            var line = LineEngine.Draw(id, EmiLineEngine.ToCtx(context));
-            if (line != null && IsOut) _window?.SpeakRingLine(line, LineEngine);
-            // ponytail: asks remain refused by Core's unset EffectFeasibleProbe; no dead offer chip is shown.
+            var ctx = EmiLineEngine.ToCtx(context);
+            // WPF Fire :680: away, a hold moment only arms its hold.
+            if (!IsOut) { if (LineEngine.IsHoldMoment(id)) LineEngine.Draw(id, ctx); return; }
+            // WPF Speak: no live widget, no draw - an unseen draw must not spend a limit.
+            var win = _window;
+            if (win == null || win.PresentationActive || !win.IsVisible) return;
+            var line = LineEngine.Draw(id, ctx);
+            var ask = LineEngine.DrawAsk(id, ctx);
+            if (ask != null) { if (IsOut) win.ShowAsk(ask); return; }
+            if (line != null && IsOut) win.SpeakRingLine(line, LineEngine);
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring moment {Moment} failed", id); }
     }
