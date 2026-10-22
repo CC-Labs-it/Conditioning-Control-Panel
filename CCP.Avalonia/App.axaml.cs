@@ -15,6 +15,15 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        internal static ConditioningControlPanel.Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; set; }
+
+        internal static void StopAudioPlaylist()
+        {
+            if (AudioPlaylist is AudioPlayer.AudioPlaylistService player) player.StopEmergency();
+            else if (Dispatcher.UIThread.CheckAccess()) AudioPlaylist?.Stop();
+            else Dispatcher.UIThread.Post(() => AudioPlaylist?.Stop());
+        }
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -689,6 +698,7 @@ namespace ConditioningControlPanel.Avalonia
                     Console.WriteLine($"[Audio] LibVLC unavailable, audio disabled: {ex.Message}");
                     Serilog.Log.Warning(ex, "[Audio] LibVLC unavailable; audio disabled on this head");
                 }
+                AudioPlaylist = new AudioPlayer.AudioPlaylistService();
                 // Speech: Core Vosk engine over parec, seeding CoreSpeech (model is a drop-in, no download).
                 try { Platform.PulseMicSource.Seed(); }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Speech] engine unavailable on this head"); }
@@ -1160,6 +1170,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
+            try { (AudioPlaylist as IDisposable)?.Dispose(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }

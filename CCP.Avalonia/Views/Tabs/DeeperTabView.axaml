@@ -33,6 +33,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:ctl="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
              xmlns:vm="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.DeeperTabView"
              x:DataType="vm:DeeperTabViewModel">
@@ -538,6 +539,8 @@
                             </Grid>
                         </Grid>
                     </Border>
+
+                    <ctl:AudioPlaylistCard/>
 
                     <!-- ONE library card: kicker + count, the filter/sort strip, and the list.
                          Round 4 merged the free-floating filter strip into the card it filters.

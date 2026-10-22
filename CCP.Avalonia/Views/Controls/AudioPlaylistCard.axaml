@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AudioPlaylistCard">
+  <Border Theme="{StaticResource SettingCardStyle}">
+    <Grid>
+      <Border Background="{DynamicResource DeeperHueWashBrush}" CornerRadius="11"/>
+      <Border Width="3" HorizontalAlignment="Left" Margin="0,10" Background="{DynamicResource DeeperAccentBrush}"/>
+      <StackPanel Margin="16,10,16,12" Spacing="8">
+        <DockPanel LastChildFill="True">
+          <Button x:Name="AddButton" DockPanel.Dock="Right" Click="AddClick" ToolTip.Tip="{loc:Str audio_player_add_tip}"><TextBlock Text="{loc:Str audio_player_add}"/></Button>
+          <TextBlock Text="{loc:Str audio_player_title}" Foreground="{DynamicResource DeeperAccentBrush}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+        </DockPanel>
+        <TextBlock x:Name="Empty" Text="{loc:Str audio_player_empty}" TextWrapping="Wrap"/>
+        <StackPanel x:Name="Body" Spacing="6">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Click="PreviousClick" ToolTip.Tip="{loc:Str audio_player_tip_previous}"><fx:IconGlyph Kind="Previous" Size="14"/></Button>
+            <Button x:Name="PlayButton" Click="PlayClick" ToolTip.Tip="{loc:Str audio_player_tip_play}"><fx:IconGlyph x:Name="PlayGlyph" Kind="Play" Size="14"/></Button>
+            <Button Click="NextClick" ToolTip.Tip="{loc:Str audio_player_tip_next}"><fx:IconGlyph Kind="Next" Size="14"/></Button>
+            <TextBlock x:Name="Current" VerticalAlignment="Center" MaxLines="1" TextTrimming="CharacterEllipsis"/>
+          </StackPanel>
+          <Slider x:Name="Seek" Minimum="0" Maximum="1" ValueChanged="SeekChanged"/>
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Text="{loc:Str audio_player_volume}" VerticalAlignment="Center"/>
+            <Slider x:Name="Level" Grid.Column="1" Minimum="0" Maximum="100" ValueChanged="VolumeChanged"/>
+          </Grid>
+          <ListBox x:Name="Tracks" DoubleTapped="TrackDoubleTapped" MaxHeight="180"/>
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Click="UpClick" ToolTip.Tip="{loc:Str audio_player_tip_move_up}"><fx:IconGlyph Kind="ArrowUp" Size="14"/></Button>
+            <Button Click="DownClick" ToolTip.Tip="{loc:Str audio_player_tip_move_down}"><fx:IconGlyph Kind="ArrowDown" Size="14"/></Button>
+            <Button Click="RemoveClick" ToolTip.Tip="{loc:Str audio_player_tip_remove}"><fx:IconGlyph Kind="Delete" Size="14"/></Button>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button x:Name="LoopButton" Click="LoopClick"/>
+            <CheckBox x:Name="ShuffleToggle" IsCheckedChanged="ShuffleChanged"><TextBlock Text="{loc:Str audio_player_shuffle}"/></CheckBox>
+            <Button Click="ClearClick"><TextBlock Text="{loc:Str audio_player_clear}"/></Button>
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

@@ -88,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// A running session is paused first, not ended (panic, tray Stop): WPF MainWindow.xaml.cs:1726.</summary>
         internal static void StopEngine()
         {
+            App.StopAudioPlaylist();
             _engineGen++;
             App.Sessions?.Pause();
             CoreEngine.Stop();
