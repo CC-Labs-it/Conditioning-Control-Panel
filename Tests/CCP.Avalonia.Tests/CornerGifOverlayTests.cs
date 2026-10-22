@@ -133,36 +133,35 @@ public sealed class CornerGifOverlayTests
     }
 
     [Fact]
-    public Task EnabledSlotStaysDownUntilEngineRunsAndStopCancelsQueuedWork() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task EnabledSlotStaysDownUntilStartEngineAndStopEngineClosesIt() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
         var provider = CoreSession.IsEngineRunningProvider;
         var session = CoreSession.IsSessionRunningProvider;
+        var stoppedHook = CoreEngine.StoppedHook;
         var settings = CoreSettings.Current.CornerGifOverlays;
         var dir = Directory.CreateTempSubdirectory("ccp-corner-engine-").FullName;
         var gif = Path.Combine(dir, "tiny.gif");
         File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
         var shell = new MainShellWindow();
-        var running = false;
         shell.Show();
         try
         {
             CornerGifOverlay.StopAll();
             CornerGifOverlay.SkipPlatformChecksForTests = true;
             CornerGifOverlay.ManualFramesForTests = true;
-            CoreSession.IsEngineRunningProvider = () => running;
+            CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
             CoreSession.IsSessionRunningProvider = () => false;
+            CoreEngine.StoppedHook = shell.OnEngineStopped;
             CoreSettings.Current.CornerGifOverlays = new() { new() { Enabled = true, GifPath = gif } };
             CornerGifOverlay.RestoreOnStartup(shell);
             await Settle();
             Assert.False(CornerGifOverlay.HasActiveOverlays);
-            running = true;
-            CornerGifOverlay.Refresh(shell);
+            shell.StartEngine();   // the Start button's path (StartStop.cs StartEngine)
             await Settle();
             Assert.Single(CornerGifOverlay.ShownSlots);
-            running = false;
-            shell.OnEngineStopped();
+            MainShellWindow.StopEngine();   // -> CoreEngine.StoppedHook -> OnEngineStopped
             await Settle();
             Assert.False(CornerGifOverlay.HasActiveOverlays);
             Assert.True(CoreSettings.Current.CornerGifOverlays[0].Enabled);
@@ -172,6 +171,9 @@ public sealed class CornerGifOverlayTests
         }
         finally
         {
+            CoreEngine.StoppedHook = null;
+            CoreEngine.Stop();
+            CoreEngine.StoppedHook = stoppedHook;
             CornerGifOverlay.StopAll();
             CoreSession.IsEngineRunningProvider = provider;
             CoreSession.IsSessionRunningProvider = session;

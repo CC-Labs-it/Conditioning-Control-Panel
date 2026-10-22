@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -62,7 +65,24 @@ public sealed class LockCardSync7Tests
     public Task VoiceHintsUseSentencePunctuation() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        Assert.DoesNotContain("—", LockCardFeatureControl.VoiceHint(true));
+        var saved = (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider);
+        try
+        {
+            // Pin every branch; the machine's real speech state must not pick the one checked.
+            var hints = new List<string> { LockCardFeatureControl.VoiceHint(false) };
+            (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider) = (() => true, () => true);
+            hints.Add(LockCardFeatureControl.VoiceHint(true));
+            (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider) = (() => false, () => false);
+            hints.Add(LockCardFeatureControl.VoiceHint(true));
+            CoreSpeech.HasCaptureDeviceProvider = () => true;
+            CoreSpeech.ModelStatusProvider = () => CoreSpeechModelStatus.LoadFailed;
+            hints.Add(LockCardFeatureControl.VoiceHint(true));
+            CoreSpeech.ModelStatusProvider = () => CoreSpeechModelStatus.NotProbed;
+            hints.Add(LockCardFeatureControl.VoiceHint(true));
+            Assert.Equal(5, hints.Distinct().Count());
+            Assert.All(hints, h => Assert.DoesNotContain("—", h));
+        }
+        finally { (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider) = saved; }
         return Task.CompletedTask;
     });
 
