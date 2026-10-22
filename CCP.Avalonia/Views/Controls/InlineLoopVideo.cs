@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 player.EndReached += OnEndReached;
                 _media = new Media(vlc, _path, FromType.FromPath);
                 _media.AddOption(":input-repeat=65535"); // loop natively
-                _media.AddOption(":no-audio");           // muted; Mute would silence every player
+                _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);           // muted; Mute would silence every player
                 player.Play(_media);
             }
             catch (Exception ex)
