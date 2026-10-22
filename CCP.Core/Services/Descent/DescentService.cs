@@ -50,8 +50,12 @@ namespace ConditioningControlPanel.Services.Descent
         /// </summary>
         private int _deferredArmed;
         private readonly Func<string, Task<JObject?>> _fetch;
-        public DescentService(Func<string, Task<JObject?>>? fetch = null) =>
+        private readonly TimeProvider _time;
+        public DescentService(Func<string, Task<JObject?>>? fetch = null, TimeProvider? time = null)
+        {
             _fetch = fetch ?? (id => new V2AuthService().GetUserProfileNodeAsync(id));
+            _time = time ?? TimeProvider.System;
+        }
 
         /// <summary>Head-owned progression adoption; WPF preserves curve-before-level ordering.</summary>
         public Action<int, double, string?, int?>? ProgressionReceived { get; set; }
@@ -144,7 +148,7 @@ namespace ConditioningControlPanel.Services.Descent
                 DescentRefreshVerdict verdict;
                 TimeSpan retryIn;
                 lock (_refreshGate)
-                    verdict = _refreshGate.Ask(DateTime.UtcNow, unifiedId, authToken, offline, inFlight: !haveGate, force, reason, out retryIn);
+                    verdict = _refreshGate.Ask(_time.GetUtcNow().UtcDateTime, unifiedId, authToken, offline, inFlight: !haveGate, force, reason, out retryIn);
 
                 switch (verdict)
                 {
@@ -159,7 +163,7 @@ namespace ConditioningControlPanel.Services.Descent
                 }
 
                 int generation = Volatile.Read(ref _generation);
-                lock (_refreshGate) _refreshGate.BeginFetch(DateTime.UtcNow, unifiedId!, authToken!);
+                lock (_refreshGate) _refreshGate.BeginFetch(_time.GetUtcNow().UtcDateTime, unifiedId!, authToken!);
 
                 var userNode = await _fetch(unifiedId!).ConfigureAwait(false);
 
@@ -228,7 +232,7 @@ namespace ConditioningControlPanel.Services.Descent
             {
                 try
                 {
-                    await Task.Delay(delay).ConfigureAwait(false);
+                    await Task.Delay(delay, _time).ConfigureAwait(false);
                     Interlocked.Exchange(ref _deferredArmed, 0);
 
                     string? wanted;
@@ -327,10 +331,11 @@ namespace ConditioningControlPanel.Services.Descent
         }
 
         /// <summary>
-        /// Marshal to the UI thread the way the rest of the app does: bail out
-        /// entirely if the dispatcher is gone or shutting down (CLAUDE.md async
-        /// rules 6/8 — a fire-and-forget callback on a dead dispatcher is a crash
-        /// report nobody can read).
+        /// Marshal to the UI thread through CoreDispatch. Unlike the old WPF-only
+        /// code, which dropped the raise once the dispatcher was shutting down,
+        /// the WPF CoreDispatch provider (App.xaml.cs PostProvider) runs it inline
+        /// then; every handler is wrapped below, so a late raise logs instead of
+        /// crashing (CLAUDE.md async rules 6/8).
         /// </summary>
         private void RaiseBlockChanged()
         {

@@ -57,6 +57,15 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
+        /// <summary>WPF ProfileSyncService.ApplyServerCurveEpoch -> RaiseProfileLoadedIfProgressionChanged: follow the
+        /// server's curve, save, and repaint the level header on the UI thread.</summary>
+        internal static void AdoptServerCurveEpoch(int? epoch, Func<Views.Windows.MainShellWindow?> shell)
+        {
+            if (!Services.ProfileAdopt.ApplyCurveEpoch(CoreSettings.Current, epoch)) return;
+            CoreSettings.Save();
+            Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
+
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
         internal static void StartRichPresence()
@@ -570,11 +579,8 @@ namespace ConditioningControlPanel.Avalonia
                 DescentCountdown.Start();
                 Descent = new Services.Descent.DescentService
                 {
-                    ProgressionReceived = (_, _, _, epoch) =>
-                    {
-                        // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
-                        if (Services.ProfileAdopt.ApplyCurveEpoch(CoreSettings.Current, epoch)) CoreSettings.Save();
-                    },
+                    // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
+                    ProgressionReceived = (_, _, _, epoch) => AdoptServerCurveEpoch(epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
                 };
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).

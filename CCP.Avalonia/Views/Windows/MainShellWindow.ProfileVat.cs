@@ -18,8 +18,9 @@
 // silent no-op forever.
 //
 // The shared DescentService now supplies read-only server data, sign-in/logout and gated polling.
-// ponytail: ApplyDescentToVat and the faucet host remain follow-up wire-shell-profile-vat-b.
-// Until that host can display/pour the persisted hold, the jar deliberately stays dark.
+// ponytail: ApplyDescentToVat (the only ArmVat caller) remains follow-up wire-shell-profile-vat-b;
+// the faucet host is row shell-profile-faucet. Until the jar is armed it stays dark, and the 60 s
+// poll stays off with it (P07): one read on card open still feeds the curve-epoch follow.
 
 using System;
 using System.Globalization;
@@ -84,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EvaluateVatPoll();
         }
 
-        private bool VatPollWanted => _vatOnScreen && ProfilePage?.IsEffectivelyVisible == true
+        private bool VatPollWanted => _vatArmed && _vatOnScreen && ProfilePage?.IsEffectivelyVisible == true
             && _vatDescent?.HasSeenBlock == true && VatGlassCanvas.WindowIsPresenting(this);
 
         private void OnDescentBlockChanged(object? sender, EventArgs e) => EvaluateVatPoll();
@@ -177,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// is resized. <paramref name="cap"/> is the accepted server cap for this reading, which
         /// the readout needs before anything can raise FillPercentChanged.
         /// </summary>
-        private void ArmVat(VatGlassCanvas glass, int cap)
+        internal void ArmVat(VatGlassCanvas glass, int cap)
         {
             _vatCap = cap;
             if (_vatArmed) { UpdateVatReadout(); return; }
@@ -209,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 readout.IsVisible = true;
             }
             UpdateVatReadout();
+            EvaluateVatPoll();   // the jar is drawn now: the recurring read has a reader
 
             // ponytail: ArmFaucet(glass, jarW, jarH) belongs here - see the header.
             Log.Information("[Descent] vat armed on the Trainer Card");
@@ -242,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var readout = ProfilePage?.FindControl<TextBlock>("ProfileVatReadout");
             if (readout != null) readout.IsVisible = false;
+            EvaluateVatPoll();
 
             // ponytail: DisarmFaucet() belongs here - see the header.
         }

@@ -115,7 +115,8 @@ public sealed class DescentServiceTests
         var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         int reads = 0;
-        var reader = new DescentService(_ => Task.FromResult<JObject?>(Profile(1000)));
+        var clock = new SteppedClock();
+        var reader = new DescentService(_ => Task.FromResult<JObject?>(Profile(1000)), clock);
         reader.BlockChanged += (_, _) =>
         {
             if (reader.Current == null) return;
@@ -129,8 +130,8 @@ public sealed class DescentServiceTests
             await first.Task.WaitAsync(TimeSpan.FromSeconds(10));
             sync.StopHeartbeat();
             Assert.True(reader.HasSeenBlock);
-            // Respect the real ten-second read floor: this is a post-sync integration check.
-            await Task.Delay(TimeSpan.FromSeconds(10.1));
+            // Step past the ten-second read floor instead of waiting it out (P08).
+            clock.Now += TimeSpan.FromSeconds(10.1);
             CoreAccount.IsLoggedInProvider = () => true;
             sync.MarkLoaded(Array.Empty<string>());
             Assert.True(await sync.PushAsync("accepted test push"));
@@ -142,6 +143,12 @@ public sealed class DescentServiceTests
         }
         finally { sync.Reset(); CoreAccount.IsLoggedInProvider = savedAccount; }
     });
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UnixEpoch;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
 
     private sealed class AcceptedSync : HttpMessageHandler
     {
