@@ -31,24 +31,13 @@ namespace ConditioningControlPanel.Services.Commands
         {
             if (commandData.Data == null) return;
 
-            var settings = App.Settings?.Current?.CompanionPrompt;
-            if (settings == null)
+            // Master switch, per-effect switch, the post-panic quiet and output moderation of the
+            // text the effect would show (AiCommandAdmission). Nested getbacktome commands pass
+            // the same gate through Admits.
+            var verdict = Judge(commandData);
+            if (verdict != AiCommandAdmission.Verdict.Run)
             {
-                App.Logger?.Debug("AiCommandService: no settings — dropping command {Cmd}", commandData.Command);
-                return;
-            }
-
-            // Master gate.
-            if (!ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOn(settings, App.Patreon?.HasLabAccess == true))
-            {
-                App.Logger?.Information("AiCommandService: master toggle off or no Tier 2 - dropping {Cmd}", commandData.Command);
-                return;
-            }
-
-            // Per-effect gate.
-            if (!IsEffectAllowed(commandData.Command, settings))
-            {
-                App.Logger?.Information("AiCommandService: effect {Cmd} disabled by user — dropping", commandData.Command);
+                App.Logger?.Information("AiCommandService: {Cmd} refused ({Verdict})", commandData.Command, verdict);
                 return;
             }
 
@@ -78,7 +67,7 @@ namespace ConditioningControlPanel.Services.Commands
 
             try
             {
-                var command = CommandFactory.CreateCommand(commandData, cts?.Token ?? default, depth: 0);
+                var command = CommandFactory.CreateCommand(commandData, cts?.Token ?? default, depth: AiCommandAdmission.FollowUpDepth);
                 if (command != null)
                 {
                     App.Logger?.Debug("AiCommandService: executing {Cmd}", commandData.Command);
@@ -104,6 +93,41 @@ namespace ConditioningControlPanel.Services.Commands
                 {
                     RemoveToken(token);
                 }
+            }
+        }
+
+        /// <summary>The live verdict for one AI command: current switches, Lab access, the
+        /// post-panic quiet and the output guard.</summary>
+        internal static AiCommandAdmission.Verdict Judge(AiCommandData commandData)
+        {
+            var settings = App.Settings?.Current?.CompanionPrompt;
+            return AiCommandAdmission.Decide(commandData,
+                masterOn: ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOn(settings, App.Patreon?.HasLabAccess == true),
+                effectAllowed: settings != null && IsEffectAllowed(commandData.Command, settings),
+                panicQuiet: Safety.PanicAftermath.TriggersSilenced(),
+                textBlocked: TextBlocked);
+        }
+
+        /// <summary>TRUE when the command may run now (see <see cref="Judge"/>).</summary>
+        internal static bool Admits(AiCommandData commandData) => Judge(commandData) == AiCommandAdmission.Verdict.Run;
+
+        /// <summary>Output moderation for text inside an effect, the same guard the chat reply
+        /// passes. A guard that throws refuses.</summary>
+        private static bool TextBlocked(string text)
+        {
+            var guard = App.ModerationGuard;
+            if (guard == null) return false;
+            try
+            {
+                var check = guard.CheckOutput(text);
+                if (check.Allow || !check.Category.HasValue) return false;
+                App.ModerationLog?.Record(check.Category.Value, source: "output", modelHint: "effect");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning("AiCommandService: effect text check failed ({Type})", ex.GetType().Name);
+                return true;
             }
         }
 
