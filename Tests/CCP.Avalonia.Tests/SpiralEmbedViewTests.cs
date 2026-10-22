@@ -5,7 +5,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Descent;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -127,6 +129,44 @@ public sealed class SpiralEmbedViewTests
             Assert.False(embedHost.IsVisible);
         }
         finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // WPF SpiralTabView.xaml.cs embed Navigated: stop the watchdog, show the host, fade the splash.
+    [Fact]
+    public Task TabEmbedNavigated_RevealsHost_HidesSplash() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldEngine = global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable;
+        var oldStart = global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed;
+        var oldMotion = CoreSettings.Current.MotionLevel;
+        global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable = () => true;
+        global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed = _ => { };
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;   // no fade: the splash hides at once
+        var tab = new global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView();
+        var window = new global::Avalonia.Controls.Window { Content = tab };
+        window.Show();
+        try
+        {
+            var embedHost = tab.FindControl<Grid>("EmbedHost")!;
+            var splash = tab.FindControl<Grid>("SpiralSplash")!;
+
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.True(splash.IsVisible);
+            Assert.False(embedHost.IsVisible);
+            var embed = Assert.IsType<SpiralEmbedView>(Assert.Single(embedHost.Children));
+
+            embed.OnNavigated(new Uri(embed.Url), true);
+            Assert.True(embedHost.IsVisible);
+            Assert.False(splash.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable = oldEngine;
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed = oldStart;
+            CoreSettings.Current.MotionLevel = oldMotion;
+        }
         return Task.CompletedTask;
     });
 }

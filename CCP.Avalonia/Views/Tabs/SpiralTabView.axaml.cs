@@ -161,6 +161,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private static bool AllowTransitions => CoreSettings.Current.MotionLevel != MotionLevel.Off;
 
+        // Test seams: headless has no browser engine, so the engine-path reveal is driven by faking both.
+        internal static Func<bool> EngineAvailable = () => WebHost.IsAvailable;
+        internal static Action<SpiralEmbedView> StartEmbed = e => e.Start();
+
         // ---- the parts ----
         private readonly Canvas _emberHost;
         private readonly StackPanel _fogCopy;
@@ -413,7 +417,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _waitingPanel.IsVisible = false;
                     StopWaitingAmbience();
 
-                    if (WebHost.IsAvailable)
+                    if (EngineAvailable())
                     {
                         // AIRSPACE, one layer down. The slab is arranged either way, so the engine
                         // is handed a real rectangle and loads exactly as it would otherwise, but
@@ -592,7 +596,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 };
                 // No server block exists on this head yet: never fabricate one from local XP.
                 embed.PostState(null);
-                embed.Start();
+                StartEmbed(embed);
             }
             catch (Exception ex)
             {
