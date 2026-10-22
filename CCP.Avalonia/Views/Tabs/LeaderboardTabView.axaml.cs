@@ -310,6 +310,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     row.ApplyRankDelta(string.IsNullOrEmpty(row.UnifiedId) ? null
                         : LeaderboardRankSnapshotService.GetPreviousRank(mode, row.UnifiedId),
                         !string.IsNullOrEmpty(row.UnifiedId));
+                // MainWindow.Leaderboard.cs:1078-1083: your own previous rank, also read before the write.
+                var myId = CoreAccount.UnifiedUserId;
+                _youPreviousRankKnown = !string.IsNullOrEmpty(myId);
+                _youPreviousRank = _youPreviousRankKnown ? LeaderboardRankSnapshotService.GetPreviousRank(mode, myId!) : null;
                 LeaderboardRankSnapshotService.RecordIfDue(mode, _ranked);
                 _rankFlashPending = true;
                 _sortKey = "rank";
@@ -330,6 +334,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private bool _fetching;
+        private int? _youPreviousRank;
+        private bool _youPreviousRankKnown;
 
         /// <summary>MainWindow.Leaderboard.cs:930: double-clicking a row opens that trainer's card on the Profile tab.</summary>
         private void LstLeaderboard_DoubleTapped(object? sender, global::Avalonia.Input.TappedEventArgs e)
@@ -357,8 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>
         /// MainWindow.Leaderboard.cs:1263 UpdateYouBar. Reads the ranked board, not the filtered view, so a filter that
         /// hides you does not blank it.
-        /// ponytail: delta is always the dash (no snapshot); off the board, achievements show 0 and the percentile only
-        /// the server-rank branch of GetPlayerPercentile.
+        /// ponytail: off the board, achievements show 0 and the percentile only the server-rank branch of GetPlayerPercentile.
         /// </summary>
         private void UpdateYouBar()
         {
@@ -373,7 +378,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var s = CoreSettings.Current;
 
             F<TextBlock>("TxtYouRankNumber").Text = rank > 0 ? rank.ToString(CultureInfo.InvariantCulture) : "\u2013";
-            F<TextBlock>("TxtYouDelta").Text = "\u2013";
+            // MainWindow.Leaderboard.cs:1304-1333.
+            // MainWindow.Leaderboard.cs:1304-1333, same rules as a row's delta, so reuse the Core formatter.
+            var delta = new LeaderboardEntryData { Rank = rank };
+            delta.ApplyRankDelta(_youPreviousRank, _youPreviousRankKnown && rank > 0);
+            var youDelta = F<TextBlock>("TxtYouDelta");
+            youDelta.Text = delta.DeltaText;
+            var deltaBrush = delta.DeltaState switch
+            {
+                "new" => "PinkSoftBrush", "up" => "SuccessGreenBrush", "down" => "DangerBrush", _ => "TextDimBrush",
+            };
+            if (this.TryFindResource(deltaBrush, out var db) && db is IBrush b) youDelta.Foreground = b;
             F<TextBlock>("TxtYouName").Text = name ?? "";
             F<TextBlock>("TxtYouInitials").Text = LeaderboardEntryData.BuildInitials(name);
             F<Ellipse>("EllYouAvatar").Fill = LeaderboardRow.BuildAvatarBrush(name);

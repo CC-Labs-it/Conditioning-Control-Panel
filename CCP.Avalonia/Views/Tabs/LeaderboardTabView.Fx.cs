@@ -74,6 +74,13 @@ public partial class LeaderboardTabView
             .Where(g => g.Classes.Contains("lbpodium-slot")));
         _goldGlow = _podium.GetVisualDescendants().OfType<Border>()
             .FirstOrDefault(b => b.Name == "PodiumGoldGlow" && b.DataContext is LeaderboardRow { Rank: 1 });
+        // WPF template blur 26, capped per tier (MainWindow.LeaderboardFx.cs:211).
+        if (_goldGlow != null)
+            _goldGlow.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Blur = Math.Min(26, AmbientFxCanvas.Env.MaxGlowBlurRadius(AmbientFxCanvas.Env.CurrentTier)),
+                Color = Color.FromUInt32(0xFFFFD700),
+            });
         if (_podiumSlots.Count > 0 && AmbientFxCanvas.Env.AllowTransitions)
         {
             foreach (var slot in _podiumSlots) slot.RenderTransform = new TranslateTransform();

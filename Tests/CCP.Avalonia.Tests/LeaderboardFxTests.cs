@@ -19,6 +19,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -63,6 +64,9 @@ public sealed class LeaderboardFxTests
                 FontManager.Current.AddFontCollection(new global::Avalonia.Fonts.Inter.InterFontCollection());
             var settings = CoreSettings.Current;
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.OfflineMode, LeaderboardTabView.NewClient, BeatLoop.Time);
+            var path = Path.Combine(CorePaths.UserData, "leaderboard_ranks.json");
+            Assert.StartsWith(Path.GetTempPath(), path);
+            var saved = File.Exists(path) ? File.ReadAllText(path) : null;
             Window? window = null;
             try
             {
@@ -149,6 +153,8 @@ public sealed class LeaderboardFxTests
             {
                 window?.Close();
                 (settings.MotionLevel, settings.PerformanceMode, settings.OfflineMode, LeaderboardTabView.NewClient, BeatLoop.Time) = old;
+                if (saved == null) File.Delete(path); else File.WriteAllText(path, saved);
+                LeaderboardRankSnapshotService.ResetForTests();
             }
         });
 
@@ -169,9 +175,11 @@ public sealed class LeaderboardFxTests
             var path = Path.Combine(CorePaths.UserData, "leaderboard_ranks.json");
             Assert.StartsWith(Path.GetTempPath(), path);
             var saved = File.Exists(path) ? File.ReadAllText(path) : null;
+            var oldId = CoreAccount.UnifiedUserId;
             Window? window = null;
             try
             {
+                CoreAccount.UnifiedUserId = "fx10";
                 Directory.CreateDirectory(CorePaths.UserData);
                 File.Delete(path);
                 LeaderboardRankSnapshotService.ResetForTests();
@@ -183,7 +191,7 @@ public sealed class LeaderboardFxTests
                     {
                         unified_id = "fx" + i, display_name = "Subject " + i,
                         total_xp_earned = i == 21 ? 0 : moved && i > 3 ? 500 + i : 1000 - i
-                    }), total_users = 21
+                    }), total_users = 21, your_rank = moved ? 14 : 10
                 });
                 var wire = new BoardWire { Response = Board(false) };
                 LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
@@ -198,12 +206,15 @@ public sealed class LeaderboardFxTests
                 static bool HasWash(ListBoxItem row) =>
                     row.GetDiagnostic(ListBoxItem.BackgroundProperty).Priority == BindingPriority.LocalValue;
                 Assert.All(Rows(), r => Assert.False(HasWash(r))); // NEW is not movement
+                var youDelta = tab.FindControl<TextBlock>("TxtYouDelta")!;
+                Assert.Equal(Loc.Get("lb_delta_new"), youDelta.Text);
                 time.Advance(1);
                 wire.Response = Board(true);
                 await tab.RefreshLeaderboardAsync();
                 window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
                 var decorated = Rows().Where(r => HasWash(r)).ToArray();
                 Assert.Equal(12, decorated.Length);
+                Assert.Equal("\u25BC4", youDelta.Text); // WPF Leaderboard.cs:1318-1327, read before the snapshot write
                 var up = decorated.First(r => ((LeaderboardRow)r.DataContext!).DeltaState == "up");
                 var down = decorated.First(r => ((LeaderboardRow)r.DataContext!).DeltaState == "down");
                 Assert.NotEqual(((SolidColorBrush)up.Background!).Color, ((SolidColorBrush)down.Background!).Color);
@@ -241,6 +252,7 @@ public sealed class LeaderboardFxTests
                 (settings.MotionLevel, settings.PerformanceMode, settings.OfflineMode, LeaderboardTabView.NewClient, BeatLoop.Time) = old;
                 if (saved == null) File.Delete(path); else File.WriteAllText(path, saved);
                 LeaderboardRankSnapshotService.ResetForTests();
+                CoreAccount.UnifiedUserId = oldId;
             }
         });
 

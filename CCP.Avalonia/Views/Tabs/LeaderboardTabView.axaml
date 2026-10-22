@@ -349,7 +349,6 @@
         <Style Selector="Border.lbpodium.r1">
             <Setter Property="BorderBrush" Value="#8CFFD700"/>
             <Setter Property="Padding" Value="12,9,12,10"/>
-
         </Style>
         <Style Selector="Border.lbpodium.r1 TextBlock#Crown">
             <Setter Property="IsVisible" Value="True"/>
