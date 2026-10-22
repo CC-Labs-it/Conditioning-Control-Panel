@@ -247,6 +247,7 @@ public static class CircesTab
             var floor = -Math.Max(0, state.PushedNetSeconds);
             applied = Math.Max(seconds, Math.Min(0, floor - (state.BalanceSeconds - state.ParkedCreditSeconds)));
             if (applied == 0) return new(0, TabRefusal.Floor);
+            SpendLeashOnCredit(state, eventId, seconds, floor, applied);
             state.DayCreditSeconds += -applied;
             // While a raffle day's slip-up waits for its push, a credit joins the set-aside one
             // rather than shrinking what lands.
@@ -450,6 +451,19 @@ public static class CircesTab
             state.LeashOwedSeconds = (int)Math.Min(int.MaxValue, (long)Math.Max(0, state.LeashOwedSeconds) + applied);
         else if (applied < 0 && eventId == LeashCreditEventId)
             state.LeashOwedSeconds = Math.Max(0, state.LeashOwedSeconds + applied);
+    }
+
+    // A player's own credit that only cleared because leash time was on the tab (without it the
+    // floor would have refused that part) spent the leash time: a cut can no longer drop it. Else
+    // leash 15:00, credit -15:00 at the floor, slip-up 10:00, cut: the cut took the slip-up too.
+    // Asked before the credit moves the balance.
+    private static void SpendLeashOnCredit(TabState state, string eventId, int seconds, int floor, int applied)
+    {
+        var owed = Math.Max(0, state.LeashOwedSeconds);
+        if (owed == 0 || eventId == LeashCreditEventId) return;
+        var withoutLeash = (int)Math.Max(seconds, Math.Min(0L, (long)floor - ((long)state.BalanceSeconds - owed - state.ParkedCreditSeconds)));
+        var spent = withoutLeash - applied;
+        if (spent > 0) state.LeashOwedSeconds = Math.Max(0, owed - spent);
     }
 
     // Leash time leaves the tab last: never more of it than is still owed.

@@ -173,6 +173,35 @@ public class LeashCutTabDropTests
     }
 
     [Fact]
+    public void A_credit_spent_on_leash_time_at_the_floor_never_lets_the_cut_take_a_later_slip_up()
+    {
+        // Without the leash the credit would have hit the floor and done nothing, so the slip-up
+        // after it is the player's own and stays.
+        var s = new TabState();
+        BookAt(s, CircesTab.LeashEventId, 900, Oct5);
+        BookAt(s, "session", -900, Oct5.AddSeconds(1));
+        BookAt(s, "typo", 600, Oct5.AddSeconds(2));
+        Assert.Equal(0, s.LeashOwedSeconds);
+
+        Assert.Equal(0, CircesTab.DropUnpushedLeash(s, Oct5.AddSeconds(3)));
+        Assert.Equal(600, s.BalanceSeconds);
+    }
+
+    [Fact]
+    public void A_credit_with_room_below_the_floor_still_comes_back_after_a_cut()
+    {
+        // With pushes on the lock the credit would have landed anyway: the cut gives it back.
+        var s = new TabState { PushedNetSeconds = 1000 };
+        BookAt(s, CircesTab.LeashEventId, 900, Oct5);
+        BookAt(s, "session", -900, Oct5.AddSeconds(1));
+        BookAt(s, "typo", 600, Oct5.AddSeconds(2));
+        Assert.Equal(900, s.LeashOwedSeconds);
+
+        Assert.Equal(900, CircesTab.DropUnpushedLeash(s, Oct5.AddSeconds(3)));
+        Assert.Equal(-300, s.BalanceSeconds);
+    }
+
+    [Fact]
     public void A_raffle_day_set_aside_credit_comes_back_with_the_drop()
     {
         var s = new TabState { PushedNetSeconds = 1000 };
