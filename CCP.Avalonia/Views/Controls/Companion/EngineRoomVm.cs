@@ -40,13 +40,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             _host = host;
             TestConnectionCommand = new RelayCommand(() => _ = TestConnectionAsync());
             SetupLocalCommand = new RelayCommand(() => _ = SetupLocalAsync());
-            SamplerSettingsCommand = new RelayCommand(() => _ = (host as EngineRoomDrawer)?.OpenSamplerSettingsAsync());
+            SamplerSettingsCommand = new RelayCommand(() => { if (!_preview) _ = (host as EngineRoomDrawer)?.OpenSamplerSettingsAsync(); });
             DailyLimitCommand = new RelayCommand(() => _ = DailyLimitAsync());
             ClearConversationCommand = new RelayCommand(() => _ = ClearConversationAsync());
             Sync();
         }
 
-        private MainShellWindow? Window => TopLevel.GetTopLevel(_host) as MainShellWindow;
+        private MainShellWindow? Window => _preview ? null : TopLevel.GetTopLevel(_host) as MainShellWindow;
+
+        private bool _preview;
+
+        /// <summary>
+        /// WPF MockEngineRoomDrawerVm's Collapsed / LoggedOut / Off exhibits for the preview harness,
+        /// resting closed as WPF MockCompanionRoomVm.Closed leaves them. Writes stay suppressed for good,
+        /// <see cref="Sync"/> is a no-op and every button does nothing (WPF NoOp).
+        /// </summary>
+        internal static EngineRoomVm CreatePreview(Control host, string exhibit)
+        {
+            var vm = new EngineRoomVm(host) { _preview = true, _suppressWrite = true };
+            vm.IsExpanded = false;
+            vm.Provider = exhibit == "Off" ? Mode.Off : Mode.Cloud;
+            vm.OllamaModel = "qwen3.5:latest";
+            vm.OllamaHost = "http://localhost:11434/";
+            vm.CustomEndpoint = vm.CustomModel = "";
+            vm.DailyLimitLabel = Loc.GetF("companion_engine_daily_limit_fmt", 200);
+            vm.IsLoggedIn = exhibit != "LoggedOut";
+            if (exhibit == "LoggedOut") vm.SetStatus(Loc.Get("companion_engine_status_disconnected"), false);
+            else if (exhibit == "Off") vm.SetStatus(Loc.Get("companion_engine_status_off"), false);
+            else vm.SetStatus(Loc.Get("companion_engine_status_ready"), true);
+            return vm;
+        }
 
         public bool IsExpanded { get => _isExpanded; set => Set(ref _isExpanded, value); }
 
@@ -126,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>Re-reads every field from settings. Never writes back (WPF Sync).</summary>
         public void Sync()
         {
+            if (_preview) return;
             _suppressWrite = true;
             try
             {
@@ -163,6 +187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>WPF EngineRoomRuntimeVm.TestConnection and the three handlers it dispatched to.</summary>
         internal async Task TestConnectionAsync()
         {
+            if (_preview) return;
             switch (_provider)
             {
                 case Mode.LocalOllama:

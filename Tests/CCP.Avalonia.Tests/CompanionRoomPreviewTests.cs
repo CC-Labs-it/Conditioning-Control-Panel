@@ -144,22 +144,88 @@ public sealed class CompanionRoomPreviewTests
         return Task.CompletedTask;
     });
 
+    // WPF MockCompanionRoomVm.cs:94-161: hero, personality, awareness and engine exhibits per strip
+    // key, the navigator fan-out, and no exhibit control that writes real settings.
     [Fact]
-    public Task LiveZonesWithoutMocksAreInertInThePreview() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task EachVariantSeatsWpfHeroPersonalityAwarenessAndEngineMocks() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var window = Create();
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var before = (s.AvatarMuted, s.AvatarEnabled, s.AiChatEnabled, s.AwarenessRetentionDays, s.SlutModeEnabled);
         try
         {
+            window.Show();   // the engine drawer's Expander binding carries the navigator check below
             var room = window.RoomView.GetLogicalDescendants().ToList();
-            // Hero mute, provider, awareness and presets write real settings; no mocks seat them yet.
-            Assert.False(room.OfType<CompanionHeroCard>().Single().IsEnabled);
-            Assert.False(room.OfType<MakeHerYoursView>().Single().IsEnabled);
-            Assert.False(room.OfType<AwarenessPrivacyView>().Single().IsEnabled);
-            Assert.False(room.OfType<EngineRoomDrawer>().Single().IsEnabled);
+            var heroView = room.OfType<CompanionHeroCard>().Single();
+            var personality = room.OfType<MakeHerYoursView>().Single();
+            var awareness = room.OfType<AwarenessPrivacyView>().Single();
+            var engineView = room.OfType<EngineRoomDrawer>().Single();
+            Assert.True(heroView.IsEnabled && personality.IsEnabled && awareness.IsEnabled && engineView.IsEnabled);
             Assert.False(room.OfType<AiPermissionsGrid>().Single().IsEnabled);
             Assert.False(room.OfType<WorkshopAccordion>().Single().IsEnabled);
-            Assert.True(room.OfType<ChatThresholdView>().Single().IsEnabled);
-            Assert.True(room.OfType<MemoryDiaryView>().Single().IsEnabled);
+
+            var expected = new (string Key, int Level, bool Enabled, bool AiLocked, bool Plate, bool Traits,
+                bool Dormant, bool Wire, AwarenessIntensity Dial, CompanionProviderMode Provider, bool LoggedIn)[]
+            {
+                ("default", 41, true, false, true, true, false, true, AwarenessIntensity.BroadStrokes, CompanionProviderMode.Cloud, true),
+                ("freeTier", 41, true, true, false, true, false, true, AwarenessIntensity.BroadStrokes, CompanionProviderMode.Cloud, false),
+                ("dormant", 41, true, false, true, false, true, false, AwarenessIntensity.BroadStrokes, CompanionProviderMode.Cloud, true),
+                ("empty", 1, true, false, true, false, false, true, AwarenessIntensity.BroadStrokes, CompanionProviderMode.Cloud, true),
+                ("drained", 41, true, false, true, true, false, true, AwarenessIntensity.BroadStrokes, CompanionProviderMode.Cloud, true),
+                ("disabled", 41, false, false, true, true, false, false, AwarenessIntensity.Off, CompanionProviderMode.Off, true),
+            };
+            foreach (var e in expected)
+            {
+                Assert.True(window.ShowVariant(e.Key));
+                window.RoomView.SyncBrain();   // a preview exhibit never re-reads the live settings
+                var hero = heroView.ViewModel!;
+                Assert.Equal(e.Level, hero.Level);
+                Assert.Equal(e.Enabled, hero.IsCompanionEnabled);
+                Assert.Equal(e.AiLocked, hero.IsAiLocked);
+                Assert.Equal(e.Plate, hero.Header!.HasAiAccess);
+                Assert.Equal(e.Traits, personality.ViewModel.AreTraitsAvailable);
+                Assert.Equal(7, personality.ViewModel.Presets.Count);
+                Assert.Equal(e.Dormant, awareness.ViewModel!.IsDormant);
+                Assert.Equal(e.Wire, awareness.ViewModel.IsWireLive);
+                Assert.Equal(e.Dial, awareness.ViewModel.Intensity);
+                var engine = Assert.IsType<EngineRoomVm>(engineView.DataContext);
+                Assert.Equal(e.Provider, engine.Provider);
+                Assert.Equal(e.LoggedIn, engine.IsLoggedIn);
+                Assert.False(engine.IsExpanded);   // WPF MockCompanionRoomVm.Closed: the drawer rests shut
+            }
+            Assert.Equal("8 / 200 XP", window.ShowVariant("empty") ? heroView.ViewModel!.XpLabel : "");
+            Assert.True(window.ShowVariant("default"));
+            Assert.Equal(2, awareness.ViewModel!.KnownApps.Count);
+            Assert.True(awareness.ViewModel.HasWireJson);
+
+            // Exhibit controls change the exhibit only.
+            var heroVm = heroView.ViewModel!;
+            heroVm.ToggleMuteCommand.Execute(null);
+            heroVm.ToggleShownCommand.Execute(null);
+            Assert.True(heroVm.IsMuted);
+            Assert.False(heroVm.IsCompanionShown);
+            heroVm.WakeCommand.Execute(null);
+            awareness.ViewModel.Intensity = AwarenessIntensity.Everything;
+            awareness.ViewModel.RetentionDays = 7;
+            awareness.ViewModel.PauseCommand.Execute(null);
+            Assert.Equal(AwarenessIntensity.Everything, awareness.ViewModel.Intensity);
+            Assert.False(awareness.ViewModel.IsPaused);
+            var presets = personality.ViewModel.Presets;
+            presets[2].IsSelected = true;
+            Assert.Equal(new[] { 2 }, presets.Select((p, i) => (p, i)).Where(x => x.p.IsSelected).Select(x => x.i));
+            presets[2].IsSelected = false;   // a second click keeps the radio group's one selection
+            Assert.True(presets[2].IsSelected);
+            personality.ViewModel.IsSpiceOn = true;
+            personality.ViewModel.ResetPersonalityCommand.Execute(null);
+            var eng = (EngineRoomVm)engineView.DataContext!;
+            eng.Provider = CompanionProviderMode.Off;
+            eng.OllamaModel = "changed";
+            Assert.Equal(before, (s.AvatarMuted, s.AvatarEnabled, s.AiChatEnabled, s.AwarenessRetentionDays, s.SlutModeEnabled));
+            Assert.NotEqual("changed", s.CompanionPrompt?.AiModel);
+
+            // Navigator fan-out: the hero's AI pill opens the Engine Room on the page.
+            heroVm.OpenEngineRoomCommand.Execute(null);
+            Assert.True(eng.IsExpanded);
         }
         finally { window.Close(); }
         return Task.CompletedTask;
