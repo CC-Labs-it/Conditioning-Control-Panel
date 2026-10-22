@@ -40,6 +40,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
+            new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
+            // WPF ChaosModeService.ForceShutdown (:3176) closes the rain; it also runs outside a run (trigger bubble, Emi, BackRoom).
+            new("gif-cascade", _ => Chaos.ChaosGifCascadeOverlay.CloseActive()),
+            // WPF ForceShutdown :3177 ChaosAnnouncerOverlay.CloseActive: queue dropped, window closed, run or not.
+            new("chaos-announcer", _ => Chaos.ChaosAnnouncerOverlay.CloseActive()),
+            new("chaos-cursor-glow", _ => Chaos.ChaosCursorGlowOverlay.CloseActive()),   // WPF ForceShutdown :3183 closes the halo
+            new("chaos-vibe-trail", _ => Chaos.ChaosVibeTrailOverlay.CloseActive()),   // WPF ForceShutdown :3184; also when no run owns it
+            new("chaos-estim", _ => Chaos.ChaosEStimOverlay.CloseActive()),   // lightning + cursor halo (WPF ChaosModeService.cs:3185)
+            new("chaos-field-fx", _ => Overlays.ChaosFieldFxOverlay.CloseActive()),   // WPF ChaosModeService teardown CloseActive
             new("chaos-skia-fx", _ => Chaos.ChaosSkiaFxOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosSkiaFxOverlay.CloseActive; also outside a run
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
             // WPF PanicStopEverySurface (:1992): the toys go to zero, bypassing throttles and gates.
@@ -59,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :1980-1981 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence()),
             new("lock-cards", _ => MainShellWindow.StopLockCards()),      // WPF LockCardService.Stop(dismissOpenCards: true)
+            new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
