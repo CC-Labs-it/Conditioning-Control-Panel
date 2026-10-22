@@ -36,8 +36,9 @@ let current = null;
 export const currentArt = () => current;
 
 /** Load the art set. Resolves { tex(id), model(id), row(id), failed[], loaded, wanted } and never rejects.
- * wanted counts the ids asked for minus LATER ids not shipped yet; loaded counts what arrived. */
-export async function loadArt(renderer, { want = WANT } = {}) {
+ * wanted counts the ids asked for minus LATER ids not shipped yet; loaded counts what arrived.
+ * onProgress(done, total) runs as each id settles (arrived or failed), for the warming card. */
+export async function loadArt(renderer, { want = WANT, onProgress = null } = {}) {
   const rows = new Map(), tex = new Map(), models = new Map(), failed = [];
   let manifest = [];
   try {
@@ -50,7 +51,12 @@ export async function loadArt(renderer, { want = WANT } = {}) {
   const ktx2 = new KTX2Loader().setTranscoderPath(TRANSCODER).detectSupport(renderer.three || renderer);
   const gltf = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
 
+  let settled = 0;
+  const tick = () => { settled++; if (onProgress) { try { onProgress(settled, want.length); } catch { /* the card only */ } } };
   await Promise.all(want.map(async (id) => {
+    try { await loadOne(id); } finally { tick(); }
+  }));
+  async function loadOne(id) {
     const r = rows.get(id);
     if (!r) { if (!LATER.has(id)) failed.push(id); return; }
     const url = new URL(r.file, BASE).href;
@@ -69,7 +75,7 @@ export async function loadArt(renderer, { want = WANT } = {}) {
       failed.push(id);
       console.warn('[glassroad/art] ' + id + ' failed: ' + (e && e.message));
     }
-  }));
+  }
   ktx2.dispose();
   const wanted = want.filter((id) => rows.has(id) || !LATER.has(id)).length;
   return current = {

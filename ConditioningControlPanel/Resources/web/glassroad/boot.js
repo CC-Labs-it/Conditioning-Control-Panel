@@ -167,14 +167,21 @@ async function boot() {
   const wordCount = createWordCount(document.getElementById('hud'));
   const NO_WORDS = [];
   let words = null;
-  hud.setReady(false, 'Warming up');
+  hud.setReady(false, 'Starting the renderer');
   hud.setHostGentle(hostGentle);
   hud.setCard('start', { title: trackName });
+  // the warming card names each stage and its bar fills with the real progress (pass 3)
+  const paintGap = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+  hud.setLoading('Starting the renderer', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
   const renderer = await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options });
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
-  const art = qs.get('art') === '0' ? null : await loadArt(renderer);
+  hud.setLoading('Loading art', 0.08);
+  const art = qs.get('art') === '0' ? null
+    : await loadArt(renderer, { onProgress: (d, n) => hud.setLoading('Loading art ' + d + '/' + n, 0.08 + 0.4 * d / n) });
+  hud.setLoading('Building the road', 0.5);
+  await paintGap();
   if (art && art.failed.length) debug.artFailed = art.failed;
   debug.art = art ? { loaded: art.loaded, wanted: art.wanted, failed: art.failed.slice(0, 4) } : null;
   renderer.setArt(art);   // the fps readout shows art loaded / wanted and the first failed id
@@ -368,10 +375,17 @@ async function boot() {
     document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
   }
 
-  // warm every material and the post chain behind the warming card
-  await renderer.compile(world.scene, cam.camera);
+  // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
+  hud.setLoading('Preparing shaders', 0.55);
+  await paintGap();
+  const warm = await renderer.compile(world.scene, cam.camera, undefined,
+    { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
+  debug.warm = warm;
   // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
+  hud.setLoading('Last touches', 0.97);
+  await paintGap();
   gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
+  hud.setLoading('Ready', 1);
   hud.setReady(true);
   bridge.ready();
   toMenu();
@@ -461,6 +475,7 @@ async function boot() {
         big: +m.big.toFixed(2), shatter: +m.shatter.toFixed(2), wave: +m.waveAmp.toFixed(2), words: words ? words.pops : 0, wordsOf: words ? words.total : 0 };
     }
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
+    renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: paused ? 0 : frameDt });   // 7. render
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud

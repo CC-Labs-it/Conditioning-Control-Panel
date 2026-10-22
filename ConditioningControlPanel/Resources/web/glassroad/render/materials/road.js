@@ -46,7 +46,7 @@ export const MUSIC_ROAD = Object.freeze({
 /** The road edge (owner, pass 2: "make the edges of the track clearer"): a crisp line on the true edge,
  * a dark gutter inside it, the lane colour held on the outer laneHoldM whatever the music does. */
 export const ROAD_EDGE = Object.freeze({
-  lineM: 0.28, aaPx: 1.5, lineTint: 0.18, lineGain: 1.15,
+  lineM: 0.28, aaPx: 1.5, aaCapMul: 4, lineTint: 0.18, lineGain: 1.15,
   gutterSoftM: 0.06, gutterM: 0.55, gutterDark: 0.5, gutterAlpha: 0.15,
   laneHoldM: [0.35, 0.55],
 });
@@ -211,10 +211,13 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // the edge line: a crisp bright line ON the true edge with a dark gutter inside it, the same in every palette
   // and music mode; its width grows to at least a pixel and its light shrinks to match, so far off it never
   // shimmers (fwidth keeps the energy per pixel even)
-  const px = fwidth(trueEdge).mul(E.aaPx);
-  const lineW = max(float(E.lineM), px);
-  const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4));
-  const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge)));
+  // capped: over a crest neighbouring pixels jump from the near road to the far road, fwidth explodes and an
+  // uncapped line lit the whole strip white across the screen; past the cap the line fades out instead
+  const px = fwidth(trueEdge).mul(E.aaPx), cap = E.lineM * E.aaCapMul;
+  const lineW = max(float(E.lineM), min(px, cap));
+  const crestFade = clamp(float(cap).div(max(px, 1e-4)), 0, 1).pow(2);
+  const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4)).mul(crestFade);
+  const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge))).mul(crestFade);
   const centre = float(1).sub(smoothstep(S.centreLineW * 0.5, S.centreLineW, au));
 
   // modes: calm (a break) flattens toward clear glass, big (a drop, a peak) lifts the contrast and lines

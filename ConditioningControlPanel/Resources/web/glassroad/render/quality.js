@@ -44,9 +44,12 @@ export function shortGpu(s) {
 }
 
 /** Starting tier: `?quality=` wins, then coarse pointer = phone, a WebGL2 fallback = mid, else high. */
-export function pickTier({ override = null, coarse = false, webgl2 = false } = {}) {
+export function pickTier({ override = null, coarse = false, webgl2 = false, gpu = '' } = {}) {
   if (override && TIERS[override]) return override;
   if (coarse) return 'phone';
+  // an Intel integrated GPU (HD / UHD / Iris) starts on mid: on high the owner's HD Graphics fell to phone
+  // mid-race, and every tier step relinks shaders (owner 2026-10-22, Firefox)
+  if (/intel/i.test(gpu) && /\b(hd|uhd|iris)\b/i.test(gpu)) return 'mid';
   return webgl2 ? 'mid' : 'high';
 }
 

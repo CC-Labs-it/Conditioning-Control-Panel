@@ -51,19 +51,47 @@ test('a trigger phrase is one row of five wearing the phrase; a gate word a row 
   assert.equal(run.total, 4);
 });
 
-test('a bubble shows leadS early ahead of the player, re-aims, then freezes freezeS before its word', () => {
+test('a bubble shows leadS early where the player will be, re-aims on real progress, then only trims, then holds', () => {
   const run = createWordRun(words([['road', 10]]), track(), { seed: 3 });
   assert.equal(run.update(7.3, { s: 0, lat: 0, speedMps: 20 }).length, 0);
-  const v = run.update(7.6, { s: 0, lat: 0, speedMps: 20 })[0];
+  const v = run.update(7.6, { s: 6, lat: 0, speedMps: 20 })[0];   // 6 m in 0.3 s: 20 m/s of progress
   assert.equal(v.state, 'live');
-  assert.ok(Math.abs(v.s - 20 * 2.4) < 1e-6, 'aimed where the player will be at startS');
-  // the player speeds up: the aim follows (smoothed in song time)
-  let s = 0;
-  for (let t = 7.6; t < 9.1; t += 0.05) { s += 30 * 0.05; run.update(t, { s, lat: 0, speedMps: 30 }); }
-  const frozenAt = run.update(9.25, { s, lat: 0, speedMps: 30 })[0].s;
-  run.update(9.6, { s: s + 1, lat: 8, speedMps: 5 });
-  assert.equal(run.live[0].s, frozenAt, 'held still once inside freezeS');
-  assert.ok(Math.abs(frozenAt - (s + 30 * 0.8)) < 6, 'near where a 30 m/s player is at the word');
+  assert.ok(Math.abs(v.s - (6 + 20 * 2.4 + L.aimAheadM)) < 1e-6, 'aimed where the player will be at startS, contact lead on top');
+  // real progress 30 m/s while speedMps reads 40 (a drift's sideways speed): the aim follows the progress
+  let s = 6, t = 7.6 + 1 / 60;
+  const step = (to, rate, speedMps, lat = 0) => { for (; t < to - 1e-9; t += 1 / 60) { s += rate / 60; run.update(t, { s, lat, speedMps }); } };
+  step(10 - L.freezeS - 0.05, 30, 40, 8);
+  assert.ok(Math.abs(run.live[0].s - (s + 30 * (10 - t) + L.aimAheadM)) < 1.5, 'aimed on progress, not on speedMps');
+  // inside freezeS a sudden boost only trims it, at most trimMps
+  step(10 - L.freezeS + 0.02, 30, 40, 8);
+  const held = run.live[0].s;
+  step(10 - L.freezeS + 0.12, 45, 45, 8);
+  assert.ok(Math.abs(run.live[0].s - held) <= L.trimMps * 0.1 + 0.05, 'a trim, not a jump');
+  // inside trimEndS it holds still whatever the kart does
+  step(10 - L.trimEndS + 0.01, 45, 45, 8);
+  const still = run.live[0].s;
+  step(10 - 0.02, 10, 10, 8);
+  assert.equal(run.live[0].s, still, 'held still once inside trimEndS');
+});
+
+test('sync: a kart driving through pops each bubble on its word, through boosts and brakes', () => {
+  const list = []; for (let k = 0; k < 24; k++) list.push(['w' + k, 6 + k * 1.1]);
+  const run = createWordRun(words(list), track(), { seed: 2 });
+  const errs = [];
+  run.onPop((e) => { const b = run.words.find((x) => x.w === e.w); errs.push(e.tS - b.startS); });
+  let s = 0, v = 0, lat = 0;
+  for (let i = 0; i < 60 * 36; i++) {
+    const t = i / 60;
+    const target = t < 3 ? 0 : 30 + (Math.floor(t / 1.7) % 3 === 1 ? 10 : Math.floor(t / 1.7) % 3 === 2 ? -9 : 0);
+    v += (target - v) * Math.min(1, 2.5 / 60);
+    s += v / 60;
+    const live = run.update(t, { s, lat, speedMps: v });
+    const next = live.filter((b) => b.state === 'live').sort((a, b) => a.remainS - b.remainS)[0];
+    if (next) lat = next.xs[0];
+  }
+  assert.ok(errs.length >= 20, 'pops ' + errs.length);
+  const med = errs.map(Math.abs).sort((a, b) => a - b)[errs.length >> 1];
+  assert.ok(med < 0.1, 'median |pop - word| ' + med.toFixed(3) + ' s');
 });
 
 test('driving through pops it once and reports the word and its point; bots never touch it', () => {
@@ -211,7 +239,15 @@ test('look: grows in, swells as its word arrives, pops with a ring, a flash only
   const v = (o) => ({ state: 'live', inT: 0, outT: -1, remainS: 2, ...o });
   assert.equal(bubbleLook(v({ inT: 0 })).alpha, 0);
   assert.equal(bubbleLook(v({ inT: 5 })).alpha, 1);
-  assert.ok(bubbleLook(v({ inT: 5, remainS: 0 })).scale > bubbleLook(v({ inT: 5, remainS: 2 })).scale);
+  assert.ok(bubbleLook(v({ inT: 5, remainS: 0.1 })).scale > bubbleLook(v({ inT: 5, remainS: 2 })).scale, 'swells as its word nears');
+  assert.ok(bubbleLook(v({ inT: 5, remainS: -0.05 })).scale > bubbleLook(v({ inT: 5, remainS: 2 })).scale, 'kicks on the word');
+  // the karaoke light: off before the word, on while it is sung, gone after; Gentle rises slower and less
+  const sung = (o, g) => bubbleLook(v({ inT: 5, lenS: 0.4, ...o }), { gentle: g }).sung;
+  assert.equal(sung({ remainS: 0.01 }), 0);
+  assert.ok(sung({ remainS: -0.1 }) > 0.95);
+  assert.ok(sung({ remainS: -0.35 }) > 0.95, 'held while the voice sings it');
+  assert.equal(sung({ remainS: -(0.4 + BL.sungFadeS + 0.01) }), 0);
+  assert.ok(sung({ remainS: -0.1 }, true) < sung({ remainS: -0.1 }) * 0.7, 'Gentle: slower, softer');
   const pop = (o) => bubbleLook({ state: 'popped', inT: 3, outT: 0.05, remainS: 0 }, o);
   assert.ok(pop({}).ring > 0);
   assert.equal(pop({}).flash, 0);

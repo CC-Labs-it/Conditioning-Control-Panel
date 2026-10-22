@@ -2,15 +2,21 @@
  *
  * Every time comes from the bubble view (sim/words.js), which reads the song clock: inT since it showed,
  * outT since it popped or was missed, remainS to its word. IN: grows and fades in with a small overshoot.
- * While live: a slow bob and a swell as its word arrives. OUT on a pop: the glass swells and clears, a
- * ring runs out, an optional flash core (only when the photosafe budget allowed it). OUT on a miss: it
- * shrinks, rises a little and fades. Gentle: every fade and rise slower, smaller moves, no flash.
+ * While live: a slow bob and a swell as its word arrives. THE KARAOKE LIGHT (pass 3, the owner could not tell
+ * which bubble the voice was on): at the word's exact start the bubble lights warm (`sung`, read by the shader)
+ * and kicks a little bigger, holds the light while the voice sings it (lenS) and lets it go after, so every
+ * bubble down the line answers its word on the voice, near or far, popped or not yet. OUT on a pop: the glass
+ * swells and clears, a ring runs out, an optional flash core (only when the photosafe budget allowed it).
+ * OUT on a miss: it shrinks, rises a little and fades. Gentle: every fade and rise slower (the light rises
+ * over the gentle rise floor, never a step), smaller moves, no flash.
  */
 export const BUBBLE_LOOK = Object.freeze({
   sizeM: 2.2, gateSizeM: 1.9,
   inS: 0.35, gentleInS: 0.7, overshoot: 0.08,
   bobM: 0.12, bobHz: 0.6,
-  nowSwell: 0.1, nowS: 0.35,
+  nowSwell: 0.08, nowS: 0.3,
+  sungRiseS: 0.06, sungFadeS: 0.3, gentleSungRiseS: 0.3, gentleSungFadeS: 0.6, gentleSung: 0.6,
+  sungKick: 0.14, sungKickS: 0.16,
   popS: 0.32, gentlePopS: 0.6, popGrow: 0.5,
   ringS: 0.45, gentleRingS: 0.8, ringGrow: 1.6, ringAlpha: 0.9,
   flashS: 0.16, flashAlpha: 0.75, flashSize: 1.3,
@@ -20,19 +26,32 @@ export const BUBBLE_LOOK = Object.freeze({
 const sat = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const ease = (x) => { x = sat(x); return x * x * (3 - 2 * x); };
 
+/** The karaoke light of a live bubble (0..1): rises on the word's start, holds for lenS, falls after. */
+export function sungLight(v, gentle = false, L = BUBBLE_LOOK) {
+  const since = -v.remainS, len = v.lenS > 0 ? v.lenS : 0.25;
+  if (!(since >= 0)) return 0;
+  const rise = gentle ? L.gentleSungRiseS : L.sungRiseS, fade = gentle ? L.gentleSungFadeS : L.sungFadeS;
+  const up = ease(since / rise), down = since <= len ? 1 : 1 - ease((since - len) / fade);
+  return up * down * (gentle ? L.gentleSung : 1);
+}
+
 /**
- * The bubble's draw: { alpha, scale (x sizeM), lift (metres up), ring (alpha, 0 = none), ringScale, flash (alpha) }.
- * flashOk: the photosafe budget granted this pop its flash.
+ * The bubble's draw: { alpha, scale (x sizeM), lift (metres up), ring (alpha, 0 = none), ringScale, flash (alpha),
+ * sung (0..1, the karaoke light) }. flashOk: the photosafe budget granted this pop its flash.
  */
 export function bubbleLook(v, { gentle = false, flashOk = false, seed = 0, L = BUBBLE_LOOK } = {}, out = {}) {
-  out.ring = 0; out.ringScale = 1; out.flash = 0; out.lift = 0;
+  out.ring = 0; out.ringScale = 1; out.flash = 0; out.lift = 0; out.sung = 0;
   const inS = gentle ? L.gentleInS : L.inS, a = sat(v.inT / inS);
   const grow = a < 1 ? ease(a) * (1 + (gentle ? 0 : L.overshoot) * Math.sin(Math.PI * a)) : 1;
   const bob = (gentle ? 0.5 : 1) * L.bobM * Math.sin((v.inT * L.bobHz + seed) * Math.PI * 2);
   if (v.state === 'live') {
-    const now = v.remainS <= L.nowS && v.remainS > -L.nowS ? 1 - Math.abs(v.remainS) / L.nowS : 0;
+    // before the word: a small swell as it nears; on the word: the light and a kick
+    const pre = v.remainS > 0 && v.remainS <= L.nowS ? 1 - v.remainS / L.nowS : 0;
+    out.sung = sungLight(v, gentle, L);
+    const since = -v.remainS;
+    const kick = since >= 0 ? (gentle ? 0.4 : 1) * L.sungKick * Math.exp(-since / L.sungKickS) * ease(since / 0.03) : 0;
     out.alpha = ease(a);
-    out.scale = (0.6 + 0.4 * grow) * (1 + (gentle ? 0.5 : 1) * L.nowSwell * ease(now));
+    out.scale = (0.6 + 0.4 * grow) * (1 + (gentle ? 0.5 : 1) * L.nowSwell * ease(pre) + kick);
     out.lift = bob;
     return out;
   }

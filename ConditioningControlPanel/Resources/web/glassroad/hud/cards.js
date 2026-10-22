@@ -19,6 +19,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
 
 const VOL_ROWS = [['volMaster', 'Volume'], ['volMusic', 'Music'], ['volSfx', 'Effects']];
+/** The warming card's bar (pass 3): fill, a moving sheen and a turning ring. */
+const LOAD_HTML = '<div class="c-load" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
+  '<div class="c-load-bar"><i class="c-load-fill"></i><i class="c-load-sheen"></i></div><span class="c-load-ring" aria-hidden="true"></span></div>';
 /** Display rows (polish 2): a button that cycles its values, with a short hint. */
 const CYCLE_ROWS = [['frameCap', 'Frame cap', 'Lower keeps a slow PC steady'], ['renderScale', 'Render scale', 'Auto drops pixels to hold the frame rate'],
   ['quality', 'Quality', 'Auto follows your PC']];
@@ -35,6 +38,14 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   let kind = 'start', data = {}, ready = false, waitNote = note?.textContent || '';
   let opts = loadOptions(), host = { gentle: false };
+  const load = { p: 0 };
+  function paintLoad() {
+    if (kind !== 'start' || ready || card.hidden) return;
+    note.textContent = waitNote;
+    const bar = extra.querySelector('.c-load'), fill = extra.querySelector('.c-load-fill');
+    if (fill) fill.style.transform = 'scaleX(' + load.p.toFixed(3) + ')';
+    if (bar) bar.setAttribute('aria-valuenow', String(Math.round(load.p * 100)));
+  }
   const stack = { options: null, controls: null };
 
   function show(k, d = {}) {
@@ -50,6 +61,9 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       title.textContent = data.title || 'Threshold';
       note.textContent = ready ? 'Press any key' : waitNote;
       go.textContent = 'Start'; go.disabled = !ready;
+      // warming: a bar that fills with the real stages, a sheen and a ring that keep turning even while a
+      // shader link holds the page (transform-only animations run on the compositor)
+      if (!ready) { extra.innerHTML = LOAD_HTML; paintLoad(); }
     } else if (k === 'finish') {
       title.textContent = 'Finished';
       note.textContent = formatTime(data.timeS) + (data.best ? ', best lap ' + formatTime(data.best) : '');
@@ -252,6 +266,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     get kind() { return card.hidden ? null : kind; },
     get options() { return { ...opts }; },
     setReady(r, n) { ready = !!r; if (n) waitNote = n; if (kind === 'start' && !card.hidden) show('start', data); },
+    /** The warming card's stage line and bar (p 0..1), updated in place: no re-show, no card-in replay. */
+    setProgress(stage, p) {
+      if (stage) waitNote = String(stage);
+      load.p = Math.max(load.p, Math.min(1, Math.max(0, Number(p) || 0)));   // the bar never runs backwards
+      paintLoad();
+    },
     setHostGentle(on) { host.gentle = !!on; },
   };
 }

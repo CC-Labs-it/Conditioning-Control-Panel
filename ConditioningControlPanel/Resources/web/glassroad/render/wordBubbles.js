@@ -8,11 +8,12 @@
  * Only the local player's bubbles exist here: nobody else's are ever drawn.
  */
 import { Sprite, SpriteNodeMaterial, InstancedBufferAttribute, DynamicDrawUsage, CanvasTexture, SRGBColorSpace } from 'three/webgpu';
-import { instancedDynamicBufferAttribute, uv, vec2, vec3, float, texture, mix, smoothstep, length, max, floor, mod, step, atan, sin } from 'three/tsl';
+import { instancedDynamicBufferAttribute, uv, vec2, vec3, float, texture, mix, smoothstep, length, max, floor, mod, step, atan, sin, clamp } from 'three/tsl';
 import { bubbleLook, fitFontPx, BUBBLE_LOOK as BL } from './wordBubblesMath.js';
 
 const GRID = 8, CELL = 256;
 const MODE = { bubble: 0, ring: 1, flash: 2 };
+const SUNG_MAX = 0.45;   // a bubble's mode carries its karaoke light, 0..SUNG_MAX (under the ring's 0.5 step)
 
 function wordAtlas() {
   const canvas = document.createElement('canvas');
@@ -76,10 +77,13 @@ function bubbleCloud(cap, atlas) {
   const spot = float(1).sub(smoothstep(0, 0.16, length(p.sub(vec2(0.34, 0.68)))));
   const auv = vec2(p.x.add(mod(slot, GRID)), p.y.add(float(GRID - 1).sub(floor(slot.div(GRID))))).div(GRID);
   const word = texture(atlas, auv);
-  const bodyCol = mix(vec3(1, 0.86, 0.94), rimTint, rim);
-  const glassCol = bodyCol.add(vec3(1, 1, 1).mul(spot.mul(0.8)));
+  // the karaoke light (wordBubblesMath sungLight) rides in the bubble's mode, 0..SUNG_MAX: on its word the
+  // glass fills warm gold, the rim glows and the body thickens behind the dark word, so the line answers the voice
+  const sung = clamp(mode.mul(isBubble).div(SUNG_MAX), 0, 1);
+  const bodyCol = mix(mix(vec3(1, 0.86, 0.94), vec3(1, 0.86, 0.46), sung), mix(rimTint, vec3(1, 0.8, 0.3), sung.mul(0.6)), rim);
+  const glassCol = bodyCol.add(vec3(1, 1, 1).mul(spot.mul(0.8))).add(vec3(1, 0.85, 0.5).mul(rim.mul(sung).mul(0.6)));
   const bubbleCol = mix(glassCol, word.rgb, word.a);
-  const bubbleA = max(word.a, max(inside.mul(0.32), max(rim.mul(0.9), spot.mul(0.85)))).mul(inside);
+  const bubbleA = max(word.a, max(inside.mul(sung.mul(0.38).add(0.32)), max(rim.mul(0.9), spot.mul(0.85)))).mul(inside);
   // ring: a thin bright band; flash: a soft white core
   const ringA = smoothstep(0.78, 0.9, d).mul(float(1).sub(smoothstep(0.9, 1.0, d)));
   const flashA = float(1).sub(smoothstep(0, 1, d)).pow(2);
@@ -127,7 +131,7 @@ export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 
       const slot = atlas.slotOf(v.w), size = v.gate ? BL.gateSizeM : BL.sizeM;
       for (let k = 0; k < v.n; k++) {
         const p = v.p[k], y = p[1] + look.lift;
-        if (look.alpha > 0.002) cloud.push(p[0], y, p[2], size * look.scale, slot, look.alpha, MODE.bubble, seed + k * 0.31);
+        if (look.alpha > 0.002) cloud.push(p[0], y, p[2], size * look.scale, slot, look.alpha, MODE.bubble + look.sung * SUNG_MAX, seed + k * 0.31);
         if (look.ring > 0.002) cloud.push(p[0], y, p[2], size * look.ringScale, slot, look.ring, MODE.ring, seed);
         if (look.flash > 0.002 && k === v.hit) cloud.push(p[0], y, p[2], size * BL.flashSize, slot, look.flash, MODE.flash, seed);
       }

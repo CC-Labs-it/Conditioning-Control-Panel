@@ -81,3 +81,12 @@ test('render: each step down makes the next step up wait longer', () => {
   assert.deepEqual(feedAt(g, 16.7, 16.7, GOVERNOR.upS + 1), []);
   assert.deepEqual(feedAt(g, 16.7, 16.7, GOVERNOR.upS), ['high']);
 });
+
+test('render: an Intel integrated GPU starts on mid; a discrete one keeps the old pick', () => {
+  assert.equal(pickTier({ gpu: 'Intel(R) HD Graphics' }), 'mid');
+  assert.equal(pickTier({ gpu: 'Intel(R) UHD Graphics 770' }), 'mid');
+  assert.equal(pickTier({ gpu: 'Intel(R) Iris(R) Xe Graphics' }), 'mid');
+  assert.equal(pickTier({ gpu: 'nvidia blackwell' }), 'high');
+  assert.equal(pickTier({ gpu: 'Intel(R) Arc(TM) A770' }), 'high');
+  assert.equal(pickTier({ gpu: 'Intel(R) HD Graphics', coarse: true }), 'phone');
+});

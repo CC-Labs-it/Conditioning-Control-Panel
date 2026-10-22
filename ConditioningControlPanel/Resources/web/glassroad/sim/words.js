@@ -13,8 +13,13 @@
  *     word is a row of three. Any bubble of a row pops the row.
  * createWordRun(song, track, { seed }) then reads, every frame, the song position tS (music.songS, what the
  * player hears) and the local player's { s, lat, speedMps }. Each bubble appears leadS before its word where
- * the player will be when it is sung (player.s + speed x time left), keeps re-aiming at that spot until
- * freezeS before, then holds still, so the word is in the bubble as its voice is heard. Only the local player
+ * the player will be when it is sung, keeps re-aiming at that spot until freezeS before, then only trims
+ * (at most trimMps, a slide too slow to read) until trimEndS, so the word is in the bubble as its voice is
+ * heard. Sync (pass 3, owner "the bubbles aren't synced precisely"): the aim reads the kart's real progress
+ * along the road (the rate of player.s over song time, so a drift's sideways speed or a climb never counts),
+ * freezes late (a mini-turbo after the freeze used to land the kart 0.2 s early), and puts the bubble
+ * aimAheadM past the kart so the kart REACHES the pop radius on the word instead of popping popSM early.
+ * Only the local player
  * pops (nothing here is shared: the room carries the pop count, never positions). A pop event carries the
  * streak (bubbles popped in a row without a miss) and lineDone (a line's last bubble, every one of it taken).
  * Every time is the song clock: a frozen tS (pause) moves nothing; tS jumping back (the song loops) starts a
@@ -24,8 +29,12 @@ import { clamp, wrap } from '../core/math.js';
 
 export const WORD_LOOK = Object.freeze({
   leadS: 2.6,          // a bubble shows this long before its word is sung
-  freezeS: 0.8,        // ...and holds its spot from this long before
-  aimTcS: 0.25,        // song-time smoothing of the re-aim, so speed wobble never jitters it
+  freezeS: 0.4,        // ...and holds its spot from this long before (12 m at racing speed)
+  trimMps: 3,          // after the freeze it may still slide this fast toward the aim (a boost, a brake)
+  trimEndS: 0.12,      // ...until this long before its word
+  aimTcS: 0.12,        // song-time smoothing of the re-aim, so speed wobble never jitters it
+  rateTcS: 0.2,        // smoothing of the kart's progress rate (metres of s per song second)
+  aimAheadM: 1.4,      // the bubble sits this far past the predicted kart: contact (popSM) lands on the word
   mergeS: 0.12,        // two words closer than this share one bubble (a third starts the next one)
   phraseGapS: 0.3,     // silence longer than this ends a phrase
   phraseMax: 4,        // and so does a fifth bubble
@@ -137,21 +146,34 @@ export function createWordRun(song, track, { seed = 1, look = WORD_LOOK } = {}) 
   const B = picked.map((p) => ({ ...p, state: 'wait', s: 0, frozen: false, inS: 0, outS: 0, hit: -1,
     view: { id: p.i, w: p.w, gate: p.row > 0, row: p.row, line: p.line, state: 'wait', n: p.row || 1,
       xs: new Array(ROW_MAX).fill(0), p: Array.from({ length: ROW_MAX }, () => [0, 0, 0]),
-      s: 0, inT: 0, outT: -1, remainS: 0, hit: -1 } }));
+      s: 0, inT: 0, outT: -1, remainS: 0, lenS: Math.max(0.08, p.endS - p.startS), hit: -1 } }));   // lenS: how long the voice sings it (the karaoke light)
   const nLines = picked.length ? picked[picked.length - 1].line + 1 : 0;
   const lineSize = new Uint16Array(nLines), linePop = new Uint16Array(nLines);
   for (const p of picked) lineSize[p.line]++;
   const live = [], fns = [];
   let lastT = null, pops = 0, shown = 0, streak = 0, best = 0, lines = 0, first = 0;
+  let lastS = null, rate = -1;   // the kart's progress along the road, m per song second (-1 = not known yet)
 
   function pass() {
     for (const b of B) { b.state = 'wait'; b.frozen = false; b.hit = -1; }
     live.length = 0; linePop.fill(0); first = 0; streak = 0;
   }
 
+  /** Progress rate from the kart's s over song time; a rescue or a route jump (a big step) is ignored. */
+  function progressRate(player, dtS) {
+    if (lastS !== null && dtS > 0) {
+      const ds = signed(player.s - lastS, lapM), r = ds / dtS;
+      if (Math.abs(ds) < 40 && r > -5) {
+        const k = 1 - Math.exp(-dtS / L.rateTcS);
+        rate = rate < 0 ? Math.max(0, r) : rate + (Math.max(0, r) - rate) * k;
+      }
+    }
+    lastS = player.s;
+  }
+
   function aimAt(b, tS, player) {
-    const v = Math.max(L.minSpeedMps, player.speedMps || 0);
-    return player.s + v * Math.max(0, b.startS - tS);
+    const v = Math.max(L.minSpeedMps, rate >= 0 ? rate : player.speedMps || 0);
+    return player.s + v * Math.max(0, b.startS - tS) + L.aimAheadM;
   }
 
   function place(b) {
@@ -169,9 +191,10 @@ export function createWordRun(song, track, { seed = 1, look = WORD_LOOK } = {}) 
 
   function update(tS, player) {
     if (!Number.isFinite(tS) || !player) return live;
-    if (lastT !== null && tS < lastT - L.loopBackS) pass();
+    if (lastT !== null && tS < lastT - L.loopBackS) { pass(); lastS = null; }
     const dtS = lastT === null ? 0 : Math.max(0, tS - lastT);
     lastT = tS;
+    progressRate(player, dtS);
     const k = dtS > 0 ? 1 - Math.exp(-dtS / L.aimTcS) : 0;
     live.length = 0;
     // bubbles are in sung order: skip the ones long gone, stop at the first not yet due
@@ -187,6 +210,9 @@ export function createWordRun(song, track, { seed = 1, look = WORD_LOOK } = {}) 
         if (!b.frozen) {
           if (b.startS - tS <= L.freezeS) b.frozen = true;
           else b.s += (aimAt(b, tS, player) - b.s) * k;
+        } else if (b.startS - tS > L.trimEndS && dtS > 0) {
+          const d = signed(aimAt(b, tS, player) - b.s, lapM), m = L.trimMps * dtS;
+          b.s += d > m ? m : d < -m ? -m : d;
         }
         place(b);
         const ds = signed(b.s - player.s, lapM);
@@ -220,7 +246,7 @@ export function createWordRun(song, track, { seed = 1, look = WORD_LOOK } = {}) 
     get best() { return best; },
     get lines() { return lines; },
     words: picked,
-    reset(s = seed) { seed = s; shares = laneShares(picked, seed, L); pass(); lastT = null; pops = 0; shown = 0; best = 0; lines = 0; },
+    reset(s = seed) { seed = s; shares = laneShares(picked, seed, L); pass(); lastT = null; lastS = null; rate = -1; pops = 0; shown = 0; best = 0; lines = 0; },
     onPop(fn) { fns.push(fn); return () => { const i = fns.indexOf(fn); if (i >= 0) fns.splice(i, 1); }; },
   };
 }
