@@ -1761,6 +1761,7 @@ namespace ConditioningControlPanel
                 var recentSamples = new Queue<(DateTime At, WpfPoint P)>();
                 var avgWindow = new Queue<WpfPoint>();
                 var started = DateTime.UtcNow;
+                var lastTick = started;
                 bool didPop = false;
 
                 while (true)
@@ -1769,6 +1770,9 @@ namespace ConditioningControlPanel
                     if (_cancelled) return "";
                     var now = DateTime.UtcNow;
                     if ((now - started).TotalMilliseconds > BubbleTimeoutMs) break;
+                    // Real time since the last lap, not TickMs: Task.Delay(33) lands every ~47 ms
+                    // or later, so counting laps made the 700 ms dwell take ~1 s of the timeout.
+                    var stepMs = Services.Timing.TickStep.Ms(ref lastTick, now, Services.Timing.TickStep.DwellMaxStepMs);
 
                     var gaze = _bubbleGaze;
                     bool fresh = gaze.HasValue && (now - _bubbleGazeAt).TotalMilliseconds < 300;
@@ -1813,14 +1817,14 @@ namespace ConditioningControlPanel
 
                     if (onTarget <= 1.0)
                     {
-                        dwellMs += TickMs;
+                        dwellMs += stepMs;
                         insideSamples.Add(raw);
                     }
                     else
                     {
                         // Leaky decay instead of a hard reset — a stray
                         // stretch shouldn't wipe accumulated dwell.
-                        dwellMs = Math.Max(0, dwellMs - TickMs);
+                        dwellMs = Math.Max(0, dwellMs - stepMs);
                     }
                     UpdateRing(TestBubbleRingFg, dwellMs / BubbleDwellNeededMs);
 
