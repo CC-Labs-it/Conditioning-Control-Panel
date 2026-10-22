@@ -57,6 +57,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Func<Uri, bool>? AllowNavigation { get; set; }
 
+        /// <summary>Per-host Chromium flags, applied before WebView2 creates its environment.
+        /// Other adapters ignore them; no process-wide environment variable is changed.</summary>
+        public string? WindowsBrowserArguments { get; set; }
+
+        /// <summary>WebView2 profiles using different browser arguments must not share a folder.</summary>
+        public string? WindowsUserDataFolder { get; set; }
+
+
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
         /// in-page links and script hops included, unlike <see cref="Source"/>, which is only
@@ -228,6 +236,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
+                    _web.EnvironmentRequested += (_, e) =>
+                    {
+                        if (OperatingSystem.IsWindows() && e is WindowsWebView2EnvironmentRequestedEventArgs windows)
+                        {
+                            if (WindowsBrowserArguments is { } arguments) windows.AdditionalBrowserArguments = arguments;
+                            if (WindowsUserDataFolder is { } folder) windows.UserDataFolder = folder;
+                        }
+                    };
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);

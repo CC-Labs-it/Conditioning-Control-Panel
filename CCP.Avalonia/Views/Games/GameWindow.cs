@@ -63,17 +63,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, Window? owner = null)
         {
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
             if (live != null) { live.Activate(); return live; }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
+            try { if (spec.Id != JustDropId && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());
-            window.Show();
+            if (owner == null) window.Show(); else window.Show(owner);
             return window;
         }
 
@@ -88,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Width = 1280;
             Height = 800;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            Content = Web;
+            if (spec.Id == JustDropId) InitializeJustDropChrome(); else Content = Web;
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);

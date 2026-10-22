@@ -533,72 +533,11 @@ namespace ConditioningControlPanel
         /// is scanned down a strip rather than read. A size the app does not know yet yields 0
         /// minutes, and the date carries the chip on its own rather than printing "0 MIN".
         /// </summary>
-        private static string FormatTakeawayMeta(JustDropOrdersService.Order order)
-        {
-            try
-            {
-                string date = FormatTakeawayDate(order);
-                int minutes = order.Minutes;
-                return minutes > 0 ? Loc.GetF("sd_takeaway_meta", minutes, date) : date;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("FormatTakeawayMeta failed: {E}", ex.Message);
-                return "";
-            }
-        }
-
-        /// <summary>"AUG 12". The tray splits what the chip joins, so it needs the halves.</summary>
-        private static string FormatTakeawayDate(JustDropOrdersService.Order order)
-        {
-            try { return order.At.ToString("MMM d").ToUpperInvariant(); }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("FormatTakeawayDate failed: {E}", ex.Message);
-                return "";
-            }
-        }
-
-        /// <summary>"18 MIN", or empty for a size the app does not know - never "0 MIN".</summary>
-        private static string FormatTakeawayMinutes(JustDropOrdersService.Order order)
-        {
-            try
-            {
-                int minutes = order.Minutes;
-                return minutes > 0 ? string.Format(LocOr("takeaway_row_min", "{0} MIN"), minutes) : "";
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("FormatTakeawayMinutes failed: {E}", ex.Message);
-                return "";
-            }
-        }
-
-        /// <summary>
-        /// "3 days ago" / "1 day ago" / "today". Singular and plural are separate keys because a
-        /// language that inflects cannot be served by pasting an "s" onto one string, and a clock
-        /// that has run backwards (a skewed machine, a re-synced NTP) reads as today rather than as
-        /// a negative age.
-        /// </summary>
-        private static string FormatTakeawayAge(JustDropOrdersService.Order order)
-        {
-            try
-            {
-                int days = (int)Math.Floor((DateTimeOffset.UtcNow - order.At).TotalDays);
-                if (days <= 0) return LocOr("takeaway_today", "today");
-                return days == 1
-                    ? string.Format(LocOr("takeaway_day_ago", "{0} day ago"), days)
-                    : string.Format(LocOr("takeaway_days_ago", "{0} days ago"), days);
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("FormatTakeawayAge failed: {E}", ex.Message);
-                return "";
-            }
-        }
-
-        private static string SafeOrderName(JustDropOrdersService.Order order) =>
-            string.IsNullOrWhiteSpace(order.Name) ? Loc.Get("sd_takeaway_order_fallback") : order.Name;
+        private static string FormatTakeawayMeta(JustDropOrdersService.Order order) => order.Meta;
+        private static string FormatTakeawayDate(JustDropOrdersService.Order order) => order.DateLabel;
+        private static string FormatTakeawayMinutes(JustDropOrdersService.Order order) => order.MinutesLabel;
+        private static string FormatTakeawayAge(JustDropOrdersService.Order order) => order.AgeLabel(DateTimeOffset.UtcNow);
+        private static string SafeOrderName(JustDropOrdersService.Order order) => order.DisplayName;
 
         /// <summary>Replay the order in the Just Drop window. Free - see the class remarks.</summary>
         private void TakeawayCard_Click(object sender, RoutedEventArgs e)

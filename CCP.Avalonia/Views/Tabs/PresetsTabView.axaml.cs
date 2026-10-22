@@ -28,8 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// honest read-only slice restored here, including pointer and keyboard selection.
     ///
     /// Preset Load / New / Save-over / Delete are wired (WPF MainWindow.Presets.cs:2202-2381).
-    /// ponytail: needs JustDropOrdersService and the tab FX clock, wired when those move to
-    /// Core. Reveal spoilers and the Catalogue chip are wired. The remaining wiring points,
+    /// ponytail: needs the tab FX clock. Reveal spoilers and the Catalogue chip are wired. The remaining wiring points,
     /// all named in the XAML, are:
     ///   BtnSelectCornerGif / ChkCornerGifEnabled / RbCornerTL..BR /
     ///   SliderCornerGifSize + SliderCornerGifOpacity / CmbRackSort.SelectionChanged /
@@ -93,6 +92,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionXP.Text = Loc.Get("label_50_xp");
             TxtSessionDifficulty.Text = Loc.Get("label_easy_2");
             SeedRailRackAndTakeaway();
+            AttachedToVisualTree += (_, _) => _ = RefreshTakeawayAsync();
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == IsVisibleProperty && IsVisible && VisualRoot != null) _ = RefreshTakeawayAsync();
+            };
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -100,11 +104,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             RefreshLocalizedDetails();
+            ConditioningControlPanel.Services.JustDrop.JustDropService.AvailabilityChanged += OnJustDropDoorChanged;
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            ConditioningControlPanel.Services.JustDrop.JustDropService.AvailabilityChanged -= OnJustDropDoorChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -327,7 +333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ---- Takeaway empty state + Core-backed session rack --------------------
         //
-        // The Takeaway strip paints WPF's empty state until the order drawer moves. The preset rail and
+        // The Takeaway strip reads the Core order drawer after attach. The preset rail and
         // the session rack read Core (Preset, AppSettings.UserPresets, Session).
 
         private void SeedRailRackAndTakeaway()
@@ -1359,11 +1365,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return file?.TryGetLocalPath();
         }
 
-        /// <summary>WPF PaintTakeawayShelf (MainWindow.Takeaway.cs:107) with an empty drawer and the
-        /// door withheld: no chips, no tray rows, no count, the shelf collapsed and the empty sentence
-        /// shown. This head has neither JustDropOrdersService (the device-token order drawer) nor
-        /// JustDropService.DoorAvailable, so that is exactly what WPF paints for it - never sample
-        /// orders. The Community Catalogue chip and Export stay live on the same line.</summary>
+        /// <summary>Empty state before the asynchronous order drawer arrives; never sample orders.</summary>
         private void SeedTakeaway()
         {
             TakeawayShelf.Children.Clear();

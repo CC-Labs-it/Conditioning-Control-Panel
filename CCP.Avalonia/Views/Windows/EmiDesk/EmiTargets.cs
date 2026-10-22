@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// availability, lock probe and opener this mirrors door for door.
     ///
     /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
-    /// intake, spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
+    /// intake, spiral (overlay), goon and backroom. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
     /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
     /// (<c>ringPick</c>, <c>lockedCardTapped</c>) - there is no <c>App.EmiDesk.Fire</c> on this head.</para>
@@ -62,6 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "lockdown" => Premium(id, null, () => Nav("lockdown")),
             // WPF :215 opens the feed directly (Mw.OpenFypFeed), not the panel; the feed's gate demands premium.
             "fyp" => Premium(id, "fyp", () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.FypId)),
+            "justdrop" => (() => Services.JustDrop.JustDropService.DoorAvailable, Never,
+                () => Nav("justdrop")),
             "vault" => Free(() => Nav("premium")),
             "companion" => Free(() => Nav("companion")),
             "progression" => Free(() => Nav("progression")),
