@@ -27,6 +27,7 @@ public sealed class FactoryResetExitTests
             {
                 "settings.json.0a1b.tmp", "settings.json.tmp", "settings.json.restored",
                 SessionSettingsJournal.FileName, SessionSettingsJournal.RampFileName,
+                ConditioningControlPanel.Services.Remote.RemoteHoldings.FileName, "lockdown_recovery.json",
             };
             string[] kept = { "settings.pre-reset-20261022_010101.json", "settings.bak-1.json", "achievements.json" };
             foreach (var name in gone.Concat(kept)) File.WriteAllText(Path.Combine(dir, name), "{}");
