@@ -420,7 +420,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// mandatory-video and bubble-count schedulers deal from a queue refilled only when empty, so
         /// it is dropped or an unticked clip keeps playing. DisabledAssetPaths is mutated in place, so
         /// nothing autosaves: the explicit (debounced) save keeps the toggle across a restart.</summary>
-        internal static void InvalidateAssetPoolsAfterSelectionChange()
+        private static void InvalidateAssetPoolsAfterSelectionChange()
         {
             Overlays.MandatoryVideoOverlay.Instance.Scheduler.ReloadAssets();
             Windows.BubbleCountHost.Instance.Scheduler.ReloadAssets();

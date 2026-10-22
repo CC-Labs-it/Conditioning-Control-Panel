@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services;   // SubliminalCard
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using Serilog;
 
@@ -30,14 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class SubliminalOverlay
     {
-        /// <summary>WPF <c>DefaultFadeMs</c>: 50 ms each side of the hold.</summary>
-        internal const int FadeMs = 50;
-
         private static readonly List<SubliminalOverlayWindow> Active = new();
         private static bool _warnedUnavailable;
-
-        /// <summary>WPF: "Duration in frames * ~16.6ms per frame, minimum 100ms".</summary>
-        internal static int HoldMs(int frames) => Math.Max(100, frames * 17);
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
@@ -55,9 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CloseAll();
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-            var hold = TimeSpan.FromMilliseconds(HoldMs(s.SubliminalDuration));
-            var alpha = Math.Clamp((opacity ?? s.SubliminalOpacity) / 100.0, 0, 1);
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
+            var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
+            var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
+            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var w = new SubliminalOverlayWindow(text);
                 if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
@@ -89,13 +84,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed class SubliminalOverlayWindow : Window
     {
-        /// <summary>WPF outline offsets in DIP (BuildSubliminalContent).</summary>
-        internal static readonly (double X, double Y)[] Offsets =
-        {
-            (-3, -3), (3, -3), (-3, 3), (3, 3),
-            (0, -4), (0, 4), (-4, 0), (4, 0),
-        };
-
         /// <summary>--render-all only: a sample card at the user's settings.</summary>
         internal SubliminalOverlayWindow() : this("GOOD GIRL")
         {
@@ -128,7 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             TextBlock Text(Color c, double x, double y) => new()
             {
                 Text = text,
-                FontSize = 120,
+                FontSize = SubliminalCard.FontDip,
                 FontWeight = FontWeight.Bold,
                 FontFamily = family,
                 Foreground = new SolidColorBrush(c),
@@ -138,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 RenderTransform = new TranslateTransform(x, y),
             };
             var border = Parse(s.SubBorderColor, Colors.White);
-            foreach (var (x, y) in Offsets) grid.Children.Add(Text(border, x, y));
+            foreach (var (x, y) in SubliminalCard.OutlineOffsets) grid.Children.Add(Text(border, x, y));
             grid.Children.Add(Text(Parse(s.SubTextColor, Color.FromRgb(255, 0, 255)), 0, 0));
             return grid;
         }
@@ -149,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// close. Compositor-side alpha (<see cref="X11Overlay.SetOpacity"/>), so the card renders once.</summary>
         public void Run(double alpha, TimeSpan hold)
         {
-            var fade = TimeSpan.FromMilliseconds(SubliminalOverlay.FadeMs);
+            var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
             var closed = false;
             Closed += (_, _) => closed = true;   // a newer card may have closed this one already
             // The envelope starts at the card's first frame, not at Show(): mapping and the first
@@ -169,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<TopLevel, Action<TimeSpan>> RequestFrame = (t, a) => t.RequestAnimationFrame(a);
 
         /// <summary>Show() to forced close: the whole envelope plus 100 ms of first-frame slack.</summary>
-        internal static TimeSpan MaxLifetime(TimeSpan hold) => hold + TimeSpan.FromMilliseconds(4 * SubliminalOverlay.FadeMs);
+        internal static TimeSpan MaxLifetime(TimeSpan hold) => hold + TimeSpan.FromMilliseconds(4 * SubliminalCard.DefaultFadeMs);
 
         private void Ramp(double from, double to, TimeSpan start, TimeSpan span)
         {

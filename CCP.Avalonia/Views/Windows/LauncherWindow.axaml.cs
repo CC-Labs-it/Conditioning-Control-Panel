@@ -90,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildTiles();
             HookVeil();
             HookFx();
+            HookLinks();
             PaintSoundButton();
         }
 
@@ -432,25 +433,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[Launcher] tile refresh on {Trigger} failed", trigger); }
         }
 
-        /// <summary>WPF BtnGear_Click: "Media and sound", applied on change; if it cannot open, the panel's
-        /// settings tab is the next best door. "Open asset browser" brings the panel up on Assets.</summary>
-        private async void BtnGear_Click(object? sender, RoutedEventArgs e)
-        {
-            // The veil (LauncherWindow.Veil.cs) already covers the gear; this refusal backs it up.
-            if (MainShellWindow.LockdownActive) return;
-            LauncherSfx.Click();
-            try
-            {
-                var dlg = new LauncherMediaDialog { OpenAssetBrowser = () => OpenPanel(p => p.ShowTab("assets")) };
-                await dlg.ShowDialogSafe(this);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "[Launcher] Game media dialog failed; falling back to the settings tab");
-                OpenPanel(p => p.ShowTab("appsettings"));
-            }
-        }
-
         /// <summary>WPF ModPill_Click: installed mods in stock order, the active one ticked, then Manage mods.</summary>
         private void ModPill_Click(object? sender, RoutedEventArgs e)
         {
@@ -668,6 +650,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 new SolidColorBrush(Color.FromRgb(0x2A, 0x1C, 0x08)), 10));
             if (card.IsNew) plate.Children.Add(Pill("exclusives_badge_new", null, Res("AccentGradientBrush"), Brushes.White,
                 needsAccount || locked ? 40 : 10));
+            plate.Children.Add(ShortcutButton(tile, card.Id));
             body.Children.Add(plate);
 
             // --- title, blurb, play: fixed heights so every title sits on the same line ---

@@ -269,11 +269,11 @@
                                   StrokeLineCap="Round" IsVisible="False"/>
                         </Grid>
                     </Button>
-                    <!-- WPF LauncherWindow.xaml:465 BtnGear: source, niches, asset preset and the master volume for every room -->
+                    <!-- WPF LauncherWindow.xaml:466 "Media": source, niches, asset preset and the master volume -->
                     <Button x:Name="BtnGear" Theme="{StaticResource LauncherBarPill}" Margin="0,0,8,0"
                             ToolTip.Tip="{loc:Str launcher_media_tooltip}" Click="BtnGear_Click">
                         <StackPanel Orientation="Horizontal">
-                            <fx:IconGlyph Kind="Image" Size="13" Margin="0,0,7,0" VerticalAlignment="Center"
+                            <fx:IconGlyph Kind="SquareMultiple" Size="13" Margin="0,0,7,0" VerticalAlignment="Center"
                                           Foreground="{DynamicResource PanelAccentBrush}"/>
                             <TextBlock Text="{loc:Str launcher_media_button}" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -349,6 +349,11 @@
                     <StackPanel Grid.Row="3" Margin="32,0,32,26">
                         <Button x:Name="PanelCta" Theme="{StaticResource LauncherCta}" Click="PanelCta_Click">
                             <TextBlock x:Name="PanelCtaText" Text="{loc:Str launcher_panel_launch}"/>
+                        </Button>
+                        <!-- WPF LauncherWindow.xaml:553; the text is bound from code (LauncherWindow.Links.cs) -->
+                        <Button x:Name="ShortcutLink" Theme="{StaticResource LauncherLink}" HorizontalAlignment="Center"
+                                Margin="0,12,0,0" Click="ShortcutLink_Click">
+                            <TextBlock x:Name="ShortcutLinkText"/>
                         </Button>
                     </StackPanel>
                 </Grid>

@@ -60,7 +60,7 @@ public sealed class LauncherMediaDialogTests
     {
         Assert.Equal("Media and sound", d.Title);
         Assert.Equal((560d, 790d), (d.Width, d.Height));
-        Assert.Equal(new[] { "My library", "Online", "Mixed" }, d.SourceChips.Select(c => c.Content as string));
+        Assert.Equal(new[] { "My library", "Online", "Mixed" }, d.SourceChips.Select(c => (c.Content as TextBlock)?.Text));
         Assert.Equal(FypOnlineCoordinator.Catalog.Length, d.NicheChips.Count);
         Assert.True(Chip(d, "local").IsChecked);
         Assert.True(d.NicheChips[0].IsChecked);
@@ -73,7 +73,7 @@ public sealed class LauncherMediaDialogTests
             Assert.Contains(copy, texts);
 
         // Done only closes: applies-on-change means there is nothing left to write.
-        var done = d.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Done");
+        var done = d.GetVisualDescendants().OfType<Button>().Single(b => (b.Content as TextBlock)?.Text == "Done");
         done.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
         Assert.False(d.IsVisible);
@@ -132,7 +132,7 @@ public sealed class LauncherMediaDialogTests
     public Task DoneAndTheLinkKeepTheirPaintUnderThePointer() => AvaloniaTestDispatcher.RunAsync(() => WithDialog((d, s) =>
     {
         var buttons = d.GetVisualDescendants().OfType<Button>().ToList();
-        var done = buttons.Single(b => b.Content as string == "Done");
+        var done = buttons.Single(b => (b.Content as TextBlock)?.Text == "Done");
         var link = buttons.Single(b => (b.Content as TextBlock)?.Text == "Open asset browser");
         foreach (var b in new[] { done, link }) ((IPseudoClasses)b.Classes).Set(":pointerover", true);
         Dispatcher.UIThread.RunJobs();
@@ -145,6 +145,9 @@ public sealed class LauncherMediaDialogTests
         Assert.Equal(0.92, done.Opacity);
         Assert.Equal(global::Avalonia.Media.Colors.Transparent, ((global::Avalonia.Media.ISolidColorBrush)Part(link).Background!).Color);
         Assert.Equal(global::Avalonia.Media.TextDecorations.Underline, ((TextBlock)link.Content!).TextDecorations);
+        // WPF MediaChip: the live chip wears the cyan wash and rim, not the theme's accent fill.
+        Assert.Equal(global::Avalonia.Media.Color.FromArgb(0x33, 0x5E, 0xC8, 0xF2),
+            ((global::Avalonia.Media.ISolidColorBrush)Part(Chip(d, "local")).Background!).Color);
         return Task.CompletedTask;
     }));
 }

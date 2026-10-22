@@ -5,7 +5,7 @@ using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.Launcher;
 using Xunit;
 
-namespace CCP.Core.Tests;
+namespace ConditioningControlPanel.Tests;
 
 /// <summary>
 /// The launcher's "Game media" dialog promises that one choice reaches every room. The
