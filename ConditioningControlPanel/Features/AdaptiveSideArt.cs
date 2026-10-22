@@ -63,14 +63,14 @@ namespace ConditioningControlPanel.Features
         /// both ways a page sitting within a scrollbar of it flipped between wide and compact on
         /// every layout pass (ccp-bugs #1321, Awareness and Listening). Wider than any scrollbar.
         /// </summary>
-        internal const double WidenMargin = Services.UI.SideArtRules.WidenMargin;
+        internal const double WidenMargin = 48;
 
         /// <summary>
         /// The pure decision: collapse below <paramref name="threshold"/>, and once collapsed stay
         /// collapsed until the width reaches the threshold plus <see cref="WidenMargin"/>.
         /// </summary>
         internal static bool ShouldCollapse(double width, double threshold, bool collapsedNow)
-            => Services.UI.SideArtRules.ShouldCollapse(width, threshold, collapsedNow);
+            => collapsedNow ? width < threshold + WidenMargin : width < threshold;
 
         /// <summary>A settings column's authored MaxWidth, stashed so the restore is exact.</summary>
         private static readonly DependencyProperty OriginalMaxWidthProperty =

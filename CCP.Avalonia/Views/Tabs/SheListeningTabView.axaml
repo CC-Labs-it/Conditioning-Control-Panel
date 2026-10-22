@@ -23,7 +23,7 @@
                                             Avalonia does not have.
        <Slider> (unstyled)               -> Theme="{StaticResource PinkSlider}" (the WPF theme applies
                                             PinkSlider implicitly to every Slider: Resources/Theme/MainWindow.xaml:341)
-       feat:AdaptiveSideArt.CollapseBelow-> unchanged (shared head port, Views/Features/AdaptiveSideArt.cs)
+       feat:AdaptiveSideArt.CollapseBelow-> dropped (ponytail: WPF-head attached property)
        x:FieldModifier="internal"        -> dropped; x:Names kept
        Click= / ValueChanged= / Checked= -> wired in the constructor
 
@@ -34,7 +34,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Avalonia.Views.Features"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.SheListeningTabView"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
@@ -112,7 +111,7 @@
                      slider is not a 1100px runway, and the width that buys back becomes one art
                      plate instead of dead margin. Every instructional card lives in column 0, not
                      the rail, because the rail is the half that collapses on a narrow window. -->
-                <Grid x:Name="SL_SettingsColumns" feat:AdaptiveSideArt.CollapseBelow="1000">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" MaxWidth="780"/>
                         <ColumnDefinition Width="2*"/>
@@ -551,9 +550,6 @@
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,16,0,14"/>
 
-                            <!-- ponytail: WPF shows each of these on one line; split by intent so phrases
-                                 this head cannot run yet are hidden. Rejoin to one line once lane
-                                 wire-views-tab-she-listening-b wires session pause/resume and volume. -->
                             <!-- Session, audio and handy verbs -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -563,11 +559,13 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0">
-                                    <fx:IconLabel Classes="vhead filled" Kind="Pause" Text="Session" Tag="voice:pause|resume"/>
-                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Text="“pause”"/><LineBreak/><Run Text="“resume” · “keep going”"/></TextBlock>
+                                    <fx:IconLabel Classes="vhead filled" Kind="Pause" Text="Session" Tag="voice:pause"/>
+                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
+                                               Text="“pause” · “resume” · “keep going”"/>
 
-                                    <fx:IconLabel Classes="vhead" Kind="Speaker2" Text="Volume" Tag="voice:louder|quieter|mute"/>
-                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Text="“louder”"/><LineBreak/><Run Text="“quieter”"/><LineBreak/><Run Text="“mute”"/></TextBlock>
+                                    <fx:IconLabel Classes="vhead" Kind="Speaker2" Text="Volume" Tag="voice:louder"/>
+                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"
+                                               Text="“louder” · “quieter” · “mute”"/>
 
                                     <fx:IconLabel Classes="vhead heart" Kind="Heart" Text="Mantra" Tag="voice:mantra"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21"
