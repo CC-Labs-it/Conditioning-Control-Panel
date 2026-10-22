@@ -2491,3 +2491,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-field-fx: +641
 - chaos-field-fx missing -> stub: Core ChaosFieldFxModel (fail-proven tests) + click-through Avalonia overlay on the shared FrameClock, hidden/paused when idle, refuses without compositor.
 - Panic and run teardown close it (PanicSurfaces chaos-field-fx); nothing draws on it until the bubble field lands.
+
+## avalonia-port/chaos-unlock-card: +588
+- Unlock-card rules moved to Core (WPF delegates); hub purchases show WPF's queued top-center unlock card on Avalonia.
+- Interactive mid-run overlay + lesson pause deferred to chaos-unlock-card-b (row stays stub).
