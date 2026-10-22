@@ -21,7 +21,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly VatFaucetHold _faucetHold = new(new AppSettingsVatPourLedger());
         private readonly VatFaucetChargePolicy _faucetChargePolicy = new();
-        private static readonly System.Collections.Generic.HashSet<MainShellWindow> FaucetWindows = new();
         private BeatLoop? _faucetChargeTimer;
         private DateTime _faucetChargeStart;
         private double _faucetChargeBudgetMs;
@@ -32,29 +31,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal int FaucetHeldXp => _faucetHold.HeldXp;
         internal bool FaucetCharging => _faucetCharging;
 
-        // The existing profile-vat lane supplies coordinator readings here when its server feed
-        // lands. No local XP fallback: the server read and Core watermark remain the only truth.
-        internal void ApplyFaucetReading(VatRead read)
-        {
-            var glass = VatGlass;
-            if (glass == null) return;
-            if (read.Cap <= 0) { DisarmVat(); return; }
-            ArmVat(glass, read.Cap);
-            glass.SetLip(read.Lip);
-            PositionVatTickGlyphs();
-            var step = _faucetHold.Fold(read, glass.IsPouring);
-            switch (step.Action)
-            {
-                case FaucetActionKind.Snap: glass.SnapTo(step.Fill); break;
-                case FaucetActionKind.Ease: glass.EaseTo(step.Fill); break;
-                case FaucetActionKind.Pour:
-                    if (glass.IsPresenting) glass.PourTo(step.Fill, userGesture: true);
-                    else glass.EaseTo(step.Fill);
-                    break;
-            }
-            UpdateVatReadout();
-            UpdateFaucetPresentation();
-        }
+        // ApplyDescentToVat (WPF MainWindow.ProfileVat.cs:267-345), which folds each accepted
+        // server read into this hold, is owned by follow-up lane wire-shell-profile-vat-b.
+        internal VatFaucetHold FaucetHold => _faucetHold;
 
         private void ArmFaucet(VatGlassCanvas glass, double jarW, double jarH)
         {
@@ -103,7 +82,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_faucetWired) return;
             _faucetWired = true;
-            FaucetWindows.Add(this);
             faucet.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(faucet).Properties.IsLeftButtonPressed) return;
@@ -146,18 +124,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 glass.SizeChanged += (_, _) => PositionVatTickGlyphs();
             }
             Deactivated += (_, _) => OnFaucetVatOffScreen();
-            Closed += (_, _) => { CancelFaucetCharge(silent: true); FaucetWindows.Remove(this); };
+            Closed += (_, _) => CancelFaucetCharge(silent: true);
         }
 
         private void OnFaucetVatOffScreen()
         {
             _faucetKeyHeld = false;
             CancelFaucetCharge(silent: true);
-        }
-
-        internal static void CancelAllFaucetCharges()
-        {
-            foreach (var shell in FaucetWindows) shell.CancelFaucetCharge(silent: true);
         }
 
         private void UpdateFaucetPresentation()
@@ -234,7 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateFaucetPresentation();
         }
 
-        private void CancelFaucetCharge(bool silent)
+        internal void CancelFaucetCharge(bool silent)
         {
             bool wasCharging = _faucetCharging;
             _faucetCharging = false;

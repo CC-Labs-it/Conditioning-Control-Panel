@@ -25,8 +25,8 @@
 //   CreateVatPollTimer       already portable - only the thing that ASKS the server is not, and a
 //                            vat filled from anything else is a number nobody agreed to.
 //   the faucet: Arm/Disarm and charge-hold now live in MainShellWindow.ProfileFaucet.cs.
-//   ApplyFaucetReading takes the accepted coordinator read; server-feed integration and
-//   remaining ambient/celebration FX are deferred in shell-profile-faucet.
+//   ApplyDescentToVat (with its VatFaucetHold fold) is follow-up lane wire-shell-profile-vat-b;
+//   the remaining ambient/celebration FX are follow-up lane wire-shell-profile-faucet-b.
 //   MaybeShowFeatureIntro  - CCP.Avalonia/Views/Windows/FeatureIntroPopup exists, but the spend
 //                            ledger it reads is on the shell's stub side; and the explainer may
 //                            only fire from ApplyDescentToVat, which is blocked above.
@@ -133,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// is resized. <paramref name="cap"/> is the accepted server cap for this reading, which
         /// the readout needs before anything can raise FillPercentChanged.
         /// </summary>
-        private void ArmVat(VatGlassCanvas glass, int cap)
+        internal void ArmVat(VatGlassCanvas glass, int cap)
         {
             _vatCap = cap;
             if (_vatArmed) { UpdateVatReadout(); return; }
@@ -174,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Put the hero back exactly as it ships without the Descent: 104px avatar at its original
         /// 6px margin, no jar, no readout, and a bay that measures to the avatar alone.
         /// </summary>
-        private void DisarmVat()
+        internal void DisarmVat()
         {
             var glass = VatGlass;
             if (!_vatArmed)

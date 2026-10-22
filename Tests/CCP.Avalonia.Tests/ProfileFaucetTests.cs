@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -33,11 +32,12 @@ public sealed class ProfileFaucetTests
         return new MainShellWindow();
     }
 
-    private static object? Call(MainShellWindow shell, string name, params object[] args)
+    // Stands in for wire-shell-profile-vat-b's ApplyDescentToVat: fold a fake server read into the hold, then arm.
+    private static void Seed(MainShellWindow shell)
     {
-        var method = typeof(MainShellWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        return method.Invoke(shell, args);
+        var step = shell.FaucetHold.Fold(new VatRead { Kind = VatReadKind.Seed, Fill = .4, TodayXp = 400, Cap = 1000, Lip = 1.2 }, pouring: false);
+        Assert.Equal(0, step.Fill); // The entire unpoured server total is held, never auto-poured.
+        shell.ArmVat(shell.ProfilePage!.FindControl<VatGlassCanvas>("ProfileVatGlass")!, 1000);
     }
 
     [Fact]
@@ -49,11 +49,11 @@ public sealed class ProfileFaucetTests
         {
             var glass = shell.ProfilePage!.FindControl<VatGlassCanvas>("ProfileVatGlass")!;
             var tap = shell.ProfilePage.FindControl<Grid>("ProfileVatFaucet")!;
-            Call(shell, "ArmVat", glass, 1000);
+            shell.ArmVat(glass, 1000);
             Assert.True(tap.IsVisible);
             Assert.NotNull(glass.ExternalSpoutXFraction);
             Assert.Equal(Math.Round(glass.Width * .10 - 8), tap.Margin.Left);
-            Call(shell, "DisarmVat");
+            shell.DisarmVat();
             Assert.False(tap.IsVisible);
             Assert.Null(glass.ExternalSpoutXFraction);
         }
@@ -73,7 +73,7 @@ public sealed class ProfileFaucetTests
             shell.ShowTab("discord");
             shell.Activate();
             Dispatcher.UIThread.RunJobs();
-            Call(shell, "ApplyFaucetReading", new VatRead { Kind = VatReadKind.Seed, Fill = .4, TodayXp = 400, Cap = 1000, Lip = 1.2 });
+            Seed(shell);
             var cues = new List<string>();
             CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
             CoreSettings.Current.MasterVolume = 50;
@@ -107,7 +107,7 @@ public sealed class ProfileFaucetTests
             Assert.False(ring.IsVisible);
             Assert.DoesNotContain("faucet_charge_drop.wav", cues); // capture loss is silent
             Assert.Equal(0, CoreSettings.Current.VatPouredTodayXp);
-            Call(shell, "DisarmVat");
+            shell.DisarmVat();
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = previous; CoreAudio.PlayOneShotProvider = previousAudio; }
         return Task.CompletedTask;
@@ -125,7 +125,7 @@ public sealed class ProfileFaucetTests
             shell.ShowTab("discord");
             shell.Activate();
             Dispatcher.UIThread.RunJobs();
-            Call(shell, "ApplyFaucetReading", new VatRead { Kind = VatReadKind.Seed, Fill = .4, TodayXp = 400, Cap = 1000, Lip = 1.2 });
+            Seed(shell);
             var cues = new List<(string File, float Volume, string Tag)>();
             CoreAudio.PlayOneShotProvider = (path, volume, tag, _, _) => cues.Add((System.IO.Path.GetFileName(path), volume, tag));
             CoreSettings.Current.MasterVolume = 50;
@@ -150,7 +150,7 @@ public sealed class ProfileFaucetTests
             Assert.Equal(0, CoreSettings.Current.VatPouredTodayXp);
             Assert.Equal("faucet_charge_drop.wav", cues.Last().File);
             tap.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
-            PanicSurfaces.All.Single(s => s.Id == "profile-faucet").Stop(null); // Tray panic has no shell argument.
+            PanicSurfaces.All.Single(s => s.Id == "profile-faucet").Stop(shell); // StopAll resolves MainShellWindow.Current for the tray route.
             Assert.False(ring.IsVisible);
             Assert.Equal(0, CoreSettings.Current.VatPouredTodayXp);
             tap.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Enter });
@@ -161,7 +161,7 @@ public sealed class ProfileFaucetTests
             page.IsVisible = true;
             cues.Clear();
             tap.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
-            Call(shell, "AdvanceFaucetCharge", 1.0);
+            shell.AdvanceFaucetCharge(1.0);
             Assert.False(ring.IsVisible);
             Assert.Equal(400, CoreSettings.Current.VatPouredTodayXp);
             Assert.True(glass.IsPouring);
@@ -170,10 +170,10 @@ public sealed class ProfileFaucetTests
             Assert.Equal(.175f, cues.Last().Volume);
             Assert.All(cues, cue => Assert.Equal("vat-faucet", cue.Tag));
             int count = cues.Count;
-            Call(shell, "AdvanceFaucetCharge", 1.0);
+            shell.AdvanceFaucetCharge(1.0);
             Assert.Equal(400, CoreSettings.Current.VatPouredTodayXp);
             Assert.Equal(count, cues.Count);
-            Call(shell, "DisarmVat");
+            shell.DisarmVat();
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = previous; CoreAudio.PlayOneShotProvider = previousAudio; }
         return Task.CompletedTask;
