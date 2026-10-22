@@ -1,0 +1,186 @@
+[
+  {
+    "id": "sky-dawn-galaxy",
+    "file": "textures/sky-dawn-galaxy.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 11184812,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-dawn-galaxy"
+    ],
+    "palette": "dawn",
+    "width": 2048,
+    "height": 1024,
+    "mipLevels": 12,
+    "encoding": "UASTC",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 2796240,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-dawn-stars",
+    "file": "textures/sky-dawn-stars.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 2796204,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-dawn-stars"
+    ],
+    "palette": "dawn",
+    "width": 1024,
+    "height": 512,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 699088,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-deep-galaxy",
+    "file": "textures/sky-deep-galaxy.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 11184812,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-deep-galaxy"
+    ],
+    "palette": "deep",
+    "width": 2048,
+    "height": 1024,
+    "mipLevels": 12,
+    "encoding": "UASTC",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 2796240,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-deep-stars",
+    "file": "textures/sky-deep-stars.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 2796204,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-deep-stars"
+    ],
+    "palette": "deep",
+    "width": 1024,
+    "height": 512,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 699088,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-afterglow-galaxy",
+    "file": "textures/sky-afterglow-galaxy.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 11184812,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-afterglow-galaxy"
+    ],
+    "palette": "afterglow",
+    "width": 2048,
+    "height": 1024,
+    "mipLevels": 12,
+    "encoding": "UASTC",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 2796240,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-afterglow-stars",
+    "file": "textures/sky-afterglow-stars.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 2796204,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-afterglow-stars"
+    ],
+    "palette": "afterglow",
+    "width": 1024,
+    "height": 512,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "srgb",
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 699088,
+    "uvMode": "equirectangular"
+  },
+  {
+    "id": "sky-spiral-open-mask",
+    "file": "textures/sky-spiral-open-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-spiral-open-mask"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 1398128,
+    "uvMode": "disc"
+  },
+  {
+    "id": "sky-spiral-deep-mask",
+    "file": "textures/sky-spiral-deep-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "sky-spiral-deep-mask"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 1398128,
+    "uvMode": "disc"
+  }
+]
