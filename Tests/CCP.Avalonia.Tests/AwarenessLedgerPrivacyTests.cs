@@ -30,9 +30,14 @@ public sealed class AwarenessLedgerPrivacyTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;   // P02: own settings, never the shared default
         var old = (AwarenessLive.Ledger, AwarenessLive.Memory, CoreSettings.Current.AwarenessRetentionDays);
-        AwarenessLive.Ledger = ledger;
+        var oldHook = WindowAwarenessService.V2Lifecycle;
+        var oldEntitlement = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
         AwarenessLive.Memory = null;
         CoreSettings.Current.AwarenessRetentionDays = 30;
+        CoreSettings.Current.AwarenessModeEnabled = true;
+        CoreSettings.Current.AwarenessConsentGiven = true;
         try
         {
             // Seed fake app ids, then reopen so the unpersisted session ring is absent on this launch.
@@ -46,10 +51,20 @@ public sealed class AwarenessLedgerPrivacyTests
                 seed.SaveNow();
             }
             // Startup with awareness off: WPF App.xaml.cs:2928 only sweeps the file, never starts the ledger.
-            ledger.PruneOnDisk();
+            global::ConditioningControlPanel.Avalonia.App.InstallPrivacyLedger(ledger);
+            Assert.Same(ledger, AwarenessLive.Ledger);
             Assert.Empty(ledger.KnownAppIds);                 // the sweep loads nothing into memory
             Assert.Contains("recent-app", File.ReadAllText(path));
-            ledger.Start();                                   // awareness turns on: the retained history loads
+            using (var awareness = new WindowAwarenessService(() => ""))
+            {
+                awareness.Start();                            // the awareness switch: the hook starts the ledger
+                Assert.Contains("recent-app", ledger.KnownAppIds);
+                ledger.NoteFocus("recent-app", "test", ActivityCategory.Unknown, now);
+                var beforeStop = File.ReadAllText(path);
+                awareness.Stop();                             // switch off: the hook stops (and flushes) it
+                Assert.NotEqual(beforeStop, File.ReadAllText(path));
+            }
+            ledger.Start();                                   // the card below works on a running ledger
             await AvaloniaTestDispatcher.RunAsync(() =>
             {
                 if (Application.Current is null)
@@ -91,10 +106,14 @@ public sealed class AwarenessLedgerPrivacyTests
                 finally { host.Close(); }
                 return Task.CompletedTask;
             });
+            global::ConditioningControlPanel.Avalonia.App.ReleasePrivacyLedger();   // exit: WPF App.OnExit:6285
+            Assert.Null(AwarenessLive.Ledger);
         }
         finally
         {
             (AwarenessLive.Ledger, AwarenessLive.Memory, CoreSettings.Current.AwarenessRetentionDays) = old;
+            WindowAwarenessService.V2Lifecycle = oldHook;
+            (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = oldEntitlement;
             CoreSettings.Save();
             CoreSettings.ServiceProvider = oldProvider;
             ledger.Dispose();
