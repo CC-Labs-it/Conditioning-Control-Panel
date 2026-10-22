@@ -203,13 +203,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF SetSpawnSpread over App.ResolveScreens(MonitorTargetFollowGlobal): DualMonitorEnabled
-        /// rains on every screen, otherwise on the primary only.</summary>
+        /// rains on every screen, otherwise on the global "Show content on" pick (GlobalTargetMonitor).</summary>
         private (double Left, double Width) SpawnBand()
         {
             var all = Screens?.All ?? Array.Empty<Screen>();
             if (all.Count == 0) return (0, Width);
             int primary = Math.Max(0, all.ToList().FindIndex(x => x.IsPrimary));
-            var picked = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, all.Count, primary)
+            var picked = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, CoreSettings.Current.GlobalTargetMonitor, CoreSettings.Current.DualMonitorEnabled, all.Count, primary)
                 .Select(i => ((all[i].Bounds.X - _bounds.X) / _scale, (all[i].Bounds.Right - _bounds.X) / _scale));
             return GifCascade.SpawnBand(picked, 0, Width);
         }
