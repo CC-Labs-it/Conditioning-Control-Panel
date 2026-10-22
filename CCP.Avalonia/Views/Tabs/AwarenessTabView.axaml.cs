@@ -25,8 +25,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
-    /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
+    /// Haptic/XP/Chaster actions and the Last Detected feed run on it too.
+    /// ponytail: ScreenOcr, highlight windows, visual/avatar actions and recent-app chips remain
+    /// wire-shell-keyword-triggers-b-next; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
     {
@@ -95,7 +96,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Tabs are shown and hidden rather than rebuilt, so re-read on every show: the master
             // switch is [JsonIgnore] session state and the app list can be edited elsewhere.
-            AttachedToVisualTree += (_, _) => SyncAwarenessTabUi();
+            AttachedToVisualTree += (_, _) => { AttachPulseFeed(); SyncAwarenessTabUi(); };
+            DetachedFromVisualTree += (_, _) => DetachPulseFeed();
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty && IsVisible) SyncAwarenessTabUi();
@@ -147,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 AwarenessAppListPanel.IsVisible = s.KeywordTriggerAppScope != AwarenessAppScope.Everywhere;
 
                 UpdateStatusIndicator(masterOn);
+                RefreshAwarenessPulseFeed();
                 RefreshAwarenessPresetCards();
             }
             catch (Exception ex)
@@ -206,7 +209,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 CoreSettings.Current.KeywordTriggersEnabled = on;
 
                 Platform.KeywordTriggerHead.Sync();
-                // ponytail: OCR/highlights and non-audio actions remain wire-shell-keyword-triggers-b.
+                // ponytail: OCR/highlights and visual/avatar actions remain wire-shell-keyword-triggers-b-next.
 
                 _isLoading = true;
                 try { if ((ChkAwarenessKeyboard.IsChecked ?? false) != on) ChkAwarenessKeyboard.IsChecked = on; }
