@@ -63,7 +63,7 @@ public class HandBackSettingsTests
         var body = Body(Source("Services", "Remote", "RemoteControlService.V2.cs"), "public void ReleaseHoldingsForExit()");
         int gate = body.IndexOf("if (!IsActive) return;", StringComparison.Ordinal);
         Assert.True(gate > 0);
-        foreach (var call in new[] { "RestoreRemoteBrainDrainSetting();", "ReleaseRemoteSafetyState();", "RestoreEasedOpacities();" })
+        foreach (var call in new[] { "HandBackWearerVisuals();", "ReleaseRemoteSafetyState();", "DropWearerSnapshot();" })
             Assert.True(body.IndexOf(call, StringComparison.Ordinal) > gate, call);
     }
 
