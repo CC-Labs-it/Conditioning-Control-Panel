@@ -368,12 +368,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void DuckSweep(double keep, long epoch, bool rescan = false)
         {
+            // WPF ApplyDuckSweep: ExcludeBambiCloudFromDucking (default on) skips the browser's audio.
+            // WebKitGTK plays from its own child process, so our-pid does not cover it.
+            var excludeWeb = CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true;
             using var doc = JsonDocument.Parse(_pactl("-f json list sink-inputs"));
             foreach (var si in doc.RootElement.EnumerateArray())
             {
                 var props = si.GetProperty("properties");
                 if (props.TryGetProperty("application.process.id", out var pid) && pid.GetString() == Environment.ProcessId.ToString())
                     continue;
+                if (excludeWeb && IsWebViewStream(props)) continue;
                 var index = si.GetProperty("index").GetInt32();
                 var raw = si.GetProperty("volume").EnumerateObject().Select(c => c.Value.GetProperty("value").GetInt32()).ToArray();
                 // PulseAudio volume units: 65536 is unity. WPF skips <=0.001 on rescans so an
@@ -388,6 +392,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 catch { lock (_duckLock) _originalVolumes.Remove(index); } // the stream ended mid-sweep
             }
         }
+
+        /// <summary>WPF IsWebView2Pid by name: WebKitGTK's WebKitWebProcess/WebKitGPUProcess, or WebView2.</summary>
+        internal static bool IsWebViewStream(JsonElement props) =>
+            props.TryGetProperty("application.process.binary", out var bin) && bin.GetString() is { } b
+            && (b.StartsWith("WebKit", StringComparison.Ordinal) || b.Contains("webview2", StringComparison.OrdinalIgnoreCase));
 
         private void Restore()
         {
