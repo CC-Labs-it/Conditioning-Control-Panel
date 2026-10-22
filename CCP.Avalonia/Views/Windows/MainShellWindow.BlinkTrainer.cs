@@ -14,8 +14,8 @@
 // the seeded CoreWebcam verb), Quick Recal over the gaze feed, the 16-point calibration
 // (WebcamCalibrationWindow), the help popover, and the status pulse (the page calls
 // SetBlinkTrainerStatusPulse in MainShellWindow.TabFxTakeoverLabStatus.cs). STILL REFUSED, each needing
-// a missing surface: ToggleWebcamFromHotkey (global hotkey), the loading splash and the Deeper hub's
-// webcam twins.
+// a missing surface: the loading splash and the Deeper hub's webcam twins. ToggleWebcamFromHotkey is
+// in MainShellWindow.GlobalHotkeys.cs.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

@@ -962,6 +962,8 @@ namespace ConditioningControlPanel.Avalonia
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Tray icon unavailable; X closes the app"); }
                 // The panic key (WPF MainWindow.xaml.cs:363 installs its hook at startup the same way).
                 shell.StartPanicKey();
+                // Chat binding + global chat/camera hotkeys (WPF MainWindow.xaml.cs:236-241, shell Loaded).
+                shell.StartGlobalHotkeys();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
                 Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
                 // Do-not-disturb reads the foreground app from X (WPF DoNotDisturbGuard: user32).

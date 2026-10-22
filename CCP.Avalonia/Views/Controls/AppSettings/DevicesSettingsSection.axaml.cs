@@ -763,11 +763,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Awaited, not fire-and-forget: Avalonia's ShowDialog is async, and writing the setting
         /// before the answer lands would store whatever the previous combo was.
         ///
-        /// <para><b>ChatShortcutGlobal is stored but not registered.</b> The checkbox's "activate
-        /// from any app" half is GlobalHotkeyService, a Win32 RegisterHotKey that stays in the WPF
-        /// head. Storing the user's choice is still right - it is one settings file across both
-        /// heads, and WPF honours it - and the IN-WINDOW binding this method applies works on this
-        /// head either way, which is exactly what WPF falls back to when the flag is off.</para>
+        /// <para>Then re-arms (or releases) the system-wide hotkey per ChatShortcutGlobal, as WPF's
+        /// ApplyGlobalChatHotkey does (MainShellWindow.GlobalHotkeys, X11 grab).</para>
         /// </summary>
         private async void BtnChatShortcut_Click(object? sender, RoutedEventArgs e)
         {
@@ -799,6 +796,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
                 AvatarTubeWindow.ApplyChatShortcutTo(owner);
                 AvatarTubeWindow.ApplyChatShortcutTo(AvatarTubeWindow.Live);
+                Views.Windows.MainShellWindow.ApplyGlobalChatHotkey();
                 RefreshChatShortcutLabel();
                 Log.Information("Chat shortcut rebound to {Combo}", AvatarTubeWindow.FormatChatShortcut());
             }

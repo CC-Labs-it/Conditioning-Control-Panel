@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
                 AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(owner);
                 AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(AvatarTube.AvatarTubeWindow.Live);
+                Views.Windows.MainShellWindow.ApplyGlobalChatHotkey();   // WPF ApplyGlobalChatHotkey re-arm
                 (DataContext as WorkshopRuntimeVm)?.Parts.Behavior.RefreshChatShortcutLabel();
                 Log.Information("Chat shortcut rebound to {Combo}",
                                 AvatarTube.AvatarTubeWindow.FormatChatShortcut());

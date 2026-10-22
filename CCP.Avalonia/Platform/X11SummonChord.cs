@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -7,17 +8,22 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
-/// The EMI Desk summon chord on X11 / XWayland, twin of WPF <c>GlobalHotkeyService</c> (RegisterHotKey):
-/// an <c>XGrabKey</c> on the root, consumed like the Win32 hotkey; a combo another client holds fails
-/// with BadAccess = "not armed". Reach: while an X11 client has focus. Own display; the listener
-/// polls without <see cref="Gate"/> and drains under it, Arm/Disarm take it too (Xlib is not threaded).
+/// System-wide chords on X11 / XWayland, twin of WPF <c>GlobalHotkeyService</c> (RegisterHotKey): one
+/// slot per well-known id (EMI Desk summon, avatar chat, camera start/stop), each an <c>XGrabKey</c> on
+/// the root, consumed like the Win32 hotkey; a combo another client holds fails with BadAccess = "not
+/// armed" and leaves the other slots alone. Reach: while an X11 client has focus. Own display; the
+/// listener polls without <see cref="Gate"/> and drains under it, Arm/Disarm take it too (Xlib is not threaded).
 /// </summary>
 internal static class X11SummonChord
 {
+    // WPF GlobalHotkeyService slot ids.
+    internal const int ChatId = 0xB1B1, CameraId = 0xB1B2, EmiDeskId = 0xB1B4;
+
     private const string LibX11 = "libX11.so.6";
     private const int KeyPress = 2, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1, AnyModifier = 1 << 15;
     private const uint ShiftMask = 1, LockMask = 2, ControlMask = 4, Mod1Mask = 8, Mod2Mask = 16, Mod4Mask = 64;
-    private const int XEventSize = 192, KeyEventKeycode = 84, ErrorEventCode = 32;
+    private const int XEventSize = 192, KeyEventState = 80, KeyEventKeycode = 84, ErrorEventCode = 32;
+    private const uint ChordMask = ShiftMask | ControlMask | Mod1Mask | Mod4Mask;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PollFd { public int Fd; public short Events; public short REvents; }
@@ -45,8 +51,8 @@ internal static class X11SummonChord
 
     private static readonly object Gate = new();
     private static IntPtr _display, _root;
-    private static int _keycode;
-    private static Action? _onPress;
+    private static readonly Dictionary<int, (int Code, uint Mask, Action OnPress)> _slots = new();
+    private static readonly uint[] LockCombos = { 0u, LockMask, Mod2Mask, LockMask | Mod2Mask };
     private static bool _badAccess;
     // Rooted for the process lifetime: Xlib keeps the pointer while it is installed.
     private static readonly XErrorHandler Handler = OnXError;
@@ -55,7 +61,13 @@ internal static class X11SummonChord
     /// <summary>Grab <paramref name="mods"/>+<paramref name="key"/> (a WPF/Avalonia Key name) and run
     /// <paramref name="onPress"/> on the listener thread for each press. Replaces any earlier grab.
     /// False when there is no X display, the key has no keycode, or another client holds the combo.</summary>
-    internal static bool Arm(ChordMods mods, string key, Action onPress)
+    internal static bool Arm(ChordMods mods, string key, Action onPress) => Arm(EmiDeskId, mods, key, onPress);
+
+    /// <summary>Release the EMI Desk chord (feature switched off, chord refused).</summary>
+    internal static void Disarm() => Disarm(EmiDeskId);
+
+    /// <summary>Grab a chord for slot <paramref name="id"/>, replacing only that slot's earlier grab.</summary>
+    internal static bool Arm(int id, ChordMods mods, string key, Action onPress)
     {
         if (!OperatingSystem.IsLinux()) return false;
         try
@@ -63,9 +75,9 @@ internal static class X11SummonChord
             lock (Gate)
             {
                 if (!EnsureDisplay()) return false;
-                UngrabLocked();
+                UngrabLocked(id);
                 int code = XKeysymToKeycode(_display, X11PanicKey.KeysymOf(key));
-                if (code == 0) { Log.Warning("[EmiDesk] chord key '{Key}' has no X keycode", key); return false; }
+                if (code == 0) { Log.Warning("[Hotkey] chord key '{Key}' has no X keycode (slot 0x{Id:X})", key, id); return false; }
                 uint mask = ((mods & ChordMods.Ctrl) != 0 ? ControlMask : 0) | ((mods & ChordMods.Alt) != 0 ? Mod1Mask : 0)
                           | ((mods & ChordMods.Shift) != 0 ? ShiftMask : 0) | ((mods & ChordMods.Win) != 0 ? Mod4Mask : 0);
 
@@ -74,14 +86,13 @@ internal static class X11SummonChord
                 _badAccess = false;
                 _previousHandler = XSetErrorHandler(Marshal.GetFunctionPointerForDelegate(Handler));
                 // Caps Lock and Num Lock are modifiers to X: grab every combination of them too.
-                foreach (var extra in new[] { 0u, LockMask, Mod2Mask, LockMask | Mod2Mask })
+                foreach (var extra in LockCombos)
                     XGrabKey(_display, code, mask | extra, _root, false, GrabModeAsync, GrabModeAsync);
                 XSync(_display, false);
                 XSetErrorHandler(_previousHandler);
 
-                if (_badAccess) { XUngrabKey(_display, code, AnyModifier, _root); XFlush(_display); return false; }
-                _keycode = code;
-                _onPress = onPress;
+                if (_badAccess) { Ungrab(code, mask); return false; }
+                _slots[id] = (code, mask, onPress);
                 // XSync read the socket, so anything it queued would sit until the next X traffic.
                 if (_wake[1] >= 0) write(_wake[1], new byte[1], 1);
                 return true;
@@ -94,23 +105,37 @@ internal static class X11SummonChord
         }
     }
 
-    /// <summary>Release the chord (feature switched off, chord refused). Safe to call when nothing is armed.</summary>
-    internal static void Disarm()
+    /// <summary>Release slot <paramref name="id"/>. Safe to call when nothing is armed.</summary>
+    internal static void Disarm(int id)
     {
         lock (Gate)
         {
             if (_display == IntPtr.Zero) return;
-            try { UngrabLocked(); } catch (Exception ex) { Log.Debug(ex, "[EmiDesk] chord ungrab failed"); }
+            try { UngrabLocked(id); } catch (Exception ex) { Log.Debug(ex, "[Hotkey] chord ungrab failed (slot 0x{Id:X})", id); }
         }
     }
 
-    private static void UngrabLocked()
+    private static void UngrabLocked(int id)
     {
-        _onPress = null;
-        if (_keycode == 0) return;
-        XUngrabKey(_display, _keycode, AnyModifier, _root);
+        if (!_slots.Remove(id, out var slot)) return;
+        // Two slots on the same combo share one X grab: keep it while the other still needs it.
+        foreach (var other in _slots.Values) if (other.Code == slot.Code && other.Mask == slot.Mask) return;
+        Ungrab(slot.Code, slot.Mask);
+    }
+
+    // Exact combos, not AnyModifier: another slot may hold the same key under different modifiers.
+    private static void Ungrab(int code, uint mask)
+    {
+        foreach (var extra in LockCombos) XUngrabKey(_display, code, mask | extra, _root);
         XFlush(_display);
-        _keycode = 0;
+    }
+
+    /// <summary>The slot a key press belongs to: same keycode, same chord modifiers (Caps/Num Lock ignored).</summary>
+    internal static Action? Match(IReadOnlyDictionary<int, (int Code, uint Mask, Action OnPress)> slots, int code, uint state)
+    {
+        foreach (var slot in slots.Values)
+            if (slot.Code == code && slot.Mask == (state & ChordMask)) return slot.OnPress;
+        return null;
     }
 
     private static bool EnsureDisplay()
@@ -156,8 +181,8 @@ internal static class X11SummonChord
                         XNextEvent(_display, ev);
                         int type = Marshal.ReadInt32(ev);
                         if (type == MappingNotify) XRefreshKeyboardMapping(ev);
-                        else if (type == KeyPress && _keycode != 0 && Marshal.ReadInt32(ev, KeyEventKeycode) == _keycode)
-                            fire = _onPress;
+                        else if (type == KeyPress)
+                            fire = Match(_slots, Marshal.ReadInt32(ev, KeyEventKeycode), (uint)Marshal.ReadInt32(ev, KeyEventState)) ?? fire;
                     }
                 }
                 fire?.Invoke();
