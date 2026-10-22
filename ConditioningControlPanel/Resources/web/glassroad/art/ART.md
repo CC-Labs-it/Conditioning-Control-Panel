@@ -815,3 +815,58 @@ Validation:
 No baked texture allocation is added. Host SVG raster caches are implementation
 dependent and are not included in texBytes. The shared pre-W3 estimate remains
 about 90 MiB including the existing effect icons; these glyphs add 0 MiB.
+## Wave 3 paper cards and result stamps
+
+9 original text-free SVGs under ui/cards, 9,882 bytes total.
+Every row has tris 0, texBytes 0 and boundRadiusM 0.
+Frames extend the Wave 2 ink, warm paper and pink-tab vocabulary.
+
+| Asset | ViewBox | Purpose |
+|---|---|---|
+| card-pause | 480 x 560 | Pause actions and context |
+| card-options | 640 x 640 | Options and input preferences |
+| card-results | 880 x 640 | Race result content |
+| card-controls | 760 x 620 | Control mapping content |
+| results-row | 600 x 80 | Place stamp, name and time |
+| stamp-new-best | 128 x 128 | Wordless personal-best mark |
+| podium-gold | 128 x 144 | First-place spiral medal |
+| podium-silver | 128 x 144 | Second-place spiral medal |
+| podium-bronze | 128 x 144 | Third-place spiral medal |
+
+Binding:
+- Preserve aspect ratios. Frames are complete panels, not nine-slice borders.
+- Place all text, buttons, media and interaction in engine layers.
+- Card title, body and footer rectangles are named safeTitleBox, safeContentBox
+  and safeFooterBox in the manifest. Coordinates use source viewBox pixels.
+- The results row has placeStampBox [27,23,34,34], safeNameBox [89,19,277,42]
+  and safeTimeBox [411,19,153,42]. The place slot is empty.
+- Scale every rectangle by the same factor as its SVG. Do not infer bounds from
+  the visible border or crop the panel to a different aspect ratio.
+- Pink tabs, corner stamps and divider rules remain outside all declared areas.
+- The personal-best stamp uses an upward arrow, star and laurel, with no letters.
+  The engine supplies the localized meaning and any accessible name.
+- Podium rank is conveyed by the gold/silver/bronze palette and manifest rank field.
+  The engine supplies accessible rank labels. No numbers are baked into the badges.
+- Render standalone stamps at a minimum height of 48 CSS px.
+- Motion, transitions, focus, disabled states and any new-best animation are external.
+
+Ink #17151c, paper #fff8ef and pink #ff5fa8 match the Wave 2 HUD.
+Medal fills are gold #ffd36b, silver #ced4df and bronze #c89471.
+These are local SVG fills; the shared environment palettes are unchanged.
+
+Original geometry and symbols authored for this project. No fonts, stock icons,
+traced concept pixels, third-party artwork or media images are embedded.
+The design board menu, pause and results layouts guided the clear content areas.
+Sources and review PNGs remain private; contact images do not ship.
+
+Validation rasterized every final SVG and checked a clear outermost pixel border.
+Every pixel inside every declared text/stamp rectangle matches the exact opaque
+paper fill, so no border, tab, divider or accent crosses a safe area.
+SHA256 values and per-area results are in private checks.json.
+The contact sheet and actual 48px stamp proof were opened and reviewed.
+
+Assumptions: fixed panel aspect ratios, opaque paper, shared result-row geometry,
+and engine-owned localized content. No media frame or credit treatment is supplied
+by these cards. No baked texture memory is added; host SVG raster caches are
+implementation dependent. Shared pre-W3 estimate remains about 90 MiB including
+existing effect icons, and this family adds 0 MiB.
