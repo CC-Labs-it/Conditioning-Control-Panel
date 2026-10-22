@@ -2401,3 +2401,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-fx-window: +498
 - Chaos FX window (vignette, edge glow, heat tint) ported with Core envelope maths; heat tint wired into ChaosRunHost; run-end close tested (fail-proven).
 - Row chaos-fx-window: missing -> stub (no user path to StartRun yet).
+
+## avalonia-port/launcher-edge: +134
+- Rounded launcher (DWM round on Windows, transparent + 8 px clip elsewhere, square when maximised); glint turns in the unit box like WPF RelativeTransform.
+- Edge timing (flare/breath/glint/idle 14 s/focus 4 s/park) covered by 4 fail-proven tests (focus gap on a stepped clock); win-launcher-edge -> wired.
