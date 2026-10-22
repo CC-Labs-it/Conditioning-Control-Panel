@@ -71,6 +71,9 @@ internal static class AccountSeed
             ? NewV2().ChangeDisplayNameAsync(id, name) : null;
         CoreAccount.DeleteAccountProvider = () => CoreSettings.Current.UnifiedId is { Length: > 0 } id
             ? NewV2().DeleteAccountAsync(id) : null;
+        // WPF MainWindow.QuestsTab.cs:869 manual streak fix (ProfileSync.UseOopsieInsuranceAsync).
+        CoreAccount.UseStreakFixProvider = day => CoreSettings.Current.UnifiedId is { Length: > 0 } id
+            ? NewV2().UseOopsieInsuranceAsync(id, day) : null;
         // WPF App.xaml.cs:2937: the weekly intake pass re-evaluates (and refunds a pre-premium spend)
         // on either provider's TierChanged. Here, because this is where the providers now exist.
         App.IntakePass.AttachEntitlementSources(

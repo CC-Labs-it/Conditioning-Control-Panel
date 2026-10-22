@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void StepAmbient()
         {
             double t = Time.GetElapsedTime(_ambientStart).TotalSeconds;
+            PulseFixHighlights(t);   // QuestsTabView.StreakFix.cs
             // Templates apply on first measure, so the roadmap's panel appears only once that sub-tab is shown:
             // rescan on start and when that panel's template lands (QuestsTabView ctor), never per tick (P07).
             if (_rescanParticles)
