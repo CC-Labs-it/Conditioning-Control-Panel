@@ -70,6 +70,9 @@ public partial class EmiDeskWindow
     internal void SpeakLine(LineDraw line, EmiLineEngine engine)
     {
         if (PresentationActive || !IsVisible) return;
+        // WPF Bubble.cs:506: she does not talk over her own offer; one slot, newest wins.
+        // A hold is a face, not a line (WPF Speak routes it to HoldFace), so it never parks.
+        if (AskLive && !line.Hold) { _parked = line; return; }
         CancelChain();
         CancelHold();
         engine.Ack(line.Id, spoke: !line.Hold);

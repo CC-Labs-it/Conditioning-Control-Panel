@@ -21,17 +21,55 @@ internal sealed partial class EmiDeskService
         }
         try
         {
+            // WPF Bubble.cs:869 OnMomentForAsk: a screen-taking moment kills a waiting offer.
+            if (EmiDeskWindow.AskKillMoments.Contains(moment)) _window?.CancelAsk(moment);
             var engine = LineEngine;
             if (!IsOut && !engine.IsHoldMoment(moment)) return;
             if (_window?.PresentationActive == true) return;
-            var line = engine.Draw(moment, EmiLineEngine.ToCtx(context));
-            // ponytail: asks/effect execution and glass channels are wire-views-settings-emidesk-b.
-            // No feasibility probe is installed until those chips have real effects.
-            // WPF EmiDeskService.cs:765: a hold is a face, so it plays even on a locked-silent moment.
-            if (line != null && (line.Hold || moment is not "dismissed" and not "appClosing"))
+            var ctx = EmiLineEngine.ToCtx(context);
+            var line = engine.Draw(moment, ctx);
+            var ask = engine.DrawAsk(moment, ctx);
+            // WPF EmiDeskService.cs:649 NeverSpeaks; a hold is a face, so it plays even there (:765).
+            bool neverSpeaks = moment is "dismissed" or "appClosing";
+            if (ask != null)
+            {
+                if (!neverSpeaks) _window?.ShowAsk(ask, engine);
+                return;
+            }
+            if (line != null && (line.Hold || !neverSpeaks))
                 _window?.SpeakLine(line, engine);
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] speech moment {Moment} failed", moment); }
+    }
+
+    // WPF App.xaml.cs:375-376 seeds both probes once the desk service exists.
+    private EmiDeskService()
+    {
+        EmiLineEngine.AskSituationProbe = AskSituationOk;
+        EmiLineEngine.EffectFeasibleProbe = EmiOffers.EffectFeasible;
+    }
+
+    /// <summary>WPF EmiDeskService.AskSituationOk: no offer while anything else owns the screen.</summary>
+    internal bool AskSituationOk()
+    {
+        try
+        {
+            if (!IsOut) return false;
+            var win = _window;
+            if (win == null || !win.IsVisible) return false;
+            if (win.PresentationActive || win.InputLocked || win.Transiting || win.AskLive) return false;
+            if (Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler.IsPlaying) return false;
+            if (CoreSession.IsSessionRunning) return false;
+            if (Views.AvatarTube.AvatarTubeWindow.Live?.HasBubbleUp == true) return false;
+            var main = (global::Avalonia.Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+            return main?.WindowState != global::Avalonia.Controls.WindowState.Minimized;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "[EmiDesk] ask situation probe failed");
+            return false;
+        }
     }
 
     private void ScheduleGreeting()

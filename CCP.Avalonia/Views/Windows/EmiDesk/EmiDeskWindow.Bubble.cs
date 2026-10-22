@@ -5,6 +5,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
@@ -86,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _bubble.SizeChanged += (_, _) => LayoutBubble();
             Resized += (_, _) => LayoutBubble();
             Moved += (_, _) => LayoutBubble();
+            AddHandler(KeyDownEvent, OnAskKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
 
         private void ShowBubble(string text)
@@ -133,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     workLeft = this.PointToClient(screen.WorkingArea.TopLeft).X;
                     workRight = this.PointToClient(screen.WorkingArea.TopRight).X;
                 }
-                var placement = ConditioningControlPanel.Services.EmiDesk.EmiBubblePlacement.Resolve(
+                var placement = EmiBubblePlacement.Resolve(
                     left, bodyX + bw * (1.0 - BubbleLeftFrac) - size.Width, size.Width,
                     false, winW, workLeft, workRight);
                 left = placement.Left;
@@ -143,6 +145,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 Canvas.SetLeft(_bubble, Math.Round(left));
                 Canvas.SetTop(_bubble, Math.Round(top));
                 LayoutTail(left, top + size.Height, size.Width, flip);
+
+                // WPF Bubble.cs:393-399: the chip row is clamped into the bubble's own window.
+                double lo = EmiBubblePlacement.EdgeGap;
+                if (!double.IsInfinity(workLeft)) lo = Math.Max(lo, workLeft + EmiBubblePlacement.EdgeGap);
+                _bubbleClampLo = lo;
+                _bubbleClampRight = Math.Max(lo, winW - 2.0);
+                if (!double.IsInfinity(workRight)) _bubbleClampRight = Math.Max(lo, Math.Min(_bubbleClampRight, workRight));
+                LayoutChips(left, top + size.Height, size.Width, flip);
 
             }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bubble layout failed"); }
