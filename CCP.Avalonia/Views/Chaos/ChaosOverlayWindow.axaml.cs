@@ -1499,7 +1499,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// lands - and exactly what the stub gave. Nothing here can be louder than the user's
         /// master volume, and a missing file is still a silent no-op.</para>
         /// </summary>
-        private static class ChaosSfx
+        internal static class ChaosSfx
         {
             /// <summary>Generic one-shot: <c>Resources/sounds/chaos/{name}.mp3</c>, silent when
             /// the asset is absent.</summary>
