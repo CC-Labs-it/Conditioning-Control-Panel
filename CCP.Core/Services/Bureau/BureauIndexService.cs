@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Bureau
 {
@@ -23,10 +21,24 @@ namespace ConditioningControlPanel.Services.Bureau
     /// bureau_hash_index.json keyed by "packId/obfuscatedName". Obfuscated names are minted at
     /// install time and pack content is immutable after install, so a cache hit needs no
     /// mtime/size validation; a reinstall mints new names and re-hashes naturally.
+    ///
+    /// Lives in Core so both heads share one index. The pack source is a head seam: it defaults to
+    /// Core's <see cref="ContentPackStore"/> (Avalonia); the WPF head points it at its own
+    /// ContentPackService in App startup. Frame decoding stays in the heads (WPF: GDI+).
     /// </summary>
     internal static class BureauIndexService
     {
-        private const int MaxSide = 1280;   // decode cap: keeps bridge messages light; boxes are normalized so labels are unaffected
+        /// <summary>Installed pack ids; null = no pack service yet (the index reports ready and empty).</summary>
+        internal static Func<IReadOnlyCollection<string>?> InstalledPacksProvider { get; set; } =
+            () => ContentPackStore.Current?.InstalledPackIds;
+
+        /// <summary>A pack's image entries (manifest type "image").</summary>
+        internal static Func<string, IEnumerable<PackFileEntry>> ImageFilesProvider { get; set; } =
+            packId => ContentPackStore.Current?.GetPackFiles(packId, ContentPackStore.ImageType) ?? new List<PackFileEntry>();
+
+        /// <summary>One decrypted pack file, or null.</summary>
+        internal static Func<string, PackFileEntry, Stream?> OpenFileProvider { get; set; } =
+            (packId, entry) => ContentPackStore.Current?.GetPackFileStream(packId, entry);
 
         private static readonly object Gate = new();
         private static Task? _buildTask;
@@ -47,7 +59,7 @@ namespace ConditioningControlPanel.Services.Bureau
             return EnsureBuiltAsync(progress);
         }
 
-        private static string CachePath => Path.Combine(App.UserDataPath, "bureau_hash_index.json");
+        private static string CachePath => Path.Combine(CorePaths.UserData, "bureau_hash_index.json");
 
         /// <summary>Kick (or join) the one-time index build. Safe to call repeatedly.</summary>
         public static Task EnsureBuiltAsync(Action<int, int>? progress = null)
@@ -74,15 +86,15 @@ namespace ConditioningControlPanel.Services.Bureau
         {
             try
             {
-                var packs = App.ContentPacks;
+                var packs = InstalledPacksProvider();
                 if (packs == null) { IsReady = true; return; }
 
                 // Collect every image entry across all installed packs (not just active ones:
                 // labeling availability shouldn't depend on which packs are toggled for flashes).
                 var work = new List<(string PackId, PackFileEntry Entry)>();
-                foreach (var packId in packs.InstalledPacks.ToList())
+                foreach (var packId in packs.ToList())
                 {
-                    foreach (var entry in packs.GetPackFiles(packId, "image"))
+                    foreach (var entry in ImageFilesProvider(packId))
                     {
                         var ext = (entry.Extension ?? "").TrimStart('.').ToLowerInvariant();
                         if (ext is "png" or "jpg" or "jpeg" or "gif" or "webp" or "bmp")
@@ -122,12 +134,12 @@ namespace ConditioningControlPanel.Services.Bureau
                 if (dirty > 0) SaveCache(cache);
                 _byHash = map;
                 _packCounts = counts;
-                App.Logger?.Information("BureauIndex: {Mapped} images indexed across {Packs} packs ({Total} entries scanned)",
-                    map.Count, packs.InstalledPacks.Count, Total);
+                Log.Information("BureauIndex: {Mapped} images indexed across {Packs} packs ({Total} entries scanned)",
+                    map.Count, packs.Count, Total);
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "BureauIndex: build failed");
+                Log.Warning(ex, "BureauIndex: build failed");
             }
             finally
             {
@@ -139,7 +151,7 @@ namespace ConditioningControlPanel.Services.Bureau
         {
             try
             {
-                using var stream = App.ContentPacks?.GetPackFileStream(packId, entry);
+                using var stream = OpenFileProvider(packId, entry);
                 if (stream == null) return null;
                 using var sha = SHA256.Create();
                 var digest = sha.ComputeHash(stream);
@@ -147,59 +159,7 @@ namespace ConditioningControlPanel.Services.Bureau
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("BureauIndex: hash failed for {Name}: {E}", entry.OriginalName, ex.Message);
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Decode one keyframe of a catalogued image as a JPEG data URI. GDI+ SelectActiveFrame
-        /// composites GIF frames the same cumulative way the catalogue's PIL sampler did, so
-        /// frame indices line up; a count mismatch (divergent decoder) returns null and the
-        /// target is simply skipped client-side.
-        /// </summary>
-        public static (string DataUri, int W, int H)? DecodeFrame(string sha256, int frameIndex)
-        {
-            if (!TryResolve(sha256, out var packId, out var entry) || entry == null) return null;
-            try
-            {
-                using var stream = App.ContentPacks?.GetPackFileStream(packId, entry);
-                if (stream == null) return null;
-                using var img = System.Drawing.Image.FromStream(stream);
-
-                if (frameIndex > 0)
-                {
-                    if (img.FrameDimensionsList == null || img.FrameDimensionsList.Length == 0) return null;
-                    var fd = new FrameDimension(img.FrameDimensionsList[0]);
-                    int count;
-                    try { count = img.GetFrameCount(fd); } catch { count = 1; }
-                    if (frameIndex >= count) return null;
-                    img.SelectActiveFrame(fd, frameIndex);
-                }
-
-                var scale = Math.Min(1.0, (double)MaxSide / Math.Max(img.Width, img.Height));
-                var dw = Math.Max(1, (int)Math.Round(img.Width * scale));
-                var dh = Math.Max(1, (int)Math.Round(img.Height * scale));
-
-                using var bmp = new Bitmap(dw, dh, PixelFormat.Format24bppRgb);
-                using (var g = Graphics.FromImage(bmp))
-                {
-                    // Charcoal behind any transparency — matches the game's light-table.
-                    g.Clear(System.Drawing.Color.FromArgb(14, 13, 26));
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.DrawImage(img, 0, 0, dw, dh);
-                }
-
-                var codec = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                using var ep = new EncoderParameters(1);
-                ep.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 88L);
-                using var ms = new MemoryStream();
-                bmp.Save(ms, codec, ep);
-                return ("data:image/jpeg;base64," + Convert.ToBase64String(ms.ToArray()), dw, dh);
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("BureauIndex: decode failed for {Hash}:{Frame}: {E}", sha256, frameIndex, ex.Message);
+                Log.Debug("BureauIndex: hash failed for {Name}: {E}", entry.OriginalName, ex.Message);
                 return null;
             }
         }
@@ -216,7 +176,7 @@ namespace ConditioningControlPanel.Services.Bureau
                     if (loaded != null) return loaded;
                 }
             }
-            catch (Exception ex) { App.Logger?.Debug("BureauIndex: cache load failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("BureauIndex: cache load failed: {E}", ex.Message); }
             return new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
@@ -224,10 +184,10 @@ namespace ConditioningControlPanel.Services.Bureau
         {
             try
             {
-                Directory.CreateDirectory(App.UserDataPath);
+                Directory.CreateDirectory(CorePaths.UserData);
                 File.WriteAllText(CachePath, JsonConvert.SerializeObject(cache));
             }
-            catch (Exception ex) { App.Logger?.Debug("BureauIndex: cache save failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("BureauIndex: cache save failed: {E}", ex.Message); }
         }
     }
 }

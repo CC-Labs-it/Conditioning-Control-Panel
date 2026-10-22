@@ -313,6 +313,10 @@ namespace ConditioningControlPanel
             // Race rules live in Core; the prize store and the NAudio decoder stay here.
             Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
             Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
+            // The Bureau's evidence index lives in Core; it reads this head's pack service.
+            Services.Bureau.BureauIndexService.InstalledPacksProvider = () => ContentPacks?.InstalledPacks;
+            Services.Bureau.BureauIndexService.ImageFilesProvider = packId => ContentPacks?.GetPackFiles(packId, "image") ?? new();
+            Services.Bureau.BureauIndexService.OpenFileProvider = (packId, entry) => ContentPacks?.GetPackFileStream(packId, entry);
             // The compositor layers moved to Core; their per-monitor fill gate resolves screens here.
             Services.Compositor.BaseLayer.ScreenTargetGate = ShouldRenderTargetOnScreen;
             // The mod service's side effects on a switch, and what it asks the head.
