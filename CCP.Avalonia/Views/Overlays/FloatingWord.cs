@@ -137,7 +137,7 @@ internal sealed class FloatingWord : Window
 
     private static double CubicOut(double t) => 1 - Math.Pow(1 - t, 3);
 
-    private static double BackOut(double t, double amp)
+    internal static double BackOut(double t, double amp)
     {
         var u = 1 - t;
         return 1 - (u * u * u - amp * u * Math.Sin(Math.PI * u));

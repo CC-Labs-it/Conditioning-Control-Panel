@@ -129,9 +129,7 @@ namespace ConditioningControlPanel.Services
 
         public bool SetPerk(CompanionBonusType perk)
         {
-            if (!CompanionExperience.IsV2Enabled || !Enum.IsDefined(perk) || App.Settings?.Current == null
-                || !CompanionPerks.CanSelect(perk, App.Settings.Current.PlayerLevel)) return false;
-            App.Settings.Current.CompanionPerk = perk;
+            if (App.Settings?.Current == null || !CompanionPerks.TrySelect(App.Settings.Current, perk)) return false;
             App.Settings.Save();
             UpdateDrainTimer();
             return true;
@@ -223,52 +221,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Calculates the XP modifier based on active companion and context.
         /// </summary>
-        public double CalculateXPModifier(XPSource source, XPContext context)
-        {
-            double modifier = 1.0;
-
-            switch (ActivePerk)
-            {
-                case CompanionBonusType.PinkFilterBonus:
-                    // OG: Bonus based on pink filter opacity (0-50%)
-                    // At 50% opacity: 1.5x multiplier
-                    if (context.PinkFilterOpacity > 0)
-                    {
-                        modifier = 1.0 + (context.PinkFilterOpacity / 100.0);
-                    }
-                    break;
-
-                case CompanionBonusType.AutonomyBonus:
-                    // Bunny: +50% when autonomy triggered the action
-                    if (context.TriggeredByAutonomy)
-                    {
-                        modifier = 1.5;
-                    }
-                    break;
-
-                case CompanionBonusType.StrictModeBonus:
-                    // Trainer: Complex modifiers
-                    if (!context.IsStrictMode)
-                    {
-                        // -50% without strict mode
-                        modifier = 0.5;
-                    }
-                    else if (context.IsNoEscapeMode && context.AttentionChecksEnabled)
-                    {
-                        // +100% for "No Escape" (strict + attention + no panic)
-                        modifier = 2.0;
-                    }
-                    // else 1.0x with just strict mode
-                    break;
-
-                case CompanionBonusType.XPDrain:
-                    // Parasite doesn't modify XP gain - only drains via timer
-                    modifier = 1.0;
-                    break;
-            }
-
-            return modifier;
-        }
+        public double CalculateXPModifier(XPSource source, XPContext context) =>   // the rule lives in Core
+            CompanionCore.CalculateXPModifier(ActivePerk, context.TriggeredByAutonomy, context.IsStrictMode,
+                context.IsNoEscapeMode, context.AttentionChecksEnabled, context.PinkFilterOpacity);
 
         /// <summary>
         /// Adds XP to the active companion with appropriate modifiers.
@@ -295,27 +250,20 @@ namespace ConditioningControlPanel.Services
             var modifier = CalculateXPModifier(source, context);
             var finalAmount = baseAmount * modifier;
 
-            // Add XP
-            progress.CurrentXP += finalAmount;
-            progress.TotalXPEarned += finalAmount;
-
             App.Logger?.Debug("Companion XP: {Companion} +{Amount:F1} (base: {Base}, modifier: {Modifier:F2}x, source: {Source})",
                 companionId, finalAmount, baseAmount, modifier, source);
 
-            // Check level up
-            while (progress.CurrentXP >= progress.XPForNextLevel && !progress.IsMaxLevel)
+            // Add XP and level up: the loop lives in Core (CompanionCore.Credit)
+            CompanionCore.Credit(progress, finalAmount, level =>
             {
-                progress.CurrentXP -= progress.XPForNextLevel;
-                progress.Level++;
-
                 App.Logger?.Information("Companion {Companion} leveled up to {Level}!",
-                    ActiveCompanionDef.Name, progress.Level);
+                    ActiveCompanionDef.Name, level);
 
-                CompanionLevelUp?.Invoke(this, (companionId, progress.Level));
+                CompanionLevelUp?.Invoke(this, (companionId, level));
 
                 // Trigger haptics for level up
                 _ = App.Haptics?.LevelUpPatternAsync();
-            }
+            });
 
             // Fire XP awarded event for UI updates
             XPAwarded?.Invoke(this, (companionId, finalAmount, modifier));
