@@ -2,16 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using ConditioningControlPanel.Services;
 using Serilog;
 
-namespace ConditioningControlPanel.Avalonia.Views.Games
+namespace ConditioningControlPanel.Services.Chaos
 {
     /// <summary>
     /// The user's library as the game pages see it (WPF Services/Chaos/DtrhAssetManifest.Build, the local half):
     /// the active library's images/ and videos/, deselected files left out, oversize or undecodable media
     /// counted as skipped, sampled down to 5000 entries keeping the image:video ratio. URLs are the asset
-    /// server's ccp.assets path (WPF https://ccp.assets/&lt;rel&gt;). <see cref="Deal"/> answers a Back Room
+    /// head's ccp.assets URL (WPF https://ccp.assets/&lt;rel&gt;). <see cref="Deal"/> answers a Back Room
     /// station's <c>media-request</c> from it (WPF BackRoomBridge.OnMediaRequestAsync, local source only).
     /// </summary>
     internal static class GameMediaManifest
@@ -85,12 +84,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return m;
         }
 
-        /// <summary>The user's pictures through the shared asset server: images/ only, the half a media deal
-        /// reads (WPF BackRoomMedia deals from FlashService's image snapshot, never the videos).</summary>
-        internal static Manifest BuildLocal(ConditioningControlPanel.Avalonia.Platform.WebAssetServer server)
+        /// <summary>The user's pictures through a head's asset URL (the Avalonia head's WebAssetServer.AssetUrl):
+        /// images/ only, the half a media deal reads (WPF BackRoomMedia deals from FlashService's image snapshot,
+        /// never the videos).</summary>
+        internal static Manifest BuildLocal(Func<string, string> assetUrl)
         {
-            return Build(CorePaths.EffectiveAssets, server.AssetUrl, CoreSettings.Current.DisabledAssetPaths, videos: false);
+            return Build(CorePaths.EffectiveAssets, assetUrl, CoreSettings.Current.DisabledAssetPaths, videos: false);
         }
+
+        /// <summary>The active library, images AND videos (WPF DtrhAssetManifest.Build's local half).</summary>
+        internal static Manifest BuildActive(Func<string, string> assetUrl) =>
+            Build(CorePaths.EffectiveAssets, assetUrl, CoreSettings.Current.DisabledAssetPaths);
+
+        /// <summary>The page's <c>manifest</c> frame (WPF DtrhHostService.PostManifest / CaucusHostService.OnPageReady),
+        /// read by hostMedia.js: {name,url} per entry, the skipped count and the truncation flag.</summary>
+        internal static object Frame(Manifest m) => new
+        {
+            type = "manifest",
+            images = m.Images.Select(e => new { name = e.Name, url = e.Url }),
+            videos = m.Videos.Select(e => new { name = e.Name, url = e.Url }),
+            skipped = m.Skipped,
+            truncated = m.Truncated,
+        };
 
         /// <summary>WPF BackRoomBridge.MediaCount: 1..13, anything else reads as 4.</summary>
         internal static int MediaCount(int? n) => n is >= 1 and <= 13 ? n.Value : 4;
