@@ -68,6 +68,7 @@ here record where and why the port chose something, and who advised.
 | 2026-09-29 | Linux package shape | AppImage; Flatpak bundles WPE; tarball + Flatpak + AUR | Tarball `ConditioningControlPanel/` with the Vosk model, `.desktop` and icon; app id `io.github.CodeBambi.ConditioningControlPanel`; Flatpak on GNOME 50 (has webkit2gtk-4.1, libsecret) bundles libVLC only - WebHost needs the GTK3 NativeControlHost engine, not WPE. CONFLICT: docs/avalonia-linux-install.md asks to bundle wpewebkit/wpebackend-fdo/libwpe; the Flatpak row stays blocked until the first flatpak-builder run shows whether any web surface needs WPE, then bundle it or amend the brief with the user; WM_CLASS = app id (X11PlatformOptions.WmClass) matching StartupWMClass; AUR `-bin` depends on system vlc/webkit/WPE | worker |
 | 2026-09-30 | MemorySignalWriter head sources | Core writer reads App.* via one seam per service; new Core events per feature; one SourcesHook the head seeds | `SourcesHook`/`DeferredSourcesHook` (WPF seeds its original bodies verbatim); settings mirror in Core over CoreSettings; Avalonia raises `App.FeatureUsed` from its flash/subliminal/bubble surfaces and Core `MandatoryVideoScheduler.VideoStarted` (mirrors WPF VideoService.VideoStarted) | worker |
 | 2026-10-01 | getbacktome follow-ups and the AI effect gate | keep WPF behaviour as frozen reference; fix on Avalonia only; fix in Core for both heads | Option A, fix in Core for both heads: getbacktome follow-ups ran nested effects without the AI-effects switch, Lab access, per-effect toggles or the 3-command cap, and panic couldn't cancel them, contradicting the shipped help text and the user's explicit consent choices. Frozen-reference status doesn't protect a consent/panic bypass, so the fix lives in Core for both heads: re-gated at fire time, refusals logged, 3-per-follow-up cap, panic or switch-off cancels everything pending. | oracle-deep |
+| 2026-10-12 | Do WPF `SessionEngine` and the Core session runner keep separate copies of the pure session rules? (supersedes the 2026-09-28 "port, duplication acceptable" row for those rules) | keep both copies; route WPF to Core | Route (session-core-a): `SessionEngine` calls `SessionClock.Elapsed`, `SessionXp.Compute`/`PausePenalty`, `SessionTimeline.PhaseIndexAt`, `DeferredStartQueue` (new optional `started` callback carries WPF's EMI "sessionFeatureArrived"), `PhrasePoolCustody.FoldUserPoolEdit` and `SessionRunner.RandomizedStart`; `ProgressionService.GetSessionXPMultiplier` returns `SessionXp.Multiplier`. The engine itself stays on WPF (MainWindow, DispatcherTimer, Win32). Not routed: save/restore of settings (Core `SessionSettingsSnapshot` restores SubliminalDuration, WPF leaks it - 2026-09-29 row) and pool reapply/restore (D1 differences). Proof: `SessionRulesTests.WpfSessionEngine_RoutesToTheCoreRules_InsteadOfCopyingThem` fails on the base engine. | session-core-a brief |
 
 ## 2026-09-29: flashing line after moving the window on KDE
 - Question: the user saw a thin purple line flash where the window's top edge had been after moving it. Can the app fix it?
@@ -443,6 +444,9 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   fail at 7 of 417 with the complement dropped). Peak 6.0 GB, suite 12 min -> ~4.5 min.
 - Follow-up branch: find what a closed `MainShellWindow` keeps alive (static event subscriptions, Skia/WebView natives);
   a real app builds one shell, so it matters for tests and for any head that rebuilds the shell.
+- Resolved 2026-10-12 (avalonia-port/suite-memory): BeatLoop kept frame-clocking closed windows, and static
+  subscriptions made in `Opened` (fires on every Hide/Show) outlived the window; plus a GC after each window
+  test for finalizer-owned Skia memory. Shard peaks 8.4-12.1 GB -> 1.6-2.9 GB (per-shard peak VmHWM, Release, gate shards).
 - Advisor: worker.
 ## 2026-10-01: Her Room chat and memory diary over the brain (avalonia-port/her-room-chat)
 - Question: how to put Z2 (ChatThresholdRuntimeVm) and Z3 (MemoryDiaryRuntimeVm) on the Avalonia brain without a second copy of their logic.
@@ -1094,6 +1098,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   a render-all failure (`render-all-crash`).
 
 ## 2026-10-12: Chaster idle-day charge stays off until the conditioning-time tracker is ported (avalonia-port/chaster-minutes)
+## 2026-10-12: Chaster idle-day charge reads the day log, as on WPF (avalonia-port/chaster-minutes, then chaster-leash-minutes)
 - Question: with `FeatureDayLogService` now in Core and running on this head, should `ChasterHead` give the Chaster
   service its `MinutesOn` (the idle-day row's eyes)? Wiring it arms WPF's idle-day charge here, which users will see.
 - Options: (A) keep it off: `MinutesOn` stays null, the day-end check reads "nobody can tell" and never books an idle day;
@@ -1115,3 +1120,83 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `windows`, `avalonia-windows` and the Windows coverage entry always run (coverage keeps `!cancelled()`, so a skipped
   avalonia-linux does not skip it). Push and pull_request runs have no inputs, so they stay full. `bin/rgate` dispatches
   `scope=windows` when it sees the input; `RGATE_FULL=1` forces the old all-remote run.
+- Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
+  `TotalConditioningMinutes` (`FeatureDayLogService.cs:73`), and nothing on this head grew it, so B would have charged
+  every day CCP was open as idle on the user's real lock.
+- Choice now (chaster-leash-minutes): B, exactly WPF `ChasterServiceApp.cs:40,49`. The input exists: the
+  conditioning-time tracker lane (avalonia-port/conditioning-time-tracker, Core `ConditioningTimeTracker`, wired in
+  `MainShellWindow.UiUpdates.cs`/`StartStop.cs`) accrues `TotalConditioningMinutes` while the engine runs. Null when no
+  log (construction failed / headless render path), 0 for a day with no entry, as WPF.
+- Test: `ChasterMinutesTests.ConditionedDayIsNotIdle_ADayWithoutConditioningIsCharged` (engine run 12 min on a stepped
+  clock -> day log -> today's idle charge 0, a day after the first log day 1200 s; fail-proven: no MinutesOn -> red, `?? 0` -> red).
+  It asserts the head's minutes and `TabDayEnd.IdleCharge`, not JudgeEndedDay's linked/priced gates or BookSeconds.
+- Upgrade edge, guarded: a day before the tracker existed reads 0 minutes, so the first day-end after upgrading would
+  charge a linked user with `idle` priced one idle day (1200 s) for a day they may well have conditioned. The head's
+  `MinutesOn` returns null (unknown, no charge, as before this lane) for any day before the day log's first day with
+  conditioning minutes (`FeatureDayLogService.FirstConditioningDay`), and null while no such day exists. No new state:
+  the earliest `cm > 0` entry is the tracker's first run. Same test: a day before the first log day is null and not
+  charged (fail-first: red with `Expected null, Actual 0` before the guard).
+## 2026-10-12: Linux web views stay off by default; CCP_LINUX_WEBVIEW opts in (webview-probe-fix)
+- Superseded by the 2026-10-13 entry (webview-render): WebKitGTK is the Linux default; the "stall" was a web-process crash.
+- Question: on Arch/CachyOS with webkit2gtk-4.1 and wpewebkit installed every web surface said "No native web view on
+  this platform." `WebHost.ProbeUnavailableReason` accepted only adapters advertising `NativeControlHost`; in
+  Avalonia.Controls.WebView 12.1.0 `GetAdapterInfo` reports WebKitGtk as `NativeDialog` and WpeWebKit/Headless as
+  `OffscreenRenderer`, so no Linux adapter ever passes, although `NativeWebView` does build one there.
+- Live evidence (sandbox, KDE Wayland + XWayland, ~/ccp-port/evidence/webview-probe-fix/): with the probe opened, the
+  engine was built and the intake page loaded and posted `ready`/`log` through `window.invokeCSharpAction` on both
+  engines. But requestAnimationFrame never kept running: WPE froze after its first frame (two captures 5 s apart are
+  identical), and GTK painted nothing. So the rAF heartbeat stayed silent and intake relaunched once, then gave up (~45 s).
+  The same pattern closes GameWindow/PbP. Run 1 was on a locked session and runs 2-3 possibly occluded, so runs 4-5
+  (live-run4-5.md) repeated it with the user at the desk, LockedHint=no and the intake window active: WPE again froze
+  after one frame (captures 5 s apart AE 0, `heartbeat silent` then `giving up`), GTK again drew only the background
+  (AE 0, gave up). A locked or hidden window is ruled out; neither 12.1 engine keeps rendering on KDE Wayland + XWayland.
+- Answer (advised by: supervisor, option B, confirmed by runs 4-5): the Linux default is unchanged (the fallback panel), so
+  nothing regresses. The decision is
+  `WebHost.DecideUnavailableReason`. `CCP_LINUX_WEBVIEW=wpe` mirrors `WebViewAdapter.CreateFactory` (WPE first, else
+  WebKitGTK); `=gtk` requires WebKitGTK and sets `PreferWebKitGtkInstead`. Windows/macOS keep the `NativeControlHost`
+  check. The Headless/Unknown adapters never count, and no engine is built without a classic desktop lifetime (tests,
+  `--smoke`, `--render-all`). The no-engine Linux hint is unchanged. Bridge: both adapters inject
+  `window.invokeCSharpAction`, which the shared web-shim already uses when `chrome.webview` is absent.
+- Next: flip the default only after a newer Avalonia.Controls.WebView keeps rAF running live (next-live-check.md has the
+  steps). WPE suspect: frame_complete is only dispatched when the compositor consumes a buffer (WpeWebViewAdapter.cs:421).
+  The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
+
+## 2026-10-13: WebKitGTK is the Linux web view; the "rAF stall" was a missing GStreamer audio sink (webview-render)
+- Question: no Linux web view kept drawing (2026-10-12 entry above). Is it the engines, Avalonia's frame pump, or the box?
+- Root cause (live, ~/ccp-port/evidence/webview-render/findings.md): the WEB PROCESS crashed. Without GStreamer's
+  `autoaudiosink` (gst-plugins-good) WebKitWebProcess/WPEWebProcess SIGABRT on a page's first WebAudio sound
+  ("autoaudiosink not found", then g_signal_connect_data(NULL)). The host keeps the last frame and rAF dies. Every earlier live
+  run has that coredump about 3 s after intake's `init`. Without audio, WebKitGTK (GtkX11) draws continuously at ~62 fps, WebGL included.
+  With a scratch-extracted autoaudiosink on GST_PLUGIN_PATH, intake animates and heartbeats in the real app.
+  WEBKIT_DISABLE_DMABUF_RENDERER, WEBKIT_DISABLE_COMPOSITING_MODE, GDK_BACKEND=x11 and LIBGL_ALWAYS_SOFTWARE change nothing.
+  The WPE frame pump is push (frame_complete per copied buffer) and needs no render-loop call.
+- Second finding: Arch wpewebkit 2.54.1-2 is built without the legacy libwpe API (`webkit_web_view_backend_new` gone,
+  upstream AvaloniaUI/Avalonia.Controls.WebView#88). 12.1's WPE adapter then throws from an async void and kills the app,
+  and WPE is the package's default Linux pick.
+- Answer (advised by: supervisor; advised: oracle-deep - keep the gate, no fake sink, add a CCP_LINUX_WEBVIEW=gtk override and
+  follow GStreamer's own plugin-path rules): on Linux, WebHost always sets `PreferWebKitGtkInstead` (WebKitGTK default).
+  `CCP_LINUX_WEBVIEW=wpe` is honoured only when libWPEWebKit exports `webkit_web_view_backend_new` (`NativeLibrary.TryGetExport`),
+  otherwise GTK is used. `=off` gives the fallback panel. A Linux engine without the audio sink gives the panel with the per-distro
+  command (Core `LinuxDependencies`, "web views (sound)": gst-plugins-good / gstreamer1.0-plugins-good / gstreamer1-plugins-good;
+  found on GST_PLUGIN_SYSTEM_PATH(_1_0), GST_PLUGIN_PATH(_1_0) and the distro plugin dirs). A gate, not a warning: a page that
+  aborts on its first sound is worse than an honest panel. WPE is opt-in only, so the startup toast (`LinuxDependencies.Required`)
+  and the panel (`WebViews`) no longer name it. PKGBUILD: gst-plugins-good in depends, the WPE trio in optdepends. Headless, `--smoke`,
+  `--render-all` and tests are unchanged (never an engine). Windows/macOS are untouched.
+- Override and probe rules (oracle-deep): an explicit `CCP_LINUX_WEBVIEW=gtk` skips the sink check (one warning logged), so a
+  probe false negative (NixOS/Guix store paths, other Debian arches) cannot block every page for good; the unset default stays
+  gated. The probe follows GStreamer: GST_PLUGIN_PATH(_1_0), the user dir ($XDG_DATA_HOME/gstreamer-1.0/plugins), then
+  GST_PLUGIN_SYSTEM_PATH(_1_0), which REPLACES the distro dirs when set (AppImage/Snap/Nix wrappers; the user dir stays, as in
+  GStreamer's registry scan). The panel and the startup toast say to restart CCP after installing (probed once per process); `=wpe` falling back to GTK on 2.54 logs one warning.
+- Not chosen: GTK `ExperimentalOffscreen` survives intake without the sink but pushes ~16 fps and hides the missing dependency.
+- Not chosen: a null/fake audio sink. WebKit asks GStreamer for `autoaudiosink` by name and no WebKit or GStreamer setting maps it
+  to another element; bundling libgstautodetect ties us to the host's GStreamer; turning off WebAudio/media in WebKit settings
+  would make `new AudioContext()` throw in our pages and stop video.
+- Wayland: Avalonia is pinned to X11 (XWayland), and the GTK adapter's `ForceX11GdkBackend` (default true) forces GDK_BACKEND=x11
+  around GTK init. Untested: NVIDIA's proprietary driver is widely reported to give blank WebKitGTK views; `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  is the user-side switch. Fractional/HiDPI scale between GTK and Avalonia is not measured.
+- Residuals: airspace (Avalonia popups under the X11 child), a shutdown-only SIGABRT seen once, and Avalonia 12.1 surfaces no
+  web-process-terminated event, so a future web-process crash would again freeze a page silently.
+- Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
+  (GstAudioSinkDependencyTests), each new row fail-proven by mutation.

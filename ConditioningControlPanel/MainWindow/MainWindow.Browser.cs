@@ -42,6 +42,8 @@ namespace ConditioningControlPanel
         // browser legitimately fails the readiness check without being wedged — tearing it down
         // there would kill an initialization that is still in flight.
         private bool _browserCorePending;
+        private int _browserRequestGeneration;
+        private bool _browserStoppedDuringInit;
 
         private async System.Threading.Tasks.Task InitializeBrowserAsync(string? overrideStartUrl = null)
         {
@@ -87,6 +89,12 @@ namespace ConditioningControlPanel
                     Dispatcher.Invoke(() =>
                     {
                         _browserCorePending = false;
+                        if (_browserStoppedDuringInit)
+                        {
+                            _browserStoppedDuringInit = false;
+                            NavigateBrowserToCurrentSiteHome();
+                            RevealBrowserForRemoteVideo(false);
+                        }
                         SettingsTab.TxtBrowserStatus.Text = Loc.Get("label_connected_2");
                         SettingsTab.TxtBrowserStatus.Foreground = new SolidColorBrush(Color.FromRgb(0, 230, 118)); // Green
 
@@ -379,12 +387,14 @@ namespace ConditioningControlPanel
 
         private async System.Threading.Tasks.Task InitAndNavigateAsync(string url, bool autoPlayFullscreen)
         {
+            var request = _browserRequestGeneration;
             // Pass the user's URL as the WebView2 start URL so initialization navigates
             // directly to it. Calling _browser.Navigate(url) right after init silently
             // dropped the call — BrowserService's _isInitialized only flips true inside
             // WebView_Loaded (which runs after we'd return), so the request never reached
             // CoreWebView2 and the start-URL load (BambiCloud) stuck.
             await InitializeBrowserAsync(url);
+            if (request != _browserRequestGeneration) return;
             if (!_browserInitialized || _browser == null)
             {
                 // Init failed, and the synchronous caller already returned true — nothing else
@@ -426,7 +436,7 @@ namespace ConditioningControlPanel
                     void OnNavCompleted(object? s, string completedUrl)
                     {
                         _browser.NavigationCompleted -= OnNavCompleted;
-                        _ = AutoPlayBambiCloudPlaylistAsync();
+                        if (request == _browserRequestGeneration) _ = AutoPlayBambiCloudPlaylistAsync(request);
                     }
                     _browser.NavigationCompleted += OnNavCompleted;
                 }
@@ -447,12 +457,16 @@ namespace ConditioningControlPanel
         /// </summary>
         private async System.Threading.Tasks.Task NavigateWhenBrowserReadyAsync(string url, bool autoPlayFullscreen, bool userInitiated)
         {
+            var request = _browserRequestGeneration;
             // Surface the browser while it finishes coming up, exactly as the ready path does —
             // otherwise the click looks ignored for as long as the bring-up takes.
             FocusBrowserSurface();
 
             for (int i = 0; i < 60 && _browserCorePending; i++)
+            {
                 await Task.Delay(250);
+                if (request != _browserRequestGeneration) return;
+            }
 
             if (_browser?.IsInitialized == true && _browser.WebView?.CoreWebView2 != null)
             {
@@ -642,6 +656,8 @@ namespace ConditioningControlPanel
         /// <returns>True if navigation was initiated, false if browser unavailable</returns>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
+            var request = ++_browserRequestGeneration;
+            _browserStoppedDuringInit = false;
             // Block navigation in offline mode.
             if (App.Settings?.Current?.OfflineMode == true)
             {
@@ -725,7 +741,8 @@ namespace ConditioningControlPanel
                         void OnNavigationCompleted(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
                         {
                             _browser.WebView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
-                            if (e.IsSuccess) _ = AutoPlayBambiCloudPlaylistAsync();
+                            if (e.IsSuccess && request == _browserRequestGeneration)
+                                _ = AutoPlayBambiCloudPlaylistAsync(request);
                         }
 
                         navCompletedHandler = OnNavigationCompleted;
@@ -775,6 +792,7 @@ namespace ConditioningControlPanel
         /// </summary>
         private Action ArmVideoAutoPlay()
         {
+            var request = _browserRequestGeneration;
             var browser = _browser;
             if (browser == null) return () => { };
 
@@ -787,9 +805,9 @@ namespace ConditioningControlPanel
             void Fire(object? sender, string url)
             {
                 Disarm();
-                if (fired) return;
+                if (fired || request != _browserRequestGeneration) return;
                 fired = true;
-                _ = AutoPlayAndFullscreenVideoAsync();
+                _ = AutoPlayAndFullscreenVideoAsync(request);
             }
 
             browser.DomContentLoaded += Fire;
@@ -802,7 +820,7 @@ namespace ConditioningControlPanel
         /// Also adds handlers for: video ended (exit fullscreen), double-click (exit fullscreen).
         /// Notifies AutonomyService when video playback ends.
         /// </summary>
-        private async Task AutoPlayAndFullscreenVideoAsync()
+        private async Task AutoPlayAndFullscreenVideoAsync(int request)
         {
             if (_browser?.WebView?.CoreWebView2 == null) return;
 
@@ -816,6 +834,7 @@ namespace ConditioningControlPanel
 
                 // Wait a moment for the page to fully render
                 await Task.Delay(1500);
+                if (request != _browserRequestGeneration) return;
 
                 // JavaScript to find video, play it, request fullscreen, and add event handlers
                 // Posts message back to C# when video ends or fullscreen exits
@@ -823,15 +842,29 @@ namespace ConditioningControlPanel
                 // as soon as the HTML is parsed, so the site's player script may still be building it
                 var script = @"
                     (async function() {
+                        window._ccpTakeoverStopped = false;
                         let video = document.querySelector('video');
                         if (!video) {
                             for (let i = 0; i < 20; i++) {
                                 await new Promise(r => setTimeout(r, 500));
+                                if (window._ccpTakeoverStopped) return;
                                 video = document.querySelector('video');
                                 if (video) break;
                             }
                         }
                         if (video) {
+                            // The host owns eligibility and the random draw; metadata is needed
+                            // before it can choose a start that leaves the entire cut available.
+                            window.__ccpSetCutStart = seconds => {
+                                try { if (seconds > 0) video.currentTime = seconds; } catch (_) {}
+                            };
+                            const reportMetadata = () => {
+                                if (Number.isFinite(video.duration) && video.duration > 0)
+                                    window.chrome.webview.postMessage(JSON.stringify({
+                                        type: 'ccpMedia', state: 'metadata', dur: video.duration }));
+                            };
+                            video.addEventListener('loadedmetadata', reportMetadata, { once: true });
+                            if (video.readyState >= 1) reportMetadata();
                             // NOTE: playback lifecycle (started / duration / ended) is NOT reported
                             // here any more — the always-on reporter injected by BrowserService owns
                             // it, so user-started videos are tracked too. This script is now only
@@ -883,6 +916,7 @@ namespace ConditioningControlPanel
 
                             video.muted = false;
                             const goFullscreen = () => {
+                                if (window._ccpTakeoverStopped) return;
                                 if (video.requestFullscreen) {
                                     video.requestFullscreen();
                                 } else if (video.webkitRequestFullscreen) {
@@ -925,17 +959,40 @@ namespace ConditioningControlPanel
         /// </summary>
         internal void EndWebVideoTakeover()
         {
+            ++_browserRequestGeneration;
+            _browserStoppedDuringInit = _browserInitializing || _browserCorePending;
+            bool remote = _remoteBrowserVideoActive;
+            _remoteBrowserVideoActive = false;
             try
             {
                 _ = _browser?.WebView?.CoreWebView2?.ExecuteScriptAsync(
+                    "window._ccpForcedFs = false; window._ccpTakeoverStopped = true;" +
                     "document.querySelectorAll('video,audio').forEach(v => { try { v.pause(); } catch (e) {} });" +
-                    "if (document.exitFullscreen) document.exitFullscreen();");
+                    "if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});");
             }
             catch (Exception ex)
             {
                 App.Logger?.Debug("EndWebVideoTakeover script failed: {Error}", ex.Message);
             }
             try { ExitBrowserFullscreen(); } catch { }
+            try
+            {
+                if (remote)
+                {
+                    // A user popout may have survived fullscreen exit. Return it to the hidden
+                    // embedded host before giving the remote card its airspace back.
+                    if (Services.Browser.RemoteBrowserStopRule.HideBrowser(
+                        RemoteControlOverlay.Visibility == Visibility.Visible, remoteVideoActive: false))
+                        _browserPopoutWindow?.Close();
+                    NavigateBrowserToCurrentSiteHome();
+                }
+            }
+            finally
+            {
+                if (remote) RevealBrowserForRemoteVideo(false);
+                _browser?.ClearFullscreenRegistration();
+                App.Overlay?.NotifyTopWindowClosed();
+            }
         }
 
         /// <summary>
@@ -944,7 +1001,7 @@ namespace ConditioningControlPanel
         /// then post videoStarted/videoEnded messages so AutonomyService treats the playlist
         /// like a fullscreen video for blocking purposes.
         /// </summary>
-        private async Task AutoPlayBambiCloudPlaylistAsync()
+        private async Task AutoPlayBambiCloudPlaylistAsync(int request)
         {
             if (_browser?.WebView?.CoreWebView2 == null) return;
 
@@ -952,6 +1009,7 @@ namespace ConditioningControlPanel
             {
                 // Wait for React hydration before looking for the button.
                 await Task.Delay(1500);
+                if (request != _browserRequestGeneration) return;
 
                 var script = @"
                     (async function() {
@@ -1139,11 +1197,16 @@ namespace ConditioningControlPanel
 
                 switch (state)
                 {
+                    case "metadata":
+                        if (App.BrowserMedia.TakeoverStartOffsetMs(dur) is long offsetMs)
+                            _ = _browser?.ExecuteScriptAsync("window.__ccpSetCutStart?.("
+                                + (offsetMs / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture) + ");");
+                        break;
                     case "playing":
                         App.BrowserMedia.OnMediaPlaying(dur);
                         break;
                     case "progress":
-                        App.BrowserMedia.OnMediaProgress(pos, dur);
+                        App.BrowserMedia.OnMediaProgress(pos, dur, (double?)o["played"] ?? 0);
                         break;
                     case "stopped":
                         App.BrowserMedia.OnMediaStopped((string?)o["reason"] ?? "page");
@@ -1173,6 +1236,7 @@ namespace ConditioningControlPanel
                 if (urlMatch.Success)
                 {
                     var videoUrl = urlMatch.Groups[1].Value;
+                    var videoDuration = Services.AudioSyncService.ParseReportedDuration(message);
                     App.Logger?.Information("AudioSync: Starting processing for video on {Host}", UrlLog.Host(videoUrl));
 
                     // Wire up progress events
@@ -1238,7 +1302,7 @@ namespace ConditioningControlPanel
                     {
                         try
                         {
-                            await App.AudioSync.OnVideoDetectedAsync(videoUrl);
+                            await App.AudioSync.OnVideoDetectedAsync(videoUrl, videoDuration);
                         }
                         catch (Exception ex)
                         {
@@ -1928,8 +1992,9 @@ namespace ConditioningControlPanel
 
             // Name - use V2 unified display name (leaderboard name), never raw provider names
             if (DiscordTab.TxtProfileViewerName != null)
-                DiscordTab.TxtProfileViewerName.Text = App.Settings?.Current?.UserDisplayName
-                    ?? App.Discord?.CustomDisplayName ?? App.Patreon?.DisplayName ?? "You";
+                DiscordTab.TxtProfileViewerName.Text = NeedsDisplayNameRule.FirstName(
+                        App.Settings?.Current?.UserDisplayName, App.Discord?.CustomDisplayName, App.Patreon?.DisplayName)
+                    ?? (string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId) ? "You" : Loc.Get("account_name_not_set"));
 
             // Show edit name button for own profile (only if logged in with unified ID)
             if (DiscordTab.BtnChangeDisplayName != null)
@@ -2728,6 +2793,15 @@ namespace ConditioningControlPanel
         {
             if (_browser?.WebView == null) return;
 
+            // A late fullscreen event from the stopped page must not reopen a topmost host.
+            if (isFullscreen && Services.Browser.RemoteBrowserStopRule.HideBrowser(
+                RemoteControlOverlay.Visibility == Visibility.Visible, _remoteBrowserVideoActive))
+            {
+                _ = _browser.ExitFullscreenAsync();
+                _browser.ClearFullscreenRegistration();
+                return;
+            }
+
             if (isFullscreen)
             {
                 // Mirror only when the "Show content on" picker actually covers more than one
@@ -2982,6 +3056,11 @@ namespace ConditioningControlPanel
 
         private void ExitBrowserFullscreen()
         {
+            if (_isDualMonitorPlaybackActive)
+            {
+                App.ScreenMirror.DisableMirror();
+                _isDualMonitorPlaybackActive = false;
+            }
             if (!_isBrowserFullscreen) return;
 
             // Off FIRST, and off the same window they went on (#952). The popout branch below
@@ -3125,20 +3204,9 @@ namespace ConditioningControlPanel
         public void StopBrowserVideoFromRemote()
         {
             if (!_remoteBrowserVideoActive) return;
-            _remoteBrowserVideoActive = false;
-            // Put the overlay's browser blindfold back: with the video gone there is nothing left
-            // for the WebView to paint over the "someone else is controlling your app" card with.
-            RevealBrowserForRemoteVideo(false);
-            try
-            {
-                if (_isBrowserFullscreen) ExitBrowserFullscreen();
-                NavigateBrowserToCurrentSiteHome();
-                App.Logger?.Information("[RemoteControl] Stopped remote browser video, restored site homepage");
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("StopBrowserVideoFromRemote failed: {Error}", ex.Message);
-            }
+            // Teardown first, then release the media flag and queue slot, just like a hard stop.
+            if (App.BrowserMedia != null) App.BrowserMedia.ForceEndCore("remote-stop");
+            else EndWebVideoTakeover();
         }
 
         /// <summary>

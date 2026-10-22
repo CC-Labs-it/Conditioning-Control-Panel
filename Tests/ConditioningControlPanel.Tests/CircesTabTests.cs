@@ -531,4 +531,104 @@ public class CircesTabTests
         Assert.Equal(TabPrices.All.Count, TabPrices.All.Select(p => p.Id).Distinct().Count());
         Assert.All(TabPrices.All, p => Assert.NotEqual(0, p.Seconds));
     }
+
+    // ---- raffle days (owner, 2026-10-17): the first slip-up of a UTC day lands even in credit ----
+
+    private static TabBooking RaffleBook(TabState s, string id, int seconds, bool raffleDay = true) =>
+        CircesTab.Book(s, id, seconds, Run.AddMinutes(s.Entries.Count + 1), Noon, Run, false, null, raffleDay);
+
+    private static void Land(TabState s)
+    {
+        var push = CircesTab.PlanPush(s, canRemove: false, TabLimits.Default, Noon);
+        Assert.Equal(TabPushKind.Add, push.Kind);
+        CircesTab.ApplyPush(s, push, Noon, Run.AddMinutes(30));
+    }
+
+    [Fact]
+    public void Raffle_day_first_slip_up_in_credit_reaches_the_lock_and_the_credit_stays()
+    {
+        var s = new TabState { PushedNetSeconds = 3600, BalanceSeconds = -600 };
+
+        RaffleBook(s, "typo", 60);
+
+        Assert.Equal(60, s.BalanceSeconds);
+        Assert.Equal(600, s.ParkedCreditSeconds);
+        Land(s);
+        Assert.Equal(-600, s.BalanceSeconds);
+        Assert.Equal(0, s.ParkedCreditSeconds);
+        Assert.True(CircesTab.LandedOn(s, Run.AddMinutes(40)));
+
+        // The day counts now; the next slip-up is paid from the credit as before.
+        RaffleBook(s, "typo", 60);
+        Assert.Equal(-540, s.BalanceSeconds);
+        Assert.Equal(0, s.ParkedCreditSeconds);
+    }
+
+    [Fact]
+    public void Outside_a_raffle_month_a_credit_still_cancels_the_slip_up()
+    {
+        var s = new TabState { PushedNetSeconds = 3600, BalanceSeconds = -600 };
+
+        RaffleBook(s, "typo", 60, raffleDay: false);
+
+        Assert.Equal(-540, s.BalanceSeconds);
+        Assert.Equal(0, s.ParkedCreditSeconds);
+        Assert.Equal(TabPushKind.None, CircesTab.PlanPush(s, canRemove: false, TabLimits.Default, Noon).Kind);
+    }
+
+    [Fact]
+    public void Only_the_first_slip_up_lands_the_set_aside_credit_pays_the_rest()
+    {
+        var s = new TabState { PushedNetSeconds = 3600, BalanceSeconds = -600 };
+
+        RaffleBook(s, "typo", 60);
+        RaffleBook(s, "typo", 30);
+        RaffleBook(s, "session", -100);
+
+        Assert.Equal(60, s.BalanceSeconds);
+        Assert.Equal(670, s.ParkedCreditSeconds);
+        Land(s);
+        Assert.Equal(-670, s.BalanceSeconds);
+        Assert.Equal(3660, s.PushedNetSeconds);
+    }
+
+    [Fact]
+    public void No_set_aside_when_the_day_already_landed_or_a_push_is_in_doubt()
+    {
+        var landed = new TabState { PushedNetSeconds = 3600 };
+        RaffleBook(landed, "typo", 60);
+        Land(landed);
+        RaffleBook(landed, "session", -300);
+        RaffleBook(landed, "typo", 60);
+        Assert.Equal(-240, landed.BalanceSeconds);
+        Assert.Equal(0, landed.ParkedCreditSeconds);
+
+        var doubt = new TabState { PushedNetSeconds = 3600, BalanceSeconds = -600, PendingSeconds = 60 };
+        RaffleBook(doubt, "typo", 60);
+        Assert.Equal(-540, doubt.BalanceSeconds);
+        Assert.Equal(0, doubt.ParkedCreditSeconds);
+    }
+
+    [Fact]
+    public void A_set_aside_credit_comes_back_on_a_wipe_and_never_passes_the_floor()
+    {
+        var s = new TabState { PushedNetSeconds = 3600, BalanceSeconds = -600 };
+        RaffleBook(s, "typo", 60);
+        CircesTab.Wipe(s, Run.AddMinutes(10), Run);
+        Assert.Equal(-600, s.BalanceSeconds);
+        Assert.Equal(0, s.ParkedCreditSeconds);
+
+        // The floor counts set-aside credit too: 3600 pushed, 600 set aside, 60 owed.
+        var f = new TabState { PushedNetSeconds = 3600, BalanceSeconds = -600 };
+        RaffleBook(f, "typo", 60);
+        var credit = RaffleBook(f, "session", -10000);
+        Assert.Equal(-3060, credit.AppliedSeconds);
+        Assert.Equal(TabRefusal.Floor, credit.Refusal);
+
+        // A hand-edited file: set-aside credit past the floor is clamped, and with nothing owed it comes back.
+        var bad = new TabState { PushedNetSeconds = 100, BalanceSeconds = 0, ParkedCreditSeconds = 5000 };
+        Assert.True(CircesTab.Sanitise(bad, TabLimits.Default));
+        Assert.Equal(-100, bad.BalanceSeconds);
+        Assert.Equal(0, bad.ParkedCreditSeconds);
+    }
 }
