@@ -2514,3 +2514,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/chaos-estim-overlay: +576
 - Chaos E-Stim lightning (click-through, refuses without a compositor) and the X11Pointer cursor halo are ported visual-only, with Core `ChaosEStimMath`. Run end and panic close both. Rows are stub because nothing calls them on this head yet.
+
+## avalonia-port/brain-drain-keep-clear: +150
+- Keep-pictures-clear rule moved to Core (tests now run on Linux); the Avalonia Brain Drain card has the option row, saved to the same setting and repainted on Reset/cloud restore.
+- No blur overlay on this head yet, so the setting has no effect there; ledger row is stub.
