@@ -740,32 +740,76 @@ The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
 
-## Wave 3 EMI screen faces
+## EMI faces: approved Back Room identity
 
-One 1024 x 1024 sRGB UASTC atlas, sixteen 256px cells, 11 mips. Budget is
-5,592,404 bytes (5.333 MiB) as RGBA8 with mips, zero geometry.
-The manifest cells map is row-major with its origin at the top left.
+Replaces the Wave 3 redraw with crops from the approved Back Room EMI atlas.
+The slot and wheel source images have identical SHA-256
+`6398c8fbd533cf378344d34c814c9c5eedeffd11fb2b5b1f62e19e4e3ceab053`.
+Canonical happy keeps the original caret eyes and flat underscore mouth.
+No new face glyphs, palettes, moving patterns or screen geometry are authored.
 
-Neutral, happy, grin, wink, determined, drift focus, dizzy, sleepy, frozen,
-heart eyes, x eyes, smug, sad, sparkle, cheer and blank occupy all sixteen cells.
-Original face paths extend the project EMI face vocabulary: pink marks on a
-plum display, with pale highlights. There are no words, scan lines or animation.
-The blank cell is uniformly plum. Frozen uses a pale ice accent.
+The same 1024 x 1024 sRGB UASTC atlas has sixteen 256px cells and 11 mips.
+Budget stays 5,592,404 bytes (5.333 MiB) as RGBA8 with mips; extra allocation is 0.
+Original 152 x 137 crops use one uniform 224/152 scale, centered on the original
+RGB (62,46,92) background with bicubic reconstruction and a clear 16px border.
+The original face aspect is preserved. The blank cell samples that background.
 
-Bind to the existing emi_screen material. Keep its original full 0..1 UV island;
-select a cell through the texture transform or shader, not by editing model UVs.
-For a cell (col,row), sample between pixel (256*col+1,256*row+1) and
-(256*(col+1)-1,256*(row+1)-1), using the atlas top-left convention and the host's
-existing glTF texture vertical orientation. The atlas has opaque RGB and sRGB
-decoding. Clamp wrapping; cap selected mip at 2 for the intended 64px display.
-The engine owns cell changes, transition timing, emission and Gentle Visuals.
+| State ID | Approved expression | Source frame |
+|---|---|---|
+| neutral | idle0_0 | 3 |
+| happy | happy | 0 |
+| grin | cute | 1 |
+| wink | cute | 1 |
+| determined | squeeze | 2 |
+| drift-focus | squeeze | 2 |
+| dizzy | dizzy | 6 |
+| sleepy | melt | 9 |
+| frozen | idle0_0 | 3 |
+| heart-eyes | hearts | 7 |
+| x-eyes | squeeze | 2 |
+| smug | cute | 1 |
+| sad | melt | 9 |
+| sparkle | stars | 5 |
+| cheer | happy | 0 |
+| blank | sampled background | none |
 
-All sixteen packed cells were decoded and reviewed both enlarged and at 64px.
-Each has at least a 24px clear border; blank contains no expression pixels.
-Strict Khronos KTX validation passes. No kart mesh, screen UV or material is
-changed by this family. Expressions and accent choices are artistic assumptions.
-Source paths, generation script, masters and contact sheet stay private.
-Original work for CCP based on its existing EMI identity; project asset terms apply.
+These are state aliases, not claims that the source includes a literal wink,
+frozen face or cross-shaped eyes. Existing contextual motion and head marks
+carry those distinctions. The runtime alias `heart` resolves to `heart-eyes`,
+cell (1,2), retaining all sixteen manifest IDs and their existing positions.
+
+Bind to `emi_screen` without changing its full 0..1 UVs. Grid origin is top left;
+glTF v=0 addresses the top. Use flipY=false for PNG review textures. KTX2 uses
+the existing atlas path and cell order. Clamp wrapping, retain the documented
+1px UV inset and max safe selected mip 2. Engine currently ignores the latter
+two metadata hints; clear cell borders keep expression edges inside their cells.
+
+Warm-load the atlas before judging identity: the current engine still draws
+its own procedural fallback if the atlas is missing. That fallback and runtime
+loading are engine work. This asset update does not edit them.
+
+Every master cell exactly matches its declared resampled source reference.
+Packed cells were decoded, compared numerically and reviewed at large and
+64px display sizes. Worst cell mean absolute channel error is 0.149/255.
+Strict Khronos KTX validation passes. Masters, scripts, source crops,
+comparison and audit evidence stay private; project asset terms apply.
+
+### Running residency after the classic face replacement
+
+| Residency | Desktop MiB | Phone MiB |
+|---|---:|---:|
+| Face atlas, replacing existing allocation | 5.333332 | 5.333332 |
+| This family added allocation | 0 | 0 |
+| W4 additions, unchanged | 87.083347 | 9.770847 |
+| Persistent total including W3/W4 art families | 196.416664 | 119.104164 |
+| With selected menu backdrop | 205.416664 | 127.014320 |
+
+These are conservative RGBA8 mip delivery totals, not measured live-engine memory.
+Only the active sky palette nebula is resident. Render targets, decode buffers
+and 63,154 bytes of optional vertex sidecars are excluded. The 17-icon allowance
+is counted once. This face replacement adds no geometry or texture allocation.
+
+
 ## Wave 3 input and option glyphs
 
 63 original SVGs under ui/glyphs, 35,776 bytes total. Each is 56 x 56 and
