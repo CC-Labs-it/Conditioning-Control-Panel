@@ -350,7 +350,7 @@
       "kart_surface",
       "emi_screen"
     ],
-    "palette": "all",
+    "palette": "karts",
     "draws": 2,
     "texBytesBlock16": 699104,
     "textureEncoding": "UASTC",
@@ -360,7 +360,14 @@
       1.52835,
       1.26305,
       1.44
-    ]
+    ],
+    "tintAttributes": {
+      "cup_tint": "_CUP_TINT",
+      "saucer_tint": "_SAUCER_TINT"
+    },
+    "tintDetailChannel": "baseColorTexture.a",
+    "tintAlphaMode": "OPAQUE",
+    "attachPoint": "head_attach"
   },
   {
     "id": "bubble",
@@ -829,5 +836,9 @@
       0.71991
     ],
     "lod": 1
-  }
+  },
+  {"id":"head-bow","file":"models/head-bow.glb","kind":"accessory","tris":180,"texBytes":0,"boundRadiusM":0.205,"materialSlots":["accessory_surface"],"palette":"karts","draws":1,"attachPoint":"head_attach","attachTo":"emi-teacup-kart/head_attach"},
+  {"id":"head-cat-ears","file":"models/head-cat-ears.glb","kind":"accessory","tris":216,"texBytes":0,"boundRadiusM":0.256,"materialSlots":["accessory_surface.001"],"palette":"karts","draws":1,"attachPoint":"head_attach","attachTo":"emi-teacup-kart/head_attach"},
+  {"id":"head-halo","file":"models/head-halo.glb","kind":"accessory","tris":376,"texBytes":0,"boundRadiusM":0.276,"materialSlots":["accessory_surface.002"],"palette":"karts","draws":1,"attachPoint":"head_attach","attachTo":"emi-teacup-kart/head_attach"},
+  {"id":"head-spiral-crown","file":"models/head-spiral-crown.glb","kind":"accessory","tris":350,"texBytes":0,"boundRadiusM":0.199,"materialSlots":["accessory_surface.003"],"palette":"karts","draws":1,"attachPoint":"head_attach","attachTo":"emi-teacup-kart/head_attach"}
 ]

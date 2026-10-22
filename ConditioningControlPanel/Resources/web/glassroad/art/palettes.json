@@ -19,5 +19,49 @@
     "#edb4b1",
     "#f6d6a5",
     "#f7edd2"
-  ]
+  ],
+  "karts": {
+    "petal": {
+      "cup": "#efb7d2",
+      "saucer": "#d6d2ee",
+      "accessory": "head-bow",
+      "personality": "Always waves back."
+    },
+    "mint": {
+      "cup": "#9ed9cc",
+      "saucer": "#e9d6ad",
+      "accessory": "head-cat-ears",
+      "personality": "Quietly curious."
+    },
+    "honey": {
+      "cup": "#e7c47d",
+      "saucer": "#edc6bf",
+      "accessory": "head-halo",
+      "personality": "Warm company."
+    },
+    "periwinkle": {
+      "cup": "#b3b5e5",
+      "saucer": "#d8d3ef",
+      "accessory": "head-spiral-crown",
+      "personality": "Keeps a private joke."
+    },
+    "apricot": {
+      "cup": "#edb69a",
+      "saucer": "#d8c8df",
+      "accessory": "head-bow",
+      "personality": "Collects little moments."
+    },
+    "tide": {
+      "cup": "#a6ccdf",
+      "saucer": "#b5d4cb",
+      "accessory": "head-cat-ears",
+      "personality": "Watches the stars."
+    },
+    "pearl": {
+      "cup": "#eadbe2",
+      "saucer": "#e8dabb",
+      "accessory": "head-halo",
+      "personality": "Enjoys the company."
+    }
+  }
 }
