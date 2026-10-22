@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Models
         // infection-control.ccpmod copies before it became a built-in.
         public const string InfectionControlId = "infection-control";
 
+        /// <summary>The photo journal is available only for the three bimbofication mods (WPF UiUpdates).</summary>
+        public static bool SupportsBimboJournal(string? modId) =>
+            modId is CCPDefaultId or BambiSleepId or SissyHypnoId;
+
         public static ModManifest CCPDefault { get; } = CreateCCPDefault();
         public static ModManifest BambiSleep { get; } = CreateBambiSleep();
         public static ModManifest SissyHypno { get; } = CreateSissyHypno();
