@@ -9,7 +9,7 @@
 // move services"). The file exists and each member is NAMED so nothing disappears
 // silently; the bodies come back when the services move to Core.
 //
-// Members dropped (48):
+// Members dropped (41; the accent retint - VaultPartner, ShiftHue, RetintVaultChrome, TintShadow/TintGradient - is in ExclusivesTabView + Core VaultColor):
 //   private sealed class ExclusiveCardUi
 //   private readonly List<ExclusiveCardUi> _exclusiveCards
 //   private readonly List<TextBlock> _exclusiveTeaserMarks
@@ -24,10 +24,6 @@
 //   private static SolidColorBrush Freeze(…)
 //   private static Color VaultAccent(…)
 //   private const byte TeaserMarkAlpha
-//   private const double VaultPartnerHueShift
-//   internal static Color VaultPartner(…)
-//   private static Color VaultPartner(…)
-//   internal static Color ShiftHue(…)
 //   private static SolidColorBrush ExclusiveEdgeDefault(…)
 //   private static SolidColorBrush SpotlightEdgeDefault(…)
 //   private LinearGradientBrush AccentGradient(…)
@@ -41,9 +37,6 @@
 //   private static string TeaserEmoji(…)
 //   private static void OnExclusiveCardHover(…)
 //   internal void RefreshExclusivesTab(…)
-//   private void RetintVaultChrome(…)
-//   private static void TintShadow(…)
-//   private static void TintGradient(…)
 //   private void ApplyExclusiveCardState(…)
 //   private static void ApplyVeilLockBreath(…)
 //   private static Storyboard? ApplyFreeTodayPulse(…)
