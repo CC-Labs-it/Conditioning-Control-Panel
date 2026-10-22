@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
@@ -71,11 +72,11 @@ public class PanicReachTests
         // The voice intent routes here and nowhere else.
         var voice = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services",
             "AutonomyService.VoiceCommands.cs"));
-        Assert.Contains("Execute = () => App.MainWindowRef?.TriggerPanicFromRemote(),", voice);
+        Assert.Contains("Run = () => App.MainWindowRef?.TriggerPanicFromRemote() == true,", voice);
 
         // It used to skip the toy, every game window, the tube, the Deeper player, a web video, a
         // running leash task (whose lines reopen a lock card) and the engine itself.
-        var body = Body(RemoteControlSource(), "internal void TriggerPanicFromRemote()");
+        var body = Body(RemoteControlSource(), "internal bool TriggerPanicFromRemote()");
         foreach (var call in new[]
                  {
                      "PanicStopEverySurface();",
@@ -96,28 +97,109 @@ public class PanicReachTests
         Assert.DoesNotContain("_panicPressCount", body);
     }
 
+    // Owner 2026-10-22 (hard rule 6): the voice panic reaches exactly as far as the panic key.
     [Theory]
-    [InlineData(false, true, true)]    // the key could stop it: so may the voice
-    [InlineData(true, true, false)]    // Lockdown holds every key
-    [InlineData(false, false, false)]  // the player switched panic off
-    [InlineData(true, false, false)]
-    public void The_voice_panic_stops_the_engine_only_where_the_panic_key_could(
-        bool lockdown, bool panicKeyEnabled, bool expected)
+    // lockdown, panic key on, leashed -> reach
+    [InlineData(false, true, false, "Full")]       // normal: the whole panic
+    [InlineData(false, true, true, "Full")]        // leashed, key works: the whole panic
+    [InlineData(true, true, false, "Refused")]     // Lockdown holds every key
+    [InlineData(true, false, false, "Refused")]    // Lockdown with its no-panic safety
+    [InlineData(false, false, false, "Refused")]   // the player switched panic off
+    [InlineData(true, true, true, "LeashOnly")]    // panic always works on a leash
+    [InlineData(true, false, true, "LeashOnly")]
+    [InlineData(false, false, true, "LeashOnly")]
+    public void The_voice_panic_reaches_as_far_as_the_panic_key(
+        bool lockdown, bool panicKeyEnabled, bool leashed, string expected)
+        => Assert.Equal(expected, VoicePanicReach.Decide(lockdown, panicKeyEnabled, leashed).ToString());
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    public void The_blink_stop_and_the_voice_panic_share_one_panic_key_rule(bool lockdown, bool panicKeyEnabled)
     {
-        // Hard rule 6: a word must never end a Lockdown the panic key cannot touch.
-        Assert.Equal(expected, ConditioningControlPanel.Services.Safety.VoicePanicReach.StopsEngine(lockdown, panicKeyEnabled));
+        // One rule: where the key runs, neither hands-free stop is refused for Lockdown or panic off.
+        var blink = BlinkStopGate.Check(blinkTrainerRunning: false, lockdownActive: lockdown,
+            panicKeyEnabled: panicKeyEnabled, strictLockEnabled: false);
+        Assert.Equal(VoicePanicReach.PanicKeyRuns(lockdown, panicKeyEnabled), blink == BlinkStopGate.Block.None);
+        Assert.Equal(VoicePanicReach.PanicKeyRuns(lockdown, panicKeyEnabled),
+            VoicePanicReach.Decide(lockdown, panicKeyEnabled, leashed: false) == VoicePanicReach.Reach.Full);
+        var blinkSrc = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Safety", "BlinkStopGate.cs"));
+        Assert.Contains("VoicePanicReach.PanicKeyRuns(lockdownActive, panicKeyEnabled)", blinkSrc);
     }
 
     [Fact]
-    public void The_voice_panic_asks_the_reach_rule_before_it_stops_the_engine()
+    public void Strict_lock_alone_leaves_the_voice_panic_whole_as_it_leaves_the_key()
     {
-        var body = Body(RemoteControlSource(), "internal void TriggerPanicFromRemote()");
-        int gate = body.IndexOf("VoicePanicReach.StopsEngine(", StringComparison.Ordinal);
+        // The panic key is the way out of a strict video; Strict Lock never takes it away. The voice
+        // panic asks the same things the key asks and nothing about Strict Lock.
+        var key = Body(MainWindowSource(), "private void OnGlobalKeyPressed(Key key)");
+        Assert.DoesNotContain("StrictLockEnabled", key);
+        var body = Body(RemoteControlSource(), "internal bool TriggerPanicFromRemote()");
+        Assert.DoesNotContain("StrictLock", body);
+        Assert.DoesNotContain("IsStrictActive", body);
+        // The blink stop is stricter on purpose (owner 2026-09-28): it still refuses Strict Lock.
+        Assert.Equal(BlinkStopGate.Block.StrictLock,
+            BlinkStopGate.Check(false, lockdownActive: false, panicKeyEnabled: true, strictLockEnabled: true));
+    }
+
+    [Fact]
+    public void The_voice_panic_asks_the_reach_rule_before_it_touches_anything()
+    {
+        var body = Body(RemoteControlSource(), "internal bool TriggerPanicFromRemote()");
+        int gate = body.IndexOf("VoicePanicReach.Decide(", StringComparison.Ordinal);
         Assert.True(gate > 0, "the voice panic must ask VoicePanicReach");
         Assert.Contains("lockdownActive: App.Lockdown?.IsActive == true", body);
         Assert.Contains("panicKeyEnabled: App.Settings?.Current?.PanicKeyEnabled == true", body);
-        Assert.True(gate < body.IndexOf("_manuallyStoppedDuringSchedule = true;", StringComparison.Ordinal));
-        Assert.True(gate < body.IndexOf("if (_isRunning) StopEngine();", StringComparison.Ordinal));
+        Assert.Contains("leashed: Controls.Leash.LeashSurfaces.IsLeashed", body);
+        // Nothing the panic does comes before the answer: not the preamble, the quiet, the safety
+        // hold, the session pause, the effect stop or the engine stop.
+        foreach (var step in new[]
+                 {
+                     "App.EmiDesk?.Fire(\"panicPressed\"", "App.Chaster?.NoteSafetyExit();", "PanicAftermath.ArmQuiet();",
+                     "FirstShowService.Stop();", "LeashOnPanicPress();", "TrackPanicPressed();",
+                     "_sessionEngine.PauseSession();", "App.LockCard?.Stop(", "PanicStopEverySurface();",
+                     "App.Overlay?.Stop();", "_manuallyStoppedDuringSchedule = true;", "if (_isRunning) StopEngine();",
+                 })
+        {
+            int at = body.IndexOf(step, StringComparison.Ordinal);
+            Assert.True(at > gate, step + " must come after the reach check");
+        }
+
+        // Refused: a log line and out. Leash only: the leash part, as the key does (LeashPanicKeyWhilePanicOff).
+        var head = body[gate..body.IndexOf("App.EmiDesk?.Fire(", StringComparison.Ordinal)];
+        Assert.Contains("if (reach == Services.Safety.VoicePanicReach.Reach.LeashOnly)", head);
+        Assert.Contains("LeashOnPanicPress(panicRuns: false);", head);
+        Assert.Contains("if (reach == Services.Safety.VoicePanicReach.Reach.Refused)", head);
+        Assert.Equal(2, head.Split("return false;").Length - 1);
+        Assert.Equal(1, head.Split("LeashOnPanicPress(").Length - 1);
+
+        // One safety hold per panic (#2522 and #2526 both added one).
+        Assert.Equal(1, body.Split("App.Chaster?.NoteSafetyExit()").Length - 1);
+    }
+
+    [Fact]
+    public void The_panic_keys_leash_exception_is_the_one_the_voice_mirrors()
+    {
+        var leash = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "MainWindow", "MainWindow.Leash.cs"));
+        Assert.Contains("try { LeashOnPanicPress(panicRuns: false); }",
+            Body(leash, "private bool LeashPanicKeyWhilePanicOff(System.Windows.Input.Key key)"));
+        var key = Body(MainWindowSource(), "private void OnGlobalKeyPressed(Key key)");
+        Assert.Contains("if (Controls.Leash.LeashSurfaces.IsLeashed && !LeashHoldSwallows(key)) LeashPanicKeyWhilePanicOff(key);", key);
+    }
+
+    [Fact]
+    public void A_refused_voice_panic_says_nothing()
+    {
+        // The recogniser's "everything's off, you're safe" line only follows a panic that ran.
+        var voice = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services",
+            "AutonomyService.VoiceCommands.cs")).Replace("\r\n", "\n");
+        var run = Body(voice, "private static void ExecuteIntentAndConfirm(VoiceCommandIntent intent)");
+        int refused = run.IndexOf("if (!ran) return;", StringComparison.Ordinal);
+        Assert.True(refused > 0, "a refused Run must return before the confirmation");
+        Assert.True(refused < run.IndexOf("GigglePriority(VocabTokens.Apply(confirm)", StringComparison.Ordinal));
+        Assert.True(refused < run.IndexOf("PickVoiceLine(", StringComparison.Ordinal));
     }
 
     // ---- 4. what came back on its own after a panic ------------------------------------------------
