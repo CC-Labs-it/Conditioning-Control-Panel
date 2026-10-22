@@ -176,7 +176,9 @@ internal sealed class ConversationPageVm : CompanionObservable
         if (dispatcher == null || dispatcher.HasShutdownStarted) return;
         dispatcher.BeginInvoke(Reconcile, DispatcherPriority.Normal);
     }
-    internal static bool Shows(TurnKind kind) => kind is TurnKind.UserChat or TurnKind.AssistantChat;
+    // Every AI line the tube said shows here too (#1443): ambient replies and display-only tube lines.
+    internal static bool Shows(TurnKind kind) =>
+        kind is TurnKind.UserChat or TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine;
     private void Reconcile()
     {
         var next = (_session?.Turns ?? Array.Empty<CompanionTurn>()).Where(t => Shows(t.Kind)).ToArray();
@@ -287,6 +289,9 @@ internal sealed class ConversationPageVm : CompanionObservable
             {
                 Notice = Loc.Get(FailureNoticeKey(result.Failure));
                 CanRetry = result.Retryable || result.Failure == AiFailureKind.Cancelled;
+                // The cap's offer is never said here (no upsell inside a conversation): the Inbox
+                // files one row once this page is gone (MainWindow.Inbox.cs).
+                if (result.Failure == AiFailureKind.DailyLimit) Services.Startup.Conversion.ConversionSignals.NoteCompanionCap();
             }
         }
         catch (OperationCanceledException) { Notice = Loc.Get("companion_v2_cancelled"); CanRetry = true; }
