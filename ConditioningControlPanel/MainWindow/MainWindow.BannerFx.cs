@@ -31,6 +31,9 @@ namespace ConditioningControlPanel
     /// </summary>
     internal static class BannerFxRules
     {
+        internal static bool CanRemoveSparkle(long spriteRun, long currentRun, bool clearing, bool present)
+            => spriteRun == currentRun && !clearing && present;
+
         public const double HostHeight = 31;
         public const double HostMaxWidth = 744;
         public const double BeatFontSize = 14;
@@ -152,6 +155,8 @@ namespace ConditioningControlPanel
         private DispatcherTimer? _bannerSparkleTimer;
         private bool _bannerBreathing;
         private int _bannerSparkleSeed = Environment.TickCount;
+        private long _bannerSparkleRun;
+        private bool _clearingBannerSparkles;
 
         /// <summary>
         /// The banner's ambient half, called from ApplyChromeFxLoops so focus, minimise, the
@@ -350,6 +355,7 @@ namespace ConditioningControlPanel
             ClearBannerSparkles();
 
             var glow = TryFindResource("PinkColor") is Color c ? c : Color.FromRgb(0xFF, 0x69, 0xB4);
+            var spriteRun = _bannerSparkleRun;
             var run = TimeSpan.FromSeconds(BannerFxRules.SparkleRunSeconds);
             var flights = BannerFxRules.PlanRun(textLeft, textW, layerH, BannerFxRules.SparkleCount, _bannerSparkleSeed++);
             foreach (var f in flights)
@@ -392,8 +398,20 @@ namespace ConditioningControlPanel
                 foreach (var tl in new Timeline[] { travel, twinkle, alpha, spin })
                     Timeline.SetDesiredFrameRate(tl, 48);
 
-                // Each star removes only itself: a newer run may already share the layer.
-                alpha.Completed += (_, __) => BannerSparkleLayer.Children.Remove(sprite);
+                // A cleared run can still have completion events queued on the render tick.
+                alpha.Completed += (_, __) =>
+                {
+                    try
+                    {
+                        if (BannerFxRules.CanRemoveSparkle(spriteRun, _bannerSparkleRun,
+                            _clearingBannerSparkles, BannerSparkleLayer.Children.Contains(sprite)))
+                            BannerSparkleLayer.Children.Remove(sprite);
+                    }
+                    catch (Exception ex)
+                    {
+                        App.Logger?.Debug("Banner sparkle cleanup skipped: {Error}", ex.Message);
+                    }
+                };
 
                 slide.BeginAnimation(TranslateTransform.XProperty, travel);
                 scale.BeginAnimation(ScaleTransform.ScaleXProperty, twinkle);
@@ -405,8 +423,11 @@ namespace ConditioningControlPanel
 
         private void ClearBannerSparkles()
         {
+            ++_bannerSparkleRun;
+            _clearingBannerSparkles = true;
             try { BannerSparkleLayer?.Children.Clear(); }
             catch { }
+            finally { _clearingBannerSparkles = false; }
         }
     }
 }

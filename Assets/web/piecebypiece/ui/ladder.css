@@ -1,0 +1,193 @@
+/* Piece by Piece - the ladder (ui/ladder.js): the rating chip, the Ladder
+   screen, and the end card's rating beat. Every effect has an IN and an OUT:
+   the number's glow breathes in as it lands and fades back out; the stamps
+   slam in once and stay as ink. Reduced motion (.door.still) shows the state:
+   final number, stamps already down.
+
+   The Ladder screen is a board (2026-10-14 polish pass): your card, a podium
+   for the top three (brass, pewter, copper coins with an ink rim, the opening
+   intro's stamp language), the rest as rows under a thin pink scrollbar.
+   Arrival times come from ui/ladder-plan.js as --at per element; --since is how
+   far into the same arrival a repaint is, so a repaint carries on, never
+   restarts. Compositor-only motion (opacity, transform). */
+
+@font-face { font-family: 'PbpFredoka'; src: url('../assets/fonts/fredoka-latin.woff2') format('woff2'); font-weight: 300 700; font-display: swap; }
+
+:root {
+  --pbp-up: #6BE39A; --pbp-down: #FF6B7D;
+  --lad-ink: #150a20; --lad-thud: cubic-bezier(.2, 1.5, .4, 1);
+  --lad-face: 'PbpFredoka', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* --- the chip beside your name --- */
+.ladder-chip { font-variant-numeric: tabular-nums; letter-spacing: 0.08em; opacity: 0.7; }
+.ladder-chip:empty { display: none; }
+.ladder-chip.rated { color: var(--pbp-pink); opacity: 1; }
+.door-foot .ladder-chip { margin-left: 8px; }
+.ladder-me { display: flex; align-items: center; gap: 10px; }
+.ladder-me .ladder-chip { font-size: 13px; }
+.ladder-me .door-link { padding: 2px; }
+
+/* --- the Ladder screen: the board --- */
+.ladder-board { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
+.ladder-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; min-height: 36px; }
+.ladder-head > :first-child { justify-self: start; }
+.ladder-title { margin: 0; font: 600 24px/1 var(--lad-face); letter-spacing: 0.01em; color: var(--pbp-cream); }
+.ladder-count { justify-self: end; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.5; white-space: nowrap; }
+
+/* your card */
+.ladder-you {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 105, 180, 0.17), rgba(255, 105, 180, 0.04));
+  border: 1px solid rgba(255, 105, 180, 0.38);
+  animation: ladder-you-in 340ms var(--lad-thud) calc(40ms - var(--you-since, 0ms)) both;
+}
+@keyframes ladder-you-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+.ladder-you-who { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ladder-you-who b { font: 500 16px/1.1 var(--lad-face); color: var(--pbp-cream); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ladder-you-who small { font-size: 11px; letter-spacing: 0.06em; opacity: 0.62; }
+.ladder-you-n { font: 600 32px/1 var(--lad-face); color: var(--pbp-pink); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+.ladder-you-n.rolled { animation: ladder-you-glow 900ms ease-out both; }
+@keyframes ladder-you-glow {
+  0% { text-shadow: 0 0 0 rgba(255, 105, 180, 0); transform: scale(1); }
+  22% { text-shadow: 0 0 18px rgba(255, 105, 180, 0.85); transform: scale(1.07); }
+  100% { text-shadow: 0 0 0 rgba(255, 105, 180, 0); transform: scale(1); }
+}
+.ladder-you.unrated, .ladder-you.none {
+  grid-template-columns: auto 1fr; background: rgba(245, 230, 200, 0.04);
+  border: 1px dashed rgba(245, 230, 200, 0.28);
+}
+.ladder-you.none { grid-template-columns: 1fr; }
+.ladder-you p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--pbp-ink); opacity: 0.8; }
+.ladder-you-stamp {
+  display: inline-block; padding: 5px 9px; border: 2px solid var(--pbp-cream); border-radius: 7px;
+  font: 600 12px/1 var(--lad-face); letter-spacing: 0.12em; text-transform: uppercase; color: var(--pbp-cream);
+  transform: rotate(-5deg); opacity: 0.85;
+  animation: ladder-stamp-in 300ms var(--lad-thud) calc(160ms - var(--you-since, 0ms)) both;
+}
+
+/* the coins: rank in an ink-rimmed medal, like the intro's stamp */
+.ladder-coin {
+  display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; flex: none;
+  font: 700 15px/1 var(--lad-face); color: var(--lad-ink); font-variant-numeric: tabular-nums;
+  background: radial-gradient(circle at 34% 28%, #fff3c4 0%, #e2a544 52%, #8a5a1c 100%);
+  border: 2px solid var(--lad-ink); box-shadow: 0 2px 0 var(--lad-ink), inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+.ladder-coin.p2 { background: radial-gradient(circle at 34% 28%, #ffffff 0%, #c9c0d8 52%, #6c6480 100%); }
+.ladder-coin.p3 { background: radial-gradient(circle at 34% 28%, #ffd9bd 0%, #d07a4a 52%, #74361a 100%); }
+.ladder-coin.you { background: radial-gradient(circle at 34% 28%, #ffe0f0 0%, #ff69b4 55%, #9c2d6a 100%); }
+
+/* the podium: second, first, third; the winner tallest */
+.ladder-podium { display: grid; grid-template-columns: 1fr 1.14fr 1fr; align-items: end; gap: 8px; padding-top: 4px; }
+.ladder-step {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
+  animation: ladder-step-in 300ms ease-out calc(var(--at, 0ms) - var(--since, 0ms)) both;
+}
+@keyframes ladder-step-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.ladder-step .ladder-coin { margin-bottom: 4px; transform: rotate(-4deg); animation: ladder-coin-in 320ms var(--lad-thud) calc(var(--at, 0ms) + 170ms - var(--since, 0ms)) both; }
+.ladder-step.p1 .ladder-coin { width: 46px; height: 46px; font-size: 20px; }
+@keyframes ladder-coin-in { from { opacity: 0; transform: scale(1.8) rotate(-14deg); } to { opacity: 1; transform: rotate(-4deg); } }
+.ladder-step-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 13.5px/1.2 var(--lad-face); color: var(--pbp-cream); }
+.ladder-step-n { font: 600 17px/1 var(--lad-face); color: var(--pbp-pink); font-variant-numeric: tabular-nums; }
+.ladder-step.p1 .ladder-step-n { font-size: 21px; color: #ffd27a; }
+.ladder-step-g { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.42; }
+.ladder-block {
+  display: block; width: 100%; height: 22px; margin-top: 5px; border-radius: 10px 10px 3px 3px;
+  background: linear-gradient(180deg, rgba(245, 230, 200, 0.16), rgba(245, 230, 200, 0.03));
+  border: 1px solid rgba(245, 230, 200, 0.16); border-bottom: 0;
+  transform-origin: 50% 100%;
+  animation: ladder-block-in 340ms var(--lad-thud) calc(var(--at, 0ms) - var(--since, 0ms)) both;
+}
+.ladder-step.p2 .ladder-block { height: 34px; }
+.ladder-step.p1 .ladder-block { height: 48px; background: linear-gradient(180deg, rgba(255, 210, 122, 0.3), rgba(226, 165, 68, 0.05)); border-color: rgba(255, 210, 122, 0.35); }
+@keyframes ladder-block-in { from { transform: scaleY(0); } to { transform: none; } }
+.ladder-step.mine .ladder-step-name { color: var(--pbp-pink); }
+.ladder-step.mine .ladder-block { border-color: rgba(255, 105, 180, 0.6); background: linear-gradient(180deg, rgba(255, 105, 180, 0.3), rgba(255, 105, 180, 0.04)); }
+
+/* the list: rank 4 down, a thin pink scrollbar, the edges fade so it reads as more */
+.ladder-scroll {
+  position: relative; flex: 1 1 auto; min-height: 96px; overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 -8px; padding: 4px 8px 6px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 14px), transparent 100%);
+}
+.ladder-scroll::-webkit-scrollbar { width: 6px; }
+.ladder-scroll::-webkit-scrollbar-track { background: transparent; }
+.ladder-scroll::-webkit-scrollbar-thumb { background: rgba(255, 105, 180, 0.45); border-radius: 3px; }
+.ladder-scroll::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+/* a browser without the webkit parts (Firefox) gets the standard thin one; a webkit one keeps the arrowless pink thumb,
+   since setting scrollbar-color there switches the webkit parts off and brings the arrow buttons back */
+@supports not selector(::-webkit-scrollbar) { .ladder-scroll { scrollbar-width: thin; scrollbar-color: rgba(255, 105, 180, 0.5) transparent; } }
+.ladder-scroll:focus-visible { outline: 2px solid rgba(255, 105, 180, 0.6); outline-offset: -2px; border-radius: 10px; }
+.ladder-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ladder-row {
+  position: relative; display: grid; grid-template-columns: 30px 1fr auto 50px; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px; background: rgba(245, 230, 200, 0.04);
+  border: 1px solid transparent; font-size: 13px;
+  transition: background-color 160ms ease, transform 160ms ease;
+  animation: ladder-row-in 260ms var(--lad-thud) calc(var(--at, 0ms) - var(--since, 0ms)) both;
+}
+.ladder-row:nth-child(even) { background: rgba(245, 230, 200, 0.065); }
+.ladder-row:hover { background: rgba(245, 230, 200, 0.1); transform: translateX(2px); }
+@keyframes ladder-row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.ladder-rk { font: 500 13px/1 var(--lad-face); font-variant-numeric: tabular-nums; opacity: 0.5; text-align: right; }
+.ladder-name { color: var(--pbp-cream); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ladder-games { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.4; }
+.ladder-rating { font: 500 14px/1 var(--lad-face); font-variant-numeric: tabular-nums; text-align: right; color: var(--pbp-cream); }
+.ladder-row.mine, .ladder-row.mine:nth-child(even) { border-color: rgba(255, 105, 180, 0.6); background: rgba(255, 105, 180, 0.13); }
+.ladder-row.mine .ladder-rating, .ladder-row.mine .ladder-name, .ladder-row.mine .ladder-rk { color: var(--pbp-pink); opacity: 1; }
+.ladder-tag {
+  display: inline-block; margin-left: 7px; padding: 2px 6px 1px; border-radius: 6px; vertical-align: 1px;
+  font: 600 9px/1 var(--lad-face); font-style: normal; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--lad-ink); background: var(--pbp-pink);
+}
+/* found: a ring comes in round your row and goes back out */
+.ladder-row.mine.found::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 12px; border: 2px solid var(--pbp-pink);
+  pointer-events: none; animation: ladder-ring 1300ms ease-out both;
+}
+@keyframes ladder-ring { 0% { opacity: 0; transform: scale(0.97); } 25% { opacity: 0.95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.04); } }
+.ladder-pinned { padding-top: 8px; border-top: 1px dashed rgba(245, 230, 200, 0.2); }
+.ladder-pinned .ladder-row { animation-delay: calc(var(--at, 0ms) + 60ms - var(--since, 0ms)); }
+
+/* reduced motion: the board is simply there */
+.door.still .ladder-board *, .ladder-board.landed * { animation: none !important; }
+.door.still .ladder-row:hover, .ladder-board.landed .ladder-row:hover { transform: none; }
+
+/* a short screen: the podium tightens */
+@media (max-height: 640px) {
+  .ladder-step.p1 .ladder-block { height: 30px; } .ladder-step.p2 .ladder-block { height: 22px; } .ladder-block { height: 14px; }
+  .ladder-step.p1 .ladder-coin { width: 38px; height: 38px; font-size: 17px; }
+  .ladder-step-g { display: none; }
+}
+
+/* --- the end card's rating beat --- */
+.rating-slot:empty { display: none; }
+.rating-end { position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 52px; }
+.rating-num { font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--pbp-cream); }
+.rating-stamp, .rating-best {
+  display: inline-block; padding: 4px 10px; border-radius: 8px; border: 2px solid currentColor;
+  font: 600 15px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.06em; font-variant-numeric: tabular-nums;
+  opacity: 0; transform: scale(1.9) rotate(-12deg);
+}
+.rating-best { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pbp-pink); transform: scale(1.9) rotate(9deg); }
+.rating-end.up .rating-stamp { color: var(--pbp-up); }
+.rating-end.down .rating-stamp { color: var(--pbp-down); }
+.rating-end.flat .rating-stamp { color: var(--pbp-cream); }
+/* landed: the stamp slams in, the number glows in and back out */
+.rating-end.landed .rating-stamp { animation: ladder-stamp 300ms cubic-bezier(.2, 1.5, .4, 1) both; }
+.rating-end.landed .rating-best { animation: ladder-stamp-b 300ms cubic-bezier(.2, 1.5, .4, 1) 520ms both; }
+.rating-end.up.landed .rating-num { animation: ladder-glow-up 1100ms ease-out both; }
+.rating-end.down.landed .rating-num { animation: ladder-glow-down 1100ms ease-out both, door-shiver 250ms ease-in-out both; }
+@keyframes ladder-stamp { from { opacity: 0; transform: scale(1.9) rotate(-12deg); } to { opacity: 1; transform: rotate(-4deg); } }
+@keyframes ladder-stamp-in { from { opacity: 0; transform: scale(1.8) rotate(-14deg); } to { opacity: 0.85; transform: rotate(-5deg); } }
+@keyframes ladder-stamp-b { from { opacity: 0; transform: scale(1.9) rotate(9deg); } to { opacity: 1; transform: rotate(3deg); } }
+@keyframes ladder-glow-up { 0% { text-shadow: none; } 25% { text-shadow: 0 0 18px rgba(107, 227, 154, 0.9); color: var(--pbp-up); } 100% { text-shadow: none; } }
+@keyframes ladder-glow-down { 0% { text-shadow: none; } 25% { text-shadow: 0 0 18px rgba(255, 107, 125, 0.8); color: var(--pbp-down); } 100% { text-shadow: none; } }
+.rating-note { margin: 0; font-size: 11px; letter-spacing: 0.14em; text-transform: lowercase; opacity: 0.5; }
+.rating-note.rank { opacity: 0.7; }
+
+/* reduced motion: the state, not the travel */
+.door.still .ladder-row, .door.still .rating-end .rating-num { animation: none; }
+.door.still .rating-end .rating-stamp, .door.still .rating-end .rating-best { animation: none; opacity: 1; transform: rotate(-4deg); }

@@ -5,7 +5,7 @@ using Xunit;
 
 namespace CCP.Core.Tests;
 
-/// <summary>PhrasePoolCustody.FoldUserPoolEdit, copied verbatim from WPF SessionEngine.cs:1224-1270 (#906).
+/// <summary>PhrasePoolCustody.FoldUserPoolEdit, the one copy: WPF SessionEngine calls it since session-core-a (#906).
 /// No WPF tests existed to port; these are written from the oracle's list.</summary>
 public sealed class PhrasePoolFoldTests
 {
