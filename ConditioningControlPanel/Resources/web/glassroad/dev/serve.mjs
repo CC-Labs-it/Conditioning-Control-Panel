@@ -9,6 +9,10 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
 // here; only that tree is mounted beside this one
 const ARCADEMY = resolve(ROOT, '..', 'arcademy');
+// DEV ONLY: the owner's private song folder (charts + mp3s, handoff-1022/MUSIC-ROAD-BRIEF.md) at /private-audio/.
+// It is read in place and never copied into this tree; GLASSROAD_AUDIO_DIR points it elsewhere.
+const PRIVATE = resolve(process.env.GLASSROAD_AUDIO_DIR || 'C:/Projects/glassroad-audio');
+const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -27,8 +31,9 @@ const server = createServer(async (req, res) => {
   try {
     let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (path.endsWith('/')) path += 'index.html';
-    const base = path.startsWith('/arcademy/') ? ARCADEMY : ROOT;
-    const file = normalize(join(base, base === ARCADEMY ? path.slice('/arcademy'.length) : path));
+    const mount = MOUNTS.find(([pre]) => path.startsWith(pre));
+    const base = mount ? mount[1] : ROOT;
+    const file = normalize(join(base, mount ? path.slice(mount[0].length - 1) : path));
     if (file !== base && !file.startsWith(base + sep)) { res.writeHead(403, head); res.end('forbidden'); return; }
     const st = await stat(file);
     if (!st.isFile()) throw new Error('not a file');

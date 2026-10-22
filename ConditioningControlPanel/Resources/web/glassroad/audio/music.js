@@ -6,8 +6,12 @@
  * `beat` reads the song position off the context clock, so a paused (suspended) context holds the
  * beat too. B1 sets only the bpm on the game clock; there is no phase lock yet. No chart ships in B1.
  * No speech is made here: the music is whatever the file holds.
+ * Music road (handoff-1022/MUSIC-ROAD-BRIEF.md): `song` is the normalised chart (audio/chart.js) and
+ * `songS` the position the player HEARS (context time minus outputLatency), the one clock every music
+ * visual reads. A chart's decoded audio is kept, so playing the same chart again restarts it at once.
  */
 import { mixGet } from './mix.js';
+import { normalizeChart } from './chart.js';
 
 /** Beat at song time tS: { bpm, phase 0..1, index } (index < 0 before the first downbeat). */
 export function beatAt(chart, tS) {
@@ -48,14 +52,18 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   const gain = ctx.createGain();
   gain.gain.value = 0;
   gain.connect(out);
-  let src = null, startT = 0, durS = 0, chart = null, bpm = 96, volume = 1, token = 0;
+  let src = null, startT = 0, durS = 0, chart = null, song = null, bpm = 96, volume = 1, token = 0;
+  let cached = null;   // { url, buffer, chart, song }: the last chart's decode, reused by a restart
   const g = (k) => mixGet(feel, k);
   const feelBpm = () => { try { return feel.get('clock.bpm'); } catch (e) { return 96; } };
 
+  // what the speakers play now: the context clock less the output path (outputLatency, else baseLatency)
+  const latency = () => { const o = ctx.outputLatency; return Number.isFinite(o) && o > 0 ? o : (Number.isFinite(ctx.baseLatency) ? ctx.baseLatency : 0); };
   function songTime() {
     if (!src) return 0;
-    const t = ctx.currentTime - startT;
-    return durS > 0 ? ((t % durS) + durS) % durS : t;
+    const t = ctx.currentTime - startT - latency();
+    if (t < 0) return 0;
+    return durS > 0 ? t % durS : t;
   }
 
   function stopSrc(fadeS) {
@@ -77,7 +85,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     const t = ctx.currentTime;
     s.start(t);
     src = s; startT = t; durS = buffer && buffer.duration > 0 ? buffer.duration : 0;
-    chart = c; bpm = b;
+    chart = c; bpm = b; song = c ? (cached && cached.chart === c ? cached.song : normalizeChart(c)) : null;
     gain.gain.cancelScheduledValues(t);
     gain.gain.setValueAtTime(0, t);
     gain.gain.setTargetAtTime(volume, t, Math.max(g('musicFadeInS') / 3, 0.01));
@@ -97,6 +105,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     async playChart(chartUrl) {
       const my = ++token;
       try {
+        if (cached && cached.url === String(chartUrl)) return start(cached.buffer, cached.chart, cached.chart.bpm);
         if (typeof fetchFn !== 'function') return false;
         const r = await fetchFn(chartUrl);
         if (!r || !r.ok) return false;
@@ -106,6 +115,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
         if (!a || !a.ok) return false;
         const buf = await decode(await a.arrayBuffer());
         if (my !== token) return false;           // a later play or stop won
+        cached = { url: String(chartUrl), buffer: buf, chart: c, song: normalizeChart(c) };
         return start(buf, c, c.bpm);
       } catch (e) { console.warn('[music] chart', e); return false; }
     },
@@ -120,13 +130,17 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
         return start(buf, null, b);
       } catch (e) { console.warn('[music] file', e); return false; }
     },
-    stop() { token++; stopSrc(g('musicFadeOutS')); chart = null; },
+    stop() { token++; stopSrc(g('musicFadeOutS')); chart = null; song = null; },
     setVolume(v) {
       volume = Math.max(0, Math.min(1, Number(v) || 0));
       if (src) { try { gain.gain.setTargetAtTime(volume, ctx.currentTime, 0.05); } catch (e) { gain.gain.value = volume; } }
     },
     get playing() { return !!src; },
     get chart() { return chart; },
+    /** The normalised chart (audio/chart.js) of the playing track, or null (a picked file has none). */
+    get song() { return src ? song : null; },
+    /** Song position the player hears, seconds (wraps on the loop); 0 when nothing plays. */
+    get songS() { return songTime(); },
     /** Song position in seconds (wraps on the loop). */
     get timeS() { return songTime(); },
     get beat() {

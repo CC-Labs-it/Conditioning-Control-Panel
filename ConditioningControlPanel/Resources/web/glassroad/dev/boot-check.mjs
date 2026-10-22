@@ -180,7 +180,7 @@ async function run(backend, httpPort) {
     report.final = st && { phase: st.phase, backend: st.backend, tier: st.tier, fps: st.fps, drawCalls: st.drawCalls,
       triangles: st.triangles, lap: st.lap, place: st.place, s: Math.round(st.s), drops: st.drops, rescues: st.rescues, laps: st.laps,
       result: st.result, effectsSeen: st.effects, gpu: st.gpu, shadowMode: st.shadowMode, sfx: st.sfx, renderScale: st.renderScale, items: pick(/^(item-|bubble-pop)/), screen: pick(/^effect-/),
-      race: pick(/^(bump|slipstream|overtake|place-change|race-|racer-event)/), seed: st.seed };
+      race: pick(/^(bump|slipstream|overtake|place-change|race-|racer-event)/), seed: st.seed, chart: st.chart, song: st.song, wordPops: pick(/^word-pop/) };
     try { await c.send('Browser.close'); } catch (e) { /* closing */ }
   } catch (e) {
     if (e) report.errors.push('harness: ' + e.message);

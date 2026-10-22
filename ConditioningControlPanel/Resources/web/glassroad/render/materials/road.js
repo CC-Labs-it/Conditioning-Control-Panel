@@ -19,7 +19,7 @@
  */
 import { MeshBasicNodeMaterial, DoubleSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping } from 'three/webgpu';
 import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, normalWorld, positionWorld, cameraPosition,
-  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step } from 'three/tsl';
+  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
 
@@ -33,6 +33,39 @@ export const ROAD_POLISH = Object.freeze({
 });
 
 const TAU = Math.PI * 2;
+
+/** Music road shader numbers (the per-frame amounts come from render/musicRoadMath.js). */
+export const MUSIC_ROAD = Object.freeze({
+  nearM: [4, 14], vibLambdaM: 7, vibHz: 2.2,
+  edgeMps: 30, melodyLambdaM: 9, melodyHz: 1.5,
+  shardM: 2.8, crackW: [0.02, 0.1], shardHue: 0.45,
+  rippleMps: 16, rippleW: 0.7, waveW: 6, waveLight: 0.35,
+  calmFlatten: 0.55, calmLines: 0.6, calmSheen: 0.6, bigContrast: 0.12, bigLines: 0.4, bassGlow: 0.5,
+});
+
+/** The music road's uniforms, every one at rest (no song = the road as it always was). */
+function musicUniforms() {
+  return { t: uniform(0), kartS: uniform(0), vib: uniform(0), melody: uniform(0), bassW: uniform(0),
+    ripAge: uniform(9), ripAmp: uniform(0), waveD: uniform(0), waveAmp: uniform(0), shatter: uniform(0), flash: uniform(0),
+    echoL: uniform(0), echoR: uniform(0), calm: uniform(0), big: uniform(0), eFps: uniform(25), eW: uniform(1) };
+}
+
+// one silent texel until a song arrives
+const ENERGY_REST = (() => {
+  const t = new DataTexture(new Uint8Array(4), 1, 1, RGBAFormat, UnsignedByteType);
+  t.magFilter = t.minFilter = LinearFilter; t.needsUpdate = true;
+  return t;
+})();
+
+/** A song's energy curves as one RGBA row (R mix, G drums, B bass, A vocals), at most 8192 texels. */
+export function energyTexture(song) {
+  const e = song.energy, n = Math.max(e.mix.length, e.vocals.length, 1), w = Math.min(n, 8192), data = new Uint8Array(w * 4);
+  const at = (a, i) => (a.length ? a[Math.min(a.length - 1, Math.floor(i * n / w))] : 0);
+  for (let i = 0; i < w; i++) { data[i * 4] = at(e.mix, i); data[i * 4 + 1] = at(e.drums, i); data[i * 4 + 2] = at(e.bass, i); data[i * 4 + 3] = at(e.vocals, i); }
+  const t = new DataTexture(data, w, 1, RGBAFormat, UnsignedByteType);
+  t.wrapS = t.wrapT = ClampToEdgeWrapping; t.magFilter = t.minFilter = LinearFilter; t.generateMipmaps = false; t.needsUpdate = true;
+  return { texture: t, width: w, fps: e.fps * w / n };
+}
 
 /** Half road width per metre of s as a 1-row texture (R = halfWidth / 16). */
 function widthTexture(track) {
@@ -102,17 +135,43 @@ function patterns(u, a, per, S, calm, spin) {
 export function createRoadMaterial(pal, art = null, track = null) {
   const P = { ...ROAD_POLISH, ...(LOOK.roadPolish || {}) };
   const S = { ...SPECTRUM_LOOK, ...(LOOK.roadSpectrum || {}) };
-  const u = { phase: uniform(0), contrast: uniform(1), bright: uniform(0), sheen: uniform(1) };
+  const u = { phase: uniform(0), contrast: uniform(1), bright: uniform(0), sheen: uniform(1), music: musicUniforms(), energyNode: null };
   const lapM = track && track.lengthM > 0 ? track.lengthM : 0;
   const fit = (b) => (lapM ? fitPeriod(lapM, b) : b);
   const per = { ramp: fit(S.rampM), packet: fit(S.packetM), chevron: fit(S.chevronM), checker: fit(S.checkerM),
     ring: fit(S.ringCellM), weave: fit(S.weaveM), warpA: fit(30), warpB: fit(54), spin: fit(12) };
   if (pal.flow) { if (lapM) pal.flowWrap = lapM; pal.motionSource = u.contrast; }
   const flow = pal.flow || u.phase;
-  const p = uv(), uL = p.x, au = abs(uL);
+  const p = uv(), uRaw = p.x;
   const a = p.y.add(flow);
   const toCam = cameraPosition.sub(positionWorld), dist = toCam.length(), V = normalize(toCam);
   const calm = smoothstep(S.nearCalmM[0], S.nearCalmM[1], dist);
+
+  // music road (render/musicRoad.js sets these from the song clock; all at rest = the road as before).
+  // Paint only: the lines shake and the edges draw, the surface the kart drives on never moves.
+  const M = MUSIC_ROAD, mu = u.music;
+  const near = smoothstep(M.nearM[0], M.nearM[1], dist);   // right under the kart the lines move least
+  const dAhead = lapM ? fract(p.y.sub(mu.kartS).div(lapM).add(0.5)).sub(0.5).mul(lapM) : p.y.sub(mu.kartS);
+  const vib = sin(p.y.mul(TAU / M.vibLambdaM).sub(mu.t.mul(TAU * M.vibHz))).mul(mu.vib).mul(near.mul(0.65).add(0.35));
+  const uL = uRaw.add(vib), au = abs(uL);
+  // the edge lines draw the melody: a wave whose height is the vocals (and the mix) at the song time
+  // that will reach the kart from that far ahead
+  const fr = mu.t.add(dAhead.div(M.edgeMps)).mul(mu.eFps);
+  const env = texture(ENERGY_REST, vec2(max(fr, 0).add(0.5).div(mu.eW), 0.5));
+  u.energyNode = env;   // musicRoad.setSong swaps its .value for the song's energy row
+  const melody = sin(dAhead.mul(TAU / M.melodyLambdaM).sub(mu.t.mul(TAU * M.melodyHz))).mul(env.a)
+    .add(sin(dAhead.mul(TAU / (M.melodyLambdaM * 0.37))).mul(env.r).mul(0.5)).mul(mu.melody);
+  // the trigger shatter: glass shards fixed to the road (a cell grid in road metres), hue shifted apart
+  const cp = vec2(uRaw, p.y).div(M.shardM), ci = floor(cp), cf = fract(cp);
+  let F1 = float(9), F2 = float(9), shardId = float(0);
+  for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+    const cid = ci.add(vec2(ox, oy));
+    const h1 = hash(cid.x.add(cid.y.mul(113.1))), h2 = hash(cid.x.mul(17.3).add(cid.y.mul(29.7)).add(5.1));
+    const d = length(vec2(ox, oy).add(vec2(h1, h2)).sub(cf));
+    F2 = min(F2, max(F1, d)); shardId = select(d.lessThan(F1), h1, shardId); F1 = min(F1, d);
+  }
+  const crack = float(1).sub(smoothstep(M.crackW[0], M.crackW[1], F2.sub(F1))).mul(mu.shatter).mul(near);
+  const shardHue = shardId.sub(0.5).mul(M.shardHue).mul(mu.shatter);
   const ramp = pal.rampRoad ? (x) => pal.rampRoad(x) : pal.ramp ? (x) => pal.ramp(x) : (x) => mix(pal.col(0), pal.col(1), sin(x.mul(TAU)).mul(0.5).add(0.5));
   const skyRamp = pal.ramp ? (x) => pal.ramp(x) : ramp;
 
@@ -131,18 +190,31 @@ export function createRoadMaterial(pal, art = null, track = null) {
       xa = xa.add(q.x.mul(wa)); la = la.add(q.l.mul(wa)); xb = xb.add(q.x.mul(wb)); lb = lb.add(q.l.mul(wb));
     });
   } else { xa = xb = pats[0].x; la = lb = pats[0].l; }
+  xa = xa.add(shardHue); xb = xb.add(shardHue);
 
-  // edges and centre: a steady bright edge lane and a calm centre line frame the racing line
+  // edges and centre: a steady bright edge lane and a calm centre line frame the racing line; the music
+  // breathes the edge lanes with the bass and moves the edge lines with the melody
   const half = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(16) : float(P.halfWidthM);
-  const toEdge = half.sub(au);
-  const edgeW = float(1).sub(smoothstep(S.edgeLaneM * 0.6, S.edgeLaneM, toEdge));
+  const toEdge = half.sub(au).sub(melody);
+  const laneM = float(S.edgeLaneM).mul(mu.bassW.add(1));
+  const edgeW = float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge));
   const centre = float(1).sub(smoothstep(S.centreLineW * 0.5, S.centreLineW, au));
 
+  // modes: calm (a break) flattens toward clear glass, big (a drop, a peak) lifts the contrast and lines
+  const con = u.contrast.mul(float(1).sub(mu.calm.mul(M.calmFlatten))).mul(mu.big.mul(M.bigContrast).add(1)).min(1.15);
   const patCol = mix(ramp(xa), ramp(xb), tB);
   const edgeCol = ramp(a.div(per.ramp).add(0.5));
   const avg = pal.col(0).mul(0.5).add(pal.col(1).mul(0.3)).add(pal.col(2).mul(0.2));
-  const body = mix(avg, mix(patCol, edgeCol.mul(1 + S.edgeGain), edgeW), u.contrast);
-  const lineV = mix(la, lb, tB).mul(float(1).sub(edgeW)).mul(u.contrast);
+  const body = mix(avg, mix(patCol, edgeCol.mul(float(1 + S.edgeGain).add(mu.bassW.mul(M.bassGlow))), edgeW), con);
+  // events as light in the lines: a kick ring running out to the edges, the drop's pressure wave down the
+  // road, the shatter's cracks, an echo's shimmer on the edge of its side
+  const ring = exp(au.sub(mu.ripAge.mul(M.rippleMps)).div(M.rippleW).pow(2).negate()).mul(mu.ripAmp);
+  const wave = exp(dAhead.sub(mu.waveD).div(M.waveW).pow(2).negate()).mul(mu.waveAmp);
+  const echo = mix(mu.echoR, mu.echoL, step(uL, float(0)));
+  const shimmer = echo.mul(edgeW).mul(sin(p.y.mul(1.9).sub(mu.t.mul(11))).mul(0.5).add(0.5));
+  const music = ring.mul(float(1).sub(edgeW)).add(wave).add(crack).add(shimmer);
+  const lineV = mix(la, lb, tB).mul(float(1).sub(edgeW)).mul(con)
+    .mul(float(1).sub(mu.calm.mul(M.calmLines))).mul(mu.big.mul(M.bigLines).add(1)).add(music);
   const hot = mix(vec3(1, 0.97, 0.99), body, 0.35);
 
   const bands = art && art.tex('road-bands-mask'), rough = art && art.tex('road-glass-roughness');
@@ -184,9 +256,11 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const glint = spot.mul(lit).mul(catchA).mul(range).mul(P.glintGain).mul(u.sheen);
 
   const rim = float(1).sub(smoothstep(0, P.rimInM, toEdge)).mul(P.rimGain);
-  const polish = refl.add(edgeCol.mul(0.6).add(0.4).mul(rim)).mul(u.sheen).add(vec3(1, 0.97, 0.99).mul(glint));
+  const polish = refl.add(edgeCol.mul(0.6).add(0.4).mul(rim)).mul(u.sheen).mul(mu.calm.mul(M.calmSheen).add(1)).add(vec3(1, 0.97, 0.99).mul(glint));
+  // u.bright carries the beat breath; the drop wave and the shatter add their own light (mu.flash is
+  // photosafe gated by the caller, 0 when refused or under Gentle)
   const surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
-    .mul(u.bright.add(1)).mul(haze).mul(LOOK.roadGain);
+    .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze).mul(LOOK.roadGain);
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
   m.colorNode = surface.add(deepCol).add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish);
   m.opacityNode = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))

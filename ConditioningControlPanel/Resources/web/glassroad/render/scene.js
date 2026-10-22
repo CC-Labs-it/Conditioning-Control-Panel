@@ -42,6 +42,8 @@ import { createSkids } from './skids.js';
 import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
 import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
+import { createMusicRoad } from './musicRoad.js';
+import { createWordBubbles } from './wordBubbles.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -197,6 +199,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const kartPos = [];
   let itemVis = null;
   try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
+  // the music road (handoff-1022/MUSIC-ROAD-BRIEF.md): the road, rails and helix answer the song; the
+  // player's own word bubbles ride the road. No song: both rest and the race looks as before
+  let musicRoad = null, wordVis = null;
+  try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
+  try { wordVis = createWordBubbles(scene, { feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word bubbles failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
   const pending = [];
@@ -316,9 +323,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
     road.uniforms.sheen.value = gentle ? LOOK.sheenGentle : 1;
+    // the song clock (music.songS) drives the music road; with a song the breath below rides its real beats
+    const mf = musicRoad ? musicRoad.update(view.song || null, view.songS, { kartS: k[S.s] || 0, gentle }) : null;
     // beat breath: a soft swell with no step at the beat (rises over breathRise of the beat, falls to
     // the next); under 10% luminance, so it is not a photosafe transition (owner call, see CONTRACT)
-    const ph = view.beat.phase, r = LOOK.beatBreathRise;
+    const ph = mf && mf.on ? mf.beatPhase : view.beat.phase, r = LOOK.beatBreathRise;
     const breath = gentle ? 0 : LOOK.beatBreath * (ph < r ? smoothstep(0, 1, ph / r) : ((1 - ph) / (1 - r)) ** 2);
     road.uniforms.bright.value = (fx.bandBright || 0) + breath;
 
@@ -364,6 +373,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     lines.update(dt, k, fx, kart);
     if (view.mode === 'menu') lines.object.visible = false;
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera);   // visuals read racer .st (CONTRACT-B1 view.karts)
+    if (wordVis) wordVis.update(view.words || []);
   }
 
   function dispose() {
@@ -375,8 +385,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (spirals) spirals.dispose();
     if (media) media.dispose();
     if (routes) routes.dispose();
+    if (musicRoad) musicRoad.dispose();
+    if (wordVis) wordVis.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media,
-    resetReactions: () => { karts.resetReactions(); skids.clear(); } };   // a restart also wipes the last race's skid marks
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad,
+    // a restart also wipes the last race's skid marks and word bubbles
+    resetReactions: () => { karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); } };
 }

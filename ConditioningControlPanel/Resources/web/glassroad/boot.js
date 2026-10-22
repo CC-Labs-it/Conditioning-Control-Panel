@@ -39,12 +39,19 @@ import { createFx } from './fx/reactions.js';
 import { createEffects } from './fx/effects.js';
 import { createAudio } from './audio/bus.js';
 import { createHud } from './hud/hud.js';
+import { createWordRun } from './sim/words.js';
+import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
 import { createSlotFx } from './render/items/slotfx.js';
 import { createGateScreen } from './render/gateScreen.js';
 
 const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
+// the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
+// server (port 8790) tries the private song folder it mounts at /private-audio/. Nothing ships a chart yet.
+const DEV_HOST = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
+const CHARTS = qs.get('chart') === '0' ? [] : qs.get('chart') ? [qs.get('chart')]
+  : DEV_HOST ? ['/private-audio/pink-road/chart.json', '/private-audio/pink-road/chart.v0.json'] : [];
 const COUNT = 8;
 const canvas = document.getElementById('view');
 const cardEl = document.getElementById('card');
@@ -156,6 +163,10 @@ async function boot() {
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
   bus.on('effect-end', () => { debug.effectNow = null; });
+  // the player's own word bubbles (sim/words.js): built from the song's chart, never sent anywhere
+  const wordCount = createWordCount(document.getElementById('hud'));
+  const NO_WORDS = [];
+  let words = null;
   hud.setReady(false, 'Warming up');
   hud.setHostGentle(hostGentle);
   hud.setCard('start', { title: trackName });
@@ -255,7 +266,33 @@ async function boot() {
     racers.interpolate(1);
     cam.snap(P.view, track, renderer.aspect);
     finishAt = 0; result = null; debug.result = null; debug.place = 0;
+    armWords();
   }
+  /** A word run for the playing song (a new song builds one, the same song resets it); none without words. */
+  function armWords() {
+    const song = audio.music && audio.music.song;
+    if (!song || !song.words.length) { words = null; wordCount.show(false); return; }
+    if (!words || words.song !== song) {
+      words = createWordRun(song, track, { seed }); words.song = song;
+      words.onPop((e) => { bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on')); });
+    } else words.reset(seed);
+    wordCount.show(true);
+  }
+  /** Start the race song from the top: the first chart in CHARTS that loads. */
+  let songToken = 0;
+  async function playSong() {
+    const my = ++songToken;
+    for (const url of CHARTS) {
+      if (my !== songToken || !audio.music) return;
+      if (await audio.music.playChart(url)) {
+        if (my !== songToken) return;
+        debug.chart = url;
+        armWords();
+        return;
+      }
+    }
+  }
+  function stopSong() { songToken++; if (audio.music) audio.music.stop(); words = null; wordCount.show(false); }
   function unpause() {
     if (!paused) return;
     paused = false; clock.pause(false); audio.setPaused(false); bus.emit('pause', { on: false });
@@ -279,9 +316,12 @@ async function boot() {
     queue.flush(bus);
     bridge.runStarted({ track: track.id, laps });
   }
-  function startRace() { audio.start(); unpause(); resetAll(); begin(); }
+  function startRace() {
+    const started = audio.start(); unpause(); resetAll(); begin();
+    if (CHARTS.length) Promise.resolve(started).then(playSong).catch((e) => console.warn('[glassroad] song', e));
+  }
   function toMenu() {
-    unpause(); resetAll();
+    stopSong(); unpause(); resetAll();
     state = 'menu';
     hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps });
   }
@@ -403,10 +443,21 @@ async function boot() {
     cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
+    // the song position the player hears (frozen while paused: the context is suspended)
+    const music = audio.music, song = inRace && music ? music.song : null, songS = song ? music.songS : NaN;
+    const pv = P.view;
+    const wordLive = words && song ? words.update(songS,
+      { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
+    if (words) wordCount.set(words.pops, words.total);
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused });
+      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive });
+    if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
+      const m = world.musicRoad.frame;
+      debug.song = { t: Math.round(songS * 100) / 100, section: m.sectionId, calm: +m.calm.toFixed(2), helix: +m.helix.toFixed(2),
+        big: +m.big.toFixed(2), shatter: +m.shatter.toFixed(2), wave: +m.waveAmp.toFixed(2), words: words ? words.pops : 0, wordsOf: words ? words.total : 0 };
+    }
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: paused ? 0 : frameDt });   // 7. render
 

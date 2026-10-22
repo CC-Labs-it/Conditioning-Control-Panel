@@ -26,7 +26,8 @@ export const RAIL_TUBE = Object.freeze({
 
 export function createRailMaterial(pal, art = null) {
   const T = { ...RAIL_TUBE, ...(LOOK.railTube || {}) };
-  const u = { flow: uniform(0), contrast: uniform(1) };
+  // pulse / vib / t: the music road (render/musicRoad.js) glows the tube with the bass and shakes its streak with the hits
+  const u = { flow: uniform(0), contrast: uniform(1), pulse: uniform(0), vib: uniform(0), t: uniform(0) };
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide, depthWrite: false });
   const glow = art && art.tex('rail-glow-mask');
   const h = clamp(uv().x.div(LOOK.railHeightM), 0, 1);
@@ -40,7 +41,8 @@ export function createRailMaterial(pal, art = null) {
   const wall = pow(abs(sin(ang)), T.wallPow);
   const facing = cos(ang);
   const band = (at, wd) => float(1).sub(smoothstep(0, wd, abs(h.sub(at))));
-  const streak = band(T.streakAt, T.streakW).mul(T.streakGain);
+  const shake = sin(uv().y.mul(0.9).sub(u.t.mul(14))).mul(u.vib).div(LOOK.railHeightM);
+  const streak = band(shake.add(T.streakAt), T.streakW).mul(T.streakGain);
   const low = band(T.lowAt, T.lowW).mul(T.lowGain);
   const core = glow ? texture(glow, vec2(h, uv().y.div(LOOK.artRoadTileM[1]))).r.mul(0.6).add(facing.mul(facing).mul(0.4)) : facing.mul(facing);
   const x = a.div(rampM);
@@ -50,7 +52,7 @@ export function createRailMaterial(pal, art = null) {
   const glint = pow(max(sin(a.div(glintM).mul(Math.PI * 2)), 0), T.glintPow).mul(T.glintGain).mul(facing).mul(contrast);
   m.colorNode = coreCol.mul(core.mul(T.coreGain).add(0.2))
     .add(wallCol.mul(wall).mul(T.wallGain))
-    .add(vec3(1, 0.97, 0.99).mul(streak.add(low).add(glint)));
+    .add(vec3(1, 0.97, 0.99).mul(streak.add(low).add(glint))).mul(u.pulse.add(1));
   const near = smoothstep(LOOK.railNearM[0], LOOK.railNearM[1], positionWorld.distance(cameraPosition));
   m.opacityNode = clamp(float(T.bodyAlpha).add(wall.mul(T.wallAlpha)).add(streak.mul(0.6)).add(low.mul(0.3))
     .add(core.mul(T.coreAlpha)).add(glint.mul(0.5)), 0, 1).mul(near);
