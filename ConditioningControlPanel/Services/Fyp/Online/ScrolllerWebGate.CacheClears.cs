@@ -179,8 +179,8 @@ internal static partial class ScrolllerWebGate
         return cleared;
     }
 
-    /// <summary>Clears one live core's profile disk cache on its own thread. False (and the core
-    /// is forgotten) when it is gone or refuses.</summary>
+    /// <summary>Clears one live core's profile disk cache on its own thread. False when it is gone
+    /// or refuses; only a core that is gone is forgotten (<see cref="ForgetAfterFailedClear"/>).</summary>
     private static async Task<bool> ClearOneAsync(LiveCore l, string reason)
     {
         try
@@ -194,11 +194,22 @@ internal static partial class ScrolllerWebGate
         }
         catch (Exception ex)
         {
-            Forget(l);
+            bool alive = l.Core.TryGetTarget(out _) && !l.Dispatcher.HasShutdownStarted;
+            if (ForgetAfterFailedClear(ex, alive)) Forget(l);
             App.Logger?.Debug("ScrolllerWebGate: disk cache clear of {Profile} failed: {E}", l.Profile, ex.Message);
             return false;
         }
     }
+
+    /// <summary>
+    /// After a failed clear, is the core gone (forget it) or only slow (keep it)? Pure. A clear
+    /// that ran past <see cref="ClearBudget"/> on a live core (a busy UI thread, a big cache) is
+    /// kept: forgetting it made the next pass treat its profile as CLOSED, so the API clear was
+    /// never tried again while the window stayed open, and the on-disk delete ran against a
+    /// browser that still held the cache files (refused, so Chromium's copies outlived the day).
+    /// </summary>
+    internal static bool ForgetAfterFailedClear(Exception ex, bool coreAlive)
+        => !coreAlive || ex is not TimeoutException;
 
     private static void Forget(LiveCore l)
     {

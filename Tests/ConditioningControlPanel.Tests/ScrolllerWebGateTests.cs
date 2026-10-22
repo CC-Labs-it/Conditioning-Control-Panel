@@ -128,6 +128,33 @@ public class ScrolllerWebGateTests
     }
 
     [Fact]
+    public void A_slow_clear_on_a_live_core_keeps_it_tracked()
+    {
+        // Forgetting a live core made its profile read as closed: no API clear again while the
+        // window stayed open, and an on-disk delete against a running browser instead.
+        Assert.False(ScrolllerWebGate.ForgetAfterFailedClear(new TimeoutException(), coreAlive: true));
+        Assert.True(ScrolllerWebGate.ForgetAfterFailedClear(new TimeoutException(), coreAlive: false));
+        Assert.True(ScrolllerWebGate.ForgetAfterFailedClear(new InvalidOperationException(), coreAlive: true));
+        Assert.True(ScrolllerWebGate.ForgetAfterFailedClear(new ObjectDisposedException("core"), coreAlive: false));
+    }
+
+    [Fact]
+    public void A_failed_clear_goes_through_the_forget_rule()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Fyp", "Online", "ScrolllerWebGate.CacheClears.cs"));
+        var at = src.IndexOf("private static async Task<bool> ClearOneAsync", StringComparison.Ordinal);
+        Assert.True(at >= 0);
+        var end = src.IndexOf("private static void Forget(", at, StringComparison.Ordinal);
+        var body = src.Substring(at, end - at);
+        var catchAt = body.IndexOf("catch (Exception ex)", StringComparison.Ordinal);
+        Assert.True(catchAt >= 0);
+        var handler = body.Substring(catchAt);
+        Assert.Contains("ForgetAfterFailedClear(ex, alive)", handler);
+        // No unconditional forget in the handler: the rule decides.
+        Assert.DoesNotContain(handler.Split('\n'), l => l.Trim() == "Forget(l);");
+    }
+
+    [Fact]
     public void Clear_stamps_round_trip_by_profile_name()
     {
         var at = new DateTime(2026, 10, 21, 9, 30, 0, DateTimeKind.Utc);
