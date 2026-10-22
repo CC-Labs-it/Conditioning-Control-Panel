@@ -1,11 +1,15 @@
 // Port of ConditioningControlPanel/MainWindow/MainWindow.DescentFuse.cs: the header spark, its
 // hover readout and the corner clock, driven by Core DescentCountdownService (App.DescentCountdown).
-// Plus the live zero opener of WPF Services/Descent/DescentShowDirector.cs:130-170.
+// Plus the live zero opener of WPF Services/Descent/DescentShowDirector.cs:130-170, and its
+// first-light reveal (RunFirstLightReveal -> SpiralTabView.BeginSpiralFirstLight, WPF :428-475).
 //
 // ponytail: the chrome dimming is not ported - DescentFuseChrome (WPF head) and this head's
 // RefreshThemeAwareElements do not share a dim step, so the neutral chrome never darkens here.
 // ponytail: zero opens only the Live show; the catch-up crack, the post-zero retry and the
-// ceremony focus/hand-off (DescentShowDirector, DescentMigrationService) remain WPF-only.
+// ceremony focus (DescentShowDirector, DescentMigrationService) remain WPF-only. First light has
+// no caller here, as in WPF (only the owner's capture rig calls it).
+// ponytail: with no descent block service the reveal always holds at the bloom, and its 12 s
+// timeout counts animation frames, so a minimised window times out only on restore.
 using System;
 using Avalonia.Animation;
 using Avalonia.Controls;
