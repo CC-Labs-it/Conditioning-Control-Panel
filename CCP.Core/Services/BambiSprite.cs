@@ -383,8 +383,6 @@ CRITICAL: Do NOT mention any specific video names. Only give generic ""go browse
                 "https://hypnotube.com/video/mommys-in-control-full-76043.html"),
             new("Bambi Loves Hentai - OneeKitsune", "Popular Bambi video",
                 "https://hypnotube.com/video/bambi-loves-hentai-oneekitsune-78373.html"),
-            new("Bubblehead Forever - Iplaywithdolls", "Popular Bambi video",
-                "https://hypnotube.com/video/bubblehead-forever-iplaywithdolls-79880.html"),
             new("Dumb Bimbo Brainwash", "Intense conditioning",
                 "https://hypnotube.com/video/dumb-bimbo-brainwash-80780.html"),
             new("Bambi TikTok Eager Slut", "Viral TikTok-style video",
@@ -677,16 +675,30 @@ Example responses with REAL video names:
         internal static bool UsesCustomPrompt(Models.AppSettings? settings)
             => settings?.CompanionPrompt?.UseCustomPrompt == true;
 
+        /// <summary>
+        /// The custom prompt as it is sent. A hand-edited one (no community id) stores only the
+        /// boxes the user changed, so the rest follow the running persona
+        /// (<see cref="Companion.ActivePersonaPromptText.WireFields"/>). A community prompt is its
+        /// author's whole text and goes out as written.
+        /// </summary>
+        internal static Models.CompanionPromptSettings? CustomPromptOnWire(Models.AppSettings? settings)
+        {
+            var custom = settings?.CompanionPrompt;
+            if (custom == null || !string.IsNullOrEmpty(settings!.ActiveCommunityPromptId)) return custom;
+            Models.CompanionPromptSettings? persona = null;
+            try { persona = App.Personality?.GetActivePreset()?.PromptSettings; } catch { }
+            return Companion.ActivePersonaPromptText.WireFields(custom, persona);
+        }
+
         internal static PrefixInputs CaptureFingerprintInputs()
         {
             var s = CoreSettings.Service?.Current;
-            var companionPrompt = s?.CompanionPrompt;
             var useCustom = UsesCustomPrompt(s);
 
             // The sections that actually get baked in: the community prompt when one is assigned,
             // otherwise the active preset's. Hashing the TEXT (not just the id) is what makes an edit
             // in the Companion tab invalidate the prefix on the very next call.
-            var sections = Sections(useCustom ? companionPrompt : PersonalityService.Shared.GetActivePreset()?.PromptSettings);
+            var sections = Sections(useCustom ? CustomPromptOnWire(s) : PersonalityService.Shared.GetActivePreset()?.PromptSettings);
 
             return new PrefixInputs(
                 ModId: CoreMods.Service?.ActiveModId ?? "none",
@@ -783,7 +795,6 @@ Example responses with REAL video names:
 
             // Check for an active custom prompt: a community/asset prompt assigned via the
             // Companion tab, or one hand-edited in the prompt editor (which carries no id).
-            var companionPrompt = CoreSettings.Service?.Current?.CompanionPrompt;
             if (UsesCustomPrompt(CoreSettings.Service?.Current))
             {
                 // Build a temporary preset wrapper so we can reuse BuildPromptFromPreset
@@ -791,7 +802,7 @@ Example responses with REAL video names:
                 {
                     Id = CoreSettings.Service?.Current?.ActiveCommunityPromptId ?? "custom",
                     Name = "Community Prompt",
-                    PromptSettings = companionPrompt
+                    PromptSettings = CustomPromptOnWire(App.Settings?.Current)
                 };
                 assembled = BuildPromptFromPreset(communityPreset);
             }
@@ -821,7 +832,9 @@ Example responses with REAL video names:
             // Add personality section. When the user has Slut Mode toggled on AND the
             // current preset has a SlutModePersonality defined, swap to that — same
             // base personality, spicier vibe. Falls back to standard Personality if the
-            // preset has no slut variant (e.g., presets that are already explicit).
+            // preset has no slut variant; the SlutModeBite block appended after the output
+            // rules then does the work for that preset too (2026-10-16: on every persona
+            // without a variant the switch used to change nothing at all).
             var slutMode = CoreSettings.Service?.Current?.SlutModeEnabled == true;
             var usingSlutVariant = slutMode && !string.IsNullOrWhiteSpace(settings.SlutModePersonality);
             var personalityText = usingSlutVariant ? settings.SlutModePersonality : settings.Personality;
@@ -852,11 +865,12 @@ Example responses with REAL video names:
             // the model followed. The user's opted-in, acknowledgement-gated spice toggle then had
             // no visible effect at all.
             //
-            // This drops ONLY the stale non-explicit variant of a persona section the user has
-            // already switched away from. It touches no moderation control: SafetyComposer's
-            // preamble and floor still wrap the result, ModerationGuard still runs on the wire, and
-            // ExplicitContentGate still gates the toggle that gets us here.
-            if (!usingSlutVariant && !string.IsNullOrWhiteSpace(settings.ExplicitReaction))
+            // This drops ONLY the stale non-explicit answer while Slut Mode is on (whether the
+            // preset ships a variant or the SlutModeBite block below stands in for one). It
+            // touches no moderation control: SafetyComposer's preamble and floor still wrap the
+            // result, ModerationGuard still runs on the wire, and ExplicitContentGate still gates
+            // the toggle that gets us here.
+            if (!slutMode && !string.IsNullOrWhiteSpace(settings.ExplicitReaction))
             {
                 sb.AppendLine(settings.ExplicitReaction);
                 sb.AppendLine();
@@ -983,6 +997,17 @@ Example responses with REAL video names:
             if (!string.IsNullOrWhiteSpace(settings.OutputRules))
             {
                 sb.AppendLine(settings.OutputRules);
+            }
+
+            // Slut Mode bites here, after the persona's own examples and rules, on EVERY preset:
+            // the last persona text before the tail, so it outranks the tame reaction examples it
+            // asks the model to re-register (see SlutModeBite).
+            var bite = slutMode ? Companion.SlutModeBite.For(preset) : null;
+            if (bite != null)
+            {
+                sb.AppendLine();
+                sb.AppendLine(bite);
+                sb.AppendLine();
             }
 
             // Inject quiz context if the user has taken a quiz

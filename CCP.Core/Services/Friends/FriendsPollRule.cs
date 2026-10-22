@@ -31,4 +31,14 @@ public static class FriendsPollRule
         if (pollIndex < 0) return true;
         return pollIndex % StateEvery == 0;
     }
+
+    /// <summary>A poll that carried an accepted request receipt (a request accepted, or the link
+    /// claimed) fetches the list too, so the new friend's row shows with its notice.</summary>
+    public static bool AcceptedRequest(System.Collections.Generic.IReadOnlyList<SenderReceipt>? receipts)
+    {
+        if (receipts == null) return false;
+        foreach (var r in receipts)
+            if (r.Kind == ReceiptKind.Request && r.State == ReceiptState.Accepted) return true;
+        return false;
+    }
 }

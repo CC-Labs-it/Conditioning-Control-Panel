@@ -276,6 +276,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             var spec = purpose == AiPurpose.Chat ? ChatWindowSpec.Chat : ChatWindowSpec.Ambient;
             var window = session?.BuildWindow(spec) ?? Array.Empty<CompanionTurn>();
             window = FenceHistoryToPersona(window, log: true);
+            if (purpose == AiPurpose.Chat && SpiceOn) window = DropApplicationReplies(window);
 
             var prefix = _systemPromptProvider() ?? string.Empty;
             string? recall = null;
@@ -326,6 +327,19 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// with the user's "hi Circe, ..." reads to a small model as one unbroken conversation with
         /// Circe and it answers as Circe under the new prompt (Kathryn, 2026-09-14).</para>
         /// </summary>
+        /// <summary>
+        /// Slut Mode on: canned app lines ("Breakout? go on. I will be watching.") are the bulk of
+        /// a typical history and they pull a 13B model back to the tame register; the owner's
+        /// first desk run (2026-10-16) sent 23 turns of them. Only her typed exchanges stay.
+        /// </summary>
+        internal static IReadOnlyList<CompanionTurn> DropApplicationReplies(IReadOnlyList<CompanionTurn> window)
+        {
+            if (window.Count == 0) return window;
+            var kept = new List<CompanionTurn>(window.Count);
+            foreach (var t in window) if (!t.IsApplicationReply) kept.Add(t);
+            return kept.Count == window.Count ? window : kept;
+        }
+
         internal IReadOnlyList<CompanionTurn> FenceHistoryToPersona(IReadOnlyList<CompanionTurn> window, bool log = true)
         {
             if (window == null || window.Count == 0) return window ?? Array.Empty<CompanionTurn>();
@@ -906,7 +920,22 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             _ => "Eerie"
         };
 
-        private static string Instruction(AiPurpose purpose) => PurposeInstruction(purpose);
+        private static string Instruction(AiPurpose purpose) =>
+            purpose == AiPurpose.Chat && SpiceOn ? ChatSpiceInstruction : PurposeInstruction(purpose);
+
+        /// <summary>
+        /// Slut Mode on: the tail's "one short bubble" line is the last thing the model reads and
+        /// it beat the bite block's length rule on the owner's first desk run (2026-10-16). The
+        /// spice tail asks for the same length the block does.
+        /// </summary>
+        public const string ChatSpiceInstruction =
+            "The last line is them talking to you directly. Answer that line in one bubble of two to four sentences, " +
+            "explicit and in character, and write only the words you say to them: no notes, no commentary about the reply, nothing after it.";
+
+        private static bool SpiceOn
+        {
+            get { try { return App.Settings?.Current?.SlutModeEnabled == true; } catch { return false; } }
+        }
 
         private static string PurposeInstruction(AiPurpose purpose) => purpose switch
         {
