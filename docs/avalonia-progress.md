@@ -2464,3 +2464,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/game-dtrh-host: +897
 - Down the Rabbit Hole opens on Avalonia behind the Lab door. Start-up sends init with motionLevel and the media manifest; the run lifecycle and payout use Core `DtrhRunWire`, which the WPF host now calls too; a window closed mid-descent banks its last snapshot.
 - Escape with DtRH in front pauses it (kept-escape); a second Escape inside 2 s closes it. Slice B covers meta, online media, the art/audio origins, watchdog and barks.
+
+## avalonia-port/chaos-announcer: +618
+- Chaos announcer: Core queue/timing shared by both heads; Avalonia click-through overlay on the shared beat, T-10 s/Relapse announces, panic closes it (row stub).
+- Review fix: ChaosOverlayWindow calls the real announcer (stand-ins gone); line centred on the work area incl. left-docked panels.
