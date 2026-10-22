@@ -50,6 +50,14 @@ namespace ConditioningControlPanel.Services
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
 
+        /// <summary>SessionEngine._randomizedSpiralStartMinute: the preset's start ±3 min.</summary>
+        public double SpiralStartMinute { get; private set; }
+
+        /// <summary>The ramped spiral opacity in percent while a RAMPING session drives it, else null.
+        /// WPF drives the overlay with it (SetSustainedOverlayOpacity("spiral")) and never writes
+        /// SpiralOpacity; a constant session writes it once instead (#897, SessionEngine.cs:731-844).</summary>
+        public double? SpiralOpacity { get; private set; }
+
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
 
@@ -90,9 +98,10 @@ namespace ConditioningControlPanel.Services
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
+            SpiralStartMinute = RandomizedStart(session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute, _random);
             _startTime = DateTime.Now;
             _stopwatch.Restart();
 
@@ -179,6 +188,10 @@ namespace ConditioningControlPanel.Services
             // SessionEngine.cs:1479: a delayed tint stays off until its randomised minute (Tick).
             s.PinkFilterEnabled = ss.PinkFilterEnabled && ss.PinkFilterStartMinute == 0;
             if (s.PinkFilterEnabled) s.PinkFilterOpacity = ss.PinkFilterStartOpacity;
+
+            // SessionEngine.cs:1384: a delayed spiral stays off until its randomised minute (Tick).
+            s.SpiralEnabled = ss.SpiralEnabled && ss.SpiralStartMinute == 0;
+            if (s.SpiralEnabled) s.SpiralOpacity = ss.SpiralOpacity;
         }
 
         /// <summary>SessionEngine.RandomizeStartTimes (SessionEngine.cs:966): a delayed start moves by up to 3 min either way.
@@ -256,6 +269,14 @@ namespace ConditioningControlPanel.Services
                 s.PinkFilterEnabled = true;
                 Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
             }
+            // Spiral delayed start (SessionEngine.cs:823-851). A non-ramping session never drives the
+            // overlay, so its opacity lands in settings here the way an immediate start does.
+            if (session.Settings.SpiralEnabled && !s.SpiralEnabled && minutes >= SpiralStartMinute)
+            {
+                if (session.Settings.SpiralOpacity == session.Settings.SpiralOpacityEnd) s.SpiralOpacity = session.Settings.SpiralOpacity;
+                s.SpiralEnabled = true;
+                Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
+            }
             Ticked?.Invoke();
         }
 
@@ -281,6 +302,14 @@ namespace ConditioningControlPanel.Services
                 var pink = RampCurves.ApplyCurve((minutes - PinkStartMinute) / (total - PinkStartMinute), curve);
                 PinkOpacity = Lerp(ss.PinkFilterStartOpacity, ss.PinkFilterEndOpacity, pink);
             }
+
+            // SessionEngine.cs:731: only when the session actually ramps, so a constant one leaves the
+            // user's slider live (#897).
+            if (ss.SpiralEnabled && ss.SpiralOpacity != ss.SpiralOpacityEnd && minutes >= SpiralStartMinute)
+            {
+                var spiral = RampCurves.ApplyCurve((minutes - SpiralStartMinute) / (total - SpiralStartMinute), curve);
+                SpiralOpacity = Lerp(ss.SpiralOpacity, ss.SpiralOpacityEnd, spiral);
+            }
         }
 
         private static double Lerp(double a, double b, double t) => a + (b - a) * Math.Clamp(t, 0, 1);
@@ -302,7 +331,7 @@ namespace ConditioningControlPanel.Services
 
             var s = CoreSettings.Current;
             s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;   // WPF ReleaseOpacityRampHolds
             _snapshot?.RestoreTo(s);
             _snapshot = null;
             _custody?.Restore(s);

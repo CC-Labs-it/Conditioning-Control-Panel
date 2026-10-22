@@ -200,7 +200,9 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             try
             {
                 s.SkipPauseXpWarning = true;
-                shell.StartSession(new Session { Id = "spiral_test", Name = "Spiral Test", DurationMinutes = 1 });
+                var session = new Session { Id = "spiral_test", Name = "Spiral Test", DurationMinutes = 1 };
+                (session.Settings.SpiralEnabled, session.Settings.SpiralOpacity, session.Settings.SpiralOpacityEnd) = (true, 40, 40);
+                shell.StartSession(session);
                 await Settle();
                 Assert.True(runner.IsRunning && SpiralOverlay.IsShowing && SpiralOverlay.IsAnimating, Why());
                 var pause = shell.Named<Button>("BtnPauseSession")!;
@@ -218,6 +220,45 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 CoreSession.IsSessionRunningProvider = null;
                 global::ConditioningControlPanel.Avalonia.App.Sessions = null;
             }
+        });
+
+    [Fact]
+    public async Task A_session_spiral_starts_at_its_minute_ramps_then_hands_the_slider_back()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            try
+            {
+                var session = new Session { Id = "spiral_ramp", Name = "Spiral Ramp", DurationMinutes = 20 };
+                session.Settings.RampCurve = RampCurve.Linear;
+                (session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute) = (true, 5);
+                (session.Settings.SpiralOpacity, session.Settings.SpiralOpacityEnd) = (10, 50);
+                shell.StartSession(session);
+                await Settle();
+                var at = runner.SpiralStartMinute;
+                Assert.InRange(at, 2.0, 8.0);   // SessionEngine.RandomizeStartTimes: +-3 min
+                Assert.False(s.SpiralEnabled || SpiralOverlay.IsShowing, Why());   // delayed: off until its minute
+
+                runner.Tick(TimeSpan.FromMinutes(at - 0.01));
+                shell.OnSessionTick();
+                Assert.False(SpiralOverlay.IsShowing);
+                runner.Tick(TimeSpan.FromMinutes((at + 20) / 2));   // halfway through the spiral's own window
+                shell.OnSessionTick();
+                await Settle();
+                shell.OnSessionTick();
+                Assert.True(SpiralOverlay.IsShowing, Why());
+                Assert.Equal(30, runner.SpiralOpacity!.Value, 2);
+                Assert.Equal(SpiralFrames.Paint(0.30), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
+                Assert.Equal(40, s.SpiralOpacity);   // the user's slider is held, never written (#897)
+            }
+            finally
+            {
+                runner.Stop();
+                CoreSession.IsSessionRunningProvider = null;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = null;
+            }
+            Assert.Null(runner.SpiralOpacity);   // WPF ReleaseOpacityRampHolds
+            Assert.Equal(SpiralFrames.Paint(0.40), SpiralOverlay.PaintedOpacity, 3);
         });
 
     /// <summary>Waits out every in-flight decode, including one a landing decode starts for a newer path.</summary>

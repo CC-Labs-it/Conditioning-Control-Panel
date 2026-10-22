@@ -373,6 +373,49 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(25, _runner.PinkOpacity!.Value, 2);
     }
 
+    [Fact]
+    public void Spiral_DelayedStartLandsItsOpacity_OnlyARampingSessionHoldsIt()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.SpiralEnabled, s.SpiralOpacity);
+        (s.SpiralEnabled, s.SpiralOpacity) = (false, 33);
+        try { SpiralRuns(s); } finally { _runner.Stop(); (s.SpiralEnabled, s.SpiralOpacity) = saved; }
+    }
+
+    private void SpiralRuns(AppSettings s)
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        session.Settings.RampCurve = RampCurve.Linear;
+        (session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute) = (true, 4);
+        (session.Settings.SpiralOpacity, session.Settings.SpiralOpacityEnd) = (20, 20);
+        _runner.Start(session);
+        var at = _runner.SpiralStartMinute;
+        Assert.InRange(at, 1.0, 7.0);
+        Assert.False(s.SpiralEnabled);   // SessionEngine.cs:1384: delayed stays off
+
+        _runner.Tick(TimeSpan.FromMinutes(at - 0.01));
+        Assert.False(s.SpiralEnabled);
+        _runner.Tick(TimeSpan.FromMinutes(at + 1e-4));
+        Assert.True(s.SpiralEnabled);
+        Assert.Equal(20, s.SpiralOpacity);   // constant: lands in settings (SessionEngine.cs:845)
+        Assert.Null(_runner.SpiralOpacity);  // and parks no hold (#897)
+        _runner.Stop();
+        Assert.False(s.SpiralEnabled);
+        Assert.Equal(33, s.SpiralOpacity);   // snapshot restore
+
+        session.Settings.SpiralStartMinute = 0;
+        session.Settings.SpiralOpacityEnd = 60;
+        _runner.Start(session);
+        Assert.True(s.SpiralEnabled);
+        Assert.Equal(20, s.SpiralOpacity);   // immediate start writes the start value
+        _runner.Tick(TimeSpan.FromMinutes(5));
+        Assert.Equal(40, _runner.SpiralOpacity!.Value, 2);
+        Assert.Equal(20, s.SpiralOpacity);   // the ramp never writes the persisted value
+        _runner.Stop();
+        Assert.Null(_runner.SpiralOpacity);
+    }
+
     private static string Fixture([CallerFilePath] string here = "") =>
         Path.Combine(Path.GetDirectoryName(here)!, "Fixtures", "session_log_runner_wpf.json");
 }

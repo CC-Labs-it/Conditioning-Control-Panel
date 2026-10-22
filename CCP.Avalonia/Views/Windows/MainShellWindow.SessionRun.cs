@@ -147,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshSessionFeatureLock(force: false);
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
+            SpiralOverlay.Refresh(this);       // the same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823)
             if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;
