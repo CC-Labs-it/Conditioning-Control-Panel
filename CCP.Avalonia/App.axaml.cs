@@ -626,6 +626,9 @@ namespace ConditioningControlPanel.Avalonia
                     if (friends != null)
                     {
                         Platform.FriendsHead.Service = friends;
+                        // WPF App.xaml.cs:2979: the feed listens to the service from startup on.
+                        try { Platform.FriendsHead.Feed = global::ConditioningControlPanel.Services.Friends.FriendsFeed.CreateForApp(friends, () => Platform.FriendsHead.Identity()?.UnifiedId); }
+                        catch (Exception exFeed) { Serilog.Log.Debug("[Friends] feed failed to start: {E}", exFeed.Message); }
                         CoreAccount.UnifiedIdentityChanged += (_, _) => friends.Kick();
                         friends.Start(new Platform.FriendsHead.Timer());
                         // WPF App.xaml.cs:2991 LEASH: rides the friends poll (report out, block in, 20 s while leashed).
