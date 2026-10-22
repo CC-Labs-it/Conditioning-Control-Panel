@@ -3351,6 +3351,8 @@
   "title_select_spiral_gif": "スパイラルGIFを選択",
   "title_save_asset_preset": "アセットプリセットを保存",
   "title_save_phrase_preset": "フレーズプリセットを保存",
+  "label_enter_a_name_for_this_phrase_preset": "このフレーズプリセットの名前を入力してください：",
+  "msg_delete_phrase_preset_confirm_0": "フレーズプリセット「{0}」を削除しますか？\n\nこの操作は元に戻せません。",
   "btn_ok": "OK",
   "skill_mult_streak_power_days": "ストリークパワー（{0}日）",
   "skill_streak_bonus_name": "{0}日ストリークボーナス！",

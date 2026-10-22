@@ -9,23 +9,23 @@
 //
 // PORTED to the tab itself (CCP.Avalonia/Views/Tabs/AssetsTabView.axaml.cs, entered from
 // OnTabShown "assets"): RefreshAssetTree (local images/videos), BuildFolderTree, the folder and
-// thumbnail checks, Select/Deselect All, thumbnails (images; videos keep the placeholder), preview
+// thumbnail checks, Select/Deselect All, thumbnails, preview
 // and reveal, the asset counts and the preset combo + Save As/Update/Delete. AssetPresetService
 // .OnlineChannelsReset is seeded in App startup (main 03af6e8bb). The Content Packs node, encrypted
 // image thumbnails, pack checks/counts and preview live in AssetsTabView.Packs.cs, using ContentPackStore.
 //
-// The rest, by blocker:
-//   App.ContentPacks - RefreshPacksAsync, BtnRefreshPacks_Click, BtnPackDownload_Click,
-//     BtnPackActivate_Click, BtnPackUpgrade_Click, BtnDeleteDownloadedPacks_Click, and the four
-//     OnPack* progress/auth/rate-limit callbacks.
-//   Pack video thumbnails - WPF Windows shell thumbnailer needs a portable replacement.
-//   The OS - BtnCreatorDiscord_Click, BtnPackPatreon_Click (pack cards only).
-//   Pack preview rotation - StartPackPreviewRotation, StopPackPreviewRotation, LoadPreviewImagesFromUrlsAsync,
-//     GetPackPreviewFileStem (pure, and held with the rotation that is its only caller).
-//   Phrase presets - InitializePhrasePresets and its four handlers (no control on this tab).
-//   WPF input - PacksScrollViewer_PreviewMouseWheel, HorizontalScrollViewer_PreviewMouseWheel,
-//     InnerScrollViewer_PreviewMouseWheel. Avalonia has no PreviewMouseWheel; these are the
-//     nested-scroller workaround and need re-deriving, not porting.
+// Phrase presets (InitializePhrasePresets and its handlers) live on the cell that owns the controls:
+// CCP.Avalonia/Views/Controls/Companion/Runtime/WorkshopTriggersCell.axaml.cs. Video thumbnails (local and
+// pack) are OpenCV's first frame in AssetsTabView.Packs.cs (VideoThumb), standing in for ShellThumbnailHelper.
+//
+// Not ported, because WPF never reaches it: the packs strip. MainWindow.xaml.cs:208 PacksSectionEnabled is
+// a const false, PacksSection and BtnRefreshPacks/BtnDeleteDownloadedPacks are Collapsed, so RefreshPacksAsync,
+// the pack-card download/activate/upgrade/Patreon/Discord handlers, the four OnPack* callbacks, the preview
+// rotation and PacksScrollViewer_PreviewMouseWheel are dead code there.
+//
+// Still open (wire-shell-assets-b-next): HorizontalScrollViewer_/InnerScrollViewer_PreviewMouseWheel, the
+// wheel-chaining helpers QuestsTabView, KeywordTriggersPanel and UpdatesSettingsSection forward to. Avalonia
+// has no PreviewMouseWheel and chains scrolls itself, so they need re-deriving per surface, not porting.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

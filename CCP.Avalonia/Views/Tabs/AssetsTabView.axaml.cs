@@ -298,7 +298,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var rel = Rel(file);
                 var item = new AssetThumbnailViewModel(file, rel) { IsChecked = !S.DisabledAssetPaths.Contains(rel) };
                 _currentFolderFiles.Add(item);
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
             ThumbnailLoads = Task.WhenAll(loads);
         }
@@ -317,6 +317,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
+                        if (item.IsVideo) return VideoThumb(item);
                         using Stream? fs = item.PackFile != null
                             ? item.PackStore?.GetPackFileStream(item.PackId!, item.PackFile)
                             : File.OpenRead(item.FullPath);

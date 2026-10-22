@@ -4121,6 +4121,8 @@
   "title_select_spiral_gif": "选择螺旋 GIF",
   "title_save_asset_preset": "保存资源预设",
   "title_save_phrase_preset": "保存短语预设",
+  "label_enter_a_name_for_this_phrase_preset": "请输入此短语预设的名称：",
+  "msg_delete_phrase_preset_confirm_0": "删除短语预设 '{0}'？\n\n此操作无法撤销。",
   "btn_ok": "确定",
   "skill_mult_streak_power_days": "连续力量（{0} 天）",
   "skill_streak_bonus_name": "第 {0} 天连续奖励！",

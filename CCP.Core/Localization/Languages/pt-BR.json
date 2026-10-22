@@ -3351,6 +3351,8 @@
   "title_select_spiral_gif": "Selecionar GIF Espiral",
   "title_save_asset_preset": "Salvar Predefinição de Recursos",
   "title_save_phrase_preset": "Salvar Predefinição de Frases",
+  "label_enter_a_name_for_this_phrase_preset": "Digite um nome para esta predefinição de frases:",
+  "msg_delete_phrase_preset_confirm_0": "Excluir a predefinição de frases '{0}'?\n\nIsso não pode ser desfeito.",
   "btn_ok": "OK",
   "skill_mult_streak_power_days": "Poder de Sequência ({0} dias)",
   "skill_streak_bonus_name": "Bônus de Sequência de {0} Dias!",

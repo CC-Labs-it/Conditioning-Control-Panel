@@ -3351,6 +3351,8 @@
   "title_select_spiral_gif": "Spiral-GIF auswählen",
   "title_save_asset_preset": "Dateien-Vorlage speichern",
   "title_save_phrase_preset": "Phrasen-Vorlage speichern",
+  "label_enter_a_name_for_this_phrase_preset": "Gib einen Namen für diese Phrasen-Vorlage ein:",
+  "msg_delete_phrase_preset_confirm_0": "Phrasen-Vorlage '{0}' löschen?\n\nDies kann nicht rückgängig gemacht werden.",
   "btn_ok": "OK",
   "skill_mult_streak_power_days": "Streak Power ({0} Tage)",
   "skill_streak_bonus_name": "Tag {0} Serien-Bonus!",

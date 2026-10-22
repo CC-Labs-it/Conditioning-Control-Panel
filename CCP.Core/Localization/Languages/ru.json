@@ -3351,6 +3351,8 @@
   "title_select_spiral_gif": "Выбери GIF спирали",
   "title_save_asset_preset": "Сохранить пресет ассетов",
   "title_save_phrase_preset": "Сохранить пресет фраз",
+  "label_enter_a_name_for_this_phrase_preset": "Введите название для этого пресета фраз:",
+  "msg_delete_phrase_preset_confirm_0": "Удалить пресет фраз «{0}»?\n\nЭто нельзя отменить.",
   "btn_ok": "ОК",
   "skill_mult_streak_power_days": "Сила серии ({0} дней)",
   "skill_streak_bonus_name": "Бонус за серию {0} дней!",

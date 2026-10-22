@@ -34,6 +34,28 @@ public partial class AssetsTabView
         PackThumbs[PackThumbKey(item)] = (bmp, ++_packThumbClock);
     }
 
+    /// <summary>WPF gets video thumbnails from the Windows shell (ShellThumbnailHelper, MainWindow.Assets.cs:918) and, for
+    /// pack videos, decrypts to a temp file first and deletes it after (:801-806). Portable stand-in: OpenCV's first decodable
+    /// frame. Null (placeholder stays, as WPF on a shell failure) when the file cannot be opened. Worker thread.</summary>
+    private static Bitmap? VideoThumb(AssetThumbnailViewModel item)
+    {
+        var path = item.PackFile != null ? item.PackStore?.GetPackFileTempPath(item.PackId!, item.PackFile) : item.FullPath;
+        if (string.IsNullOrEmpty(path)) return null;
+        try { return VideoFrameThumb(path); }
+        finally { if (item.PackFile != null) item.PackStore?.DeleteTempFile(path); }
+    }
+
+    internal static Bitmap? VideoFrameThumb(string path)
+    {
+        using var cap = new OpenCvSharp.VideoCapture(path);
+        if (!cap.IsOpened()) return null;
+        using var frame = new OpenCvSharp.Mat();
+        if (!cap.Read(frame) || frame.Empty()) return null;
+        OpenCvSharp.Cv2.ImEncode(".png", frame, out var png);
+        using var ms = new System.IO.MemoryStream(png);
+        return Bitmap.DecodeToWidth(ms, 100);
+    }
+
     private static bool IsPackLeaf(AssetTreeItem folder) =>
         folder.IsPackFolder && !string.IsNullOrEmpty(folder.PackId) && !string.IsNullOrEmpty(folder.PackFileType);
 
@@ -71,8 +93,7 @@ public partial class AssetsTabView
                 var item = new AssetThumbnailViewModel(store, folder.PackId!, file)
                     { IsChecked = !S.DisabledAssetPaths.Contains(ContentPackStore.SelectionKey(folder.PackId!, file)) };
                 _currentFolderFiles.Add(item);
-                // ponytail: videos keep the existing placeholder; WPF's Windows shell thumbnailer needs a portable replacement.
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
         ThumbnailLoads = Task.WhenAll(loads);
         return true;

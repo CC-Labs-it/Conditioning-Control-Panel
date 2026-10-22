@@ -3351,6 +3351,8 @@
   "title_select_spiral_gif": "Seleccionar GIF de Espiral",
   "title_save_asset_preset": "Guardar Preset de Recursos",
   "title_save_phrase_preset": "Guardar Preset de Frases",
+  "label_enter_a_name_for_this_phrase_preset": "Introduce un nombre para este preset de frases:",
+  "msg_delete_phrase_preset_confirm_0": "¿Eliminar el preset de frases '{0}'?\n\nEsto no se puede deshacer.",
   "btn_ok": "OK",
   "skill_mult_streak_power_days": "Poder de Racha ({0} días)",
   "skill_streak_bonus_name": "¡Bonus de Racha de {0} Días!",

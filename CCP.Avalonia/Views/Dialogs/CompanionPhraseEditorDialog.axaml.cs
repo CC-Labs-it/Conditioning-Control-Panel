@@ -217,7 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// head-side, so that row kind is missing here. Collapses into one GetAllPhrases() call
         /// when the service moves to Core.
         /// </summary>
-        private static List<CompanionPhrase> LoadPhrases()
+        internal static List<CompanionPhrase> LoadPhrases()
         {
             var settings = CoreSettings.Current;
             var disabled = settings.DisabledPhraseIds;

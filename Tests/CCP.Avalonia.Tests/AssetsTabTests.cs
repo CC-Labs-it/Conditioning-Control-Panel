@@ -334,6 +334,23 @@ public sealed class AssetsTabTests
         throw new InvalidOperationException("control never realized");
     }
 
+    // WPF MainWindow.Assets.cs:918: videos get a frame thumbnail (Windows shell there, OpenCV first frame here);
+    // an undecodable file keeps the placeholder.
+    [Fact]
+    public Task SelectingTheVideosFolderGivesADecodableVideoAFrameThumbnail() => Run(async (shell, tab, s) =>
+    {
+        var videos = tab.AssetTree.Single(n => n.Name == "videos");
+        var clip = Path.Combine(videos.FullPath!, "clip.avi");
+        using (var writer = new OpenCvSharp.VideoWriter(clip, OpenCvSharp.FourCC.MJPG, 5, new OpenCvSharp.Size(32, 24)))
+        using (var frame = new OpenCvSharp.Mat(24, 32, OpenCvSharp.MatType.CV_8UC3, new OpenCvSharp.Scalar(180, 105, 255)))
+            for (var i = 0; i < 3; i++) writer.Write(frame);
+        tab.AssetTreeView.SelectedItem = videos;
+        await tab.ThumbnailLoads;
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(tab.CurrentFolderFiles.Single(f => f.Name == "clip.avi").Thumbnail);
+        Assert.Null(tab.CurrentFolderFiles.Single(f => f.Name == "v.mp4").Thumbnail);
+    });
+
     private static async Task Pump(Func<bool> done)
     {
         for (var i = 0; i < 200 && !done(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }

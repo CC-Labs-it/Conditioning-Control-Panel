@@ -1,6 +1,12 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
@@ -11,9 +17,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     /// the preset store and the avatar trigger timer all hang off <c>App</c>/<c>MainWindow</c> in
     /// the WPF project - so only the two behaviours that are purely local to this cell are wired:
     /// the toggle showing the interval panel (MainWindow.Patreon.cs:1209) and the slider writing
-    /// its own value label (MainWindow.Patreon.cs:1235). Edit Phrases, Manage Phrases and the three
-    /// preset controls stay inert until that runtime crosses; they are not stubbed, so nothing here
-    /// pretends to work.</summary>
+    /// its own value label (MainWindow.Patreon.cs:1235). The phrase-preset combo, Save and Delete
+    /// (MainWindow.Assets.cs:1751-1903) and the active-phrase count (MainWindow.Patreon.cs:1327) are
+    /// ported here against CCP.Core's PhrasePreset/CoreSettings. Edit Phrases and Manage Phrases
+    /// stay inert until that runtime crosses.</summary>
     public partial class WorkshopTriggersCell : UserControl
     {
         public WorkshopTriggersCell()
@@ -29,6 +36,94 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
             toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
             slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+
+            _presets = this.FindControl<ComboBox>("CmbPhrasePresets")!;
+            _phraseCount = this.FindControl<TextBlock>("TxtPhraseCount")!;
+            _presets.SelectionChanged += (_, _) => CmbPhrasePresets_SelectionChanged();
+            this.FindControl<Button>("BtnSavePhrasePreset")!.Click += async (_, _) => await SavePhrasePresetAsync();
+            this.FindControl<Button>("BtnDeletePhrasePreset")!.Click += async (_, _) => await DeletePhrasePresetAsync();
+            AskText = async (title, prompt, def) =>
+            {
+                var dlg = new InputDialog(title, prompt, def);
+                return await dlg.ShowDialogSafe<bool?>(TopLevel.GetTopLevel(this) as Window) == true ? dlg.ResultText : null;
+            };
+            Confirm = (title, msg) => MessageDialog.ConfirmAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
+            Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
+            // WPF InitializePhrasePresets runs each time the Companion tab is shown (TabNavigation.cs:505)
+            // and the count at startup (MainWindow.xaml.cs:394); this cell lives on that tab.
+            AttachedToVisualTree += (_, _) => { RefreshPhrasePresetsComboBox(); UpdatePhraseCountDisplay(); };
+        }
+
+        private readonly ComboBox _presets;
+        private readonly TextBlock _phraseCount;
+        private bool _isLoadingPhrasePreset;
+
+        // Dialog seams (same shape as AssetsTabView's), replaced by tests.
+        internal Func<string, string, string, Task<string?>> AskText;
+        internal Func<string, string, Task<bool>> Confirm;
+        internal Func<string, string, Task> Inform;
+
+        // WPF App.CompanionPhrases.GetActivePhraseCount(); the editor's LoadPhrases is this head's
+        // GetAllPhrases (voice-line rows still missing, see that method).
+        private static int ActivePhraseCount() => CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled);
+
+        /// <summary>WPF UpdatePhraseCountDisplay (MainWindow.Patreon.cs:1327).</summary>
+        internal void UpdatePhraseCountDisplay() => _phraseCount.Text = Loc.GetF("label_0_active_2", ActivePhraseCount());
+
+        /// <summary>WPF RefreshPhrasePresetsComboBox (MainWindow.Assets.cs:1760).</summary>
+        internal void RefreshPhrasePresetsComboBox()
+        {
+            _isLoadingPhrasePreset = true;
+            var s = CoreSettings.Current;
+            _presets.ItemsSource = null;
+            _presets.ItemsSource = s.PhrasePresets;
+            if (!string.IsNullOrEmpty(s.CurrentPhrasePresetId))
+                _presets.SelectedItem = s.PhrasePresets.FirstOrDefault(p => p.Id == s.CurrentPhrasePresetId);
+            _isLoadingPhrasePreset = false;
+        }
+
+        /// <summary>WPF CmbPhrasePresets_SelectionChanged (MainWindow.Assets.cs:1773).</summary>
+        private void CmbPhrasePresets_SelectionChanged()
+        {
+            if (_isLoadingPhrasePreset || _presets.SelectedItem is not PhrasePreset preset) return;
+            preset.ApplyToSettings();
+            CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
+            CoreSettings.Save();
+            UpdatePhraseCountDisplay();
+            Log.Information("Loaded phrase preset: {Name} ({Count} phrases)", preset.Name, preset.ActivePhraseCount);
+        }
+
+        /// <summary>WPF BtnSavePhrasePreset_Click (MainWindow.Assets.cs:1788).</summary>
+        internal async Task SavePhrasePresetAsync()
+        {
+            var activePhraseCount = ActivePhraseCount();
+            var s = CoreSettings.Current;
+            // "Preset {0}": WPF's literal default name; the asset preset key carries the same text.
+            var name = await AskText(Loc.Get("title_save_phrase_preset"), Loc.Get("label_enter_a_name_for_this_phrase_preset"),
+                Loc.GetF("label_asset_preset_default_0", s.PhrasePresets.Count + 1));
+            if (string.IsNullOrWhiteSpace(name)) return;
+            var preset = PhrasePreset.FromCurrentSettings(name.Trim(), activePhraseCount);
+            s.PhrasePresets.Add(preset);
+            s.CurrentPhrasePresetId = preset.Id;
+            CoreSettings.Save();
+            RefreshPhrasePresetsComboBox();
+            Log.Information("Saved phrase preset: {Name} with {Count} active phrases", preset.Name, activePhraseCount);
+        }
+
+        /// <summary>WPF BtnDeletePhrasePreset_Click (MainWindow.Assets.cs:1878).</summary>
+        internal async Task DeletePhrasePresetAsync()
+        {
+            if (_presets.SelectedItem is not PhrasePreset preset)
+            {
+                await Inform(Loc.Get("title_no_preset_selected"), Loc.Get("msg_please_select_a_preset_to_delete"));
+                return;
+            }
+            if (!await Confirm(Loc.Get("title_delete_preset"), Loc.GetF("msg_delete_phrase_preset_confirm_0", preset.Name))) return;
+            CoreSettings.Current.PhrasePresets.Remove(preset);
+            CoreSettings.Current.CurrentPhrasePresetId = null;
+            CoreSettings.Save();
+            RefreshPhrasePresetsComboBox();
+            Log.Information("Deleted phrase preset: {Name}", preset.Name);
         }
     }
 

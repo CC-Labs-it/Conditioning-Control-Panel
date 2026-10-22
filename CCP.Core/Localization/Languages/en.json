@@ -4502,6 +4502,8 @@
   "title_select_spiral_gif": "Select Spiral GIF",
   "title_save_asset_preset": "Save Asset Preset",
   "title_save_phrase_preset": "Save Phrase Preset",
+  "label_enter_a_name_for_this_phrase_preset": "Enter a name for this phrase preset:",
+  "msg_delete_phrase_preset_confirm_0": "Delete phrase preset '{0}'?\n\nThis cannot be undone.",
   "btn_ok": "OK",
   "skill_mult_streak_power_days": "Streak Power ({0} days)",
   "skill_streak_bonus_name": "Day {0} Streak Bonus!",

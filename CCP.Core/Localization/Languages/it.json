@@ -4669,6 +4669,8 @@
   "title_select_spiral_gif": "Seleziona GIF della spirale",
   "title_save_asset_preset": "Salva preset degli asset",
   "title_save_phrase_preset": "Salva preset delle frasi",
+  "label_enter_a_name_for_this_phrase_preset": "Inserisci un nome per questo preset delle frasi:",
+  "msg_delete_phrase_preset_confirm_0": "Eliminare il preset delle frasi '{0}'?\n\nNon si può annullare.",
   "btn_ok": "OK",
   "btn_yes": "Sì",
   "btn_no": "No",
