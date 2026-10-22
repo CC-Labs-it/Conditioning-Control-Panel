@@ -2549,3 +2549,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/bureau-core-a: +490
 - Cloud session unit (bureau-core-a); reviewed and gated locally.
+
+## avalonia-port/compositor-core-c: +90
+- Cloud session unit (compositor-core-c); reviewed and gated locally.
