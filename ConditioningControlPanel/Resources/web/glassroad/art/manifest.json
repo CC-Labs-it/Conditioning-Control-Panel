@@ -1,0 +1,158 @@
+[
+  {
+    "id": "road-bands-mask",
+    "file": "textures/road-bands-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "road_bands"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      12,
+      16
+    ],
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 1398128
+  },
+  {
+    "id": "road-glass-roughness",
+    "file": "textures/road-glass-roughness.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "road_glass"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      4,
+      4
+    ],
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 349552
+  },
+  {
+    "id": "road-glass-normal",
+    "file": "textures/road-glass-normal.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "road_glass"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "UASTC",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      4,
+      4
+    ],
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 349552
+  },
+  {
+    "id": "rail-glow-mask",
+    "file": "textures/rail-glow-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 699052,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "rail_glow"
+    ],
+    "palette": "all",
+    "width": 256,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      0.9,
+      8
+    ],
+    "wrap": [
+      "clamp",
+      "repeat"
+    ],
+    "texBytesBlock16": 174800
+  },
+  {
+    "id": "boost-chevron-mask",
+    "file": "textures/boost-chevron-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "boost"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      4,
+      6
+    ],
+    "wrap": [
+      "clamp",
+      "repeat"
+    ],
+    "texBytesBlock16": 349552
+  },
+  {
+    "id": "jump-lip-mask",
+    "file": "textures/jump-lip-mask.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 699052,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "jump_lip"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 256,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "uvSizeM": [
+      12,
+      3
+    ],
+    "wrap": [
+      "repeat",
+      "clamp"
+    ],
+    "texBytesBlock16": 174800
+  }
+]
