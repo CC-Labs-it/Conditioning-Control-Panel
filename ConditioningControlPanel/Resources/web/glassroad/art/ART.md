@@ -355,3 +355,60 @@ Review PNGs are evidence only, not runtime inputs.
 
 Each family branch starts directly from the same main snapshot. When integrating families,
 append their distinct manifest rows and retain all family ART.md sections. The sampled palettes are identical.
+
+## Wave 2 item card and effect bubble
+
+Two original procedural GLBs, with no embedded textures, no words and no effect icons.
+The existing DtRH effect art remains external and unchanged.
+
+### Integration
+
+Both assets use metres, Y up, forward -Z and a base-centred origin.
+Use the card as the spinning pickup carrier; its eye motif is static geometry.
+The body is item_surface, with retained COLOR_0; item_edge is a separate material.
+The edge starts with a low, constant emissive value. The host owns its colour,
+intensity, transitions, pickup spin and reveal. No animation is embedded.
+
+The bubble is 1.1 m across. effect_shell uses alpha blending, clearcoat and
+iridescence for a clear centre with view-dependent reflections. It is a single
+surface with back-face culling, not a nested volume or a transparent solid ball.
+A host Fresnel shader may replace it while retaining the shape and UVs.
+
+The separate mesh node and material effect_icon form a 0.70 m square billboard.
+Its local vertices are centred on its object origin, with full 0..1 UVs, front -Z.
+The node is placed at (0, 0.55, 0) relative to the asset base. Rotate this node
+about its centre to face the camera; keep the shell rooted independently.
+Its four corners leave at least 0.055 m clearance inside the shell at any rotation.
+The material starts at alpha 0 and has no image. Bind the existing animated DtRH
+icon, enable alpha blending and disable billboard depth writing at runtime.
+No icon, motes, pop sequence or screen effect is baked into the asset.
+The engine owns emission, motion, contrast and Gentle Visuals handling.
+
+### Sources and review
+
+Original work for CCP, developed from the private W1 card and bubble helpers.
+The design board's effect section guided a clear centre and thin reflective rim;
+W1 cards guided the porcelain, plum, gold and pink vocabulary. No concept pixels
+were copied, no third-party geometry was used, and no existing icon was redrawn.
+Rights follow the project's existing asset terms. No CC0 claim is made.
+Sources, editable .blend masters and review renders stay in the private archive.
+Contact sheets belong in the PR description, never the runtime tree.
+
+The card's width and thickness, 1.1 m bubble diameter and 0.70 m icon carrier are
+art assumptions. Collision radii and pickup placement remain engine decisions.
+Use manifest boundRadiusM for clearance around the asset's base-centred origin.
+Final triangle counts, bounds and fresh-import evidence accompany the exports.
+Both models add zero texture bytes to the running game budget.
+
+### Measured export budget
+
+| Asset | Triangles | Draws | Texture bytes | Bound radius |
+|---|---:|---:|---:|---:|
+| item-card | 814 | 2 | 0 | 1.245 m |
+| effect-bubble | 962 | 2 | 0 | 1.102 m |
+
+Fresh-imported final meshopt roundtrips pass finite geometry, zero degenerate triangles and material
+separation checks. The icon UVs span 0..1 and measured corner clearance is
+0.055025 m. Front, three-quarter, rear, both sides and top views were opened for
+review. The separate runtime example binds the existing spiral icon only in the
+review scene; that image is not embedded in either GLB.

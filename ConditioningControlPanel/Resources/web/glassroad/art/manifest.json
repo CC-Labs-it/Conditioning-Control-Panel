@@ -829,5 +829,7 @@
       0.71991
     ],
     "lod": 1
-  }
+  },
+  {"id":"item-card","file":"models/item-card.glb","kind":"prop","tris":814,"texBytes":0,"boundRadiusM":1.245,"materialSlots":["item_surface","item_edge"],"palette":"all","draws":2,"sizeM":[0.7805,1.2005,0.061],"emissionSlot":"item_edge","assumptions":"Original static eye motif on both faces; host controls spin, reveal and edge intensity.","compression":"meshopt-lossless"},
+  {"id":"effect-bubble","file":"models/effect-bubble.glb","kind":"prop","tris":962,"texBytes":0,"boundRadiusM":1.102,"materialSlots":["effect_icon","effect_shell"],"palette":"all","draws":2,"sizeM":[1.099999,1.1,1.1],"billboardNode":"effect_icon","billboardSizeM":[0.7,0.7],"billboardCentreM":[0,0.55,0],"billboardCornerClearanceM":0.05503,"assumptions":"1.1 m diameter, 0.70 m square icon carrier, alpha 0 default. Existing DtRH art remains external and unchanged.","compression":"meshopt-lossless"}
 ]
