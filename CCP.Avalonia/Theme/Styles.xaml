@@ -319,7 +319,7 @@
                       RenderTransform="translateX(0px)">
             <Border.Transitions>
               <Transitions>
-                <TransformOperationsTransition Property="Border.RenderTransform" Duration="0:0:0.34">
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.34">
                   <TransformOperationsTransition.Easing>
                     <BackEaseOut/>
                   </TransformOperationsTransition.Easing>
@@ -336,7 +336,7 @@
                    RenderTransform="scale(0.4)">
             <Ellipse.Transitions>
               <Transitions>
-                <TransformOperationsTransition Property="Border.RenderTransform" Duration="0:0:0.45">
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.45">
                   <TransformOperationsTransition.Easing>
                     <QuadraticEaseOut/>
                   </TransformOperationsTransition.Easing>
