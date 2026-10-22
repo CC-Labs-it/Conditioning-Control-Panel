@@ -22,6 +22,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Banner;
 using Xunit;
 using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
 using IconKind = FluentIcons.Common.Symbol;
@@ -171,6 +172,103 @@ public sealed class HomeMarqueeTests
         w.ShowTab("settings");
         Dispatcher.UIThread.RunJobs();
         Assert.True(dash.Marquee.IsTicking);
+        return Task.CompletedTask;
+    });
+
+    // ---------------------------------------------------------------- the interludes
+
+    /// <summary>A scrolling strip with an eligible read (rd_001: streak >= 3) and the cadence on a stepped clock;
+    /// the touched settings are put back by <see cref="WithShell"/> and here.</summary>
+    private static Task WithReads(Func<MainShellWindow, SettingsTabView, MarqueeInterlude, SteppedTime, Action<TimeSpan>, Task> body) =>
+        WithShell(async (w, dash) =>
+        {
+            var s = CoreSettings.Current;
+            var saved = (s.BannerPoolEnabled, s.CurrentStreak, s.BannerSeenIds.ToList());
+            try
+            {
+                var time = new SteppedTime();
+                BeatLoop.Time = time;
+                (s.MotionLevel, s.PerformanceMode, s.MarqueeMessage, s.BannerPoolEnabled, s.CurrentStreak) =
+                    (MotionLevel.Full, false, "Good night", true, 3);
+                dash.StartMarqueeAnimation();
+                var reads = dash.Marquee.Reads!;
+                var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                reads.Cadence = new MarqueeReadCadence(() => now);
+                await body(w, dash, reads, time, by => now += by);
+            }
+            finally { (s.BannerPoolEnabled, s.CurrentStreak, s.BannerSeenIds) = saved; }
+        });
+
+    /// <summary>WPF MainWindow.MarqueeReads.cs: the 4th loop (past the launch delay) plays a read; the ticker pauses,
+    /// fades out 280 ms, and after the act comes back where it stopped with the loop clock re-armed.</summary>
+    [Fact]
+    public Task MarqueeReadTakesTheStripAndGivesItBack() => WithReads((w, dash, reads, time, wall) =>
+    {
+        var strip = dash.Marquee;
+        var canvas = dash.FindControl<Canvas>("MarqueeCanvas")!;
+        var stage = dash.FindControl<Grid>("MarqueeRead")!;
+        Assert.Equal(TimeSpan.FromSeconds(strip.SegmentWidth / MarqueeScroller.PixelsPerSecond), reads.LoopInterval);
+        time.Advance(TimeSpan.FromSeconds(0.5));
+        BeatLoop.StepAll();
+
+        for (var i = 0; i < 3; i++) reads.OnLoop();
+        Assert.False(reads.IsPlaying);                  // three loops: not yet
+        wall(TimeSpan.FromMinutes(2));
+        reads.OnLoop();
+        Assert.True(reads.IsPlaying);                   // the fourth, two minutes after launch
+        Assert.Null(reads.LoopInterval);
+        Assert.False(strip.IsScrolling);
+        Assert.False(string.IsNullOrWhiteSpace(reads.StageText));
+        Assert.NotEmpty(stage.GetVisualDescendants().OfType<TextBlock>());
+
+        time.Advance(TimeSpan.FromMilliseconds(140));
+        BeatLoop.StepAll();
+        Assert.InRange(canvas.Opacity, 0.01, 0.99);      // the ticker is fading out
+        time.Advance(TimeSpan.FromMilliseconds(MarqueeInterlude.ActMs));
+        BeatLoop.StepAll();
+        Assert.Equal(0, canvas.Opacity);
+        Assert.Equal(1, stage.Opacity);
+        time.Advance(TimeSpan.FromSeconds(1));
+        BeatLoop.StepAll();
+
+        Assert.False(reads.IsPlaying);
+        Assert.Equal(1, canvas.Opacity);
+        Assert.Equal(0, stage.Opacity);
+        Assert.Empty(stage.Children);
+        Assert.True(strip.IsScrolling);
+        Assert.Equal(-40, strip.Transform.X, 3);        // resumed in phase, not from zero
+        Assert.NotNull(reads.LoopInterval);
+        reads.OnLoop();
+        Assert.False(reads.IsPlaying);                  // the next one waits four loops and three minutes
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF MarqueeRead_IsVisibleChanged: leaving Home cancels the act and hands the ticker back; the pool
+    /// switch (BannerPoolEnabled) keeps the act off the strip.</summary>
+    [Fact]
+    public Task MarqueeReadStopsOnHideAndHonoursThePoolSwitch() => WithReads((w, dash, reads, time, wall) =>
+    {
+        var canvas = dash.FindControl<Canvas>("MarqueeCanvas")!;
+        wall(TimeSpan.FromMinutes(3));
+        CoreSettings.Current.BannerPoolEnabled = false;
+        for (var i = 0; i < 4; i++) reads.OnLoop();
+        Assert.False(reads.IsPlaying);
+
+        CoreSettings.Current.BannerPoolEnabled = true;
+        reads.OnLoop();
+        Assert.True(reads.IsPlaying);
+        time.Advance(TimeSpan.FromMilliseconds(140));
+        BeatLoop.StepAll();
+        w.ShowTab("presets");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(reads.IsPlaying);
+        Assert.Equal(1, canvas.Opacity);
+        Assert.Empty(dash.FindControl<Grid>("MarqueeRead")!.Children);
+        // WPF MarqueeRead_IsVisibleChanged: the loop clock stops on hide and restarts on show.
+        Assert.Null(reads.LoopInterval);
+        w.ShowTab("settings");
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(reads.LoopInterval);
         return Task.CompletedTask;
     });
 

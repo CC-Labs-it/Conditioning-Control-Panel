@@ -251,6 +251,8 @@ namespace ConditioningControlPanel
         static App()
         {
             CorePaths.EffectiveAssetsProvider = () => EffectiveAssetsPath;
+            // Chaos bubble payloads are Core data; what firing one does is this head's.
+            Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
@@ -311,6 +313,10 @@ namespace ConditioningControlPanel
             // Race rules live in Core; the prize store and the NAudio decoder stay here.
             Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
             Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
+            // The Bureau's evidence index lives in Core; it reads this head's pack service.
+            Services.Bureau.BureauIndexService.InstalledPacksProvider = () => ContentPacks?.InstalledPacks;
+            Services.Bureau.BureauIndexService.ImageFilesProvider = packId => ContentPacks?.GetPackFiles(packId, "image") ?? new();
+            Services.Bureau.BureauIndexService.OpenFileProvider = (packId, entry) => ContentPacks?.GetPackFileStream(packId, entry);
             // The compositor layers moved to Core; their per-monitor fill gate resolves screens here.
             Services.Compositor.BaseLayer.ScreenTargetGate = ShouldRenderTargetOnScreen;
             // The mod service's side effects on a switch, and what it asks the head.
@@ -376,6 +382,8 @@ namespace ConditioningControlPanel
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
+            // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
+            Services.GoonGame.GoonSignalingClient.MergedAccountHook = Services.MergedAccountRecovery.TryHandle;
             Services.MergedAccountRecoveryHead.Seed();
             Services.Arcademy.ArcademySyncService.MergedRecovery = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
@@ -604,6 +612,10 @@ namespace ConditioningControlPanel
             // declared null! until then - so the provider must not capture it now.
             CoreWebcam.IsAvailableProvider = () => Webcam != null;
             CoreWebcam.RevokeConsentAction = () => Webcam?.RevokeConsent();
+            // The Deeper engine and its host moved to Core; the effects and the tracker stay here.
+            Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Services.Deeper.RealActionDispatcher();
+            Services.Deeper.EnhancementHostService.WebcamProvider = () =>
+                Webcam == null ? null : (_deeperWebcam ??= new Services.Deeper.EnhancementWebcamAdapter(Webcam));
 
             // Speech capability, for the views that ask whether voice input is worth offering.
             // SpeechService itself stays here - it owns a capture device. Reading ModelStatus
@@ -1219,6 +1231,7 @@ namespace ConditioningControlPanel
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
+        private static Services.Deeper.EnhancementWebcamAdapter? _deeperWebcam;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
         public static FocusGameService FocusGame { get; private set; } = null!;
@@ -2727,7 +2740,7 @@ namespace ConditioningControlPanel
             V2Purchase = new Services.Prizes.V2PurchaseService(
                 new Services.BackRoom.BackRoomApi(null, Services.BackRoom.BackRoomApi.AppIdentity, adoptSp: null),
                 () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId,
-                Services.Prizes.V2PurchaseRule.OwnsPrize,
+                id => Services.Prizes.V2PurchaseRule.OwnsPrize(id, Services.Prizes.PrizeGrants.IsGranted),
                 () => Settings?.Current?.SkillPoints ?? 0,
                 // The account is captured when the reply lands and checked AGAIN inside the
                 // marshalled write, the `canAdopt` shape BackRoomBridge.AdoptSp uses: the write
