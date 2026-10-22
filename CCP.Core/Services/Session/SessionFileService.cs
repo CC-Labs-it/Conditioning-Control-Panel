@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Services
             _builtInSessionsFolderOverride = ValidateFolderOverride(builtInSessionsFolder, nameof(builtInSessionsFolder));
         }
 
-        private string CustomSessionsPath => _customSessionsFolderOverride ?? CustomSessionsFolder;
+        internal string CustomSessionsPath => _customSessionsFolderOverride ?? CustomSessionsFolder;
         private string BuiltInSessionsPath => _builtInSessionsFolderOverride ?? BuiltInSessionsFolder;
 
         private static string ValidateFolderOverride(string? folder, string parameterName)
