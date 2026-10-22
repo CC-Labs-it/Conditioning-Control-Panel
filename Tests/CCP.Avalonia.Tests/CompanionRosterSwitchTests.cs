@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -12,10 +13,12 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -61,6 +64,7 @@ public sealed class CompanionRosterSwitchTests
     public Task RightClickAndPersonalityButtonDoNotSwitchTheCard() => WithRoster((shell, room, roster) =>
     {
         int personalityRequests = 0;
+        shell.PersonalityFileForTests = _ => Task.FromResult<string?>(null); // picker cancelled
         roster.PersonalityAssignRequested += (_, index) => { Assert.Equal(2, index); personalityRequests++; };
         Click(shell, roster.FindControl<Border>("CompanionCard2")!, MouseButton.Right);
         Assert.Equal(0, CoreSettings.Current.ActiveCompanionId);
@@ -68,6 +72,70 @@ public sealed class CompanionRosterSwitchTests
         Assert.Equal(1, personalityRequests);
         Assert.Equal(0, CoreSettings.Current.ActiveCompanionId);
     });
+
+    [Fact]
+    public Task PersonalityButtonImportsAssignsLabelsAndActivatesOnSwitch() => WithRoster((shell, room, roster) =>
+    {
+        var s = CoreSettings.Current;
+        var oldAssignments = s.CompanionPromptAssignments;
+        var oldInstalled = s.InstalledCommunityPromptIds;
+        var oldActivePrompt = s.ActiveCommunityPromptId;
+        var oldPrompt = s.CompanionPrompt;
+        s.CompanionPromptAssignments = new();
+        s.InstalledCommunityPromptIds = new();
+        s.ActiveCommunityPromptId = null;
+        var dir = Directory.CreateTempSubdirectory("ccp-persona-").FullName;
+        string Fixture(string name)
+        {
+            var path = Path.Combine(dir, name + ".json");
+            File.WriteAllText(path, JsonConvert.SerializeObject(new CommunityPrompt
+            { Id = "ignored", Name = "ignored", Author = "Test", PromptSettings = new() { Personality = "fixture " + name } }));
+            return path;
+        }
+        try
+        {
+            // Inactive companion 2: assigned and labelled, but not activated (WPF :436).
+            shell.PersonalityFileForTests = _ => Task.FromResult<string?>(Fixture("Second Persona"));
+            Click(shell, roster.FindControl<Button>("BtnCompanion2Personality")!, MouseButton.Left);
+            var second = s.GetCompanionPromptId(2);
+            Assert.False(string.IsNullOrEmpty(second));
+            Assert.Null(s.ActiveCommunityPromptId);
+            Assert.Equal("Second Persona", roster.FindControl<TextBlock>("TxtCompanion2Prompt")!.Text);
+            Assert.Equal("", roster.FindControl<TextBlock>("TxtCompanion0Prompt")!.Text);
+            CloseConfirmation(shell);
+
+            // Active companion 0: activated at once.
+            shell.PersonalityFileForTests = _ => Task.FromResult<string?>(Fixture("First Persona"));
+            Click(shell, roster.FindControl<Button>("BtnCompanion0Personality")!, MouseButton.Left);
+            var first = s.GetCompanionPromptId(0);
+            Assert.Equal(first, s.ActiveCommunityPromptId);
+            Assert.Equal("fixture First Persona", s.CompanionPrompt.Personality);
+            Assert.Equal("First Persona", roster.FindControl<TextBlock>("TxtCompanion0Prompt")!.Text);
+            CloseConfirmation(shell);
+
+            // Switching to companion 2 activates her assignment (WPF SwitchCompanion :214).
+            Click(shell, roster.FindControl<Border>("CompanionCard2")!, MouseButton.Left);
+            Assert.Equal(second, s.ActiveCommunityPromptId);
+            Assert.Equal("fixture Second Persona", s.CompanionPrompt.Personality);
+        }
+        finally
+        {
+            foreach (var id in s.InstalledCommunityPromptIds)
+                File.Delete(Path.Combine(CorePaths.UserData, "community-prompts", id + ".json"));
+            s.CompanionPromptAssignments = oldAssignments;
+            s.InstalledCommunityPromptIds = oldInstalled;
+            s.ActiveCommunityPromptId = oldActivePrompt;
+            s.CompanionPrompt = oldPrompt;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    private static void CloseConfirmation(MainShellWindow shell)
+    {
+        var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+        dialog.Close(true);
+        Dispatcher.UIThread.RunJobs();
+    }
 
     private static Task WithRoster(Action<MainShellWindow, CompanionRoomView, WorkshopRosterCell> test) => AvaloniaTestDispatcher.RunAsync(() =>
     {

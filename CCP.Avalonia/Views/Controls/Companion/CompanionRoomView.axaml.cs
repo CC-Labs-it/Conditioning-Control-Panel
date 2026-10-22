@@ -142,6 +142,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             RefreshRoster();
         }
 
+        /// <summary>WPF UpdateCommunityPromptsUI on tab show (MainWindow.CompanionTab.cs:147) and after a
+        /// deactivate (MainWindow.Patreon.cs:2249): the rows' active dot follows the setting. Skipped while
+        /// the cell is detached - it rebuilds on attach, and a detached read would leak a service.</summary>
+        internal void RefreshCommunity()
+        {
+            if ((WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Community is { } cell
+                && global::Avalonia.VisualTree.VisualExtensions.IsAttachedToVisualTree(cell))
+                cell.RefreshInstalledPrompts();
+        }
+
         // ponytail: ICompanionRoomVm (zone interfaces) lives in the WPF head; hero, chat and memory are
         // live, the other zones seed their own viewmodels until their runtime crosses.
 
@@ -182,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 HeroZone.GetLogicalDescendants().OfType<RelationshipConstellation>().FirstOrDefault()?.PlayIntro();
                 // WPF UpdateCompanionCardsUI runs on the same show: the roster's levels and ring.
                 (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
+                RefreshCommunity();
                 // ponytail: WPF also calls ChatZone.SyncThinking() here. This head's
                 // ChatThresholdView has no thinking clock to sync - WPF's dots are three
                 // RepeatBehavior=Forever Storyboards (CmpThinkingDotsStoryboard) and the port

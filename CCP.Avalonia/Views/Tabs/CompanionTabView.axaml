@@ -34,7 +34,7 @@
 
          The room owns live zone viewmodels; visibility and roster card
          actions reach the shell. The aggregate runtime/compat seam and
-         WPF v2 page mount remain in wire-views-tab-companion-b.
+         WPF v2 page mount remain in wire-views-tab-companion-b-next.
 
          The tab's own header is gone on purpose: Z0 draws it, from the
          hero's viewmodel, so there is one title and not two.

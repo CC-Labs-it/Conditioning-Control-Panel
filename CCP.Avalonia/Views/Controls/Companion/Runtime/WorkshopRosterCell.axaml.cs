@@ -107,6 +107,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 this.FindControl<TextBlock>($"TxtCompanion{i}Lock")!.IsVisible = false;
                 card.Opacity = 1.0;
             }
+
+            // WPF UpdateCompanionPromptLabels (MainWindow.CompanionTab.cs:464), called from :150.
+            for (int i = 0; i < 5; i++)
+            {
+                var promptName = global::ConditioningControlPanel.Services.Companion.CompanionCore.GetAssignedPromptName((CompanionId)i);
+                var displayName = mods?.MakeModAware(promptName ?? "") ?? promptName ?? "";
+                var label = this.FindControl<TextBlock>($"TxtCompanion{i}Prompt")!;
+                label.Text = displayName;
+                ToolTip.SetTip(label, string.IsNullOrEmpty(displayName) ? null : Loc.GetF("tooltip_ai_personality", displayName));
+            }
         }
     }
 

@@ -48,10 +48,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
             //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
             //    that flips with nothing behind it would report a paused browser that is playing.
-            //  · Roster.PersonalityAssignRequested — personality prompt assignment remains absent.
-            //    CompanionTabView wires CompanionCardClicked to the shell's shared-Core switch.
-            //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
-            //    service, still in the WPF head.
+            //  · Roster.PersonalityAssignRequested / CompanionCardClicked — CompanionTabView wires
+            //    both to the shell (MainShellWindow.CompanionTab.cs).
+            // Community owns its shared-service actions and native picker presentation.
         }
 
         /// <summary>

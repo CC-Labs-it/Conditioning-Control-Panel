@@ -121,8 +121,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 PersonalityService.ClearCustomPromptOverride(CoreSettings.Current);
                 CoreSettings.Save();
                 Sync();
+                RefreshCommunityRows();   // WPF MainWindow.Patreon.cs:2249 UpdateCommunityPromptsUI
             });
             Sync();
+        }
+
+        /// <summary>The Workshop COMMUNITY rows' active dot follows a reset or preset pick made here.</summary>
+        private void RefreshCommunityRows()
+        {
+            if (_host != null) global::Avalonia.VisualTree.VisualExtensions.FindAncestorOfType<CompanionRoomView>(_host)?.RefreshCommunity();
         }
 
         internal Windows.MainShellWindow? Shell =>
@@ -187,9 +194,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public ICommand ResetPersonalityCommand { get; }
         public ICommand ViewCompiledPromptCommand { get; }
         public ICommand ForkPromptCommand { get; }
-        // ponytail: WPF BtnBrowsePrompts_Click opens the community prompt browser
-        // (App.CommunityPrompts, WPF-head CommunityPromptService); no browser exists on this head, so the
-        // link stays a null command (disabled) rather than a dead button that looks alive.
+        // ponytail: WPF BtnBrowsePrompts_Click opens the community prompt browser. CommunityPromptService is
+        // in Core now and the browser lives in the Workshop's COMMUNITY cell (WorkshopCommunityCell); this
+        // link is not routed there yet, so it stays a null command (disabled) rather than a dead button.
         public ICommand? CommunityPromptsCommand => null;
 
         /// <summary>Re-reads settings and the personality service (WPF MakeHerYoursRuntimeVm.SyncCore).</summary>
@@ -211,7 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (!string.IsNullOrEmpty(communityId))
             {
                 // ponytail: WPF shows the installed prompt's NAME (CommunityPromptService.GetInstalledPrompt,
-                // head-only); this head has no installed-prompt store yet, so the id stands in.
+                // now in Core); this viewmodel holds no service instance yet, so the id stands in.
                 ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", communityId);
                 CanResetPersonality = true;
                 return;
@@ -290,6 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (Shell is { } shell) await shell.ActivatePersonalityPresetAsync(id);
             // Reads back what happened: a cancelled acknowledgement leaves the old preset active.
             Sync();
+            RefreshCommunityRows();
         }
 
         private async void OpenPromptEditor()
