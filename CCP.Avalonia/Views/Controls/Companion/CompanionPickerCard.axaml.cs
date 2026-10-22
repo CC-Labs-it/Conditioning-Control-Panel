@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -75,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 TxtPreviewGlyph.Bind(ConditioningControlPanel.Avalonia.Controls.IconGlyph.ForegroundProperty, TxtPreviewGlyph.GetResourceObservable("TextMutedBrush"));
                 TxtLiveName.Text = LiveName();
                 ShowPerk();
-                FillAvatars();
+                FillAvatars(AvatarTubeWindow.Live);
                 FillPersonalities();
             }
             catch (Exception ex)
@@ -180,10 +182,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         // ------------------------------------------------------------------ look
 
-        private void FillAvatars()
+        internal void FillAvatars(AvatarTubeWindow? tube)
         {
             CmbAvatar.Items.Clear();
-            var tube = AvatarTubeWindow.Live;
             BtnTurnOn.IsVisible = tube == null;
             BtnTubeFit.IsVisible = tube != null;
             var set = Math.Max(1, tube?.CurrentAvatarSet ?? CoreSettings.Current.SelectedAvatarSet);
@@ -202,7 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 CmbAvatar.Items.Add(item);
                 CmbAvatar.SelectedItem = item;
                 CmbAvatar.IsEnabled = false;
-                TxtAvatarHint.IsVisible = false;
+                ShowHint(Loc.Get("modmgr_avatar_single_hint"));
             }
             ShowPortrait(ModArt.TryLoad(set == 1 ? "avatar_pose1.png" : $"avatar{set}_pose1.png", 240));
         }
@@ -215,8 +216,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void ShowPortrait(IImage? source)
         {
+            ImgPreview.Transitions = null; // cancel a previous portrait's fade before replacing it
             ImgPreview.Source = source;
             TxtPreviewGlyph.IsVisible = source == null;
+            if (source == null || !AmbientFxCanvas.Env.AllowTransitions)
+            {
+                ImgPreview.Opacity = 1;
+                return;
+            }
+            // WPF ShowPreview: a linear 0.2 -> 1 entrance, 160 ms, including reduced motion.
+            ImgPreview.Opacity = 0.2;
+            ImgPreview.Transitions = new Transitions
+            {
+                new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(160) }
+            };
+            ImgPreview.Opacity = 1;
         }
 
         // ------------------------------------------------------------------ personality

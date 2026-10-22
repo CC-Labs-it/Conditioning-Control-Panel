@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Companion;
 
@@ -49,10 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 };
                 choice.IsCheckedChanged += (_, _) =>
                 {
-                    if (choice.IsChecked != true || !CompanionPerks.TrySelect(CoreSettings.Current, type)) return;
-                    // ponytail: WPF SetPerk also restarts CompanionService's XP-drain timer; this head
-                    // has no companion XP service yet (MainShellWindow.Companion.cs), so only the choice persists.
-                    CoreSettings.Save();
+                    if (choice.IsChecked != true || !CompanionHead.SetPerk(type)) return;
                     window.Close();
                 };
                 panel.Children.Add(choice);
