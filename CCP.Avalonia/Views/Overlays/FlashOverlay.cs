@@ -94,13 +94,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 var clickable = s.FlashClickable;
                 var lifetime = Lifetime(s, ambient, durationMs);
-                var cap = Cap(s, ambient);
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
                 var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
 
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
-                Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
+                Schedule(flashes, 1000, StaggerMs, generation, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
                     done: () => _busy = false);
                 scheduled = true;
             }
@@ -112,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
         private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
-            int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
+            int generation, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
             var refused = false;
@@ -124,7 +123,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     try
                     {
-                        if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
+                        // Being full skips this picture only: a pop may free room for the next one.
+                        if (refused || _closed || generation != _generation || Active.Count >= Cap(CoreSettings.Current, ambient))
+                        { bmp.Dispose(); return; }
                         refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
@@ -139,6 +140,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null)
         {
             var s = CoreSettings.Current;
+            // WPF SpawnFlashWindow: every spawn path shares this gate, with the LIVE slider.
+            // A staying ambient flash keeps its promised 40; point-fired flashes use Max on screen.
+            if (Active.Count >= Cap(s, ambient)) { bmp.Dispose(); return false; }
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
@@ -364,8 +368,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ? TimeSpan.FromMilliseconds(FlashStayRule.SafetyLifetimeMs)
             : TimeSpan.FromMilliseconds((durationMs ?? s.FlashDuration * 1000) + 1000);
 
-        /// <summary>WPF FlashService.cs:1692: the shared-host cap (30), 40 while flashes stay.</summary>
-        internal static int Cap(AppSettings s, bool ambient) => FlashStayRule.Cap(MaxConcurrent, Stays(s, ambient), sharedHost: true);
+        /// <summary>WPF SpawnFlashWindow: Max on screen trims the mode cap except for staying
+        /// ambient flashes, whose own ceiling stays 40 (6174b5c01, 4bcb62934).</summary>
+        internal static int Cap(AppSettings s, bool ambient)
+        {
+            var stay = Stays(s, ambient);
+            return FlashStayRule.OnScreen(FlashStayRule.Cap(MaxConcurrent, stay, sharedHost: true), s.HydraLimit, stay);
+        }
 
         /// <summary>WPF FlashService.cs:696-706: with stay on and the screen full, the ambient tick
         /// skips whole (picture and whisper) and waits for a pop.</summary>
@@ -415,7 +424,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
                 if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
-                Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
+                Schedule(flashes, 0, 100, generation, Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
                     parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
             }
