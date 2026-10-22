@@ -431,7 +431,10 @@ The membrane fills the opening from the road to the inner arch, with centre
 UV (0.5, 0.5), U increasing right and V upward before glTF texture convention.
 It is visual geometry, never a collision barrier. Do not use it for road clearance.
 
-Both mask materials start at alpha 0 with no image. Bind the shared grayscale
+Both mask materials start at alpha 0 with no image and glTF alphaMode MASK.
+For a soft or fading spiral, explicitly select blended transparency, set alphaTest
+to 0 and disable depth writing, or replace the material with the host shader.
+Bind the shared grayscale
 spiral texture, sample its red channel and set palette colour, alpha and emission
 in the engine. Do not treat a decoded single-channel image as coloured RGB.
 The host owns rotation, intensity, contrast, transitions and Gentle Visuals.
