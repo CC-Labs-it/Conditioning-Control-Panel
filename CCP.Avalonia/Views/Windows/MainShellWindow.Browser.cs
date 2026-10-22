@@ -19,12 +19,9 @@
 //   2. (Resolved) the offline-block toast now shows through App.Notifications, as WPF
 //      NotifyBrowserBlockedOffline does (MainWindow.Browser.cs:489-494).
 //
-// REFUSED, not "not done yet": the mute pair. BtnMuteBrowser_Click flips
-// AppSettings.BrowserVideoMuted and applies it live through CoreWebView2.IsMuted;
-// SyncBrowserMuteIcon paints the glyph from the saved flag. WebHost has no mute, so restoring the
-// pair would move the glyph to "muted" over a web view still playing at full volume - a control
-// that lies about state, and the one control whose entire job is to say whether sound is coming
-// out. A stub until WebHost exposes IsAudioMuted.
+// THE MUTE PAIR is ported onto the card itself (Views/Tabs/SettingsTabView.BrowserCard.cs) over the WebHost
+// script channel (Views/Controls/WebHostMedia.cs), re-applied after each navigation. There is still no ENGINE
+// mute: a player inside a cross-origin iframe is out of reach.
 //
 // CALLERS STILL MISSING, each one line in a file this layer does not own:
 //   * (Resolved) SettingsTabView forwards RbBambiCloud / RbHypnoTube / BtnReloadBrowser and the
