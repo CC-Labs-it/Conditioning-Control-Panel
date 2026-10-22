@@ -27,8 +27,15 @@ public sealed class NewEnhancementSourceTests
     {
         var old = CoreModsHooks.KnownVideoLinksProvider;
         var seen = CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial;
-        var dialog = new NewEnhancementDialog();
-        dialog.Show();
+        // Opened the way a user does (P04): shell -> Deeper tab -> "New enhancement".
+        var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        shell.Show();
+        shell.ShowTab("deeper");
+        Dispatcher.UIThread.RunJobs();
+        shell.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.DeeperTabView>("DeeperTab")!
+            .FindControl<Button>("BtnDeeperNewEnhancement")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.Single(shell.OwnedWindows.OfType<NewEnhancementDialog>());
         try
         {
             CoreModsHooks.KnownVideoLinksProvider = () => new Dictionary<string, string>
@@ -45,6 +52,7 @@ public sealed class NewEnhancementSourceTests
         finally
         {
             dialog.Close();
+            shell.Close();
             CoreModsHooks.KnownVideoLinksProvider = old;
             CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial = seen;
         }
