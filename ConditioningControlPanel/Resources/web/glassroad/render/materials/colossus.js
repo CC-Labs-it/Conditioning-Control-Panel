@@ -1,17 +1,19 @@
 /* render/materials/colossus.js - soft shading for the colossi and the floating scatter.
  * Unlit node material (no light pass) built from the glTF material it replaces: its colour, vertex
  * paint (COLOR_0, the approved chess paint) and emissive are kept. Shading:
+ *   - an optional saturated tint over the paint's luminance (polish 3: every prop and colossus wears a
+ *     spectrum colour; metal trims and screens keep their own),
  *   - soft wrap light from the lamp (LOOK.lightDir), the shaded side cooled toward violet instead of
  *     going grey,
  *   - a broad sheen (wider and stronger on metal),
- *   - a rim from the sky palette, so silhouettes glow against the spiral,
- *   - aerial perspective: distance haze toward the sky colour along the view, and a low haze that
- *     swallows whatever hangs below the road, so a 250 m body reads as huge and far.
+ *   - a rim (the tint lifted toward white, or the sky palette), so silhouettes pop off the sky,
+ *   - no seams or flutes: lines running up an upright body read as ribbing (polish 3 review),
+ *   - aerial perspective: full colour inside hazeNearM, a light haze toward the sky colour beyond it.
  * Everything moves only with the palette mix and the camera; no time term, nothing to flicker.
  */
 import { MeshBasicNodeMaterial, Color, DoubleSide } from 'three/webgpu';
 import { vec3, float, vertexColor, normalWorld, positionWorld, cameraPosition, normalize, dot, max, abs, pow, mix, clamp,
-  exp, smoothstep, texture, uv, uniform, faceDirection } from 'three/tsl';
+  smoothstep, texture, uv, uniform, faceDirection } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { worldLook } from '../colossiMath.js';
 
@@ -23,12 +25,20 @@ export function skyToward(pal, d) {
   return mix(ground, bands, 0.45).mul(LOOK.skyDim);
 }
 
+/** Parts that keep their own colour under a tint: metal trims, screens, lamps and the credit slot. */
+const KEEP = ['screen', 'lamp', 'credit', 'gold', 'silver', 'rim'];
+export function keepsOwnColour(src) {
+  const name = String((src && src.name) || '').toLowerCase();
+  return ((src && src.metalness) || 0) > 0.5 || KEEP.some((k) => name.includes(k));
+}
+
 /**
  * src: the glTF material to replace (MeshStandardMaterial / MeshPhysicalMaterial).
- * opts.haze (default 1) scales the aerial haze; opts.instanced is informational (instancing works
- * through normalWorld either way). Returns { material, uniforms: { haze } }.
+ * opts.haze (default 1) scales the aerial haze. opts.tint: a vec3 node (a uniform, or an instanced
+ * attribute) the body takes on; opts.rimGain / rimPow override the rim.
+ * Returns { material, uniforms: { haze } }.
  */
-export function createSoftMaterial(src, pal, { haze = 1 } = {}) {
+export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = null, rimPow = null } = {}) {
   const W = worldLook();
   const u = { haze: uniform(haze) };
   const c = new Color().copy((src && src.color) || new Color(1, 1, 1));
@@ -36,6 +46,11 @@ export function createSoftMaterial(src, pal, { haze = 1 } = {}) {
   if (src && src.vertexColors) base = base.mul(vertexColor().rgb);
   if (src && src.map) base = base.mul(texture(src.map, uv()).rgb);
   const metal = float(Math.min(1, (src && src.metalness) || 0));
+  // the tint keeps the paint's light and dark (symbols, panel lines) and swaps its hue
+  if (tint && !keepsOwnColour(src)) {
+    const lum = dot(base, vec3(0.3, 0.59, 0.11));
+    base = mix(base, tint.mul(lum.mul(W.tintGain).add(W.tintFloor)), W.tintMix);
+  }
 
   const N = normalize(normalWorld);
   const Lv = normalize(vec3(...LOOK.lightDir));
@@ -51,17 +66,26 @@ export function createSoftMaterial(src, pal, { haze = 1 } = {}) {
   const sky = Nf.y.mul(0.5).add(0.5).mul(0.12);                          // a little sky fill from above
   const H = normalize(Lv.add(V));
   const spec = pow(max(dot(Nf, H), 0), mix(float(W.specPow * 0.4), float(W.specPow), metal)).mul(W.specGain).mul(metal.mul(0.8).add(0.35));
-  const rim = pow(float(1).sub(abs(dot(Nf, V))), W.rimPow).mul(W.rimGain);
-  let col = lit.add(base.mul(pal.col(1)).mul(sky)).add(vec3(1, 0.95, 0.92).mul(spec)).add(mix(pal.col(0), pal.col(1), 0.35).mul(rim));
+  const edge = max(float(1).sub(abs(dot(Nf, V))), 0);   // never negative under pow (NaN guard)
+  let col = lit.add(base.mul(pal.col(1)).mul(sky)).add(vec3(1, 0.95, 0.92).mul(spec));
+  if (tint) {
+    // a bright rim in the body's own hue, lifted toward white: reads against any sky colour
+    col = col.add(mix(tint, vec3(1, 1, 1), W.propRimWhite).mul(pow(edge, rimPow ?? W.propRimPow)).mul(rimGain ?? W.propRimGain));
+  } else {
+    col = col.add(mix(pal.col(0), pal.col(1), 0.35).mul(pow(edge, W.rimPow)).mul(rimGain ?? W.rimGain));
+  }
   if (src && src.emissive) {
     const e = src.emissive, k = src.emissiveIntensity ?? 1;
     if (e.r + e.g + e.b > 0) col = col.add(vec3(e.r * k, e.g * k, e.b * k));
   }
-  // aerial perspective: far haze along the view, low haze under the road plane
-  const far = float(1).sub(exp(dist.div(-W.hazeM))).mul(W.hazeMax);
-  const low = smoothstep(0, W.hazeLowM, positionWorld.y.negate()).mul(W.hazeLowMax);
-  const h = float(1).sub(float(1).sub(far).mul(float(1).sub(low))).mul(u.haze);
-  col = mix(col, skyToward(pal, V.negate()), clamp(h, 0, 1));
+  // aerial perspective: nothing inside hazeNearM, a light haze toward the sky beyond it
+  const far = smoothstep(W.hazeNearM, W.hazeFarM, dist).mul(W.hazeMax);
+  let h = far;
+  if (W.hazeLowMax > 0) {
+    const low = smoothstep(0, W.hazeLowM, positionWorld.y.negate()).mul(W.hazeLowMax);
+    h = float(1).sub(float(1).sub(far).mul(float(1).sub(low)));
+  }
+  col = mix(col, skyToward(pal, V.negate()), clamp(h.mul(u.haze), 0, 1));
 
   const m = new MeshBasicNodeMaterial({ side: DoubleSide, fog: false });
   m.name = (src && src.name) || 'colossus';

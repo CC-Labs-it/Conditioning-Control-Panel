@@ -53,7 +53,9 @@ test('world: every colossus places and clears the road tube of every stretch, ch
 
 test('world: several arches lean across the road at least clearM over it; towers stand beside', () => {
   const arches = placed.filter((p) => p.spec.kind === 'arch'), towers = placed.filter((p) => p.spec.kind === 'tower');
-  assert.ok(arches.length >= 3, 'arches ' + arches.length);
+  // polish 3 review: the bishop arch is gone (it read as a tentacle) and the king stands as a tower so its
+  // crown reads; the watch still lies across the road
+  assert.ok(arches.length >= 1, 'arches ' + arches.length);
   for (const a of arches) {
     const c = bodyClear(a, fine, FINE);
     assert.ok(c.crosses, a.id + ' crosses over the road');
@@ -85,27 +87,24 @@ test('world: the fitter only raises an arch or steps a tower out, and gives up c
     else assert.ok(a.spec.offM >= raw.offM);
   }
   // an arch through the road with no tries left is refused
-  const spec = { ...layout.colossi[0], crossUpM: 0 };
+  const spec = { ...layout.colossi.find((c) => c.kind === 'arch'), crossUpM: 0 };
   assert.equal(placeColossi([spec], tr, rowOf, { ...W, fitTries: 0 }, samples).length, 0);
   // a missing art row skips that body
   assert.equal(placeColossi([{ ...spec, id: 'nope' }], tr, rowOf, W, samples).length, 0);
 });
 
-test('world: the scatter is colossal and fewer, never clips any stretch, overlaps nothing, clears the colossi', () => {
-  const kinds = LOOK.artScatterKinds.filter((k) => rowOf(k.id));
+test('world: the scatter never clips any stretch, overlaps nothing, clears the colossi', () => {
+  const kinds = W.scatterKinds.filter((k) => rowOf(k.id));
+  const SC = { ...FINE, sideM: W.scatterMarginM, underM: W.scatterMarginM, clearM: W.scatterAirM };
   for (const seed of [1, 7, 12345, 99991]) {
     const sc = placeScatter(tr, kinds, rowOf, seed, { avoid: placed, W, samples });
-    assert.ok(sc.length > W.scatter * 0.6 && sc.length <= W.scatter, 'seed ' + seed + ' count ' + sc.length);
-    assert.ok(W.scatter < LOOK.artScatter, 'fewer than the polish 1 scatter');
+    assert.ok(sc.length > W.scatter * 0.85 && sc.length <= W.scatter, 'seed ' + seed + ' count ' + sc.length);
     for (const x of sc) {
-      assert.ok(x.scale >= x.k.scale[0] * W.scatterScaleMul - 1e-9, 'scaled up');
-      if (x.k.id.startsWith('chess-')) assert.ok(x.upright && Math.abs(x.rot[0]) <= W.scatterTiltRad && Math.abs(x.rot[2]) <= W.scatterTiltRad, 'chess floats upright');
-      assert.ok(scatterClear(x.p, x.R, fine, FINE), 'seed ' + seed + ' ' + x.k.id + ' clips the road at 2 m sampling');
-      for (const c of placed) assert.ok(capsulesApart({ B: x.p, top: x.p, r: x.R }, c, 0), x.k.id + ' touches ' + c.id);
+      assert.ok(bodyClear(x.body, fine, SC).ok, 'seed ' + seed + ' ' + x.k.id + ' clips the road at 2 m sampling');
+      for (const c of placed) assert.ok(capsulesApart(x.body, c, 0), x.k.id + ' touches ' + c.id);
+      if (x.k.id.startsWith('chess-')) assert.equal(x.pose, 'upright');
     }
-    for (let i = 0; i < sc.length; i++) for (let j = i + 1; j < sc.length; j++) {
-      assert.ok(V3.len(V3.sub(sc[i].p, sc[j].p)) >= sc[i].R + sc[j].R);
-    }
+    for (let i = 0; i < sc.length; i++) for (let j = i + 1; j < sc.length; j++) assert.ok(capsulesApart(sc[i].body, sc[j].body, 0));
     // seeded: the same seed lays the same scatter
     assert.deepEqual(placeScatter(tr, kinds, rowOf, seed, { avoid: placed, W, samples }).map((x) => x.p), sc.map((x) => x.p));
   }

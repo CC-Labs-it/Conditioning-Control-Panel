@@ -9,8 +9,9 @@
  * very slowly about its own axis (the clearance test is a capsule round that axis, so the turn can
  * never bring it into the road). Every mesh casts into the lamp's shadow map (render/shadows.js).
  */
-import { Group, Matrix4, Vector3 } from 'three/webgpu';
-import { placeColossi, sampleTrack, worldLook } from './colossiMath.js';
+import { Group, Matrix4, Vector3, Color } from 'three/webgpu';
+import { uniform } from 'three/tsl';
+import { placeColossi, sampleTrack, worldLook, propColour, chessColour, hexOf } from './colossiMath.js';
 import { softenAll } from './materials/colossus.js';
 
 const LAYOUTS = new Map();
@@ -31,6 +32,12 @@ await loadColossi('threshold');
 
 const M4 = new Matrix4(), VX = new Vector3(), VY = new Vector3(), VZ = new Vector3();
 
+/** A colossus's body colour: the layout's own, else a spectrum pick per index (chess pieces never warm). */
+export function colossusColours(spec, i) {
+  const chess = String(spec.id || '').startsWith('chess-');
+  return { tint: hexOf(spec.tint) || (chess ? chessColour(i * 5 + 2, 'deep') : propColour(i * 5 + 2, 'deep')) };
+}
+
 /**
  * art: render/art.js set; track: loaded track; pal: the section palette (materials/palette.js).
  * opts.layout overrides the fetched layout; opts.samples reuses road samples.
@@ -42,19 +49,24 @@ export function buildColossi(art, track, pal, { layout = LAYOUTS.get(track.id), 
   const rowOf = (id) => (art.model(id) && art.row(id)) || null;
   const placed = placeColossi(layout.colossi, track, rowOf, W, samples || sampleTrack(track, W.stepM));
   if (!placed.length) return null;
-  const group = new Group(), spinners = [], cache = new Map();
+  const group = new Group(), spinners = [], mats = [];
   group.name = 'colossi';
-  for (const ax of placed) {
+  placed.forEach((ax, i) => {
     const holder = new Group(), body = art.model(ax.id).scene.clone(true);
     M4.makeBasis(VX.set(...ax.X), VY.set(...ax.Y), VZ.set(...ax.Z));
     holder.quaternion.setFromRotationMatrix(M4);
     holder.position.set(...ax.B);
     body.scale.setScalar(ax.scale);
-    softenAll(body, pal, cache);
+    // each body its own saturated colour and a bright rim, so it reads as what it is from the road (no
+    // seams: flutes up an upright body read as ribbing, polish 3 review)
+    const tint = new Color(colossusColours(ax.spec, i).tint);
+    const cache = new Map();
+    softenAll(body, pal, cache, { tint: uniform(tint), rimGain: W.colossusRimGain });
+    for (const m of cache.values()) mats.push(m);
     body.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     holder.add(body); group.add(holder);
     spinners.push({ body, rate: (ax.spec.spinRadps ?? W.colossusSpinRadps ?? 0.012) * (ax.spec.side < 0 ? -1 : 1) });
-  }
+  });
   return {
     object: group,
     placed,
@@ -64,6 +76,6 @@ export function buildColossi(art, track, pal, { layout = LAYOUTS.get(track.id), 
       if (!spinMul) return;
       for (const s of spinners) s.body.rotation.y = (s.body.rotation.y + s.rate * dt * spinMul) % (Math.PI * 2);
     },
-    dispose() { for (const m of cache.values()) m.dispose(); },
+    dispose() { for (const m of mats) m.dispose(); },
   };
 }

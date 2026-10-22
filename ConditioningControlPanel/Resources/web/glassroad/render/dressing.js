@@ -15,13 +15,13 @@
  */
 import {
   Group, InstancedMesh, Object3D, Matrix4, Quaternion, Vector3, MeshBasicNodeMaterial, CanvasTexture,
-  SRGBColorSpace, AdditiveBlending, DoubleSide, Color, LOD,
+  SRGBColorSpace, AdditiveBlending, DoubleSide, Color, LOD, InstancedBufferAttribute,
 } from 'three/webgpu';
-import { uniform, uv, vec2, texture, cos, sin, float, smoothstep, length, positionView } from 'three/tsl';
+import { uniform, uv, vec2, texture, cos, sin, float, smoothstep, length, positionView, instancedBufferAttribute } from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
-import { placeScatter, sampleTrack, worldLook } from './colossiMath.js';
+import { placeScatter, sampleTrack, worldLook, scatterCount, scatterBasis } from './colossiMath.js';
 import { createSoftMaterial } from './materials/colossus.js';
 
 const M4 = new Matrix4(), V = new Vector3(), SC = new Vector3(), ZB = new Vector3();
@@ -193,49 +193,63 @@ export function buildFinish(art, track, pal) {
   };
 }
 
-/** Seeded scatter of floating props. Returns { object, update(dt, spinMul) } or null with no props. */
+/**
+ * Seeded scatter of floating props (polish 3: a dense corridor the chase camera sees, colossiMath.js
+ * placeScatter). Count per tier from LOOK.world / WORLD_DEFAULTS scatterByTier (the tier picked at boot;
+ * a later governor step leaves the layout alone). Each piece wears its own saturated spectrum colour
+ * (an instanced tint) with a bright rim. Cards, watches and discs face the oncoming camera and swing
+ * about it; chess pieces and cabinets lean their top toward it and turn slowly; bubbles tumble.
+ * Returns { object, count, placed, update(dt, spinMul) } or null with no props.
+ */
 export function buildScatter(art, track, seed, { pal = null, avoid = [], samples = null } = {}) {
   if (!art) return null;
-  const kinds = LOOK.artScatterKinds.filter((k) => art.model(k.id) && art.row(k.id));
-  if (!kinds.length) return null;
   const W = worldLook();
-  // the tier picked at boot sets the count (a later governor step leaves the layout alone)
-  const want = Math.round(W.scatter * (Q.scatter ?? 1));
+  const kinds = (W.scatterKinds || LOOK.artScatterKinds).filter((k) => art.model(k.id) && art.row(k.id));
+  if (!kinds.length) return null;
+  const want = scatterCount(Q.name, W);
+  const sectionOf = (s) => { try { const sec = track.sections[track.sectionAt(s)]; return sec ? sec.palette : null; } catch { return null; } };
   const placed = placeScatter(track, kinds, (id) => art.row(id), seed,
-    { want, avoid, W, samples: samples || sampleTrack(track, W.stepM) });
-  // huge things turn slowly: the spin share falls with the size multiplier
+    { want, avoid, W, samples: samples || sampleTrack(track, W.stepM), sectionOf });
+  // huge things turn slowly
   for (const x of placed) x.spin *= W.scatterSpinMul;
   if (!placed.length) return null;
 
-  // one InstancedMesh per mesh part of each kind; instance matrix = placement * part matrix
-  const group = new Group(), parts = [], soft = new Map();
+  // one InstancedMesh per mesh part of each kind; instance matrix = placement * part matrix; one tint
+  // buffer per kind, read per instance by every part's material
+  const group = new Group(), parts = [], C = new Color();
   for (const k of kinds) {
     const mine = placed.filter((x) => x.k === k);
     if (!mine.length) continue;
+    const tints = new Float32Array(mine.length * 3);
+    mine.forEach((x, i) => { C.set(x.colour); tints.set([C.r, C.g, C.b], i * 3); });
+    const tintAttr = new InstancedBufferAttribute(tints, 3);
     const root = art.model(k.id).scene;
     root.updateMatrixWorld(true);
     root.traverse((m) => {
       if (!m.isMesh) return;
       let mat = m.material;
-      if (pal && mat && !Array.isArray(mat)) {
-        if (!soft.has(mat)) soft.set(mat, createSoftMaterial(mat, pal).material);
-        mat = soft.get(mat);
-      }
+      if (pal && mat && !Array.isArray(mat)) mat = createSoftMaterial(mat, pal, { tint: instancedBufferAttribute(tintAttr, 'vec3') }).material;
       const im = new InstancedMesh(m.geometry, mat, mine.length);
       im.frustumCulled = false;
       group.add(im); parts.push({ im, local: m.matrixWorld.clone(), mine });
     });
   }
-  const E = new Object3D();
+  const E = new Object3D(), BX = new Vector3(), BY = new Vector3(), BZ = new Vector3();
+  function place(x) {
+    const b = scatterBasis(x, x.ang, W);
+    if (b) {
+      M4.makeBasis(BX.set(b.X[0], b.X[1], b.X[2]), BY.set(b.Y[0], b.Y[1], b.Y[2]), BZ.set(b.Z[0], b.Z[1], b.Z[2]));
+      E.quaternion.setFromRotationMatrix(M4);
+    } else E.rotation.set(x.rot[0], x.rot[1], x.rot[2]);
+    E.position.set(x.p[0], x.p[1], x.p[2]);
+    E.scale.setScalar(x.scale);
+    E.updateMatrix();
+    x.m = (x.m || new Matrix4()).copy(E.matrix);
+  }
   function write() {
+    for (const x of placed) place(x);
     for (const { im, local, mine } of parts) {
-      mine.forEach((x, i) => {
-        E.position.set(x.p[0], x.p[1], x.p[2]);
-        E.rotation.set(x.rot[0], x.rot[1], x.rot[2]);
-        E.scale.setScalar(x.scale);
-        E.updateMatrix();
-        im.setMatrixAt(i, M4.multiplyMatrices(E.matrix, local));
-      });
+      mine.forEach((x, i) => im.setMatrixAt(i, M4.multiplyMatrices(x.m, local)));
       im.instanceMatrix.needsUpdate = true;
     }
   }
@@ -243,9 +257,14 @@ export function buildScatter(art, track, seed, { pal = null, avoid = [], samples
   return {
     object: group,
     count: placed.length,
+    placed,
+    /** spinMul: the Gentle scroll share (0 holds them still). */
     update(dt, spinMul) {
       if (!spinMul) return;
-      for (const x of placed) { x.rot[1] += x.spin * dt * spinMul; if (!x.upright) x.rot[0] += x.spin * 0.3 * dt * spinMul; }
+      for (const x of placed) {
+        x.ang += x.spin * dt * spinMul;
+        if (x.pose === 'tumble') { x.rot[1] += x.spin * dt * spinMul; x.rot[0] += x.spin * 0.3 * dt * spinMul; }
+      }
       write();
     },
   };
