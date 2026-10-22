@@ -38,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void AttachAwareness()
         {
+            // OnOpened runs on every Hide/Show, OnClosed once: a second += outlived the window.
+            DetachAwareness();
             App.WindowAwareness.ActivityChanged += OnActivityChanged;
             App.WindowAwareness.StillOnActivity += OnStillOnActivity;
             App.WindowAwareness.Start();

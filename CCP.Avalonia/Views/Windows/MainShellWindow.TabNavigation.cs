@@ -25,7 +25,7 @@
 //     in the same place WPF fires it - see ShowTab.
 //   - The keys that are WINDOWS, not tabs, and the one launcher door: "patreon" (Settings · Account,
 //     as WPF ShowAppInfoPopup - wired), "fyp" (OpenFypFeed), "justdrop" (the shop host).
-//     justdrop opens its GameWindow (MainShellWindow.JustDrop.cs); fyp is a documented no-op. The "webapp" door is
+//     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The "webapp" door is
 //     wired (DoorWebApp_Click opens it through the Launcher).
 //
 // Every panel and door is resolved by x:Name through FindControl, never by generated field, so
@@ -147,6 +147,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF ShowTab("patreon") -> ShowAppInfoPopup -> ShowAccountSettings (MainWindow.TabNavigation.cs:126,
             // MainWindow.AccountShell.cs:73): Settings, scrolled to Account. Before the bark, as there.
             if (tab == "patreon") { OpenAppSettingsSection("account"); return; }
+            // WPF :248 "fyp" is a window: OpenFypFeed (MainWindow.Lab.cs:234) demands premium, then the feed
+            // opens; here the gate is the Game spec's (GameWindow.Fyp.cs) and the feed is a GameWindow.
+            if (tab == "fyp") { Games.GameWindow.Launch(Games.GameWindow.FypId); return; }
             // WPF :264-272: the door's own refusal, then the shop window. Before the bark, as there.
             if (tab == "justdrop") { OpenJustDrop(); return; }
             if (WindowKeys.Contains(tab)) return;                 // a window, not a tab - see header

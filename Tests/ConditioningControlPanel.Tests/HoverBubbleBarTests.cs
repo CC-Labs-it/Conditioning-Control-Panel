@@ -17,8 +17,8 @@ namespace ConditioningControlPanel.Tests;
 /// Nav polish wave 4 made the five Home pills (Webcam &amp; Mic, System, Scheduler + Intensity
 /// Ramp, CCP Catalogue, App Info &amp; Data) round hover bubbles; wave 5 (owner, 2026-10-06:
 /// compact the account strip and the bubble row into ONE line) put them on the account strip
-/// beside the name, Link phone, Logout, the Discord pill and the Rich Presence switch, which is
-/// a bubble too. Realizes the REAL SettingsTabView at the page width and holds: the strip is one
+/// beside the name, Link phone, Logout, the Discord button and the Rich Presence switch, which are
+/// bubbles too (Discord wears its logo as a vector Icon since 2026-10-20). Realizes the REAL SettingsTabView at the page width and holds: the strip is one
 /// line, the order reads name | phone, logout | Discord, status | the five | ?, every bubble is
 /// 34 px and 8 px from the next, Logout wears the pink fill, the switch lights up when checked,
 /// phone and Logout follow the signed-in face, one label opens at a time and is fully readable.
@@ -66,7 +66,7 @@ public class HoverBubbleBarTests
         var bar = page.HomeBubbleBar;
         ButtonBase[] expected =
         {
-            page.BtnLinkPhone, page.BtnQuickLogout, page.ChkQuickDiscordRichPresence,
+            page.BtnLinkPhone, page.BtnQuickLogout, page.BtnJoinDiscord, page.ChkQuickDiscordRichPresence,
             page.VelvetBtnWebcam, page.VelvetBtnSystem, page.VelvetBtnSchedulerRamp,
             page.VelvetBtnCatalogue, page.VelvetBtnAppInfo,
         };
@@ -139,6 +139,12 @@ public class HoverBubbleBarTests
         // Labels.
         Assert.Equal("Link phone", bar.LabelOf(page.BtnLinkPhone));
         Assert.Equal("Logout", bar.LabelOf(page.BtnQuickLogout));
+        // The Discord pill is a round bubble now (2026-10-20): Discord blue, the vector mark, the old label on hover.
+        Assert.Equal("Join our Discord community", bar.LabelOf(page.BtnJoinDiscord));
+        Assert.Equal(Color.FromRgb(0x58, 0x65, 0xF2), bar.RestFillOf(page.BtnJoinDiscord));
+        Assert.NotNull(HoverBubbleBar.GetIcon(page.BtnJoinDiscord));
+        Assert.IsType<System.Windows.Shapes.Path>(((Border)((StackPanel)((Border)page.BtnJoinDiscord.Content).Child).Children[1]).Child);
+        Assert.Equal("Join the Discord community", page.BtnJoinDiscord.ToolTip);
         Assert.Equal("Show in Discord status", bar.LabelOf(page.ChkQuickDiscordRichPresence));
         Assert.Equal("Webcam & Mic", bar.LabelOf(page.VelvetBtnWebcam));
         Assert.Equal("System", bar.LabelOf(page.VelvetBtnSystem));
