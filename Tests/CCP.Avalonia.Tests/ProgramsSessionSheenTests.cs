@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -36,6 +37,7 @@ public sealed class ProgramsSessionSheenTests
         var (oldPrograms, oldSessions, oldTask, oldTime) = (AvApp.Programs, AvApp.Sessions, CoreProgram.TaskAvailableProvider, BeatLoop.Time);
         var settings = CoreSettings.Current;
         var (seenTab, seenIntro, motion, perf) = (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro, settings.MotionLevel, settings.PerformanceMode);
+        var skipPauseWarning = settings.SkipPauseXpWarning;
         MainShellWindow? shell = null;
         try
         {
@@ -94,12 +96,17 @@ public sealed class ProgramsSessionSheenTests
             BeatLoop.StepAll();
             Assert.Equal(-160 + (tab.FindControl<Border>("SessionBarHost")!.Bounds.Width + 220) / 2, slide.X, 2);
 
-            runner.Pause();
-            shell.OnSessionTick();
+            // The real pause path (BtnPauseSession_Click -> full row refresh), no tick in between.
+            settings.SkipPauseXpWarning = true;
+            var pause = shell.Named<Button>("BtnPauseSession")!;
+            pause.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(runner.IsPaused);
             Assert.False(tab.SessionSheenRunning);
             Assert.Equal(0, sheen.Opacity);
-            runner.Resume();
-            shell.OnSessionTick();
+            pause.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(runner.IsPaused);
             Assert.True(tab.SessionSheenRunning);
             tab.IsVisible = false;
             Assert.False(tab.SessionSheenRunning);
@@ -159,6 +166,7 @@ public sealed class ProgramsSessionSheenTests
             AvApp.Programs?.Dispose();
             (AvApp.Programs, AvApp.Sessions, CoreProgram.TaskAvailableProvider, BeatLoop.Time) = (oldPrograms, oldSessions, oldTask, oldTime);
             (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro, settings.MotionLevel, settings.PerformanceMode) = (seenTab, seenIntro, motion, perf);
+            settings.SkipPauseXpWarning = skipPauseWarning;
             CoreSession.IsSessionRunningProvider = null;
             Directory.Delete(dir, true);
         }
