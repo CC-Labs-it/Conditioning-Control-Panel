@@ -94,10 +94,11 @@ public sealed class BrainDrainLayer : BaseLayer
     private bool _dirty = true;
     private int _lastSeenFrames = -1;
 
-    public BrainDrainLayer(CompositorEngine engine) : base(engine) { }
+    public BrainDrainLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.BrainDrain;
     public override bool ExcludeFromCapture => true;
+    protected override bool GentleFades => true;   // gentle visuals: blur fades in and out
     public override bool WorldSpacePx => true;
 
     /// <summary>Start capturing + blurring at the given intensity (legacy 1..200 scale).
@@ -139,7 +140,8 @@ public sealed class BrainDrainLayer : BaseLayer
     {
         DisarmFirstFrameWatchdog();
         SetActive(false);
-        ReleaseCaptures();
+        // Gentle visuals: still fading away, so keep the capture; OnDeactivated releases it.
+        if (!IsRendering) ReleaseCaptures();
     }
 
     // ================================================================================
