@@ -1,0 +1,25 @@
+[
+  {
+    "id": "emi-teacup-kart",
+    "file": "models/emi-teacup-kart.glb",
+    "kind": "kart",
+    "tris": 4722,
+    "texBytes": 2796200,
+    "boundRadiusM": 1.274,
+    "materialSlots": [
+      "kart_surface",
+      "emi_screen"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "texBytesBlock16": 699104,
+    "textureEncoding": "UASTC",
+    "skins": 1,
+    "joints": 13,
+    "sizeM": [
+      1.52835,
+      1.26305,
+      1.44
+    ]
+  }
+]
