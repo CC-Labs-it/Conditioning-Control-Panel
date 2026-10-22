@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -72,6 +73,7 @@ public sealed class HeroXpFxTests
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         (s.PlayerLevel, s.PlayerXP, s.MotionLevel, s.PerformanceMode) = (10, 100, MotionLevel.Full, false);
+        var (oldOffline, oldOfflineName) = (s.OfflineMode, s.OfflineUsername);
         s.OfflineMode = true;
         s.OfflineUsername = "hero-xp-test";
         var time = new SteppedTime();
@@ -83,6 +85,21 @@ public sealed class HeroXpFxTests
             shell.Show();
             shell.Activate();
             Dispatcher.UIThread.RunJobs();
+            // Tray Hide/Show re-fires Opened; the static motion-gate subscription must not stack.
+            int Hooks()
+            {
+                var field = typeof(AmbientFxCanvas.Env).GetField("MotionGateChanged",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+                var list = (field.GetValue(null) as Delegate)?.GetInvocationList() ?? Array.Empty<Delegate>();
+                return list.Count(d => ReferenceEquals(d.Target, shell) && d.Method.Name == "RefreshHeroXpFx");
+            }
+            var hooks = Hooks();
+            Assert.Equal(1, hooks);
+            // Replay Opened as a tray Show does (a headless Hide/Show re-show throws here).
+            typeof(Window).GetMethod("OnOpened", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .Invoke(shell, new object[] { EventArgs.Empty });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(hooks, Hooks());
             var dot = shell.FindControl<Border>("XPMeniscus")!;
             Assert.True(shell.XpMeniscusPulsing);
             Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, dot) && loop.OnFrameBeat);
@@ -174,14 +191,17 @@ public sealed class HeroXpFxTests
             shell.Close();
             Dispatcher.UIThread.RunJobs();
             BeatLoop.Time = oldTime;
+            (s.OfflineMode, s.OfflineUsername) = (oldOffline, oldOfflineName);
+            service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
         }
         return Task.CompletedTask;
     });
     private static void SaveFrame(MainShellWindow shell, string name)
     {
-        var dir = Environment.GetEnvironmentVariable("CCP_GLOW_PROOF_DIR")
-            ?? System.IO.Path.Combine(AppContext.BaseDirectory, "hero-xp-proof");
+        // Proof frames are opt-in: a normal run writes nothing.
+        var dir = Environment.GetEnvironmentVariable("CCP_HERO_XP_PROOF_DIR");
+        if (string.IsNullOrEmpty(dir)) return;
         System.IO.Directory.CreateDirectory(dir);
         Dispatcher.UIThread.RunJobs();
         using var frame = shell.CaptureRenderedFrame();

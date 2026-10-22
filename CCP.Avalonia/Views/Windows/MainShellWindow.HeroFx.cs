@@ -118,6 +118,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Opened += (_, _) =>
             {
+                // Opened fires again on every tray Hide/Show: never stack the static subscription (P41).
+                AmbientFxCanvas.Env.MotionGateChanged -= RefreshHeroXpFx;
                 AmbientFxCanvas.Env.MotionGateChanged += RefreshHeroXpFx;
                 RefreshHeroXpFx();
             };
