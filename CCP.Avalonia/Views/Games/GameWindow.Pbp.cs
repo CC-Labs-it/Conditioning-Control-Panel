@@ -116,6 +116,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "boot-error":
                         PbpBootFailedThisSession = true;
                         return false;
+                    case PbpWatchRules.SettingFrame:
+                        if (PbpWatchRules.TryRead(o, out var key, out var value)
+                            && PbpWatchRules.Apply(CoreSettings.Current, key, value))
+                            CoreSettings.Save();
+                        return true;
                     case "pbp:exit":
                         Close();
                         return true;
@@ -147,7 +152,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>()));
+                var frame = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>());
+                frame["letPeopleWatch"] = PbpWatchRules.LetPeopleWatch(s);
+                frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
+                frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
+                // ponytail: mediaAvailable and spectate intents land with the missing media/Lobby host;
+                // do not advertise online pictures this head cannot provide (sync7-pbp-host-a-next).
+                Post(frame);
             }
             if (!_pbpIdentityPosted)
             {

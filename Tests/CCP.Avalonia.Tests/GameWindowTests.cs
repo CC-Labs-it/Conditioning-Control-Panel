@@ -31,9 +31,7 @@ public sealed class GameWindowTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
@@ -308,6 +306,69 @@ public sealed class GameWindowTests
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
         }
+    });
+
+    [Fact]
+    public void PieceByPiece_RelayRefusesTraversal_AndPublicTapeOmitsToken() => Run((shell, launcher) =>
+    {
+        var (oldHttp, oldBase, oldSecret) = (GameWindow.PbpHttpClient, GameWindow.PbpServerBase, CoreSecrets.RetrieveProvider);
+        var fake = new FakeHttp();
+        using var http = new System.Net.Http.HttpClient(fake);
+        try
+        {
+            GameWindow.PbpHttpClient = () => http;
+            GameWindow.PbpServerBase = () => "https://pbp.test";
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"pbp:net\",\"id\":\"bad\",\"path\":\"/v2/pbp/../user/me\"}");
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("forbidden_path", (string?)sent.Single(o => (string?)o["id"] == "bad")["body"]);
+            Assert.Null(fake.Seen);
+            w.HandleMessage("{\"type\":\"pbp:net\",\"id\":\"public\",\"path\":\"/v2/pbp/watch/m_0123456789abcdef/upto/0\"}");
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(200, (int)sent.Single(o => (string?)o["id"] == "public")["status"]!);
+            Assert.False(fake.Seen!.Headers.Contains("X-Auth-Token"));
+            Assert.Equal("/v2/pbp/watch/m_0123456789abcdef/upto/0", fake.Seen.RequestUri!.AbsolutePath);
+        }
+        finally
+        {
+            (GameWindow.PbpHttpClient, GameWindow.PbpServerBase, CoreSecrets.RetrieveProvider) = (oldHttp, oldBase, oldSecret);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_WatchPreferencesRoundTrip_RejectsArbitrarySettings() => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PbpLetPeopleWatch = false;
+        CoreSettings.Current.PbpWatchEffects = false;
+        CoreSettings.Current.PbpWatchAmount = "more";
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        var settings = sent.Single(o => (string?)o["type"] == "pbp:settings");
+        Assert.False((bool)settings["letPeopleWatch"]!);
+        Assert.False((bool)settings["watchEffects"]!);
+        Assert.Equal("more", (string?)settings["watchAmount"]);
+        w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"letPeopleWatch\",\"value\":true}");
+        w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"watchEffects\",\"value\":true}");
+        w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"watchAmount\",\"value\":\"less\"}");
+        Assert.True(CoreSettings.Current.PbpLetPeopleWatch);
+        Assert.True(CoreSettings.Current.PbpWatchEffects);
+        Assert.Equal("less", CoreSettings.Current.PbpWatchAmount);
+        w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"watchAmount\",\"value\":\"invalid\"}");
+        w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"watchEffects\",\"value\":\"false\"}");
+        var welcomed = CoreSettings.Current.Welcomed;
+        w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"Welcomed\",\"value\":false}");
+        Assert.Equal("less", CoreSettings.Current.PbpWatchAmount);
+        Assert.True(CoreSettings.Current.PbpWatchEffects);
+        Assert.Equal(welcomed, CoreSettings.Current.Welcomed);
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Single(sent.Where(o => (string?)o["type"] == "pbp:settings"));
     });
 
     // ---- Racing Thoughts (WPF Services/Chaos/CaucusHostService.cs) ----

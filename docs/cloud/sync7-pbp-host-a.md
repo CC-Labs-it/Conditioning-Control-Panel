@@ -1,0 +1,28 @@
+# sync7-pbp-host-a — safe chess relay and saved watch preferences
+
+- Ported the Piece by Piece half of WPF `f76378ea7`: judge the built request URI, reject parser-ambiguous paths, and send the exact judged URI. Moved `HostNetPathRule` into CCP.Core so both heads use one rule. Goon's existing WPF host also keeps using this same rule; there is no Avalonia Goon host.
+- Adapted the relay half of WPF `3729bee50`: moved `PbpNetRelay` into Core and reused it in the Avalonia transport. Public tape GET routes carry no player token; seat, heartbeat, mutation and other private routes retain it.
+- Ported the page preference portion of WPF `81b59fcd4` / `3729bee50`: boot sends the stored let-people-watch / watch-effects / watch-amount values, and the existing web settings UI writes only those keys through the shared `PbpWatchRules` parser, saving changes.
+- Read-only `parity/trunk` was fetched for the required import reference. No trunk code was imported; existing base files won.
+- No new windows or panic surfaces: the existing `games` panic entry still closes the chess window. No appearance changes; no new PNG is expected for these host protocol changes.
+
+## Remaining slice: sync7-pbp-host-a-next
+
+The parity row remains **stub**. This branch is a coherent relay/preferences slice, not a complete spectating host:
+
+- Row 127 stays `needs-port`: this base has no Avalonia Lobby host/view to expose Watch, and no friend/host spectate-intent lane. Add the signed-in Watch path and the once-only fresh settings intent / existing-board intent there.
+- Row 128 stays `needs-port`: the online-media host/picker is absent. Port its consent-aware media source path, saved flavour adoption before settings, off-thread local-media probe, mediaAvailable on settings/media-state, refresh/generation checks and off/empty online result handling together. This slice deliberately does not claim a source the head cannot supply.
+- Completing those missing host/UI paths coherently exceeds this brief's 1000-added-line budget. Existing settings frames retain their previous media defaults until that host lands.
+
+## Verification limits
+
+- Environment: `/workspace/shared/dotnet` on PATH, `DOTNET_PROCESSOR_COUNT=2`, `DiffEngine_Disabled=true`. Builds used Release, `-m:1`, `-p:UseSharedCompilation=false`; output-copy hardlinks recovered disk space. Initial unbounded/interrupted and ENOSPC attempts were retained in worker logs and retried.
+- `dotnet build CCP.Core/CCP.Core.csproj -c Release` and `dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release` with the above flags: passed. A forced fresh Avalonia compile and test-output refresh also passed after detecting a stale settings frame in the first head run.
+- Built every Linux test project listed in `.github/workflows/build.yml`: `CCP.Core.Tests`, `CCP.Core.Settings.Tests`, `CCP.Core.Content.Tests`, `CCP.Avalonia.Tests`, `CCP.Avalonia.Consent.Tests`, `CCP.Avalonia.Language.Tests`, `CCP.Avalonia.CatalogueStartup.Tests`, `CCP.Avalonia.Scheduler.Tests`, `CCP.Avalonia.Report.Tests`, `CCP.Avalonia.GeneralSettings.Tests`, `CCP.Avalonia.Snapshot.Tests`: all passed. Five restores initially hit ENOSPC; their successful retries used `BuildProjectReferences=false` against the already-built heads/Core and the four `CreateHardLinksForCopyFilesToOutputDirectoryIfPossible`, `CreateHardLinksForCopyLocalIfPossible`, `CreateHardLinksForAdditionalFilesIfPossible`, `CreateHardLinksForCopyAdditionalFilesIfPossible` properties set true.
+- `dotnet build Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false` (bounded compilation/hardlink flags): passed, 564 warnings, 0 errors. WPF app and tests compiled; Windows execution was not run.
+- `bash .github/scripts/core-guards.sh`: passed (429 XAML references checked).
+- Regression proof before the relay fix: `dotnet test Tests/CCP.Core.Tests -c Release --filter FullyQualifiedName~PbpRelaySecurityTests` against the original compiled Core: 10 failed / 4 passed. Failures exposed parser-ambiguous routes being sent and public tape requests carrying a token.
+- `dotnet test Tests/CCP.Core.Tests -c Release --no-build --no-restore`: 2859 passed, 1 failed, 5 skipped. The unchanged `BoardTilesTests.A_frame_fits_the_budget` measured 68.67 ms against its 12 ms budget under shared CPU load; an isolated retry still measured 13.72 ms and failed. No threshold/assertion was changed. Five speech tests skipped because the external Vosk model was absent. The full Core suite is therefore **not green** on this worker.
+- `dotnet test Tests/CCP.Core.Tests -c Release --no-build --no-restore --filter 'FullyQualifiedName~PbpHostRulesTests|FullyQualifiedName~PbpRelaySecurityTests'`: **38 passed**, 0 failed/skipped.
+- The first head run failed on the existing PremiumSpark Segoe UI Black font bootstrap. `GameWindowTests.Run` now uses the production `RenderProof.EnsureSetUp()` builder and bundled fonts; assertions were preserved. Rebuilt the test project with `BuildProjectReferences=false`, then ran all of `GameWindowTests` after all builds stopped: `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --no-restore --filter FullyQualifiedName~GameWindowTests`: **13 passed**, 0 failed/skipped, including relay rejection/public token omission, saved watch preferences and existing panic/watchdog behavior.
+- No live browser/desktop or Windows execution. No render-all PNG: this changes host protocol/settings wiring, with no AXAML/HTML layout change. Runtime tests were kept separate from builds that could rewrite their hardlinked binaries.
