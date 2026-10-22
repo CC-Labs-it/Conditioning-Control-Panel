@@ -161,6 +161,7 @@ internal sealed class ProcessStateSnapshot
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
+        PutBackLateWrites();
         foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json"))
             s._files[f] = File.ReadAllBytes(f);
         return s;
@@ -180,7 +181,31 @@ internal sealed class ProcessStateSnapshot
         ConditioningControlPanel.Services.SettingsService.DisarmAllPendingSaves();
         foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json"))
             if (!_files.ContainsKey(f)) try { File.Delete(f); } catch (IOException) { }
-        foreach (var (f, bytes) in _files)
+        WriteBack(_files);
+        _restored = _files;
+    }
+
+    // The files as the last Restore left them. A write that lands after it (a save still in flight
+    // past the disarm's bounded wait) would otherwise become the NEXT test's baseline and every later
+    // test's: a settings.json with Welcomed and no age acceptance put an Age Verification dialog in
+    // each later shell (JumpRightInTests saw two MessageDialogs, update-core-a gate 2026-10-13).
+    private static Dictionary<string, byte[]>? _restored;
+
+    private static void PutBackLateWrites()
+    {
+        if (_restored is not { } expected) return;
+        foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json").ToList())
+        {
+            if (expected.TryGetValue(f, out var bytes) && File.ReadAllBytes(f).AsSpan().SequenceEqual(bytes)) continue;
+            Serilog.Log.Warning("[TestIsolation] {File} changed after the previous test's restore; put back", Path.GetFileName(f));
+            if (bytes is null) try { File.Delete(f); } catch (IOException) { }
+        }
+        WriteBack(expected);
+    }
+
+    private static void WriteBack(Dictionary<string, byte[]> files)
+    {
+        foreach (var (f, bytes) in files)
             if (!File.Exists(f) || !File.ReadAllBytes(f).AsSpan().SequenceEqual(bytes))
                 try { File.WriteAllBytes(f, bytes); } catch (IOException) { }
     }

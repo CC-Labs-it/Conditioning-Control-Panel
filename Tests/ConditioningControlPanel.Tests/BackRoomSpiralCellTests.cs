@@ -105,4 +105,14 @@ public class BackRoomSpiralCellTests
             Assert.Equal((HorizontalAlignment.Center, VerticalAlignment.Center), (img.HorizontalAlignment, img.VerticalAlignment));
         });
     }
+
+    [Fact]
+    public void SpiralDecode_KeepsEveryLoopFrame_BySizingASquareWeaveDown()
+    {
+        Assert.Equal(640, BackRoomLoomSpiralOverlay.FitLongSide((720, 405, 72)));    // the bundled wide weave
+        Assert.Equal(506, BackRoomLoomSpiralOverlay.FitLongSide((720, 720, 72)));    // a player's square weave
+        Assert.Equal(480, BackRoomLoomSpiralOverlay.FitLongSide((480, 480, 72)));    // small: never upscaled
+        Assert.Equal(640, BackRoomLoomSpiralOverlay.FitLongSide((1280, 720, 600)));  // frames past the loop cap do not count
+        Assert.Equal(640, BackRoomLoomSpiralOverlay.FitLongSide(null));
+    }
 }
