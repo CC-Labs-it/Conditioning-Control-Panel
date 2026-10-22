@@ -145,6 +145,9 @@
                                     <Run Text="{Binding Label, Mode=OneWay}"/>
                                     <Run Text="{Binding WasHint, Mode=OneWay}" FontSize="11"
                                          Foreground="{DynamicResource TextDimBrush}"/>
+                                    <InlineUIContainer BaselineAlignment="Center">
+                                        <fx:IconGlyph x:Name="PinnedMark" Kind="Star" Variant="Filled" Size="11" Margin="6,0,0,0" IsVisible="{Binding IsPinned}"/>
+                                    </InlineUIContainer>
                                 </TextBlock>
                                 <TextBlock Text="{Binding Context}" FontSize="11"
                                            Foreground="{DynamicResource TextDimBrush}"

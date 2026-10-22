@@ -27,8 +27,14 @@ public sealed class AssetsMediaPickerTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+        {
+            var fonts = ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false);
+            var mappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(fonts)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        }
     }
 
     private static async Task WithView(Func<AssetsTabView, AppSettings, Task> body)
@@ -69,7 +75,7 @@ public sealed class AssetsMediaPickerTests
     [Fact]
     public Task SourceSwitchWritesOnlyAfterTheAwaitedConsentSaysYes() => AvaloniaTestDispatcher.RunAsync(() => WithView(async (view, s) =>
     {
-        var details = view.FindControl<StackPanel>("RemoteMediaDetails")!;
+        var details = view.FindControl<Grid>("RemoteMediaDetails")!;
         Assert.False(details.IsVisible);
 
         // No: nothing changes, the chips go back to "local".
@@ -102,6 +108,8 @@ public sealed class AssetsMediaPickerTests
     [Fact]
     public Task FlavourCardSetsThePoolAndMineBringsTheOldSelectionBack() => AvaloniaTestDispatcher.RunAsync(() => WithView((view, s) =>
     {
+        s.MediaSource = "online";
+        view.RefreshRemoteMediaPicker();
         // A selection no flavour equals (Catalog[0] alone is Trance's preset), so it is "Mine".
         s.FypOnlineCustomSubs = new() { "myownsub" };
         var before = s.FypOnlineNiches.ToList();
@@ -127,6 +135,31 @@ public sealed class AssetsMediaPickerTests
         tiles.Single(t => (string?)t.Tag == "mine").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(before, s.FypOnlineNiches);
         Assert.Equal(new[] { "myownsub" }, s.FypOnlineCustomSubs);
+        return Task.CompletedTask;
+    }));
+
+    [Fact]
+    public Task FineTuneUsesThePageHeightAndLocalSourceRestoresTheBrowser() => AvaloniaTestDispatcher.RunAsync(() => WithView((view, s) =>
+    {
+        s.MediaSource = "mixed";
+        view.RefreshRemoteMediaPicker();
+        view.FindControl<Button>("BtnRemoteFineTune")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var scroll = view.FindControl<ScrollViewer>("RemoteFineTuneScroll")!;
+        var browser = view.FindControl<Border>("AssetBrowserSection")!;
+        var page = (Grid)browser.Parent!;
+        Assert.True(scroll.IsVisible);
+        Assert.False(browser.IsVisible);
+        Assert.True(page.RowDefinitions[1].Height.IsStar);
+        Assert.Equal(0, page.RowDefinitions[4].MinHeight);
+        Assert.Equal(0, page.RowDefinitions[4].Height.Value);
+        Assert.True(double.IsPositiveInfinity(scroll.MaxHeight));
+        s.MediaSource = "local";
+        view.RefreshRemoteMediaPicker();
+        Assert.False(scroll.IsVisible);
+        Assert.True(browser.IsVisible);
+        Assert.True(page.RowDefinitions[1].Height.IsAuto);
+        Assert.True(page.RowDefinitions[4].Height.IsStar);
+        Assert.Equal(260, page.RowDefinitions[4].MinHeight);
         return Task.CompletedTask;
     }));
 

@@ -84,6 +84,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 dash.RecentEmpty.IsVisible = dash.RecentList.Children.Count == 0;
             }
             catch (Exception ex) { Log.Debug("RefreshFavoritesRail: {E}", ex.Message); }
+            RefreshPageDrawer();
+        }
+
+        private void RefreshPageDrawer()
+        {
+            var drawer = Named<Views.Controls.PageFavoritesDrawer>("PageDrawer");
+            var dash = SettingsPage;
+            var settings = CoreSettings.Current;
+            if (drawer == null || dash == null) return;
+            var byId = SettingsPaletteIndex.All.Where(e => FavoritesRailRule.IsDestination(e.Id))
+                .ToDictionary(e => e.Id, StringComparer.Ordinal);
+            bool Known(string id) => byId.TryGetValue(id, out var entry) && entry.Available;
+            drawer.Paint(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
+            drawer.FavoritesList.Children.Clear();
+            foreach (var id in settings.RailFavorites.Where(Known)) drawer.FavoritesList.Children.Add(BuildRailChip(dash, byId[id]));
+            drawer.RecentList.Children.Clear();
+            foreach (var id in FavoritesRailRule.RecentForDisplay(settings.RailRecent, settings.RailFavorites, Known)) drawer.RecentList.Children.Add(BuildRailChip(dash, byId[id]));
+            drawer.FavoritesEmpty.IsVisible = drawer.FavoritesList.Children.Count == 0;
+            drawer.RecentEmpty.IsVisible = drawer.RecentList.Children.Count == 0;
         }
 
         private Button BuildRailChip(Tabs.SettingsTabView dash, SettingsPaletteEntry entry)
@@ -271,6 +290,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // favorite slides it out for a moment.
             if (!wasPinned)
             {
+                if (Named<Views.Controls.PageFavoritesDrawer>("PageDrawer") is { IsVisible: true } drawer) drawer.SetOpen(true, true);
                 try { SettingsPage?.PeekFavoritesDrawer(id); }
                 catch (Exception ex) { Log.Debug("PeekFavoritesDrawer({Id}): {E}", id, ex.Message); }
             }

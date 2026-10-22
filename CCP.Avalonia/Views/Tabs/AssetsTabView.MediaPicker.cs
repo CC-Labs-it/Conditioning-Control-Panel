@@ -97,9 +97,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void SetFineTuneOpen(bool open)
         {
             _fineTuneOpen = open;
-            RemoteFineTuneScroll.IsVisible = open;
-            AssetBrowserSection.IsVisible = !open;
-            TxtRemoteFineTuneChevron.Kind = open ? IconKind.ChevronUp : IconKind.ChevronDown;
+            var shows = open && Settings?.MediaSource != MediaSrcLocal;
+            RemoteFineTuneScroll.IsVisible = shows;
+            AssetBrowserSection.IsVisible = !shows;
+            var rows = ((Grid)AssetBrowserSection.Parent!).RowDefinitions;
+            rows[1].Height = shows ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            rows[4].MinHeight = shows ? 0 : 260;
+            rows[4].Height = shows ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            TxtRemoteFineTuneChevron.Kind = shows ? IconKind.ChevronUp : IconKind.ChevronDown;
         }
 
         private void BuildSourceChips()

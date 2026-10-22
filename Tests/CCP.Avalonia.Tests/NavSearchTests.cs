@@ -45,6 +45,94 @@ public sealed class NavSearchTests
     });
 
     [Fact]
+    public Task EmptyPaletteLeadsWithPinnedFavoritesThenRecents() => Shell(shell =>
+    {
+        CoreSettings.Current.RailFavorites.Clear();
+        CoreSettings.Current.RailFavorites.Add("door.library");
+        CoreSettings.Current.NavSearchRecents = "[\"door.studio\"]";
+        SettingsPaletteWindow.Toggle(shell);
+        var palette = OpenPalette();
+        Dispatcher.UIThread.RunJobs();
+        var rows = palette.FindControl<ListBox>("ListResults")!.Items.Cast<PaletteRow>().ToArray();
+        Assert.Equal("door.library", rows[0].Entry.Id);
+        Assert.True(rows[0].IsPinned);
+        Assert.False(rows[1].IsPinned);
+        Assert.Equal("door.studio", rows[1].Entry.Id);
+        Assert.Equal(rows.Length, rows.Select(r => r.Entry.Id).Distinct().Count());
+        Assert.Single(palette.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>()
+            .Where(icon => icon.Name == "PinnedMark" && icon.IsVisible));
+    });
+
+    [Fact]
+    public Task EveryPageDrawerPinsNavigatesAndClosesOnNavigation() => Shell(shell =>
+    {
+        CoreSettings.Current.RailFavorites.Clear();
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        shell.ShowTab("assets");
+        var drawer = shell.FindControl<Grid>("PageDrawer");
+        Assert.NotNull(drawer);
+        Assert.True(drawer!.IsVisible);
+        var page = (Grid)drawer.Parent!;
+        Assert.Equal(2, page.ColumnDefinitions.Count);
+        Assert.Equal(1, Grid.GetColumn(drawer));
+        Assert.Equal(1, Grid.GetRow(drawer));
+        Assert.Equal(1, Grid.GetRowSpan(drawer));
+        Assert.Equal(2, Grid.GetColumnSpan(shell.PageStrip!));
+        shell.TogglePinned("door.studio");
+        Dispatcher.UIThread.RunJobs();
+        var body = (Grid)drawer.Children[1];
+        Assert.Equal(92, body.Width);
+        var chip = drawer.GetVisualDescendants().OfType<Button>().Single(b => (string?)b.Tag == "door.studio");
+        chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal("studio", shell.CurrentTab);
+        Assert.Equal(0, body.Width);
+        shell.ShowTab("settings");
+        Assert.False(drawer.IsVisible);
+    });
+
+    [Fact]
+    public Task PageDrawerHandleFillsThePageAndBodyPushesIt() => Run(() =>
+    {
+        var host = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var page = new Border();
+        var drawer = new ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer();
+        Grid.SetColumn(drawer, 1);
+        host.Children.Add(page);
+        host.Children.Add(drawer);
+        var window = new Window { Width = 1100, Height = 800, Content = host };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var handle = (Button)drawer.Children[0];
+            Assert.True(handle.Bounds.Height > 400, $"handle height {handle.Bounds.Height}");
+            Assert.True(((Border)handle.Content!).Bounds.Height > 400);
+            var closedWidth = page.Bounds.Width;
+            Assert.Equal(host.Bounds.Width - 22, closedWidth, 3);
+            drawer.SetOpen(true, false);
+            window.UpdateLayout();
+            Assert.Equal(closedWidth - 92, page.Bounds.Width, 3);
+            Assert.Equal(92, drawer.Body.Bounds.Width, 3);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task PresetsExplainWhatIsSaved() => Run(() =>
+    {
+        var window = new Window { Width = 1100, Height = 780, Content = new ConditioningControlPanel.Avalonia.Views.Tabs.PresetsTabView() };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var scope = window.GetVisualDescendants().OfType<TextBlock>().SingleOrDefault(t => t.Text == Loc.Get("sd_presets_scope"));
+            Assert.NotNull(scope);
+            Assert.Equal(global::Avalonia.Media.TextWrapping.Wrap, scope!.TextWrapping);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public Task RowsCarryTheOldNameHintAndAScreenReaderName() => Run(() =>
     {
         var palette = new SettingsPaletteWindow();
@@ -281,8 +369,12 @@ public sealed class NavSearchTests
     {
         if (Application.Current is null)
         {
+            var fonts = ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false);
+            var mappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia()
+                .UseSkia().WithInterFont().With(fonts)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         }

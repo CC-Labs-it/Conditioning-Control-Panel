@@ -280,14 +280,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 else if (query.Trim().Length == 0)
                 {
-                    // Empty box: the last few places first, then the authored opening list.
-                    var recents = SettingsPaletteIndex.Recents(CoreSettings.Current.NavSearchRecents);
-                    var seen = new HashSet<string>(recents.Select(e => e.Id), StringComparer.Ordinal);
-                    rows = recents.Select(e => new PaletteRow(e, null))
-                                  .Concat(SettingsPaletteIndex.Search(query)
-                                                              .Where(e => !seen.Contains(e.Id))
-                                                              .Select(e => new PaletteRow(e, null)))
-                                  .ToList();
+                    var settings = CoreSettings.Current;
+                    rows = SettingsPaletteIndex.OpeningRows(settings.RailFavorites, settings.NavSearchRecents)
+                        .Select(e => new PaletteRow(e, null, FavoritesRailRule.IsPinned(settings.RailFavorites, e.Id)))
+                        .ToList();
                 }
                 else
                 {
@@ -543,9 +539,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// </summary>
     public sealed class PaletteRow
     {
-        public PaletteRow(SettingsPaletteEntry entry, string? query)
+        public PaletteRow(SettingsPaletteEntry entry, string? query, bool pinned = false)
         {
             Entry = entry;
+            IsPinned = pinned;
             Glyph = entry.Glyph;
             // Map by stable id (fluent-icons design c.3). A mapped icon that carries colour or a brand
             // glyph keeps the emoji route, which resolves to the same icon WITH its brush/brand.
@@ -570,6 +567,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>The retired name the row was found under ("(was Premium)"), or empty.</summary>
         public string WasHint { get; }
+        public bool IsPinned { get; }
 
         /// <summary>Caption, then its breadcrumb: what a screen reader announces for the row.</summary>
         public string AutomationName => string.IsNullOrEmpty(Context) ? Label : Label + ", " + Context;
