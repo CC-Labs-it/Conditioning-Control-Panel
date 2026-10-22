@@ -1475,14 +1475,13 @@ namespace ConditioningControlPanel
                 App.BrainDrain?.Stop();
                 App.LockCard?.Stop(dismissOpenCards: true);   // remote panic == local panic
 
-                // Turn off overlays but keep the overlay service alive
-                // so the controller can turn them back on. Clear the settings flags first so a
-                // running reconcile loop won't recreate them, then stop the windows directly:
-                // voice/Deeper start spiral & pink ad-hoc (no reconcile loop), so RefreshOverlays()
-                // — gated on the service's IsRunning — can't see those windows to tear them down.
-                EnablePinkFilter(false);
-                EnableSpiral(false);
-                App.Overlay?.RefreshOverlays();
+                // Turn off overlays. The overlay service stops (no reconcile tick can repaint while
+                // it is stopped); a controller's show_pink_filter / show_spiral starts it again
+                // through EnsureOverlayRunning, and a session resume restarts it. Then the windows
+                // directly: voice/Deeper start spiral & pink ad-hoc. Never EnablePinkFilter(false) /
+                // EnableSpiral(false) here: those are the user's SAVED switches, and a panic must
+                // not leave them off for every later run.
+                App.Overlay?.Stop();
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
 
