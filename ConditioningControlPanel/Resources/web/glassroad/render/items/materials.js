@@ -8,7 +8,7 @@
  */
 import {
   Sprite, SpriteNodeMaterial, MeshBasicNodeMaterial, InstancedBufferAttribute, DynamicDrawUsage, AdditiveBlending,
-  DoubleSide, Color, InstancedMesh, Matrix4, Quaternion, Vector3,
+  DoubleSide, Color, InstancedMesh, Matrix4, Quaternion, Vector3, Euler, PlaneGeometry,
 } from 'three/webgpu';
 import {
   instancedDynamicBufferAttribute, uniform, uv, vec2, vec3, float, texture, mix, smoothstep, sin, cos, atan, log, length,
@@ -62,12 +62,16 @@ export function bubbleCloud(cap, atlas) {
   const tint = mix(mix(hue, vec3(1, 1, 1), L.shellWhite), col3(L.goldTint), gold);
   const dn = d.div(mix(float(L.iconFill), float(L.shellFill), shell));   // 1 = the bubble's edge
   const rim = smoothstep(0.6, 1.0, dn).mul(smoothstep(1.0, 1.04, dn).oneMinus()).mul(shell.mul(0.5).add(0.5));
-  const spec = smoothstep(0, 0.12, length(p.sub(0.5).div(mix(float(L.iconFill), float(L.shellFill), shell)).sub(vec2(-0.3, 0.32)))).oneMinus();
+  // polish 2: the highlight drifts round the top left, a caustic glint answers it low on the far side
+  const sa = u.time.mul(L.shineHz * Math.PI * 2).add(v.w);
+  const sp = vec2(sin(sa).mul(0.08).sub(0.3), cos(sa).mul(0.06).add(0.32)), pc = p.sub(0.5).div(mix(float(L.iconFill), float(L.shellFill), shell));
+  const spec = smoothstep(0, 0.12, length(pc.sub(sp))).oneMinus();
+  const caus = smoothstep(0, 0.2, length(pc.add(sp.mul(0.8)))).oneMinus().pow(2).mul(L.causticGain * 0.6).mul(sin(sa.mul(2.3)).mul(0.3).add(0.7));
   const body = smoothstep(0.98, 1.0, dn).oneMinus().mul(L.shellAlpha).mul(shell);
-  const glass = tint.mul(rim.mul(L.shellRim)).add(spec);
+  const glass = tint.mul(rim.mul(L.shellRim).add(caus)).add(spec);
   m.colorNode = mix(glass.add(tint.mul(body)), icon.rgb, iconA);
   // a bare icon draws only the icon: the GLB shell around it is the glass
-  m.opacityNode = max(iconA, max(rim.mul(0.85), max(spec.mul(0.7), body)).mul(dressed)).mul(v.y);
+  m.opacityNode = max(iconA, max(rim.mul(0.85), max(spec.mul(0.7), max(caus, body))).mul(dressed)).mul(v.y);
   return { ...c, uniforms: u, dispose: () => m.dispose() };
 }
 
@@ -84,9 +88,15 @@ export function shellCloud(geometry, cap) {
   const fres = pow(float(1).sub(abs(dot(normalView, positionViewDirection))), L.shellGlassPow);
   const hue = cos(vec3(0, 2.1, 4.2).add(fres.mul(4)).add(u.time.mul(0.6)).add(info.y)).mul(0.5).add(0.5);
   const tint = mix(hue, vec3(1, 1, 1), L.shellWhite);
-  const spec = pow(max(dot(normalView, normalize(vec3(-0.45, 0.55, 0.7))), 0), 48).mul(L.shellGlassSpec);
-  m.colorNode = tint.mul(fres.mul(L.shellGlassRim)).add(spec);
-  m.opacityNode = max(fres.mul(0.85), max(spec, float(L.shellGlassBody))).mul(info.x);
+  // polish 2: the lamp's highlight drifts round the top left (shineHz, per seed) and a caustic glint
+  // gathers low on the far side of the glass, the light focused through the sphere
+  const sa = u.time.mul(L.shineHz * Math.PI * 2).add(info.y);
+  const lamp = normalize(vec3(sin(sa).mul(L.shineDriftRad * 0.4).sub(0.45), cos(sa).mul(L.shineDriftRad * 0.3).add(0.55), 0.7));
+  const spec = pow(max(dot(normalView, lamp), 0), 48).mul(L.shellGlassSpec);
+  const caus = pow(max(dot(normalView, vec3(lamp.x.negate(), lamp.y.negate().mul(0.8), 0.6).normalize()), 0), L.causticSharp)
+    .mul(L.causticGain).mul(sin(sa.mul(2.3)).mul(0.3).add(0.7));
+  m.colorNode = tint.mul(fres.mul(L.shellGlassRim).add(caus)).add(spec);
+  m.opacityNode = max(fres.mul(0.85), max(spec, max(caus.mul(0.8), float(L.shellGlassBody)))).mul(info.x);
   const mesh = new InstancedMesh(geometry, m, cap);
   mesh.count = 0; mesh.frustumCulled = false; mesh.renderOrder = 4;
   const M = new Matrix4(), P = new Vector3(), Qi = new Quaternion(), Sc = new Vector3();
@@ -161,11 +171,49 @@ export function ghost(hex) {
   return { material: m, uniforms: u };
 }
 
-/** Pink wave: a flat additive ring drawn on a unit plane, opacity uniform. */
+/** Pink wave, shockwaves, warning and landing rings: a flat additive ring drawn on a unit plane, opacity and colour uniforms. */
 export function ringGlow(hex) {
-  const u = { opacity: uniform(0) };
+  const u = { opacity: uniform(0), colour: uniform(new Color(hex)) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
   const d = length(uv().sub(0.5)).mul(2);
-  m.colorNode = col3(hex).mul(smoothstep(0.8, 0.93, d).mul(smoothstep(0.93, 1.0, d).oneMinus())).mul(u.opacity);
+  m.colorNode = vec3(u.colour).mul(smoothstep(0.8, 0.93, d).mul(smoothstep(0.93, 1.0, d).oneMinus())).mul(u.opacity);
   return { material: m, uniforms: u };
+}
+
+/** A soft dark ellipse on the road (the lob's landing shadow) on a unit plane, opacity uniform; normal blending. */
+export function blobShadow(hex = '#1a0820') {
+  const u = { opacity: uniform(0) };
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const d = length(uv().sub(0.5)).mul(2);
+  m.colorNode = col3(hex);
+  m.opacityNode = smoothstep(0.15, 1, d).oneMinus().pow(1.6).mul(u.opacity);
+  return { material: m, uniforms: u };
+}
+
+/**
+ * Confetti cards: one instanced draw of small flat cards. push(x, y, z, rx, ry, size, r, g, b, alpha);
+ * the face catches the light as it turns (brighter face on, darker edge on), both sides drawn.
+ */
+export function confettiCloud(cap) {
+  const aCol = new InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(DynamicDrawUsage);
+  const c = instancedDynamicBufferAttribute(aCol, 'vec4');
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
+  m.colorNode = c.rgb.mul(abs(normalView.z).mul(0.55).add(0.6));
+  m.opacityNode = c.a;
+  const mesh = new InstancedMesh(new PlaneGeometry(1, 0.64), m, cap);
+  mesh.count = 0; mesh.frustumCulled = false; mesh.renderOrder = 3;
+  const M = new Matrix4(), P = new Vector3(), Qi = new Quaternion(), Sc = new Vector3(), E = new Euler();
+  let n = 0;
+  return {
+    mesh, cap,
+    begin() { n = 0; },
+    push(x, y, z, rx, ry, size, r, g, b, alpha) {
+      if (n >= cap || alpha <= 0.002) return false;
+      mesh.setMatrixAt(n, M.compose(P.set(x, y, z), Qi.setFromEuler(E.set(rx, ry, rx * 0.5)), Sc.setScalar(size)));
+      const q = aCol.array; q[n * 4] = r; q[n * 4 + 1] = g; q[n * 4 + 2] = b; q[n * 4 + 3] = alpha; n++;
+      return true;
+    },
+    end() { mesh.count = n; mesh.visible = n > 0; mesh.instanceMatrix.needsUpdate = true; aCol.needsUpdate = true; },
+    dispose() { m.dispose(); mesh.geometry.dispose(); },
+  };
 }

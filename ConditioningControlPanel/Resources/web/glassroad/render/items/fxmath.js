@@ -1,7 +1,7 @@
 /* render/items/fxmath.js - pure helpers for render/screenfx.js and render/items/visuals.js.
  * No three.js, so tests/render-screenfx.test.mjs and render-items.test.mjs run them under bare node.
  */
-import { ITEM_TIERS, SCREEN_LOOK, ITEM_LOOK } from './look.js';
+import { ITEM_TIERS, SCREEN_LOOK, ITEM_LOOK, SLOT_LOOK } from './look.js';
 
 export const SCREEN_KINDS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter'];
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
@@ -149,6 +149,21 @@ export function nearCapR(R, d, vFovDeg, frac = ITEM_LOOK.nearMaxFrac) {
 }
 
 /**
+ * True when an impact at (dx, dy, dz) from the camera is near (under maxM) and in front, inside the
+ * horizontal field of view plus a small margin; (fx, fy, fz) is the unit view direction. Only these
+ * glows ask photosafe, so unseen ones never spend the budget the player's own juice needs.
+ */
+export function impactSeen(dx, dy, dz, fx, fy, fz, { maxM = ITEM_LOOK.impactAskM, vFovDeg = 0, aspect = 16 / 9 } = {}) {
+  const d = Math.hypot(dx, dy, dz);
+  if (!(d <= maxM)) return false;
+  if (d < 1e-6) return true;
+  const along = (dx * fx + dy * fy + dz * fz) / d;
+  if (!(vFovDeg > 0)) return along > 0;
+  const half = Math.min(Math.PI / 2, Math.atan(Math.tan((vFovDeg * Math.PI) / 360) * aspect) + 0.17);
+  return along >= Math.cos(half);
+}
+
+/**
  * A per-frame pool over a fixed cap: begin(), then take() per thing drawn (null when the cap is met),
  * end() hides every object not taken this frame. make(i) builds one; hide(obj) parks it.
  */
@@ -166,4 +181,120 @@ export function createPool(cap, make, hide) {
     end() { for (let i = used; i < items.length; i++) hide(items[i]); },
     each(fn) { items.forEach(fn); },
   };
+}
+
+// ---- polish 2 ----------------------------------------------------------------------------------
+const TAU = Math.PI * 2;
+const ease01 = (x) => { const q = clamp01(x); return q * q * (3 - 2 * q); };
+
+/** The living icon's breath: a scale round 1, slow; Gentle keeps a third of the move. */
+export function breathe(t, seed = 0, gentle = false) {
+  const L = ITEM_LOOK;
+  return 1 + L.breathAmp * (gentle ? 1 / 3 : 1) * Math.sin(TAU * L.breathHz * t + seed * 1.7);
+}
+
+/**
+ * A trail history { pts: Float32Array(n * 3), n }: adds (x, y, z) once it is stepM from the newest
+ * point, drops the oldest past n, starts over after a jump. Returns the count.
+ */
+export function trailPush(h, x, y, z, n, stepM, jumpM = 20) {
+  const p = h.pts;
+  if (h.n) {
+    const j = (h.n - 1) * 3, d = Math.hypot(p[j] - x, p[j + 1] - y, p[j + 2] - z);
+    if (d > jumpM) h.n = 0;
+    else if (d < stepM) return h.n;
+  }
+  if (h.n >= n) { p.copyWithin(0, 3); h.n = n - 1; }
+  const j = h.n * 3;
+  p[j] = x; p[j + 1] = y; p[j + 2] = z;
+  return ++h.n;
+}
+
+/** Ribbon point i of n (0 = oldest, n - 1 = the head): size share and alpha, tapered to the tail, a slow twinkle (none under Gentle). */
+export function trailLook(i, n, t, seed = 0, gentle = false) {
+  const q = n > 1 ? i / (n - 1) : 1;
+  const tw = gentle ? 1 : 0.75 + 0.25 * Math.sin(TAU * ITEM_LOOK.trailTwinkleHz * t + i * 2.3 + seed);
+  return { size: 0.35 + 0.65 * q, alpha: q ** 1.3 * tw };
+}
+
+/** A trap's warning, 0..1, from the nearest kart's distance d (m): wakes at trapWarnM[0], full at trapWarnM[1]. */
+export function trapWarn(d) {
+  const [far, near] = ITEM_LOOK.trapWarnM;
+  return Number.isFinite(d) ? ease01((far - d) / (far - near)) : 0;
+}
+
+/** The lob's landing mark at flight share k (0..1): the shadow tightens and darkens as it falls; the ring pulses gently (steady under Gentle). */
+export function lobMark(k, t, gentle = false) {
+  const L = ITEM_LOOK, q = clamp01(k), [r0, r1] = L.lobShadowR;
+  const pulse = gentle ? 0.6 : 0.7 + 0.3 * Math.sin(TAU * L.markPulseHz * t);
+  return { r: r1 + (r0 - r1) * q * q, alpha: L.lobShadowAlpha * (0.25 + 0.75 * q), ring: L.markRingM * (1 - 0.35 * q), ringAlpha: L.markAlpha * (0.4 + 0.6 * q) * pulse };
+}
+
+/**
+ * An impact at age t (s): the shockwave ring's radius and alpha, and the soft glow's alpha (0 once over,
+ * or when photosafe refused it). Gentle: half as bright, twice as long, every rise at least 300 ms.
+ */
+export function impactPhase(t, { glow = true, gentle = false } = {}) {
+  const L = ITEM_LOOK, life = L.impactRingS * (gentle ? 2 : 1), q = clamp01(t / life), [r0, r1] = L.impactRingM;
+  const rise = gentle ? 0.3 : 0.05, k = gentle ? 0.5 : 1;
+  const ringA = q >= 1 ? 0 : L.impactRingAlpha * k * Math.min(1, t / rise) * (1 - q) ** 1.5;
+  const gS = Math.max(L.impactGlowS, rise + 0.1) * (gentle ? 2 : 1);
+  const glowA = !glow || t >= gS ? 0 : L.impactGlowAlpha * k * Math.min(1, t / rise) * (1 - t / gS) ** 2;
+  return { ring: r0 + (r1 - r0) * (1 - (1 - q) ** 3), ringA, glowA };
+}
+
+/** Confetti card k at age t from a taken box: writes the offset [dx, dy, dz] (m, y up) into out; returns its turn and alpha. */
+export function confettiAt(k, t, out, seed = 0) {
+  const L = ITEM_LOOK, [v0, v1] = L.confettiSpeedMps;
+  const a = k * 2.399963 + seed, e = 0.5 + 0.9 * rnd(k * 3.3 + seed), v = v0 + (v1 - v0) * rnd(k + seed);
+  const d = (1 - Math.exp(-t * 1.8)) / 1.8, side = Math.sin(t * 5 + k) * 0.15 * t;
+  out[0] = Math.cos(a) * Math.cos(e) * v * d + Math.cos(a + 1.57) * side;
+  out[1] = Math.sin(e) * v * d - 0.5 * L.confettiGravityMps2 * 0.6 * t * t;
+  out[2] = Math.sin(a) * Math.cos(e) * v * d + Math.sin(a + 1.57) * side;
+  const f = t / L.confettiS;
+  return { rx: t * (3 + 4 * rnd(k * 7.1 + seed)), ry: t * (2 + 3 * rnd(k * 1.9 + seed)), alpha: f >= 1 ? 0 : 1 - ease01((f - 0.55) / 0.45) };
+}
+
+/** A box card's glint: where it is along the card's diagonal (-1..1) and how bright (0..1); one sweep each glintEveryS, boxes out of step. */
+export function boxGlint(t, i = 0, gentle = false) {
+  const L = ITEM_LOOK, p = (((t + i * 0.37 * L.glintEveryS) % L.glintEveryS) + L.glintEveryS) % L.glintEveryS;
+  if (p >= L.glintS) return { u: 0, alpha: 0 };
+  const q = p / L.glintS;
+  return { u: q * 2 - 1, alpha: Math.sin(q * Math.PI) * (gentle ? 0.4 : 1) };
+}
+
+/** Freeze: the edge value the frost front has reached at amount a (1 = nothing frozen, frostFrontAt at full). */
+export const frostThreshold = (a) => 1 - clamp01(a) * (1 - SCREEN_LOOK.frostFrontAt);
+
+/** Shatter at t seconds in with amount a: how far the cracks have grown (0..1) and how far the pieces slid (0..1); the OUT slides them home. */
+export function shatterPhase(t, a) {
+  const L = SCREEN_LOOK, k = clamp01(a);
+  return { crack: ease01(t / L.shatterCrackS) * k, slide: ease01((t - L.shatterCrackS) / L.shatterSlideS) * k };
+}
+
+/** Spiral: the radius (view heights) the spiral has opened to at amount a. */
+export const spiralOpen = (a) => clamp01(a) * SCREEN_LOOK.spiralOpenR;
+
+/** Pink: the heart vignette's size at amount a (big and off screen at 0, pinkHeartR[1] at full). */
+export const pinkHeart = (a) => SCREEN_LOOK.pinkHeartR[0] + (SCREEN_LOOK.pinkHeartR[1] - SCREEN_LOOK.pinkHeartR[0]) * clamp01(a);
+
+/** Signed distance to a heart of size 1 (point up at y = 0, lobes near y = 1; the shader's same formula). */
+export function heartSd(x, y) {
+  x = Math.abs(x);
+  if (x + y > 1) return Math.hypot(x - 0.25, y - 0.75) - Math.SQRT2 / 4;
+  const m = 0.5 * Math.max(x + y, 0);
+  return Math.sqrt(Math.min(Math.hypot(x, y - 1) ** 2, Math.hypot(x - m, y - m) ** 2)) * Math.sign(x - y);
+}
+
+/** HUD slot card shuffle s seconds after a roll tick: the new card slides in from the right, tilted and small, and settles. */
+export function shuffleAt(s, gentle = false) {
+  const L = SLOT_LOOK, m = gentle ? L.gentleMul : 1, q = 1 - ease01(s / L.shuffleS);
+  return { dx: L.shuffleDx * q * m, rotDeg: L.shuffleRotDeg * q * m, scale: 1 - (1 - L.shuffleScale) * q * m };
+}
+
+/** HUD slot orbit mote i of n at time t: x, y in slot radii (a tilted ring), size px, alpha, and whether it passes in front. */
+export function slotOrbit(i, n, t, gentle = false) {
+  const L = SLOT_LOOK, a = TAU * (i / n + L.orbitHz * t * (gentle ? 0.5 : 1)) + rnd(i) * 0.4;
+  const s = Math.sin(a), [s0, s1] = L.orbitSizePx, wob = 1 + 0.06 * Math.sin(t * 0.9 + i * 1.3);
+  return { x: Math.cos(a) * L.orbitR * wob, y: s * L.orbitR * L.orbitTilt, size: s0 + (s1 - s0) * (0.5 + 0.5 * s), alpha: L.orbitAlpha * (0.45 + 0.55 * (0.5 + 0.5 * s)), front: s > 0 };
 }

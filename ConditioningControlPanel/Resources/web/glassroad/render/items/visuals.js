@@ -8,6 +8,11 @@
  * Wave 2 art (each optional, the look above is the fallback): boxes are the item-card GLB with a slowly
  * breathing edge; held, thrown, trap and box-turn bubbles are the effect-bubble GLB shell (instanced)
  * round the living icon; the Melt puddle samples fx-melt-spiral.
+ * Polish 2: icons breathe inside glass that catches a drifting light; throws trail a sparkling ribbon,
+ * lobs a dotted arc with a soft shadow and pulsing ring waiting under the target; traps pulse and wake a
+ * warning ring as a kart nears; impacts ring out over the road with a soft glow capped to a share of the
+ * view (asks opts.photosafe once, skipped when refused or not wired); box cards glint now and then and
+ * burst into tumbling confetti cards when taken. The player's held bubble stays in the HUD (slotfx.js).
  */
 import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion, Box3, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -15,9 +20,12 @@ import { S } from '../../sim/state.js';
 import { ITEM_IDS } from '../../sim/itemTable.js';
 import { Q } from '../quality.js';
 import { ITEM_LOOK as L, ITEM_TIERS, MOTE_TINT } from './look.js';
-import { tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, cardEdgeGlow, shellFit, nearCapR } from './fxmath.js';
+import {
+  tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, cardEdgeGlow, shellFit, nearCapR, impactSeen,
+  breathe, trailPush, trailLook, trapWarn, lobMark, impactPhase, confettiAt, boxGlint,
+} from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
-import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge } from './materials.js';
+import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
 const OFF = [0, 0, 0];
@@ -52,12 +60,22 @@ function lay(obj, p, n, spin = 0, lift = 0) {
   obj.quaternion.setFromUnitVectors(UP, N).multiply(QS.setFromAxisAngle(UP, spin));
 }
 
-export function createItemVisuals(scene, art, feel) {
+const IMPACTS = new Set(['hit', 'glass', 'golden', 'decoy']);
+const hexRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
+const MOTE_HEX = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k, '#' + s.split(',').map((x) => Number(x).toString(16).padStart(2, '0')).join('')]));
+let frame = 0;
+
+/** opts.photosafe (fx/photosafe.js): an impact's soft glow asks it once and is skipped when refused or missing. */
+export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
   const top = ITEM_TIERS.high, start = tierOf(Q.name);
   const root = new Group(); root.name = 'item-visuals'; scene.add(root);
   const icons = createLivingIcons({ px: start.iconPx, fps: start.iconFps });
-  const bubbles = bubbleCloud(top.bubbles + 24, icons.texture), motes = moteCloud(top.bubbles * top.motes + 24 * L.popMotes);
+  // motes: bubble rings, pop sprays, throw ribbons, lob dots, box glints and impact glows share one draw
+  const bubbles = bubbleCloud(top.bubbles + 24, icons.texture), motes = moteCloud(top.bubbles * top.motes + 24 * L.popMotes + 8 * (L.trailPts + L.lobDots) + 24);
   root.add(bubbles.sprite, motes.sprite);
+  const confetti = confettiCloud(L.confetti.high * 6);
+  root.add(confetti.mesh);
+  const CONF = L.confettiColours.map(hexRgb);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
   const meltTex = art && art.tex ? art.tex(L.meltMask) : null;
   const gentle = () => !!feel.get('gentle.on');
@@ -107,6 +125,27 @@ export function createItemVisuals(scene, art, feel) {
     mesh.frustumCulled = false; root.add(mesh);
     return { mesh, u: g.uniforms };
   }, (e) => { e.mesh.visible = false; });
+  // polish 2: flat rings (shockwaves, trap warnings, lob landing marks) and soft landing shadows
+  const marks = createPool(16, () => {
+    const g = ringGlow(L.markColour), mesh = new Mesh(plane, g.material);
+    mesh.frustumCulled = false; mesh.renderOrder = 1; root.add(mesh);
+    return { mesh, u: g.uniforms };
+  }, (e) => { e.mesh.visible = false; });
+  const shadows = createPool(6, () => {
+    const g = blobShadow(), mesh = new Mesh(plane, g.material);
+    mesh.frustumCulled = false; root.add(mesh);
+    return { mesh, u: g.uniforms };
+  }, (e) => { e.mesh.visible = false; });
+  /** A flat ring at p (normal n or up), radius rM, colour hex, opacity a. */
+  function mark(p, n, rM, hex, a, lift = 0.06) {
+    const e = a > 0.004 ? marks.take() : null;
+    if (!e) return;
+    lay(e.mesh, p, n, 0, lift); e.mesh.scale.setScalar(rM);
+    e.u.colour.value.set(hex); e.u.opacity.value = a; e.mesh.visible = true;
+  }
+  const trails = new Map(), seen = new Set(), glows = new Map();
+  const trailOf = (id, n) => { let h = trails.get(id); if (!h) trails.set(id, h = { pts: new Float32Array(n * 3), n: 0 }); return h; };
+  const confT = [];
   const kartModel = art && art.model ? art.model('emi-teacup-kart') : null;
   const ghostGeo = new SphereGeometry(0.7, 16, 10).scale(1, 0.8, 1).translate(0, 0.6, 0);
   const copies = createPool(top.copies * 4, () => {
@@ -140,7 +179,8 @@ export function createItemVisuals(scene, art, feel) {
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     const cell = mode >= MODE.shell ? -1 : cellOf(id);
     if (cell >= 0) icons.use(id);
-    if (!bubbles.push(x, y, z, (R * 2) / (mode >= MODE.shell ? L.shellFill : L.iconFill), cell, alpha, mode, seed)) return;
+    const br = mode >= MODE.shell ? 1 : breathe(timeS, seed, gentle());
+    if (!bubbles.push(x, y, z, (R * 2 * br) / (mode >= MODE.shell ? L.shellFill : L.iconFill), cell, alpha, mode, seed)) return;
     drawn++;
     const n = moteN >= 0 ? moteN : tierOf(Q.name).motes;
     if (n > 0) addMotes(x, y, z, R, id, n, seed, alpha);
@@ -152,7 +192,8 @@ export function createItemVisuals(scene, art, feel) {
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     if (!shells.push(x, y, z, R, alpha, seed)) return;
     icons.use(id);
-    bubbles.push(x, y, z, 2 * R * fit.carrier, cellOf(id), alpha, MODE.bare, seed);
+    // the living icon breathes inside its still glass
+    bubbles.push(x, y, z, 2 * R * fit.carrier * breathe(timeS, seed, gentle()), cellOf(id), alpha, MODE.bare, seed);
     drawn++;
     const n = moteN >= 0 ? moteN : tierOf(Q.name).motes;
     if (n > 0) addMotes(x, y, z, R, id, n, seed, alpha);
@@ -168,15 +209,17 @@ export function createItemVisuals(scene, art, feel) {
     bubbles.uniforms.time.value = timeS;
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     if (edge) edge.uniforms.glow.value = cardEdgeGlow(timeS, soft);
-    bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); drawn = 0;
-    if (!view) { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); if (shells) shells.end(); return; }
+    bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
+    const endAll = () => { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); if (shells) shells.end(); };
+    if (!view) { endAll(); return; }
+    const tier = tierOf(Q.name), moteK = tier.motes / top.motes;
     const showS = feel.get('items.popShowS') || 0.6;
     const mid = cardModel ? L.boxCardM / 2 : 0;   // the bubble rises out of the card's middle
 
     // boxes: spinning cards; driven through, the card spins away and a bubble rises out of it
     (view.boxes || []).forEach((b, i) => {
       const o = boxes[i] || (boxes[i] = buildBox(i));
-      if (prevAlive[i] && !b.alive) turnT[i] = 0;
+      if (prevAlive[i] && !b.alive) { turnT[i] = 0; confT[i] = 0; }
       prevAlive[i] = b.alive;
       const turning = turnT[i] !== undefined && turnT[i] < L.boxTurnS + showS;
       const bob = Math.sin(timeS * L.boxBobHz * 6.283 + i) * L.boxBobM;
@@ -191,6 +234,24 @@ export function createItemVisuals(scene, art, feel) {
       } else {
         turnT[i] = undefined;
         o.visible = !!b.alive; o.scale.setScalar(Math.max(0.01, b.k === undefined ? 1 : b.k));
+        // a glint sweeps the card's face corner to corner now and then
+        const gl = o.visible ? boxGlint(timeS, i, soft) : null;
+        if (gl && gl.alpha > 0.01) {
+          const h = (cardModel ? L.boxCardM : L.boxSizeM) * 0.42 * o.scale.x;
+          W.set(gl.u * h * 0.7, mid + gl.u * h, 0.06).applyQuaternion(o.quaternion).add(o.position);
+          motes.push(W.x, W.y, W.z, L.glintSizeM * (0.6 + 0.4 * gl.alpha), 1, 0.97, 1, gl.alpha);
+          motes.push(W.x, W.y, W.z, L.glintSizeM * 2.2, 1, 0.75, 0.9, gl.alpha * 0.25);
+        }
+      }
+      // taken: confetti cards burst out of the card, tumble and fall
+      if (confT[i] !== undefined) {
+        confT[i] += dt;
+        const n = L.confetti[Q.name] || L.confetti.high;
+        if (confT[i] >= L.confettiS) confT[i] = undefined;
+        else for (let k = 0; k < n; k++) {
+          const c = confettiAt(k, confT[i], OFF, i * 13), col = CONF[k % CONF.length];
+          confetti.push(o.position.x + OFF[0], o.position.y + mid + OFF[1], o.position.z + OFF[2], c.rx, c.ry, L.confettiSizeM, col[0], col[1], col[2], c.alpha);
+        }
       }
     });
 
@@ -214,13 +275,47 @@ export function createItemVisuals(scene, art, feel) {
       bubble3d(W.x, W.y, W.z, id || 'box', L.heldR * (me ? L.playerHeldScale : 1), 1, h.racer * 7, me ? 4 : -1);
     }
 
-    // throws and lobs: the sim's p already carries the arc
+    // throws and lobs: the sim's p already carries the arc. A throw draws a sparkling ribbon of motes
+    // behind it; a lob a dotted arc, and a soft shadow with a pulsing ring waits where it will land
+    seen.clear();
+    const lobS = feel.get('items.lobFlightS') || 1.6;
     for (const pr of view.projectiles || []) {
-      bubble3d(comp(pr.p, 0), comp(pr.p, 1), comp(pr.p, 2), pr.kind, pr.mode === 'lob' ? L.lobR : L.throwR, 1, (pr.id | 0) * 3);
+      const x = comp(pr.p, 0), y = comp(pr.p, 1), z = comp(pr.p, 2), lob = pr.mode === 'lob', id = pr.id | 0;
+      bubble3d(x, y, z, pr.kind, lob ? L.lobR : L.throwR, 1, id * 3);
+      seen.add(id);
+      const n = lob ? L.lobDots : L.trailPts, h = trailOf(id, n), c = TINTS[pr.kind] || TINTS.box;
+      trailPush(h, x, y, z, n, lob ? L.lobDotStepM : L.trailStepM);
+      const shown = Math.max(2, Math.round(h.n * (lob ? 1 : moteK)));
+      for (let i = h.n - shown; i < h.n - 1; i++) {
+        const j = i * 3, tl = trailLook(i - (h.n - shown), shown, timeS, id, soft);
+        if (lob) motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], L.lobDotSizeM, c[0], c[1], c[2], 0.35 + 0.5 * tl.size);
+        else {
+          motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], L.trailSizeM * tl.size, c[0], c[1], c[2], L.trailAlpha * tl.alpha);
+          if (i & 1) motes.push(h.pts[j], h.pts[j + 1] + 0.05, h.pts[j + 2], L.trailSizeM * 0.45 * tl.size, 1, 1, 1, L.trailAlpha * tl.alpha);
+        }
+      }
+      const tk = lob ? karts[pr.target] : null;
+      if (tk && tk.st) {
+        const m = lobMark((pr.t || 0) / lobS, timeS, soft), e = shadows.take();
+        kartPos(tk); W.set(0, 1, 0).applyQuaternion(kartQuat(tk));
+        if (e) { lay(e.mesh, V, W, 0, 0.05); e.mesh.scale.setScalar(m.r); e.u.opacity.value = m.alpha; e.mesh.visible = true; }
+        mark(V, W, m.ring, L.markColour, m.ringAlpha, 0.07);
+      }
     }
+    for (const id of trails.keys()) if (!seen.has(id)) trails.delete(id);
 
-    // traps: Melt is a puddle; any other kind sits on the road as a low bubble
+    // traps: Melt is a puddle; any other kind sits on the road as a low bubble that pulses; either wakes
+    // a warning ring as a kart comes near
     for (const tr of view.traps || []) {
+      let d2 = Infinity;
+      for (const k of karts) {
+        if (!k || !k.st) continue;
+        const dx = k.st[S.posX] - comp(tr.p, 0), dy = k.st[S.posY] - comp(tr.p, 1), dz = k.st[S.posZ] - comp(tr.p, 2);
+        d2 = Math.min(d2, dx * dx + dy * dy + dz * dz);
+      }
+      const warn = tr.armed ? trapWarn(Math.sqrt(d2)) : 0;
+      const ringR = tr.kind === 'melt' ? (feel.get('items.meltRadiusM') || 2.4) * L.meltPuddleMul * 1.08 : L.trapWarnRingM;
+      mark(tr.p, tr.n, ringR * (1 + (soft ? 0 : 0.06 * Math.sin(timeS * 6.283 * L.markPulseHz))), L.trapWarnColour, warn * L.trapWarnAlpha * (soft ? 0.6 : 1));
       const alpha = tr.armed ? 1 : L.trapUnarmedAlpha;
       if (tr.kind === 'melt') {
         const e = puddles.take();
@@ -231,8 +326,9 @@ export function createItemVisuals(scene, art, feel) {
         continue;
       }
       normal(tr.n);
-      const lift = L.trapHoverM + Math.sin(timeS * 1.2 + (tr.id | 0)) * 0.08;
-      bubble3d(comp(tr.p, 0) + N.x * lift, comp(tr.p, 1) + N.y * lift, comp(tr.p, 2) + N.z * lift, tr.kind, L.trapR, alpha, (tr.id | 0) * 5);
+      const lift = L.trapHoverM + Math.sin(timeS * 1.2 + (tr.id | 0)) * 0.08 * (1 + warn);
+      const pulse = 1 + L.trapPulse * (soft ? 0.4 : 1 + warn) * Math.sin(timeS * 6.283 * L.trapPulseHz * (1 + warn) + (tr.id | 0));
+      bubble3d(comp(tr.p, 0) + N.x * lift, comp(tr.p, 1) + N.y * lift, comp(tr.p, 2) + N.z * lift, tr.kind, L.trapR * pulse, alpha, (tr.id | 0) * 5);
     }
 
     // Pink wave: a ring opening along the road
@@ -283,11 +379,34 @@ export function createItemVisuals(scene, art, feel) {
         popMote(i, n, pop.t || 0, OFF, x * 0.37 + z);
         motes.push(x + OFF[0], y + OFF[1], z + OFF[2], L.moteSizeM * 1.4, c[0], c[1], c[2], 1 - q);
       }
+      // an impact: a shockwave ring runs out over the road and a soft glow swells and goes, never more
+      // than impactGlowFrac of the view tall; the glow asks photosafe once, only when near and on screen
+      // (unseen ones never spend the player's budget), and stays dark when refused
+      if (!IMPACTS.has(pop.at)) continue;
+      const key = kind + pop.at + Math.round(x * 2) + ',' + Math.round(z * 2);
+      let g = glows.get(key);
+      if (!g) glows.set(key, g = { ok: false, asked: false, f: 0 });
+      g.f = frame;
+      if (!g.asked && cam) {
+        const e = cam.matrixWorld.elements, cp = cam.position;
+        if (impactSeen(x - cp.x, y - cp.y, z - cp.z, -e[8], -e[9], -e[10], { maxM: L.impactAskM ?? 60, vFovDeg: cam.fov || 0, aspect: cam.aspect || 16 / 9 })) {
+          g.asked = true; g.ok = !!(photosafe && photosafe.request('flash'));
+        }
+      }
+      const ip = impactPhase(pop.t || 0, { glow: g.ok, gentle: soft });
+      mark(pop.p, null, ip.ring, MOTE_HEX[kind] || L.markColour, ip.ringA, 0.08);
+      if (ip.glowA > 0.003) {
+        const p = cam && cam.position, d = p ? Math.hypot(x - p.x, y - p.y, z - p.z) : 99;
+        const r = nearCapR(L.impactGlowM, d, cam ? cam.fov : 0, L.impactGlowFrac);
+        // lifted by half its radius so the road never slices the bottom off the glow
+        motes.push(x, y + r * 0.5, z, r * 2, c[0] * 0.5 + 0.5, c[1] * 0.5 + 0.5, c[2] * 0.5 + 0.5, ip.glowA);
+      }
     }
+    for (const [k, g] of glows) if (g.f !== frame) glows.delete(k);
+    frame++;
 
     icons.tick(dt, timeS, soft);
-    bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end();
-    if (shells) shells.end();
+    endAll();
   }
 
   return {
@@ -298,6 +417,7 @@ export function createItemVisuals(scene, art, feel) {
       if (shells) shells.dispose();
       if (edge) edge.material.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());
+      marks.each((e) => e.mesh.material.dispose()); shadows.each((e) => e.mesh.material.dispose()); confetti.dispose();
       copies.each((e) => { e.obj.traverse((m) => { if (m.isMesh && m.material) m.material.dispose(); }); });
       for (const m of spare) m.dispose();
     },

@@ -8,7 +8,7 @@
  * motes.js and wakes.js turn these into TSL.
  */
 
-import { SCREEN_LOOK } from './items/look.js';
+import { SCREEN_LOOK, MOTE_TINT } from './items/look.js';
 import { LOOK } from './look.js';
 
 export const GRID = 4;
@@ -82,7 +82,34 @@ export const FAMILIES = Object.freeze({
   freeze: [['frost', 3], ['glint', 1]],
   golden: [['star', 2], ['glitter', 1]],
   melt: [['drip', 3], ['disc', 1]],
+  // polish 2: every effect that lands sprays its own shards or petals
+  flash: [['glint', 2], ['glitter', 2], ['star', 1]],
+  spiral: [['swirl', 2], ['petal', 1]],
+  brainDrain: [['smoke', 2], ['swirl', 1]],
+  blackout: [['smoke', 2], ['glint', 1]],
+  pink: [['heart', 3], ['petal', 2]],
+  shatter: [['shard', 3], ['glint', 1]],
+  surge: [['spark', 2], ['glitter', 1]],
+  echo: [['ring', 1], ['glint', 1]],
+  flame: [['disc', 3], ['smoke', 1]],                 // the boost flame's body (glitter sparks ride on top)
+  ember: [['glitter', 2], ['glint', 1]],              // drift spark embers that float
+  streak: [['spark', 1]],                             // slipstream streaks, turned along their motion
 });
+
+/** Polish 2 particle numbers (move to LOOK.fx2 when the integrator wants them there; LOOK.fx2 wins). */
+export const FX2_LOOK = Object.freeze({
+  sparkWhite: 0.2, sparkAccent: 0.15, emberShare: 0.3, emberSizeMul: 0.45, emberLifeMul: 2.2, emberSpeedMul: 0.4,
+  flameCore: '#fff6fb', flameGrow: 1.4, flameRateMul: 1.5, flameLifeMul: 1.2, flameSparkShare: 0.3,
+  wispStreakShare: 0.5, wispStreakSizeMul: 1.8, phoneExtraMul: 0.5,
+});
+
+/** The colours an effect's hit sprays: its mote tint, white, and the tint halfway to white. */
+export function hitColours(kind) {
+  const t = MOTE_TINT[kind];
+  if (!t) return null;
+  const c = t.split(',').map(Number), hex = (v) => '#' + v.map((x) => Math.round(x).toString(16).padStart(2, '0')).join('');
+  return [hex(c), '#ffffff', hex(c.map((x) => (x + 255) / 2))];
+}
 
 /** Drift sparks per tier: streaks, petals by the tier's petal share, glints join at tier 3. */
 export function sparkFamily(tier, petalShare = 0) {
@@ -114,9 +141,10 @@ export function familyOf(opts, L) {
   return 'box';
 }
 
-/** The item-hit family for an effect kind, or null when that hit sprays nothing. */
+const HIT_KINDS = new Set(['freeze', 'golden', 'melt', 'glass', 'decoy', 'flash', 'spiral', 'brainDrain', 'blackout', 'pink', 'shatter', 'surge', 'echo']);
+/** The item-hit family for an effect kind or verdict, or null when that hit sprays nothing (mercy, immune). */
 export function hitFamily(kind) {
-  return kind === 'freeze' || kind === 'golden' || kind === 'melt' || kind === 'glass' || kind === 'decoy' ? kind : null;
+  return HIT_KINDS.has(kind) ? kind : null;
 }
 
 /**

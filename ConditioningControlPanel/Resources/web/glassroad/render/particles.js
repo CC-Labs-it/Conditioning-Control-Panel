@@ -7,6 +7,11 @@
  * (Freeze), stars and glitter (Golden) and drips (Melt). Without the atlas the B1 shader shapes draw
  * (0 disc, 1 sparkle with four arms, 2 petal). Ring allocation over the tier budget (Q.particles);
  * one draw call. CPU integrates, the GPU reads its attributes.
+ * Polish 2 (numbers in atlas.js FX2_LOOK, LOOK.fx2 wins): drift sparks mix the tier colour with white-hot
+ * and next-tier accents and shed floating embers; the boost flame is soft tongues born white at the saucer
+ * that swell into the boost colour (a colour ramp and growth per particle) with glitter shot through;
+ * slipstream adds long streaks turned along their motion; every effect hit sprays its own cells and tint.
+ * Extras run at FX2_LOOK.phoneExtraMul on the phone tier; the ring buffer keeps the frame cost flat.
  */
 import { Sprite, SpriteNodeMaterial, AdditiveBlending, InstancedBufferAttribute, DynamicDrawUsage, Color, Vector3 } from 'three/webgpu';
 import {
@@ -20,7 +25,7 @@ import { sparkProfile } from './kartPose.js';
 import { currentArt } from './art.js';
 import {
   CELLS, GRID, ATLAS_PX, MAX_LOD, FXART_LOOK, FAMILIES, UPRIGHT, ALIGNED, cellIndex, cellInset, legacyShape, sparkFamily, pickCell,
-  familyOf, hitFamily,
+  familyOf, hitFamily, FX2_LOOK, hitColours,
 } from './atlas.js';
 
 export const SHAPE = Object.freeze({ disc: 0, sparkle: 1, petal: 2 });
@@ -67,6 +72,10 @@ export function createParticles(feel, art = currentArt()) {
   const aVel = new InstancedBufferAttribute(new Float32Array(max0 * 3), 3).setUsage(DynamicDrawUsage);   // streaks turn along it
   const vel = aVel.array, life = new Float32Array(max0), maxLife = new Float32Array(max0);
   const size = new Float32Array(max0), spin = new Float32Array(max0), grav = new Float32Array(max0);
+  // polish 2: a colour ramp from birth to death (flame: white core to the boost colour) and growth over life
+  const ramp = new Float32Array(max0 * 3), hasRamp = new Uint8Array(max0), grow = new Float32Array(max0);
+  const B = LOOK.fx2 || FX2_LOOK;
+  const extra = () => (Q.name === 'phone' ? B.phoneExtraMul : 1);
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   m.positionNode = instancedDynamicBufferAttribute(aPos, 'vec3');
   m.scaleNode = instancedDynamicBufferAttribute(aSize, 'float');
@@ -103,7 +112,8 @@ export function createParticles(feel, art = currentArt()) {
   };
 
   /** World-space emit; cell = an atlas cell name (render/atlas.js CELLS). */
-  function emit(x, y, z, vx, vy, vz, hex, sz, lifeS, cell = 'disc', g = 1, sp = 0) {
+  /** hex2: the colour it ends as (a ramp from hex), gr: how much it grows over its life (0 = shrinks as before). */
+  function emit(x, y, z, vx, vy, vz, hex, sz, lifeS, cell = 'disc', g = 1, sp = 0, hex2 = null, gr = 0) {
     const i = head; head = (head + 1) % cap();
     const p = aPos.array, cl = aCol.array, k = rgb(hex), ci = cellOf(cell);
     p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z;
@@ -111,22 +121,32 @@ export function createParticles(feel, art = currentArt()) {
     cl[i * 4] = k[0]; cl[i * 4 + 1] = k[1]; cl[i * 4 + 2] = k[2]; cl[i * 4 + 3] = 1;
     aRot.array[i * 2] = ci.code; aRot.array[i * 2 + 1] = ci.upright ? 0 : Math.random() * 6.283;
     size[i] = sz * ci.size; life[i] = maxLife[i] = lifeS; grav[i] = g; spin[i] = ci.upright ? 0 : sp;
+    grow[i] = gr; hasRamp[i] = hex2 ? 1 : 0;
+    if (hex2) { const e = rgb(hex2); ramp[i * 3] = e[0] - k[0]; ramp[i * 3 + 1] = e[1] - k[1]; ramp[i * 3 + 2] = e[2] - k[2]; }
   }
   /** Kart-local emit: position through obj.matrixWorld, velocity through its rotation. */
-  function local(obj, lx, ly, lz, vx, vy, vz, hex, sz, lifeS, cell, g, sp) {
+  function local(obj, lx, ly, lz, vx, vy, vz, hex, sz, lifeS, cell, g, sp, hex2 = null, gr = 0) {
     tmp.set(lx, ly, lz).applyMatrix4(obj.matrixWorld);
     dir.set(vx, vy, vz).applyQuaternion(obj.quaternion);
-    emit(tmp.x, tmp.y, tmp.z, dir.x, dir.y, dir.z, hex, sz, lifeS, cell, g, sp);
+    emit(tmp.x, tmp.y, tmp.z, dir.x, dir.y, dir.z, hex, sz, lifeS, cell, g, sp, hex2, gr);
   }
 
+  /** Drift sparks: the tier colour, a white-hot share and an accent of the next tier's colour (pink, white,
+   * gold), and floating embers that outlive the streaks. */
   function sparks(obj, n, hex, sz, lifeS, spread, petal, tier) {
     const r = LOOK.saucerR, [lo, hi] = LOOK.sparkSpeedMps, fam = sparkFamily(tier, petal);
+    const colours = feel.get('juice.sparkColours'), accent = colours[tier % colours.length] || '#ffffff', ember = B.emberShare * extra();
     for (let k = 0; k < n; k++) {
-      const side = k & 1 ? 1 : -1, pick = Math.random();
+      const side = k & 1 ? 1 : -1, pick = Math.random(), c = Math.random();
       const cell = at ? pickCell(fam, pick) : pick < petal ? 'petal' : k % 3 === 0 ? 'disc' : 'spark';
-      const isPetal = cell === 'petal', h = Math.random() > 0.8 ? '#ffffff' : hex;
+      const isPetal = cell === 'petal', h = c < B.sparkWhite ? '#ffffff' : c < B.sparkWhite + B.sparkAccent ? accent : hex;
       local(obj, side * r * 0.7, 0.05, r * 0.7, side * rnd(0, spread), rnd(lo, hi) * 0.6, rnd(lo, hi), h,
         sz * rnd(0.7, 1.3), lifeS * (isPetal ? 2 : 1), cell, isPetal ? 0.25 : 1, rnd(-1, 1) * LOOK.sparkSpin);
+      if (Math.random() < ember) {
+        const v = B.emberSpeedMul;
+        local(obj, side * r * 0.7, 0.1, r * 0.7, side * rnd(0, spread) * v, rnd(lo, hi) * v, rnd(lo, hi) * v, Math.random() < 0.5 ? '#ffffff' : hex,
+          sz * B.emberSizeMul, lifeS * B.emberLifeMul, at ? pickCell(FAMILIES.ember, Math.random()) : 'spark', -0.15, rnd(-1, 1) * LOOK.sparkSpin * 0.3, hex);
+      }
     }
   }
 
@@ -154,22 +174,31 @@ export function createParticles(feel, art = currentArt()) {
       mem.tier = 0;
     }
     if (bk !== BOOST.NONE) {
-      mem.carryX = (mem.carryX || 0) + LOOK.exhaustRate * mul * dt;
+      // the boost flame: soft tongues born white hot at the saucer's back, swelling into the boost colour
+      // as they stream away, with glitter sparks shot through them
+      mem.carryX = (mem.carryX || 0) + LOOK.exhaustRate * B.flameRateMul * extra() * mul * dt;
       const n = Math.floor(mem.carryX); mem.carryX -= n;
       const hex = bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? colours[bk - 1] : bk === BOOST.LAUNCH ? LOOK.launchTrail : LOOK.exhaustColour;
       for (let k = 0; k < n; k++) {
-        const cell = at ? pickCell(FAMILIES.trail, Math.random()) : k % 4 === 0 ? 'spark' : 'disc';
-        local(obj, rnd(-0.2, 0.2), 0.3, LOOK.saucerR, rnd(-0.5, 0.5), rnd(0, 0.5), rnd(4, 8), k & 1 ? hex : LOOK.exhaustColour,
-          LOOK.exhaustSizeM * rnd(0.6, 1.1), LOOK.exhaustLifeS, cell, 0.2, 0);
+        if (Math.random() < B.flameSparkShare) {
+          local(obj, rnd(-0.25, 0.25), 0.3, LOOK.saucerR, rnd(-1.2, 1.2), rnd(0, 1.2), rnd(6, 11), Math.random() < 0.5 ? '#ffffff' : hex,
+            LOOK.exhaustSizeM * rnd(0.3, 0.5), LOOK.exhaustLifeS * 1.4, at ? 'glitter' : 'spark', 0.3, rnd(-1, 1) * LOOK.sparkSpin);
+          continue;
+        }
+        const cell = at ? pickCell(FAMILIES.flame, Math.random()) : 'disc';
+        local(obj, rnd(-0.15, 0.15), rnd(0.2, 0.35), LOOK.saucerR, rnd(-0.4, 0.4), rnd(0.2, 0.7), rnd(4, 8), B.flameCore,
+          LOOK.exhaustSizeM * rnd(0.5, 0.8), LOOK.exhaustLifeS * B.flameLifeMul, cell, -0.2, rnd(-1, 1), k & 1 ? hex : LOOK.exhaustColour, B.flameGrow);
       }
     } else mem.carryX = 0;
     if (slip > 0.05) {
+      // slipstream: soft wisps and long thin streaks pour past the kart from the front
       mem.carryW = (mem.carryW || 0) + LOOK.wispRate * slip * mul * dt;
       const n = Math.floor(mem.carryW); mem.carryW -= n;
       for (let k = 0; k < n; k++) {
-        const side = k & 1 ? 1 : -1;
-        local(obj, side * rnd(0.5, 1.1), rnd(0.2, 1), -rnd(0.4, 1.2), side * rnd(0, 0.6), rnd(-0.2, 0.3), LOOK.wispSpeedMps * rnd(0.8, 1.2),
-          LOOK.wispColour, LOOK.wispSizeM * rnd(0.6, 1.2), LOOK.wispLifeS, at ? pickCell(FAMILIES.wisp, Math.random()) : 'disc', 0, at ? rnd(-1, 1) : 0);
+        const side = k & 1 ? 1 : -1, streak = at && Math.random() < B.wispStreakShare;
+        local(obj, side * rnd(0.5, 1.3), rnd(0.2, 1.1), -rnd(0.4, 1.6), side * rnd(0, 0.6), rnd(-0.2, 0.3), LOOK.wispSpeedMps * rnd(0.8, 1.3) * (streak ? 1.3 : 1),
+          LOOK.wispColour, LOOK.wispSizeM * rnd(0.6, 1.2) * (streak ? B.wispStreakSizeMul : 1), LOOK.wispLifeS * (streak ? 1.3 : 1),
+          streak ? 'spark' : at ? pickCell(FAMILIES.wisp, Math.random()) : 'disc', 0, at && !streak ? rnd(-1, 1) : 0, streak ? '#bfe8ff' : null, streak ? 0 : 0.6);
       }
     } else mem.carryW = 0;
   }
@@ -211,10 +240,11 @@ export function createParticles(feel, art = currentArt()) {
   function hit(p, kind, { few = 1 } = {}) {
     const family = hitFamily(kind);
     if (!p || !family) return false;
-    const colours = family === 'freeze' ? A.frostColours : family === 'golden' ? A.goldColours : family === 'melt' ? A.meltColours : LOOK.popColours;
-    const melt = family === 'melt';
-    burst(p, Math.round(A.hitCount * few), { family, colours, speed: A.hitSpeedMps * (melt ? 0.6 : 1), sizeM: A.hitSizeM,
-      lifeS: melt ? 0.8 : 0.6, sparkle: 0.7, up: melt ? 2 : 1, g: melt ? 1.6 : 0.4 });
+    const colours = family === 'freeze' ? A.frostColours : family === 'golden' ? A.goldColours : family === 'melt' ? A.meltColours
+      : hitColours(family) || LOOK.popColours;
+    const melt = family === 'melt', soft = family === 'pink' || family === 'spiral' || family === 'brainDrain' || family === 'blackout';
+    burst(p, Math.round(A.hitCount * few), { family, colours, speed: A.hitSpeedMps * (melt ? 0.6 : soft ? 0.8 : 1), sizeM: A.hitSizeM * (soft ? 1.2 : 1),
+      lifeS: melt || soft ? 0.8 : 0.6, sparkle: 0.7, up: melt ? 2 : 1, g: melt ? 1.6 : soft ? 0.15 : 0.4 });
     return true;
   }
 
@@ -230,7 +260,12 @@ export function createParticles(feel, art = currentArt()) {
       rt[i * 2 + 1] += spin[i] * dt;
       const t = Math.max(0, life[i] / maxLife[i]);
       cl[i * 4 + 3] = t < 0.85 ? t / 0.85 : 1;          // no pop-in: full at birth, eased out
-      sz[i] = size[i] * (0.5 + 0.5 * t);
+      if (hasRamp[i]) {
+        // the ramp is stored as (end - start); step the colour by this frame's share of the life
+        const s = maxLife[i] > 0 ? Math.min(dt, life[i] + dt) / maxLife[i] : 0;
+        cl[i * 4] += ramp[i * 3] * s; cl[i * 4 + 1] += ramp[i * 3 + 1] * s; cl[i * 4 + 2] += ramp[i * 3 + 2] * s;
+      }
+      sz[i] = size[i] * (grow[i] > 0 ? 0.4 + grow[i] * (1 - t) : 0.5 + 0.5 * t);
     }
     sprite.count = n;
     aPos.needsUpdate = true; aCol.needsUpdate = true; aSize.needsUpdate = true; aRot.needsUpdate = true;

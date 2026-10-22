@@ -110,7 +110,8 @@ test('fxart: a burst finds its family by name or by the LOOK colour list it carr
   assert.equal(hitFamily('freeze'), 'freeze');
   assert.equal(hitFamily('golden'), 'golden');
   assert.equal(hitFamily('melt'), 'melt');
-  assert.equal(hitFamily('spiral'), null);
+  assert.equal(hitFamily('spiral'), 'spiral', 'polish 2: every effect sprays its own cells');
+  assert.equal(hitFamily('mercy'), null);
 });
 
 test('fxart: without the atlas each cell falls back to a B1 shape (0 disc, 1 sparkle, 2 petal)', () => {

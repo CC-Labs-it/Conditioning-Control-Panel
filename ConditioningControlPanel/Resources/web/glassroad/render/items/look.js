@@ -50,6 +50,32 @@ export const ITEM_LOOK = {
   shieldR: 1.55, shieldUpM: 0.75, goldTint: '#ffcf6b',
   echoSideM: 1.7, echoBackM: 1.4, echoSwayM: 0.35, echoAlpha: 0.38, echoFlickerHz: 2.5, echoFlickerAmp: 0.15,
   goldMotes: 14,
+  // ---- polish 2 ----
+  // the glass catches the light: a highlight that drifts round the top left, an inner caustic glint
+  // low on the far side; the living icon breathes (scale share, Hz; Gentle keeps a third)
+  shineDriftRad: 0.5, shineHz: 0.11, causticGain: 0.55, causticSharp: 10, breathAmp: 0.05, breathHz: 0.35,
+  // throws: a sparkling ribbon of motes along the last trailPts positions (one every trailStepM)
+  trailPts: 14, trailStepM: 0.45, trailSizeM: 0.16, trailAlpha: 0.85, trailTwinkleHz: 0.9,
+  // lobs: a dotted arc (a dot every lobDotStepM) and a soft shadow plus a pulsing ring at the target
+  lobDots: 18, lobDotStepM: 1.6, lobDotSizeM: 0.2, lobShadowR: [0.9, 2.2], lobShadowAlpha: 0.5, markColour: '#ff8fd0',
+  markPulseHz: 1.2, markRingM: 2.4, markAlpha: 0.55,
+  // traps: a slow pulse (scale share, Hz) and a warning ring that wakes from warnM[0] to full at warnM[1]
+  trapPulse: 0.07, trapPulseHz: 0.8, trapWarnM: [18, 5], trapWarnRingM: 2.2, trapWarnAlpha: 0.6, trapWarnColour: '#ffb3d9',
+  // impacts (an effect lands, a shield soaks it): a shockwave ring on the road and a soft glow that never
+  // spans more than impactGlowFrac of the view's height; the glow asks photosafe and skips when refused
+  impactRingM: [0.6, 6.5], impactRingS: 0.55, impactRingAlpha: 0.75, impactGlowM: 1.6, impactGlowFrac: 0.18, impactGlowAlpha: 0.55,
+  // only an impact this near and on screen asks photosafe for its glow (the shared budget is the player's)
+  impactAskM: 60,
+  impactGlowS: 0.32,
+  // item boxes: a glint sweeps the card every glintEveryS; taken, it bursts into confetti cards
+  glintEveryS: 2.4, glintS: 0.45, glintSizeM: 0.55, confetti: { high: 16, mid: 12, phone: 7 }, confettiSizeM: 0.22,
+  confettiSpeedMps: [3, 6.5], confettiGravityMps2: 7, confettiS: 1.1, confettiColours: ['#ff8fd0', '#ffffff', '#ffd36b', '#bff4ff', '#e6d6ff'],
+};
+
+/** The HUD item slot (render/items/slotfx.js): motes orbit the held bubble, a roll shuffles cards. */
+export const SLOT_LOOK = {
+  orbitN: 7, orbitPhoneN: 4, orbitHz: 0.18, orbitR: 0.47, orbitTilt: 0.35, orbitSizePx: [1.4, 3.2], orbitAlpha: 0.85,
+  shuffleS: 0.11, shuffleDx: 0.32, shuffleRotDeg: 9, shuffleScale: 0.9, gentleMul: 0.4,
 };
 
 /** The screen effects (render/screenfx.js). uv units are fractions of the view height unless named. */
@@ -76,4 +102,22 @@ export const SCREEN_LOOK = {
   meltRunUv: 0.06, meltDripUv: 0.1, meltStreak: 2.5, meltWobbleUv: 0.012, meltCols: 9, meltHz: 0.6, meltBlur: 0.75, meltSat: 1.15,
   // Shatter: a soft radial smear and a brief tilt
   shatterSmear: 0.06, shatterTiltRad: 0.07, shatterTiltHz: 1.4, shatterTaps: 6,
+  // ---- polish 2: each effect has a readable IN and OUT ----
+  // Melt: colour channels run apart down the view; drips fall from the top (columns, view heights per s, length)
+  meltChromaUv: 0.012, meltDripCols: 26, meltDripSpeed: 0.55, meltDripLen: 0.4, meltDripGloss: 0.22, meltDripTint: '#ff7cc8',
+  // Spiral: a full-view spiral of two bands that opens from the centre with the amount and twirls the view a little
+  spiralBands: ['#ff8fd0', '#7ce8e0'], spiralFullAlpha: 0.38, spiralOpenR: 1.25, spiralTwirlRad: 0.3, spiralHole: 0.05, spiralEdge: 0.1,
+  // Freeze: a frost front crystallises in from the edges (frontAt = where it stops at full), crystal glints on the front
+  frostFrontAt: 0.42, frostFrontSoft: 0.09, frostCells: 22, frostGlint: 0.35,
+  // Shatter: cracks grow out from the middle (crackS), then the shards slide apart (slideUv) and settle on the OUT;
+  // shards are cells in log-polar space (spokes round the middle, rings per e-fold of radius); seam and the gap it
+  // opens as the shards part in view heights
+  shatterSpokes: 9, shatterRings: 1.7, shatterCrackS: 0.28, shatterSlideS: 0.35, shatterSlideUv: 0.03, shatterCrackW: 0.004,
+  shatterGapW: 0.006, shatterCrackDark: 0.45,
+  // Blackout: a soft rim on the closing iris
+  irisRimPow: 6, irisRimColour: '#ff8fd0', irisRimAlpha: 0.22,
+  // Pink: the wash closes in from the edges round a heart (heart size at no amount, at full)
+  pinkHeartR: [1.6, 0.55], pinkHeartSoft: 0.22, pinkEdgeTint: '#ff5cbf', pinkEdgeAlpha: 0.4, pinkRimW: 0.05, pinkRimAlpha: 0.3,
+  // Brain Drain: the grey edge creeps inward by this much of the view as the amount rises
+  drainCreep: 0.35,
 };
