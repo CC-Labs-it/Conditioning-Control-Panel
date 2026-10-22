@@ -18,13 +18,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// PORTED from ConditioningControlPanel/Controls/EmiDock.xaml.cs. Deviations:
     ///  - <c>App.EmiDesk</c> is the head's <c>EmiDeskService.Instance</c> (Toggle, OutChanged,
     ///    AvatarMuted). The mini face mirrors the widget's <c>FaceChanged</c> feed while she is out
-    ///    (WPF binds EmiFace.Face), using the adapted ink-box renderer.
-    ///    KnockRequested is not ported yet (ponytail: needs EmiKnockMachine/EmiKnockWorld from
-    ///    ConditioningControlPanel/Services/EmiDesk/EmiKnock.cs + TryKnock), so <see cref="StartKnock"/>
-    ///    stays public and nothing calls it.
+    ///    (WPF binds EmiFace.Face/Small/Flat), using the adapted ink-box renderer.
+    ///  - No KnockRequested subscription: WPF still subscribes, but nothing raises it any more -
+    ///    its only caller, MainWindow.QueueEmiKnock, lost its last call site when the first-show
+    ///    replaced the knock (commit 1df40c54e). <see cref="StartKnock"/> stays public for a future
+    ///    caller and is what WPF's handler would run.
     ///  - The four WPF keyframe timelines become one Avalonia <see cref="Animation"/> on the ring
-    ///    (stroke colour, thickness) plus one on a sibling glow Border. Both run three times and stop.
-    ///    ponytail: glow blur stays 16px while opacity swells, avoiding an animated Effect.
+    ///    (stroke colour, thickness) plus one on a sibling glow Border (opacity and BoxShadow blur
+    ///    0..16, WPF's DropShadowEffect Opacity/BlurRadius). Both run three times and stop.
     ///  - The frozen-brush guard is gone: Avalonia brushes do not freeze.
     /// </summary>
     public partial class EmiDock : UserControl
@@ -89,10 +90,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _faceSource = desk;
                 if (desk != null) desk.FaceChanged += OnFaceChanged;
             }
-            _miniFace.Face = desk?.Face ?? RestFace;
+            Mirror();
         }
 
-        private void OnFaceChanged(object? sender, string face) => _miniFace.Face = face;
+        private void OnFaceChanged(object? sender, string face) => Mirror();
+
+        /// <summary>WPF binds Face, Small and Flat; resting is <c>Draw(RestFace)</c>, which clears both flags.</summary>
+        private void Mirror()
+        {
+            var desk = _faceSource;
+            _miniFace.Small = desk?.FaceSmall ?? false;
+            _miniFace.Flat = desk?.FaceFlat ?? false;
+            _miniFace.Face = desk?.Face ?? RestFace;
+        }
 
         /// <summary>EmiChains.RestFace.</summary>
         private const string RestFace = "0_0";
@@ -148,10 +158,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 ring.Children.Add(Frame(1.00, new Setter(Shape.StrokeProperty, new SolidColorBrush(RestPink)), new Setter(Shape.StrokeThicknessProperty, RestThickness)));
 
                 var glowAnim = new Animation { Duration = span, IterationCount = repeat };
-                glowAnim.Children.Add(Frame(0.00, new Setter(OpacityProperty, 0.0)));
-                glowAnim.Children.Add(Frame(0.18, new Setter(OpacityProperty, 0.95)));
-                glowAnim.Children.Add(Frame(0.55, new Setter(OpacityProperty, 0.0)));
-                glowAnim.Children.Add(Frame(1.00, new Setter(OpacityProperty, 0.0)));
+                glowAnim.Children.Add(Frame(0.00, new Setter(OpacityProperty, 0.0), new Setter(Border.BoxShadowProperty, Glow(0))));
+                glowAnim.Children.Add(Frame(0.18, new Setter(OpacityProperty, 0.95), new Setter(Border.BoxShadowProperty, Glow(16))));
+                glowAnim.Children.Add(Frame(0.55, new Setter(OpacityProperty, 0.0), new Setter(Border.BoxShadowProperty, Glow(0))));
+                glowAnim.Children.Add(Frame(1.00, new Setter(OpacityProperty, 0.0), new Setter(Border.BoxShadowProperty, Glow(0))));
 
                 // ONE of the two carries the tidy-up: its task completes once the whole repeat
                 // count is spent, and StopKnock is idempotent, so a click landing mid-pulse and
@@ -170,6 +180,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 Log.Warning(ex, "[EmiDesk] dock chip knock failed to start");
             }
         }
+
+        /// <summary>WPF's DropShadowEffect (depth 0, #FF69B4) at <paramref name="blur"/>.</summary>
+        internal static BoxShadows Glow(double blur) =>
+            new(new BoxShadow { Blur = blur, Color = RestPink });
 
         private static KeyFrame Frame(double cue, params Setter[] setters)
         {
@@ -194,6 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _ring.Stroke = new SolidColorBrush(RestPink);
                 _ring.StrokeThickness = RestThickness;
                 _glow.Opacity = 0;
+                _glow.BoxShadow = Glow(0);
             }
             catch (Exception ex)
             {

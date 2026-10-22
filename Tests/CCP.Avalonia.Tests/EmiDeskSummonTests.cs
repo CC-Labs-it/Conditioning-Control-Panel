@@ -233,11 +233,22 @@ public sealed class EmiDeskSummonTests
             Assert.True(svc.IsOut);
             svc.Window!.DrawFace(">_<");
             Assert.Equal(">_<", mini.Face);
+            // WPF binds Small/Flat too (EmiDock.xaml.cs:150-156), and the glass is an EmiFace.
+            svc.Window!.DrawFace(":)", small: true, flat: true);
+            var glass = svc.Window!.FindControl<EmiFace>("FaceView")!;
+            Assert.True(glass.Small && glass.Flat);
+            Assert.Equal(":)", mini.Face);
+            Assert.True(mini.Small);
+            Assert.True(mini.Flat);
+            svc.Window!.DrawFace(":)");
+            Assert.False(mini.Small || mini.Flat);
+            svc.Window!.DrawFace("...", small: true);
 
             svc.Dismiss();
             await Pump(2000);
             Assert.False(svc.IsOut);
             Assert.Equal("0_0", mini.Face);
+            Assert.False(mini.Small); // resting clears the mirrored flags
             svc.Window!.DrawFace("^_^");
             Assert.Equal("0_0", mini.Face);
         }
