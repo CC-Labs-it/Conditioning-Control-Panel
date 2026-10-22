@@ -1200,3 +1200,19 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-13: push-triggered port workflows skip cloud-* and gate-* branches (avalonia-port/ci-skip-cloud)
+- Question: the GitHub Free plan shares 20 concurrent jobs between rgate (build.yml dispatched on `avalonia-port/gate-*`),
+  PR CI and push-triggered workflows. Each push of a throwaway `avalonia-port/cloud-*` (Claude cloud session) branch
+  also starts distro-check, reference-render (3 jobs) and snapshot-lock, ~5 jobs nobody reads. rgate's `gate-*` snapshot
+  commits already carry `[skip ci]`, so for them the exclusion is only a second safeguard.
+  Should those workflows keep running on them?
+- Options: (A) keep `branches: ['avalonia-port/**']`; (B) exclude both prefixes with negative patterns in the same list;
+  (C) drop the push trigger and run them only by hand.
+- Choice: B: `['avalonia-port/**', '!avalonia-port/cloud-**', '!avalonia-port/gate-**']` in distro-check.yml,
+  reference-render.yml and snapshot-lock.yml. `workflow_dispatch` stays. Cloud branches are reviewed locally and re-pushed
+  as normal `avalonia-port/<slug>` PR branches, which still get the full push CI. rgate only dispatches build.yml
+  (`gh workflow run build.yml --ref avalonia-port/gate-...`) and never waits on these push runs.
+- Constraint: `cloud-` and `gate-` are reserved prefixes. A real lane slug must not start with either, or its pushes
+  silently lose distro-check, reference-render and snapshot-lock.
+- Advised: main session.
