@@ -36,7 +36,7 @@ function clearDrift(st) { st[S.driftDir] = 0; st[S.driftStage] = 0; st[S.driftCh
 export function driftYaw(st, steer, feel, gripYaw) {
   const dir = st[S.driftDir];
   const tight = lerp(feel.get('drift.tightMin'), feel.get('drift.tightMax'), (clamp(steer * dir, -1, 1) + 1) / 2);
-  return dir * feel.get('drift.yawMul') * gripYaw * tight;
+  return dir * feel.get('drift.yawMul') * gripYaw * tight;   // gripYaw here = the uncalmed base law (sim/steer.js)
 }
 
 /** One tick of a running drift: release, cancels, charge and tier steps. */

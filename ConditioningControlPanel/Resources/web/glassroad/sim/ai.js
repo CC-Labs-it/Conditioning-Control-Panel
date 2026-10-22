@@ -15,6 +15,9 @@ import { clamp, lerp, wrap, damp } from '../core/math.js';
 import { applyBoost } from './boost.js';
 import { gap } from './gaps.js';
 import { ITEMS } from './itemTable.js';
+import { bendSpeed, yawParams, calmOf } from './steer.js';
+
+const YP = {};                       // steering law numbers, read once per bot per tick
 
 // feel gap: AI numbers feel.json does not carry yet (read through feel first)
 const GAPS = {
@@ -134,14 +137,6 @@ export function createAi(track, feel, { seed = 1 } = {}) {
   }
   const LIM = { lo: 0, hi: 0 };
 
-  /** Fastest speed (m/s) the kart can take a bend of k deg/m with ymax rad/s of yaw (speed ref ref). */
-  function bendSpeed(kDeg, ymax, ref) {
-    const k = Math.abs(kDeg) * Math.PI / 180;
-    if (k < 1e-4) return Infinity;
-    const a = k / ref;                                // k v (1 + v / ref) = ymax
-    return (-k + Math.sqrt(k * k + 4 * a * ymax)) / (2 * a);
-  }
-
   function drive(r, ctx, dt, out) {
     out.steer = 0; out.throttle = 0; out.brake = 0; out.hop = false; out.hopPressed = false; out.pause = false; out.item = false; out.back = false;
     const race = ctx && ctx.race, st = r.st, b = bot(r.i);
@@ -217,7 +212,11 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     const rx = 1 - 2 * (qy * qy + qz * qz), ry = 2 * (qx * qy + qw * qz), rz = 2 * (qx * qz - qw * qy);          // +X
     const fx = -(2 * (qx * qz + qw * qy)), fy = -(2 * (qy * qz - qw * qx)), fz = -(1 - 2 * (qx * qx + qy * qy)); // -Z
     const x = tx * rx + ty * ry + tz * rz, z = tx * fx + ty * fy + tz * fz;
-    let steer = Math.atan2(x, Math.max(z, 0.1)) * feel.get('ai.steerGain');
+    // the calm softens the wheel at speed, so the bot pushes the stick further for the same yaw: its
+    // pursuit loop keeps the Phase A response and only the full-lock limit is new (sim/steer.js)
+    yawParams(r.feel, YP);
+    const soft = Math.max(0.2, calmOf(speed, YP) * YP.user);
+    let steer = Math.atan2(x, Math.max(z, 0.1)) * feel.get('ai.steerGain') / soft;
     if (blind > 0) steer += blind * feel.get('ai.blindSteerNoise') * (0.6 * Math.sin(1.7 * b.t + b.n1) + 0.4 * Math.sin(3.1 * b.t + b.n2));
     out.steer = clamp(steer, -1, 1);
     // heading against the road here (+ = nose right of travel) and sideways speed across it
@@ -239,9 +238,10 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     // throttle and brakes for the bend ahead (lift, then brake if well over)
     let vmax = Infinity;
     const brakeLook = Math.max(la, speed * 1.2), coast = feel.get('engine.coastMps2');
-    const ymax = r.feel.rad('steer.yawRateDegps') * fg(feel, 'ai.cornerMargin'), yref = r.feel.get('steer.yawSpeedRefMps');
+    // of the calmed grip law (sim/steer.js), the kart's own feel; a Freeze (mods.steerMul) is planned for too
+    const share = fg(feel, 'ai.cornerMargin') * clamp(r.mods ? r.mods.steerMul : 1, 0.2, 1);
     for (let d = 0; d <= brakeLook; d += STEP * 2) {
-      const v = bendSpeed(bend[at(s + d)], ymax, yref);
+      const v = bendSpeed(bend[at(s + d)], YP, share);
       vmax = Math.min(vmax, Math.sqrt(v * v + 2 * coast * d));
     }
     out.throttle = 1;

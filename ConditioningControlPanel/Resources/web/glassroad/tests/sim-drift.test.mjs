@@ -50,7 +50,7 @@ test('hop starts a drift into the turn above min speed, curves into it, cancels 
   run(st, tr, feel, a, 1, rec);
   assert.deepEqual(rec.first('hop').payload.speed > 19, true);
   assert.deepEqual(rec.first('drift-start').payload, { dir: -1 });
-  assert.equal(rec.first('land').payload.tier, 1, 'a hop lands light');
+  assert.equal(rec.first('land').payload.tier, 0, 'a plain hop lands soft: no landing thud on every drift (polish 2)');
   assert.ok(st[S.yawRate] < 0, 'curving left');
   assert.equal(st[S.driftDir], -1, 'drift kept through the landing');
   // under min speed: no drift from a hop, and a running drift cancels as slow

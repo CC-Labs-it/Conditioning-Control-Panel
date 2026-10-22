@@ -2,7 +2,7 @@
  *
  * Two layers: an engine value (engineV) that ramps through five equal bands of 0..top, and a forward
  * velocity that chases it with a linear drag. Steering slews toward the stick, then yaws by
- * steer * rate / (1 + v / ref). Lateral velocity bleeds into the heading with a grip time constant
+ * steer * rate / (1 + v / ref) x the speed calm x steer.userMul (sim/steer.js). Lateral velocity bleeds into the heading with a grip time constant
  * (a longer one while drifting); the angle between them is the slip that costs engineV. "Up" is the
  * road normal from the track query, so banked and magnet surfaces need nothing special on the ground:
  * the kart is slerped to that normal, and on a magnet surface airborne gravity is minus it.
@@ -17,6 +17,7 @@ import { applyBoost, boostFloor, endBoost } from './boost.js';
 import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js';
 import { hop, gravityMps2 } from './hop.js';
 import { takeoff, land } from './air.js';
+import { baseYaw, gripYaw } from './steer.js';
 
 export { applyBoost };
 
@@ -60,8 +61,8 @@ export function step(st, a, track, feel, dt, ev) {
   if (wasGround) v3norm(U, v3lerp(U, U, qa.normal, 1 - Math.exp(-dt / gap(feel, 'kart.alignTcS'))));
   v3norm(F, v3reject(F, F, U));
   const fwd0 = v3dot(V, F);
-  const gripYaw = feel.rad('steer.yawRateDegps') / (1 + Math.abs(fwd0) / feel.get('steer.yawSpeedRefMps'));
-  let yaw = st[S.driftDir] ? driftYaw(st, steer, feel, gripYaw) : steer * gripYaw * (fwd0 < 0 ? -1 : 1);
+  // grip: the calmed law (sim/steer.js); a drift keeps the uncalmed base, so it stays the strong turn
+  let yaw = st[S.driftDir] ? driftYaw(st, steer, feel, baseYaw(fwd0, feel)) : steer * gripYaw(fwd0, feel) * (fwd0 < 0 ? -1 : 1);
   if (stalled) yaw = 0;
   st[S.yawRate] = yaw;
   qrotate(F, qaxis(QY, U, -yaw * dt), F);         // + yaw turns right: clockwise seen from above

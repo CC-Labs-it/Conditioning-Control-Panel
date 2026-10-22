@@ -8,16 +8,25 @@
     "coastMps2": 4
   },
   "steer": {
-    "slewCentreS": 0.06,
-    "slewFullS": 0.14,
+    "slewCentreS": 0.09,
+    "slewFullS": 0.18,
     "yawRateDegps": 137.5,
     "yawSpeedRefMps": 25,
+    "calmFromMps": 8,
+    "cruiseMps": 20,
+    "cruiseYawMul": 0.67,
+    "topCalmMps": 30,
+    "topYawMul": 0.64,
+    "boostCalmMps": 39,
+    "boostYawMul": 0.5,
+    "userMul": 1,
     "slipCostGripPerDegS": 0.009,
     "slipCostDriftPerDegS": 0.0035
   },
+  "input": { "keyStart": 0.35, "keyRampS": 0.3, "stickExpo": 0.35, "touchExpo": 0.2 },
   "offroad": { "hazeThrustLoss": 0.35 },
   "wall": { "normalKeep": 0.4, "engineLoss": 0.12, "cueFullDvMps": 12, "shakeFrac": 0.5 },
-  "hop": { "upMps": 5.5, "gravityHopMps2": 18, "gravityMps2": 28, "gravityEaseS": 0.3 },
+  "hop": { "upMps": 4.8, "gravityHopMps2": 26, "gravityMps2": 28, "gravityEaseS": 0.25 },
   "drift": {
     "minSpeedMps": 8,
     "tightMin": 0.6,
@@ -42,11 +51,11 @@
   },
   "pad": { "amount": 0.2, "holdS": 1.0 },
   "air": {
-    "lightS": 0.25,
+    "lightS": 0.35,
     "mediumS": 0.6,
     "heavyS": 1.0,
     "squash": [0.04, 0.08, 0.12],
-    "bounceM": [0, 0.15, 0.3],
+    "bounceM": [0, 0.1, 0.2],
     "keepDriftOnLand": true
   },
   "drop": { "edgeGraceM": 1.2, "edgeGraceS": 0.8 },
@@ -67,13 +76,14 @@
     "followHTcS": 0.08,
     "followVTcS": 0.25,
     "followHopTcS": 0.6,
+    "yawFollowTcS": 0.16,
     "lowHopMps": 8,
     "yawCapDegps": 55,
     "yawCapFarDegps": 160,
     "yawFarGapDeg": 70,
-    "driftBiasDeg": 12,
-    "driftBiasOutDeg": 16,
-    "driftBiasEaseS": 0.15
+    "driftBiasDeg": 8,
+    "driftBiasOutDeg": 11,
+    "driftBiasEaseS": 0.3
   },
   "fov": { "baseVDeg": 60, "boostKickDeg": 8, "kickInS": 0.12, "kickOutS": 0.45 },
   "shake": { "hitAmpM": 0.12, "boostAmpM": 0.35, "periodS": 0.1, "repeatMul": 0.85, "stopBelowM": 0.05 },
@@ -143,7 +153,7 @@
     "flashCover": 0.4,
     "spiralSteerAmp": 0.35,
     "spiralSteerHz": 0.4,
-    "freezeSteerMul": 0.4,
+    "freezeSteerMul": 0.55,
     "meltGripMul": 6,
     "meltSlideMul": 2.5,
     "shatterSpeedKeep": 0.3,
@@ -212,7 +222,8 @@
     "itemDropChance": 0.5,
     "itemRangeM": 60,
     "resultsWaitS": 10,
-    "audibleKarts": 3
+    "audibleKarts": 3,
+    "cornerMargin": 0.8
   },
   "contact": {
     "radiusM": 0.8,

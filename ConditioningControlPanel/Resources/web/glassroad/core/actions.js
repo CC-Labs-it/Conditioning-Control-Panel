@@ -8,7 +8,14 @@
  * and `back` (held). Without the option the Phase A shape is unchanged.
  * Polish 1: a source may set `padLost` (the gamepad in use left); it reads as a pause edge in `pause`
  * and is never copied out, so a pause card's resume (the pad's own Start) cannot see it.
+ * Polish 2: a source that tags `steerKind` ('key' | 'stick' | 'touch') gets its steer shaped by the
+ * response curve (input/steerCurve.js: a key ramp that builds, expo on stick and touch) before the
+ * merge; `steerKind` is never copied out. createActionMap(sources, { feel }) reads the curve numbers
+ * from feel.json `input.*` (slice defaults without a feel); sample({ nowS }) lets a test drive time.
  */
+import { shapeSteer, createKeyRamp } from '../input/steerCurve.js';
+
+const wallS = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) / 1000;
 
 /** @returns {{steer: number, throttle: number, brake: number, hop: boolean, hopPressed: boolean, pause: boolean}} */
 export function createActions() {
@@ -24,19 +31,27 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 /**
  * @param {{poll(into: object): void, dispose(): void}[]} sources null entries are skipped
- * @param {{items?: boolean}} [opts] items: also merge `item` (edge) and `back` (held)
- * @returns {{sample(): object, dispose(): void}} sample() runs once per frame and returns the same object
+ * @param {{items?: boolean, feel?: object}} [opts] items: also merge `item` (edge) and `back` (held);
+ *   feel: the curve numbers (`input.*`)
+ * @returns {{sample(opts?: {nowS?: number}): object, dispose(): void}} sample() runs once per frame and returns the same object
  */
-export function createActionMap(sources = [], { items = false } = {}) {
+export function createActionMap(sources = [], { items = false, feel = null } = {}) {
   const list = sources.filter(Boolean);
+  const ramps = list.map(() => createKeyRamp());
   const out = zero(createActions(), items), tmp = zero(createActions(), items);
-  function sample() {
+  let lastS = -1;
+  function sample(opts) {
+    const nowS = opts && typeof opts.nowS === 'number' ? opts.nowS : wallS();
+    const dtS = lastS < 0 ? 0 : Math.min(0.1, Math.max(0, nowS - lastS));   // a long gap (pause, tab away) never jumps the ramp
+    lastS = nowS;
     zero(out, items);
-    for (const src of list) {
+    for (let i = 0; i < list.length; i++) {
+      const src = list[i];
       zero(tmp, items);
-      tmp.padLost = false;
+      tmp.padLost = false; tmp.steerKind = null;
       try { src.poll(tmp); } catch (e) { continue; }
       if (tmp.padLost) out.pause = true;               // the pad in use left mid-race: pause, never resume
+      if (tmp.steerKind) tmp.steer = shapeSteer(tmp.steer, tmp.steerKind, dtS, feel, ramps[i]);
       if (Math.abs(tmp.steer) > Math.abs(out.steer)) out.steer = tmp.steer;
       out.throttle = Math.max(out.throttle, tmp.throttle);
       out.brake = Math.max(out.brake, tmp.brake);

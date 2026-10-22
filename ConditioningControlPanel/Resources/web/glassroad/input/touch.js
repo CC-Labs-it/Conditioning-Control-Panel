@@ -124,6 +124,7 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
 
   function poll(into) {
     into.steer = clamp(steer, -1, 1);
+    into.steerKind = 'touch';                       // the action map applies the expo (input/steerCurve.js)
     into.throttle = touched ? 1 : 0;
     into.hop = actId >= 0;
     into.hopPressed = hopEdge;

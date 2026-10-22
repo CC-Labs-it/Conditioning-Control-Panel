@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { S, BOOST } from '../sim/state.js';
 import { step, applyBoost, spawn } from '../sim/kart.js';
 import { createState } from '../sim/state.js';
+import { gripYaw } from '../sim/steer.js';
 import { qrotate, v3dot, qlook } from '../core/math.js';
 import { DT, makeFeel, fakeTrack, place, recorder, acts, run } from './sim-fake.mjs';
 
@@ -52,7 +53,8 @@ test('steering: yaw law, right is right', () => {
   const feel = makeFeel(), tr = fakeTrack(), rec = recorder();
   const st = place(tr, { speed: 25 });
   run(st, tr, feel, acts({ throttle: 1, steer: 1 }), 0.5, rec);
-  const want = feel.rad('steer.yawRateDegps') / (1 + Math.abs(25) / feel.get('steer.yawSpeedRefMps'));
+  // the calmed grip law (sim/steer.js) at the kart's own speed
+  const want = gripYaw(st[S.speedPct] * feel.get('speed.topMps'), feel);
   assert.ok(st[S.yawRate] > 0 && Math.abs(st[S.yawRate] - want) < 0.15 * want, 'yaw ' + st[S.yawRate] + ' vs ' + want);
   assert.ok(st[S.lateral] > 0.3, 'moved right ' + st[S.lateral]);
 });

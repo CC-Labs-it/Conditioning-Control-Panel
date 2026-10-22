@@ -130,6 +130,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1 } = {}) {
       const pace = r.meta.isBot ? base[Math.min(r.i - 1, base.length - 1)] * (r.rubber || 1) : 1;
       o['kart.gripTcS'] = gap(feel, 'kart.gripTcS') * m.gripMul;
       o['drift.slideTcS'] = gap(feel, 'drift.slideTcS') * m.slideMul;
+      if (r.meta.isBot) o['steer.userMul'] = 1;        // steering sensitivity is the player's option only
       o['speed.topMps'] = feel.get('speed.topMps') * m.capMul * pace;
       if (r.assist) o['gentle.on'] = true; else delete o['gentle.on'];
 

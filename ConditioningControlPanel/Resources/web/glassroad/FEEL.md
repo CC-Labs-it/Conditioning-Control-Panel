@@ -18,12 +18,34 @@ default so the code has no hidden number.
 - `engine.coastMps2` 4: engineV loss per second with no throttle (added).
 
 ## steer
-- `steer.slewCentreS` 0.06: stick slew time near centre.
-- `steer.slewFullS` 0.14: stick slew time at full lock.
-- `steer.yawRateDegps` 137.5: yaw rate at full lock and zero speed (2.4 rad/s); `yaw = steer * rate / (1 + v / yawSpeedRefMps)`.
-- `steer.yawSpeedRefMps` 25: speed that halves the yaw rate.
+Polish 2 (owner: "the steering is too strong"): grip yaw = `steer * rate / (1 + v / yawSpeedRefMps) * calm(v) * userMul`
+(`sim/steer.js`). Full-lock grip yaw, before / after: 8 m/s 104 / 104 deg/s, 20 m/s 76 / 51 (-33%), 30 m/s (top)
+62.5 / 40 (-36%), 39 m/s (boosted top) 54 / 27 (-50%). Drift yaw keeps the uncalmed base law, so a drift is the strong
+turn. -50% already at 30 m/s cost 5.8% lap time on Threshold (the 280 m banked sweeper at 1.2 deg/m); -36% costs 2.8%.
+- `steer.slewCentreS` 0.09: stick slew time near centre (0.06 before polish 2: a tap is a small correction now).
+- `steer.slewFullS` 0.18: stick slew time at full lock (0.14 before).
+- `steer.yawRateDegps` 137.5: yaw rate at full lock and zero speed (2.4 rad/s), before the calm.
+- `steer.yawSpeedRefMps` 25: speed that halves the base yaw rate.
+- `steer.calmFromMps` 8: below this the base law is untouched (nimble when slow).
+- `steer.cruiseMps` 20: cruise point of the calm ...
+- `steer.cruiseYawMul` 0.67: ... grip yaw multiplier there (smoothstep from 1 at calmFromMps).
+- `steer.topCalmMps` 30: top-speed point of the calm ...
+- `steer.topYawMul` 0.64: ... grip yaw multiplier there.
+- `steer.boostCalmMps` 39: boosted-top point of the calm (speed.topMps x speed.maxPct) ...
+- `steer.boostYawMul` 0.5: ... grip yaw multiplier there and above.
+- `steer.userMul` 1: steering sensitivity, the player's Options `steerSens` (0.6 to 1.4 in 0.1 steps). The integrator
+  wires it with `feel.set('steer.userMul', opts.steerSens)`. Scales grip yaw only (not drift yaw); bots hold it at 1
+  (`sim/racers.js` overlay), and the bots' corner planning reads the same calmed law.
 - `steer.slipCostGripPerDegS` 0.009: engineV fraction lost per degree of slip per second in a grip turn.
 - `steer.slipCostDriftPerDegS` 0.0035: the same while drifting.
+
+## input (human steering response, `input/steerCurve.js`; bots never pass here)
+Each source tags its steer (`steerKind` key, stick or touch) and the action map shapes it before the merge. Pass the
+feel to `createActionMap(sources, { items: true, feel })` for live edits; without it the same numbers are the defaults.
+- `input.keyStart` 0.35: a key press starts at this share of full lock ...
+- `input.keyRampS` 0.3: ... and builds to full over this long held (a release or a change of side starts over).
+- `input.stickExpo` 0.35: gamepad stick expo, `(1 - e) x + e x^3`: fine near centre, full at the edge.
+- `input.touchExpo` 0.2: the same for the touch steer drag.
 
 ## offroad
 - `offroad.hazeThrustLoss` 0.35: thrust lost on `haze` surface; skipped during any boost.
@@ -35,10 +57,11 @@ default so the code has no hidden number.
 - `wall.shakeFrac` 0.5: share of cueFullDvMps that shakes the camera (added).
 
 ## hop
-- `hop.upMps` 5.5: hop up speed.
-- `hop.gravityHopMps2` 18: gravity right after a hop.
-- `hop.gravityMps2` 28: rest gravity (every other airborne moment).
-- `hop.gravityEaseS` 0.3: time to ease from hop gravity to rest gravity.
+Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every drift); now 0.40 m, 0.33 s, lands soft.
+- `hop.upMps` 4.8: hop up speed (5.5 before).
+- `hop.gravityHopMps2` 26: gravity right after a hop (18 before: the hang at the apex).
+- `hop.gravityMps2` 28: rest gravity (every other airborne moment; unchanged so jump arcs stay the same).
+- `hop.gravityEaseS` 0.25: time to ease from hop gravity to rest gravity (0.3 before).
 
 ## drift
 - `drift.minSpeedMps` 8: a hop starts a drift only above this speed; dropping under it cancels.
@@ -67,11 +90,11 @@ default so the code has no hidden number.
 - `pad.holdS` 1.0: pad hold, same envelope as drift boosts.
 
 ## air (landing tiers by airtime)
-- `air.lightS` 0.25: under this, nothing.
+- `air.lightS` 0.35: under this, nothing (0.25 before; a plain hop, 0.33 s, now lands soft).
 - `air.mediumS` 0.6: light tier up to here (squash, dust).
 - `air.heavyS` 1.0: medium tier up to here (squash, bounce, cue); above is heavy (squash, bounce, shake, loud cue).
 - `air.squash` [0.04, 0.08, 0.12]: squash per tier light, medium, heavy.
-- `air.bounceM` [0, 0.15, 0.3]: bounce height per tier.
+- `air.bounceM` [0, 0.1, 0.2]: bounce height per tier ([0, 0.15, 0.3] before: the jump landing was a second hop).
 - `air.keepDriftOnLand` true: landing with drift held keeps drift and charge.
 
 ## drop
@@ -94,14 +117,15 @@ default so the code has no hidden number.
 - `camera.lookUpM` 0.6: look point above kart height.
 - `camera.followHTcS` 0.08: horizontal follow time constant.
 - `camera.followVTcS` 0.25: vertical follow time constant.
-- `camera.followHopTcS` 0.6: both follow constants during a low-speed hop.
+- `camera.followHopTcS` 0.6: both follow constants (and the heading follow) during a low-speed hop.
+- `camera.yawFollowTcS` 0.16: heading follow time constant (was followHTcS 0.08): a steering correction turns the kart on screen first and the world swings after, never exaggerating the steering. The horizon stays level (no roll).
 - `camera.lowHopMps` 8: a hop under this speed is a low-speed hop (added).
 - `camera.yawCapDegps` 55: camera yaw rate cap.
 - `camera.yawCapFarDegps` 160: cap when the yaw gap exceeds yawFarGapDeg.
 - `camera.yawFarGapDeg` 70: gap that switches to the far cap.
-- `camera.driftBiasDeg` 12: yaw bias into a drift.
-- `camera.driftBiasOutDeg` 16: bias on the outside line.
-- `camera.driftBiasEaseS` 0.15: bias ease time. Camera yaw is frozen during a stall.
+- `camera.driftBiasDeg` 8: yaw bias into a drift (12 before polish 2: the lateral swing was too big).
+- `camera.driftBiasOutDeg` 11: bias on the outside line (16 before).
+- `camera.driftBiasEaseS` 0.3: bias ease time (0.15 before). Camera yaw is frozen during a stall.
 
 ## fov
 - `fov.baseVDeg` 60: vertical fov at 16:9, through the lifted viewport law for other aspects.
@@ -202,7 +226,7 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.flashCover` 0.4: share of the screen a Flash picture covers.
 - `items.spiralSteerAmp` 0.35: Spiral steering drift, stick share added at the peak.
 - `items.spiralSteerHz` 0.4: Spiral steering drift rate (one slow sway per 1 / Hz s).
-- `items.freezeSteerMul` 0.4: Freeze steering share.
+- `items.freezeSteerMul` 0.55: Freeze steering share (0.4 before polish 2; raised so Freeze on the calmed steer law bites about as hard at top speed as before).
 - `items.meltGripMul` 6: Melt multiplies the grip bleed time (kart.gripTcS) by this: ice.
 - `items.meltSlideMul` 2.5: Melt multiplies the drift slide time (drift.slideTcS) by this.
 - `items.shatterSpeedKeep` 0.3: Shatter cuts engineV to this share of what it was.
@@ -272,6 +296,7 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `ai.itemRangeM` 60: a bot throws only when its target is within this.
 - `ai.resultsWaitS` 10: after the player finishes, results wait at most this for the bots (the rest are placed by distance).
 - `ai.audibleKarts` 3: the nearest this many bot engines are heard.
+- `ai.cornerMargin` 0.8: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
 
 ## contact (B1 kart contact and slipstream, sim/contact.js)
 - `contact.radiusM` 0.8: kart contact radius (two karts touch under 2x this).

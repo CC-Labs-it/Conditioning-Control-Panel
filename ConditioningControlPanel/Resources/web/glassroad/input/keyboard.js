@@ -46,6 +46,7 @@ export function createKeyboard({ target = window } = {}) {
     into.steer = (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
     into.throttle = held('throttle') ? 1 : 0;
     into.brake = held('brake') ? 1 : 0;
+    into.steerKind = 'key';                         // the action map ramps it (input/steerCurve.js)
     into.hop = held('hop');
     into.hopPressed = hopEdge;
     into.pause = pauseEdge;

@@ -59,6 +59,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     readPad(g, profileFor(g, kept), seen.get(id), r);
     const ax = r.x, ay = r.y;
     into.steer = Math.abs(ax) > DEADZONE ? Math.sign(ax) * Math.min(1, (Math.abs(ax) - DEADZONE) / (1 - DEADZONE)) : 0;
+    into.steerKind = 'stick';                       // the action map applies the expo (input/steerCurve.js)
     into.throttle = r.rt;
     into.brake = r.lt;
     into.hop = r.south;

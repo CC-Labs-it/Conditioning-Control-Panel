@@ -90,7 +90,10 @@ export function createCamRig(feel) {
     if (!(kart[S.stalled] > 0)) {
       const gap = angleDiff(rig.yaw, ky + rig.bias);
       const cap = rad(Math.abs(gap) > rad(c('yawFarGapDeg')) ? c('yawCapFarDegps') : c('yawCapDegps')) * dt;
-      rig.yaw += clamp(gap * (1 - Math.exp(-dt / Math.max(1e-4, tcH))), -cap, cap);
+      // heading follow has its own, softer time constant than the position follow: a steering
+      // correction turns the kart on screen first, the world swings after it (never exaggerated)
+      const tcY = lowHop ? tcH : c('yawFollowTcS');
+      rig.yaw += clamp(gap * (1 - Math.exp(-dt / Math.max(1e-4, tcY))), -cap, cap);
     }
     rig.pitch = damp(rig.pitch, Math.asin(clamp(f[1], -1, 1)), tcV, dt);
     F[0] = damp(F[0] + kart[S.velX] * dt, px, tcH, dt);
