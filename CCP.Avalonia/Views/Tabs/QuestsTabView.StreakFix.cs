@@ -8,6 +8,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -109,10 +110,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var ring in _fixRings) ring.Opacity = opacity;
         }
 
-        private void ShowFixStatus(string text, IBrush? colour = null)
+        private void ShowFixStatus(string text, IBrush? colour = null, IconKind? kind = null)
         {
             _fixStatusTimer?.Dispose();
             _fixStatusTimer = null;
+            TxtFixStreakStatus.Kind = kind;
             TxtFixStreakStatus.Text = text;
             if (colour != null) TxtFixStreakStatus.SetValue(TextElement.ForegroundProperty, colour);
             TxtFixStreakStatus.IsVisible = true;
@@ -165,7 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 if (string.IsNullOrEmpty(s.UnifiedId))
                 {
-                    ShowFixStatus(Loc.Get("label_oopsie_insurance_requires_a_cloud_account_ple"), FixRed);
+                    ShowFixStatus(IconText.BareLoc("label_oopsie_insurance_requires_a_cloud_account_ple"), FixRed, IconKind.DismissCircle);
                     return;
                 }
 
@@ -173,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var (success, error, credits) = await SpendStreakFix(fixDate);
                 if (!success)
                 {
-                    ShowFixStatus($"❌ {error ?? Loc.Get("label_streak_fix_failed")}", FixRed);
+                    ShowFixStatus(error ?? Loc.Get("label_streak_fix_failed"), FixRed, IconKind.DismissCircle);
                     return;
                 }
 
@@ -186,7 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (stillFixing)
                 {
                     _isStreakFixMode = false;
-                    ShowFixStatus(Loc.GetF("label_streak_fixed_success", fixDate.ToString("MMMM d")), FixGreen);
+                    ShowFixStatus(IconText.BareLoc("label_streak_fixed_success", fixDate.ToString("MMMM d")), FixGreen, IconKind.CheckmarkCircle);
                 }
                 RefreshQuestUI();   // the stats tile and the button caption, not just the calendar
                 if (!stillFixing) return;
