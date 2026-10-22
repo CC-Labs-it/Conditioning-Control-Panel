@@ -8,8 +8,8 @@
  *      resume the sound eases back and the layers wait RETURN_MS.
  *   B  audio/sfx.js hush(): master to 0, held there through a volume change and
  *      a tab-visibility flip, back to the player's volume after.
- *   C  boot.js: an Escape on the pause card leaves (never resumes), leaving
- *      stays hushed, and the slow-turn spiral board drops while paused.
+ *   C  boot.js: Escape on the pause card resumes; the Leave button stays hushed,
+ *      and the slow-turn spiral board drops while paused.
  *   D  the one Escape the panel keeps as the pause pauses the game wherever it
  *      lands: with Options open, with the promotion picker up, or mid-drag
  *      (bug hunt 2026-09-29, CHESS-1).
@@ -149,8 +149,8 @@ function expect(cond, name) {
 /* ---- C: boot.js wiring ------------------------------------------------------------ */
 {
   const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
-  expect(/if \(pausedGame\) \{ postToHost\(\{ type: 'pbp:exit' \}\); return; \}/.test(boot), 'Escape on the pause card leaves, and never resumes');
-  expect(!/if \(pausedGame\) \{ setGamePaused\(false\)/.test(boot), 'no Escape path un-hushes on the way out');
+  expect(/if \(pausedGame\) \{ setGamePaused\(false\); return; \}/.test(boot), 'Escape on the pause card resumes through the hush');
+  expect(/else postToHost\(\{ type: 'pbp:exit' \}\);/.test(boot), 'the Leave button still exits without un-hushing');
   expect(/pauseHush\.set\(p\)/.test(boot), 'every pause and resume goes through the hush');
   expect(/menuOpen: \(\) => [^\n]*isPaused/.test(boot), 'the slow-turn spiral board drops while paused');
   expect(/menuOpen: \(\) => [^\n]*isPaused[^\n]*isReturning/.test(boot), 'and stays down while the other effects wait to come back');
