@@ -12,7 +12,8 @@ import { createShake } from './shake.js';
 import { FX_CUES } from './cues.js';
 
 const CHANNELS = ['bloom', 'band', 'push', 'fov', 'lines', 'bandSpeed', 'burst', 'squash', 'stretch',
-  'dust', 'edge', 'duck', 'tendril', 'rescue', 'white', 'flash', 'orbit', 'rumble', 'thud', 'pad'];
+  'dust', 'edge', 'duck', 'tendril', 'rescue', 'white', 'flash', 'orbit', 'rumble', 'thud', 'pad',
+  'wake'];   // B1: slipstream charge (speed lines at LOOK-free half strength)
 
 export function restState() {
   return {
@@ -21,6 +22,7 @@ export function restState() {
     dust: 0, padRing: 0, padGlow: 0, speedLines: 0, edgeGlow: 0, edgeSide: 0, rescueGlow: 0, tendril: 0,
     whiteFade: 0, flashLevel: 0, orbit: 0, duck: 0,
     rumble: 0, // added: gamepad rumble 0..1 for boot (zero under Gentle)
+    slipWake: 0, // B1: 0..1 while the player charges a slipstream (feeds speedLines at half)
   };
 }
 
@@ -113,7 +115,8 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     state.padGlow = clamp(ch.pad.v, 0, 1);
     // the one variable: speed past top speed draws the speed lines
     const pct = kart ? kart[S.speedPct] : 0, maxPct = feel.get('speed.maxPct');
-    state.speedLines = Math.max(ch.lines.v, clamp((pct - 1) / Math.max(maxPct - 1, 1e-3), 0, 1));
+    state.slipWake = clamp(ch.wake.v, 0, 1);
+    state.speedLines = Math.max(ch.lines.v, state.slipWake * 0.5, clamp((pct - 1) / Math.max(maxPct - 1, 1e-3), 0, 1));
     if (padT >= 0) { padT += dt; state.padRing = padT < padLife ? Math.max(padT / padLife, 1e-3) : 0; if (padT >= padLife) padT = -1; }
     const pm = state.paletteMix;
     if (pm.waitS > 0) pm.waitS = Math.max(0, pm.waitS - dt);   // the old palette lingers one beat

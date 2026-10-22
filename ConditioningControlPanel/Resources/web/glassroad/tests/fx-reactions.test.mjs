@@ -26,7 +26,10 @@ function rig({ gentle = false } = {}) {
 
 test('every CONTRACT event has exactly one fx registry entry and nothing else', () => {
   assert.equal(EVENTS.length, 25);
-  assert.deepEqual(Object.keys(FX_CUES).sort(), EVENTS.slice().sort());
+  // B1: the registry may also hold CONTRACT-B1 events (its section 4), nothing else
+  const b1 = readFileSync(new URL('../CONTRACT-B1.md', import.meta.url), 'utf8');
+  const B1 = [...b1.slice(b1.indexOf('## 4. Events')).matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]);
+  assert.deepEqual(Object.keys(FX_CUES).filter((k) => EVENTS.includes(k) || !B1.includes(k)).sort(), EVENTS.slice().sort());
   for (const k of Object.keys(FX_CUES)) assert.equal(typeof FX_CUES[k], 'function');
 });
 

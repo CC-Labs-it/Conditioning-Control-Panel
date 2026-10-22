@@ -49,11 +49,15 @@ export const FX_CUES = {
     fx.release('rumble', rise(fx));
   },
   // 4. boost fire: fov kick, speed lines, bands x boostBandMul; all ease back over the tail
-  'boost-start'(fx, { kind }) {
-    fx.hold('fov', fx.gentle.kick(fx.feel.get('fov.boostKickDeg')), fx.feel.get('fov.kickInS'));
-    fx.hold('lines', 1, fx.feel.get('boost.riseS'));
-    fx.hold('bandSpeed', fx.gentle.scroll(j(fx, 'boostBandMul') - 1), fx.feel.get('boost.riseS'));
-    if (kind !== 'pad') fx.shake.kick('boost');
+  // B1 grants: a pickup bubble or a slipstream kicks the fov in proportion to its size (vs a pad)
+  // and never shakes; Surge shakes like a drift boost
+  'boost-start'(fx, { kind, amount = 0 }) {
+    const small = kind === 'bubble' || kind === 'slip';
+    const size = small ? Math.min(1, Math.max(0.3, amount / fx.feel.get('pad.amount'))) : 1;
+    fx.hold('fov', fx.gentle.kick(fx.feel.get('fov.boostKickDeg') * size), fx.feel.get('fov.kickInS'));
+    fx.hold('lines', size, fx.feel.get('boost.riseS'));
+    fx.hold('bandSpeed', fx.gentle.scroll((j(fx, 'boostBandMul') - 1) * size), fx.feel.get('boost.riseS'));
+    if (kind !== 'pad' && !small) fx.shake.kick('boost');
   },
   'boost-end'(fx) {
     fx.release('fov', fx.feel.get('fov.kickOutS'));
@@ -124,6 +128,31 @@ export const FX_CUES = {
     const swell = j(fx, 'finishSwellS');
     if (fx.ask('flash')) fx.fire('flash', 1, swell, 0, swell);
     fx.hold('orbit', fx.gentle.scroll(1), swell);
+  },
+  // B1 (CONTRACT-B1 events). Positional sparks, rings and wobbles are drawn by render/scene.js from
+  // the same events; these are the player's camera and pad beats only.
+  'item-hit'(fx, { victim = -1, verdict }) {
+    if (victim !== 0) return;
+    if (verdict === 'hit') { fx.shake.kick('hit'); fx.fire('thud', fx.gentle.kick(rumbleOf(fx, 3)), 0, 0, j(fx, 'landGoneS') * 2); }
+    else if (verdict === 'glass' || verdict === 'golden') fx.fire('thud', fx.gentle.kick(rumbleOf(fx, 1)), 0, 0, j(fx, 'landGoneS'));
+  },
+  bump(fx, { a = -1, b = -1, dv = 0 }) {
+    if (a !== 0 && b !== 0) return;
+    const min = fx.feel.get('contact.cueMinDvMps');
+    if (dv < min) return;
+    if (dv >= 2 * min) fx.shake.kick('hit');
+    fx.fire('thud', fx.gentle.kick(rumbleOf(fx, dv >= 3 * min ? 2 : 1)), 0, 0, j(fx, 'landGoneS'));
+  },
+  // slipstream: a thin wake of speed lines while the charge builds; the boost itself is a boost-start
+  slipstream(fx, { racer = -1, state }) {
+    if (racer !== 0) return;
+    if (state === 'in') fx.hold('wake', 1, j(fx, 'riseS') * 3);
+    else fx.release('wake', j(fx, 'edgeGlowFadeS'));
+  },
+  // a pickup bubble: the bands brighten a touch (one photosafe transition, quietly skipped when refused)
+  'bubble-pop'(fx, { racer = -1 }) {
+    if (racer !== 0 || !fx.ask('band')) return;
+    fx.fire('band', fx.gentle.contrast(j(fx, 'padBandPeak') * 0.4), rise(fx), 0, j(fx, 'landGoneS') * 2);
   },
   // the rest change nothing on screen; kept so every event has its one entry
   wall(fx, { dv = 0 }) {
