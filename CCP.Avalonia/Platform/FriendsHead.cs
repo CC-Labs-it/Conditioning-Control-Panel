@@ -16,6 +16,9 @@ internal static class FriendsHead
     /// <summary>WPF App.Friends. Null until startup built it.</summary>
     internal static IFriendsService? Service { get; set; }
 
+    /// <summary>WPF App.FriendsFeed: the "What happened" lines, built with the service at startup.</summary>
+    internal static FriendsFeed? Feed { get; set; }
+
     /// <summary>WPF BackRoomApi.AppIdentity: null offline or without an id and a token.</summary>
     internal static (string UnifiedId, string Token)? Identity()
     {
@@ -41,7 +44,7 @@ internal static class FriendsHead
     internal static FriendsService? Create(string? userDataDir, string? overrideUrl)
     {
         if (BaseUrl(userDataDir, overrideUrl) is not { } url) return null;
-        // ponytail: no Contract D hook (WPF MergedAccountRecovery.TryHandle is head-only); add it when that moves.
+        // ponytail: no Contract D hook yet; Core MergedAccountRecovery is unseeded on this head (re-auth/sign-in seams pending).
         return new FriendsService(new FriendsApi(null, Identity, url), () => Identity()?.UnifiedId, AnyWindowActive);
     }
 

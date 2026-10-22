@@ -141,9 +141,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// ShowTab("haptics") selects the same row itself, so the landing is identical.</para>
         ///
         /// <para>ponytail: WPF opens with <c>Services.EmiDesk.EmiTargets.NoteRackOpened(rackKey)</c>,
-        /// so opening Flashes scores Flashes rather than the Studio. EmiTargets is not in Core
-        /// (CCP.Core/Services/EmiDesk holds only the chrome/layout half), so the scoring is the one
-        /// thing missing here.</para>
+        /// so opening Flashes scores Flashes rather than the Studio. The rack map is in Core now
+        /// (<c>EmiDoors.RackTargets</c>); the call that scores through it is the one thing still
+        /// missing here.</para>
         /// </summary>
         internal void OpenStudioModule(string rackKey)
         {
@@ -293,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Dispatcher.UIThread.Post(RefreshWallActiveStates);
             }
             void OnReplaced() => Dispatcher.UIThread.Post(Rebind);
-            Opened += (_, _) => { Rebind(); if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnReplaced; };
+            Opened += (_, _) => { Rebind(); if (CoreSettings.Service is { } svc) { svc.CurrentReplaced -= OnReplaced; svc.CurrentReplaced += OnReplaced; } };   // Opened fires on every Hide/Show
             Closed += (_, _) =>
             {
                 if (hooked != null) hooked.PropertyChanged -= OnFlag;
