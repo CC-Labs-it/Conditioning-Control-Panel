@@ -35,5 +35,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (MainWindow.Assets.cs:39); the tab refreshes itself from OnTabShown.</summary>
         private void BtnAssets_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
             => ShowTab("assets");
+
+        /// <summary>WPF ApplyAssetPresetFromLauncher: the Assets page applies the preset, repaints and reloads the pools.</summary>
+        internal bool ApplyAssetPresetFromLauncher(string presetId)
+        {
+            if (Named<Tabs.AssetsTabView>("AssetsTab") is not { } tab) return false;
+            tab.ApplyAssetPresetAndRepaint(presetId);
+            return true;
+        }
     }
 }

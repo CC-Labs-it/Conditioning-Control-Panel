@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -77,6 +78,39 @@ public sealed class ChaosRunHostTests
             }
             finally { ChaosRunHost.ForceShutdown(); }
             return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF EndRun (ChaosModeService.cs:3228) closes the braindrain wash itself, so it never sits over the results card.</summary>
+    [Fact]
+    public async Task The_run_ending_closes_the_wash_before_the_results_card()
+    {
+        var gif = ChaosFlashOverlayTests.WriteGif(out var dir);
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var schedule = ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule;
+            try
+            {
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = (_, _) => { };
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                await ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.ShowPath(
+                    new[] { new PixelRect(0, 0, 1920, 1080) }, gif, 60000, 0.30);
+                Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+                Ticks(244);   // past the 60 s run
+                Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
+                Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.CloseActive();
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = false;
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = schedule;
+                System.IO.Directory.Delete(dir, true);
+            }
         });
     }
 
@@ -196,6 +230,57 @@ public sealed class ChaosRunHostTests
                 Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
                 overlay.Close();   // "wake up": OnDismissed tears down
                 Assert.False(ChaosRunHost.IsActive);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF SpawnTick + OnBenignPopped on BubbleOverlay: stepped spawns fill the field,
+    /// a pop scores, and panic clears every chaos bubble.</summary>
+    [Fact]
+    public async Task Spawn_ticks_fill_the_field_a_pop_scores_and_panic_clears_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.SpawnTick();   // countdown up: nothing spawns
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                for (int i = 0; i < 3; i++) ChaosRunHost.SpawnTick();
+                Assert.True(BubbleOverlay.ChaosCount >= 3);
+                var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                Assert.False(b.Spec!.IsLive);   // treats only until live bubbles land
+                BubbleOverlay.Pop(b);
+                Assert.True(state.Score > 0);
+                Assert.Equal(1, state.Combo);
+
+                // WPF ToggleManualPause :265-268: a held field neither moves nor takes clicks.
+                var held = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                double score = state.Score, y = held.Y;
+                ChaosRunHost.ToggleManualPause();
+                BubbleOverlay.Field.Step();
+                BubbleOverlay.Pop(held);
+                Assert.Equal((y, false, score), (held.Y, held.Popping, state.Score));
+                ChaosRunHost.ToggleManualPause();
+                BubbleOverlay.Field.Step();
+                Assert.True(held.Y < y);   // moving again
+
+                // Headless never opens windows, so fake the chaos-only state: it is not the ambient game.
+                var t = typeof(BubbleOverlay);
+                const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+                t.GetField("_running", F)!.SetValue(null, true);
+                t.GetField("_chaosOpenedWindows", F)!.SetValue(null, true);
+                try { Assert.False(BubbleOverlay.IsRunning); }
+                finally { t.GetField("_running", F)!.SetValue(null, false); t.GetField("_chaosOpenedWindows", F)!.SetValue(null, false); }
+
+                ChaosRunHost.ForceShutdown();
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, x => x.Spec != null);
             }
             finally { ChaosRunHost.ForceShutdown(); }
             return Task.CompletedTask;

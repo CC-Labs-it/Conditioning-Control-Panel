@@ -203,24 +203,24 @@ namespace ConditioningControlPanel.Services.Deeper
             catch (Exception ex) { App.Logger?.Debug("BrowserVideoTimeSource.SetVolume error: {Error}", ex.Message); }
         }
 
-        public Rect GetVideoRect()
+        public PlaybackRect GetVideoRect()
         {
             try
             {
                 // Map normalized video element rect through the WebView's
-                // screen rect. Returns Rect.Empty if the WebView isn't laid
+                // screen rect. Returns PlaybackRect.Empty if the WebView isn't laid
                 // out yet (engine then skips gaze evaluation silently).
-                if (_webView.ActualWidth <= 0 || _webView.ActualHeight <= 0) return Rect.Empty;
+                if (_webView.ActualWidth <= 0 || _webView.ActualHeight <= 0) return PlaybackRect.Empty;
                 var origin = _webView.PointToScreen(new Point(0, 0));
                 var w = _webView.ActualWidth;
                 var h = _webView.ActualHeight;
-                return new Rect(
+                return new PlaybackRect(
                     origin.X + _videoRectNormalized[0] * w,
                     origin.Y + _videoRectNormalized[1] * h,
                     _videoRectNormalized[2] * w,
                     _videoRectNormalized[3] * h);
             }
-            catch { return Rect.Empty; }
+            catch { return PlaybackRect.Empty; }
         }
 
         public void Dispose() => Detach();

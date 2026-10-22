@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
 using Newtonsoft.Json.Linq;
@@ -187,7 +188,7 @@ public sealed class GameWindowTests
             var oldAssets = CorePaths.EffectiveAssetsProvider;
             CorePaths.EffectiveAssetsProvider = () => root;
             using var server = new WebAssetServer(root);
-            try { Assert.Empty(GameMediaManifest.BuildLocal(server).Videos); }
+            try { Assert.Empty(GameMediaManifest.BuildLocal(server.AssetUrl).Videos); }
             finally { CorePaths.EffectiveAssetsProvider = oldAssets; }
         }
         finally { Directory.Delete(root, true); }
@@ -484,6 +485,7 @@ public sealed class GameWindowTests
         {
             var player = new FakeTrackPlayer();
             var w = GameWindow.Launch("race")!;
+            using (var real = w.RaceNewPlayer!()) Assert.IsType<RaceTrackPlayer>(real);   // this head's own player
             w.RaceNewPlayer = () => player;
             w.RacePickFile = () => Task.FromResult<string?>(files[0]);
             var sent = new List<JObject>();
@@ -531,6 +533,7 @@ public sealed class GameWindowTests
         WithTrackFiles(null, files =>
         {
             var w = GameWindow.Launch("race")!;
+            w.RaceNewPlayer = null;   // a build with no player
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.RacePickFile = () => Task.FromResult<string?>(null);
@@ -584,5 +587,149 @@ public sealed class GameWindowTests
             Assert.All(charts, c => Assert.Equal("two.mp3", (string?)c["chart"]!["source"]!["name"]));
             w.Close();
         });
+    });
+
+    // ---- Down the Rabbit Hole (WPF Services/Chaos/DtrhHostService.cs, slice A) ----
+
+    /// <summary>Lab (or not), signed in, a throwaway library; XP and each payout's counts-as-run go to lists.</summary>
+    private static void RunDtrh(bool lab, Action<MainShellWindow, List<double>, List<bool>, List<string>> body) => Run((shell, launcher) =>
+    {
+        var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
+            CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
+        var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
+        var xp = new List<double>();
+        var runs = new List<bool>();
+        var denied = new List<string>();
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreEntitlement.HasLabProvider = () => lab;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreEntitlement.ShowDeniedHandler = v => denied.Add(v.Feature);
+            GameWindow.DtrhBankSparks = (_, countsAsRun) => { runs.Add(countsAsRun); return 5; };
+            CoreProgression.AddXPProvider = (amount, _) => xp.Add(amount);
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            ChaosMeta.State.ForceScriptedRun = false;    // a forced replay would write the meta save
+            Directory.CreateDirectory(Path.Combine(lib, "images"));
+            Directory.CreateDirectory(Path.Combine(lib, "videos"));
+            File.WriteAllBytes(Path.Combine(lib, "images", "pic.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "videos", "clip.mp4"), new byte[] { 1 });
+            launcher.Hide();
+            body(shell, xp, runs, denied);
+        }
+        finally
+        {
+            (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
+                CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
+            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
+            GameWindow.CloseAllForPanic();
+            Directory.Delete(lib, true);
+        }
+    });
+
+    /// <summary>WPF LauncherCatalogue :241 (Lab door, DemandLab refusal), OnPageReady :271 (init with motionLevel
+    /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
+    /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
+    [Fact]
+    public void Dtrh_LabDoor_BootRunLifecycle_AndCloseBanks()
+    {
+        RunDtrh(lab: false, (_, _, _, denied) =>
+        {
+            Assert.True(GameWindow.DtrhLocked());
+            Assert.Null(GameWindow.Launch("dtrh"));
+            Assert.Single(denied);
+            Assert.False(GameWindow.IsAnyOpen());
+        });
+        RunDtrh(lab: true, (_, xp, runs, _) =>
+        {
+            var s = CoreSettings.Current;
+            s.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Reduced;
+            s.ChaosDifficulty = "Normal";
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "dtrh");
+            Assert.False(GameWindow.DtrhLocked());
+            var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var now = t0;
+            GameWindow.DtrhUtcNow = () => now;
+            var w = GameWindow.Launch("dtrh")!;
+            Assert.Contains("dtrh/index.html", w.PageUrl!.AbsolutePath);
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
+            Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
+            Assert.EndsWith("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
+            Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)sent[1]["videos"]!.Single()["url"]);
+            sent.Clear();
+
+            ChaosMeta.State.RunsCompleted = 0;
+            w.HandleMessage("{\"type\":\"request-run\",\"setup\":{\"difficulty\":\"Hard\"}}");
+            Assert.Equal("Hard", s.ChaosDifficulty);                                   // the hub's choice persists
+            Assert.True((bool)Assert.Single(sent)["runConfig"]!["scriptedFirstRun"]!);  // the first descent is the classroom
+            sent.Clear();
+
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // no run-started: nothing
+            Assert.Empty(sent);
+            w.HandleMessage("{\"type\":\"run-started\",\"difficulty\":\"Easy\"}");
+            Assert.True(w.DtrhRunActive);
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // a second end pays nothing
+            var pay = Assert.Single(sent);
+            Assert.Equal("payout-result", (string?)pay["type"]);
+            Assert.Equal(300, (double)pay["baseXp"]!);
+            Assert.Equal(5, (int)pay["sparksEarned"]!);
+            Assert.Equal(new[] { 300.0 }, xp);
+            Assert.Equal(new[] { true }, runs);
+
+            // Closed with an endless descent still falling: the last snapshot is banked as left, paid for
+            // the 90 s the host saw (+5 s slack), not the 600 s the page claims.
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-progress\",\"score\":100000,\"durationSec\":720,\"elapsedSec\":600}");
+            now = t0.AddSeconds(90);
+            w.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(2, xp.Count);
+            Assert.Equal(250.0 * 95 / 60, xp[1], 6);
+            Assert.Equal(new[] { true, true }, runs);
+        });
+    }
+
+    /// <summary>WPF MainWindow.xaml.cs:1505 TryRacePauseOnEscape (DtRH since 2026-10-12): with Escape as the panic
+    /// key and the game in front, the first press is the game's pause (kept-escape to the page, the game stays
+    /// open, nothing exits); a second press inside 2 s is a full panic that closes it (PanicSurfaces "games").</summary>
+    [Fact]
+    public void Dtrh_EscapePauses_ASecondEscapeInsideTwoSecondsClosesIt() => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
+        try
+        {
+            s.PanicKey = "Escape";
+            s.PanicKeyEnabled = true;
+            var shellClosed = false;
+            shell.Closed += (_, _) => shellClosed = true;
+            var w = GameWindow.Launch("dtrh")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(w, GameWindow.DtrhInFront());
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
+
+            shell.HandlePanicKeyPress(t0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen());                                 // a pause, not a close
+            Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+
+            shell.HandlePanicKeyPress(t0.AddSeconds(1));                          // again within 2 s: panic
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(shellClosed);                                            // a game owned the screen: no exit rung
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
     });
 }

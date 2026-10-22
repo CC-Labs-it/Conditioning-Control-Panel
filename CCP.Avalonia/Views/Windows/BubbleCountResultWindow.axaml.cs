@@ -142,6 +142,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Key handlers
             _btnSubmit.Click += (_, _) => BtnSubmit_Click();
             KeyDown += OnKeyDown;
+            // P51: the panic key wins over the focused answer box and Submit (panic bound to Enter would
+            // otherwise submit the answer first). Tunnel, and only for the panic key.
+            AddHandler(KeyDownEvent, (object? _, KeyEventArgs e) =>
+            {
+                var s = CoreSettings.Current;
+                if (!s.PanicKeyEnabled || !Platform.HotkeyNames.Matches(e.Key, s.PanicKey)) return;
+                OnKeyDown(this, e);
+                e.Handled = true;
+            }, RoutingStrategies.Tunnel);
             _txtAnswer.KeyDown += OnInputKeyDown;
             _txtAnswer.TextChanged += OnTextChanged;
 
@@ -220,7 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Same key rules as the game window: strict falls open without a global panic listener.
             var s = CoreSettings.Current;
             switch (Services.MandatoryVideoScheduler.KeyAction(_strictMode, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt),
-                s.PanicKeyEnabled, s.PanicKey, s.PanicKeyEnabled && BubbleCountWindow.PanicListenerLive()))
+                s.PanicKeyEnabled, Platform.HotkeyNames.Canonical(s.PanicKey), s.PanicKeyEnabled && BubbleCountWindow.PanicListenerLive()))
             {
                 case Services.VideoKeyAction.Dismiss: e.Handled = true; CompleteAll(false); break;
                 case Services.VideoKeyAction.ForceStop:

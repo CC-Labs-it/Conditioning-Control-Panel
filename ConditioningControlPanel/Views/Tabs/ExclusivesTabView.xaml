@@ -137,6 +137,19 @@
                             HorizontalAlignment="Left" Margin="0,-8,0,18"
                             Padding="18,7" Visibility="Collapsed" Click="SeePremium_Click"/>
 
+                    <!-- "I just subscribed": re-reads the server tier now and says what it found.
+                         Shown while there is still a plan to buy (RefreshJustSubscribed). -->
+                    <StackPanel x:Name="JustSubscribedRow" x:FieldModifier="internal" Orientation="Horizontal"
+                                HorizontalAlignment="Left" Margin="0,-8,0,18" Visibility="Collapsed">
+                        <Button x:Name="BtnJustSubscribed" x:FieldModifier="internal"
+                                Style="{StaticResource SecondaryButton}"
+                                Content="{loc:Str plans_just_subscribed}"
+                                Padding="14,5" Click="JustSubscribed_Click"/>
+                        <TextBlock x:Name="TxtJustSubscribed" x:FieldModifier="internal"
+                                   FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap" MaxWidth="420"/>
+                    </StackPanel>
+
                     <!-- Spotlight: the newest exclusive, hero-sized -->
                     <Border x:Name="SpotlightCard" x:FieldModifier="internal"
                             Height="250" CornerRadius="14" Margin="0,0,0,22"
