@@ -163,7 +163,7 @@
     "texBytes": 11184812,
     "boundRadiusM": 0,
     "materialSlots": [
-      "sky-dawn-galaxy"
+      "sky_dawn_galaxy"
     ],
     "palette": "dawn",
     "width": 2048,
@@ -209,7 +209,7 @@
     "texBytes": 11184812,
     "boundRadiusM": 0,
     "materialSlots": [
-      "sky-deep-galaxy"
+      "sky_deep_galaxy"
     ],
     "palette": "deep",
     "width": 2048,
@@ -255,7 +255,7 @@
     "texBytes": 11184812,
     "boundRadiusM": 0,
     "materialSlots": [
-      "sky-afterglow-galaxy"
+      "sky_afterglow_galaxy"
     ],
     "palette": "afterglow",
     "width": 2048,
@@ -350,7 +350,7 @@
       "kart_surface",
       "emi_screen"
     ],
-    "palette": "all",
+    "palette": "karts",
     "draws": 2,
     "texBytesBlock16": 699104,
     "textureEncoding": "UASTC",
@@ -360,7 +360,14 @@
       1.52835,
       1.26305,
       1.44
-    ]
+    ],
+    "tintAttributes": {
+      "cup_tint": "_CUP_TINT",
+      "saucer_tint": "_SAUCER_TINT"
+    },
+    "tintDetailChannel": "baseColorTexture.a",
+    "tintAlphaMode": "OPAQUE",
+    "attachPoint": "head_attach"
   },
   {
     "id": "bubble",
@@ -792,43 +799,928 @@
     "id": "finish-portal-lod0",
     "file": "models/finish-portal-lod0.glb",
     "kind": "prop",
-    "tris": 2876,
-    "texBytes": 0,
-    "boundRadiusM": 10.923,
-    "materialSlots": [
-      "portal_trim",
-      "portal_glass",
-      "spiral_mask"
-    ],
     "palette": "all",
-    "draws": 3,
+    "lod": 0,
+    "tris": 4695,
+    "degenerateTriangles": 0,
+    "boundRadiusM": 12.852,
     "sizeM": [
-      16.21235,
-      10.92004,
-      0.71991
+      17.24,
+      12.85,
+      1.02
     ],
-    "lod": 0
+    "materialSlots": [
+      "portal_glass",
+      "portal_trim",
+      "spiral_mask",
+      "finish_membrane"
+    ],
+    "texBytes": 0,
+    "draws": 4,
+    "clearanceWidthM": 14.4,
+    "compression": "meshopt-lossless"
   },
   {
     "id": "finish-portal-lod1",
     "file": "models/finish-portal-lod1.glb",
     "kind": "prop",
-    "tris": 780,
-    "texBytes": 0,
-    "boundRadiusM": 10.86,
+    "palette": "all",
+    "lod": 1,
+    "tris": 1207,
+    "degenerateTriangles": 0,
+    "boundRadiusM": 12.838,
+    "sizeM": [
+      17.18,
+      12.835,
+      1
+    ],
     "materialSlots": [
-      "portal_trim",
       "portal_glass",
-      "spiral_mask"
+      "portal_trim",
+      "spiral_mask",
+      "finish_membrane"
+    ],
+    "texBytes": 0,
+    "draws": 4,
+    "clearanceWidthM": 14.4,
+    "compression": "meshopt-lossless"
+  },
+  {
+    "id": "particles-atlas",
+    "file": "textures/particles-atlas.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "particles_atlas"
     ],
     "palette": "all",
-    "draws": 3,
-    "sizeM": [
-      16.18966,
-      10.83006,
-      0.71991
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "UASTC",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
     ],
-    "lod": 1
+    "texBytesBlock16": 1398128,
+    "cells": {
+      "disc": [
+        0,
+        0
+      ],
+      "spark": [
+        1,
+        0
+      ],
+      "glint": [
+        2,
+        0
+      ],
+      "glitter": [
+        3,
+        0
+      ],
+      "petal": [
+        0,
+        1
+      ],
+      "heart": [
+        1,
+        1
+      ],
+      "ring": [
+        2,
+        1
+      ],
+      "smoke": [
+        3,
+        1
+      ],
+      "drip": [
+        0,
+        2
+      ],
+      "shard": [
+        1,
+        2
+      ],
+      "frost": [
+        2,
+        2
+      ],
+      "swirl": [
+        3,
+        2
+      ],
+      "bubble": [
+        0,
+        3
+      ],
+      "star": [
+        1,
+        3
+      ],
+      "spare0": [
+        2,
+        3
+      ],
+      "spare1": [
+        3,
+        3
+      ]
+    },
+    "cellGrid": [
+      4,
+      4
+    ],
+    "cellSizePx": 256,
+    "cellOrigin": "top-left",
+    "alphaMode": "straight",
+    "coverageChannel": "a",
+    "maxSafeLod": 4
   },
-  {"id":"particles-atlas","file":"textures/particles-atlas.ktx2","kind":"texture","tris":0,"texBytes":5592404,"boundRadiusM":0,"materialSlots":["particles_atlas"],"palette":"all","width":1024,"height":1024,"mipLevels":11,"encoding":"UASTC","colorSpace":"linear","wrap":["clamp","clamp"],"texBytesBlock16":1398128,"cells":{"disc":[0,0],"spark":[1,0],"glint":[2,0],"glitter":[3,0],"petal":[0,1],"heart":[1,1],"ring":[2,1],"smoke":[3,1],"drip":[0,2],"shard":[1,2],"frost":[2,2],"swirl":[3,2],"bubble":[0,3],"star":[1,3],"spare0":[2,3],"spare1":[3,3]},"cellGrid":[4,4],"cellSizePx":256,"cellOrigin":"top-left","alphaMode":"straight","coverageChannel":"a","maxSafeLod":4}
+  {
+    "id": "fx-crack",
+    "file": "textures/fx-crack.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "fx_crack"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 349552,
+    "sampleChannel": "r",
+    "meaning": "white is effect strength"
+  },
+  {
+    "id": "fx-frost-edge",
+    "file": "textures/fx-frost-edge.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "fx_frost_edge"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 1398128,
+    "sampleChannel": "r",
+    "meaning": "white is effect strength"
+  },
+  {
+    "id": "fx-iris",
+    "file": "textures/fx-iris.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "fx_iris"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 349552,
+    "sampleChannel": "r",
+    "meaning": "white is visible aperture"
+  },
+  {
+    "id": "fx-melt-flow",
+    "file": "textures/fx-melt-flow.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 5592404,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "fx_melt_flow"
+    ],
+    "palette": "all",
+    "width": 1024,
+    "height": 1024,
+    "mipLevels": 11,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 1398128,
+    "sampleChannel": "r",
+    "meaning": "0.5 is neutral displacement"
+  },
+  {
+    "id": "fx-melt-spiral",
+    "file": "textures/fx-melt-spiral.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 1398100,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "fx_melt_spiral"
+    ],
+    "palette": "all",
+    "width": 512,
+    "height": 512,
+    "mipLevels": 10,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "clamp",
+      "clamp"
+    ],
+    "texBytesBlock16": 349552,
+    "sampleChannel": "r",
+    "meaning": "white is effect strength"
+  },
+  {
+    "id": "fx-noise",
+    "file": "textures/fx-noise.ktx2",
+    "kind": "texture",
+    "tris": 0,
+    "texBytes": 349524,
+    "boundRadiusM": 0,
+    "materialSlots": [
+      "fx_noise"
+    ],
+    "palette": "all",
+    "width": 256,
+    "height": 256,
+    "mipLevels": 9,
+    "encoding": "ETC1S",
+    "colorSpace": "linear",
+    "wrap": [
+      "repeat",
+      "repeat"
+    ],
+    "texBytesBlock16": 87408,
+    "sampleChannel": "r",
+    "meaning": "white is effect strength"
+  },
+  {
+    "id": "item-card",
+    "file": "models/item-card.glb",
+    "kind": "prop",
+    "tris": 814,
+    "texBytes": 0,
+    "boundRadiusM": 1.245,
+    "materialSlots": [
+      "item_surface",
+      "item_edge"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      0.7805,
+      1.2005,
+      0.061
+    ],
+    "emissionSlot": "item_edge",
+    "assumptions": "Original static eye motif on both faces; host controls spin, reveal and edge intensity.",
+    "compression": "meshopt-lossless"
+  },
+  {
+    "id": "effect-bubble",
+    "file": "models/effect-bubble.glb",
+    "kind": "prop",
+    "tris": 962,
+    "texBytes": 0,
+    "boundRadiusM": 1.102,
+    "materialSlots": [
+      "effect_icon",
+      "effect_shell"
+    ],
+    "palette": "all",
+    "draws": 2,
+    "sizeM": [
+      1.099999,
+      1.1,
+      1.1
+    ],
+    "billboardNode": "effect_icon",
+    "billboardSizeM": [
+      0.7,
+      0.7
+    ],
+    "billboardCentreM": [
+      0,
+      0.55,
+      0
+    ],
+    "billboardCornerClearanceM": 0.05503,
+    "assumptions": "1.1 m diameter, 0.70 m square icon carrier, alpha 0 default. Existing DtRH art remains external and unchanged.",
+    "compression": "meshopt-lossless"
+  },
+  {
+    "id": "head-bow",
+    "file": "models/head-bow.glb",
+    "kind": "accessory",
+    "tris": 180,
+    "texBytes": 0,
+    "boundRadiusM": 0.205,
+    "materialSlots": [
+      "accessory_surface"
+    ],
+    "palette": "karts",
+    "draws": 1,
+    "attachPoint": "head_attach",
+    "attachTo": "emi-teacup-kart/head_attach"
+  },
+  {
+    "id": "head-cat-ears",
+    "file": "models/head-cat-ears.glb",
+    "kind": "accessory",
+    "tris": 216,
+    "texBytes": 0,
+    "boundRadiusM": 0.256,
+    "materialSlots": [
+      "accessory_surface.001"
+    ],
+    "palette": "karts",
+    "draws": 1,
+    "attachPoint": "head_attach",
+    "attachTo": "emi-teacup-kart/head_attach"
+  },
+  {
+    "id": "head-halo",
+    "file": "models/head-halo.glb",
+    "kind": "accessory",
+    "tris": 376,
+    "texBytes": 0,
+    "boundRadiusM": 0.276,
+    "materialSlots": [
+      "accessory_surface.002"
+    ],
+    "palette": "karts",
+    "draws": 1,
+    "attachPoint": "head_attach",
+    "attachTo": "emi-teacup-kart/head_attach"
+  },
+  {
+    "id": "head-spiral-crown",
+    "file": "models/head-spiral-crown.glb",
+    "kind": "accessory",
+    "tris": 350,
+    "texBytes": 0,
+    "boundRadiusM": 0.199,
+    "materialSlots": [
+      "accessory_surface.003"
+    ],
+    "palette": "karts",
+    "draws": 1,
+    "attachPoint": "head_attach",
+    "attachTo": "emi-teacup-kart/head_attach"
+  },
+  {
+    "id": "place-1-white",
+    "file": "ui/place-1-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 1,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-1-pink",
+    "file": "ui/place-1-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 1,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-2-white",
+    "file": "ui/place-2-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 2,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-2-pink",
+    "file": "ui/place-2-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 2,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-3-white",
+    "file": "ui/place-3-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 3,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-3-pink",
+    "file": "ui/place-3-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 3,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-4-white",
+    "file": "ui/place-4-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 4,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-4-pink",
+    "file": "ui/place-4-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 4,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-5-white",
+    "file": "ui/place-5-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 5,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-5-pink",
+    "file": "ui/place-5-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 5,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-6-white",
+    "file": "ui/place-6-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 6,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-6-pink",
+    "file": "ui/place-6-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 6,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-7-white",
+    "file": "ui/place-7-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 7,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-7-pink",
+    "file": "ui/place-7-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 7,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-8-white",
+    "file": "ui/place-8-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 8,
+    "variant": "white",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "place-8-pink",
+    "file": "ui/place-8-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 104,
+    "height": 112,
+    "format": "svg",
+    "numeral": 8,
+    "variant": "pink",
+    "minDisplayHeightPx": 48,
+    "contentBox": [
+      12,
+      5,
+      87,
+      105
+    ]
+  },
+  {
+    "id": "item-slot-frame",
+    "file": "ui/item-slot-frame.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 112,
+    "height": 112,
+    "format": "svg",
+    "safeContentBox": [
+      28,
+      28,
+      56,
+      56
+    ]
+  },
+  {
+    "id": "drift-pip-pink",
+    "file": "ui/drift-pip-pink.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 32,
+    "height": 32,
+    "format": "svg",
+    "state": "pink"
+  },
+  {
+    "id": "drift-pip-white",
+    "file": "ui/drift-pip-white.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 32,
+    "height": 32,
+    "format": "svg",
+    "state": "white"
+  },
+  {
+    "id": "drift-pip-gold",
+    "file": "ui/drift-pip-gold.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 32,
+    "height": 32,
+    "format": "svg",
+    "state": "gold"
+  },
+  {
+    "id": "lap-time-divider",
+    "file": "ui/lap-time-divider.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 192,
+    "height": 16,
+    "format": "svg"
+  },
+  {
+    "id": "minimap-frame",
+    "file": "ui/minimap-frame.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 200,
+    "height": 152,
+    "format": "svg",
+    "safeContentBox": [
+      24,
+      24,
+      152,
+      104
+    ]
+  },
+  {
+    "id": "flag-start",
+    "file": "ui/flag-start.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 128,
+    "height": 120,
+    "format": "svg",
+    "variant": "start"
+  },
+  {
+    "id": "flag-finish",
+    "file": "ui/flag-finish.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 128,
+    "height": 120,
+    "format": "svg",
+    "variant": "finish"
+  },
+  {
+    "id": "menu-race-frame",
+    "file": "ui/menu-race-frame.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 256,
+    "height": 168,
+    "format": "svg",
+    "safeLabelBox": [
+      27,
+      120,
+      196,
+      25
+    ],
+    "safeDetailBox": [
+      98,
+      38,
+      109,
+      61
+    ]
+  },
+  {
+    "id": "menu-online-frame",
+    "file": "ui/menu-online-frame.svg",
+    "kind": "ui",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "width": 256,
+    "height": 168,
+    "format": "svg",
+    "safeLabelBox": [
+      27,
+      120,
+      196,
+      25
+    ],
+    "safeDetailBox": [
+      98,
+      38,
+      109,
+      61
+    ]
+  }
 ]
