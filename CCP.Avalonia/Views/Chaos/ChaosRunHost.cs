@@ -320,6 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
+            Overlays.ChaosFlashOverlay.CloseActive();   // WPF EndRun :3228: the wash never sits over the results card
             ChaosGifCascadeOverlay.CloseActive();   // WPF EndRun :3229
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3230
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
@@ -356,6 +357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
             CloseBoonBar();

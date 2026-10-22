@@ -81,6 +81,39 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF EndRun (ChaosModeService.cs:3228) closes the braindrain wash itself, so it never sits over the results card.</summary>
+    [Fact]
+    public async Task The_run_ending_closes_the_wash_before_the_results_card()
+    {
+        var gif = ChaosFlashOverlayTests.WriteGif(out var dir);
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var schedule = ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule;
+            try
+            {
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = (_, _) => { };
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                await ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.ShowPath(
+                    new[] { new PixelRect(0, 0, 1920, 1080) }, gif, 60000, 0.30);
+                Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+                Ticks(244);   // past the 60 s run
+                Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
+                Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.CloseActive();
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = false;
+                ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = schedule;
+                System.IO.Directory.Delete(dir, true);
+            }
+        });
+    }
+
     /// <summary>Decisions 2026-10-08 (panic-surfaces): the safe word, the only exit under Lockdown, ends a run.</summary>
     [Fact]
     public async Task The_safe_word_ends_the_run()
