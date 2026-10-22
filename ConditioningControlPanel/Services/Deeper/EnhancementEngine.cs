@@ -961,7 +961,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
         }
 
-        private static bool HitsRect(System.Windows.Point screenPoint, Rect videoRect, double[] normalized)
+        private static bool HitsRect(System.Windows.Point screenPoint, PlaybackRect videoRect, double[] normalized)
         {
             if (normalized == null || normalized.Length < 4) return false;
             var rx = videoRect.X + normalized[0] * videoRect.Width;

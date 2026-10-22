@@ -2349,3 +2349,9 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/possession-core-c: +319 vs base
 - Cloud session unit (possession-core-c); reviewed and gated locally.
+
+## avalonia-port/deeper-core-b: +337
+- Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
+
+## avalonia-port/deeper-core-b: +342
+- Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
