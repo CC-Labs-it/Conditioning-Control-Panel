@@ -15,7 +15,7 @@
 // ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
 // motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
+// (PaintDepthHud/Home/Quests; PaintDepthRail landed in wire-shell-nav-rail-b), the "Moved" redirects and their note, and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
 using System;
@@ -94,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintFill(Named<Border>("SectionWashFill"), NavStripRules.WithAlpha(hue, SectionWashAlpha / 255.0), ms);
                 PaintFill(Named<Border>("SectionWashLine"), NavStripRules.WithAlpha(hue, SectionWashLineAlpha / 255.0), ms);
                 PaintSectionEdge(hue, level, ms);
+                PaintDepthRail(hue);   // WPF :164
             }
             catch (Exception ex) { Serilog.Log.Debug("PaintSectionWash failed: {E}", ex.Message); }
         }

@@ -641,6 +641,13 @@
             </Grid>
         </Border>
 
+        <!-- THE RAIL'S SHADOW (WPF MainWindow.xaml:799, depth wave 10): the rail stands above the page and
+             throws DepthLaw.RailShadowPx of shade onto it; NavCoin.cs PaintDepthRail tints it with the
+             section hue (neutral DepthRailShadow until then). Never hit-testable. -->
+        <Rectangle x:Name="NavRailShadow" Grid.Row="1" Grid.RowSpan="5" Grid.Column="1"
+                   Width="6" HorizontalAlignment="Left" ZIndex="59"
+                   Fill="{DynamicResource DepthRailShadow}" IsHitTestVisible="False"/>
+
         <!-- THE HUD BAND (WPF MainWindow.xaml:805, nav polish wave 2): the header row and the XP row
              read as one zone - 20% black over the window ground and a 1px TextMuted divider at 30%
              under the XP row. Drawn before the header so its controls sit on it; never hit-testable.
