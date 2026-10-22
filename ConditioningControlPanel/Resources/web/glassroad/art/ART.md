@@ -739,3 +739,28 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 3 threshold landmarks
+
+All models use metres, Y up and -Z forward, with base-centre roots and measured conservative bounds. New geometry is original. The cabinet row derives only from the approved Wave 1 slot cabinet.
+
+| Asset stem | LOD0 tris | LOD1 tris | Texture memory |
+| --- | ---: | ---: | ---: |
+| threshold-start-gantry | 2252 | 668 | 0 |
+| threshold-slot-row | 5410 | 1402 | 0 |
+| threshold-bubble-arch-a | 5272 | 1276 | 0 |
+| threshold-bubble-arch-b | 4824 | 1180 | 0 |
+| threshold-bubble-arch-c | 5720 | 1372 | 0 |
+| threshold-chevron-stalk | 480 | 336 | 0 |
+| threshold-checkpoint-ring | 1144 | 620 | 0 |
+
+- The start gantry has a 14.4 m minimum opening and three blank displays. Mesh nodes start_screen_left, start_screen_centre and start_screen_right use screen; the matching start_credit_* nodes use credit. Each has full 0..1 UVs. Clone shared materials per display before assigning different feeds.
+- countdown_mount_left, countdown_mount_centre and countdown_mount_right are attachment empties at x = -4.3, 0 and 4.3 m, y = 4.1 m, z = -0.15 m. Place the approved countdown-ring model at each anchor using its existing base origin. Rings are separate assets and are not duplicated into the gantry file.
+- Six original cabinets share one 12.3 m glass plinth. slot_lamps stays a separate material for host emission. screen, credit and emi_screen remain blank. LOD1 removes small original detail islands before material-preserving decimation; the silhouette is retained. This row repeats a shared feed across the cabinet screens.
+- Bubble arches use 21, 19 and 23 clear shells on a thin gold support. Their nominal low passage widths are 14.4, 15.1 and 14.6 m. The transparent bubble_glass material uses iridescence; there is no baked colour motion.
+- The chevron points along local +X. Rotate or mirror placement for track direction. Its geometric symbol has no text or numerals.
+- The checkpoint has a thin glass rim, gold inlay and 14.4 m minimum spacing between its feet.
+- Material colours and lamp emission are controlled by the host. There is no flash, strobe, animation or media image in these exports.
+- Contact sheets show neutral views and clearly labelled host examples. Review-only countdown rings and shader mask bindings are excluded from the landmark runtime files.
+
+Validation covers reopened native masters, fresh GLB imports, triangle caps, zero-area faces, finite coordinates, all screen/credit UVs and named mounts. All models add zero texture memory.
