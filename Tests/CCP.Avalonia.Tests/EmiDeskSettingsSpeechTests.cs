@@ -23,11 +23,15 @@ public sealed class EmiDeskSettingsSpeechTests
           "firstContact":{"priority":3,"pools":["greeting"],"limit":{"per":"ever","max":1}},
           "desktopFirstBoot":{"priority":3,"pools":["boot"]},
           "resized":{"priority":3,"pools":["spicy"]},
-          "panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]}},
+          "panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]},
+          "dismissed":{"hold":true,"holdMs":6000,"pools":["sulk"]},
+          "wordless":{"priority":3,"pools":["face"]}},
          "pools":{"greeting":[{"id":"hello","t":"hello","spice":0}],
                   "boot":[{"id":"boot","t":"desktop hello","spice":0}],
                   "spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}],
-                  "quiet":[{"id":"quiet","t":"","spice":0}]}}
+                  "quiet":[{"id":"quiet","t":"","spice":0}],
+                  "sulk":[{"id":"sulk","t":"","spice":0,"face":"T_T"}],
+                  "face":[{"id":"face","t":"","spice":0,"face":"o_o"}]}}
         """;
 
     private static Task InDesk(Func<EmiDeskService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -147,6 +151,30 @@ public sealed class EmiDeskSettingsSpeechTests
         for (int i = 0; i < 6; i++) desk.Window.AdvanceSpeech();
         Assert.False(done);
         Assert.Null(desk.Window.BubbleText);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task WordlessRowDrawsItsFaceWithoutAHold() => InDesk(desk =>
+    {
+        // WPF EmiDeskWindow.Bubble.cs:524-530: no text, no chain -> just the face, no held revert.
+        desk.Fire("wordless");
+        Assert.Equal("o_o", desk.Window!.Face);
+        Assert.Null(desk.Window.BubbleText);
+        Assert.False(desk.Window.HoldPending);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HoldPlaysOnDismissedAndDismissCancelsIt() => InDesk(desk =>
+    {
+        // WPF EmiDeskService.cs:765: a hold plays even on a locked-silent moment.
+        var window = desk.Window!;
+        desk.Fire("dismissed");
+        Assert.Equal("T_T", window.Face);
+        Assert.True(window.HoldPending);
+        window.RunDismiss();
+        Assert.False(window.HoldPending);
         return Task.CompletedTask;
     });
 }

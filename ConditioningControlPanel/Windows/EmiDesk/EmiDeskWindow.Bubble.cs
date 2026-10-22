@@ -63,9 +63,6 @@ public partial class EmiDeskWindow
     /// <summary>The chip font, same rule as the bubble: sized at the reference width, floored.</summary>
     private const double ChipFontAtDefaultWidth = 9.0;
 
-    private const int AskDot1Ms = 420;        // the locked . / .. / ... cadence, same as MakeSay
-    private const int AskDot2Ms = 420;
-    private const int AskDot3Ms = 520;
     private const int IgnoreFaceMs = 1400;    // MOMENTS: askIgnored is a 1400 ms hold
     private const int IgnoreThinkMs = 700;
 
@@ -605,7 +602,7 @@ public partial class EmiDeskWindow
             _askStage = 0;
             DrawFace(EmiChains.RestFace);
             ShowBubble(".");
-            _askTimer = NewTimer(AskDot1Ms, AskCadenceStep);
+            _askTimer = NewTimer(EmiSpeechCadence.Dot1Ms, AskCadenceStep);
         }
         catch (Exception ex)
         {
@@ -623,11 +620,11 @@ public partial class EmiDeskWindow
         {
             case 1:
                 ShowBubble("..");
-                _askTimer = NewTimer(AskDot2Ms, AskCadenceStep);
+                _askTimer = NewTimer(EmiSpeechCadence.Dot2Ms, AskCadenceStep);
                 break;
             case 2:
                 ShowBubble("...");
-                _askTimer = NewTimer(AskDot3Ms, AskCadenceStep);
+                _askTimer = NewTimer(EmiSpeechCadence.Dot3Ms, AskCadenceStep);
                 break;
             default:
                 var askFace = string.IsNullOrEmpty(ask.Face) ? "^_^" : ask.Face;

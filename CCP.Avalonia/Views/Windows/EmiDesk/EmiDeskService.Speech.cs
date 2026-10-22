@@ -27,7 +27,8 @@ internal sealed partial class EmiDeskService
             var line = engine.Draw(moment, EmiLineEngine.ToCtx(context));
             // ponytail: asks/effect execution and glass channels are wire-views-settings-emidesk-b.
             // No feasibility probe is installed until those chips have real effects.
-            if (line != null && moment is not "dismissed" and not "appClosing")
+            // WPF EmiDeskService.cs:765: a hold is a face, so it plays even on a locked-silent moment.
+            if (line != null && (line.Hold || moment is not "dismissed" and not "appClosing"))
                 _window?.SpeakLine(line, engine);
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] speech moment {Moment} failed", moment); }

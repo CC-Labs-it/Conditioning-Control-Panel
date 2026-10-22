@@ -73,9 +73,16 @@ public partial class EmiDeskWindow
         CancelChain();
         CancelHold();
         engine.Ack(line.Id, spoke: !line.Hold);
-        if (line.Hold || string.IsNullOrWhiteSpace(line.Text))
+        if (line.Hold)
         {
             HoldFace(line);
+            return;
+        }
+        // WPF EmiDeskWindow.Bubble.cs:524-530: a wordless row is a chain, or just a face.
+        if (string.IsNullOrWhiteSpace(line.Text))
+        {
+            if (!string.IsNullOrEmpty(line.Chain)) PlayChain(line.Chain!);
+            else DrawFace(line.Face);
             return;
         }
         Say(line.Text, line.Face);
@@ -84,6 +91,7 @@ public partial class EmiDeskWindow
     // WPF EmiDeskWindow.Bubble.cs:545-565 HoldFace: a face, held, no bubble, then back to rest.
     private const int IgnoreFaceMs = 1400;
     private DispatcherTimer? _holdTimer;
+    internal bool HoldPending => _holdTimer != null;
 
     private void HoldFace(LineDraw line)
     {

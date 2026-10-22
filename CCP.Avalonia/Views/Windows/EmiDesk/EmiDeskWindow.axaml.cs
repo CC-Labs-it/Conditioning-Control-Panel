@@ -2254,6 +2254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopIdleBeats();
                 DisarmPet();
                 CancelChain();
+                CancelHold();
                 TearDownReactions();
 
                 try { OnTearDownCore(); }
