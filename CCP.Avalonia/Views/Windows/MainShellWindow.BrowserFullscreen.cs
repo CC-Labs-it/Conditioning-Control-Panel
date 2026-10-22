@@ -2,9 +2,12 @@
 // Enter/ExitBrowserFullscreen, ExitBrowserFullscreenForTeardown) and BrowserService.cs:249-330 (the forced-fullscreen exit
 // detector). NativeWebView has no ContainsFullScreenElementChanged and no document-created script seam, so the page's own
 // fullscreenchange is reported over the WebHost string channel by a script injected after each completed navigation.
-// ponytail: dual-monitor mirroring (WPF App.ScreenMirror, :2735-2745) and the 0.5/1.0 zoom swap (WebHost has no zoom)
-// remain wire-shell-browser-b-next.
+// Dual-monitor mirroring (WPF App.ScreenMirror, :2733-2761) rides the page's fullscreen signal; the clone itself is Windows-only
+// (Platform/ScreenMirrorHead). ponytail: the 0.5/1.0 zoom swap (WebHost has no zoom) remains wire-shell-browser-b-next.
 using System;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -99,9 +102,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Log.Information("MainShell: ccp_exit_fullscreen received (forced FS active = {Active})", _isBrowserFullscreen);
                     if (_isBrowserFullscreen) ExitBrowserFullscreen();
                     break;
-                case BrowserFullscreenOnMessage: EnterBrowserFullscreen(); break;
+                case BrowserFullscreenOnMessage:
+                    // WPF HandleBrowserFullscreenChanged(true): mirror only when the "Show content on" pick covers more
+                    // than one screen - content pinned to one monitor must not be cloned onto the others.
+                    if (PickedScreenCount() > 1)
+                    {
+                        _isDualMonitorPlaybackActive = ScreenMirrorHead.For(this)?.EnableMirror() ?? false;
+                        if (_isDualMonitorPlaybackActive) Log.Information("Screen mirroring enabled for fullscreen video");
+                    }
+                    EnterBrowserFullscreen();
+                    break;
                 case BrowserFullscreenOffMessage: ExitBrowserFullscreen(); break;
             }
+        }
+
+        private bool _isDualMonitorPlaybackActive;
+
+        /// <summary>WPF App.GetGlobalScreens().Length, resolved like BubbleCountHost's message windows.</summary>
+        private int PickedScreenCount()
+        {
+            var screens = ScreenList.Enumerate(this);
+            var s = global::ConditioningControlPanel.CoreSettings.Current;
+            var primary = screens.ToList().FindIndex(x => x.IsPrimary);
+            return Overlays.PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal,
+                s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary).Length;
+        }
+
+        /// <summary>WPF HandleBrowserFullscreenChanged(false): put extend back. Also run when the fullscreen window is
+        /// closed from outside, which WPF reached through the page's own fullscreenchange.</summary>
+        private void ReleaseBrowserMirror()
+        {
+            if (!_isDualMonitorPlaybackActive) return;
+            ScreenMirrorHead.For(this)?.DisableMirror();
+            _isDualMonitorPlaybackActive = false;
+            Log.Information("Screen mirroring disabled");
         }
 
         /// <summary>WPF ArmFullscreenEscapes: Topmost is rented (dropped on Deactivated, taken back on Activated while still
@@ -207,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                             _isBrowserFullscreen = false;
                             DisarmFullscreenEscapes();
                         }
+                        ReleaseBrowserMirror();
                         using var returning = host.BeginReparenting();
                         fs.Content = null;
                         if (!container.Children.Contains(host)) container.Children.Add(host);
@@ -232,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void ExitBrowserFullscreen()
         {
+            ReleaseBrowserMirror();
             if (!_isBrowserFullscreen) return;
             // Off FIRST, and off the window they went on (#952): a user's pop-out must not keep re-claiming Topmost.
             DisarmFullscreenEscapes();
