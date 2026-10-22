@@ -32,11 +32,13 @@ namespace ConditioningControlPanel
         private bool _subscribed;
         private int _previewGeneration;   // drops an online decode whose row was deselected
         private MediaPreviewPlan? _plan;  // the selected row's plan; what the action buttons obey
+        private readonly Controls.ScrolllerCreditBadge _credit = new() { Margin = new Thickness(0, 0, 8, 6) };   // "via Scrolller" on an online row
 
         public MediaHistoryWindow()
         {
             InitializeComponent();
             MediaList.ItemsSource = _view;
+            (PreviewImage.Parent as System.Windows.Controls.Grid)?.Children.Add(_credit);
             Loaded += OnLoaded;
             Closed += OnClosed;
         }
@@ -187,6 +189,7 @@ namespace ConditioningControlPanel
             _previewGeneration++;
             PreviewHint.Visibility = Visibility.Collapsed;
             PreviewName.Text = row.DisplayName;
+            _credit.SetShown(Services.Video.ScrolllerCredit.IsScrolllerMedia(row.Entry.FilePath));
 
             var plan = MediaHistoryPreviewRules.Plan(
                 row.Entry.FilePath, row.Entry.Type, row.FileExists,
@@ -388,6 +391,7 @@ namespace ConditioningControlPanel
 
         private void ShowPreviewNone()
         {
+            _credit.SetShown(false);
             _previewGeneration++;
             _plan = null;
             PreviewHint.Visibility = Visibility.Visible;
