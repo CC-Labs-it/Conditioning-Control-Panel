@@ -1831,6 +1831,13 @@ namespace ConditioningControlPanel
                     return;
                 }
 
+                // The exit thread is already on its way out (up to 5 s): never open a dialog meanwhile.
+                if (Volatile.Read(ref exitInProgress) == 1)
+                {
+                    args.Handled = true;
+                    return;
+                }
+
                 // Only show error dialog once to prevent multiplying dialogs
                 if (!errorDialogShown)
                 {
