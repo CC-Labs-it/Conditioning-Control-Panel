@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// PORTED from ConditioningControlPanel/Views/Tabs/AvailableSubjectsTabView.xaml.cs.
     ///
     /// <para>The WPF code-behind owns no logic of its own: every handler looks up the hosting
-    /// MainWindow and forwards. The ambient fog tuning, roster entrance and Connect press motion
-    /// are ported beside the view. The remaining service actions are stubs.</para>
+    /// MainWindow and forwards. The ambient fog tuning and roster entrance stagger are ported
+    /// beside the view (no Connect press-squish: WPF OnSubjectConnectPress has no caller). The remaining service actions are stubs.</para>
     ///
     /// <para>Dropped: AvailableSubjectsScroller_PreviewMouseWheel. It existed only to turn a
     /// vertical wheel notch into horizontal scrolling on a scroller whose vertical axis is

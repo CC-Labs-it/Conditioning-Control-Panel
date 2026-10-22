@@ -14,8 +14,9 @@
 // ever re-attached while another tab is showing, it un-parks itself. The canvas still self-gates
 // on IsVisible, so the worst case is a composed-but-invisible surface, not a running clock.
 //
-// Entrance stagger and Connect press motion now live beside the roster in
-// AvailableSubjectsTabView.Fx.cs. The view's visibility/loaded hooks replace WPF's shell
+// The entrance stagger now lives beside the roster in AvailableSubjectsTabView.Fx.cs.
+// OnSubjectConnectPress is not ported: current WPF never calls it (Lobby frame replaced Connect).
+// The view's visibility/loaded hooks replace WPF's shell
 // callbacks, while this partial continues to own tab-level ambient parking.
 
 using System;

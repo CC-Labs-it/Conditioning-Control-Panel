@@ -2,27 +2,25 @@ using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
 public partial class AvailableSubjectsTabView
 {
-    // WPF MainWindow.SubjectsFx + MotionFx: interaction clock, including under Reduced.
+    // WPF MainWindow.SubjectsFx StaggerSubjectCards + MotionFx.StaggerIn: interaction clock, including under Reduced.
+    // No Connect press-squish: WPF OnSubjectConnectPress (MainWindow.SubjectsFx.cs:136) has no caller.
     internal static TimeProvider FxTime = TimeProvider.System;
     private readonly List<Entrance> _entrances = new();
-    private readonly Dictionary<Control, Press> _presses = new();
-    private readonly HashSet<ScaleTransform> _heldConnectScales = new();
-    private DispatcherTimer? _subjectsFxTimer;
+    // The shared window beat, not a private 16 ms timer (AmbientBeatLoopsTests ratchet); stopped when done.
+    private BeatLoop? _subjectsFxBeat;
     private int _arrival;
-    internal bool SubjectsFxRunning => _subjectsFxTimer?.IsEnabled == true;
+    internal bool SubjectsFxRunning => _subjectsFxBeat?.IsRunning == true;
 
     private sealed record Entrance(Control Container, TranslateTransform Slide, long Start, int Delay);
-    private sealed record Press(ScaleTransform Scale, long Start, double From, double To);
 
     private void InitializeSubjectsMotion()
     {
@@ -81,70 +79,10 @@ public partial class AvailableSubjectsTabView
         if (_entrances.Count > 0) StartSubjectsFxClock();
     }
 
-    private void SubjectConnect_Loaded(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Button button) return;
-        // Buttons handle pointer events themselves; WPF's PreviewMouse hooks run in the tunnel.
-        button.RemoveHandler(PointerPressedEvent, SubjectConnect_PointerPressed);
-        button.RemoveHandler(PointerReleasedEvent, SubjectConnect_PointerReleased);
-        button.AddHandler(PointerPressedEvent, SubjectConnect_PointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
-        button.AddHandler(PointerReleasedEvent, SubjectConnect_PointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
-    }
-
-    private void SubjectConnect_PointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (sender is Control button && e.GetCurrentPoint(button).Properties.IsLeftButtonPressed)
-            PressSubjectConnect(button, true);
-    }
-
-    private void SubjectConnect_PointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (e.InitialPressMouseButton == MouseButton.Left && sender is Control button)
-            PressSubjectConnect(button, false);
-    }
-
-    private void SubjectConnect_PointerExited(object? sender, PointerEventArgs e)
-    {
-        if (sender is Control button) PressSubjectConnect(button, false);
-    }
-
-    private void SubjectConnect_PointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
-    {
-        if (sender is Control button) PressSubjectConnect(button, false);
-    }
-
-    private void PressSubjectConnect(Control button, bool down)
-    {
-        if (button.RenderTransform is not ScaleTransform scale)
-        {
-            if (button.RenderTransform != null) return;
-            button.RenderTransform = scale = new ScaleTransform();
-            button.RenderTransformOrigin = RelativePoint.Center;
-        }
-        double to = down && IsEffectivelyVisible ? 0.97 : 1;
-        if (to < 1) _heldConnectScales.Add(scale);
-        if (scale.ScaleX == to && scale.ScaleY == to)
-        {
-            _presses.Remove(button);
-            if (to == 1) _heldConnectScales.Remove(scale);
-            return;
-        }
-        if (!Env.AllowTransitions)
-        {
-            _presses.Remove(button);
-            scale.ScaleX = scale.ScaleY = to;
-            if (to == 1) _heldConnectScales.Remove(scale);
-            return;
-        }
-        _presses[button] = new Press(scale, FxTime.GetTimestamp(), scale.ScaleX, to);
-        StartSubjectsFxClock();
-    }
-
     private void StartSubjectsFxClock()
     {
-        _subjectsFxTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render,
-            (_, _) => StepSubjectsFx());
-        _subjectsFxTimer.Start();
+        _subjectsFxBeat ??= new BeatLoop(this, _ => StepSubjectsFx());
+        _subjectsFxBeat.Start();
     }
 
     internal void StepSubjectsFx()
@@ -159,28 +97,14 @@ public partial class AvailableSubjectsTabView
             e.Slide.Y = 10 * (1 - rise) * (1 - rise);
             if (rise == 1) _entrances.RemoveAt(i);
         }
-        foreach (var (button, p) in new List<KeyValuePair<Control, Press>>(_presses))
-        {
-            double t = Math.Clamp(FxTime.GetElapsedTime(p.Start).TotalMilliseconds / 80, 0, 1);
-            p.Scale.ScaleX = p.Scale.ScaleY = p.From + (p.To - p.From) * (1 - (1 - t) * (1 - t));
-            if (t == 1)
-            {
-                _presses.Remove(button);
-                if (p.To == 1) _heldConnectScales.Remove(p.Scale);
-            }
-        }
-        if (_entrances.Count == 0 && _presses.Count == 0) _subjectsFxTimer?.Stop();
+        if (_entrances.Count == 0) _subjectsFxBeat?.Stop();
     }
 
     private void FinishSubjectsFx()
     {
         ++_arrival; // invalidate pending first-bind retries when leaving before their dispatch
-        _subjectsFxTimer?.Stop();
+        _subjectsFxBeat?.Stop();
         foreach (var e in _entrances) { e.Container.Opacity = 1; e.Slide.Y = 0; }
         _entrances.Clear();
-        // A held-down button may have finished its tween: only reset scales this view owns.
-        foreach (var scale in _heldConnectScales) scale.ScaleX = scale.ScaleY = 1;
-        _heldConnectScales.Clear();
-        _presses.Clear();
     }
 }

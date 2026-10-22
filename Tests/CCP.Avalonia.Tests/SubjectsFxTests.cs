@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -86,7 +85,7 @@ public sealed class SubjectsFxTests
     });
 
     [Fact]
-    public Task ConnectSquishesOnPressAndRestoresOnReleaseLeaveAndHide() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ReducedStillEntersAndOffNeverStartsAnEntrance() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var previous = CoreSettings.ServiceProvider;
@@ -103,38 +102,15 @@ public sealed class SubjectsFxTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
-            var button = list.ContainerFromIndex(0)!.GetVisualDescendants().OfType<Button>().Single();
             Assert.Equal(0, list.ContainerFromIndex(0)!.Opacity); // Reduced still permits interaction entrances
             Step(view, clock, 600);
-            var centre = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
-            window.MouseMove(centre);
-            window.MouseDown(centre, MouseButton.Left);
-            Step(view, clock, 40);
-            var scale = Assert.IsType<ScaleTransform>(button.RenderTransform);
-            Assert.InRange(scale.ScaleX, 0.97, 0.999);
-            Step(view, clock, 40);
-            Assert.Equal(0.97, scale.ScaleX, 6);
-            window.MouseUp(centre, MouseButton.Left);
-            Step(view, clock, 80);
-            Assert.Equal(1, scale.ScaleX, 6);
-            window.MouseDown(centre, MouseButton.Left);
-            Step(view, clock, 80);
-            window.MouseMove(new Point(1290, 690));
-            Step(view, clock, 80);
-            Assert.Equal(1, scale.ScaleX, 6);
-            window.MouseUp(new Point(1290, 690), MouseButton.Left);
+            Assert.Equal(1, list.ContainerFromIndex(0)!.Opacity);
 
-            // Off snaps the same states, while an entrance never starts.
             CoreSettings.Current.MotionLevel = MotionLevel.Off;
             view.IsVisible = false; view.IsVisible = true;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, list.ContainerFromIndex(0)!.Opacity);
-            window.MouseMove(centre);
-            window.MouseDown(centre, MouseButton.Left);
-            Assert.Equal(0.97, scale.ScaleX, 6);
-            view.IsVisible = false;
-            Assert.Equal(1, scale.ScaleX, 6);
-            window.MouseUp(centre, MouseButton.Left);
+            Assert.False(view.SubjectsFxRunning);
         }
         finally
         {
