@@ -2357,3 +2357,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 - Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
 ## avalonia-port/video-core-b: +334
 - Cloud session unit (video-core-b); reviewed and gated locally.
+
+## avalonia-port/video-core-b: +334
+- Cloud session unit (video-core-b); reviewed and gated locally.
