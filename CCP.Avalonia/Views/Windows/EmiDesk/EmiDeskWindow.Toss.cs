@@ -83,7 +83,7 @@ public partial class EmiDeskWindow
         {
             if (_landFace != t) return;   // a pickup since then cancelled it
             _landFace = null;
-            if (!_closingForGood && !ChainLive) DrawFace(RestFace);
+            if (!_closingForGood && !ChainLive) DrawFace(EmiChains.RestFace);
         }), null, TimeSpan.FromMilliseconds(LandFaceMs), Timeout.InfiniteTimeSpan);
         _landFace = t;
     }
