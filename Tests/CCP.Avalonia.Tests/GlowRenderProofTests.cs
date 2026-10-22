@@ -195,4 +195,41 @@ public sealed class GlowRenderProofTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task LauncherTileGlowDrawsAHaloBesideTheTile() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var before = (s.MotionLevel, s.PerformanceMode);
+        MainShellWindow? w = null;
+        try
+        {
+            (s.MotionLevel, s.PerformanceMode) = (MotionLevel.Reduced, false);   // no ambient spin between frames
+            w = new MainShellWindow();
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var launcher = LauncherWindow.OpenFor(w);
+            Dispatcher.UIThread.RunJobs();
+            for (int i = 0; i < 40; i++) launcher.StepFx(0.02);                   // the fade-in lands
+            var tile = launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!
+                .Children.OfType<Border>().First();
+            var glow = launcher.TileGlow(tile)!;
+            Assert.True(glow.IsEffectivelyVisible, "the tile glow is not shown - the proof proves nothing");
+            glow.Opacity = 1;
+            var p = tile.TranslatePoint(new Point(tile.Bounds.Width + 4, tile.Bounds.Height / 2), launcher)!.Value;   // in the gutter
+            var lit = Pixel(Frame(launcher, "launcher-tile-glow-on"), p);
+            glow.IsVisible = false;
+            var dark = Pixel(Frame(launcher, "launcher-tile-glow-off"), p);
+            Assert.True(Diff(lit, dark) > 12, $"no halo beside the tile: {lit:X6} vs {dark:X6}");
+        }
+        finally
+        {
+            LauncherWindow.Instance?.Close();
+            w?.Close();
+            Dispatcher.UIThread.RunJobs();
+            (s.MotionLevel, s.PerformanceMode) = before;
+        }
+        return Task.CompletedTask;
+    });
 }

@@ -81,7 +81,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var on = MainShellWindow.LockdownActive;
                 var rising = on && !LockdownVeil.IsVisible;
                 LockdownVeil.IsVisible = on;
-                RefreshTileGlowVisibility();
                 if (rising) LockdownVeil.Focus();   // nothing under the veil keeps focus
                 if (on && IsVisible && WindowState != WindowState.Minimized && AmbientFxCanvas.Env.AllowAmbientLoops)
                 {

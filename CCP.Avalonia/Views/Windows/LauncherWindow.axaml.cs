@@ -550,7 +550,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void BuildTiles()
         {
             ClearHoverComet();
-            ClearTileGlows();
             GamesGrid.Children.Clear();
             _revealedAtBuild.Clear();
             foreach (var card in VisibleCards) { GamesGrid.Children.Add(CreateTile(card)); _revealedAtBuild[card.Id] = true; }
@@ -606,14 +605,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             bool locked = !needsAccount && Locked(dest);
             var hue = Color.FromRgb(card.R, card.G, card.B);
 
-            var tile = new Border
+            // The tile is an unclipped cell: its glow (P82 rule 3, a sibling Border, not an Effect) sits under
+            // the clipped face, so the halo can spill past the face like WPF's DropShadowEffect did.
+            var face = new Border
             {
                 CornerRadius = new CornerRadius(TileRadius),
                 Background = Res("SurfaceBgBrush"),
                 BorderBrush = locked ? Res("Tier2DiamondBorderBrush") : RimBrush(hue),
                 BorderThickness = new Thickness(LauncherGridLayout.TileBorder),
-                Margin = new Thickness(LauncherGridLayout.TileMargin),
                 ClipToBounds = true,
+            };
+            var tile = new Border
+            {
+                Margin = new Thickness(LauncherGridLayout.TileMargin),
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Tag = card.Id,
             };
@@ -696,8 +700,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!MainShellWindow.LockdownActive) Play(card);
             };
 
-            tile.Child = body;
-            DecorateTileFx(tile, hue);
+            face.Child = body;
+            var cell = new Panel();
+            if (DecorateTileFx(tile, hue) is { } glow) cell.Children.Add(glow);
+            cell.Children.Add(face);
+            tile.Child = cell;
             return tile;
         }
 

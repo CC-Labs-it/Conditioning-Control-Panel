@@ -211,12 +211,21 @@ public sealed class PerimeterCometHostTests
         {
             w.Show(); Settle(w);
             Assert.Null(Comet(panel));
+            var rest = panel.BorderBrush;
             CoreEngine.Start();
             w.RefreshStatus();
             var running = Assert.IsType<PerimeterCometAdorner>(Comet(panel));
             clock.Now += TimeSpan.FromSeconds(6).Ticks;
             running.Tick();
             Assert.Equal(0.5, running.Phase, 3); // WPF panel lap: twelve seconds.
+            // WPF Choreo.cs:403-416: the rim breathes 0.45 <-> 1 over 2.6 s each way while the comet runs.
+            Assert.Equal(0.45, w.PanelRimOpacity!.Value, 3);
+            w.StepFx(1.3);
+            Assert.Equal(0.725, w.PanelRimOpacity!.Value, 3);
+            w.StepFx(1.3);
+            Assert.Equal(1.0, panel.BorderBrush!.Opacity, 3);   // the breathing copy is what the rim draws
+            w.StepFx(2.6);
+            Assert.Equal(0.45, w.PanelRimOpacity!.Value, 3);
             w.WindowState = WindowState.Minimized;
             Assert.False(running.IsTicking);
             Assert.Null(Comet(panel));
@@ -236,6 +245,9 @@ public sealed class PerimeterCometHostTests
             w.RefreshStatus();
             Assert.Null(Comet(panel));
             Assert.False(stopped.IsTicking);
+            Assert.Null(w.PanelRimOpacity);
+            Assert.Equal(1.0, panel.BorderBrush!.Opacity, 3);                // the theme's rim is back
+            Assert.Equal(((ISolidColorBrush)rest!).Color, ((ISolidColorBrush)panel.BorderBrush).Color);
             CoreEngine.Start(); w.RefreshStatus();
             var hidden = Comet(panel)!;
             w.Hide();

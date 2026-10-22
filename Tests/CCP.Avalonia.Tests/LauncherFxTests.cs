@@ -161,8 +161,9 @@ public sealed class LauncherFxTests
         Step(launcher, 0.3);
         Assert.Equal(0.55, card.Opacity, 2);             // the rest stepped back
         Assert.Equal(0.55, dimmedTile.Opacity, 2);
-        Assert.Equal(0.35 * 0.55 * launcher.FindControl<Panel>("RootGrid")!.Opacity,
-            launcher.TileGlow(dimmedTile)!.Opacity, 3); // the old Effect inherited both opacity layers
+        var dimmedGlow = launcher.TileGlow(dimmedTile)!;   // inside the tile, so it dims with it as the Effect did
+        Assert.True(dimmedTile.IsVisualAncestorOf(dimmedGlow));
+        Assert.Equal(0.35, dimmedGlow.Opacity, 3);
         Assert.True(launcher.IsVisible);
 
         Step(launcher, 0.3);                             // FadeLeadMs + FadeOutMs = 450 ms

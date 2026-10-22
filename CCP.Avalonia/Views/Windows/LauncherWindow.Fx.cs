@@ -76,8 +76,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public ScaleTransform Scale = new(1, 1);
             public RotateTransform Tilt = new();
             public Border? Glow;
-            public IDisposable? GlowWatch;
-            public double GlowOpacity = TileGlowRest;
             public Color Hue;
             public Tween Lift, Lean, Shine, Dim;
             public double PopT = -1, PopPeak;
@@ -154,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // A real close (app exit, panel closed; not the user's X, which OnClosing turns into the host's
             // decision): a pending exit is dropped before the hide parks the FX, never run into ShowFromTray.
             Closing += (_, e) => { if (!e.Cancel) { _exitThen = _fadeThen = null; _fadeGuard.Stop(); } };
-            Closed += (_, _) => { FxPark(); ClearTileGlows(); };
+            Closed += (_, _) => FxPark();
         }
 
         // ------------------------------------------------------------------ show / park
@@ -257,6 +255,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_echoIn >= 0 && (_echoIn -= dt) < 0) BurstAt(_echoAnchor, _echoColor, _echoAnchor == Wordmark ? WelcomeBurstCount : PlayBurstEcho);
                 if (_echoIn >= 0) busy = true;
                 if (_exitIn >= 0) { busy = true; if ((_exitIn -= dt) < 0) BeginFadeOut(); }
+                busy |= StepPanelRim(dt);
                 StepTile(_cardFx, dt);
                 busy |= _cardFx.Busy;
                 foreach (var t in _tileFx) { StepTile(t, dt); busy |= t.Busy; }
@@ -351,21 +350,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // ------------------------------------------------------------------ tiles: hover
 
         /// <summary>WPF CreateTile's hover rig (Tiles.cs:72-88, 228-244): lift, tilt toward the pointer, glow, the
-        /// hover note, and the hue bleeding into the backdrop (Choreo.cs ChoreoTileHover).</summary>
-        private void DecorateTileFx(Border tile, Color hue)
+        /// hover note, and the hue bleeding into the backdrop (Choreo.cs ChoreoTileHover). Returns the glow
+        /// (WPF's DropShadowEffect as a shadow-only Border the caller puts under the tile face), null on the
+        /// Performance tier.</summary>
+        private Border? DecorateTileFx(Border tile, Color hue)
         {
             _tileFx.RemoveAll(t => t.Tile.Parent == null);   // BuildTiles cleared the grid
             var fx = new TileFx { Tile = tile, Hue = hue };
             tile.RenderTransformOrigin = RelativePoint.Center;
             tile.RenderTransform = new TransformGroup { Children = { fx.Scale, fx.Tilt } };
-            tile.Loaded += (_, _) => AttachTileGlow(fx);
-            tile.DetachedFromVisualTree += (_, _) => RemoveTileGlow(fx);
-            AttachTileGlow(fx);
+            if (Env.AllowGlow(Env.CurrentTier))
+                fx.Glow = new Border
+                {
+                    IsHitTestVisible = false, Background = Brushes.Transparent, Opacity = TileGlowRest,
+                    CornerRadius = new CornerRadius(TileRadius),
+                    BoxShadow = new BoxShadows(new BoxShadow
+                    {
+                        Color = hue, Blur = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
+                    }),
+                };
             _tileFx.Add(fx);
             tile.PointerEntered += (_, _) => TileHover(fx, true);
             tile.PointerExited += (_, _) => TileHover(fx, false);
             tile.PointerMoved += (_, e) => TiltToward(fx, e.GetPosition(tile));
+            return fx.Glow;
         }
+
+        internal Border? TileGlow(Border tile) => _tileFx.Find(fx => ReferenceEquals(fx.Tile, tile))?.Glow;
 
         internal void TileHover(Border tile, bool on)
         {
@@ -380,7 +391,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (on) LauncherSfx.Hover();
                 bool anim = Env.AllowTransitions;
                 t.Lift.Go(t.Scale.ScaleX, on ? HoverLiftScale : 1, anim ? HoverLiftSeconds : 0);
-                t.Shine.Go(t.GlowOpacity, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
+                t.Shine.Go(t.Glow?.Opacity ?? 0, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
                 if (!on) t.Lean.Go(t.Tilt.Angle, 0, anim ? TileHoverSeconds : 0);
                 if (!anim) StepTile(t, 0);
                 if (on) BleedGlow(t.Hue); else RestoreGlow();
@@ -399,13 +410,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EnsureFxClock();
         }
 
-        private void StepTile(TileFx t, double dt)
+        private static void StepTile(TileFx t, double dt)
         {
             if (t.Lift.On || dt == 0) t.Scale.ScaleX = t.Scale.ScaleY = t.Lift.Step(dt);
             if (t.Lean.On || dt == 0) t.Tilt.Angle = t.Lean.Step(dt);
-            if (t.Glow != null && (t.Shine.On || dt == 0)) t.GlowOpacity = t.Shine.Step(dt);
+            if (t.Glow != null && (t.Shine.On || dt == 0)) t.Glow.Opacity = t.Shine.Step(dt);
             if (t.Dim.On) t.Tile.Opacity = t.Dim.Step(dt);
-            if (t.Glow != null) t.Glow.Opacity = t.GlowOpacity * t.Tile.Opacity * RootGrid.Opacity;
             if (t.PopT >= 0)
             {
                 // Choreo.cs Pop: to the peak by 35 % (quad out), back to 1 by 100 % (quad in-out).
@@ -418,7 +428,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        private void SettleTile(TileFx t)
+        private static void SettleTile(TileFx t)
         {
             t.Lift.Go(1, 1, 0); t.Lean.Go(0, 0, 0); t.Shine.Go(TileGlowRest, TileGlowRest, 0);
             t.PopT = -1;
