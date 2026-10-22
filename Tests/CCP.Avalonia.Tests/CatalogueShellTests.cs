@@ -228,6 +228,7 @@ public sealed class CatalogueShellTests
             finally
             {
                 AppA.Notifications.Dismiss("catalogue_submission_accepted_c1");
+                s.DismissedNotificationKeys.Remove("catalogue_submission_accepted_c1");
                 shell.Close();
                 s.CataloguePresetSubmissions.Remove(preset.Id);
                 (AppA.Catalogue, CoreSecrets.RetrieveProvider) = (oldClient, oldGet);
