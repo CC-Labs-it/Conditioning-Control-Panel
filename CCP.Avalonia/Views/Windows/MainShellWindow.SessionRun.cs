@@ -142,12 +142,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OnSessionProgressUpdated (+ OnSessionStarted's red button): the lock heartbeat
         /// and both clock labels. Runs on the UI thread (the runner ticks through CoreDispatch).</summary>
+        private (bool, double?)? _spiralTickKey;
+
         internal void OnSessionTick()
         {
             RefreshSessionFeatureLock(force: false);
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
-            SpiralOverlay.Refresh(this);       // the same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823)
+            // The same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823), only when the start or the
+            // ramp moved it: a Refresh enumerates screens and probes the file. A landing decode refreshes itself.
+            var spiralKey = (CoreSettings.Current.SpiralEnabled, runner.SpiralOpacity);
+            if (spiralKey != _spiralTickKey) { _spiralTickKey = spiralKey; SpiralOverlay.Refresh(this); }
             if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;

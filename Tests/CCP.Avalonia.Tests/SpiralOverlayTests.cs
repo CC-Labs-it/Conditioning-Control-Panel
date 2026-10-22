@@ -242,6 +242,10 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 runner.Tick(TimeSpan.FromMinutes(at - 0.01));
                 shell.OnSessionTick();
                 Assert.False(SpiralOverlay.IsShowing);
+                var refreshes = SpiralOverlay.Refreshes;
+                runner.Tick(TimeSpan.FromMinutes(at - 0.005));
+                shell.OnSessionTick();
+                Assert.Equal(refreshes, SpiralOverlay.Refreshes);   // nothing moved: no per-tick screen/file probe
                 runner.Tick(TimeSpan.FromMinutes((at + 20) / 2));   // halfway through the spiral's own window
                 shell.OnSessionTick();
                 await Settle();
@@ -249,6 +253,9 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 Assert.True(SpiralOverlay.IsShowing, Why());
                 Assert.Equal(30, runner.SpiralOpacity!.Value, 2);
                 Assert.Equal(SpiralFrames.Paint(0.30), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
+                runner.Tick(TimeSpan.FromMinutes((at + 20) / 2 + 1));   // the ramp moved: repainted
+                shell.OnSessionTick();
+                Assert.Equal(SpiralFrames.Paint(runner.SpiralOpacity!.Value / 100), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
                 Assert.Equal(40, s.SpiralOpacity);   // the user's slider is held, never written (#897)
             }
             finally

@@ -48,6 +48,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
 
+        /// <summary>Refresh calls so far (tests: the session tick only refreshes on a change).</summary>
+        internal static int Refreshes { get; private set; }
+
         internal static bool IsShowing => Windows.Count > 0;
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
@@ -85,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
+            Refreshes++;
             var s = CoreSettings.Current;
             if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
 
