@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
@@ -6,6 +7,7 @@ using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -22,8 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// <summary>
     /// SETTINGS · ACCOUNT, ported from the WPF head.
     ///
-    /// <para>Every card is live except cloud backup/restore and GDPR export (hidden until
-    /// ProfileSync's calls reach Core). Providers come from <c>AccountSeed</c>; the tier card asks
+    /// <para>Every card is live except cloud Backup now / Restore (hidden until the cross-OS
+    /// path-translation design exists; the backup status line and GDPR export are live). Providers come from <c>AccountSeed</c>; the tier card asks
     /// <c>CoreAccount</c> exactly what WPF asks (<c>HasLabAccess</c> then <c>HasPremiumAccess</c>).</para>
     /// </summary>
     public partial class AccountSettingsSection : UserControl, IAppSettingsSection
@@ -250,9 +252,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             linkDiscord.IsVisible = hasUnifiedId && !hasLinkedDiscord;
             // WPF BtnLinkDiscord_Click finally: the label comes back after a failed/cancelled link.
             if (linkDiscord.IsEnabled) Find<IconLabel>("TxtBtnLinkDiscord").Key = "btn_link_discord";
-            // ponytail: CloudSettingsBackupSection stays hidden and BtnExportData collapsed until
-            // ProfileSync's backup/restore/export calls reach this head (MainShellWindow.CloudBackup.cs).
+            // WPF MainWindow.Patreon.cs:682-688: both cloud-identity cards, and a fresh backup status.
+            Find<Border>("CloudSettingsBackupSection").IsVisible = hasUnifiedId;
             Find<Border>("DataPrivacySection").IsVisible = hasUnifiedId;
+            if (hasUnifiedId) _ = UpdateBackupStatusAsync();
         }
 
         // ---- provider buttons (WPF MainWindow.Patreon.cs:455/526, MainWindow.SubscribeStar.cs:92) ----
@@ -471,15 +474,84 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 PresenceAsk.MarkAsked);
         }
 
-        // ponytail: cloud settings backup - ProfileSyncService.BackupSettingsAsync /
-        // GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync, all still in the WPF head.
-        // CloudSettingsBackupSection stays hidden until they land (MainShellWindow.CloudBackup.cs).
+        // ponytail: Backup now / Restore (WPF MainWindow.CloudBackup.cs:59/105) stay hidden: uploading and
+        // restoring settings across Windows and Linux needs the path-translation design first
+        // (decision rows-cloud-remember; parity row views-settings-account, wire-views-settings-account-b-next).
         private void BtnBackupSettingsNow_Click(object? sender, RoutedEventArgs e) { }
         private void BtnRestoreSettings_Click(object? sender, RoutedEventArgs e) { }
 
-        // ponytail: GDPR export - ProfileSyncService.ExportDataAsync plus a save-file picker; the
-        // button stays collapsed until that transport reaches Core.
-        private void BtnExportData_Click(object? sender, RoutedEventArgs e) { }
+        private int _backupStatusGen;
+
+        /// <summary>Tests only: the client the backup status line and the export ask (WPF App.ProfileSync). Its own
+        /// seam, not AccountSeed.NewV2: the status refreshes on every repaint, link flows included.</summary>
+        internal static Func<V2AuthService> CloudData = () => new V2AuthService();
+
+        /// <summary>WPF MainWindow.CloudBackup.cs UpdateBackupStatus (:261): the last backup's date and version,
+        /// else "no cloud backup found" (WPF answers that for a failed check too).</summary>
+        internal async Task UpdateBackupStatusAsync()
+        {
+            var gen = ++_backupStatusGen;
+            var status = Find<TextBlock>("TxtCloudBackupStatus");
+            try
+            {
+                var info = await CloudData().GetSettingsBackupInfoAsync(CoreSettings.Current.UnifiedId);
+                if (gen != _backupStatusGen) return;
+                status.Text = info is { } i && i.backedUpAt is { } at
+                    ? Loc.GetF("label_last_backup_0_v_1", at.ToLocalTime().ToString("MMM d, yyyy h:mm tt"), i.appVersion ?? "")
+                    : Loc.Get("label_no_cloud_backup_found_back_up_your_settings_t");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Failed to update backup status: {Error}", ex.Message);
+                if (gen == _backupStatusGen) status.Text = Loc.Get("label_could_not_check_backup_status");
+            }
+        }
+
+        /// <summary>Tests only: the save-file picker (WPF Microsoft.Win32.SaveFileDialog); null = cancelled.</summary>
+        internal static Func<Window, Task<string?>> PickExportPath = async owner =>
+        {
+            var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = Loc.Get("title_save_data_export"),
+                SuggestedFileName = $"my-data-export-{DateTime.Now:yyyy-MM-dd}.json",
+                DefaultExtension = ".json",
+                FileTypeChoices = new[] { new FilePickerFileType("JSON files") { Patterns = new[] { "*.json" } } },
+            });
+            return file?.TryGetLocalPath();
+        };
+
+        private async void BtnExportData_Click(object? sender, RoutedEventArgs e) => await Guard(ExportDataAsync());
+
+        /// <summary>WPF MainWindow.CloudBackup.cs BtnExportData_Click (:191): fetch, pick a file, write, tell.</summary>
+        internal async Task ExportDataAsync()
+        {
+            var button = Find<Button>("BtnExportData");
+            var label = Find<TextBlock>("TxtBtnExportData");
+            button.IsEnabled = false;
+            label.Text = Loc.Get("btn_exporting");
+            try
+            {
+                var (success, error, jsonData) = await CloudData().ExportDataAsync(CoreSettings.Current.UnifiedId);
+                if (!success || jsonData == null)
+                {
+                    await Tell(Owner, Loc.Get("title_export_failed"), error ?? Loc.Get("msg_failed_to_export_data"));
+                    return;
+                }
+                if (Owner is not { } owner || await PickExportPath(owner) is not { } path) return;
+                await File.WriteAllTextAsync(path, jsonData);
+                await Tell(owner, Loc.Get("title_export_complete"), Loc.GetF("msg_data_exported_to_0", path));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Data export failed");
+                await Tell(Owner, Loc.Get("title_export_error"), Loc.GetF("msg_export_failed_0", ex.Message));
+            }
+            finally
+            {
+                button.IsEnabled = true;
+                label.Text = Loc.Get("btn_export_my_data");
+            }
+        }
 
         // Live: WPF used Process.Start with UseShellExecute, Avalonia's Launcher is the
         // cross-platform equivalent. Same two URLs MainWindow.CloudBackup.cs and
