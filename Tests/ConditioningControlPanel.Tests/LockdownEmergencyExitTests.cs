@@ -33,7 +33,7 @@ public class LockdownEmergencyExitTests
     private static LockdownService SeedRunningLockdown(TimeSpan duration, TimeSpan alreadyServed)
     {
         var svc = new LockdownService();
-        var started = DateTime.Now - alreadyServed;
+        var started = DateTime.UtcNow - alreadyServed;
         Set(svc, "_duration", duration);
         Set(svc, "_startedAt", started);
         Set(svc, "_activatedAt", started);
@@ -131,12 +131,12 @@ public class LockdownEmergencyExitTests
     public void LastActiveDuration_IsMeasuredFromStartedAt_NotTheRebasedClock()
     {
         var deactivate = Body(LockdownSource(), "public void Deactivate()");
-        Assert.Contains("LastActiveDuration = DateTime.Now - _startedAt;", deactivate);
+        Assert.Contains("LastActiveDuration = DateTime.UtcNow - _startedAt;", deactivate);
 
         // ...and RestartTimer must never touch it, or the separation is decorative.
         var restart = Body(LockdownSource(), "public void RestartTimer(string reason)");
         Assert.DoesNotContain("_startedAt", restart);
-        Assert.Contains("_activatedAt = DateTime.Now;", restart);
+        Assert.Contains("_activatedAt = DateTime.UtcNow;", restart);
     }
 
     [Fact]
