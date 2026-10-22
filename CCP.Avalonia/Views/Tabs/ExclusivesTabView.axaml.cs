@@ -370,11 +370,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenExclusiveFeature(feature.Key);
         }
 
-        /// <summary>WPF OnExclusiveCardHover: the shared hover pop on the art, driven from the card.
-        /// ponytail: no MotionFx.HoverLift or glow bloom on this head yet.</summary>
-        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverPop.Enter(CardArt(sender));
+        private void Card_PointerEntered(object? sender, PointerEventArgs e) => CardHover(sender as Border, true);
 
-        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverPop.Leave(CardArt(sender));
+        private void Card_PointerExited(object? sender, PointerEventArgs e) => CardHover(sender as Border, false);
+
+        /// <summary>WPF OnExclusiveCardHover (MainWindow.Exclusives.cs:914): MotionFx.HoverLift (1.02, 150 ms quad
+        /// ease-out, snapped when transitions are off), a glow bloom where the tier allows glow (blur min(24, tier cap),
+        /// opacity 0.55, mod glow colour re-read every hover) and the shared hover pop on the art. The bloom is the card
+        /// Border's own BoxShadow, not an Effect (P82 rule 3).</summary>
+        internal static void CardHover(Border? card, bool on)
+        {
+            if (card == null) return;
+            try
+            {
+                if (card.RenderTransform is not ScaleTransform lift)
+                {
+                    card.RenderTransform = lift = new ScaleTransform();
+                    card.RenderTransformOrigin = RelativePoint.Center;
+                }
+                bool animate = AmbientFxCanvas.Env.AllowTransitions;
+                lift.Transitions = animate
+                    ? new global::Avalonia.Animation.Transitions
+                    {
+                        new global::Avalonia.Animation.DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new global::Avalonia.Animation.Easings.QuadraticEaseOut() },
+                        new global::Avalonia.Animation.DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new global::Avalonia.Animation.Easings.QuadraticEaseOut() },
+                    }
+                    : null;
+                lift.ScaleX = lift.ScaleY = on ? 1.02 : 1.0;
+
+                var tier = AmbientFxCanvas.Env.CurrentTier;
+                card.BoxShadow = on && AmbientFxCanvas.Env.AllowGlow(tier)
+                    ? Glow(ExclusiveCardRow.Accent, 0.55, Math.Min(24, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)))
+                    : default;
+
+                if (on) HoverPop.Enter(CardArt(card)); else HoverPop.Leave(CardArt(card));
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Exclusives card hover: {E}", ex.Message); }
+        }
 
         private static Control? CardArt(object? card) =>
             (card as Control)?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "CardArt");
