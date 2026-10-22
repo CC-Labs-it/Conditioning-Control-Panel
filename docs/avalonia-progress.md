@@ -2346,3 +2346,12 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/main-20261015-compat: +317
 - Compat for main sync #7: Scrolller cluster + 13 helpers into Core (licence switch now reaches the Avalonia online-media path), App.* in Core as seams, head hooks (sweeper, idle voice, funnel), Avalonia vault card/update button follow 7.1.14, WPF scan tests via SourceRoots/Assets. rgate green except the listed RaceTrackPlayer flake (run 39709240603).
+
+## avalonia-port/possession-core-c: +319 vs base
+- Cloud session unit (possession-core-c); reviewed and gated locally.
+
+## avalonia-port/deeper-core-b: +337
+- Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
+
+## avalonia-port/video-core-b: +334
+- Cloud session unit (video-core-b); reviewed and gated locally.
