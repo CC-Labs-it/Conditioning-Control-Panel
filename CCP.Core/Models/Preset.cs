@@ -67,6 +67,7 @@ namespace ConditioningControlPanel.Models
         public bool StrictLockEnabled { get; set; } = false;
         public int VideoMinDurationSeconds { get; set; } = 0;
         public int VideoMaxDurationSeconds { get; set; } = 0;
+        public bool VideoCutRandomStart { get; set; } = true;
 
         // Attention Check (Mini-Game) Settings
         public bool AttentionChecksEnabled { get; set; } = false;
@@ -343,6 +344,7 @@ namespace ConditioningControlPanel.Models
             settings.StrictLockEnabled = StrictLockEnabled;
             settings.VideoMinDurationSeconds = VideoMinDurationSeconds;
             settings.VideoMaxDurationSeconds = VideoMaxDurationSeconds;
+            settings.VideoCutRandomStart = VideoCutRandomStart;
 
             // Attention Checks
             settings.AttentionChecksEnabled = AttentionChecksEnabled;
@@ -465,6 +467,7 @@ namespace ConditioningControlPanel.Models
                 StrictLockEnabled = settings.StrictLockEnabled,
                 VideoMinDurationSeconds = settings.VideoMinDurationSeconds,
                 VideoMaxDurationSeconds = settings.VideoMaxDurationSeconds,
+                VideoCutRandomStart = settings.VideoCutRandomStart,
 
                 // Attention Checks
                 AttentionChecksEnabled = settings.AttentionChecksEnabled,

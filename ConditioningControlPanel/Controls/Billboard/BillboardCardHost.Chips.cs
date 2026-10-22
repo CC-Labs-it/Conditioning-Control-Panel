@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Controls.Billboard
         /// <summary>The dots on screen, in deck order.</summary>
         internal UIElementCollection ChipButtons => _chips.Children;
 
-        private void RebuildChips()
+        private void RebuildChips(bool tick = true)
         {
             StopHold();
             _chips.Children.Clear();
@@ -57,7 +57,7 @@ namespace ConditioningControlPanel.Controls.Billboard
                     _currentChip = chip;
                 }
             }
-            if (_currentChip != null && MotionFx.AllowTransitions) Tick(_currentChip);
+            if (tick && _currentChip != null && MotionFx.AllowTransitions) Tick(_currentChip);
         }
 
         /// <summary>A resting dot's size in px (round).</summary>

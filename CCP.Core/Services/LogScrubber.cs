@@ -8,12 +8,13 @@ namespace ConditioningControlPanel.Services
     /// Per-category counts from a scrubber pass. Shown in the bug-report preview
     /// so the user can see at a glance how many things were redacted.
     /// </summary>
-    public record ScrubberCounts(int Paths, int Emails, int Tokens, int AppData)
+    public record ScrubberCounts(int Paths, int Emails, int Tokens, int AppData, int Scrolller)
     {
-        public static ScrubberCounts Empty => new(0, 0, 0, 0);
+        public static ScrubberCounts Empty => new(0, 0, 0, 0, 0);
 
         public ScrubberCounts Add(ScrubberCounts other) =>
-            new(Paths + other.Paths, Emails + other.Emails, Tokens + other.Tokens, AppData + other.AppData);
+            new(Paths + other.Paths, Emails + other.Emails, Tokens + other.Tokens, AppData + other.AppData,
+                Scrolller + other.Scrolller);
     }
 
     /// <summary>
@@ -40,6 +41,16 @@ namespace ConditioningControlPanel.Services
         // Handled indirectly via UserPathRegex (which captures the username) — we leave
         // the rest of the path intact so debug info is preserved.
 
+        // Scrolller items (licence, 2026-10-21): a feed id names a post, and a url names its media.
+        // Neither belongs in a bug report. A url stops at whitespace, a quote, a bracket or a
+        // closing paren, so a JSON or prose line keeps the rest of itself.
+        private static readonly Regex ScrolllerUrlRegex = new(
+            @"https?://[a-z0-9.-]*scrolller\.com(?:[/?#][^\s""'<>)\]]*)?",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex ScrolllerIdRegex = new(
+            @"\bscrolller/[A-Za-z0-9_]+/[A-Za-z0-9_-]+",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
         // Timestamp formats to normalize. Each pattern is tried in order; the first
         // matching span is replaced with its UTC-rounded-to-minute form.
         // Supported formats:
@@ -58,7 +69,7 @@ namespace ConditioningControlPanel.Services
             if (string.IsNullOrEmpty(input))
                 return (string.Empty, ScrubberCounts.Empty);
 
-            int paths = 0, emails = 0, tokens = 0, appdata = 0;
+            int paths = 0, emails = 0, tokens = 0, appdata = 0, scrolller = 0;
 
             // 1. User paths (home folder → redacted). Windows shape first, then POSIX/macOS,
             //    so a report from any head redacts the username the same way.
@@ -109,6 +120,18 @@ namespace ConditioningControlPanel.Services
                 return "%APPDATA%";
             });
 
+            // 6b. Scrolller urls, then feed ids (a url first: it may carry an id-shaped path).
+            step6 = ScrolllerUrlRegex.Replace(step6, _ =>
+            {
+                scrolller++;
+                return "[scrolller url]";
+            });
+            step6 = ScrolllerIdRegex.Replace(step6, _ =>
+            {
+                scrolller++;
+                return "scrolller/[redacted]";
+            });
+
             // 7. Timestamp normalization (last, so previous substitutions don't interfere).
             var step7 = TimestampRegex.Replace(step6, m =>
             {
@@ -117,7 +140,7 @@ namespace ConditioningControlPanel.Services
                 return m.Value;
             });
 
-            return (step7, new ScrubberCounts(paths, emails, tokens, appdata));
+            return (step7, new ScrubberCounts(paths, emails, tokens, appdata, scrolller));
         }
 
         private static bool TryNormalizeTimestamp(Match m, out string normalized)
