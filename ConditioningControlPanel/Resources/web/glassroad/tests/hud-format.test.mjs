@@ -112,3 +112,14 @@ test('hud copy: no exclamation marks, no em or en dashes, no speech', () => {
     assert.ok(!/speechSynthesis|SpeechSynthesisUtterance/.test(src), f);
   }
 });
+
+test('options: a record saved before mixV 2 keeps its other options and takes the new volume defaults once', () => {
+  const mem = new Map(), storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  mem.set(OPTIONS_KEY, JSON.stringify({ volMaster: 0.8, volMusic: 0.7, volSfx: 0.9, assist: true, quality: 'mid' }));
+  const o = loadOptions(storage);
+  assert.equal(o.volMusic, OPTION_DEFAULTS.volMusic); assert.equal(o.volSfx, OPTION_DEFAULTS.volSfx);
+  assert.equal(o.assist, true); assert.equal(o.quality, 'mid');
+  assert.ok(OPTION_DEFAULTS.volSfx < OPTION_DEFAULTS.volMusic, 'effects sit under the song');
+  saveOptions({ ...o, volSfx: 0.3 }, storage);
+  assert.equal(loadOptions(storage).volSfx, 0.3, 'a choice made after the reset is kept');
+});

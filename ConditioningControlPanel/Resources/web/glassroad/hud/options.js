@@ -8,10 +8,13 @@
 
 export const OPTIONS_KEY = 'glassroad.options.v1';
 export const OPTION_DEFAULTS = Object.freeze({
-  gentlePreview: false, assist: false, volMaster: 0.8, volMusic: 0.7, volSfx: 0.9,
+  gentlePreview: false, assist: false, volMaster: 0.8, volMusic: 1, volSfx: 0.55, mixV: 2,
   frameCap: 'display', renderScale: 'auto', quality: 'auto', showFps: false, steerSens: 1, shadows: true,
 });
 const VOLS = ['volMaster', 'volMusic', 'volSfx'];
+// mixV 2 (owner, 2026-10-22: effects too loud, the song and its voice too quiet): a record saved before it keeps
+// every other option and takes the new volume defaults once
+const MIX_V = 2;
 const BOOLS = ['gentlePreview', 'assist', 'showFps', 'shadows'];
 
 /** The choice rows: allowed values in cycle order (the first is the default). */
@@ -69,7 +72,11 @@ export function choiceLabel(key, v) {
 const store = () => { try { return globalThis.localStorage || null; } catch (e) { return null; } };
 
 export function loadOptions(storage = store()) {
-  try { return cleanOptions(JSON.parse(storage?.getItem(OPTIONS_KEY) || 'null')); } catch (e) { return cleanOptions(null); }
+  try {
+    const raw = JSON.parse(storage?.getItem(OPTIONS_KEY) || 'null');
+    if (raw && typeof raw === 'object' && raw.mixV !== MIX_V) for (const k of VOLS) delete raw[k];
+    return cleanOptions(raw);
+  } catch (e) { return cleanOptions(null); }
 }
 
 export function saveOptions(o, storage = store()) {

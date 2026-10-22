@@ -19,7 +19,7 @@
  */
 import { MeshBasicNodeMaterial, DoubleSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping } from 'three/webgpu';
 import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, normalWorld, positionWorld, cameraPosition,
-  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select } from 'three/tsl';
+  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
 
@@ -41,6 +41,14 @@ export const MUSIC_ROAD = Object.freeze({
   shardM: 2.8, crackW: [0.02, 0.1], shardHue: 0.45,
   rippleMps: 16, rippleW: 0.7, waveW: 6, waveLight: 0.35,
   calmFlatten: 0.55, calmLines: 0.6, calmSheen: 0.6, bigContrast: 0.12, bigLines: 0.4, bassGlow: 0.5,
+});
+
+/** The road edge (owner, pass 2: "make the edges of the track clearer"): a crisp line on the true edge,
+ * a dark gutter inside it, the lane colour held on the outer laneHoldM whatever the music does. */
+export const ROAD_EDGE = Object.freeze({
+  lineM: 0.28, aaPx: 1.5, lineTint: 0.18, lineGain: 1.15,
+  gutterSoftM: 0.06, gutterM: 0.55, gutterDark: 0.5, gutterAlpha: 0.15,
+  laneHoldM: [0.35, 0.55],
 });
 
 /** The music road's uniforms, every one at rest (no song = the road as it always was). */
@@ -149,7 +157,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
 
   // music road (render/musicRoad.js sets these from the song clock; all at rest = the road as before).
   // Paint only: the lines shake and the edges draw, the surface the kart drives on never moves.
-  const M = MUSIC_ROAD, mu = u.music;
+  const M = MUSIC_ROAD, mu = u.music, E = { ...ROAD_EDGE, ...(LOOK.roadEdge || {}) };
   const near = smoothstep(M.nearM[0], M.nearM[1], dist);   // right under the kart the lines move least
   const dAhead = lapM ? fract(p.y.sub(mu.kartS).div(lapM).add(0.5)).sub(0.5).mul(lapM) : p.y.sub(mu.kartS);
   const vib = sin(p.y.mul(TAU / M.vibLambdaM).sub(mu.t.mul(TAU * M.vibHz))).mul(mu.vib).mul(near.mul(0.65).add(0.35));
@@ -197,7 +205,16 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const half = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(16) : float(P.halfWidthM);
   const toEdge = half.sub(au).sub(melody);
   const laneM = float(S.edgeLaneM).mul(mu.bassW.add(1));
-  const edgeW = float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge));
+  // the true edge never moves (no vibration, no melody): the lane's outer stretch stays lane colour there
+  const trueEdge = half.sub(abs(uRaw));
+  const edgeW = max(float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge)), float(1).sub(smoothstep(E.laneHoldM[0], E.laneHoldM[1], trueEdge)));
+  // the edge line: a crisp bright line ON the true edge with a dark gutter inside it, the same in every palette
+  // and music mode; its width grows to at least a pixel and its light shrinks to match, so far off it never
+  // shimmers (fwidth keeps the energy per pixel even)
+  const px = fwidth(trueEdge).mul(E.aaPx);
+  const lineW = max(float(E.lineM), px);
+  const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4));
+  const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge)));
   const centre = float(1).sub(smoothstep(S.centreLineW * 0.5, S.centreLineW, au));
 
   // modes: calm (a break) flattens toward clear glass, big (a drop, a peak) lifts the contrast and lines
@@ -255,15 +272,18 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const range = smoothstep(P.glintNearM[0], P.glintNearM[1], dist).mul(float(1).sub(smoothstep(P.glintFarM[0], P.glintFarM[1], dist)));
   const glint = spot.mul(lit).mul(catchA).mul(range).mul(P.glintGain).mul(u.sheen);
 
-  const rim = float(1).sub(smoothstep(0, P.rimInM, toEdge)).mul(P.rimGain);
+  const rim = float(1).sub(smoothstep(0, P.rimInM, trueEdge)).mul(P.rimGain);
   const polish = refl.add(edgeCol.mul(0.6).add(0.4).mul(rim)).mul(u.sheen).mul(mu.calm.mul(M.calmSheen).add(1)).add(vec3(1, 0.97, 0.99).mul(glint));
   // u.bright carries the beat breath; the drop wave and the shatter add their own light (mu.flash is
   // photosafe gated by the caller, 0 when refused or under Gentle)
   const surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
     .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze).mul(LOOK.roadGain);
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
-  m.colorNode = surface.add(deepCol).add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish);
-  m.opacityNode = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
-    .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)), 0, 1);
+  // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
+  const litCol = surface.add(deepCol).add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
+  m.colorNode = mix(litCol, lineCol, edgeLine);
+  m.opacityNode = max(clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
+    .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1), edgeLine);
   return { material: m, uniforms: u };
 }

@@ -201,12 +201,18 @@ export async function warmAll(renderer, scene, camera, extras = []) {
     objects++;
   });
   scene.updateMatrixWorld(true);
+  // every layer too: the shadow catchers live on their own layer, which the camera only joins in the first
+  // world.update; without them the warm frame never runs the shadow pass, and every caster's depth program
+  // then links in the first menu frame (a 1.5 s stall in Firefox, which has no parallel shader compile)
+  const layers = camera && camera.layers ? camera.layers.mask : null;
+  if (layers !== null) camera.layers.enableAll();
   try {
     await post.compileAsync();
     post.render();
   } catch (e) {
     console.warn('[glassroad/renderer] warm: ' + (e && e.message));
   } finally {
+    if (layers !== null) camera.layers.mask = layers;
     for (const [o, v, f, n] of saved) { o.visible = v; o.frustumCulled = f; if (o.count !== n) o.count = n; }
     for (const m of mats) m.visible = false;
     for (const o of [...temp.children]) temp.remove(o);

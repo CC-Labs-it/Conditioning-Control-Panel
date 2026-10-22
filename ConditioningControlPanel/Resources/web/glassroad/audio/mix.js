@@ -9,7 +9,7 @@
 // feel gap: audio.* has no feel.json group yet (reported). Gains are linear, times in seconds.
 export const MIX = {
   masterGain: 0.8,            // the one master gain (Phase A MASTER_GAIN)
-  musicGain: 0.55,            // music bus at volume 1, under the engine and cues
+  musicGain: 0.85,            // music bus at volume 1: the song carries the voice (owner 2026-10-22: raise it)
   musicFadeInS: 0.6,
   musicFadeOutS: 0.35,
   volTcS: 0.05,               // setVolumes glide

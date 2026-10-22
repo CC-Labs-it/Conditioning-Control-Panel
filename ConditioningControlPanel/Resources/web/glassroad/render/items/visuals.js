@@ -17,6 +17,8 @@
  * opens where it left) and drags a longer, haloed ribbon you can follow; an impact (hit, trap, glass, golden,
  * decoy) throws a wider ring, twice the motes, a second shockwave, confetti in the kind's colour and a fountain
  * of glitter. The self item auras are on the karts (render/karts.js).
+ * Music road pass 2 (render/items/status.js): every racer under an effect wears that effect's look for all to
+ * see, throws fly as comets with a trail and sparks, launches puff and landings burst with a shock ring.
  */
 import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion, Box3, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -30,6 +32,7 @@ import {
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
 import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
+import { createItemStatus } from './status.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
 const OFF = [0, 0, 0];
@@ -80,6 +83,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
   root.add(bubbles.sprite, motes.sprite);
   const confetti = confettiCloud(L.confetti.high * 6 + L.hitConfetti.high * 4);
   root.add(confetti.mesh);
+  const status = createItemStatus(root, feel, { photosafe });
   const CONF = L.confettiColours.map(hexRgb);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
   const meltTex = art && art.tex ? art.tex(L.meltMask) : null;
@@ -212,6 +216,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
     const soft = gentle(), rate = soft ? 0.5 : 1;
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
+    status.update(view, dt, karts);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     if (edge) edge.uniforms.glow.value = cardEdgeGlow(timeS, soft);
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
@@ -445,7 +450,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
     update,
     dispose() {
       scene.remove(root);
-      icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose();
+      status.dispose(); icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose();
       if (shells) shells.dispose();
       if (edge) edge.material.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());

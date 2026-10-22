@@ -108,7 +108,7 @@ function bubbleCloud(cap, atlas) {
  * @param opts { feel (gentle.on), photosafe (request('pop')), cap (bubbles + rings + flashes on screen) }
  * @returns {{ update(live: object[], camera?: object): void, clear(): void, dispose(): void, object: object }}
  */
-export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 64 } = {}) {
+export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 128 } = {}) {
   const atlas = wordAtlas(), cloud = bubbleCloud(cap, atlas.texture);
   scene.add(cloud.sprite);
   const flashed = new Map();   // view id -> the pop's flash was granted (asked once per pop)

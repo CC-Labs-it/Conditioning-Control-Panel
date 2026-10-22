@@ -263,6 +263,7 @@ Queue = emitted in sim steps, flushed once per frame. Bus = emitted synchronousl
 | `item-refused` | `{ racer, id, reason: 'edge' }` | items | hud (racer 0), audio |
 | `item-hit` | `{ victim, by, kind, verdict: 'hit'\|'glass'\|'golden'\|'mercy'\|'decoy', durationS, p }` | items | effects (victim 0), fx, audio, hud (name tag) |
 | `bubble-pop` | `{ racer, i, p }` | items | audio, fx |
+| `word-pop` | `{ w, gate, row, p, tS, streak, lineDone, lineLen, racer: 0 }` | boot (sim/words.js, local player only) | audio, world (render/wordPopFx.js), hud |
 | `effect-start` | `{ kind, durationS, by }` | effects (bus) | audio, hud |
 | `effect-end` | `{ kind, replaced }` | effects (bus) | audio, hud |
 | `bump` | `{ a, b, dv, p }` | contact | fx (shake when a or b is 0), audio |

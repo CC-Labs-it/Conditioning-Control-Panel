@@ -44,6 +44,7 @@ import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
 import { createWordBubbles } from './wordBubbles.js';
+import { createWordPopFx } from './wordPopFx.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -204,6 +205,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   let musicRoad = null, wordVis = null;
   try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
   try { wordVis = createWordBubbles(scene, { feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word bubbles failed: ' + (e && e.message)); }
+  // a word taken: the pop burst, a ring under the kart and light streaks (render/wordPopFx.js, on `word-pop`)
+  let wordFx = null;
+  try { wordFx = createWordPopFx(scene, { particles, wakes, kart, bus, feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word pop fx failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
   const pending = [];
@@ -374,6 +378,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (view.mode === 'menu') lines.object.visible = false;
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera);   // visuals read racer .st (CONTRACT-B1 view.karts)
     if (wordVis) wordVis.update(view.words || []);
+    if (wordFx) wordFx.update(dt, view.camera);
   }
 
   function dispose() {
@@ -387,9 +392,10 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (routes) routes.dispose();
     if (musicRoad) musicRoad.dispose();
     if (wordVis) wordVis.dispose();
+    if (wordFx) wordFx.dispose();
     for (const off of offs) off();
   }
   return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad,
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); } };
+    resetReactions: () => { karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); } };
 }

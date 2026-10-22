@@ -55,6 +55,33 @@ export function bubbleLook(v, { gentle = false, flashOk = false, seed = 0, L = B
   return out;
 }
 
+/**
+ * How big a word pop's juice is (render/wordPopFx.js), from the pop event (sim/words.js): particles in the
+ * scene burst, light streaks flying out, the ground ring's size, and a flare (a line finished, a row, or a
+ * streak landing on a tenth) that also asks photosafe. The streak grows the pop a little at a time, so a
+ * long run of clean pops feels like it is building. Gentle: about half of everything, no flare.
+ */
+export const POP_JUICE = Object.freeze({
+  particles: 18, particlesPerStreak: 0.6, particlesMax: 34, rowParticles: 1.6, lineParticles: 1.4,
+  streaks: 8, streaksPerStreak: 0.35, streaksMax: 16, rowStreaks: 1.5, lineStreaks: 1.5,
+  ringM: 2.2, rowRingM: 3.4, lineRingM: 4.2,
+  streakLenM: [0.7, 1.5], streakSpeedMps: [7, 13], streakLifeS: 0.38, streakW: 0.045, nearM: [2.5, 9], peakAlpha: 0.8,
+  gentleMul: 0.5,
+});
+
+export function popJuice(e, { gentle = false, J = POP_JUICE } = {}) {
+  const streak = Math.max(1, e.streak | 0), row = (e.row | 0) > 0, line = !!e.lineDone;
+  const big = (row ? 1 : 0) + (line ? 1 : 0) + (streak % 10 === 0 ? 1 : 0);
+  const mul = gentle ? J.gentleMul : 1;
+  const p = Math.min(J.particlesMax, J.particles + J.particlesPerStreak * (streak - 1)) * (row ? J.rowParticles : 1) * (line ? J.lineParticles : 1);
+  const s = Math.min(J.streaksMax, J.streaks + J.streaksPerStreak * (streak - 1)) * (row ? J.rowStreaks : 1) * (line ? J.lineStreaks : 1);
+  return {
+    particles: Math.round(p * mul), streaks: Math.round(s * mul),
+    ringM: line ? J.lineRingM : row ? J.rowRingM : J.ringM,
+    flare: !gentle && big > 0, gold: line || streak % 10 === 0, level: Math.min(1, (streak - 1) / 20),
+  };
+}
+
 /** Font size (px) that fits a word into a cell of width px (bold system-ui at about 0.6 em per glyph). */
 export function fitFontPx(word, cellPx, { max = 0.3, min = 0.12, fill = 0.8, perChar = 0.6 } = {}) {
   const n = Math.max(1, String(word).length);

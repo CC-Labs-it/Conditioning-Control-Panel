@@ -274,7 +274,7 @@ async function boot() {
     if (!song || !song.words.length) { words = null; wordCount.show(false); return; }
     if (!words || words.song !== song) {
       words = createWordRun(song, track, { seed }); words.song = song;
-      words.onPop((e) => { bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on')); });
+      words.onPop((e) => { bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e); });
     } else words.reset(seed);
     wordCount.show(true);
   }
@@ -448,7 +448,7 @@ async function boot() {
     const pv = P.view;
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
-    if (words) wordCount.set(words.pops, words.total);
+    if (words) wordCount.set(words.pops, words.total, words.streak);
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,

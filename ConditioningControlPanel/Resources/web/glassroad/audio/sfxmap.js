@@ -74,6 +74,21 @@ export function popRungNext(st, t, streakS, rungs) {
   return st.rung;
 }
 
+/** The word-pop ladder rung: the pop streak (sim/words.js) climbs the pentatonic ladder and wraps to its foot. */
+export const wordPopRung = (streak, rungs) => Math.max(0, (streak | 0) - 1) % Math.max(1, rungs | 0);
+
+/**
+ * A word bubble taken (sim/words.js pop event): the bubble pop on the streak's rung, a fifth on top for a
+ * row (a trigger or gate word), and an octave sparkle when the pop finishes a whole line.
+ */
+export function wordPopPlan(p, feel) {
+  const r = semisToRate(Math.min(12, ladderSemis(wordPopRung(p.streak, mixGet(feel, 'popRungs')))));
+  const plan = [one('bubble-pop', p.row ? 1 : 0.85, r)];
+  if (p.row) plan.push(one('bubble-pop', 0.6, r * semisToRate(7), 0.04));
+  if (p.lineDone) plan.push(one('bubble-pop', 0.7, r * 2, 0.08));
+  return plan;
+}
+
 const fg = (feel, path, def) => { try { const v = feel?.get(path); return v === undefined ? def : v; } catch (e) { return def; } };
 const one = (id, vol = 1, rate = 1, at = 0) => ({ id, vol, rate, at });
 
@@ -155,6 +170,7 @@ export function sfxPlan(name, p = {}, o = {}) {
       const rung = popRungNext(o.st, o.now || 0, mixGet(feel, 'popStreakS'), mixGet(feel, 'popRungs'));
       return [one('bubble-pop', 1, semisToRate(Math.min(12, ladderSemis(rung))))];
     }
+    case 'word-pop': return wordPopPlan(p, feel);
     case 'overtake':
       if (p.racer === 0) return [one('overtake')];
       return p.passed === 0 ? null : [];

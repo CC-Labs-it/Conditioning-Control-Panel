@@ -134,6 +134,13 @@ export const B1_CUES = {
     if (mine || (by === 0 && kind === 'shatter')) HIT[kind]?.(syn);
     else if (by === 0) syn.tone(syn.semis(24), { type: 'sine', dur: 0.15, vol: 0.05, at: 0.06 });   // yours landed
   },
+  // a word bubble taken (sim/words.js): the synth twin of sfxmap.js wordPopPlan
+  'word-pop'(syn, { streak = 1, row = 0, lineDone = false }) {
+    const s = 12 + ladderSemis(Math.max(0, (streak | 0) - 1) % m(syn, 'popRungs'));
+    pop(syn, s, row ? 0.1 : 0.08);
+    if (row) syn.tone(syn.semis(s + 7), { type: 'sine', dur: 0.3, vol: 0.05, at: 0.04 });
+    if (lineDone) syn.tone(syn.semis(s + 12), { type: 'sine', dur: 0.4, vol: 0.05, at: 0.08 });
+  },
   'bubble-pop'(syn, { racer }) {
     if (racer !== 0) { pop(syn, 12, 0.05); return; }
     const s = st(syn), t = now(syn);
