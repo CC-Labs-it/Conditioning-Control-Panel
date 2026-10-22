@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
+using static ConditioningControlPanel.Services.GazeTargetScoring;
 
 namespace ConditioningControlPanel.Services;
 
@@ -51,54 +52,13 @@ public class GazeFocusService : IDisposable
     // because each boost replaces the previous timer.
     private const int LingerBoostThrottleMs = 250;
 
-    // Predictive target scoring — replaces the old hard-radius slack hit-test.
-    // For each candidate target we compute:
-    //   score = exp(-d² / 2σ²)  (Gaussian falloff with distance d from rect edge)
-    //         + StickyBonus     (if target is the one we were already dwelling on)
-    //         + FlashTypeBonus  (flashes outrank background bubbles, foreground intent)
-    // The single highest score above ScoreThreshold wins. The Gaussian replaces
-    // the binary "inside slack / outside slack" cliff with a soft falloff —
-    // small jitter at the boundary no longer toggles the lock. The sticky
-    // bonus prevents ping-pong when two targets are equidistant: noise has
-    // to push the cursor meaningfully closer to a *different* target before
-    // the lock switches. This is the "feels glued" behavior — the same trick
-    // iPhone keyboards use (bias the candidate set with a prior, don't just
-    // pick the literal hit point).
-    // Sigmas sized for quadrant-level reach ("if we are in that quadrant we
-    // are looking at that target"): a bubble stays the acquired target out
-    // to ≈390 dips — roughly a quarter of a 1080p screen — so the cursor
-    // lock-on (SetCursorLock) can draw the cursor in from its whole region.
-    private const double BubbleScoreSigma = 160; // ≈ 2.45σ (≈390 dips) at threshold
-    private const double FlashScoreSigma = 90;
-    private const double StickyBonus = 0.20;
-    private const double FlashTypeBonus = 0.15;
-    private const double ScoreThreshold = 0.05;
+    // Predictive target scoring (sigmas, sticky / flash bonuses, threshold) lives in
+    // CCP.Core GazeTargetScoring, shared with the Avalonia head; the model is documented there.
 
     // ---- Two-stage zoom refine (see GazeRefineOverlay) --------------------
-    // A raw gaze point can never be precise: the fovea is ~1 degree and the eye
-    // micro-moves through every fixation, so the true point of regard lives
-    // somewhere inside an error blob (~90-200px for a webcam rig). When two
-    // targets both sit in that blob with near-identical scores, taking the top
-    // score is a coin flip — and losing that flip is exactly what users report
-    // as "it selected the wrong thing". So instead of guessing we magnify.
-    //
-    // Every threshold here is set to under-trigger on purpose. A refine panel
-    // the user didn't need is far more annoying than an occasional wrong pick
-    // they can just re-dwell, so the rule demands ALL of:
-    //   * the winner is genuinely engaged (not a wisp at the threshold),
-    //   * the runner-up is genuinely engaged too,
-    //   * their scores are within RefineCloseRatio of each other,
-    //   * they are close enough together to plausibly share one error blob,
-    //   * and the winner did NOT need the sticky bonus to win (if it did, the
-    //     user has already been holding it for a whole dwell — that's evidence,
-    //     not ambiguity).
-    // Ambiguity is judged on scores WITHOUT the sticky bonus: sticky exists to
-    // stop lock ping-pong, not to answer "which target did they mean".
-    private const double RefineCloseRatio = 0.85;        // runner-up within 15% of the winner
-    private const double RefineMinWinnerScore = 0.30;    // ≈1.55σ — clearly in a target's region
-    private const double RefineMinRunnerUpScore = 0.20;  // ≈1.79σ
-    private const double RefineMaxSpreadDips = 280;      // centre-to-centre; wider than this is not one blob
-    private const int MaxRefineCandidates = 4;
+    // When the gaze blob covers two near-equal targets the head magnifies instead of guessing.
+    // The ambiguity rule and its thresholds live in CCP.Core GazeTargetScoring
+    // (AmbiguousLeader / RefineChoices), deliberately set to under-trigger.
 
     // Refine session limits. The panel must be impossible to get stuck in:
     // it is click-through (so it never traps input), it dies on look-away, it
@@ -396,6 +356,7 @@ public class GazeFocusService : IDisposable
     private const int CalOriginCacheMs = 1000;
     private static Vector _calOriginDips;
     private static DateTime _calOriginAt = DateTime.MinValue;
+    private static int _calOriginMonitorRevision = -1;
 
     /// <summary>
     /// Origin of the calibrated monitor expressed in DESKTOP DIPs, or (0,0)
@@ -413,7 +374,10 @@ public class GazeFocusService : IDisposable
         try
         {
             var now = DateTime.UtcNow;
-            if ((now - _calOriginAt).TotalMilliseconds < CalOriginCacheMs) return _calOriginDips;
+            int revision = App.Webcam?.GazeMonitorRevision ?? 0;
+            if (_calOriginMonitorRevision == revision
+                && (now - _calOriginAt).TotalMilliseconds < CalOriginCacheMs) return _calOriginDips;
+            _calOriginMonitorRevision = revision;
 
             var result = default(Vector);
             var webcam = App.Webcam;
@@ -652,22 +616,11 @@ public class GazeFocusService : IDisposable
             // the same blob. The panel shows the real choice set, not just the
             // top two — if three bubbles overlapped, hiding the third would
             // make the refine itself feel wrong.
-            var ordered = new List<ScoredCandidate>(_scored);
-            ordered.Sort((x, y) => y.BaseScore.CompareTo(x.BaseScore));
-            if (ordered.Count < 2) return false;
-
-            var head = ordered[0];
-            var hc = new Point(head.Bounds.X + head.Bounds.Width / 2.0, head.Bounds.Y + head.Bounds.Height / 2.0);
-
             var picked = new List<GazeRefineCandidate>(MaxRefineCandidates);
-            foreach (var s in ordered)
+            foreach (var s in RefineChoices(_scored, ScoreOf))
             {
                 if (picked.Count >= MaxRefineCandidates) break;
-                if (s.BaseScore < RefineMinRunnerUpScore) continue;
                 if (s.Bounds.IsEmpty) continue;
-                var c = new Point(s.Bounds.X + s.Bounds.Width / 2.0, s.Bounds.Y + s.Bounds.Height / 2.0);
-                var dx = c.X - hc.X; var dy = c.Y - hc.Y;
-                if (Math.Sqrt(dx * dx + dy * dy) > RefineMaxSpreadDips) continue;
                 var cand = BuildRefineCandidate(s);
                 if (cand != null) picked.Add(cand);
             }
@@ -956,12 +909,12 @@ public class GazeFocusService : IDisposable
                 try { rect = new Rect(fw.Left, fw.Top, fw.Width, fw.Height); }
                 catch { continue; }
                 if (!TargetOnCalScreen(rect, calScreen)) continue;
-                var dist = DistanceFromRectEdge(rect, p);
+                var dist = DistanceFromRectEdge(rect.X, rect.Y, rect.Width, rect.Height, p.X, p.Y);
                 // Base score = geometry + the type prior. The sticky bonus is
                 // deliberately EXCLUDED from the base: the refine stage asks
                 // "which target did they mean", and sticky is a lock-stability
                 // trick, not evidence of intent.
-                var baseScore = GaussianScore(dist, FlashScoreSigma) + FlashTypeBonus;
+                var baseScore = FlashBaseScore(dist);
                 var score = baseScore;
                 if (ReferenceEquals(_currentFlash, fw)) score += StickyBonus;
                 _scored.Add(new ScoredCandidate(fw, null, null, rect, baseScore));
@@ -988,8 +941,8 @@ public class GazeFocusService : IDisposable
                 var rect = b.GetGazeBounds();
                 if (rect.IsEmpty) continue;
                 if (!TargetOnCalScreen(rect, calScreen)) continue;
-                var dist = DistanceFromRectEdge(rect, p);
-                var baseScore = GaussianScore(dist, BubbleScoreSigma);
+                var dist = DistanceFromRectEdge(rect.X, rect.Y, rect.Width, rect.Height, p.X, p.Y);
+                var baseScore = BubbleBaseScore(dist);
                 var score = baseScore;
                 if (ReferenceEquals(_currentBubble, b)) score += StickyBonus;
                 _scored.Add(new ScoredCandidate(null, b, null, rect, baseScore));
@@ -1015,8 +968,8 @@ public class GazeFocusService : IDisposable
                 var rect = ft.GetGazeBounds();
                 if (rect.IsEmpty) continue;
                 if (!TargetOnCalScreen(rect, calScreen)) continue;
-                var dist = DistanceFromRectEdge(rect, p);
-                var baseScore = GaussianScore(dist, BubbleScoreSigma);
+                var dist = DistanceFromRectEdge(rect.X, rect.Y, rect.Width, rect.Height, p.X, p.Y);
+                var baseScore = BubbleBaseScore(dist);
                 var score = baseScore;
                 if (ReferenceEquals(_currentFloating, ft)) score += StickyBonus;
                 _scored.Add(new ScoredCandidate(null, null, ft, rect, baseScore));
@@ -1049,40 +1002,16 @@ public class GazeFocusService : IDisposable
     private void EvaluateAmbiguity(Bubble? winBubble, FlashWindow? winFlash, IAttentionTarget? winFloating)
     {
         if (!RefineEnabled) return;
-        if (_scored.Count < 2) return;
         if (DateTime.UtcNow < _refineSuppressedUntil) return;
-
-        // Highest and second-highest BASE score, distinct candidates.
-        int iA = -1, iB = -1;
-        for (int i = 0; i < _scored.Count; i++)
-        {
-            if (iA < 0 || _scored[i].BaseScore > _scored[iA].BaseScore) { iB = iA; iA = i; }
-            else if (iB < 0 || _scored[i].BaseScore > _scored[iB].BaseScore) { iB = i; }
-        }
-        if (iA < 0 || iB < 0) return;
-
-        var a = _scored[iA];
-        var b = _scored[iB];
-
-        if (a.BaseScore < RefineMinWinnerScore) return;
-        if (b.BaseScore < RefineMinRunnerUpScore) return;
-        if (a.BaseScore <= 0) return;
-        if (b.BaseScore / a.BaseScore < RefineCloseRatio) return;
-
-        // Both must plausibly live inside one gaze error blob. Two targets on
-        // opposite sides of the screen scoring alike is a scoring artifact, not
-        // an ambiguity the user is experiencing.
-        var ca = new Point(a.Bounds.X + a.Bounds.Width / 2.0, a.Bounds.Y + a.Bounds.Height / 2.0);
-        var cb = new Point(b.Bounds.X + b.Bounds.Width / 2.0, b.Bounds.Y + b.Bounds.Height / 2.0);
-        var dx = ca.X - cb.X; var dy = ca.Y - cb.Y;
-        if (Math.Sqrt(dx * dx + dy * dy) > RefineMaxSpreadDips) return;
 
         // If the sticky bonus is what decided the winner, the user has already
         // been holding that target for a full dwell. Trust them.
-        if (!a.Matches(winBubble, winFlash, winFloating)) return;
-
-        _ambiguous = true;
+        var lead = AmbiguousLeader(_scored, ScoreOf);
+        _ambiguous = lead >= 0 && _scored[lead].Matches(winBubble, winFlash, winFloating);
     }
+
+    private static GazeScore ScoreOf(ScoredCandidate s)
+        => new(s.BaseScore, s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height);
 
     /// <summary>One candidate's geometry-only standing for this tick.</summary>
     private readonly struct ScoredCandidate
@@ -1138,23 +1067,6 @@ public class GazeFocusService : IDisposable
         {
             return true;
         }
-    }
-
-    private static double GaussianScore(double dist, double sigma)
-    {
-        var d = dist / sigma;
-        return Math.Exp(-0.5 * d * d);
-    }
-
-    /// <summary>
-    /// Perpendicular distance from p to the nearest edge of r. Returns 0 if
-    /// p is inside r.
-    /// </summary>
-    private static double DistanceFromRectEdge(Rect r, Point p)
-    {
-        var dx = Math.Max(0, Math.Max(r.X - p.X, p.X - (r.X + r.Width)));
-        var dy = Math.Max(0, Math.Max(r.Y - p.Y, p.Y - (r.Y + r.Height)));
-        return Math.Sqrt(dx * dx + dy * dy);
     }
 
     private readonly struct GazeHit

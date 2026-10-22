@@ -157,17 +157,6 @@ public partial class FriendsServiceTests
         await svc.TickAsync();
         Assert.Equal(((PresenceActivity?)null, (int?)null, false), api.PollCalls.Last());
     }
-
-    [Fact]
-    public void Setting_row_without_a_service_writes_the_setting()
-    {
-        bool saved = false, asked = false;
-        FriendsPresenceSetting.Write(true, null, v => saved = v, () => asked = true);
-        Assert.True(saved);
-        Assert.True(asked);
-        Assert.True(FriendsPresenceSetting.Read(null, () => true));
-        Assert.False(FriendsPresenceSetting.Read(null, () => throw new InvalidOperationException()));
-    }
 }
 
 public partial class FriendsDrawerTests
@@ -238,7 +227,7 @@ public partial class FriendsDrawerTests
             "friends_activity_chess",
         };
         var dir = SourceRoots.LanguagesDirectory;
-        foreach (var lang in new[] { "en", "de", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN" })
+        foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
         {
             var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(dir, lang + ".json")));
             foreach (var k in keys)

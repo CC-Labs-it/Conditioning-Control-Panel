@@ -1,8 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
@@ -17,63 +15,11 @@ namespace ConditioningControlPanel.Tests;
 /// had nowhere to go (accessibility report, "doesn't go below 1% which still hurts my eyes").</para>
 ///
 /// <para>Zero has to survive four call sites, each of which used to carry its own <c>Max(1, ...)</c>,
-/// so the floor is asserted per site rather than once.</para>
+/// so the floor is asserted per site rather than once. The setting and the policy itself are pinned
+/// in Core (<c>Tests/CCP.Core.Tests/BrainDrainVisualPolicyTests.cs</c>).</para>
 /// </summary>
 public class BrainDrainBlurZeroTests
 {
-    // ---- the settings model ----------------------------------------------------------
-
-    [Fact]
-    public void TheSettingAcceptsZero()
-    {
-        var s = new AppSettings { BrainDrainBlurStrength = 0 };
-        Assert.Equal(0, s.BrainDrainBlurStrength);
-    }
-
-    [Theory]
-    [InlineData(-5, 0)]
-    [InlineData(0, 0)]
-    [InlineData(1, 1)]
-    [InlineData(50, 50)]
-    [InlineData(100, 100)]
-    [InlineData(250, 100)]
-    public void TheClampStillHoldsBothEnds(int written, int expected)
-    {
-        var s = new AppSettings { BrainDrainBlurStrength = written };
-        Assert.Equal(expected, s.BrainDrainBlurStrength);
-    }
-
-    /// <summary>
-    /// Widening the floor must not rewrite a saved choice. Someone sitting on the old minimum of 1
-    /// keeps 1 - which is a different setting from 0 and always was.
-    /// </summary>
-    [Fact]
-    public void AnOldFileHoldingTheOldFloorIsLeftAlone()
-    {
-        var s = new AppSettings { BrainDrainBlurStrength = 1 };
-        Assert.Equal(1, s.BrainDrainBlurStrength);
-        Assert.False(BrainDrainVisualPolicy.IsSilent(s.BrainDrainBlurStrength));
-    }
-
-    // ---- the policy ------------------------------------------------------------------
-
-    [Theory]
-    [InlineData(0, true)]
-    [InlineData(-1, true)]      // defensive: a corrupt file that dodged the setter
-    [InlineData(1, false)]
-    [InlineData(100, false)]
-    public void SilentMeansZeroAndNothingElse(int strength, bool silent) =>
-        Assert.Equal(silent, BrainDrainVisualPolicy.IsSilent(strength));
-
-    [Theory]
-    [InlineData(true, 50, true)]
-    [InlineData(true, 1, true)]
-    [InlineData(true, 0, false)]    // the feature is on, the picture is not
-    [InlineData(false, 50, false)]
-    [InlineData(false, 0, false)]
-    public void TheBaseFeatureWantsTheBlurOnlyWhenBothHalvesSayYes(bool enabled, int strength, bool wants) =>
-        Assert.Equal(wants, BrainDrainVisualPolicy.WantsBlur(enabled, strength));
-
     // ---- the melt bubble -------------------------------------------------------------
 
     /// <summary>
@@ -110,7 +56,7 @@ public class BrainDrainBlurZeroTests
     [Theory]
     [InlineData("Services/Notifications/OverlayService.cs", 2)]   // the start gate + RefreshBrainDrainState
     [InlineData("Services/AutonomyService.cs", 1)]                // the 5-second pulse
-    [InlineData("Services/Chaos/EffectPayload.cs", 1)]            // the melt bubble's pop
+    [InlineData("Services/Chaos/EffectPayloadFiring.cs", 1)]      // the melt bubble's pop
     public void EveryVisualCallSiteAsksThePolicy(string file, int expectedMentions)
     {
         var src = ReadSource(file.Split('/'));
