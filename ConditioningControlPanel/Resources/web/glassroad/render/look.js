@@ -44,4 +44,20 @@ export const LOOK = {
   lineLenM: [6, 14], lineRadiusM: [5, 12], lineSpanM: 70, lineFlowMps: 45, lineWidthM: 0.04,
   lineFromPct: 0.7, lineGain: 1.6, lineAlpha: 0.35,
   tendrilColour: '#fff6e6', tendrilM: 60, tendrilGain: 0.45, ringColour: '#ffd36b', ringMaxM: 4,
+  // wave 1 art (render/art.js, render/dressing.js; art/ART.md for tile sizes and bound radii)
+  artRoadTileM: [12, 16], artBandSpan: 0.999, artHaze: 0.06, artHazeTileM: 4, artRailCore: 0.6, artRailCoreAlpha: 0.35,
+  artChevronM: 6, artChevronWideM: 4, artChevronFloor: 0.25, artGalaxyGain: 0.9, artStarGain: 0.7,
+  artRingAheadM: [12, 22, 32], artRingScale: 1, artRingRiseS: 0.12, artRingOpenS: 0.35, artRingHideS: 1.2,
+  artRingTurnRadps: 0.8, artGentleFace: 0.5, artFinishFace: 0.3, artFinishClearM: 1.5,
+  artLight: { sky: '#ffe3f1', ground: '#2a1640', hemi: 1.6, sun: 1.4 },
+  artScatter: 44, artScatterSideM: [3, 26], artScatterUpM: [-10, 14], artScatterMarginM: 2, artScatterAirM: 9,
+  artScatterKinds: [
+    { id: 'card-drop', w: 3, scale: [2.5, 5], spin: 0.5 }, { id: 'card-lens', w: 3, scale: [2.5, 5], spin: 0.5 },
+    { id: 'card-orbit', w: 3, scale: [2.5, 5], spin: 0.5 }, { id: 'card-petal', w: 3, scale: [2.5, 5], spin: 0.5 },
+    { id: 'pocket-watch', w: 3, scale: [2, 4], spin: 0.4 }, { id: 'bubble', w: 4, scale: [1.5, 4], spin: 0.2 },
+    { id: 'spiral-disc', w: 2, scale: [2, 5], spin: 0.6 }, { id: 'slot-cabinet-lod1', w: 1.5, scale: [1.5, 2.5], spin: 0.15 },
+    { id: 'chess-king-lod1', w: 1, scale: [2, 4], spin: 0.25 }, { id: 'chess-queen-lod1', w: 1, scale: [2, 4], spin: 0.25 },
+    { id: 'chess-rook-lod1', w: 1, scale: [2, 4], spin: 0.25 }, { id: 'chess-bishop-lod1', w: 1, scale: [2, 4], spin: 0.25 },
+    { id: 'chess-knight-lod1', w: 1, scale: [2, 4], spin: 0.25 }, { id: 'chess-pawn-lod1', w: 1.5, scale: [2, 4], spin: 0.25 },
+  ],
 };

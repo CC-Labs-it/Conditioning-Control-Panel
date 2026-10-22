@@ -1,10 +1,14 @@
 /* render/scene.js - buildWorld (CONTRACT.md section 6): road, rails, pads and jump lips from the
- * track MeshData, the spiral sky, the greybox teacup kart, floating props for speed reference,
- * particles and speed lines. update(view) moves everything from the interpolated kart and FxState.
+ * track MeshData, the spiral sky, the teacup kart, floating props for speed reference, particles and
+ * speed lines. update(view) moves everything from the interpolated kart and FxState.
+ * opts.art (render/art.js) dresses the world in the wave 1 art: textured road, rails, pads and sky,
+ * the EMI kart, countdown rings, the finish arch and a seeded scatter (render/dressing.js). Without
+ * it, or for any asset that failed, the greybox stand-in stays.
  */
 import {
   Scene, Group, Mesh, InstancedMesh, Object3D, BufferGeometry, BufferAttribute, Float32BufferAttribute, Color, Vector2,
   SphereGeometry, LatheGeometry, TorusGeometry, CylinderGeometry, RingGeometry, IcosahedronGeometry,
+  HemisphereLight, DirectionalLight,
 } from 'three/webgpu';
 import { S } from '../sim/state.js';
 import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.js';
@@ -13,7 +17,8 @@ import { createPalette } from './materials/palette.js';
 import { createRoadMaterial } from './materials/road.js';
 import { createRailMaterial } from './materials/rails.js';
 import { createPadMaterial } from './materials/pads.js';
-import { createSkyMaterial } from './materials/sky.js';
+import { createSkyMaterial, SKY_PALETTES } from './materials/sky.js';
+import { buildKart, buildCountdown, buildFinish, buildScatter } from './dressing.js';
 import { createKartMaterial, createPropMaterial } from './materials/kart.js';
 import { createGlowMaterial } from './materials/glow.js';
 import { createParticles } from './particles.js';
@@ -76,25 +81,43 @@ function props(track) {
   return im;
 }
 
-export function buildWorld(track, feel) {
+export function buildWorld(track, feel, { art = null, bus = null, seed = 1 } = {}) {
   const scene = new Scene();
   const pal = createPalette();
-  const owned = [];
+  const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
 
-  const sky = createSkyMaterial(pal);
+  if (art) {
+    // the glTF props and kart are lit (standard / physical materials); everything else is unlit
+    const L = LOOK.artLight;
+    scene.add(new HemisphereLight(L.sky, L.ground, L.hemi));
+    const sun = new DirectionalLight(L.sky, L.sun);
+    sun.position.set(LOOK.lightDir[0], LOOK.lightDir[1], LOOK.lightDir[2]);
+    scene.add(sun);
+  }
+  const sky = createSkyMaterial(pal, art);
   const skyMesh = add(new Mesh(new SphereGeometry(LOOK.skyRadiusM, 48, 32), sky.material));
   skyMesh.renderOrder = -1; skyMesh.frustumCulled = false;
-  const road = createRoadMaterial(pal);
+  const road = createRoadMaterial(pal, art);
   add(meshFrom(track.meshes.road, road.material));
-  add(meshFrom(track.meshes.rails, createRailMaterial(pal).material));
-  const pad = createPadMaterial(LOOK.padColour), lip = createPadMaterial(LOOK.lipColour);
+  add(meshFrom(track.meshes.rails, createRailMaterial(pal, art).material));
+  const pad = createPadMaterial(LOOK.padColour, art && art.tex('boost-chevron-mask')), lip = createPadMaterial(LOOK.lipColour);
   add(meshFrom(track.meshes.pads, pad.material));
   add(meshFrom(track.meshes.jumps, lip.material));
-  add(props(track));
+  const scatter = buildScatter(art, track, seed);
+  add(scatter ? scatter.object : props(track));
+  const countdown = buildCountdown(art, track, pal), finish = buildFinish(art, track, pal);
+  if (countdown) {
+    add(countdown.object);
+    if (bus) {
+      offs.push(bus.on('countdown', ({ n = 3 } = {}) => countdown.pulse(n, feel.get('juice.countdownPulses'))));
+      offs.push(bus.on('go', () => countdown.go()));
+    }
+  }
+  if (finish) add(finish.object);
 
   const kart = add(new Group());
-  const body = new Mesh(kartGeometry(), createKartMaterial().material);
+  const body = buildKart(art) || new Mesh(kartGeometry(), createKartMaterial().material);
   kart.add(body);
   const ring = createGlowMaterial(LOOK.ringColour);
   const ringMesh = new Mesh(new RingGeometry(LOOK.saucerR * 0.9, LOOK.saucerR * 1.1, 48).rotateX(-Math.PI / 2), ring.material);
@@ -143,6 +166,10 @@ export function buildWorld(track, feel) {
     const b = sec(pm.to), t = clamp(pm.t, 0, 1);
     const mixOf = (get) => lerp(fromW.reduce((acc, [x, w]) => acc + get(x) * w, 0), get(b), t);
     pal.set(fromW.map(([x, w]) => [x.palette, w]), b.palette, t);
+    const gw = [0, 0, 0], gi = (id) => Math.max(0, SKY_PALETTES.indexOf(id));
+    for (const [x, w] of fromW) gw[gi(x.palette)] += w * (1 - t);
+    gw[gi(b.palette)] += t;
+    sky.uniforms.galaxy.value.set(gw[0], gw[1], gw[2]);
     const band = mixOf((x) => x.bandSpeed) * (fx.bandSpeedMul || 1) * scroll;
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
@@ -174,6 +201,11 @@ export function buildWorld(track, feel) {
     tendrilMesh.scale.set(1, LOOK.tendrilM, 1);
     tendril.uniforms.opacity.value = (fx.tendril || 0) * LOOK.tendrilGain;
 
+    const turn = LOOK.artRingTurnRadps * scroll;
+    if (countdown) countdown.update(dt, turn, gentle);
+    if (finish) finish.update(dt, turn * 0.5);
+    if (scatter) scatter.update(dt, scroll);
+
     particles.update(dt, k, fx, kart);
     lines.update(dt, k, fx, kart);
   }
@@ -181,6 +213,7 @@ export function buildWorld(track, feel) {
   function dispose() {
     for (const o of owned) o.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
     particles.dispose(); lines.dispose();
+    for (const off of offs) off();
   }
   return { scene, kart, update, dispose };
 }

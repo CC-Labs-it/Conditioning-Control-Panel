@@ -23,6 +23,7 @@ import { createProgress } from './sim/progress.js';
 import { loadTrack } from './track/load.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
+import { loadArt } from './render/art.js';
 import { createChaseCamera } from './render/camera.js';
 import { createGentle } from './fx/gentle.js';
 import { createPhotosafe } from './fx/photosafe.js';
@@ -106,7 +107,12 @@ async function boot() {
   setCard('start', { title: (track.name && track.name.en) || 'Threshold' });
 
   const renderer = await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer });
-  const world = buildWorld(track, feel);
+  // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
+  const art = qs.get('art') === '0' ? null : await loadArt(renderer);
+  if (art && art.failed.length) debug.artFailed = art.failed;
+  const seed = +qs.get('seed') || ((Math.random() * 2147483646) | 0) + 1;
+  debug.seed = seed;
+  const world = buildWorld(track, feel, { art, bus, seed });
   const cam = createChaseCamera(feel);
   debug.backend = renderer.backend;
 
