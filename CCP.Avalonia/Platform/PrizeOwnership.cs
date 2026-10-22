@@ -15,6 +15,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         /// <summary>WPF <c>PrizeGrants.FlashDriftBounce</c>: a wire id, spelled as the server does.</summary>
         internal const string FlashDriftBounce = "fx.flash.drift_bounce";
+        /// <summary>WPF <c>PrizeGrants.BubbleRain</c> / <c>BubbleSpiralIn</c>: the two ambient bubble motions.</summary>
+        internal const string BubbleRain = "fx.bubble.rain";
+        internal const string BubbleSpiralIn = "fx.bubble.spiral_in";
 
         /// <summary>The DEBUG override spec, read once; always null in Release.</summary>
         internal static readonly string? OverrideSpec = ReadOverride();
