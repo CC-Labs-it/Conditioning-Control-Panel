@@ -2452,3 +2452,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-cursor-glow: +410
 - Rabbit Caller cursor halo ported: Core maths (size/breath/follow), click-through topmost Avalonia overlay with Arm/Disarm/MoveToPx/CloseActive seam, closed by ChaosRunHost teardown and panic (PanicSurfaces).
 - Row chaos-cursor-glow missing -> stub (nothing arms it until the Rabbit Caller skill/run loop exist).
+
+## avalonia-port/emi-desk-extras: +518
+- Emi desk toss on Avalonia: drag lift cue, fling detection, landing squash and the land face, using the new Core `EmiToss` (EmiFlingDetector + EmiTossRules.LandingScale), which WPF now calls too.
+- Row win-emi-desk-extras missing -> stub (land body frame and dizzy chain missing; Tube has no user path).
