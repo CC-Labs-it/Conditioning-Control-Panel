@@ -794,7 +794,7 @@ Each desktop atlas accounts for 5,592,404 RGBA8 bytes; each phone atlas accounts
 for 349,524. Download bytes are separate from GPU residency. All 24 rows have
 zero triangles and boundRadiusM 0. The phone family brings the 109.333317 MiB
 Wave 3 persistent baseline, including 17 engine icons, to 113.333302 MiB before
-other Wave 4 families. A concurrent 9 MiB menu backdrop would make 122.333302 MiB.
+other Wave 4 families. A concurrent phone menu backdrop adds 7.910156 MiB, for 121.243458 MiB.
 
 Validation:
 - All 24 final KTX2 files pass strict validation and were decoded for review.
