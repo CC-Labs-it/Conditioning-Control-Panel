@@ -196,6 +196,17 @@ public class BouncingTextService : IDisposable
         CompositionTarget.Rendering += Animate;
     }
 
+    /// <summary>A Bubble Count round holding the other effects (#1418) takes the mandatory video's
+    /// pause, same rules ("show over videos" keeps the text up).</summary>
+    internal void HoldForFullscreen() => OnVideoStartedPause(null, EventArgs.Empty);
+
+    /// <summary>End of that hold: the mandatory video's resume. A video that took the screen in the
+    /// meantime keeps its own pause.</summary>
+    internal void ReleaseFullscreenHold()
+    {
+        if (App.Video?.IsPlaying == true) return;
+        OnVideoEndedResume(null, EventArgs.Empty);
+    }
     /// <summary>
     /// Measure the actual rendered size of a string at the engine's current font size. Handed to
     /// the engine as its <see cref="BouncingTextEngine.Measure"/> delegate; answering (0,0) makes
@@ -355,7 +366,8 @@ public class BouncingTextService : IDisposable
             App.Achievements?.TrackCornerHit();
             OnCornerHit?.Invoke(this, EventArgs.Empty);
 
-            if (settings.BouncingTextFxCornerBurst)
+            // Gentle visuals: no ring snapping in at 90% opacity.
+            if (settings.BouncingTextFxCornerBurst && !Safety.GentleVisuals.On)
             {
                 double cx = l.PosX + l.TextWidth / 2;
                 double cy = l.PosY + l.TextHeight / 2;
