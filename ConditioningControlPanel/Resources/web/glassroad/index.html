@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Racing Thoughts</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/build/three.webgpu.min.js",
+      "three/webgpu": "./vendor/three/build/three.webgpu.min.js",
+      "three/tsl": "./vendor/three/build/three.tsl.min.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b0a12; color: #f4eef8; overflow: hidden; }
+    #view { display: block; width: 100vw; height: 100vh; touch-action: none; outline: none; }
+    #card { position: fixed; inset: 0; display: grid; place-items: center; font: 16px/1.4 system-ui, sans-serif; }
+    #card[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="view" tabindex="0" aria-label="Race view"></canvas>
+  <div id="hud"></div>
+  <div id="card" data-kind="start">
+    <div class="card-body">
+      <h1 class="card-title">Threshold</h1>
+      <p class="card-note" id="card-note">Warming up</p>
+      <button type="button" id="card-go" disabled>Start</button>
+    </div>
+  </div>
+  <script type="module" src="./boot.js"></script>
+</body>
+</html>
