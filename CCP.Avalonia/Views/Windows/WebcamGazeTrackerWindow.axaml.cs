@@ -25,6 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private const int SmoothFrames = 5;     // small extra smoothing on top of the upstream iris-vector smoothing
 
         private readonly Queue<Point> _smoothBuffer = new();
+        private int _monitorRevision = -1;
 
         private readonly Canvas _dotCanvas;
         private readonly Ellipse _dot;
@@ -44,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<Button>("BtnClose")!.Click += (_, _) => Close();
             this.FindControl<Button>("BtnErrorClose")!.Click += (_, _) => Close();
             KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+            WebcamCalibrationWindow.PlaceOnCalibratedScreen(this);
         }
 
         protected override void OnOpened(EventArgs e)
@@ -61,6 +63,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ShowError("No calibration loaded. Run Calibrate (16-point) first — the tracker test needs a calibration to project gaze onto the screen.");
                 return;
             }
+            RefreshMonitor();
+            Screens.Changed += OnScreensChanged;
             tracker.OnGazeMove += OnGazeMove;
             tracker.StateChanged += OnTrackerStateChanged;
         }
@@ -68,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
+            Screens.Changed -= OnScreensChanged;
             WebcamTracker.Instance.OnGazeMove -= OnGazeMove;
             WebcamTracker.Instance.StateChanged -= OnTrackerStateChanged;
         }
@@ -77,10 +82,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!WebcamTracker.Instance.IsRunning) Close();
         }
 
+        private void OnScreensChanged(object? sender, EventArgs e) => RefreshMonitor();
+
+        internal void RefreshMonitor(IReadOnlyList<global::Avalonia.Platform.Screen>? liveScreens = null)
+        {
+            var tracker = WebcamTracker.Instance;
+            var screen = tracker.GetGazeScreen(liveScreens ?? Screens.All);
+            if (_monitorRevision == tracker.GazeMonitorRevision) return;
+            _monitorRevision = tracker.GazeMonitorRevision;
+            _smoothBuffer.Clear();
+            if (screen == null) return;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            // A maximized window must first restore to move to a display that just returned.
+            var maximized = WindowState == WindowState.Maximized;
+            if (maximized) WindowState = WindowState.Normal;
+            Position = screen.Bounds.Position;
+            if (maximized) WindowState = WindowState.Maximized;
+        }
+
         private void OnGazeMove(Point screenPoint)
         {
             // OnGazeMove is marshalled onto the UI thread by the service (Service.Dispatch),
             // so we can update UI directly.
+            RefreshMonitor();
             _smoothBuffer.Enqueue(screenPoint);
             while (_smoothBuffer.Count > SmoothFrames) _smoothBuffer.Dequeue();
 

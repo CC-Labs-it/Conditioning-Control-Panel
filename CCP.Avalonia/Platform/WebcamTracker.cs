@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using PixelRect = Avalonia.PixelRect;
+using Avalonia.Platform;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -134,6 +137,33 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
         private volatile WebcamCalibrationData? _calibration;
         private volatile bool _calibrationLoaded;
+
+        // Runtime-only monitor resolution. A primary fallback must never replace the saved
+        // identity: the chosen display can wake up with a different desktop origin or order.
+        private (string? Name, PixelRect Bounds, double Scaling, bool Primary)[] _gazeScreens = Array.Empty<(string?, PixelRect, double, bool)>();
+        private string? _gazeMonitorName;
+        private int _gazeMonitorRevision;
+        internal int GazeMonitorRevision => Volatile.Read(ref _gazeMonitorRevision);
+        internal bool GazeMonitorFallback { get; private set; }
+
+        /// <summary>UI thread. Resolve against the live list on each use, including gaze frames that
+        /// arrive before Screens.Changed. Calibration geometry and identity are never rewritten.</summary>
+        internal Screen? GetGazeScreen(IReadOnlyList<Screen> screens)
+        {
+            var name = Calibration?.MonitorBounds?.DeviceName;
+            var snapshot = screens.Select(s => (s.DisplayName, s.Bounds, s.Scaling, s.IsPrimary)).ToArray();
+            if (!string.Equals(name, _gazeMonitorName, StringComparison.OrdinalIgnoreCase)
+                || !_gazeScreens.SequenceEqual(snapshot))
+            {
+                _gazeScreens = snapshot;
+                _gazeMonitorName = name;
+                Interlocked.Increment(ref _gazeMonitorRevision);
+            }
+            var choice = WebcamMonitorRule.Select(name, screens.Select(s => s.DisplayName ?? "").ToArray(),
+                Array.FindIndex(snapshot, s => s.IsPrimary));
+            GazeMonitorFallback = choice.TemporaryFallback;
+            return choice.Index >= 0 ? screens[choice.Index] : null;
+        }
 
         public bool IsRunning => _run != null;
         /// <summary>Why the last start failed, for the user; null after a good start.</summary>

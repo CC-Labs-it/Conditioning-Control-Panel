@@ -18,7 +18,6 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
 using Xunit;
-using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -78,7 +77,7 @@ public sealed class WebcamCalibrationTests
     private static void WithTracker(bool start, Action<WebcamTracker, WebcamCalibrationData> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -355,6 +354,9 @@ public sealed class WebcamCalibrationTests
         Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
         Assert.Equal(screen.Bounds.Position, win.Position);
         tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
-        Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+        var fallback = new WebcamQuickRecalWindow();
+        Assert.Equal(WindowStartupLocation.Manual, fallback.WindowStartupLocation); // legacy identity: primary, never stale origin
+        Assert.Equal((fallback.Screens.Primary ?? fallback.Screens.All[0]).Bounds.Position, fallback.Position);
+        Assert.Equal(-99999, tracker.Calibration.MonitorBounds!.X); // fallback never rewrites the saved geometry
     });
 }

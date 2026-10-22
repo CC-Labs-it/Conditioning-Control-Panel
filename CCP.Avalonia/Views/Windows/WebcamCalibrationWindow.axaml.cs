@@ -445,12 +445,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return final;
         }
 
-        /// <summary>WPF App.ApplyCalibrationScreenPlacement: start on the monitor the last calibration
-        /// ran on (matched by pixel origin) so Maximized lands there; unknown monitor: leave it.</summary>
-        internal static void PlaceOnCalibratedScreen(Window window)
+        /// <summary>WPF App.ApplyCalibrationScreenPlacement: resolve the saved identity against
+        /// the live display set, temporarily using primary while that display is unavailable.</summary>
+        internal static void PlaceOnCalibratedScreen(Window window,
+            IReadOnlyList<global::Avalonia.Platform.Screen>? liveScreens = null)
         {
-            if (Tracker.Calibration?.MonitorBounds is not { } mb || window.Screens is not { } screens) return;
-            if (screens.All.FirstOrDefault(s => s.Bounds.X == mb.X && s.Bounds.Y == mb.Y) is not { } sc) return;
+            if (Tracker.Calibration == null) return;
+            if (Tracker.GetGazeScreen(liveScreens ?? window.Screens.All) is not { } sc) return;
             window.WindowStartupLocation = WindowStartupLocation.Manual;
             window.Position = sc.Bounds.Position;
         }
