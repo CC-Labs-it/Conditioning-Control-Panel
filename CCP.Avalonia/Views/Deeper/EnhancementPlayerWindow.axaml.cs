@@ -224,6 +224,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
             // window its native move/resize/maximize for a colour. Left native and untinted.
             Closed += (_, _) => { try { (Owner as Window)?.Activate(); } catch { } };
+            // WPF EnhancementPlayerWindow.xaml.cs:111-114: friends see "in Deeper" while the player is on
+            // screen. Loaded/Closed rather than the constructor, so a window that never shows never publishes.
+            Loaded += (_, _) => { try { Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Deeper); } catch (Exception ex) { Log.Debug(ex, "[Friends] enter Deeper"); } };
+            Closed += (_, _) => { try { Platform.FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Deeper); } catch (Exception ex) { Log.Debug(ex, "[Friends] leave Deeper"); } };
 
             _statusPill = this.FindControl<Border>("StatusPill")!;
             _statusPillText = this.FindControl<TextBlock>("StatusPillText")!;

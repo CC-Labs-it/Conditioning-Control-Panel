@@ -700,6 +700,8 @@ namespace ConditioningControlPanel.Avalonia
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
                 Sessions = new SessionRunner(new SessionLogService());
+                // WPF SessionEngine.cs:387: friends stop seeing "in a session" once it ends (entered at StartSession).
+                Sessions.Stopped += (_, _) => Platform.FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session);
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)

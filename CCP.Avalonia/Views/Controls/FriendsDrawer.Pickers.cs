@@ -2,7 +2,7 @@
 // BuildCard/ActionButton/ShowResult): the card's Invite / Poke / Send a watch buttons and the picker
 // each opens inline in the card, over IFriendsService.
 // The action buttons carry WPF's MDL2 glyphs as Fluent icons (E8A7/E7C9/E714, fluent-icons 2026-10-10).
-// ponytail: no Pop() juice and no FriendsSfx sounds (.Juice.cs / FriendsSfx are not on this head). The Goon
+// ponytail: no Pop() juice (.Juice.cs is not on this head) and no FriendsSfx cues on the pickers yet. The Goon
 // and chess tiles stay shut here: GoonHostService and PieceByPieceHostService are WPF-only, so this head
 // can neither open a room nor a board (FriendsInviteCodes is the seam that lights them when they move).
 using System;

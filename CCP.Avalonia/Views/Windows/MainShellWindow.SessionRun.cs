@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     runner.Start(session);
+                    Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session);   // WPF SessionEngine.cs:243
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
                     StartConditioningTimeTracker();   // ... and StartEngine :423

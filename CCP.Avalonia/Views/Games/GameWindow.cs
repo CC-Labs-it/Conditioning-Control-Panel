@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
-            ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            [BreakoutDemoId] = new(BreakoutDemoId, "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
             // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
             [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
             // WPF JustDropHostService: the live shop at app.cclabs.app, not a page off disk (GameWindow.JustDrop.cs).
@@ -49,6 +49,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
         };
+
+        internal const string BreakoutDemoId = "breakoutdemo";
 
         private static readonly List<GameWindow> Open = new();
 
@@ -78,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
-        internal GameWindow() : this(Games["breakoutdemo"]) { }
+        internal GameWindow() : this(Games[BreakoutDemoId]) { }
 
         internal GameWindow(Game spec)
         {
@@ -96,6 +98,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            // WPF BackRoomHostService.cs:384-385 / :765-766: the Breakout page is "in Breakout" until the window goes.
+            if (spec.Id == BreakoutDemoId)
+            {
+                Opened += (_, _) => { try { FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout); } catch (Exception ex) { Log.Debug(ex, "[Friends] enter Breakout"); } };
+                Closed += (_, _) => { try { FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout); } catch (Exception ex) { Log.Debug(ex, "[Friends] leave Breakout"); } };
+            }
         }
 
         private WebAssetServer? _server;

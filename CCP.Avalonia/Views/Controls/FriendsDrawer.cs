@@ -464,13 +464,25 @@ public sealed partial class FriendsDrawer : Border
         else ShowTimed(f.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
         await SafeRefreshAsync();
     }
-    internal async Task<ActResult> ReportAsync(string friendId, string reason)
+    internal Task<ActResult> ReportAsync(string friendId, string reason) => ReportAsync(friendId, friendId, reason);
+
+    /// <summary>WPF ReportAsync (FriendsDrawer.Honesty.cs:105): <paramref name="rowId"/> is where the words go.</summary>
+    internal async Task<ActResult> ReportAsync(string rowId, string accountId, string reason)
     {
         if (_svc == null) return ActResult.TryLater;
+        FriendsSfx.Click();
         ActResult r;
-        try { r = await _svc.ReportAsync(friendId, reason); } catch { r = ActResult.TryLater; }
-        ShowTimed(friendId, Loc.Get(r == ActResult.Done ? "friends_report_done" : FriendsDrawerRules.ActResultKey(r)), r == ActResult.Done);
+        try { r = await _svc.ReportAsync(accountId, reason); } catch { r = ActResult.TryLater; }
+        if (r == ActResult.Done) ShowTimed(rowId, Loc.Get("friends_report_done"), true);
+        else ShowActResult(rowId, r);
         return r;
+    }
+
+    /// <summary>WPF ShowActResult (FriendsDrawer.Honesty.cs:119): the denied cue, then the words.</summary>
+    private void ShowActResult(string rowId, ActResult r)
+    {
+        FriendsSfx.Denied();
+        ShowTimed(rowId, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
     }
 
     internal async Task<ActResult> ConfirmAsync(string id, string name, string what)
@@ -482,12 +494,13 @@ public sealed partial class FriendsDrawer : Border
         catch { r = ActResult.TryLater; }
         if (r == ActResult.Done)
         {
+            FriendsSfx.Dismiss();
             if (what == "block") RememberBlock(id, name);
             if (_openId == id) _openId = null;
             // The row is gone after the refresh, so the word goes where the player is looking.
             Say(Loc.GetF(what == "block" ? "friends_blocked_done" : "friends_removed_done", name), true);
         }
-        else ShowTimed(id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
+        else ShowActResult(id, r);
         await SafeRefreshAsync();
         Render();
         return r;
@@ -514,8 +527,16 @@ public sealed partial class FriendsDrawer : Border
             var decline = Pill(Loc.Get("friends_request_decline"), Raised, Text, "friends-decline");
             decline.Margin = new Thickness(6, 0, 0, 0);
             decline.Click += async (_, _) => await AnswerRequestAsync(r, "decline");
+            // WPF FriendsDrawer.cs:799-817: the MDL2 E712 "more" pill opens the request menu below itself.
+            var more = Pill(new IconGlyph { Kind = IconKind.MoreHorizontal, Size = 11 }, Brushes.Transparent, Muted, "friends-request-more");
+            more.Margin = new Thickness(2, 0, 0, 0);
+            more.Padding = new Thickness(5, 4, 5, 4);
+            ToolTip.SetTip(more, Loc.Get("friends_action_more"));
+            AutomationProperties.SetName(more, Loc.Get("friends_action_more"));
+            more.Click += (_, _) => { FriendsSfx.Click(); RequestMenu(r).Open(more); };
             buttons.Children.Add(accept);
             buttons.Children.Add(decline);
+            buttons.Children.Add(more);
         }
         else
         {
@@ -525,20 +546,31 @@ public sealed partial class FriendsDrawer : Border
         }
         Grid.SetColumn(mid, 1);
         Grid.SetColumn(buttons, 2);
-        ContextMenu? menu = null;
-        if (incoming)   // WPF FriendsDrawer.cs:785-818 builds the menu for incoming requests only
-        {
-            var block = MenuItem("block");
-            block.Click += async (_, _) => await BlockRequesterAsync(r);
-            menu = new ContextMenu { ItemsSource = new[] { block } };
-        }
         return new Border
         {
-            ContextMenu = menu,
+            ContextMenu = incoming ? RequestMenu(r) : null,   // WPF FriendsDrawer.cs:785-818: incoming requests only
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
             Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
         };
+    }
+
+    /// <summary>WPF BuildRequestMenu (FriendsDrawer.Honesty.cs:80) + AddRequestMenuExtras (.Blocked.cs:126):
+    /// Block, then Report with one line per reason, worded on the request row.</summary>
+    private ContextMenu RequestMenu(FriendRequest r)
+    {
+        var block = MenuItem("block");
+        block.Click += async (_, _) => await BlockRequesterAsync(r);
+        var subs = new List<MenuItem>();
+        foreach (var reason in ReportReason.All)
+        {
+            var sub = MenuItem("report_" + reason);
+            sub.Click += async (_, _) => await ReportAsync("in:" + r.Id, r.Id, reason);
+            subs.Add(sub);
+        }
+        var report = MenuItem("report");
+        report.ItemsSource = subs;
+        return new ContextMenu { ItemsSource = new[] { block, report }, Tag = "friends-request-menu:" + r.Id };
     }
 
     private void RememberBlock(string id, string name)
@@ -554,10 +586,11 @@ public sealed partial class FriendsDrawer : Border
         try { result = await _svc.BlockAsync(request.Id); } catch { result = ActResult.TryLater; }
         if (result == ActResult.Done)
         {
+            FriendsSfx.Dismiss();
             RememberBlock(request.Id, request.Name);
             Say(Loc.GetF("friends_blocked_done", request.Name), true);
         }
-        else ShowTimed("in:" + request.Id, Loc.Get(FriendsDrawerRules.ActResultKey(result)), false);
+        else ShowActResult("in:" + request.Id, result);
         await SafeRefreshAsync();
         Render();
         return result;
@@ -604,16 +637,18 @@ public sealed partial class FriendsDrawer : Border
     internal async Task<ActResult> UnblockAsync(BlockedEntry b)
     {
         if (_svc == null) return ActResult.TryLater;
+        FriendsSfx.Click();   // WPF FriendsDrawer.Blocked.cs:240-247
         ActResult r;
         try { r = await _svc.UnblockAsync(b.Id); } catch { r = ActResult.TryLater; }
         if (r == ActResult.Done)
         {
             FriendsBlockList.Shared.Remove(b.Account, b.Id);
+            FriendsSfx.Accepted();
             Say(Loc.GetF("friends_unblocked_done", b.Name), true);
             await SafeRefreshAsync();
             Render();
         }
-        else ShowTimed("blocked:" + b.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
+        else ShowActResult("blocked:" + b.Id, r);
         return r;
     }
     internal void ToggleBlocked() { _showBlocked = !_showBlocked; Render(); }

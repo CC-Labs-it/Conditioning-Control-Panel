@@ -145,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 else await MessageDialog.ShowAsync(owner, Loc.Get("title_connection_error"), Loc.Get("msg_remote_connection_error"));
                 return;
             }
+            Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote);   // WPF RemoteControlService.cs:200
             ShowSession(code);
         }
 

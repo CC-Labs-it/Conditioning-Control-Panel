@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using ConditioningControlPanel;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -511,5 +512,91 @@ public sealed class FriendsDrawerTests
         Assert.Equal(subscriber, Tagged<WrapPanel>(d, "friends-invite-line")!.IsVisible);
         Tagged<Button>(d, "friends-invite-link")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(1, asked);
+    });
+
+    /// <summary>WPF FriendsDrawer.cs:799-818 + BuildRequestMenu (.Honesty.cs:80): an incoming request's
+    /// "more" pill and right-click both carry Block and Report (one line per reason); a report goes to
+    /// the wire and its words land on the request row.</summary>
+    [Fact]
+    public Task ARequestsMoreButtonOffersBlockAndReportByReason() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        var more = Tagged<Button>(d, "friends-request-more")!;
+        Assert.Equal(Loc.Get("friends_action_more"), ToolTip.GetTip(more));
+        Assert.Equal(IconKind.MoreHorizontal, more.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind);
+        var menu = Tagged<Border>(d, "friends-request-in:u_req")!.ContextMenu!;
+        var items = menu.ItemsSource!.Cast<MenuItem>().ToList();
+        Assert.Equal(new[] { "friends-menu-item:block", "friends-menu-item:report" }, items.Select(i => (string)i.Tag!));
+        var reasons = items[1].ItemsSource!.Cast<MenuItem>().ToList();
+        Assert.Equal(ReportReason.All.Select(r => "friends-menu-item:report_" + r), reasons.Select(i => (string)i.Tag!));
+        reasons[0].RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        await Until(() => Tagged<TextBlock>(d, "friends-result") != null);
+        Assert.Contains("report", wire.Ops);
+        Assert.Equal(Loc.Get("friends_report_done"), Tagged<TextBlock>(d, "friends-result")!.Text);
+    });
+
+    /// <summary>WPF FriendsSfx on the block paths (.Honesty.cs:35/121, .Blocked.cs:143/240-247): a refused
+    /// block is denied, a block sinks, an unblock clicks then unlocks.</summary>
+    [Fact]
+    public Task BlockAndUnblockPlayWpfsCues() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var tags = new List<string>();
+        var (oldAudio, oldNow, oldVolume) = (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow, CoreSettings.Current.MasterVolume);
+        var t = DateTime.UtcNow;
+        try
+        {
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            FriendsLanding.SfxNow = () => t = t.AddSeconds(2);   // past every gap: each cue is judged on its own
+            CoreSettings.Current.MasterVolume = 50;
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.BlockRequesterAsync(svc.Snapshot.Incoming[0]));
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.BlockRequesterAsync(svc.Snapshot.Incoming[0]));
+            Assert.Equal(ActResult.Done, await d.ConfirmAsync("u_on", "Mia", "block"));
+            Assert.Equal(ActResult.Done, await d.UnblockAsync(new BlockedFriend("u_bad", "Bob")));
+            Assert.Equal(new[] { "friends-denied", "friends-sink", "friends-sink", "friends-click", "friends-accepted" }, tags);
+        }
+        finally
+        {
+            (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow) = (oldAudio, oldNow);
+            CoreSettings.Current.MasterVolume = oldVolume;
+        }
+    });
+
+    /// <summary>WPF BackRoomHostService.cs:385/765 and EnhancementPlayerWindow.xaml.cs:113-114: the Breakout
+    /// window and the Deeper player are the friends activity while they are on screen, and leave it on close.</summary>
+    [Fact]
+    public Task TheBreakoutAndDeeperWindowsArePresenceWhileOpen() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var (svc, _) = Service();
+        var oldHead = FriendsHead.Service;
+        FriendsHead.Service = svc;
+        try
+        {
+            var game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+            game.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(PresenceActivity.Breakout, svc.Activity);
+            var player = new global::ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
+            player.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(PresenceActivity.Deeper, svc.Activity);
+            game.Close();
+            Assert.Equal(PresenceActivity.Deeper, svc.Activity);
+            player.Close();
+            Assert.Equal(PresenceActivity.Panel, svc.Activity);
+        }
+        finally { FriendsHead.Service = oldHead; }
+        return Task.CompletedTask;
     });
 }
