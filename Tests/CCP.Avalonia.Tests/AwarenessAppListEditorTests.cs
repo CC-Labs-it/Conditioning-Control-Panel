@@ -22,7 +22,7 @@ public sealed class AwarenessAppListEditorTests
     [InlineData(true)]
     [InlineData(false)]
     public Task EnterOrBlurCommitsCanonicalAppsAndPersistsWithoutSavingPartialTyping(bool enter) =>
-        AvaloniaTestDispatcher.RunAsync(async () =>
+        AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -47,13 +47,19 @@ public sealed class AwarenessAppListEditorTests
                 box.Text = "  Chrome.exe; DISCORD.EXE, chrome; ms-teams  ";
                 Assert.Equal(new[] { "firefox" }, service.Current.KeywordTriggerApps);
                 if (enter)
+                {
+                    Assert.True(box.Focus());
+                    Assert.True(box.IsFocused);
                     box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+                    Assert.False(box.IsFocused); // WPF moves focus off the box on Enter
+                }
                 else
                     box.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent));
                 Assert.Equal(new[] { "Chrome", "DISCORD", "ms-teams" }, service.Current.KeywordTriggerApps);
                 Assert.Equal("Chrome, DISCORD, ms-teams", box.Text);
-                // The editor's own debounced save must reach the sandbox file.
-                await Task.Delay(750);
+                // The editor must queue its own debounced save; flush it deterministically (P08).
+                Assert.True(service.HasPendingSave);
+                service.SaveImmediate();
                 Assert.Equal(service.Current.KeywordTriggerApps, new SettingsService().Current.KeywordTriggerApps);
                 // Clearing OnlyListed is valid: the eventual engine must suppress every unidentified/unlisted app.
                 box.Text = ", ; .exe";
@@ -77,5 +83,6 @@ public sealed class AwarenessAppListEditorTests
                 if (saved is null) File.Delete(settingsPath);
                 else File.WriteAllBytes(settingsPath, saved);
             }
+            return Task.CompletedTask;
         });
 }
