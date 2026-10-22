@@ -31,7 +31,9 @@ namespace ConditioningControlPanel.Services.Commands
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    App.LockCard?.ShowLockCard(phrase, amount, customStrict: true);
+                    // Strict follows the user's own Lock Card switch, which asks twice before it
+                    // turns on (no Esc). An AI card used to force strict on every player.
+                    App.LockCard?.ShowLockCard(phrase, amount, customStrict: false);
                 });
                 return Task.FromResult(true);
             }
