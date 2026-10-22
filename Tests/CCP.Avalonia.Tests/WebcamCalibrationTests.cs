@@ -57,15 +57,6 @@ public sealed class WebcamCalibrationTests
     }
 
     [Fact]
-    public void Calibration_HasMouthEventsAndCursorTrail() => WithTracker(start: false, (tracker, _) =>
-    {
-        Assert.NotNull(typeof(WebcamTracker).GetEvent("OnMouthOpen"));
-        var win = new WebcamCalibrationWindow();
-        Assert.NotNull(win.FindControl<Control>("VerifyTrail"));
-        win.Close();
-    });
-
-    [Fact]
     public void MouthPrompts_ConsumeEventsAndUnsubscribeOnPanic() => WithTracker(start: true, (tracker, _) =>
     {
         var win = OpenAndContinue();

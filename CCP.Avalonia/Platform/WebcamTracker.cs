@@ -425,7 +425,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (ev == BlinkEvent.Blink) Dispatcher.UIThread.Post(() => OnBlink?.Invoke());
                 else if (ev == BlinkEvent.EyesClosedLong) Dispatcher.UIThread.Post(() => OnEyesClosedLong?.Invoke());
             }
-            ProcessMouthLandmarks(lm, DateTime.UtcNow);   // WPF :1740 order: after blink, skipped when both irises are missing
+            ProcessMouthLandmarks(lm, DateTime.UtcNow, run);   // WPF :1740 order: after blink, skipped when both irises are missing
             (double Dx, double Dy)? vl = left == null ? null
                 : _gaze.NormalizeIris(left.IrisCenter, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], rightEye: false);
             (double Dx, double Dy)? vr = right == null ? null
@@ -468,10 +468,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { gaze.HeadPoseFailed(); Log.Debug("[Webcam] head pose failed: {Error}", ex.Message); return null; }
         }
 
-        internal bool ProcessMouthLandmarks(float[][] landmarks, DateTime now)
+        internal bool ProcessMouthLandmarks(float[][] landmarks, DateTime now) => ProcessMouthLandmarks(landmarks, now, _run);
+
+        /// <summary>The frame's own capture run tags the event, so a stop drops it before delivery.</summary>
+        private bool ProcessMouthLandmarks(float[][] landmarks, DateTime now, Run? run)
         {
             bool fired = _mouth.Update(MouthOpenDetector.ComputeMar(landmarks), now, CoreSettings.Current.WebcamSensitivity);
-            var run = _run;
             if (fired) Dispatcher.UIThread.Post(() => { if (run != null && ReferenceEquals(_run, run)) OnMouthOpen?.Invoke(); });
             return fired;
         }
