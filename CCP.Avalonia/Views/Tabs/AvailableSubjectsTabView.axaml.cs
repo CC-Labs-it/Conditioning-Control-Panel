@@ -24,17 +24,24 @@ public partial class AvailableSubjectsTabView : UserControl
     public AvailableSubjectsTabView()
     {
         InitializeComponent();
-        var gates = ReadGates();
-        PaintSnapshot(_snapshot with { SignedIn = gates.SignedIn }, gates);
+        Repaint();
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
+        // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
+        // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) Repaint(); };
         Loaded += (_, _) =>
         {
-            var current = ReadGates();
-            PaintSnapshot(_snapshot with { SignedIn = current.SignedIn }, current);
+            Repaint();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
         Unloaded += (_, _) => SubjectsAmbientFx.Stop();
+    }
+
+    private void Repaint()
+    {
+        var gates = ReadGates();
+        PaintSnapshot(_snapshot with { SignedIn = gates.SignedIn }, gates);
     }
 
     internal void SetNarrow(bool narrow)
@@ -105,14 +112,12 @@ public sealed class LobbyCardView
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
         Title = LobbyPageRules.Title(row, Loc.Get);
-        var summary = LobbySummary.For(row, Loc.Get);
-        var label = Loc.Get(LobbyPageRules.LabelKey(row.Game));
-        Line = summary.Length > 0 ? label + " · " + summary : label;
+        Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
-        HasButton = row.CanJoin || row.CanWatch;
-        Locked = row.CanJoin && !gates.CanJoin(row.Game);
+        HasButton = LobbyPageRules.HasButton(row);
+        Locked = LobbyPageRules.Locked(row, gates);
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
-        ButtonOpacity = Locked ? 0.55 : 1;
+        ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
     public string Title { get; }
     public string Line { get; }

@@ -16,4 +16,10 @@ public static class LobbyPageRules
     public static string Title(LobbyRow row, Func<string, string> loc) =>
         row.State == LobbyRowState.Playing && !string.IsNullOrEmpty(row.OpponentName)
             ? string.Format(loc("lobby_row_versus"), row.HostName, row.OpponentName) : row.HostName;
+    /// <summary>The card's second line: game label, then the settings summary when there is one.</summary>
+    public static string Line(string gameLabel, string summary) => summary.Length > 0 ? gameLabel + " · " + summary : gameLabel;
+    public static bool HasButton(LobbyRow row) => row.CanJoin || row.CanWatch;
+    /// <summary>The join would be refused by the game's gate: the button shows with a lock.</summary>
+    public static bool Locked(LobbyRow row, LobbyGates gates) => row.CanJoin && !gates.CanJoin(row.Game);
+    public static double ButtonOpacity(bool locked) => locked ? 0.55 : 1.0;
 }

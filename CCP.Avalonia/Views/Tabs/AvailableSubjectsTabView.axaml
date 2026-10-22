@@ -49,9 +49,11 @@
    <Border Margin="0,0,6,8" CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1">
     <Grid ColumnDefinitions="*,Auto">
      <StackPanel>
-      <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis"/>
+      <StackPanel Orientation="Horizontal">
+       <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis" MaxWidth="190"/>
+       <Ellipse Width="7" Height="7" Margin="7,1,0,0" VerticalAlignment="Center" Fill="#5FFFD0" IsVisible="{Binding Friend}" ToolTip.Tip="{loc:Str lobby_friend_tip}"/>
+      </StackPanel>
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
-      <fx:IconGlyph Kind="People" Size="12" IsVisible="{Binding Friend}" ToolTip.Tip="{loc:Str lobby_friend_tip}"/>
      </StackPanel>
      <!-- ponytail: the row's game/claim door is not wired in this slice. -->
      <Button Grid.Column="1" IsEnabled="False" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -94,7 +96,7 @@
      <DockPanel>
       <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,10">
        <TextBlock Text="{loc:Str lobby_list_open}" Theme="{StaticResource LobbyHead}"/>
-       <Border CornerRadius="10" Background="#FF8CC0" Padding="8,1,8,2" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock x:Name="LobbyOpenCount" Text="0" Theme="{StaticResource LobbyCount}"/></Border>
+       <Border CornerRadius="10" Background="#FF5FA2" Padding="8,1,8,2" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock x:Name="LobbyOpenCount" Text="0" Theme="{StaticResource LobbyCount}"/></Border>
       </StackPanel>
       <Border x:Name="AvailableSubjectsEmptyPanel" DockPanel.Dock="Top">
        <StackPanel><TextBlock x:Name="TxtLobbyEmpty" Text="{loc:Str lobby_empty_open}" Theme="{StaticResource LobbyColumnEmpty}"/>

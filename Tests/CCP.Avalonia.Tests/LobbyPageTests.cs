@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -86,6 +87,49 @@ public sealed class LobbyPageTests
         Assert.False(row.HasButton);
         Assert.Contains("5+0", row.Line);
         Assert.True(Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "LobbyFriendsList").Items.Single()).Friend);
+    });
+
+    [Fact]
+    public void ShowingTheTabAgainRedrawsSignInGateAndLanguage() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        page.ReadGates = () => LobbyGates.From(false, false, false);
+        page.IsVisible = false;
+        page.IsVisible = true;
+        Assert.Equal(Loc.Get("lobby_signed_out"), Named<TextBlock>(page, "TxtLobbyEmpty").Text);
+        page.IsVisible = false;
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("de");
+            page.IsVisible = true;
+            Assert.Equal(Loc.Get("lobby_empty_open"), Named<TextBlock>(page, "TxtLobbyEmpty").Text);
+            Assert.True(Named<TextBlock>(page, "TxtBecomeASubjectSubtitle").IsVisible);
+            Assert.Equal(Loc.Get("lobby_list_open") + "  0", Named<Button>(page, "TabOpen").Content);
+        }
+        finally { LocalizationManager.Instance.SetLanguage("en"); }
+    });
+
+    [Fact]
+    public void SignedOutRemoteHostButtonOpensSignInInsteadOfRemote() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        shell.Show();
+        try
+        {
+            var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
+            page.ReadGates = () => LobbyGates.From(false, false, false);
+            shell.ShowTab("availablesubjects");
+            Named<Button>(page, "BtnBecomeASubject").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(shell.OwnedWindows, w => w is LoginDialog);
+            Assert.True(page.IsVisible);
+        }
+        finally
+        {
+            foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
+            shell.Close();
+        }
     });
 
     [Fact]
