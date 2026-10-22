@@ -27,6 +27,9 @@ export const WASH_MS = 900, WORD_MS = 830, WORD_GAP_MS = 500, SPIRAL_STRETCH = 1
 const SPIRAL_EDGE = 512, SPIRAL_FPS = 30;
 const SPIRAL_PRESETS = ['screen', 'candy', 'pinwheel', 'mint', 'ribbon', 'star'];
 
+/** True inside a desktop host (WebView2 or the WebKitGTK string carrier); the web and dev.html are neither. */
+export { desktopHosted } from '../../../shared/carrier.js';
+
 /**
  * routeFx({ hosted, fx, page }) -> a ctx.fx shaped function, or null.
  * On the desktop host the five ids go to the page renderer and the rest to the host

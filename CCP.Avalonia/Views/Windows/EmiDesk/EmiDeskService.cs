@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
     /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats, needs EmiLineEngine + EmiState), the nudge machine, the
+    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off (<c>TubeDeskVisibility</c>). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>
@@ -110,6 +110,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 // Invalidate a summon parked behind the mute prompt before anything else.
                 _summonGen++;
+                // WPF EmiDeskService.cs:422: sending her away ends the welcome show she is presenting.
+                if (_window?.PresentationActive == true) _window.StopPresentation();
 
                 if (_window == null) return;
                 if (!IsOut && !WindowOnScreen) return;
@@ -132,6 +134,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 IsOut = false;
                 RaiseOutChanged();
             }
+        }
+
+        /// <summary>WPF :598 BeginPresentation: the welcome show borrows the real widget, bypassing the desk
+        /// preference and the mute prompt without changing either; she stays out afterwards, as on WPF.</summary>
+        internal EmiDeskWindow? BeginPresentation()
+        {
+            var window = EnsureWindow();
+            if (window == null) return null;
+            _summonGen++;   // a summon parked behind the mute prompt must not finish over the show
+            if (!IsOut) window.RestorePlacement();
+            IsOut = true; RaiseOutChanged();
+            return window;
         }
 
         private EmiDeskWindow? EnsureWindow()

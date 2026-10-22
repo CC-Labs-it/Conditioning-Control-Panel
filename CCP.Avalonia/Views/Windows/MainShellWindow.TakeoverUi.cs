@@ -150,8 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             foreach (var root in roots)
             {
                 tried = root;
-                try { System.IO.Directory.CreateDirectory(root); }
-                catch (Exception ex) { Log.Debug("Speech model folder {Root} not creatable: {E}", root, ex.Message); continue; }
+                if (SpeechModelFolder.Ensure(root) == null) continue;
                 if (await Platform.ExternalOpener.OpenAsync(this, root)) return;
                 break;
             }
