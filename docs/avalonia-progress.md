@@ -2440,3 +2440,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/banner-link-overrun: +40
 - Banner web link stays inside its line at the narrower header (lead + link in one embedded DockPanel; link ellipsizes like WPF); headless test narrows HeaderBannerHost explicitly.
+
+## avalonia-port/chaos-gif-cascade: +798
+- Chaos gif rain ported: Core GifCascade maths (WPF timing/caps/motion) + click-through FrameClock overlay ticking every frame; panic surface gif-cascade. Row stub (no caller yet).
+- Review P3s fixed: spawn band uses the window's DesktopScaling (mixed DPI).
