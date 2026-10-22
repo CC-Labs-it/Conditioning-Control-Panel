@@ -23,12 +23,52 @@ namespace CCP.Avalonia.Tests;
 public sealed class SessionRunWireTests
 {
     [Fact]
+    public Task Bottom_bar_tracks_session_pause_countdown_preference_and_stop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previousSessions = AvApp.Sessions;
+        var previousStopped = CoreEngine.StoppedHook;
+        var previousCountdown = CoreSettings.Current.ShowSessionCountdown;
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        var shell = new MainShellWindow();
+        try
+        {
+            CoreEngine.StoppedHook = shell.OnEngineStopped;
+            CoreSettings.Current.ShowSessionCountdown = true;
+            shell.StartSession(new Session { Id = "bar-clock", Name = "Bar clock", DurationMinutes = 10 });
+            var status = shell.Named<TextBlock>("TxtPresetsStatus")!;
+            Assert.StartsWith("Bar clock - ", status.Text);
+            Assert.EndsWith(" left", status.Text);
+            runner.Pause();
+            shell.SetPauseButton(true); // A held tick must still repaint the mark immediately.
+            Assert.EndsWith(" [" + Loc.Get("label_paused") + "]", status.Text);
+            CoreSettings.Current.ShowSessionCountdown = false;
+            shell.OnSessionTick();
+            Assert.Equal("Bar clock [" + Loc.Get("label_paused") + "]", status.Text);
+            runner.Stop();
+            Assert.Equal("", status.Text);
+        }
+        finally
+        {
+            runner.Stop();
+            CoreEngine.StoppedHook = previousStopped;
+            AvApp.Sessions = previousSessions;
+            CoreSettings.Current.ShowSessionCountdown = previousCountdown;
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public async Task StartLocksAndLabelsTrayStopPausesResumeRestartsStopOpensTheRecap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 

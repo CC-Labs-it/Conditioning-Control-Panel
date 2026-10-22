@@ -26,6 +26,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>The game can play at all (Avalonia: the shared LibVLC loaded). False skips it,
         /// as WPF skips before counting it started (BubbleCountService.cs:373).</summary>
         bool CanPlay => true;
+        /// <summary>Explain a skipped round with no local or active pack video (#1449).</summary>
+        void NoVideos() { }
+
     }
 
     /// <summary>
@@ -57,6 +60,7 @@ namespace ConditioningControlPanel.Services
         private ITimer? _scheduler, _leadIn, _queued;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
+        private bool _toldNoVideos;
 
         public BubbleCountScheduler(IBubbleCountHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
         {
@@ -173,8 +177,20 @@ namespace ConditioningControlPanel.Services
                 {
                     Log.Warning("BubbleCountService: No videos found");
                     Idle();
+                    TellNoVideos(forceTest);
                 }
             });
+        }
+
+        private void TellNoVideos(bool forceTest)
+        {
+            try
+            {
+                if (!BubbleCountNoVideos.ShouldTell(forceTest, _toldNoVideos)) return;
+                _toldNoVideos = true;
+                _host.NoVideos();
+            }
+            catch (Exception ex) { Log.Debug(ex, "BubbleCountService: no-videos notice failed"); }
         }
 
         private void QueueBehind(bool forceTest) => _queued = After(QueuePoll, mine =>

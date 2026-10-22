@@ -38,6 +38,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // opening it would end as a failed count and, in strict mode, retry forever.
         public bool CanPlay => Platform.LibVlcAudio.Shared != null;
 
+        public void NoVideos() => Dispatcher.UIThread.Invoke(() =>
+        {
+            var packs = ContentPackStore.Current;
+            var key = BubbleCountNoVideos.MessageKey(packs?.InstalledPackIds.Count ?? 0,
+                packs?.GetActivePackIds().Count ?? 0);
+            App.Notifications.Show(global::ConditioningControlPanel.Localization.Loc.Get(key),
+                Helpers.NotificationType.Warning);
+        });
+
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Dispatcher.UIThread.Invoke(() =>
             BubbleCountWindow.ShowOnAllMonitors(path, (BubbleCountScheduler.Difficulty)difficulty, strict, onComplete));
 

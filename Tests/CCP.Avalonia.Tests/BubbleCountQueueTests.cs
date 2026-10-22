@@ -24,7 +24,7 @@ public sealed class BubbleCountQueueTests
     public Task TestNowOverALockCardWaitsForIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -38,9 +38,11 @@ public sealed class BubbleCountQueueTests
         CoreSubliminal.BambiFreezeProvider = () => freezes++;
         try
         {
+            // Mount the card before starting the one-second cover: a cold XAML/font load must
+            // not consume the cover's lifetime before Test Now can be pressed.
+            var card = new BubbleCountFeatureControl();
             LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
             Dispatcher.UIThread.RunJobs();
-            var card = new BubbleCountFeatureControl();
             card.FindControl<Button>("BtnTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(b.IsQueued);
             Assert.False(b.IsBusy);
@@ -72,7 +74,7 @@ public sealed class BubbleCountQueueTests
     public Task StrictGameWithoutLibVlcIsSkippedNotRetried() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 

@@ -17,6 +17,8 @@ public sealed class BubbleCountSchedulerTests
         public readonly List<(string Path, int Difficulty, bool Strict, Action<bool> Done)> Shown = new();
         public readonly List<(string Text, Action Then)> Messages = new();
         public int Closes;
+        public int NoVideoNotices;
+        public void NoVideos() => NoVideoNotices++;
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
@@ -42,6 +44,40 @@ public sealed class BubbleCountSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Fact]
+    public void Empty_library_explains_each_manual_attempt_but_scheduled_only_once() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock();
+        var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Array.Empty<string>());
+        b.Start();
+        try
+        {
+            foreach (var manual in new[] { false, false, true, true, false })
+            {
+                b.Trigger(forceTest: manual);
+                clock.Advance(BubbleCountScheduler.LeadIn);
+                Assert.False(b.IsBusy);
+                Assert.Empty(host.Shown);
+            }
+            Assert.Equal(3, host.NoVideoNotices);
+            b.Stop();
+            b.Start();
+            b.Trigger();
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            Assert.Equal(3, host.NoVideoNotices); // Restarting the schedule is the same launch.
+        }
+        finally { b.Stop(); b.ForceCleanup(); }
+    });
+
+
+    [Theory]
+    [InlineData(0, 0, "bubblecount_no_videos")]
+    [InlineData(1, 0, "bubblecount_no_videos_packs_off")]
+    [InlineData(2, 1, "bubblecount_no_videos")]
+    public void Empty_library_advice_distinguishes_disabled_packs(int installed, int active, string key) =>
+        Assert.Equal(key, BubbleCountNoVideos.MessageKey(installed, active));
 
     [Fact]
     public void Rules_match_wpf()

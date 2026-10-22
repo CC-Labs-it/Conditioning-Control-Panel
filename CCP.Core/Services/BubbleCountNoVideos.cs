@@ -7,7 +7,7 @@ namespace ConditioningControlPanel.Services;
 /// plays a local file (BubbleCountWindow opens it by path), so it cannot borrow the online
 /// pool; the fix is to say why, in one toast.
 /// </summary>
-internal static class BubbleCountNoVideos
+public static class BubbleCountNoVideos
 {
     /// <summary>The play-it-now button (and voice / remote "play now") always gets the line.
     /// A scheduled round says it once per launch: the scheduler fires up to ten times an
