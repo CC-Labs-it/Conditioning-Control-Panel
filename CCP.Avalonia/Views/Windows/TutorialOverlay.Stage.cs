@@ -154,11 +154,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Dispatcher.UIThread.Post(() =>
             {
                 if (_tornDown || !ReferenceEquals(sender, _targetWindow)) return;
-                if (CoreTutorial.CurrentStep?.TargetWindowTypeName is { } current && current != _targetWindow?.GetType().Name) return;
+                // WPF TutorialOverlay.xaml.cs:264-282: any named target window (current or next) means a
+                // scripted cross-window jump is pending, so the tour waits for WindowLoaded/Next to retarget.
+                if (!string.IsNullOrEmpty(CoreTutorial.CurrentStep?.TargetWindowTypeName)) return;
                 var service = TutorialHead.Service;
                 var nextIndex = service.CurrentStepIndex + 1;
-                if (nextIndex < service.CurrentSteps.Count && service.CurrentSteps[nextIndex].TargetWindowTypeName is { } next
-                    && next != _targetWindow?.GetType().Name) return;
+                if (nextIndex < service.CurrentSteps.Count
+                    && !string.IsNullOrEmpty(service.CurrentSteps[nextIndex].TargetWindowTypeName)) return;
                 Teardown();
             }, DispatcherPriority.Background);
         }

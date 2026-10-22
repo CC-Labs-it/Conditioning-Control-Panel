@@ -121,6 +121,27 @@ public sealed class TutorialStageTests
     });
 
     [Fact]
+    public Task HostCloseKeepsTheTourWhenTheStepNamesItsOwnWindow() => WithHost((host, overlay, _, _, index) =>
+    {
+        // WPF TutorialOverlay.xaml.cs:264-268: any named target window defers to WindowLoaded, even the closing one.
+        var provider = CoreTutorial.CurrentStepProvider;
+        try
+        {
+            CoreTutorial.CurrentStepProvider = () => provider?.Invoke() is { } s
+                ? new CoreTutorial.Step { Id = s.Id, Title = s.Title, Description = s.Description, Icon = s.Icon,
+                    TargetElementName = s.TargetElementName, TargetWindowTypeName = host.GetType().Name,
+                    TextPosition = s.TextPosition, Advance = s.Advance, AllowManualSkip = s.AllowManualSkip,
+                    BlockBackgroundClicks = s.BlockBackgroundClicks }
+                : null;
+            host.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(CoreTutorial.IsActive);
+            Assert.Equal(index, CoreTutorial.CurrentStepIndex);
+        }
+        finally { CoreTutorial.CurrentStepProvider = provider; }
+    });
+
+    [Fact]
     public Task HostEscapeEndsTheTourWithoutTakingFocus() => WithHost((host, overlay, target, _, _) =>
     {
         target.Focus();

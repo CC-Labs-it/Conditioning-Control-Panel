@@ -559,7 +559,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BorderThickness = new Thickness(2),
                 Background = Brushes.Transparent,
                 IsHitTestVisible = false,
-                BoxShadow = new BoxShadows(new BoxShadow { Blur = 15, Color = Color.FromArgb(179, 255, 105, 180) }),
+                // WPF's DropShadowEffect glowed both sides of the ring; BoxShadow is one-sided, so add an inset twin.
+                BoxShadow = new BoxShadows(new BoxShadow { Blur = 15, Color = Color.FromArgb(179, 255, 105, 180) },
+                    new[] { new BoxShadow { Blur = 15, IsInset = true, Color = Color.FromArgb(179, 255, 105, 180) } }),
             };
             Canvas.SetLeft(glowBorder, glowBounds.X);
             Canvas.SetTop(glowBorder, glowBounds.Y);
