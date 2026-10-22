@@ -628,3 +628,114 @@ Assumptions: one white and one pink variant per place; three filled drift states
 with inactive opacity supplied by the host; empty minimap and menu text areas;
 flags are HUD emblems, not track geometry. Placement, focus states, text and motion
 remain the engine's responsibility.
+## Wave 2 sky textures
+
+These three static galaxies replace the Wave 1 haze at the existing asset IDs and paths.
+Each has a defined core, branching dust lanes and small embedded stellar clusters.
+The separate star overlays and grayscale spiral masks remain independent engine layers.
+
+| Asset ID | Size | Tris | Texture bytes, RGBA8 with all mips | Packed bytes |
+|---|---|---:|---:|---:|
+| sky-dawn-galaxy | 2048 x 1024 | 0 | 11,184,812 | 303,074 |
+| sky-deep-galaxy | 2048 x 1024 | 0 | 11,184,812 | 298,572 |
+| sky-afterglow-galaxy | 2048 x 1024 | 0 | 11,184,812 | 285,153 |
+| Total | 3 textures | 0 | 33,554,436 | 886,799 |
+
+The conservative total is 32.000004 MiB, replacing the same Wave 1 allocation.
+A 16-byte block transcode needs 2,796,240 bytes per texture including all mips.
+There is no additional sky texture allocation in Wave 2.
+
+Runtime contract:
+- KTX2, UASTC, sRGB, 12 mip levels.
+- Equirectangular mapping, repeat U, clamp V.
+- Keep the current IDs and material slots.
+- These are stationary environmental backgrounds. Any rotation, brightness or motion belongs to the engine.
+- The galaxy core is at the equator; longitudinal orientation can be set by the sky transform.
+- Dawn core longitude is -14 degrees, deep +9 degrees, afterglow -5 degrees.
+- Galactic plane tilts are +29, -34 and +22 degrees respectively.
+- Values are authored from the existing five-colour palettes. No palette entries change.
+
+Source and licence:
+- Original procedural artwork, authored for this project.
+- Spherical density fields, authored dust lanes and deterministic stellar clusters.
+- No external images, downloaded textures, fonts or third-party artwork in the runtime assets.
+- No words, media images, baked animated spiral or flashing pattern.
+
+Validation:
+- All three KTX2 files pass Khronos validation with warnings treated as errors.
+- Packed output was decoded and visually inspected, including panoramas, core closeups,
+  a direct Wave 1 comparison and the longitude seam at base level and mip 5.
+- Source edge samples match exactly and both source poles are longitude invariant.
+- Packed base-level edge differences are at most 3 bytes; packed pole range is zero.
+- Mip 3 and mip 5 were checked. Repeat filtering keeps the longitude seam continuous.
+  At mip 5 the adjacent border samples differ by up to 20 bytes because they represent
+  different angular areas; pole variation is at most 1 byte.
+- Whole-image mean absolute packing error is at most 0.033 byte including alpha.
+- About 96-98 percent of panorama pixels remain below luma 0.12.
+- Evidence views use the actual packed textures with horizontal repeat sampling.
+  They are static review views, not an in-game device test.
+
+Private evidence:
+- sky-before-after.png: identical camera and exposure for Wave 1 and Wave 2.
+- sky-packed-contact.png: each decoded panorama and a core closeup.
+- sky-seam-poles.png: decoded longitude seam at full size and mip 5.
+- sky-validation.json: edge, pole and mip measurements.
+- sky-checks.json: packed SHA256 values, bytes and reconstruction error.
+
+## Wave 2 finish arch rework
+
+This replaces the two W1 finish-portal GLBs, retaining their IDs and base-centred
+placement. The countdown ring is unchanged. Galaxy texture replacements are
+listed separately by the sky lane.
+
+### Integration
+
+Metres, Y up, forward -Z. The main frame is now about 0.95 m thick radially,
+with greater depth, an outer ribbon and five supported crown discs. LOD0 is
+17.24 m wide, 12.85 m tall and 1.02 m deep including the front inlay.
+The rigid opening remains 14.4 m wide through the first 2.8 m above the road.
+Both LODs retain the crown, supports and membrane; use one LOD per instance.
+
+Materials remain portal_glass, portal_trim and spiral_mask, with the added
+finish_membrane material on its own named mesh node. Both spiral_mask crown
+faces and finish_membrane have clean 0..1 UVs. All other UVs are ordinary mesh UVs.
+The membrane fills the opening from the road to the inner arch, with centre
+UV (0.5, 0.5), U increasing right and V upward before glTF texture convention.
+It is visual geometry, never a collision barrier. Do not use it for road clearance.
+
+Both mask materials start at alpha 0 with no image and glTF alphaMode MASK.
+For a soft or fading spiral, explicitly select blended transparency, set alphaTest
+to 0 and disable depth writing, or replace the material with the host shader.
+Bind the shared grayscale
+spiral texture, sample its red channel and set palette colour, alpha and emission
+in the engine. Do not treat a decoded single-channel image as coloured RGB.
+The host owns rotation, intensity, contrast, transitions and Gentle Visuals.
+No coloured or moving spiral is baked into either GLB.
+
+The two nodes cost four material draws: three for the static frame/crown and
+one for the membrane. No new texture allocation is required; masks are shared.
+The manifest bounds include all crown discs and a small numerical safety pad.
+
+### Sources and review
+
+Original CCP geometry, refined from the private W1 portal source. The main inner
+radius and leg clearance remain unchanged. Crown supports overlap the frame and
+disc bezels, providing a continuous physical connection. No reference pixels,
+third-party meshes, words, numerals or media were added. Rights follow the
+project's existing asset terms; no CC0 claim is made.
+
+Native .blend masters reopen successfully. Final meshopt roundtrips preserve names,
+materials, dimensions and 0..1 mask UVs, with finite geometry and zero degenerate
+triangles. Measured rigid clearance is 14.3999996 m from float storage, or 14.4 m.
+Private evidence includes both LODs from front, three-quarter, back, both sides
+and top, plus a contextual temporary shader binding. Those sheets were opened
+and reviewed. The context preview is not baked into runtime art.
+
+| Asset | Triangles | Draws | Texture bytes | Bound radius |
+|---|---:|---:|---:|---:|
+| finish-portal-lod0 | 4,695 | 4 | 0 | 12.852 m |
+| finish-portal-lod1 | 1,207 | 4 | 0 | 12.838 m |
+
+The crown spacing, disc sizes and frame thickness are art assumptions. Engine
+placement, collision decisions and the final membrane shader remain Claude's lane.
+Contact sheets stay in the private archive and PR description, not the game tree.
