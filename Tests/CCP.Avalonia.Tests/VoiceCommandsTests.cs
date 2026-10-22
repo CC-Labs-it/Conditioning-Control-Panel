@@ -130,10 +130,13 @@ public sealed class VoiceCommandsTests
         await Until(() => engine.IsListening, 10);
         shell.OnWakeWordHeard(null);                     // push-to-talk: a command prompt takes the mic
         await Until(() => shell.VoicePromptActive && engine.IsListening, 10);
+        // Baseline BEFORE the panic: the loop re-opens the mic within 350 ms of the prompt ending, and
+        // that listen has no end unless the WAV happens to wake her, so a count read after the wait
+        // below could already include it on a slow runner and then wait for a second start forever.
+        var starts = mic.Starts;
         shell.HandlePanicKeyPress(DateTime.Now);
         await Until(() => !shell.VoicePromptActive, 3); // no re-prompt, no retry, no chain
         Assert.True(shell.WakeLoopArmed);
-        var starts = mic.Starts;
         await Until(() => mic.Starts > starts && engine.IsListening, 10);   // the wake loop listens again
     });
 

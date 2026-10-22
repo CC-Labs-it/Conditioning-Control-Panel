@@ -1,0 +1,29 @@
+@echo off
+setlocal enableextensions
+set "LOG=C:\Users\a b\AppData\Local\ConditioningControlPanel\logs\native-repair.log"
+set "APPEXE=C:\Users\a b\AppData\Local\Programs\Conditioning Control Panel\ConditioningControlPanel.exe"
+set "CACHE=C:\Users\a b\AppData\Local\Temp\.net\ConditioningControlPanel"
+echo [native-repair] start pid=4242 > "%LOG%"
+set /a tries=0
+:waitloop
+tasklist /FI "PID eq 4242" /NH 2>nul | find "4242" >nul
+if errorlevel 1 goto gone
+set /a tries+=1
+if %tries% GEQ 30 (
+  echo [native-repair] wait timed out, proceeding anyway >> "%LOG%"
+  goto gone
+)
+ping 127.0.0.1 -n 2 >nul
+goto waitloop
+:gone
+echo [native-repair] app exited (tries=%tries%), clearing cache >> "%LOG%"
+rd /s /q "%CACHE%" 2>nul
+if exist "%CACHE%" (
+  echo [native-repair] WARNING cache survived the delete >> "%LOG%"
+) else (
+  echo [native-repair] cache cleared >> "%LOG%"
+)
+echo [native-repair] relaunching app >> "%LOG%"
+start "" "%APPEXE%"
+echo [native-repair] done >> "%LOG%"
+endlocal

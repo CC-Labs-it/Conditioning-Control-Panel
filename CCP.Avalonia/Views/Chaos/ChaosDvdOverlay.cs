@@ -132,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static OutlinedTextBlock Label(string text, double size)
         {
             var t = new OutlinedTextBlock { Text = text, FontSize = size, Family = new FontFamily("Segoe UI"),
-                                            Stroke = 2.6, StrokeBrush = new SolidColorBrush(Color.FromRgb(0x0B, 0x08, 0x12)),
+                                            StrokeThickness = 2.6, Stroke = new SolidColorBrush(Color.FromRgb(0x0B, 0x08, 0x12)),
                                             IsHitTestVisible = false };
             t.Build();
             return t;
