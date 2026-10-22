@@ -234,13 +234,17 @@ public sealed class FriendsDrawerTests
     [Fact]
     public Task TheDrawerListsFriendsRequestsAndBlockedAndTheChipCountsOnline() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var (svc, _) = Service();
+        var (svc, wire) = Service();
+        wire.StateBody = State.Replace("\"outgoing\":[]", "\"outgoing\":[{\"id\":\"u_out\",\"name\":\"Oli\",\"via\":null,\"at\":\"2026-09-01T00:00:00Z\"}]");
         var chip = new FriendsRailChip(svc);
         await svc.RefreshAsync();
         Assert.Equal(1, chip.PillCount);
         var d = chip.Drawer;
         d.Render();
         foreach (var tag in new[] { "friends-row:u_on", "friends-row:u_off", "friends-request-in:u_req" }) Assert.NotNull(Tagged<Border>(d, tag));
+        // WPF FriendsDrawer.cs:785-818: only an incoming request carries the Block menu
+        Assert.NotNull(Tagged<Border>(d, "friends-request-in:u_req")!.ContextMenu);
+        Assert.Null(Tagged<Border>(d, "friends-request-out:u_out")!.ContextMenu);
         Assert.Equal("CCP-ABCDE", Tagged<TextBlock>(d, "friends-my-code")!.Text);
         Assert.Null(Tagged<Border>(d, "friends-blocked:u_bad"));
         d.ToggleBlocked();
@@ -375,13 +379,14 @@ public sealed class FriendsDrawerTests
     {
         var (svc, wire) = Service();
         wire.StateBody = State.Replace(",\"blocked\":[{\"id\":\"u_bad\",\"name\":\"Bob\"}]", "");
-        var old = FriendsBlockList.Shared;
+        var (old, oldAccount, oldHead) = (FriendsBlockList.Shared, FriendsBlockList.Account, FriendsHead.Service);
         var entries = new List<BlockedEntry>();
         FriendsBlockList.Shared = new FriendsBlockList(() => entries, rows => entries = rows.ToList());
         var account = "me";
+        FriendsBlockList.Account = () => account;
         try
         {
-            var d = new FriendsDrawer(svc) { BlockAccount = () => account };
+            var d = new FriendsDrawer(svc);
             await svc.RefreshAsync();
             Assert.Null(svc.Snapshot.Blocked);
             wire.ActSucceeds = false;
@@ -410,11 +415,19 @@ public sealed class FriendsDrawerTests
             wire.StateBody = State;
             await svc.RefreshAsync();
             d.Render();
-            Assert.Empty(entries);
             Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_bad"));
+            Assert.Null(Tagged<Border>(d, "friends-blocked:stale"));
+            Assert.Equal(2, entries.Count);   // WPF: showing the server's list never writes this PC's file
+            FriendsHead.Service = svc;
+            FriendsLanding.Tick();             // WPF FriendsLanding.cs:71: the landing tick retires it once
+            Assert.Empty(entries);
             Assert.Equal(3, wire.Ops.Count(op => op == "block"));
         }
-        finally { FriendsBlockList.Shared = old; }
+        finally
+        {
+            FriendsLanding.Stop();
+            (FriendsBlockList.Shared, FriendsBlockList.Account, FriendsHead.Service) = (old, oldAccount, oldHead);
+        }
     });
 
     [Fact]

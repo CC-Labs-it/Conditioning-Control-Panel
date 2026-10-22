@@ -215,9 +215,6 @@ public sealed partial class FriendsDrawer : Border
         _head.Child = g;
     }
 
-    /// <summary>WPF BackRoomApi.AppIdentity, scoped per signed-in account.</summary>
-    internal Func<string?> BlockAccount { get; set; } = () => FriendsHead.Identity()?.UnifiedId;
-
     private void RenderAsk()
     {
         _ask.Child = null;
@@ -276,7 +273,6 @@ public sealed partial class FriendsDrawer : Border
             _list.Children.Add(box);
             return;
         }
-        var blocked = FriendsBlockList.Shared.Rows(BlockAccount(), snap.Blocked);
         var (online, offline) = FriendsDrawerRules.Split(snap);
         if (_openId != null && !Contains(snap, _openId)) (_openId, _picker) = (null, null);
         if (_confirm is { } c && !Contains(snap, c.Id)) _confirm = null;
@@ -300,6 +296,7 @@ public sealed partial class FriendsDrawer : Border
         }
         if (online.Count + offline.Count + req == 0 && !_showBlocked) _list.Children.Add(AsPage ? PageEmptyBlock() : EmptyLine(Loc.Get("friends_empty")));
         if (!_showBlocked) return;
+        var blocked = FriendsBlockList.Shared.Rows(FriendsBlockList.Account(), snap.Blocked);   // WPF reads it only while shown
         Section("friends_section_blocked", blocked.Count);
         if (blocked.Count == 0)
             _list.Children.Add(Tagged(Wrap(Label(Loc.Get(snap.Blocked != null ? "friends_blocked_none" : "friends_blocked_empty"), 11.5, Muted)), "friends-blocked-empty"));
@@ -528,11 +525,16 @@ public sealed partial class FriendsDrawer : Border
         }
         Grid.SetColumn(mid, 1);
         Grid.SetColumn(buttons, 2);
-        var block = MenuItem("block");
-        block.Click += async (_, _) => await BlockRequesterAsync(r);
+        ContextMenu? menu = null;
+        if (incoming)   // WPF FriendsDrawer.cs:785-818 builds the menu for incoming requests only
+        {
+            var block = MenuItem("block");
+            block.Click += async (_, _) => await BlockRequesterAsync(r);
+            menu = new ContextMenu { ItemsSource = new[] { block } };
+        }
         return new Border
         {
-            ContextMenu = new ContextMenu { ItemsSource = new[] { block } },
+            ContextMenu = menu,
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
             Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
@@ -542,7 +544,7 @@ public sealed partial class FriendsDrawer : Border
     private void RememberBlock(string id, string name)
     {
         if (_svc?.Snapshot.Blocked == null)
-            FriendsBlockList.Shared.Add(BlockAccount(), id, name, DateTimeOffset.UtcNow);
+            FriendsBlockList.Shared.Add(FriendsBlockList.Account(), id, name, DateTimeOffset.UtcNow);
     }
 
     internal async Task<ActResult> BlockRequesterAsync(FriendRequest request)
@@ -597,7 +599,7 @@ public sealed partial class FriendsDrawer : Border
         };
     }
     internal Task<ActResult> UnblockAsync(BlockedFriend b) =>
-        UnblockAsync(new BlockedEntry(BlockAccount() ?? "", b.Id, b.Name, DateTimeOffset.MinValue));
+        UnblockAsync(new BlockedEntry(FriendsBlockList.Account() ?? "", b.Id, b.Name, DateTimeOffset.MinValue));
 
     internal async Task<ActResult> UnblockAsync(BlockedEntry b)
     {

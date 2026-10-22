@@ -65,12 +65,11 @@ public sealed class FriendsBlockList
     }
 
     /// <summary>The server's list is authoritative, including an empty list. Older servers
-    /// fall back to this account's local blocks. Observing a server list retires local entries
-    /// without replaying them: another PC may already have unblocked that player.</summary>
+    /// fall back to this account's local blocks. Pure: the local entries are retired only by
+    /// <see cref="MigrateIfDue"/> on the landing tick (WPF FriendsLanding.cs:71).</summary>
     public IReadOnlyList<BlockedEntry> Rows(string? account, IReadOnlyList<BlockedFriend>? server)
     {
         if (server == null) return For(account);
-        foreach (var entry in For(account)) Remove(account, entry.Id);
         return server.Select(b => new BlockedEntry(account ?? "", b.Id, b.Name, DateTimeOffset.MinValue)).ToList();
     }
 

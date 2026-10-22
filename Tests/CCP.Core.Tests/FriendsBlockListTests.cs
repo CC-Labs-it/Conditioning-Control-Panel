@@ -35,13 +35,13 @@ public sealed class FriendsBlockListTests
         var list = new FriendsBlockList(() => entries, rows => entries = rows.ToList());
         list.Add("me", "a", "Ann", DateTimeOffset.UtcNow);
         list.Add("other", "b", "Bo", DateTimeOffset.UtcNow);
-        var rows = list.Rows("me", new[] { new BlockedFriend("c", "Cy") });
-        Assert.Equal("c", Assert.Single(rows).Id);
+        var server = new[] { new BlockedFriend("c", "Cy") };
+        Assert.Equal("c", Assert.Single(list.Rows("me", server)).Id);
+        Assert.Empty(list.Rows("me", Array.Empty<BlockedFriend>()));
+        Assert.Single(list.For("me"));   // showing the server's list never writes (WPF)
+        Assert.True(FriendsBlockList.MigrateAsync(null!, list, "me", server).Result);
         Assert.Empty(list.For("me"));
         Assert.Single(list.For("other"));
-        list.Add("me", "d", "Dee", DateTimeOffset.UtcNow);
-        Assert.Empty(list.Rows("me", Array.Empty<BlockedFriend>()));
-        Assert.Empty(list.For("me"));
     }
 
     [Fact]
