@@ -11,9 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// <summary>
     /// PORTED from ConditioningControlPanel/Views/Controls/Companion/KnowledgeLinksEditor.xaml.cs:
     /// the global knowledge base links editor (AppSettings.GlobalKnowledgeBaseLinks).
-    /// <see cref="SaveImmediately"/> writes every add / remove straight to settings (the Links page).
-    /// Deviation: CompanionPromptEditorDialog on this head still carries its own copy of the list
-    /// (ported before this control); it saves with the dialog as WPF's does.
+    /// <see cref="SaveImmediately"/> writes every add / remove straight to settings (the Links page);
+    /// CompanionPromptEditorDialog hosts it too and saves with the dialog, as WPF's does.
     /// MessageBox -> MessageDialog (awaited, so the clicks are async).
     /// </summary>
     public partial class KnowledgeLinksEditor : UserControl

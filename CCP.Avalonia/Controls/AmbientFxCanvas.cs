@@ -278,6 +278,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>The layers this canvas was last asked to run.</summary>
         public AmbientFxLayers Layers => _config.Layers;
 
+        /// <summary>Test seam: the tuning this canvas was last started with.</summary>
+        internal AmbientFxConfig Config => _config;
+
         /// <summary>True while the clock is actually ticking.</summary>
         public bool IsRunning => _timer.IsEnabled;
 

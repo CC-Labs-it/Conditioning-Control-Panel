@@ -100,7 +100,46 @@ public sealed class CompanionLinksKnownCardTests
     {
         EnsureApp();
         var page = new ConversationPage();
-        Assert.Equal(Fx.AmbientFxLayers.DustField, page.FindControl<Fx.AmbientFxCanvas>("StageDust")!.Layers);
+        var dust = page.FindControl<Fx.AmbientFxCanvas>("StageDust")!;
+        Assert.Equal(Fx.AmbientFxLayers.DustField, dust.Layers);
+        // WPF ConversationPage.xaml.cs:29: Intensity 0.8, DustDensity 0.65, tint #F486D3.
+        Assert.Equal(0.8, dust.Config.Intensity);
+        Assert.Equal(0.65, dust.Config.DustDensity);
+        Assert.Equal(global::Avalonia.Media.Color.FromRgb(0xF4, 0x86, 0xD3), dust.Config.Tint);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PromptEditorDialogHostsTheSharedEditorAndSavesWithTheDialog() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // WPF CompanionPromptEditorDialog.xaml:381 hosts KnowledgeLinksEditor; Save calls SaveToSettings.
+        EnsureApp();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.GlobalKnowledgeBaseLinks.Clear();
+        s.GlobalKnowledgeBaseLinks.Add(new KnowledgeBaseLink { Title = "Wiki", Url = "https://example.org/wiki" });
+        try
+        {
+            var dlg = new ConditioningControlPanel.Avalonia.Views.Dialogs.CompanionPromptEditorDialog();
+            var editor = dlg.FindControl<KnowledgeLinksEditor>("KnowledgeLinks")!;
+            Assert.False(editor.SaveImmediately);
+            Assert.Equal("Wiki", Assert.Single(editor.Links).Title);
+
+            editor.PromptForLink = _ => Task.FromResult<KnowledgeBaseLink?>(new KnowledgeBaseLink { Title = "Guide", Url = "https://example.org/guide" });
+            editor.FindControl<Button>("BtnAddKnowledgeLink")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "Wiki" }, s.GlobalKnowledgeBaseLinks.Select(l => l.Title));   // not until Save
+
+            dlg.FindControl<Button>("BtnSave")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "Wiki", "Guide" }, s.GlobalKnowledgeBaseLinks.Select(l => l.Title));
+        }
+        finally
+        {
+            s.GlobalKnowledgeBaseLinks.Clear();
+            CoreSettings.ServiceProvider = null;
+        }
         return Task.CompletedTask;
     });
 }
