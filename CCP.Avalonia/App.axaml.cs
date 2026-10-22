@@ -622,6 +622,7 @@ namespace ConditioningControlPanel.Avalonia
                     if (friends != null)
                     {
                         Platform.FriendsHead.Service = friends;
+                        Platform.FriendsHead.StartFeed(friends);
                         CoreAccount.UnifiedIdentityChanged += (_, _) => friends.Kick();
                         friends.Start(new Platform.FriendsHead.Timer());
                         // WPF App.xaml.cs:2991 LEASH: rides the friends poll (report out, block in, 20 s while leashed).
@@ -1186,7 +1187,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
-            try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
+            try { Platform.FriendsHead.StopFeed(); (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
             // WPF App.OnExit:6336: only the `ollama serve` this app spawned; a user's own server is untouched.

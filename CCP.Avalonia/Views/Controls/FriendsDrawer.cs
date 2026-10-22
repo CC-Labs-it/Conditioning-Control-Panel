@@ -139,6 +139,7 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>The name in the header (WPF App.UserDisplayName, else "you").</summary>
     internal Func<string> MeName { get; set; } = () =>
         string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("friends_you") : CoreAccount.DisplayName!.Trim();
+    internal Func<int> MeTier { get; set; } = () => FriendsDrawerRules.DisplayTier((int)(AccountSeed.Patreon?.CurrentTier ?? ConditioningControlPanel.Models.PatreonTier.None));
     public void OnOpened()
     {
         _isOpen = true;

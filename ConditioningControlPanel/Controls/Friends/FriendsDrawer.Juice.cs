@@ -20,12 +20,7 @@ namespace ConditioningControlPanel.Controls.Friends;
 public sealed partial class FriendsDrawer
 {
     /// <summary>1 at Full, 0.5 at Reduced, 0 at Off: every amplitude is multiplied by it.</summary>
-    internal static double Amount => MotionFx.Level switch
-    {
-        MotionLevel.Off => 0,
-        MotionLevel.Reduced => 0.5,
-        _ => 1,
-    };
+    internal static double Amount => FriendsDrawerRules.MotionAmount(MotionFx.Level);
 
     private readonly List<UIElement> _breathing = new();
     private readonly Random _rng = new();

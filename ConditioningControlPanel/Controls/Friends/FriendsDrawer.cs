@@ -1209,7 +1209,7 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>0 free, 1 Basic, 2 Prime.</summary>
     internal Func<int> MeTier { get; set; } = () =>
     {
-        try { return (int)(App.Patreon?.CurrentTier ?? Models.PatreonTier.None) switch { >= 2 => 2, 1 => 1, _ => 0 }; }
+        try { return FriendsDrawerRules.DisplayTier((int)(App.Patreon?.CurrentTier ?? Models.PatreonTier.None)); }
         catch { return 0; }
     };
 }
