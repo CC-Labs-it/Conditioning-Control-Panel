@@ -95,18 +95,21 @@ public sealed class PresetsWallParityTests
         CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
         CoreEngine.StoppedHook = shell.OnEngineStopped;
         SpiralOverlay.SkipPlatformChecksForTests = true;
+        // The user path: right-click on the Spiral half of the combo -> ToggleA -> ToggleWallFeature.
+        var combo = shell.SettingsPage!.ComboSpiralPink;
+        void ToggleSpiral() => combo.RaiseEvent(new RoutedEventArgs(SplitFeatureCard.ToggleAEvent, combo));
         try
         {
             CoreEngine.Start();
             Assert.False(SpiralOverlay.IsShowing);
-            shell.SetWallFeature("spiral", true);
+            ToggleSpiral();
             if (SpiralOverlay.Decoding is { } decode) await decode;
             Dispatcher.UIThread.RunJobs();
             Assert.True(SpiralOverlay.IsShowing);
             Assert.True(SpiralOverlay.IsAnimating);
-            shell.SetWallFeature("spiral", false);
+            ToggleSpiral();
             Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
-            shell.SetWallFeature("spiral", true);
+            ToggleSpiral();
             Assert.True(SpiralOverlay.IsShowing);
             PanicSurfaces.StopAll("wall-toggle-test", shell);
             Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
