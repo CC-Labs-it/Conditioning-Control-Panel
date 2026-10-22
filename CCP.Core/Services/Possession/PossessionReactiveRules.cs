@@ -15,6 +15,7 @@ public static class PossessionReactiveRules
         var name = propertyName ?? "";
         return name.StartsWith("LockdownPossession", StringComparison.Ordinal)
                || name.StartsWith("LockdownPhotosafe", StringComparison.Ordinal)
+               || name.StartsWith("Gentle", StringComparison.Ordinal)   // Gentle visuals reads as photosafe
                || name.StartsWith("LockdownTripwires", StringComparison.Ordinal)
                || name.StartsWith("LockdownWarden", StringComparison.Ordinal);
     }

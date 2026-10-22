@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using ConditioningControlPanel.Controls;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Invites;
@@ -97,6 +99,7 @@ namespace ConditioningControlPanel
         {
             // The Tonight Board's Waiting card reads the same answer (no second request).
             try { Services.Billboard.Providers.WaitingSignals.NoteInvites(mine); } catch { }
+            PostInviteNews(mine);
             try
             {
                 if (BtnInviteTicket == null) return;
@@ -109,6 +112,43 @@ namespace ConditioningControlPanel
             catch (Exception ex)
             {
                 App.Logger?.Debug("[Invites] ticket paint failed: {E}", ex.GetType().Name);
+            }
+        }
+
+        /// <summary>
+        /// Someone used a code, or a friend subscribed: one notice each, told once
+        /// (<see cref="InviteClaimNotice"/>), through the presenter so it never lands inside a
+        /// session or a game. Never throws.
+        /// </summary>
+        private void PostInviteNews(InviteMine? mine)
+        {
+            try
+            {
+                var settings = App.Settings?.Current;
+                if (settings == null) return;
+                var news = InviteClaimNotice.Decide(mine, settings.UnifiedId, settings.InboxStamps, out bool changed);
+                if (changed) App.Settings?.Save();
+                foreach (var item in news)
+                {
+                    var name = item.Name ?? Loc.Get("invites_news_someone");
+                    bool subscribed = item.Kind == InviteNewsKind.Subscribed;
+                    var title = subscribed
+                        ? (item.Name == null ? Loc.Get("invites_news_subscribed_plain") : Loc.GetF("invites_news_subscribed", name))
+                        : Loc.GetF("invites_news_claimed", name);
+                    var body = Loc.Get(subscribed ? "invites_news_subscribed_body" : "invites_news_claimed_body");
+                    PresentOrInbox(new Services.Startup.InboxItem
+                    {
+                        Key = item.Key,
+                        Glyph = subscribed ? "💖" : "🎟",
+                        Title = title,
+                        Summary = body,
+                        Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get("invites_news_see"), OpenInvitesCard),
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("[Invites] news failed: {E}", ex.GetType().Name);
             }
         }
 

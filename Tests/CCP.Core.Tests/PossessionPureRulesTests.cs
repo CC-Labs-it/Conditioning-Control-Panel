@@ -91,6 +91,7 @@ public class PossessionPureRulesTests
     [Theory]
     [InlineData("LockdownPossessionIntensity", true)]
     [InlineData("LockdownPhotosafe", true)]
+    [InlineData("GentleVisuals", true)]                                      // main 46582ed13
     [InlineData("LockdownTripwiresEnabled", true)]
     [InlineData("LockdownWardenEnabled", true)]
     [InlineData("lockdownPossessionEnabled", false)]                            // ordinal, as WPF

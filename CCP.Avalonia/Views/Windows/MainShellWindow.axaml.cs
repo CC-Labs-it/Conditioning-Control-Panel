@@ -328,7 +328,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   internal void SyncNoPanicState(…)
 //   internal void SyncOfflineModeState(…)
 //   internal bool RequestToggleWindowsStartup(…)
-//   private void LoadLogo(…)
 //   private void LoadTakeoverImage(…)
 //   private void RefreshThemeAwareElements(…)
 //   private static Color LightenColor(…)

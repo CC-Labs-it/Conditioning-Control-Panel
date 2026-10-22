@@ -277,7 +277,7 @@ public sealed class PossessionDirector : IDisposable
         var s = _head.Settings();
         if (s == null) return;
         _intensity = (PossessionIntensity)Math.Clamp(s.LockdownPossessionIntensity, 0, 2);
-        _photosafe = s.LockdownPhotosafe;
+        _photosafe = Services.Safety.GentleVisuals.Photosafe(s.LockdownPhotosafe);
     }
 
     /// <summary>Phase 1 haunts the main window. It may finish loading after the lockdown starts, so we

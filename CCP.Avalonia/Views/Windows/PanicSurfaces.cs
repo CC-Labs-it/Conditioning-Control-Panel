@@ -26,6 +26,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The intake's say-it loops end before the capture abort below reads as silence; WPF GameSurfaces
             // 'intake' -> CloseActive. A game surface: closing it never arms the exit ladder.
             new("intake", _ => IntakeHostWindow.CloseAllForPanic(), IntakeHostWindow.IsAnyOpen),
+            // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
+            // video window closes, the gate stands back ten minutes.
+            new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
@@ -55,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :1980-1981 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence()),
             new("lock-cards", _ => MainShellWindow.StopLockCards()),      // WPF LockCardService.Stop(dismissOpenCards: true)
+            new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
