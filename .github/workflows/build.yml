@@ -138,6 +138,46 @@ jobs:
           path: ${{ runner.temp }}/render/
 
   # The "behaves identically on Windows" gate.
+  # --perf-bench on a real X server (xvfb), not headless: startup, per-tab switch median/p95, working set.
+  # The numbers are report-only (docs/avalonia-perf.md; Linux is never compared against WPF). The missing-tab
+  # step is NOT report-only: it proves the bench can fail (exit 3), so a broken tab lookup cannot pass silently.
+  perf-bench-linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
+    runs-on: ubuntu-latest
+    env:
+      DiffEngine_Disabled: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libvlc-dev vlc-plugin-base
+      - run: dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release
+      - name: perf-bench (report-only)
+        continue-on-error: true
+        run: |
+          export CCP_USERDATA_DIR=$(mktemp -d) XDG_CONFIG_HOME=$(mktemp -d)
+          timeout 600 xvfb-run -a -s '-screen 0 1920x1080x24' \
+            dotnet run --no-build --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --perf-bench perf-bench-linux.json
+      - name: perf-bench fails on a missing tab (must exit 3)
+        run: |
+          export CCP_USERDATA_DIR=$(mktemp -d) XDG_CONFIG_HOME=$(mktemp -d)
+          set +e
+          timeout 300 xvfb-run -a -s '-screen 0 1920x1080x24' \
+            dotnet run --no-build --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --perf-bench missing.json --perf-bench-tabs SettingsTab,NoSuchTab
+          code=$?
+          set -e
+          if [ "$code" -ne 3 ]; then echo "--perf-bench with a missing tab exited $code, expected 3"; exit 1; fi
+          if [ -e missing.json ]; then echo "--perf-bench wrote JSON for a failed run"; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: perf-bench-linux
+          path: perf-bench-linux.json
+          if-no-files-found: warn
+          retention-days: 30
+
   windows:
     runs-on: windows-latest
     steps:

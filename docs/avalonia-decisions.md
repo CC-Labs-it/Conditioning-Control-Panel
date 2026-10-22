@@ -1228,3 +1228,9 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
   `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
   barks queued through Giggle. Lane barks-wpf gets the same rule.
+
+## 2026-10-23: Performance parity is measured on one machine with both heads (advisor: oracle; avalonia-port/perf-bench-avalonia)
+**Performance parity is measured on one machine with both heads.** WPF only runs on Windows, so both heads run `--perf-bench` back to back on the same `windows-latest` CI runner, with Avalonia built as win-x64. Each run records startup to the first rendered interactive window, median and p95 tab-switch latency, and working set after warm-up and forced GC. A row passes if the Avalonia median is within the WPF median × 1.10 + 20 ms (memory: × 1.10). Linux numbers are information only, never compared against WPF. A WPF number recorded on another machine is not a baseline, and a row with no WPF number is a gap, not a pass.
+- This lane adds the Avalonia flag, the JSON shape and the report-only Linux job (`perf-bench-linux`); the WPF flag, the
+  Windows job and the comparison script come with `perf-bench-wpf-compare`. The gate starts report-only and becomes required
+  after 3 consecutive stable runs. Table: `docs/avalonia-perf.md`.

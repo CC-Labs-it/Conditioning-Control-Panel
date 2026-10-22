@@ -10,6 +10,9 @@ namespace ConditioningControlPanel.Avalonia
     /// </summary>
     internal static class NavCheck
     {
+        /// <summary>Every nav tab panel, by x:Name. --perf-bench cycles the same list.</summary>
+        internal static readonly string[] TabPanels = { "SettingsTab","PresetsTab","QuestsTab","ProgramsTab","EnhancementsTab","DeeperTab","AchievementsTab","CompanionTab","PlayTab","LeaderboardTab","AssetsTab","DiscordTab","AwarenessTab","RemoteControlTab","AvailableSubjectsTab","BambiTakeoverTab","StudioTab","LockdownTab","BlinkTrainerTab","SheListeningTab","GradedIntakeTab","AppSettingsTab","SpiralTab","ExclusivesTab" };
+
         public static int Run()
         {
             RenderProof.EnsureSetUp();
@@ -126,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia
             w.ShowTab("settings");
 
             var shown = 0;
-            foreach (var n in new[] { "SettingsTab","PresetsTab","QuestsTab","ProgramsTab","EnhancementsTab","DeeperTab","AchievementsTab","CompanionTab","PlayTab","LeaderboardTab","AssetsTab","DiscordTab","AwarenessTab","RemoteControlTab","AvailableSubjectsTab","BambiTakeoverTab","StudioTab","LockdownTab","BlinkTrainerTab","SheListeningTab","GradedIntakeTab","AppSettingsTab","SpiralTab","ExclusivesTab" })
+            foreach (var n in TabPanels)
                 if (Vis(n)) shown++;
             Check(shown == 1, $"exactly one tab visible (saw {shown})");
 

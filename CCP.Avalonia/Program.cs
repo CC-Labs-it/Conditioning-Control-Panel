@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Avalonia
         [STAThread]
         public static int Main(string[] args)
         {
+            PerfBench.SinceMain.Start();   // --perf-bench startup clock: the first line of Main, by definition
             // WPF logs to a file under UserData/logs (App.xaml.cs:1967, LogPipeline.cs); stderr stays for CI and kc.
             // ponytail: WPF's path redaction, flight recorder and per-run naming come with the bug-report port.
             Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information()
@@ -38,6 +39,20 @@ namespace ConditioningControlPanel.Avalonia
             // check that exercises a click.
             if (Array.IndexOf(args, "--nav-check") >= 0)
                 return NavCheck.Run();
+
+            // --perf-bench <out.json> times startup, every nav tab switch and the working set on the REAL
+            // windowing platform and writes JSON (PerfBench.cs). --perf-bench-tabs A,B overrides the tab list.
+            var pb = Array.IndexOf(args, "--perf-bench");
+            if (pb >= 0)
+            {
+                if (pb + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("usage: --perf-bench <out.json> [--perf-bench-tabs A,B]");
+                    return 2;
+                }
+                var pbt = Array.IndexOf(args, "--perf-bench-tabs");
+                return PerfBench.Run(args[pb + 1], pbt >= 0 && pbt + 1 < args.Length ? args[pbt + 1].Split(',') : null);
+            }
 
             // --click-through <dir> dispatches REAL pointer clicks at real controls and saves a
             // frame per step. The only proof here that can see a button which draws but does not
