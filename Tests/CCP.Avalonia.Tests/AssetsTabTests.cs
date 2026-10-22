@@ -52,7 +52,7 @@ public sealed class AssetsTabTests
             shell.ShowTab("assets");
             var packs = tab.AssetTree.Single(n => n.IsPackFolder);
             var pack = Assert.Single(packs.Children);
-            Assert.Equal("Test Pack", pack.Name);
+            Assert.Equal("test-pack", pack.Name); // WPF BuildPackTree: not built in -> raw pack id, not the manifest name
             Assert.Equal(new[] { "images", "videos" }, pack.Children.Select(n => n.Name));
             Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 5, 3), tab.TxtAssetCounts.Text);
             var images = pack.Children.Single(n => n.PackFileType == "image");
@@ -104,6 +104,14 @@ public sealed class AssetsTabTests
             Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsChecked));
             tab.BtnSelectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, ContentPackStore.Current.GetAllActivePackImages().Count);
+
+            // Panic closes an open pack preview and its decrypted temp goes with it (P06; WPF left it open).
+            tab.OpenAssetPreview(tab.CurrentFolderFiles[0]);
+            var panicked = shell.OwnedWindows.OfType<MiniPlayerWindow>().Single(w => w.IsVisible);
+            Assert.Single(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            PanicSurfaces.StopAll("asset-preview-test", shell);
+            Assert.False(panicked.IsVisible);
+            Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
         }
         finally { ContentPackStore.Current = oldStore; }
     });
