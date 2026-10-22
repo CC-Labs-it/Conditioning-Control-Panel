@@ -59,6 +59,11 @@ namespace ConditioningControlPanel.Services
             s.CurrentSeason = null;
             s.PatreonTier = 0;
             s.InviteGrantUntil = null; // an invite week is the old account's, never the next one's
+            // Same for what the server said about the old account: none of it follows to the next one.
+            s.ServerTierSeen = null;
+            s.PatreonMember = false;
+            s.PostGrants = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            s.ServerPaidUntil = null;
 
             // This is the ONLY deliberate "yes, really zero me" surface in the app (logout,
             // account switch, account deletion), so it is the one place allowed to void the
