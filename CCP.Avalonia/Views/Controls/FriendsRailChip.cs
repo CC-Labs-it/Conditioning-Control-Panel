@@ -19,41 +19,29 @@ public sealed partial class FriendsRailChip : Grid
     private readonly TextBlock _pillText = new(), _name;
     private readonly Popup _popup;
     private IFriendsService? _svc;
-    private FriendsFeed? _feed;
-    private readonly FriendsFeed? _injectedFeed;
-    private readonly bool _injectedService;
-    private readonly Border _badge = new();
-    private readonly TextBlock _badgeText = new();
     private readonly Grid _nameLine = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
-    private int _lastOnline = -1, _lastUnread = -1;
+    private int _lastOnline = -1;
     private DateTime _closedAt = DateTime.MinValue;
     public FriendsRailChip() : this(null) { }
-    internal FriendsRailChip(IFriendsService? service, FriendsFeed? feed = null)
+    internal FriendsRailChip(IFriendsService? service)
     {
-        _injectedFeed = feed;
-        _injectedService = service != null;
         Drawer = new FriendsDrawer(service);
         (Height, Margin, Background, Cursor) = (48, new Thickness(0, 2, 0, 4), Brushes.Transparent, FriendsDrawer.Hand());
         ColumnDefinitions = new ColumnDefinitions("56,*");
         (_pillText.FontFamily, _pillText.FontWeight, _pillText.FontSize, _pillText.Foreground) = (FriendsDrawer.Display, FontWeight.SemiBold, 11, FriendsDrawer.MintInk);
         (_pill.Child, _pill.Background, _pill.CornerRadius, _pill.Padding, _pill.IsVisible, _pill.Tag) = (_pillText, FriendsDrawer.Mint, new CornerRadius(999), new Thickness(5, 0), false, "friends-chip-online");
         (_pill.HorizontalAlignment, _pill.VerticalAlignment, _pill.Margin) = (HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -2, -4, 0));
-        (_badgeText.FontFamily, _badgeText.FontWeight, _badgeText.FontSize, _badgeText.Foreground) = (FriendsDrawer.Display, FontWeight.SemiBold, 11, new SolidColorBrush(Color.Parse("#2A061A")));
-        (_badge.Child, _badge.Background, _badge.CornerRadius, _badge.Padding, _badge.IsVisible, _badge.Tag) = (_badgeText, FriendsDrawer.Pink, new CornerRadius(999), new Thickness(5, 0), false, "friends-chip-unread");
-        (_badge.HorizontalAlignment, _badge.VerticalAlignment, _badge.Margin, _badge.MinWidth) = (HorizontalAlignment.Right, VerticalAlignment.Bottom, new Thickness(0, 0, -4, -2), 18);
-        foreach (var count in new[] { _pill, _badge })
-        {
-            count.BorderThickness = new Thickness(2);
-            count.BorderBrush = new SolidColorBrush(Color.Parse("#0E0919"));
-            count.RenderTransform = new ScaleTransform(1, 1);
-            count.RenderTransformOrigin = RelativePoint.Center;
-            count.BoxShadow = new BoxShadows(new BoxShadow { Blur = 8, Color = Color.Parse(count == _pill ? "#B35FFFD0" : "#B3FF5FB4") });
-        }
+        // ponytail: WPF's pink unread badge needs the drawer's feed + mark-read first (FriendsDrawer.Feed.cs:195); lane ctrl-friends-rail-chip-b.
+        _pill.BorderThickness = new Thickness(2);
+        _pill.BorderBrush = new SolidColorBrush(Color.Parse("#0E0919"));
+        _pill.RenderTransform = new ScaleTransform(1, 1);
+        _pill.RenderTransformOrigin = RelativePoint.Center;
+        _pill.BoxShadow = new BoxShadows(new BoxShadow { Blur = 8, Color = Color.Parse("#B35FFFD0") });
         _face.RenderTransform = new ScaleTransform(1, 1);
         _face.RenderTransformOrigin = RelativePoint.Center;
         _face.BorderThickness = new Thickness(1);
         _face.HorizontalAlignment = HorizontalAlignment.Center;
-        _face.Child = new Grid { Children = { FriendsDrawer.Avatar(Drawer.MeName(), 40, null), _pill, _badge } };
+        _face.Child = new Grid { Children = { FriendsDrawer.Avatar(Drawer.MeName(), 40, null), _pill } };
         // The star column must trim the name while the Auto column keeps the tier plate.
         _name = FriendsDrawer.Label(Drawer.MeName(), 14, FriendsDrawer.Text, FriendsDrawer.Display, FontWeight.SemiBold);
         _nameLine.Children.Add(_name);
@@ -67,8 +55,8 @@ public sealed partial class FriendsRailChip : Grid
             IsLightDismissEnabled = true,
         };
         Children.Add(_popup);
-        _popup.Opened += (_, _) => { _face.Background = FriendsDrawer.Raised; _face.BorderBrush = FriendsDrawer.Line2; DropTopmost(); Drawer.OnOpened(); };
-        _popup.Closed += (_, _) => { _closedAt = DateTime.UtcNow; _face.Background = Brushes.Transparent; _face.BorderBrush = Brushes.Transparent; Drawer.OnClosed(); };
+        _popup.Opened += (_, _) => { _face.Background = FriendsDrawer.Raised; _face.BorderBrush = FriendsDrawer.Line2; DropTopmost(); Platform.FriendsLanding.DrawerOpen(); Drawer.OnOpened(); };
+        _popup.Closed += (_, _) => { _closedAt = DateTime.UtcNow; _face.Background = Brushes.Transparent; _face.BorderBrush = Brushes.Transparent; Platform.FriendsLanding.DrawerClose(); Drawer.OnClosed(); };
         WireInput();
         Drawer.OwnerWindow = () => TopLevel.GetTopLevel(this) as Window;
         Drawer.CloseRequested += () => _popup.IsOpen = false;
@@ -88,9 +76,10 @@ public sealed partial class FriendsRailChip : Grid
     internal FriendsDrawer Drawer { get; }
     internal bool IsOpen => _popup.IsOpen;
 
-    /// <summary>The rail trims the name, so the tooltip leads with it in full (WPF UpdateTooltip).</summary>
     /// <summary>WPF UpdateTooltip runs on a language switch too: the tooltip is code-set, so rebuild it.</summary>
-    private void OnLanguage(object? sender, EventArgs e) => UpdateBadge(false);
+    private void OnLanguage(object? sender, EventArgs e) => ToolTip.SetTip(this, Tip(_name.Text));
+
+    /// <summary>The rail trims the name, so the tooltip leads with it in full (WPF UpdateTooltip).</summary>
 
     internal static string Tip(string? name) =>
         (string.IsNullOrWhiteSpace(name) ? "" : name + "\n") + Loc.Get("friends_chip_tooltip");
@@ -108,19 +97,10 @@ public sealed partial class FriendsRailChip : Grid
     {
         var next = Drawer.Service ?? Platform.FriendsHead.Service;
         if (!ReferenceEquals(next, _svc)) { Unwire(); _svc = next; if (_svc != null) _svc.SnapshotChanged += OnSnapshot; }
-        var feed = _injectedFeed ?? (_injectedService ? null : Platform.FriendsHead.Feed);
-        if (!ReferenceEquals(feed, _feed))
-        {
-            if (_feed != null) _feed.Changed -= OnFeed;
-            _feed = feed;
-            if (_feed != null) _feed.Changed += OnFeed;
-            _lastUnread = -1;
-        }
         UpdatePill(false);
     }
-    private void Unwire() { if (_svc != null) _svc.SnapshotChanged -= OnSnapshot; _svc = null; if (_feed != null) _feed.Changed -= OnFeed; _feed = null; }
+    private void Unwire() { if (_svc != null) _svc.SnapshotChanged -= OnSnapshot; _svc = null; }
     private void OnSnapshot(FriendsSnapshot _) => Ui(() => UpdatePill(true));
-    private void OnFeed() => Ui(() => UpdateBadge(true));
     private static void Ui(Action action) { if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) action(); else global::Avalonia.Threading.Dispatcher.UIThread.Post(action); }
     internal void UpdatePill(bool animate = true)
     {
@@ -130,18 +110,7 @@ public sealed partial class FriendsRailChip : Grid
         _pill.IsVisible = n > 0;
         if (animate && _lastOnline >= 0 && n > _lastOnline) Bump(_pill);
         _lastOnline = n;
-        UpdateBadge(animate);
-    }
-
-    internal int UnreadBadge => _badge.IsVisible ? _badgeText.Text == "9+" ? 10 : int.TryParse(_badgeText.Text, out var n) ? n : 0 : 0;
-    private void UpdateBadge(bool animate)
-    {
-        var n = _svc?.Available != false ? _feed?.Unread ?? 0 : 0;
-        _badgeText.Text = FriendsFeedRules.BadgeText(n);
-        _badge.IsVisible = n > 0;
-        ToolTip.SetTip(this, Tip(_name.Text) + (n > 0 ? "\n" + Loc.GetF("friends_feed_new", n) : ""));
-        if (animate && _lastUnread >= 0 && n > _lastUnread) Bump(_badge);
-        _lastUnread = n;
+        ToolTip.SetTip(this, Tip(_name.Text));
     }
     internal void RefreshFace()
     {

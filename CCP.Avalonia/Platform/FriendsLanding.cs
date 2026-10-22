@@ -229,7 +229,12 @@ internal static class FriendsLanding
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
 
-    private static readonly FriendsSfxGate SfxGate = new();
+    /// <summary>Not readonly: a test swaps in a fresh gate so two cues inside the 130 ms gap both play.</summary>
+    internal static FriendsSfxGate SfxGate = new();
+
+    /// <summary>WPF FriendsSfx.DrawerOpen / DrawerClose (FriendsRailChip.cs:407/428).</summary>
+    internal static void DrawerOpen() => Sfx("chaos/cards_in.mp3", 0.14f, "friends-open");
+    internal static void DrawerClose() => Sfx("chaos/ui_unequip.mp3", 0.10f, "friends-close");
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
     private static void Sfx(string rel, float scale, string tag, bool incoming = false)

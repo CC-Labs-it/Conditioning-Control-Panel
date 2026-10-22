@@ -65,7 +65,7 @@ public sealed partial class FriendsRailChip
         {
             var peak = 1 + .45 * amount;
             await ScalePhase(target, 1, peak, 120, new LinearEasing(), run.Token);
-            await ScalePhase(target, peak, 1, 300, new ElasticEaseOut(), run.Token);
+            await ScalePhase(target, peak, 1, 300, new WpfElasticOut(), run.Token);
         }
         catch (OperationCanceledException) { }
         finally
@@ -82,6 +82,16 @@ public sealed partial class FriendsRailChip
             new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, to), new Setter(ScaleTransform.ScaleYProperty, to) } },
         } };
         return animation.RunAsync(target, token);
+    }
+    /// <summary>WPF ElasticEase { EasingMode = EaseOut, Oscillations = 1, Springiness = 4 }; Avalonia's ElasticEaseOut rings several times.</summary>
+    internal sealed class WpfElasticOut : Easing
+    {
+        public override double Ease(double progress)
+        {
+            var t = 1 - progress;
+            var spring = (Math.Exp(4 * t) - 1) / (Math.Exp(4) - 1);
+            return 1 - spring * Math.Sin((Math.PI * 2 * 1 + Math.PI / 2) * t);
+        }
     }
     private void CancelBumps()
     {

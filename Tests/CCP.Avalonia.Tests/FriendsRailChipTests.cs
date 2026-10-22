@@ -23,50 +23,56 @@ public sealed partial class FriendsDrawerTests
     private static void ChipApp()
     {
         if (Application.Current == null)
-            AppBuilder.Configure<AvApp>().UseSkia().WithInterFont()
+            AppBuilder.Configure<AvApp>().WithInterFont()
                 .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     [Fact]
-    public Task RailUnreadTracksFeedReadAccountAndDetach() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task RailOpenAndClosePlayTheDrawerSounds() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChipApp();
-        string? account = "u_me";
-        var feed = new FriendsFeed(() => account);
         var (svc, _) = Service();
-        var chip = new FriendsRailChip(svc, feed);
-        chip.Drawer.MeName = () => "A long full account name";
-        var window = new Window { Content = chip }; window.Show();
+        var chip = new FriendsRailChip(svc);
+        var window = new Window { Content = chip, Width = 400, Height = 400 }; window.Show();
+        var oldPlay = CoreAudio.PlayOneShotProvider;
+        var oldVolume = CoreSettings.Current.MasterVolume;
+        var tags = new System.Collections.Generic.List<string>();
         try
         {
-            await svc.RefreshAsync();
-            Assert.Equal(1, chip.PillCount);
-            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "first"));
-            Assert.Equal(1, chip.UnreadBadge);
-            Assert.Contains("A long full account name", ToolTip.GetTip(chip)!.ToString());
-            for (var n = 0; n < 12; n++) feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "poke" + n));
-            Assert.Equal(10, chip.UnreadBadge); // displayed 9+
-            Assert.Equal(1, chip.PillCount); // independent badges
-            feed.MarkAllRead(); Assert.Equal(0, chip.UnreadBadge);
-            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "next"));
-            account = "different"; chip.UpdatePill(); Assert.Equal(0, chip.UnreadBadge);
-            window.Content = null;
-            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "detached"));
-            Assert.Equal(0, chip.UnreadBadge);
-            Assert.Equal(0, chip.ActiveBumps);
+            CoreSettings.Current.MasterVolume = 80;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            FriendsLanding.SfxGate = new FriendsSfxGate();
+            chip.Toggle(); Assert.True(chip.IsOpen);
+            FriendsLanding.SfxGate = new FriendsSfxGate(); // the 130 ms gap is real time; a fresh gate stands in for it
+            chip.Toggle(); Assert.False(chip.IsOpen);
+            Assert.Equal(new[] { "friends-open", "friends-close" }, tags);
+            await Task.CompletedTask;
         }
-        finally { window.Close(); svc.Dispose(); }
+        finally { CoreAudio.PlayOneShotProvider = oldPlay; CoreSettings.Current.MasterVolume = oldVolume; FriendsLanding.SfxGate = new FriendsSfxGate(); window.Close(); svc.Dispose(); }
     });
+
+    [Theory]
+    [InlineData(0, 0)] [InlineData(1, 1)]
+    public void BumpSettleIsWpfsOneOscillationElastic(double t, double expected) =>
+        Assert.Equal(expected, new FriendsRailChip.WpfElasticOut().Ease(t), 9);
+
+    [Fact]
+    public void BumpSettleOvershootsOnceLikeWpf()
+    {
+        var ease = new FriendsRailChip.WpfElasticOut();
+        var sign = Enumerable.Range(1, 99).Select(i => Math.Sign(ease.Ease(i / 100.0) - 1)).Where(v => v != 0).ToArray();
+        var crossings = sign.Zip(sign.Skip(1), (a, b) => a != b).Count(c => c);
+        Assert.Equal(2, crossings); // WPF Oscillations=1: rise, one overshoot, one dip; Avalonia's ElasticEaseOut rings ~6 times
+    }
 
     [Fact]
     public Task RailTierMotionAndPopupFollowOwnerLifecycle() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChipApp();
         var old = CoreSettings.Current.MotionLevel;
-        var (svc, _) = Service();
-        var feed = new FriendsFeed(() => "u_me");
-        var chip = new FriendsRailChip(svc, feed);
+        var (svc, wire) = Service();
+        var chip = new FriendsRailChip(svc);
         chip.Drawer.MeTier = () => 2;
         var window = new Window { Content = chip, Width = 400, Height = 400 }; window.Show();
         try
@@ -76,15 +82,18 @@ public sealed partial class FriendsDrawerTests
             Assert.Equal(13, chip.GetVisualDescendants().OfType<Image>().Single(i => Equals(i.Tag, "friends-tier-2")).Height);
             chip.Drawer.MeTier = () => 0; chip.RefreshFace();
             Assert.DoesNotContain(chip.GetVisualDescendants().OfType<Image>(), i => Equals(i.Tag, "friends-tier-2"));
-            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "off"));
+            await svc.RefreshAsync(); // Mia online: 0 -> 1, but motion is off
+            Assert.Equal(1, chip.PillCount);
             Assert.Equal(0, chip.ActiveBumps);
             chip.Hover(true);
             var face = chip.Children.OfType<Border>().Single();
             Assert.Equal(1.02, ((ScaleTransform)face.RenderTransform!).ScaleX);
             chip.Hover(false); Assert.Equal(1, ((ScaleTransform)face.RenderTransform!).ScaleX);
             CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
-            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "reduced"));
-            Assert.True(chip.ActiveBumps > 0);
+            wire.StateBody = State.Replace("\"online\":false", "\"online\":true"); // Zed comes online too
+            await svc.RefreshAsync();
+            Assert.Equal(2, chip.PillCount);
+            Assert.True(chip.ActiveBumps > 0); // the online pill bumps (WPF BumpCount)
             chip.Toggle(); Assert.True(chip.IsOpen);
             if (TopLevel.GetTopLevel(chip.Drawer) is WindowBase popup) Assert.False(popup.Topmost);
             window.WindowState = WindowState.Minimized;
