@@ -15,7 +15,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeWebcamLoadingSplash()
         {
             var tracker = WebcamTracker.Instance;
-            Opened += (_, _) => { tracker.OnStartupProgress += OnWebcamStartupProgress; tracker.StateChanged += OnWebcamStartupState; };
+            Opened += (_, _) =>
+            {
+                // Opened fires on every Hide/Show; Closed only once.
+                tracker.OnStartupProgress -= OnWebcamStartupProgress; tracker.StateChanged -= OnWebcamStartupState;
+                tracker.OnStartupProgress += OnWebcamStartupProgress; tracker.StateChanged += OnWebcamStartupState;
+            };
             Closed += (_, _) => { tracker.OnStartupProgress -= OnWebcamStartupProgress; tracker.StateChanged -= OnWebcamStartupState; };
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -46,7 +47,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             var screens = host is null ? Array.Empty<Screen>() : Features.ScreenList.Enumerate(host);
             var batch = new List<Window>();
-            foreach (var screen in screens.Count > 0 ? screens : new Screen?[] { null })
+            // WPF BubbleCountService.cs:588 App.GetGlobalScreens: the "Show content on" pick.
+            var s = CoreSettings.Current;
+            var primary = screens.ToList().FindIndex(x => x.IsPrimary);
+            var picked = Overlays.PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal,
+                s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary).Select(i => (Screen?)screens[i]).ToList();
+            foreach (var screen in picked.Count > 0 ? picked : new List<Screen?> { null })
             {
                 var w = new Window
                 {

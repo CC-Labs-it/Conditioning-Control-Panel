@@ -31,7 +31,7 @@ public static class ChasterServiceApp
 #if DEBUG
         if (DemoService(options) is { } demo) return demo;
 #endif
-        return new ChasterService(
+        var svc = new ChasterService(
             new ChasterClient(userAgent: $"ConditioningControlPanel/{UpdateService.AppVersion}"),
             new DpapiChasterTokenStore(),
             Path.Combine(App.UserDataPath, "chaster_tab.json"),
@@ -42,6 +42,9 @@ public static class ChasterServiceApp
             RafflePostDays = () => App.Settings?.Current?.ChasterRafflePostDays == true,
             LadderShowName = () => App.Settings?.Current?.ChasterLadderShowName == true,
         };
+        // The raffle card is the CCP account's; the link is this PC's (ChasterService.Ladder.cs).
+        svc.WatchIdentity();
+        return svc;
     }
 
     /// <summary>The idle-day row's eyes: conditioning minutes the feature day log booked on a

@@ -11,21 +11,6 @@ using ConditioningControlPanel.Services.GoonGame;
 
 namespace ConditioningControlPanel.Services.Lobby;
 
-/// <summary>When the next poll runs. Pure: a good answer polls at <see cref="Base"/>, a failed
-/// one doubles the wait up to <see cref="Max"/>.</summary>
-public static class LobbyPollPlan
-{
-    public static readonly TimeSpan Base = TimeSpan.FromSeconds(10);
-    public static readonly TimeSpan Max = TimeSpan.FromSeconds(60);
-
-    public static TimeSpan Next(TimeSpan current, bool ok)
-    {
-        if (ok) return Base;
-        var doubled = TimeSpan.FromTicks(Math.Max(Base.Ticks, current.Ticks) * 2);
-        return doubled > Max ? Max : doubled;
-    }
-}
-
 /// <summary>
 /// THE LOBBY (App.Lobby). Fans out to the three existing open-table wires (chess
 /// <c>GET /v2/pbp/lobby</c>, Goon <c>POST /v2/goon/open</c> via <see cref="GoonOpenTables"/>,
