@@ -3,7 +3,8 @@
 // wire-shell-awareness: app-list commit now uses Core AwarenessAppList. WPF's trigger service
 // delegates to the same parser/matcher, so both heads agree about case, separators and .exe.
 // ponytail: wire-shell-awareness-c still owns the runtime pulse feed, OCR/keyboard lifecycle,
-// recently focused app suggestions, highlight overlays/capture affinity. The actual tab now owns its status pulse.
+// recently focused app suggestions, highlight overlays/capture affinity. The status pulse goes through
+// SetAwarenessStatusPulse (MainShellWindow.TabFxTakeoverLabStatus.cs).
 // The separate v2 title observer/ledger path is also incomplete. No new desktop observer is
 // installed by this slice, and none of these methods is referenced directly from shell XAML.
 

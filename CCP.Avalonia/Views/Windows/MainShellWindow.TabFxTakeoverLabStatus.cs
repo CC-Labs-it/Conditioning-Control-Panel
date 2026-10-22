@@ -9,14 +9,17 @@
 // Animation kept the whole window composing at render rate).
 //
 // On WPF each status tab calls its Set*StatusPulse from the state-change method it already has.
-// Here SetBlinkTrainerStatusPulse is called by BlinkTrainerTabView.RefreshStatusRow and
-// SetHapticsStatusPulse as below; check SheListening/Awareness callers before assuming they are wired.
+// Here SetBlinkTrainerStatusPulse is called by BlinkTrainerTabView.RefreshStatusRow,
+// SetSheListeningStatusPulse by MainShellWindow.SheListening and SetAwarenessStatusPulse by
+// AwarenessTabView.UpdateStatusIndicator (WPF UpdateAwarenessStatusIndicator).
+//
+// The gate is WPF's whole one: focus, not minimised, AmbientFxCanvas.Env.AllowAmbientLoops (motion
+// level + tier) and AllowGlow, with the blur capped at MaxGlowBlurRadius; Settings > Performance
+// re-evaluates through Env.MotionGateChanged. Awareness's glow is a sibling Border's BoxShadow (P82:
+// no Effect under a looping layer); the other dots still carry a DropShadowEffect until their XAML
+// gains a sibling glow host.
 //
 // Deviations, each because the symbol is not on this head:
-//   * MotionFx.AllowAmbientLoops and PerformanceProfile.CurrentTier / AllowGlow / MaxGlowBlurRadius
-//     (ConditioningControlPanel/Services/MotionFx.cs, /Services/PerformanceProfile.cs) are not in
-//     Core. The gate keeps the two halves that ARE here - window focus and not-minimised - and the
-//     blur is used unclamped. Restore both when they move: two `&&` and one Math.Min.
 //   * FxTheme.GlowColor (ConditioningControlPanel/Services/FxTheme.cs) is the mod's glow. This head
 //     resolves the same slot through the FxGlowColor theme key, which is what a mod switch
 //     rewrites, so the retint on CoreMods.ModChanged still lands.
@@ -40,6 +43,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
+using FxEnv = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 using ConditioningControlPanel.Models;
 using Serilog;
 
@@ -72,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             internal double Blur;
             internal Color Tint;
             internal DropShadowEffect? Glow;
+            internal Border? GlowHost;               // sibling glow: BoxShadow on it, never an Effect on the dot
             internal BeatLoop? Clock;
         }
 
@@ -108,9 +113,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 HookPr4aTab(Named<Control>("AwarenessTab"));
 
                 CoreMods.ModChanged += OnPr4aModChanged;
+                FxEnv.MotionGateChanged += ApplyPr4aFxLoops;
                 // ModChanged is a STATIC event and this is an instance handler, so the
                 // subscription would root the window for the life of the process.
-                Closed += (_, _) => CoreMods.ModChanged -= OnPr4aModChanged;
+                Closed += (_, _) =>
+                {
+                    CoreMods.ModChanged -= OnPr4aModChanged;
+                    FxEnv.MotionGateChanged -= ApplyPr4aFxLoops;
+                };
             }
             catch (Exception ex) { Log.Warning(ex, "EnsurePr4aFx failed"); }
         }
@@ -151,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         req.Tint = tint;
                         if (req.Glow != null) req.Glow.Color = tint;
                     }
+                    ApplyPr4aFxLoops();              // a sibling glow's BoxShadow is rebuilt with the new tint
                 }
                 catch (Exception ex) { Log.Debug("OnPr4aModChanged: {E}", ex.Message); }
             }
@@ -177,7 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Records whether a status element wants to pulse and re-evaluates it. The ONLY entry
         /// point, so "the feature stopped" and "the window lost focus" land in the same place.
         /// </summary>
-        private void SetStatusPulse(Control? dot, bool on, bool large = false)
+        private void SetStatusPulse(Control? dot, bool on, bool large = false, Border? glowHost = null)
         {
             if (dot == null) return;
             try
@@ -188,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _statusPulses[dot] = req = new StatusPulseRequest();
                 }
                 req.Wanted = on;
+                req.GlowHost = glowHost;
                 req.Blur = large ? StatusPulseBlurLarge : StatusPulseBlurSmall;
                 req.Tint = Pr4aGlowColor;
                 ApplyStatusPulse(dot, req);
@@ -218,7 +230,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                bool run = req.Wanted && dot.IsEffectivelyVisible && Pr4aAmbientAllowed;
+                var tier = FxEnv.CurrentTier;
+                bool run = req.Wanted && dot.IsEffectivelyVisible && Pr4aAmbientAllowed
+                    && FxEnv.AllowAmbientLoops
+                    && FxEnv.AllowGlow(tier);
+                double blur = Math.Min(req.Blur, FxEnv.MaxGlowBlurRadius(tier));
 
                 if (!run)
                 {
@@ -226,6 +242,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     req.Glow = null;
                     dot.Opacity = 1;
                     dot.ClearValue(Visual.EffectProperty);
+                    if (req.GlowHost is { } off) { off.Opacity = 0; off.BoxShadow = default; }
+                    return;
+                }
+
+                if (req.GlowHost is { } host)
+                {
+                    host.Background = (dot as global::Avalonia.Controls.Shapes.Shape)?.Fill;
+                    host.BoxShadow = new BoxShadows(new BoxShadow { Color = req.Tint, Blur = blur });
+                    if (req.Clock != null) return;   // already breathing, leave the clock alone
+                    req.Clock = new BeatLoop(host, t => host.Opacity =
+                        StatusPulseMinOpacity + (StatusPulseMaxOpacity - StatusPulseMinOpacity) * BeatLoop.Breath(t, StatusPulseSeconds));
+                    req.Clock.Start();
                     return;
                 }
 
@@ -236,7 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 req.Glow = new DropShadowEffect
                 {
                     Color = req.Tint,
-                    BlurRadius = req.Blur,
+                    BlurRadius = blur,
                     OffsetX = 0,
                     OffsetY = 0,
                     Opacity = StatusPulseMaxOpacity,
@@ -290,7 +318,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void SetAwarenessStatusPulse(bool live)
         {
             EnsurePr4aFx();
-            SetStatusPulse(Named<Control>("AwarenessTab")?.FindControl<Control>("AwarenessStatusDot"), live);
+            var tab = Named<Control>("AwarenessTab");
+            SetStatusPulse(tab?.FindControl<Control>("AwarenessStatusDot"), live, glowHost: tab?.FindControl<Border>("AwarenessStatusGlow"));
         }
     }
 }

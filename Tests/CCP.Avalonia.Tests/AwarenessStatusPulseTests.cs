@@ -36,16 +36,18 @@ public sealed class AwarenessStatusPulseTests
         var resources = Application.Current!.Resources;
         var hadLocalTint = resources.Keys.Contains("FxGlowColor");
         var oldTint = resources["FxGlowColor"];
-        Window? host = null;
+        ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? host = null;
         try
         {
             s.KeywordTriggersEnabled = false;
             s.MotionLevel = MotionLevel.Full;
             s.PerformanceMode = false;
-            var view = new AwarenessTabView();
-            var parent = new Border { Child = view };
-            host = new Window { Content = parent, Width = 1200, Height = 900 };
-            host.Show(); host.Activate(); Dispatcher.UIThread.RunJobs();
+            // The shell's one pulse registry (SetAwarenessStatusPulse), reached the way a user does.
+            host = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            host.Show(); host.Activate();
+            host.ShowTab("awareness"); Dispatcher.UIThread.RunJobs();
+            var view = host.FindControl<AwarenessTabView>("AwarenessTab")!;
+            Assert.True(view.IsEffectivelyVisible);
             var dot = view.FindControl<Ellipse>("AwarenessStatusDot")!;
             var glow = view.FindControl<Border>("AwarenessStatusGlow");
             Assert.NotNull(glow);
@@ -77,16 +79,17 @@ public sealed class AwarenessStatusPulseTests
             Assert.Equal(0.22, glow.Opacity, 3);
             Assert.Equal(1, dot.Opacity);
 
-            parent.IsVisible = false;
+            host.ShowTab("settings"); Dispatcher.UIThread.RunJobs();
             Assert.False(loop.IsRunning);
             Assert.Equal(0, glow.Opacity);
-            parent.IsVisible = true;
+            host.ShowTab("awareness"); Dispatcher.UIThread.RunJobs();
             Assert.Single(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
             host.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
             Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
             host.WindowState = WindowState.Normal; host.Activate(); Dispatcher.UIThread.RunJobs();
             Assert.Single(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
 
+            // Headless never deactivates a window when another activates; drive the platform callback.
             typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(host, null); Dispatcher.UIThread.RunJobs();
             Assert.False(host.IsActive);
             Assert.Equal(0, glow.Opacity);
@@ -101,17 +104,11 @@ public sealed class AwarenessStatusPulseTests
             Assert.Equal(0, glow.Opacity);
             s.PerformanceMode = false; AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.Single(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
-            s.KeywordTriggersEnabled = false; Dispatcher.UIThread.RunJobs();
+            view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = false; Dispatcher.UIThread.RunJobs();
             Assert.Equal("Off", view.FindControl<TextBlock>("TxtAwarenessStatus")!.Text);
             Assert.Equal(0, glow.Opacity);
             Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
-            s.KeywordTriggersEnabled = true; Dispatcher.UIThread.RunJobs();
-            parent.Child = null;
-            Assert.Equal(0, glow.Opacity);
-            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
-            s.KeywordTriggersEnabled = false;
-            CoreMods.RaiseModChanged(null, new ModPackage(BuiltInMods.CCPDefault, null, isBuiltIn: true));
-            AmbientFxCanvas.Env.RaiseMotionGateChanged(); // detached static callbacks must not restart it
+            AmbientFxCanvas.Env.RaiseMotionGateChanged(); // an Off dot must not restart on a gate change
             Assert.Equal(0, glow.Opacity);
         }
         finally

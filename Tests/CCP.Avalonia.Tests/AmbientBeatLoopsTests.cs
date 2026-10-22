@@ -349,12 +349,16 @@ public sealed class AmbientBeatLoopsTests
             shell.ShowTab("awareness");
             Dispatcher.UIThread.RunJobs();
             shell.SetAwarenessStatusPulse(true);
-            var dot = shell.Named<Control>("AwarenessTab")!.FindControl<Control>("AwarenessStatusDot")!;
-            var glow = Assert.IsType<DropShadowEffect>(dot.Effect);
+            // Awareness breathes a sibling Border's BoxShadow, never an Effect on the dot (P82).
+            var awareness = shell.Named<Control>("AwarenessTab")!;
+            var dot = awareness.FindControl<Control>("AwarenessStatusDot")!;
+            var glow = awareness.FindControl<Border>("AwarenessStatusGlow")!;
+            Assert.Null(dot.Effect);
             Assert.Equal(0.22, glow.Opacity, 3);
             Step(time, 2.8);
             Assert.Equal(0.95, glow.Opacity, 3);
             shell.SetAwarenessStatusPulse(false);
+            Assert.Equal(0, glow.Opacity);
             Assert.Null(dot.Effect);
         }
         finally
