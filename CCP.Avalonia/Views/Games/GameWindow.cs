@@ -233,6 +233,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
 
+        /// <summary>WPF FypHostService.IsActive: the For You window is open.</summary>
+        internal static bool IsFypOpen() { lock (Open) return Open.Any(w => w.Spec.Id == FypId); }
+
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 
         internal static GameWindow? OpenForTests(string id) => OpenWindowsForTests().FirstOrDefault(w => w.Spec.Id == id);

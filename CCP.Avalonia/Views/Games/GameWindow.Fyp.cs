@@ -23,11 +23,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
     /// <para>ponytail: not on this head yet - eye control (init says off; a toggle gets eyeStatus "unsupported"),
-    /// ghost mode (WPF's own unavailable answer), calibrate and EMI's fypOpened/fypClosed.</para>
+    /// ghost mode (WPF's own unavailable answer), calibrate and EMI's fypOpened/fypClosed (no EMI Desk event bus here).</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
         internal const string FypId = "fyp";
+
+        /// <summary>WPF FeedOwnsTheScreen (VideoService.cs:1988, BubbleCountService.cs:121): mandatory videos and
+        /// bubble count stand down while the feed is open (no ghost mode on this head, so open = on screen).
+        /// Seeded with the type: no feed can be open before it exists.</summary>
+        static GameWindow() => FypFeedDefer.FeedOnScreen = IsFypOpen;
 
         private FypMetaStore? _fypMeta;
         private bool _fypHooked;

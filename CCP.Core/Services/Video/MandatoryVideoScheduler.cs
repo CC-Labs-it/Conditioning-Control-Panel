@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Fyp;
 using Serilog;
 
 namespace ConditioningControlPanel.Services
@@ -42,7 +44,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
     /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
+    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/DND/browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
@@ -99,7 +101,10 @@ namespace ConditioningControlPanel.Services
             _host = host;
             _time = time ?? TimeProvider.System;
             _library = library ?? LocalLibrary;
+            _feedDefer = new FypFeedDefer(_time, "VideoService");
         }
+
+        private readonly FypFeedDefer _feedDefer;
 
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
@@ -259,6 +264,7 @@ namespace ConditioningControlPanel.Services
         public void Stop()
         {
             _running = false;
+            _feedDefer.Reset();   // WPF Stop: the #1073 latch goes too
             _retryGeneration++;   // WPF CancelPendingRetry: a verdict message must not replay after a stop
             Dispose(ref _scheduler);
             ForceCleanup();
@@ -304,9 +310,32 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (no clip, or one is already playing).
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
-        public bool Trigger(bool? strictOverride = null, string? path = null)
+        public bool Trigger(bool? strictOverride = null, string? path = null, bool userInitiated = false)
         {
             if (_playing) return false;
+            // WPF TriggerVideo :2300 (#1073): the For You feed on screen IS the video experience, so a picked
+            // video waits for it to leave (a specific clip is WPF PlaySpecificVideo, which has no such guard).
+            if (path == null && FypFeedDefer.FeedOwnsTheScreen)
+            {
+                Log.Information("VideoService: TriggerVideo deferred - For You feed on screen");
+                // #1239: only a press the user just made owes a word; the scheduler deferring is not news.
+                if (userInitiated)
+                    CoreProgram.Notify(Loc.Get("video_toast_feed_has_the_screen"), "Info", TimeSpan.FromSeconds(6));
+                _feedDefer.Defer(() =>
+                {
+                    // Re-asserted at fire time: the engine stopped or videos were switched off meanwhile.
+                    if (!_running || !CoreSettings.Current.MandatoryVideosEnabled)
+                    {
+                        Log.Information("VideoService: For You replay abandoned - mandatory videos no longer running");
+                        return;
+                    }
+                    if (!Trigger(strictOverride)) Rearm();
+                },
+                // Deviation (as the empty-library re-arm above): WPF's schedule dies when a held trigger expires.
+                Rearm);
+                void Rearm() { if (_scheduler == null && !_playing) ScheduleNext(); }
+                return true;
+            }
             path ??= PickNext();
             if (path == null)
             {

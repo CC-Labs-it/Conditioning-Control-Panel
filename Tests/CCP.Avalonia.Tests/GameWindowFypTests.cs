@@ -17,6 +17,7 @@ using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Services.Fyp;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -68,6 +69,68 @@ public sealed class GameWindowFypTests
             }
         });
     }
+
+    /// <summary>Timers fire only when told to (P08): no real waits.</summary>
+    private sealed class ManualClock : TimeProvider
+    {
+        private readonly List<Timer> _timers = new();
+        public override global::System.Threading.ITimer CreateTimer(global::System.Threading.TimerCallback cb, object? state, TimeSpan due, TimeSpan period)
+        {
+            var t = new Timer(cb, state) { Armed = due != global::System.Threading.Timeout.InfiniteTimeSpan };
+            _timers.Add(t);
+            return t;
+        }
+        /// <summary>Fire the newest armed timer only (the defer poll, not the hour-long schedule).</summary>
+        public void FireNewest() { var t = _timers.LastOrDefault(t => t.Armed); if (t == null) return; t.Armed = false; t.Cb(t.State); }
+        private sealed class Timer(global::System.Threading.TimerCallback cb, object? state) : global::System.Threading.ITimer
+        {
+            public bool Armed;
+            public readonly global::System.Threading.TimerCallback Cb = cb;
+            public readonly object? State = state;
+            public bool Change(TimeSpan due, TimeSpan period) { Armed = due != global::System.Threading.Timeout.InfiniteTimeSpan; return true; }
+            public void Dispose() => Armed = false;
+            public ValueTask DisposeAsync() { Armed = false; return default; }
+        }
+    }
+
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public int Shown;
+        public void Show(string path, bool strict) => Shown++;
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+    }
+
+    /// <summary>WPF FeedOwnsTheScreen (VideoService.cs:1988): the open feed holds a picked mandatory video;
+    /// closing it (here: panic) lets the held trigger through.</summary>
+    [Fact]
+    public void OpenFeed_StandsMandatoryVideoDown_UntilItCloses() => Run((shell, lib) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        File.WriteAllBytes(Path.Combine(lib, "a.mp4"), new byte[] { 1 });
+        var host = new NoVideoHost();
+        var clock = new ManualClock();
+        var v = new MandatoryVideoScheduler(host, clock, () => new[] { Path.Combine(lib, "a.mp4") });
+        CoreSettings.Current.MandatoryVideosEnabled = true;   // the replay re-reads it, as WPF (fresh SettingsService per Run)
+        CoreSettings.Current.FlashEnabled = false;
+        try
+        {
+            v.Start();                                // the engine's schedule: the replay needs it running
+            shell.ShowTab("fyp");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsFypOpen());
+            Assert.True(FypFeedDefer.FeedOwnsTheScreen);
+            Assert.True(v.Trigger());                 // held, not started
+            Assert.False(v.IsPlaying);
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(FypFeedDefer.FeedOwnsTheScreen);
+            clock.FireNewest();                       // the 500 ms poll sees the feed gone
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(v.IsPlaying);                 // the held trigger went through once the feed left
+        }
+        finally { v.Stop(); }
+    });
 
     /// <summary>WPF ShowTab("fyp") -> OpenFypFeed (MainWindow.Lab.cs:234), refused out loud; panic closes it (GameSurfaces.cs:56).</summary>
     [Fact]

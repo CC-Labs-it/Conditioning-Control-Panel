@@ -36,7 +36,8 @@ namespace ConditioningControlPanel.Services
     /// The Bambi Freeze lead-in (:353) goes through <see cref="CoreSubliminal.TriggerBambiFreeze"/>.
     /// A game due while another fullscreen interaction is up waits and replays once it ends
     /// (WPF TriggerGame :321 queueing on InteractionQueue), re-checked every <see cref="QueuePoll"/>.
-    /// Pack clips come through <see cref="PackVideos"/>. ponytail: the For You defer needs the feed host.
+    /// Pack clips come through <see cref="PackVideos"/>. A game due while the For You feed is on screen waits
+    /// for it (WPF :307, <see cref="Fyp.FypFeedDefer"/>).
     /// </summary>
     public sealed class BubbleCountScheduler
     {
@@ -63,7 +64,10 @@ namespace ConditioningControlPanel.Services
             _host = host;
             _time = time ?? TimeProvider.System;
             _library = library ?? MandatoryVideoScheduler.LocalLibrary;
+            _feedDefer = new Fyp.FypFeedDefer(_time, "BubbleCountService");
         }
+
+        private readonly Fyp.FypFeedDefer _feedDefer;
 
         public bool IsRunning { get; private set; }
         /// <summary>A game (lead-in, clip, answer or retry message) is in progress.</summary>
@@ -110,6 +114,7 @@ namespace ConditioningControlPanel.Services
         {
             IsRunning = false;
             Dispose(ref _scheduler);
+            _feedDefer.Reset();   // WPF Stop :78: a defer that outlived the service must not coalesce every later trigger
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
@@ -151,6 +156,23 @@ namespace ConditioningControlPanel.Services
             if (!forceTest && !CoreSettings.Current.BubbleCountEnabled)
             {
                 Log.Information("BubbleCountService: game dropped - bubble count is disabled in settings");
+                return;
+            }
+            // WPF TriggerGame :307 (#1073): a video-class interaction stands down for the feed on screen,
+            // held and replayed once it leaves; forceTest (the card's Test button) waits too, as in WPF.
+            if (Fyp.FypFeedDefer.FeedOwnsTheScreen)
+            {
+                Log.Information("BubbleCountService: game deferred - For You feed on screen");
+                _feedDefer.Defer(() =>
+                {
+                    // Re-asserted at fire time (#872): the engine stopped or bubble count was switched off.
+                    if (!forceTest && (!IsRunning || !CoreSettings.Current.BubbleCountEnabled))
+                    {
+                        Log.Information("BubbleCountService: For You replay abandoned - bubble count no longer running");
+                        return;
+                    }
+                    Trigger(forceTest);
+                });
                 return;
             }
             if (_host.OtherInteractionActive)
