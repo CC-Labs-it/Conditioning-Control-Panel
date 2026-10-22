@@ -12,38 +12,22 @@
 // Dispatcher.UIThread and the setting has no meaning on this head. There is nothing to port,
 // so InitializeAvatarTube is the else-branch alone.
 //
-// STILL HEAD-SIDE, each with the exact symbol and where it lives today:
-//   OnCompanionXPAwarded   - App.Companion's XPAwarded / LevelUp / XPDrained / CompanionSwitched
-//   OnCompanionLevelUp       events (ConditioningControlPanel/Services/Companion/CompanionService.cs)
-//   OnCompanionXPDrained     and UpdateCompanionCardsUI, which is itself blocked twice over -
-//   OnCompanionSwitched      see MainShellWindow.CompanionTab.cs. The level-up half also needs
-//                            _trayIcon.ShowNotification (here: Platform.OsNotifications.Show), PlayLevelUpSound (WPF MainWindow.xaml.cs, not ported) and
-//                            UpdateLevelDisplay (MainShellWindow.Progression.cs), both stubs.
-//   FlashXpBarOnDrain      - restored for the HEADER bar only. Its second overlay,
-//                            CompanionTab.PrgCompanion0FlashOverlay, lives inside
-//                            CCP.Avalonia/Views/Controls/Companion/CompanionHeroCard.axaml and
-//                            CompanionTabView re-publishes none of the room's cell controls
-//                            (MainShellWindow.CompanionTab.cs says why), so there is no accessor
-//                            path to it. A future wiring reaches it through the hero card.
-//   the mute half         - AvatarTubeWindow.SetMuteAvatar and Giggle are in the WPF Speech.cs
-//                            partial that did not cross. Detach/Attach did (the tube's
-//                            Windowing.cs partial), and OnShellStateForTube below drives them.
-//
-// _avatarTubeWindow IS DECLARED HERE. WPF declares it in MainWindow.xaml.cs:179, whose twin
-// (MainShellWindow.axaml.cs) already lists it in its dropped ledger and is not this layer's to
-// own. A partial-class field can be declared exactly once, so whoever restores that file must
-// take the field from here rather than re-declare it.
-//
-// NO CALLER YET for any of it: the tray menu's "Wake Bambi Up!", the companion room's avatar
-// toggle (MainShellWindow.CompanionRoom.cs, this layer) and the shell's minimise/restore path
-// (MainShellWindow.axaml.cs) are the three call sites, and only the second is on this head.
+// XP events now originate in CompanionCore and are released when the shell closes. The existing
+// live mute setting, speech pipeline and quick menu are reused; no second mute flag is introduced.
 
 using System;
+using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Styling;
+using Avalonia.LogicalTree;
+using Avalonia.Threading;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using Serilog;
 
@@ -59,6 +43,90 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// its Opened work runs (App.axaml.cs). Nobody sees the panel then, so the tube stays put.</summary>
         internal bool BuildingHiddenForBoot { get; set; }
 
+        private bool _companionEventsClosed;
+        private Action? _stopCompanionLevelSound;
+
+        /// <summary>WPF ctor event subscriptions; a closed shell must never receive another reward.</summary>
+        private void HookCompanionEvents()
+        {
+            CompanionCore.XPAwarded += OnCompanionXPAwarded;
+            CompanionCore.LevelUp += OnCompanionLevelUp;
+            CompanionCore.XPDrained += OnCompanionXPDrained;
+            CompanionCore.Switched += OnCompanionSwitched;
+            Closed += (_, _) =>
+            {
+                _companionEventsClosed = true;
+                CompanionCore.XPAwarded -= OnCompanionXPAwarded;
+                CompanionCore.LevelUp -= OnCompanionLevelUp;
+                CompanionCore.XPDrained -= OnCompanionXPDrained;
+                CompanionCore.Switched -= OnCompanionSwitched;
+                StopCompanionLevelSound();
+            };
+        }
+
+        private void DispatchCompanionEvent(Action action)
+        {
+            void Apply() { if (!_companionEventsClosed) action(); }
+            if (Dispatcher.UIThread.CheckAccess()) Apply();
+            else Dispatcher.UIThread.Post(Apply);
+        }
+
+        private bool CompanionRoomVisible => Named<Control>("CompanionTab")?.IsVisible == true;
+
+        private void RefreshCompanionCards()
+        {
+            SyncHero();
+            RoomView()?.RefreshRoster();
+        }
+
+        private void OnCompanionXPAwarded(CompanionId id, double amount, double modifier) =>
+            DispatchCompanionEvent(() => { if (CompanionRoomVisible) RefreshCompanionCards(); });
+
+        private void OnCompanionLevelUp(CompanionId id, int level) => DispatchCompanionEvent(() =>
+        {
+            RefreshCompanionCards();
+            var name = CoreMods.MakeModAware(CompanionDefinition.GetById(id).Name);
+            if (CompanionCore.MilestoneNotification(name, level) is not { } notice) return;
+            Platform.OsNotifications.Show(notice.Title, notice.Body);
+            PlayCompanionLevelSound();
+        });
+
+        private void OnCompanionXPDrained(double amount) => DispatchCompanionEvent(() =>
+        {
+            UpdateLevelDisplay();
+            FlashXpBarOnDrain();
+            if (CompanionRoomVisible) RefreshCompanionCards();
+        });
+
+        private void OnCompanionSwitched(CompanionId id) => DispatchCompanionEvent(RefreshCompanionCards);
+
+        /// <summary>WPF MainWindow.xaml.cs PlayLevelUpSound: same fallbacks, curve and gain.</summary>
+        private void PlayCompanionLevelSound()
+        {
+            try
+            {
+                var root = AppDomain.CurrentDomain.BaseDirectory;
+                var path = new[]
+                {
+                    Path.Combine(root, "Resources", "sounds", "lvup.mp3"),
+                    Path.Combine(root, "Resources", "sounds", "lvlup.mp3"),
+                    Path.Combine(root, "assets", "sounds", "lvlup.mp3"),
+                }.FirstOrDefault(File.Exists);
+                if (path == null) return;
+                StopCompanionLevelSound();
+                var volume = (float)Math.Pow(CoreSettings.Current.MasterVolume / 100f, 1.5) * 0.2625f;
+                _stopCompanionLevelSound = CoreAudio.PlayStoppable(path, Math.Max(0.01f, volume), "level-up");
+            }
+            catch (Exception ex) { Log.Warning(ex, "Companion level-up sound failed"); }
+        }
+
+        internal void StopCompanionLevelSound()
+        {
+            var stop = _stopCompanionLevelSound;
+            _stopCompanionLevelSound = null;
+            try { stop?.Invoke(); } catch (Exception ex) { Log.Debug(ex, "Companion level-up sound stop failed"); }
+        }
+
         // ============================== the XP-drain flash ==============================
 
         /// <summary>
@@ -69,6 +137,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Log.Information("XP drain flash fired");
             FlashOverlay(Named<Border>("XPBarFlashOverlay"));
+            foreach (var hero in this.GetLogicalDescendants().OfType<CompanionHeroCard>())
+                FlashOverlay(hero.FindControl<Border>("PrgCompanion0FlashOverlay"));
         }
 
         /// <summary>
@@ -119,8 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _avatarTubeWindow = new AvatarTubeWindow(this);
                 PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnShellStateForTube(); };
 
-                // WPF SetMuteAvatar(AvatarMuted) at build: this tube reads the setting live
-                // (AvatarTubeWindow.IsMuted), so the room's mute toggle needs no push here.
+                _avatarTubeWindow.UpdateQuickMenuState(); // IsMuted already reads the saved setting live.
 
                 if (showNow)
                 {
@@ -211,7 +280,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _avatarTubeWindow.ShowSafe();
                 _avatarTubeWindow.StartPoseAnimation();
                 _avatarTubeWindow.Detach();
-                // ponytail: WPF also has her Giggle("Good morning~!") - Speech.cs has not crossed.
+                _avatarTubeWindow.Giggle("Good morning~!");
             }
             SyncHero();   // WPF CompanionRoom?.SyncHero(): every on/off label follows the switch
         }

@@ -28,6 +28,47 @@ public sealed class CompanionCoreTests : IDisposable
     }
 
     [Fact]
+    public void AwardAndDrainEventsMatchWpfPayloadAndObserveTheUpdatedSettings()
+    {
+        (_s.CompanionPerk, _s.StrictLockEnabled) = (CompanionBonusType.StrictModeBonus, false);
+        var awards = new List<(CompanionId Id, double Amount, double Modifier)>();
+        var drained = new List<double>();
+        Action<CompanionId, double, double> award = (id, amount, modifier) =>
+        {
+            Assert.Equal(amount, _s.ActiveCompanionProgress.CurrentXP);
+            awards.Add((id, amount, modifier));
+        };
+        Action<double> drain = amount => { Assert.Equal(0, _s.PlayerXP); drained.Add(amount); };
+        CompanionCore.XPAwarded += award;
+        CompanionCore.XPDrained += drain;
+        try
+        {
+            CompanionCore.AddCompanionXP(12, "test");
+            Assert.Equal((CompanionCore.ActiveCompanion, 6.0, 0.5), Assert.Single(awards));
+            _s.ActiveCompanionProgress.Level = CompanionProgress.MaxLevel;
+            CompanionCore.AddCompanionXP(12, "test");
+            Assert.Single(awards);
+            (_s.CompanionPerk, _s.PlayerXP) = (CompanionBonusType.XPDrain, 2);
+            Assert.True(CompanionCore.DrainTick(DateTime.UtcNow));
+            Assert.Equal(3.0, Assert.Single(drained)); // WPF announces its tick rate, even at the floor.
+            Assert.False(CompanionCore.DrainTick(DateTime.UtcNow));
+            Assert.Single(drained);
+        }
+        finally { CompanionCore.XPAwarded -= award; CompanionCore.XPDrained -= drain; }
+    }
+
+    [Theory]
+    [InlineData(9, null, null)]
+    [InlineData(10, "Companion Level Up!", "Circe reached Level 10!")]
+    [InlineData(CompanionProgress.MaxLevel, "MAX LEVEL!", "Circe has reached maximum level!")]
+    public void MilestoneRuleUsesTheSuppliedModAwareName(int level, string? title, string? body)
+    {
+        var notice = CompanionCore.MilestoneNotification("Circe", level);
+        Assert.Equal(title, notice?.Title);
+        Assert.Equal(body, notice?.Body);
+    }
+
+    [Fact]
     public void TheModifierIsWpfsPerkTable()
     {
         Assert.Equal(1.5, CompanionCore.CalculateXPModifier(CompanionBonusType.PinkFilterBonus, false, false, false, false, 50));

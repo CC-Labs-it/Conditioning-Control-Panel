@@ -56,23 +56,10 @@ namespace ConditioningControlPanel
                 var rawCompanionName = Models.CompanionDefinition.GetById(args.Companion).Name;
                 var companionName = App.Mods?.MakeModAware(rawCompanionName) ?? rawCompanionName;
 
-                // Show notification for companion level up
-                if (args.NewLevel == Models.CompanionProgress.MaxLevel)
+                // Shared milestone rule; both heads use the same notification text and threshold.
+                if (Services.Companion.CompanionCore.MilestoneNotification(companionName, args.NewLevel) is { } notice)
                 {
-                    _trayIcon?.ShowNotification("MAX LEVEL!",
-                        $"{companionName} has reached maximum level!",
-                        System.Windows.Forms.ToolTipIcon.Info);
-                }
-                else if (args.NewLevel % 10 == 0)
-                {
-                    _trayIcon?.ShowNotification("Companion Level Up!",
-                        $"{companionName} reached Level {args.NewLevel}!",
-                        System.Windows.Forms.ToolTipIcon.Info);
-                }
-
-                // Play level up sound for significant milestones
-                if (args.NewLevel % 10 == 0 || args.NewLevel == Models.CompanionProgress.MaxLevel)
-                {
+                    _trayIcon?.ShowNotification(notice.Title, notice.Body, System.Windows.Forms.ToolTipIcon.Info);
                     PlayLevelUpSound();
                 }
             });
