@@ -100,6 +100,7 @@ public sealed class RemoteRelayTests
     [Fact]
     public void Restraint_reducing_verbs_run_under_Lockdown_keep_its_timer_and_it_still_restores_on_end()
     {
+        var quiet = ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.PanicQuietUntilMs;
         var s = CoreSettings.Current;
         var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey);
         var prev = LockdownService.Current;
@@ -111,6 +112,7 @@ public sealed class RemoteRelayTests
             Assert.True(s.StrictLockEnabled);
             Assert.False(s.PanicKeyEnabled);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.True(ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.PanicQuiet);
             Assert.True(s.PanicKeyEnabled);       // WPF StopAllRemoteEffects, Lockdown or not
             Assert.False(s.StrictLockEnabled);
             (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
@@ -127,6 +129,7 @@ public sealed class RemoteRelayTests
         }
         finally
         {
+            ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.PanicQuietUntilMs = quiet;
             ld.Deactivate();
             ld.Dispose();
             LockdownService.Current = prev;

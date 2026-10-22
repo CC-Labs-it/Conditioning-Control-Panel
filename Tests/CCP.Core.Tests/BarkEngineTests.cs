@@ -15,14 +15,25 @@ public sealed class BarkEngineTests : IDisposable
     private readonly ConditioningControlPanel.Models.AppSettings _s = CoreSettings.Current;
     private readonly (bool, int, int) _old;
     private readonly List<BarkSpeech> _said = new();
+    private readonly List<string> _idle, _latches;
+    private readonly Dictionary<string, List<string>> _rotation;
 
     public BarkEngineTests()
     {
         _old = (_s.AvatarEnabled, _s.MasterVolume, _s.BarkChatSuppressionMs);
+        _idle = new(_s.BarkIdleRotation);
+        _latches = new(_s.BarkLifetimeFired);
+        _rotation = _s.BarkVariantRotation.ToDictionary(kv => kv.Key, kv => new List<string>(kv.Value));
         (_s.AvatarEnabled, _s.MasterVolume, _s.BarkChatSuppressionMs) = (true, 50, 0);
     }
 
-    public void Dispose() => (_s.AvatarEnabled, _s.MasterVolume, _s.BarkChatSuppressionMs) = _old;
+    public void Dispose()
+    {
+        (_s.AvatarEnabled, _s.MasterVolume, _s.BarkChatSuppressionMs) = _old;
+        _s.BarkIdleRotation = _idle;
+        _s.BarkLifetimeFired = _latches;
+        _s.BarkVariantRotation = _rotation;
+    }
 
     private static BarkRule Rule(string trigger, params string[] lines) => new()
     { Id = trigger + Guid.NewGuid().ToString("N"), Trigger = trigger, VariantPool = lines.Select(l => new BarkVariant(l)).ToList() };
@@ -117,6 +128,202 @@ public sealed class BarkEngineTests : IDisposable
         Assert.False(e.Raise("AttentionCheckFail"));
         clock.Advance(TimeSpan.FromSeconds(0.2));
         Assert.True(e.Raise("AttentionCheckFail"));
+    }
+
+    [Fact]
+    public void IdleRulesRotateAcrossSessionsThenRecycleWithoutAnImmediateRepeat()
+    {
+        var rules = new[] { Rule("Idle", "a"), Rule("Idle", "b"), Rule("Idle", "c") };
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        Assert.True(Engine(rules).DispatchIdle());
+        var e = Engine(rules); // reload the persisted rule-level rotation
+        e.Clock = clock;
+        for (int i = 0; i < 2; i++)
+        {
+            Assert.True(e.DispatchIdle());
+            clock.Advance(TimeSpan.FromMinutes(1));
+        }
+        Assert.Equal(3, _said.Select(x => x.Text).Distinct().Count());
+        Assert.Equal(3, rules.Count(r => _s.BarkIdleRotation.Contains(r.Id)));
+        Assert.True(e.DispatchIdle());
+        Assert.NotEqual(_said[2].Text, _said[3].Text);
+        Assert.All(_said, line => Assert.True(line.Unprompted));
+        var only = Engine(Rule("Idle", "only"));
+        only.Clock = clock;
+        Assert.True(only.DispatchIdle());
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(only.DispatchIdle()); // a single eligible rule necessarily repeats
+    }
+
+    private sealed class IdleRandom(double roll) : Random
+    {
+        public override double NextDouble() => roll;
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Theory]
+    [InlineData(0.34999, "gated")]
+    [InlineData(0.35, "ordinary")]
+    public void IdleBiasUsesTheWpfThresholdAndOnlyEligibleRules(double roll, string expected)
+    {
+        var ordinary = Rule("Idle", "ordinary");
+        ordinary.Priority = 10;
+        var gated = Rule("Idle", "gated");
+        gated.Conditions = new() { ["master_volume_gte"] = 50 };
+        var excluded = Rule("Idle", "ineligible");
+        excluded.Conditions = new() { ["master_volume_gt"] = 50 };
+        excluded.Priority = 100;
+        var e = new BarkEngine(() => new BarkRuleSet(new[] { ordinary, gated, excluded }), new IdleRandom(roll)) { Speak = _said.Add };
+        e.Start();
+        Assert.True(e.DispatchIdle());
+        Assert.Equal(expected, Assert.Single(_said).Text);
+    }
+
+    [Fact]
+    public void IdleRespectsMuteSpeakingChatAndThePanicHoldWithoutSpendingTheRule()
+    {
+        var idle = Rule("Idle", "idle");
+        var panic = Rule("Panic", "safe");
+        panic.ClassRaw = "safety";
+        var e = Engine(idle, panic);
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        e.Clock = clock;
+        _s.MasterVolume = 0;
+        Assert.False(e.DispatchIdle());
+        _s.MasterVolume = 50;
+        e.IsSpeaking = () => true;
+        Assert.False(e.DispatchIdle());
+        e.IsSpeaking = () => false;
+        _s.BarkChatSuppressionMs = 1000;
+        e.NoteUserMessage();
+        Assert.False(e.DispatchIdle());
+        Assert.DoesNotContain(idle.Id, _s.BarkIdleRotation);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(e.Raise("Panic"));
+        Assert.False(e.DispatchIdle());
+        clock.Advance(TimeSpan.FromSeconds(6));
+        Assert.False(e.DispatchIdle()); // hold expired, but ordinary idle still keeps the 60 s floor
+        clock.Advance(TimeSpan.FromSeconds(54));
+        Assert.True(e.DispatchIdle());
+    }
+
+    [Theory]
+    [InlineData("AttentionCheckFail", false)]
+    [InlineData("PossessionEffect", true)]
+    [InlineData("PossessionTripwire", true)]
+    [InlineData("PossessionWarden", true)]
+    [InlineData("PossessionRungChanged", true)]
+    [InlineData("PossessionTimerRestarted", true)]
+    [InlineData("PossessionRemember", true)]
+    [InlineData("LockdownConscript", true)]
+    [InlineData("EmergencyExitOpened", true)]
+    [InlineData("EmergencyExitVerdict", true)]
+    [InlineData("Idle", false)]
+    public void WhisperExemptsOnlyAttributionsWhileNarratorHoldsThemAll(string trigger, bool maySpeak)
+    {
+        var e = Engine(Rule(trigger, "line"));
+        e.IsWhisperAudioPlaying = () => true;
+        Assert.Equal(maySpeak, e.Raise(trigger));
+        e.IsChaosNarratorPlaying = () => true;
+        Assert.False(e.Raise(trigger));
+        Assert.True(e.Raise(trigger, guaranteed: true));
+        var safety = Rule("Panic", "safe");
+        safety.ClassRaw = "safety";
+        e = Engine(safety);
+        e.IsWhisperAudioPlaying = e.IsChaosNarratorPlaying = () => true;
+        Assert.True(e.Raise("Panic"));
+    }
+
+    [Fact]
+    public void TierOneShotsUseTheLiveTierAndKeepTheWpfSessionLatch()
+    {
+        var r = Rule("AttentionCheckFail", "tier");
+        (r.Repeatable, r.ScopeRaw) = (false, "tier");
+        var e = Engine(r);
+        var tier = "Level1";
+        e.CurrentTier = () => tier;
+        Assert.True(e.Raise(r.Trigger));
+        Assert.True(_s.IsBarkFired(r.Id + "@Level1"));
+        tier = "Level2";
+        Assert.False(e.Raise(r.Trigger, guaranteed: true)); // session latch remains, as WPF
+        e.ReloadRules();
+        Assert.True(e.Raise(r.Trigger));
+        Assert.True(_s.IsBarkFired(r.Id + "@Level2"));
+        e = Engine(r);
+        e.CurrentTier = () => "Level1";
+        Assert.False(e.Raise(r.Trigger, guaranteed: true));
+    }
+
+    [Fact]
+    public void DryRunExercisesGatesWithoutMouthEchoOrPersistedMutation()
+    {
+        var idle = Rule("Idle", "idle");
+        var once = Rule("AttentionCheckFail", "once");
+        (once.Repeatable, once.ScopeRaw) = (false, "lifetime");
+        var e = Engine(idle, once);
+        e.DryRun = true;
+        bool echoed = false;
+        e.BarkSpoken += (_, _) => echoed = true;
+        Assert.False(e.DispatchIdle());
+        Assert.False(e.Raise(once.Trigger));
+        Assert.False(e.DispatchIdle()); // gap still evaluated
+        Assert.Empty(_said);
+        Assert.False(echoed);
+        Assert.DoesNotContain(idle.Id, _s.BarkIdleRotation);
+        Assert.False(_s.BarkVariantRotation.ContainsKey(idle.Id));
+        Assert.False(_s.IsBarkFired(once.Id));
+        e.DryRun = false;
+        Assert.False(e.Raise(once.Trigger, guaranteed: true)); // dry-run kept its session latch
+    }
+
+    [Fact]
+    public void EnvironmentOptInStartsInDryRun()
+    {
+        var previous = Environment.GetEnvironmentVariable("CCP_BARK_DRYRUN");
+        try
+        {
+            Environment.SetEnvironmentVariable("CCP_BARK_DRYRUN", "1");
+            var e = Engine(Rule("AttentionCheckFail", "silent"));
+            Assert.True(e.DryRun);
+            Assert.False(e.Raise("AttentionCheckFail"));
+            Assert.Empty(_said);
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_BARK_DRYRUN", previous); }
+    }
+
+    [Theory]
+    [InlineData(false, false, false, false, false, true)]
+    [InlineData(true, false, false, false, false, false)]
+    [InlineData(true, true, false, false, false, true)]
+    [InlineData(true, false, true, false, false, true)]
+    [InlineData(true, false, true, true, false, false)]
+    [InlineData(true, false, false, false, true, true)]
+    public void IdleVoiceHonorsEngineSessionPauseAndOptIn(bool idle, bool engine, bool session,
+        bool paused, bool optedIn, bool expected) =>
+        Assert.Equal(expected, ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.ShouldVoice(idle, engine, session, paused, optedIn, panicQuiet: false));
+
+    [Fact]
+    public void WhisperDurationExtendsTheFloorAndIncludesItsQuarterSecondTail()
+    {
+        var e = Engine(Rule("AttentionCheckFail", "line"));
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        e.Clock = clock;
+        e.NoteWhisperAudio(TimeSpan.FromSeconds(10));
+        e.NoteWhisperAudio(TimeSpan.FromSeconds(1)); // never shorten an audible clip
+        e.NoteWhisperAudio(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.False(e.Raise("AttentionCheckFail"));
+        clock.Advance(TimeSpan.FromMilliseconds(250));
+        Assert.True(e.Raise("AttentionCheckFail"));
+    }
+
+    [Fact]
+    public void PanicQuietOverridesEveryIdleOptInButNeverPromptedReplies()
+    {
+        Assert.False(ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.ShouldVoice(true, true, true, false, true, true));
+        Assert.True(ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.ShouldVoice(false, false, false, true, false, true));
+        Assert.True(ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.IsPanicQuiet(300999, 301000));
+        Assert.False(ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.IsPanicQuiet(301000, 301000));
     }
 
     [Fact]

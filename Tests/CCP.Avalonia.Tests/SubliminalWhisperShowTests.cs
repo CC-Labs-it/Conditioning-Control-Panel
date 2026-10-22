@@ -53,6 +53,33 @@ public sealed class SubliminalWhisperShowTests
     }
 
     [Fact]
+    public void AudibleWhisperHoldsTheBarkEngine() => With(audible: true, roll: 0.5, run =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine;
+        var enabled = CoreSettings.Current.AvatarEnabled;
+        var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+        { Id = "whisper-test", Trigger = "AttentionCheckFail", VariantPool = new() { new("eyes") } };
+        var engine = new ConditioningControlPanel.Services.Bark.BarkEngine(() => new(new[] { rule })) { Speak = _ => { } };
+        try
+        {
+            CoreSettings.Current.AvatarEnabled = true;
+            engine.Start();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = engine;
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, _) =>
+            { started?.Invoke(TimeSpan.FromMinutes(1)); return () => { }; };
+            Assert.True(SubliminalWhisperShow.Whisper("reset"));
+            Assert.False(engine.Raise(rule.Trigger));
+            Assert.True(engine.Raise(rule.Trigger, guaranteed: true));
+        }
+        finally
+        {
+            SubliminalWhisperShow.StopAll();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = old;
+            CoreSettings.Current.AvatarEnabled = enabled;
+        }
+    });
+
+    [Fact]
     public void Freeze_whispers_then_card_then_reset() => With(audible: true, roll: 0.9, run =>
     {
         CoreSubliminal.TriggerBambiFreeze();

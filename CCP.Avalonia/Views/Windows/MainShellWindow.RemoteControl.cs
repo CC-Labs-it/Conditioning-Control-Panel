@@ -95,6 +95,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)
         {
+            // WPF RemoteControlService.StopAllRemoteEffects -> KillAllAudio also cuts her current voice.
+            if (action == "trigger_panic") _avatarTubeWindow?.PanicSilence();
             if (RemoteCommands.Quiet.Contains(action)) return;
             ShowCommandNotification(action);
         }

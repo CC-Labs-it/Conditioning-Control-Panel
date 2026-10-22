@@ -77,6 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && SettingsPaletteWindow.TryConsumeEscape();
             var rung = PanicPolicy.Decide(lockCardOpen, paletteClaimed, PanicPolicy.OverrideEnabled(s));
             Serilog.Log.Information("Panic key pressed ({Rung})", rung);
+            if (rung != PanicPolicy.Rung.DismissSettingsPalette)
+                ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.ArmPanicQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal

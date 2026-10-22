@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
+                ConditioningControlPanel.Services.Companion.CompanionIdleVoicePolicy.EndPanicQuiet(); // only user START ends idle quiet early
                 CoreEngine.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()

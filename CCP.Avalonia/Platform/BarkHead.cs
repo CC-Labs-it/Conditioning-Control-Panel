@@ -4,6 +4,8 @@ using System.Reflection;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Companion.Brain;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -55,11 +57,17 @@ internal static class BarkHead
         e.IsSpeaking = () => Views.AvatarTube.AvatarTubeWindow.Live?.IsSpeaking == true;
         e.IsCompanionBusy = ms => Views.AvatarTube.AvatarTubeWindow.Live?.IsCompanionBusy(ms) == true;
         e.EmiDeskAvatarMuted = () => Views.Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted;
+        e.CurrentTier = () => AccountSeed.Patreon?.CurrentTier.ToString() ?? "None";
+        CompanionBrain.IdleLineVoiced = trigger => CompanionIdleVoicePolicy.ShouldVoice(
+            string.Equals(trigger, "Idle", StringComparison.OrdinalIgnoreCase), CoreEngine.IsRunning,
+            CoreSession.IsSessionRunning, App.Sessions?.IsPaused == true,
+            CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff, CompanionIdleVoicePolicy.PanicQuiet);
         e.FocusedAppName = () => App.WindowAwareness.CurrentServiceName is { Length: > 0 } svc
             ? svc : App.WindowAwareness.CurrentDetectedName;
         e.LiveField = field => field switch
         {
             "video_playing" => CoreEngine.Video?.IsPlaying == true,
+            "webcam_running" => WebcamTracker.Instance.IsRunning,
             // WPF ResolveField :1446: the free collection's 100%, the ceiling the tab shows.
             "achievements_all_unlocked" => App.Achievements is { } a && a.GetTotalCount(false) is var total
                 && total > 0 && a.GetUnlockedCount(false) >= total,
@@ -84,16 +92,20 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
-    /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
-    /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
-    /// already dropped it if she was speaking, so it never cuts a line off.</summary>
-    internal static void Speak(BarkSpeech s)
+    /// <summary>WPF Speak (:1985): ordinary barks queue, priority barks preempt, with the clip as her voice.</summary>
+    internal static void Speak(BarkSpeech s) => Speak(s, Views.AvatarTube.AvatarTubeWindow.Live);
+
+    internal static void Speak(BarkSpeech s, Views.AvatarTube.AvatarTubeWindow? tube)
     {
-        var tube = Views.AvatarTube.AvatarTubeWindow.Live;
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.SilentEgg || !s.Priority)
+        {
+            tube.Giggle(s.Text, phraseAudioPath: s.SilentEgg ? null : s.AudioPath,
+                barkVoice: !s.SilentEgg && s.AudioPath != null, mood: s.Mood, unprompted: s.Unprompted);
+            return;
+        }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
-            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
+            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood, unprompted: s.Unprompted);
     }
 
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);

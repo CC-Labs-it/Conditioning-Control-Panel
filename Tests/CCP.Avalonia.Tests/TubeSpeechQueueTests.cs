@@ -25,7 +25,10 @@ public sealed class TubeSpeechQueueTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont()
+                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 
