@@ -105,6 +105,16 @@ public sealed class TabState
     /// onto the balance once the balance is down to zero again (the push landed, or a credit or
     /// the jackpot cleared it). 0 when nothing is set aside.</summary>
     [JsonProperty("parked_credit")] public int ParkedCreditSeconds { get; set; }
+
+    /// <summary>Leash time on the tab and not on the lock yet: the holder's "leash" adds net of
+    /// their "leash_credit" pardons, never below 0. A push takes leash time last, so this is held
+    /// to what is still owed after each push. A leash cut drops it
+    /// (<see cref="CircesTab.DropUnpushedLeash"/>).</summary>
+    [JsonProperty("leash_owed")] public int LeashOwedSeconds { get; set; }
+
+    /// <summary>A leash cut came while a push was on the wire. That push stands if it lands; if it
+    /// fails, its leash part is dropped then (<see cref="CircesTab.PushFailed"/>).</summary>
+    [JsonProperty("leash_cut_held")] public bool LeashCutHeld { get; set; }
 }
 
 public enum TabRefusal
@@ -244,6 +254,7 @@ public static class CircesTab
             else state.BalanceSeconds += applied;
         }
 
+        NoteLeash(state, eventId, applied);
         Record(state, eventId, applied, nowUtc, runStartUtc);
         var clamped = applied != seconds;
         if (!clamped) return new(applied, TabRefusal.None);
@@ -266,6 +277,8 @@ public static class CircesTab
         var applied = -state.BalanceSeconds;
         state.BalanceSeconds = 0;
         Unpark(state);
+        // The wipe took the leash's part too: nothing of it is left for a cut to drop.
+        HoldLeashToOwed(state);
         Record(state, JackpotEventId, applied, nowUtc, runStartUtc);
         return new(applied, TabRefusal.None);
     }
@@ -321,6 +334,7 @@ public static class CircesTab
             NotePushed(state, DayKey(localNow), push.Total);
             ChasterLadder.NoteAdded(state, push.Total, nowUtc ?? localNow.ToUniversalTime());
             Unpark(state);
+            AfterPushSettled(state);
         }
         else
         {
@@ -366,7 +380,89 @@ public static class CircesTab
         ChasterLadder.NoteAdded(state, seconds, nowUtc ?? DateTime.UtcNow);
         Unpark(state);
         ClearPending(state);
+        AfterPushSettled(state);
         return seconds;
+    }
+
+    public const string LeashEventId = "leash";
+    public const string LeashCreditEventId = "leash_credit";
+
+    /// <summary>
+    /// A leash cut: the leash time still on the tab leaves it, as if the holder had never booked it
+    /// (owner, 2026-09-26 and 2026-10-22). The player's own slip-ups and credits stay. Returns the
+    /// seconds dropped.
+    ///
+    /// <para>A push already on the wire (<see cref="TabState.PendingSeconds"/>) STANDS: its seconds
+    /// count as landed here, so only leash time past it is dropped now. If that push then fails,
+    /// <see cref="PushFailed"/> drops its leash part too. A push not sent yet is planned again from
+    /// the lowered balance before it goes (<see cref="StillDue"/>).</para>
+    ///
+    /// <para>The floor holds: a credit the leash booking cancelled comes back, but never past what
+    /// CCP put on the lock. A credit set aside for a raffle day comes back once nothing is owed.
+    /// The raffle day ledger notes the drop (<see cref="ChasterLadder.NoteDropped"/>) so the seconds
+    /// never count as time a credit cancelled; the month's added total never saw them.</para>
+    /// </summary>
+    public static int DropUnpushedLeash(TabState state, DateTime nowUtc)
+    {
+        var inFlight = PendingPriced(state);
+        state.LeashCutHeld = inFlight > 0;
+        var owedAll = Math.Max(0, state.LeashOwedSeconds);
+        // What the push on the wire carries is treated as landed: leash time goes last.
+        var owed = inFlight > 0 ? Math.Min(owedAll, Math.Max(0, state.BalanceSeconds - inFlight)) : owedAll;
+        var effective = (long)state.BalanceSeconds - Math.Max(0, state.ParkedCreditSeconds);
+        var drop = (int)Math.Clamp(Math.Min(owed, effective + Math.Max(0, state.PushedNetSeconds)), 0, int.MaxValue);
+        // Only the leash part riding the push on the wire is kept, for PushFailed.
+        state.LeashOwedSeconds = inFlight > 0 ? owedAll - owed : 0;
+        if (drop == 0) return 0;
+        state.BalanceSeconds -= drop;
+        // With a push on the wire the balance still holds its seconds; ApplyPush / ResolvePending unpark.
+        if (inFlight == 0) Unpark(state);
+        ChasterLadder.NoteDropped(state, drop, nowUtc);
+        return drop;
+    }
+
+    /// <summary>A push went out and Chaster said no (or nothing went out after the mark). The
+    /// pending mark clears and, if a leash cut came meanwhile, its leash part is dropped now.</summary>
+    public static int PushFailed(TabState state, DateTime nowUtc)
+    {
+        ClearPending(state);
+        if (!state.LeashCutHeld) return 0;
+        return DropUnpushedLeash(state, nowUtc);
+    }
+
+    /// <summary>The planned push, held to what is due NOW. The plan is made before the token and
+    /// lock reads; a leash cut (or a credit) in between lowers the balance, and the lowered part
+    /// must not go out. None when nothing is due any more.</summary>
+    public static TabPush StillDue(TabPush planned, TabPush fresh)
+    {
+        if (planned.Kind != TabPushKind.Add || fresh.Kind != TabPushKind.Add) return new(TabPushKind.None, 0);
+        var seconds = Math.Min(planned.Seconds, fresh.Seconds);
+        return seconds > 0 ? planned with { Seconds = seconds } : new(TabPushKind.None, 0);
+    }
+
+    // The priced part of a push on the wire: what is still inside the balance.
+    private static int PendingPriced(TabState state) =>
+        Math.Max(0, state.PendingSeconds - Math.Clamp(state.PendingCatchUpSeconds, 0, Math.Max(0, state.PendingSeconds)));
+
+    private static void NoteLeash(TabState state, string eventId, int applied)
+    {
+        if (applied > 0 && eventId == LeashEventId)
+            state.LeashOwedSeconds = (int)Math.Min(int.MaxValue, (long)Math.Max(0, state.LeashOwedSeconds) + applied);
+        else if (applied < 0 && eventId == LeashCreditEventId)
+            state.LeashOwedSeconds = Math.Max(0, state.LeashOwedSeconds + applied);
+    }
+
+    // Leash time leaves the tab last: never more of it than is still owed.
+    private static void HoldLeashToOwed(TabState state) =>
+        state.LeashOwedSeconds = Math.Clamp(state.LeashOwedSeconds, 0, Math.Max(0, state.BalanceSeconds));
+
+    private static void AfterPushSettled(TabState state)
+    {
+        HoldLeashToOwed(state);
+        if (!state.LeashCutHeld) return;
+        // The push that was on the wire at the cut landed (or counts as landed): its leash part stands.
+        state.LeashCutHeld = false;
+        state.LeashOwedSeconds = 0;
     }
 
     /// <summary>How many times <paramref name="eventId"/> booked on this local day.</summary>
@@ -405,6 +501,7 @@ public static class CircesTab
     public static bool Sanitise(TabState state, TabLimits limits)
     {
         var parkedBefore = state.ParkedCreditSeconds;
+        var leashBefore = state.LeashOwedSeconds;
         var before = (state.BalanceSeconds, state.PendingSeconds, state.PushedNetSeconds, state.DayAddedSeconds, state.DayCreditSeconds, state.PushDaySeconds, state.RemoteDaySeconds, state.ForgivableSeconds);
         state.BalanceSeconds = Math.Min(state.BalanceSeconds, limits.BacklogSeconds);
         state.BalanceSeconds = Math.Max(state.BalanceSeconds, -Math.Max(0, state.PushedNetSeconds));
@@ -424,8 +521,9 @@ public static class CircesTab
         state.ParkedCreditSeconds = Math.Clamp(state.ParkedCreditSeconds, 0,
             Math.Max(0, state.PushedNetSeconds + Math.Min(0, state.BalanceSeconds)));
         Unpark(state);
+        state.LeashOwedSeconds = Math.Clamp(state.LeashOwedSeconds, 0, TabLimits.MaxBacklogSeconds);
         state.Entries ??= new List<TabEntry>();
-        return parkedBefore != state.ParkedCreditSeconds
+        return parkedBefore != state.ParkedCreditSeconds || leashBefore != state.LeashOwedSeconds
             || before != (state.BalanceSeconds, state.PendingSeconds, state.PushedNetSeconds, state.DayAddedSeconds, state.DayCreditSeconds, state.PushDaySeconds, state.RemoteDaySeconds, state.ForgivableSeconds);
     }
 

@@ -359,6 +359,25 @@ public sealed partial class ChasterService : IDisposable
         return booking;
     }
 
+    /// <summary>The leash was cut: leash time not on the lock yet leaves the tab
+    /// (<see cref="CircesTab.DropUnpushedLeash"/>). Runs paused or not, linked or not: the balance
+    /// is there either way. A push already sent stands. Returns the seconds dropped.</summary>
+    public int DropUnpushedLeash()
+    {
+        int dropped;
+        lock (_gate)
+        {
+            dropped = CircesTab.DropUnpushedLeash(_tab, _utcNow());
+            SaveTab();
+        }
+        App.Logger?.Information("[Chaster] leash cut: {Seconds}s of unpushed leash time dropped", dropped);
+        if (dropped > 0)
+        {
+            try { LockChanged?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex, "chaster leash drop repaint"); }
+        }
+        return dropped;
+    }
+
     /// <summary>Panic was pressed or an emergency exit opened. Call it from those paths and from
     /// nowhere else; it never books anything itself.</summary>
     public void NoteSafetyExit()
@@ -496,15 +515,18 @@ public sealed partial class ChasterService : IDisposable
 
             lock (_gate)
             {
-                CircesTab.MarkPending(_tab, plan, _localNow());
-                SaveTab();
+                // Planned before the token and lock reads: a leash cut (or a credit) since then
+                // lowered the balance, and the lowered part must not go out.
+                plan = CircesTab.StillDue(plan, CircesTab.PlanPush(_tab, canRemove: false, options.Caps, _localNow()));
+                if (plan.Kind == TabPushKind.Add) { CircesTab.MarkPending(_tab, plan, _localNow()); SaveTab(); }
             }
+            if (plan.Kind != TabPushKind.Add) return SettleOutcome.Nothing;
             var sent = plan;
             var answer = await CallWithAccessAsync(a => _client.AddTimeAsync(a, lockId!, sent.Total, ct), ct).ConfigureAwait(false);
             if (answer is not { } added)
             {
                 // No usable token for the call: nothing went out, so nothing is in doubt.
-                lock (_gate) { CircesTab.ClearPending(_tab); SaveTab(); }
+                lock (_gate) { CircesTab.PushFailed(_tab, _utcNow()); SaveTab(); }
                 return IsLinked ? SettleOutcome.TryLater : SettleOutcome.LinkExpired;
             }
             // No answer at all: counted as landed NOW, never resent. Left for the next settle (up to
@@ -518,9 +540,11 @@ public sealed partial class ChasterService : IDisposable
 
             lock (_gate)
             {
-                CircesTab.ClearPending(_tab);
-                if (added.Ok)
+                // A refused push changes nothing, except that a leash cut held for it lands now.
+                if (!added.Ok) CircesTab.PushFailed(_tab, _utcNow());
+                else
                 {
+                    CircesTab.ClearPending(_tab);
                     CircesTab.ApplyPush(_tab, plan, _localNow(), _utcNow());
                     _pushedThisRun += plan.Seconds;
                 }
