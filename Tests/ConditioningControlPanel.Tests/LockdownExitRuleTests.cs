@@ -140,6 +140,12 @@ public class LockdownExitRuleTests
         Assert.Contains("RefreshLockdownGate();", patreon);
         Assert.Contains("LockdownExitRule.ShowsPremiumVeil", patreon);
 
+        // Opening the tab repaints the veil too; a bare RefreshPremiumGate there buried a running
+        // lockdown again the moment the user navigated back to it.
+        var nav = Source("MainWindow", "MainWindow.TabNavigation.cs");
+        Assert.DoesNotContain("RefreshPremiumGate(LockdownTab.LockdownGate)", nav);
+        Assert.DoesNotContain("RefreshPremiumGate(LockdownTab?.LockdownGate)", nav);
+
         var lab = Source("MainWindow", "MainWindow.Lab.cs");
         var off = lab.IndexOf("private void OnLockdownDeactivated()", StringComparison.Ordinal);
         Assert.True(off >= 0);
