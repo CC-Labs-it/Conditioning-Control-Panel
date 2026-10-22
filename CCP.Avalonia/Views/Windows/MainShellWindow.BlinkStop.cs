@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var tracker = WebcamTracker.Instance;
             Action onBlink = () => Dispatcher.UIThread.Post(() => OnRapidBlink(DateTime.UtcNow));
-            Opened += (_, _) => tracker.OnBlink += onBlink;
+            Opened += (_, _) => { tracker.OnBlink -= onBlink; tracker.OnBlink += onBlink; };   // Opened fires on every Hide/Show
             Closed += (_, _) => tracker.OnBlink -= onBlink;
         }
 

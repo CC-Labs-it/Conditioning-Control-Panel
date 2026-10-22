@@ -570,6 +570,7 @@
       ..\Assets\web\backroom\**\tests\**\*;
       ..\Assets\web\backroom\shared\hypno\tests\**\*;
       ..\Assets\web\backroom\stations\breakout\**\*.test.js;
+      ..\Assets\web\shared\tests\**\*;
       ..\Assets\web\backroom\stations\breakout\**\*.md;
       ..\Assets\web\backroom\stations\breakout\dev.html;
       ..\Assets\web\backroom\stations\breakout\showcase*;
@@ -577,7 +578,8 @@
       ..\Assets\web\piecebypiece\dev\**\*;
       ..\Assets\web\piecebypiece\**\*.md;
       ..\Assets\web\piecebypiece\package.json;
-      ..\Assets\web\dtrh\tests\**\*
+      ..\Assets\web\dtrh\tests\**\*;
+      ..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
          flash): its node tests ride along so the vendored copy stays checkable, but they are
@@ -598,6 +600,7 @@
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\**\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\shared\hypno\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\**\*.test.js;
+      $(MSBuildProjectDirectory)\..\Assets\web\shared\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\dev.html;
       $(MSBuildProjectDirectory)\..\Assets\web\backroom\stations\breakout\showcase*;
@@ -605,7 +608,8 @@
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\dev\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\package.json;
-      $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*
+      $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
 

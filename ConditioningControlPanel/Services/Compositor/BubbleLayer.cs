@@ -38,7 +38,7 @@ public sealed class BubbleLayer : BaseLayer
     // use-after-free heap-corruption class).
     private static readonly Dictionary<BitmapSource, SKImage> _spriteCache = new();
 
-    public BubbleLayer(CompositorEngine engine) : base(engine) { }
+    public BubbleLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.Bubbles;
     public override bool WorldSpacePx => true;
