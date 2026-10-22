@@ -1200,3 +1200,20 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-22: Scrolller web gate on Avalonia: headers + navigation guard; refusing sub-resources is a follow-up (avalonia-port/sync7-scrolller-d)
+- Question: WPF ScrolllerWebGate (main c45d58a65, f7102be55, 92fdebaa4) answers Scrolller requests inside WebView2 pages:
+  a local 403 while the licence switch is off, the device cache (200/206/416), whole fetches charged to the daily share. Licence
+  compliance: with the switch off the app must not fetch Scrolller.
+- Finding: Avalonia.Controls.WebView 12.1.0's `WebResourceRequestedEventArgs` carries only `Request` (Uri, Method, Headers with
+  TrySet/TryRemove): no response, no deferral, no cancel. On Linux it is raised from WebKitGTK `resource-load-started`.
+- Options: (A) rules into Core, WebHost rewrites the headers it can; (B) native interop per engine (WebKitGTK user content
+  filter, WebView2 COM filter via `TryGetPlatformHandle`).
+- Answer (advised by: supervisor; oracle-deep review pending): interim A plus a navigation guard. Core `ScrolllerWebRules` holds
+  the gate's pure rules (WPF forwards, one copy). `WebHost` gives every hosted page's Scrolller requests the honest user-agent and
+  replaces a foreign Referer; while `ScrolllerPolicy.Enabled` is off it cancels top-level navigations to Scrolller and refuses
+  `Navigate`/`Source` to it. The in-app browser (`GateScrolller="False"`) is the user's own browsing and stays untouched, as in WPF.
+- Gap: Scrolller sub-resources embedded in a page cannot be refused, served from the device cache or charged on this engine.
+  Follow-up unit `sync7-scrolller-d-native`: WebKitGTK user content filter (Linux, tested) + WebView2 AddWebResourceRequestedFilter
+  (Windows, compiled-not-run).
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostScrolllerGateTests.cs`, `Tests/CCP.Core.Tests/ScrolllerWebRulesTests.cs`.
