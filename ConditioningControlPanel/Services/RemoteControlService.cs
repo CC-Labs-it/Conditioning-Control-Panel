@@ -955,6 +955,10 @@ namespace ConditioningControlPanel.Services
         private void StopAllRemoteEffects(RemoteEndCause cause)
         {
             var force = cause == RemoteEndCause.Panic;
+            // The controller's panic is a panic: Trigger Mode and keyword triggers stay quiet and
+            // the Lockdown keeper holds the engine, as after the panic key (PanicAftermath). It only
+            // ever refuses; no pause mark, so the controller may still resume (owner, 2026-10-19).
+            if (force) Safety.PanicAftermath.ArmQuiet();
             if (LeavesLocalRun(cause)) { ReleaseRemoteHoldings(); return; }
             try
             {
