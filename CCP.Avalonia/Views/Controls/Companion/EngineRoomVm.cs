@@ -201,7 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                     || Provider != Mode.LocalOllama || !owner.IsVisible) return;
                 if (await Views.Dialogs.MessageDialog.ConfirmAsync(owner,
                     Loc.Get("dialog_local_ai_setup_offer_title"), Loc.Get("dialog_local_ai_setup_offer_body"),
-                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("label_no")))
+                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("btn_cancel")))
                     await SetupLocalAsync();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Companion room: detect-on-local-toggle failed"); }

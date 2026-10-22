@@ -51,8 +51,6 @@
 //   internal void BtnSwitchCompanion_Click(…)
 //   internal void RevealCompanionWorkshopCell(…)
 //   private void OnCompanionProviderSelected(…)
-//   private async Task MaybeOfferLocalAiSetupAsync(…)
-//   internal void BtnSetupLocalAi_Click(…)
 //   internal void BtnLabEffectsSetupLocal_Click(…)
 //   private void LaunchLocalAiSetupWizard(…)
 //   private static void CommitFocusedEdit(…)

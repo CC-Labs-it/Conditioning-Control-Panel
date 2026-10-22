@@ -78,7 +78,10 @@ public sealed class CompanionLocalSetupOfferTests
                 Assert.Equal(Loc.Get("dialog_local_ai_setup_offer_title"), offer.Title);
                 Assert.Equal(Loc.Get("dialog_local_ai_setup_offer_body"), offer.FindControl<TextBlock>("TxtMessage")!.Text);
                 var button = offer.FindControl<Button>(accept ? "BtnOk" : "BtnCancel")!;
-                Assert.Equal(Loc.Get(accept ? "label_yes" : "label_no"), ((TextBlock)button.Content!).Text);
+                var key = accept ? "label_yes" : "btn_cancel";
+                // A missing key renders as the key itself; Loc.Get returns it too, so pin that it resolved.
+                Assert.NotEqual(key, ((TextBlock)button.Content!).Text);
+                Assert.Equal(Loc.Get(key), ((TextBlock)button.Content!).Text);
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(accept ? 1 : 0, shell.OwnedWindows.OfType<LocalAiSetupWizard>().Count());
