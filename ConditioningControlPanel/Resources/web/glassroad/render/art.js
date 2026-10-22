@@ -19,7 +19,17 @@ export const WANT = [
   'sky-spiral-open-mask', 'emi-teacup-kart', 'countdown-ring', 'finish-portal-lod0',
   'bubble', 'card-drop', 'card-lens', 'card-orbit', 'card-petal', 'pocket-watch', 'spiral-disc', 'slot-cabinet-lod0',
   'chess-bishop-lod0', 'chess-king-lod0', 'chess-knight-lod0', 'chess-pawn-lod0', 'chess-queen-lod0', 'chess-rook-lod0',
+  // wave 2 particle atlas and screen masks (FXART lane: particles, motes, wakes, screenfx)
+  'particles-atlas', 'fx-frost-edge', 'fx-melt-flow', 'fx-crack', 'fx-iris', 'fx-noise',
+  // wave 2 models (MODELS lane: item box card, effect-bubble shell, Melt puddle, finish LOD, rival accessories)
+  'finish-portal-lod1', 'item-card', 'effect-bubble', 'fx-melt-spiral',
+  'head-bow', 'head-cat-ears', 'head-halo', 'head-spiral-crown',
 ];
+
+let current = null;
+/** The last art set loadArt resolved (null before, or with ?art=0): modules built after boot's
+ * loadArt read it when their caller passes no art. */
+export const currentArt = () => current;
 
 /** Load the art set. Resolves { tex(id), model(id), row(id), failed[] } and never rejects. */
 export async function loadArt(renderer, { want = WANT } = {}) {
@@ -56,7 +66,7 @@ export async function loadArt(renderer, { want = WANT } = {}) {
     }
   }));
   ktx2.dispose();
-  return {
+  return current = {
     tex: (id) => tex.get(id) || null,
     model: (id) => models.get(id) || null,
     row: (id) => rows.get(id) || null,

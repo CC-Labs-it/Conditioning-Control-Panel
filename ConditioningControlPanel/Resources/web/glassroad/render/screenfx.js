@@ -10,19 +10,29 @@
  * line are the brightest things on screen), Blackout keeps a circle and a dim floor, and post.js
  * adds bloom from the clear scene after this node. Gentle halves the amounts and slows the motion.
  * Look numbers in render/items/look.js; the uniform-gated branch costs one sample when idle.
+ * Wave 2 masks (art/ART.md, each optional with the procedural look as its fallback): Freeze reads
+ * fx-frost-edge, Melt runs down along fx-melt-flow, Shatter lays fx-crack lines over the glass (no
+ * flash), Blackout takes its soft edge from fx-iris, and fx-noise dithers every fade edge and the
+ * output so the soft gradients never band.
  */
-import { TextureLoader, SRGBColorSpace, Color } from 'three/webgpu';
+import { TextureLoader, SRGBColorSpace, Color, NearestFilter } from 'three/webgpu';
 import {
   Fn, If, uniform, screenUV, vec2, vec3, float, texture, mix, smoothstep, sin, cos, atan, log, length, abs, max, min,
-  luminance, mx_noise_float, clamp,
+  luminance, mx_noise_float, clamp, normalize, screenCoordinate,
 } from 'three/tsl';
+import { currentArt } from './art.js';
 import { SCREEN_LOOK as L } from './items/look.js';
 import { screenAmounts, irisRadius, flashRect, shatterTilt } from './items/fxmath.js';
+import { maskLook } from './atlas.js';
 
 const rgb = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
 const ICON = new URL('../art/fx/spiral.png', import.meta.url).href;
 
-export function createScreenFx(three) {
+export function createScreenFx(three, art = currentArt()) {
+  const tex = (id) => (art && art.tex ? art.tex(id) : null);
+  const frostT = tex('fx-frost-edge'), flowT = tex('fx-melt-flow'), crackT = tex('fx-crack'), irisT = tex('fx-iris'), noiseT = tex('fx-noise');
+  if (noiseT) { noiseT.minFilter = NearestFilter; noiseT.magFilter = NearestFilter; }   // a dither threshold: base mip, nearest
+  const X = maskLook();
   const icon = new TextureLoader().load(ICON);
   icon.colorSpace = SRGBColorSpace;
   const u = {
@@ -45,7 +55,13 @@ export function createScreenFx(three) {
         // where to read: Shatter tilts about the centre, Melt runs down (reads from above) and wobbles
         const ct = cos(u.tilt), st = sin(u.tilt);
         const rc = vec2(c.x.mul(ct).sub(c.y.mul(st)), c.x.mul(st).add(c.y.mul(ct)));
-        const drip = mx_noise_float(vec2(uv0.x.mul(L.meltCols), u.t.mul(L.meltHz))).mul(0.5).add(0.5);
+        // blue noise per pixel (-0.5..0.5) jitters every fade edge below
+        const jit = noiseT ? texture(noiseT, screenCoordinate.div(X.noisePx)).level(0).r.sub(0.5) : null;
+        const dz = (x) => (jit ? clamp(x.add(jit.mul(X.ditherEdge).mul(x).mul(x.oneMinus()).mul(4)), 0, 1) : x);
+        // the run: fx-melt-flow scrolls down the view (0.5 neutral), long vertical runs, else noise columns
+        const drip = flowT
+          ? texture(flowT, vec2(uv0.x.mul(X.meltFlowTile[0]), uv0.y.mul(X.meltFlowTile[1]).sub(u.t.mul(X.meltFlowUvps)))).r
+          : mx_noise_float(vec2(uv0.x.mul(L.meltCols), u.t.mul(L.meltHz))).mul(0.5).add(0.5);
         const run = u.melt.mul(smoothstep(0, 1.5, u.runT).mul(L.meltRunUv).add(drip.mul(drip).mul(L.meltDripUv)));
         const wob = u.melt.mul(L.meltWobbleUv);
         const suv = rc.div(toH).add(0.5).add(vec2(
@@ -54,8 +70,10 @@ export function createScreenFx(three) {
         )).toVar();
         const col = sceneTex.sample(suv).rgb.toVar();
         // blur: Brain Drain at the edges, Freeze under the frost, Melt everywhere
-        const edge = smoothstep(L.drainEdge[0], L.drainEdge[1], rad);
-        const frost = smoothstep(L.frostEdge[0], L.frostEdge[1], rad.add(mx_noise_float(c.mul(L.frostNoise)).mul(0.18)));
+        const edge = dz(smoothstep(L.drainEdge[0], L.drainEdge[1], rad));
+        const frostM = frostT ? texture(frostT, uv0).r : null;
+        const frost = dz(frostT ? smoothstep(X.frostMask[0], X.frostMask[1], frostM)
+          : smoothstep(L.frostEdge[0], L.frostEdge[1], rad.add(mx_noise_float(c.mul(L.frostNoise)).mul(0.18))));
         If(u.blurOn.greaterThan(0), () => {
           const r = u.drain.mul(edge).mul(L.drainBlur).add(u.melt.mul(L.meltBlur)).add(u.freeze.mul(frost).mul(L.frostBlur))
             .mul(L.blurMaxUv).mul(u.blurMul);
@@ -69,16 +87,21 @@ export function createScreenFx(three) {
           col.assign(sum.div(L.blurTaps + 1));
         });
         If(u.shatter.greaterThan(0), () => {
+          // the glass cracks (fx-crack, fixed to the screen): the lines bend the smear taps a little, then
+          // darken with a faint cool edge; never a flash
+          const crack = crackT ? texture(crackT, c.mul(X.crackScale).add(0.5)).r.mul(u.shatter) : null;
+          if (crack) suv.addAssign(normalize(c.add(0.0001)).div(toH).mul(crack.mul(X.crackRefractUv)));
           const sum = col.toVar(), toC = suv.sub(0.5).mul(u.shatter.mul(L.shatterSmear));
           for (let i = 1; i <= L.shatterTaps; i++) sum.addAssign(sceneTex.sample(suv.sub(toC.mul(i / L.shatterTaps))).rgb);
           col.assign(sum.div(L.shatterTaps + 1));
+          if (crack) col.assign(mix(col, col.mul(X.crackDark).add(rgb(X.crackTint).mul(X.crackLight)), crack));
         });
         const lum = luminance(col);
         col.assign(mix(col, vec3(lum), u.drain.mul(edge).mul(L.drainGrey)));
         col.assign(mix(vec3(lum), col, u.melt.mul(L.meltSat - 1).add(1)));
         const low = mix(vec3(0.5), col, u.pink.mul(L.pinkContrast).oneMinus()).mul(vec3(...L.pinkTint)).add(L.pinkLift);
         col.assign(mix(col, low, u.pink));
-        const ice = abs(mx_noise_float(c.mul(L.frostNoise * 4))).oneMinus().pow(10);
+        const ice = frostT ? smoothstep(X.frostVeinBand[0], X.frostVeinBand[1], frostM) : abs(mx_noise_float(c.mul(L.frostNoise * 4))).oneMinus().pow(10);
         col.assign(mix(col, rgb(L.frostColour).add(ice.mul(L.frostVeins)), frost.mul(u.freeze).mul(L.frostAlpha)));
         // Spiral: arms over the middle (or a soft dim under Gentle)
         const ring = smoothstep(L.spiralR[0] * 0.4, L.spiralR[0], rad).mul(smoothstep(L.spiralR[1] * 0.7, L.spiralR[1], rad).oneMinus());
@@ -99,13 +122,17 @@ export function createScreenFx(three) {
         const pic = mix(mix(rgb(L.flashPaper), ic.rgb, ic.a), rgb(L.flashInk), ink);
         col.assign(mix(col, pic, inside.mul(L.flashAlpha)));
         // Blackout: everything outside the iris goes dim
-        const di = length(uv0.sub(vec2(...L.irisAt)).mul(toH));
-        const shut = smoothstep(u.iris.sub(L.irisSoft), u.iris.add(L.irisSoft), di).mul(min(u.black.mul(3), 1));
+        const ic0 = uv0.sub(vec2(...L.irisAt)).mul(toH);
+        // fx-iris: white is the aperture (radius irisMaskR of the mask), scaled so it sits at u.iris
+        const open = irisT ? texture(irisT, ic0.mul(X.irisMaskR).div(u.iris).add(0.5)).r.oneMinus()
+          : smoothstep(u.iris.sub(L.irisSoft), u.iris.add(L.irisSoft), length(ic0));
+        const shut = dz(open).mul(min(u.black.mul(3), 1));
         col.assign(mix(col, col.mul(L.keepImage), shut));
         // never blind: the highlights (rails, racing line) come through sharp, read where Melt and
         // Shatter moved the view so even Melt has no still centre
         const clear = sceneTex.sample(suv).rgb;
         const bright = clear.mul(smoothstep(L.keepBright[0], L.keepBright[1], luminance(clear)).mul(L.keepBrightGain));
+        if (jit) col.addAssign(jit.mul(X.ditherOut));
         out.assign(max(col, bright));
       });
       return out;

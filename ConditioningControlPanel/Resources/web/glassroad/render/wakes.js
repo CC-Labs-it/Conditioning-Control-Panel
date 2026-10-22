@@ -4,17 +4,31 @@
  * runs (colour by boost kind: the drift tier colour, gold for pads and B1 grants, white for a launch),
  * tapered and faded along its length, easing out over LOOK.trailFadeTcS after the boost. Every kart
  * shares one geometry: one draw call. Points are laid every trailStepM; Q.trailPoints per kart.
- * Rings: a small pool of flat glow rings that grow and fade (landings, pickup pops).
+ * Rings: a small pool of flat glow rings that grow and fade (landings, pickup pops); with the wave 2
+ * particle atlas each is a flat card drawing its soft ring cell, else a RingGeometry glow.
  */
 import { Mesh, BufferGeometry, BufferAttribute, DynamicDrawUsage, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide,
-  RingGeometry, Color, Vector3, Quaternion } from 'three/webgpu';
-import { attribute, smoothstep, abs } from 'three/tsl';
+  RingGeometry, PlaneGeometry, Color, Vector3, Quaternion } from 'three/webgpu';
+import { attribute, smoothstep, abs, uniform, vec3, float } from 'three/tsl';
 import { S, BOOST } from '../sim/state.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
 import { createGlowMaterial } from './materials/glow.js';
+import { currentArt } from './art.js';
+import { atlasOf, atlasCoverage } from './particles.js';
+import { FXART_LOOK, cellIndex } from './atlas.js';
 
-export function createWakes(feel, count = 8) {
+/** A flat ring card: the atlas ring cell, its ring at radius 1 of the mesh scale. */
+function atlasRing(at, hex, A) {
+  const half = 1 / A.ringCellR, c = new Color(hex), u = { opacity: uniform(0) };
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
+  m.colorNode = vec3(c.r, c.g, c.b).mul(u.opacity);
+  m.opacityNode = atlasCoverage(at, float(cellIndex('ring', at.cells)));
+  return { geometry: new PlaneGeometry(half * 2, half * 2).rotateX(-Math.PI / 2), material: m, uniforms: u };
+}
+
+export function createWakes(feel, count = 8, art = currentArt()) {
+  const at = atlasOf(art), A = LOOK.fxArt || FXART_LOOK;
   const N = Q.trailPoints, V = count * N * 2;
   const pos = new BufferAttribute(new Float32Array(V * 3), 3).setUsage(DynamicDrawUsage);
   const col = new BufferAttribute(new Float32Array(V * 4), 4).setUsage(DynamicDrawUsage);
@@ -78,8 +92,8 @@ export function createWakes(feel, count = 8) {
   // ground rings
   const rings = [], rq = new Quaternion();
   for (let i = 0; i < LOOK.ringPool; i++) {
-    const mat = createGlowMaterial(LOOK.ringColour);
-    const r = new Mesh(new RingGeometry(1 - LOOK.ringWidth, 1, 48).rotateX(-Math.PI / 2), mat.material);
+    const mat = at ? atlasRing(at, LOOK.ringColour, A) : createGlowMaterial(LOOK.ringColour);
+    const r = new Mesh(at ? mat.geometry : new RingGeometry(1 - LOOK.ringWidth, 1, 48).rotateX(-Math.PI / 2), mat.material);
     r.visible = false; r.renderOrder = 1;
     rings.push({ mesh: r, u: mat.uniforms, t: 0, life: 1, size: 1, gain: 1, rise: 8 });
   }
