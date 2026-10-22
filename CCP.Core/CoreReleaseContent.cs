@@ -29,7 +29,7 @@ namespace ConditioningControlPanel
         /// <summary>
         /// The running build's version string and its patch notes. Every head seeds both: the
         /// Windows head from <c>UpdateService</c> (the hardcoded release constants the installer
-        /// flow keys on), the Avalonia head from its own assembly. Core cannot read the version
+        /// flow keys on), the Avalonia head from its own assembly; both share ReleaseNotes. Core cannot read the version
         /// itself - <c>Assembly.GetEntryAssembly()</c> is the head, or null when hosted, and
         /// <c>typeof(X).Assembly</c> changes meaning the moment a type moves - so an unseeded
         /// head answers "0.0.0" and no notes rather than reporting the engine's own identity as
