@@ -32,6 +32,9 @@ public sealed class AppSettingsRefreshTests
             var oldAvailable = CoreWebcam.IsAvailableProvider;
             var oldMics = CoreSpeech.EnumerateInputDevicesProvider;
             var mics = new[] { new SpeechInputDevice(-1, "System default") };
+            var s = CoreSettings.Current;
+            var (oldRun, oldVideo, oldPerf, oldSuppress) =
+                (s.RunOnStartup, s.StartupVideoPath, s.PerformanceMode, s.SuppressPerkNotifications);
             MainShellWindow? shell = null;
             try
             {
@@ -39,7 +42,6 @@ public sealed class AppSettingsRefreshTests
                 XdgAutostart.DirectoryOverride = Path.Combine(root, "autostart");
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreSpeech.EnumerateInputDevicesProvider = () => mics;
-                var s = CoreSettings.Current;
                 s.RunOnStartup = false;
                 s.StartupVideoPath = "old.mp4";
                 s.PerformanceMode = false;
@@ -91,6 +93,8 @@ public sealed class AppSettingsRefreshTests
                 XdgAutostart.DirectoryOverride = oldStartup;
                 CoreWebcam.IsAvailableProvider = oldAvailable;
                 CoreSpeech.EnumerateInputDevicesProvider = oldMics;
+                (s.RunOnStartup, s.StartupVideoPath, s.PerformanceMode, s.SuppressPerkNotifications) =
+                    (oldRun, oldVideo, oldPerf, oldSuppress);
                 Directory.Delete(root, true);
             }
         });
