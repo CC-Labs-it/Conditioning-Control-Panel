@@ -92,11 +92,36 @@ public sealed class DiscordActivityCallersTests : IDisposable
         finally { video.Stop(); }
     }
 
+    [Fact]
+    public void AttentionRetryKeepsWatchingLikeWpfCloseAll()
+    {
+        var clock = new FakeClock(); var host = new Host { HoldMessage = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => new[] { "/fake.mp4" });
+        CoreSettings.Current.FlashEnabled = false;
+        CoreSettings.Current.MandatoryVideosEnabled = true;
+        CoreSettings.Current.AttentionChecksEnabled = true;
+        video.Start();
+        try
+        {
+            Assert.True(video.Trigger()); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            video.NoteSpawn();
+            video.Ended(); // Fail verdict: the message is up, the replay follows
+            Assert.NotNull(host.Pending);
+            Assert.Equal("Watching", _rpc.CurrentState); // WPF CloseAll never idles
+        }
+        finally { video.Stop(); }
+    }
+
     private sealed class Host : IMandatoryVideoHost
     {
         internal int Shows;
+        internal bool HoldMessage;
+        internal Action? Pending;
         public void Show(string path, bool strict) => Shows++;
         public double CloseAll() => 0;
-        public void ShowMessage(AttentionVerdict verdict, int milliseconds, Action after) => after();
+        public void ShowMessage(AttentionVerdict verdict, int milliseconds, Action after)
+        {
+            if (HoldMessage) Pending = after; else after();
+        }
     }
 }

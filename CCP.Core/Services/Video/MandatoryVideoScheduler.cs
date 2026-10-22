@@ -403,7 +403,10 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (Finish() && _running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
+            if (!Finish()) return;
+            // Deviation: WPF ForceCleanup leaves the presence on "Watching"; a closed clip is not watched.
+            CoreDiscord.Service?.SetIdleActivity();
+            if (_running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
         }
 
         private bool Finish()
@@ -415,7 +418,6 @@ namespace ConditioningControlPanel.Services
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
-            CoreDiscord.Service?.SetIdleActivity(); // every live cleanup, including fall-open panic
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();

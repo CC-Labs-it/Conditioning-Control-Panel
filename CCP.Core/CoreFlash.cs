@@ -68,13 +68,15 @@ namespace ConditioningControlPanel
         /// <summary>Disarm the schedule. Idempotent; bursts already on screen finish on their own.</summary>
         public static void Stop()
         {
+            bool wasRunning;
             lock (Gate)
             {
+                wasRunning = _isRunning;
                 _isRunning = false;
                 try { _timer?.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
             }
             CoreDiscord.Service?.SetIdleActivity(); // WPF FlashService.Stop:580 (even when already stopped)
-            Log.Information("Flash schedule stopped");
+            if (wasRunning) Log.Information("Flash schedule stopped");
         }
 
         /// <summary>Re-roll the pending interval after FlashFrequency changes (WPF <c>RefreshSchedule</c>).</summary>
