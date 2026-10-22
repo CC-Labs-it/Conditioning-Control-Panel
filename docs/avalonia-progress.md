@@ -2425,3 +2425,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/adaptive-side-art: +278
 - AdaptiveSideArt.CollapseBelow ported to Avalonia and applied to 21 side-art views with WPF thresholds; row feat-adaptive-side-art updated (not verified).
 - Headless resize test fail-proven; source-scan test pins all 21 thresholds to WPF; rgate GATE-OK.
+
+## avalonia-port/lock-title: +635
+- LockTitle ported (padlock letters, candy/ice, entry/idle/jolt/rattle with WPF timings on one FrameClock parked when hidden/detached) and wired into the Chaster hero; ctrl-lock-title -> wired.
+- LockTitleTests (curves + stepped-clock lifecycle, fail-proven, incl. the 4 Chaster tab hooks); no shadow (P82 ratchet), no booking sparks.
