@@ -2429,3 +2429,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/companion-barks: +1016
 - BarkEngine extracted into Core; Avalonia BarkHost plays default-voice barks (bouncing-text, doorbell triggers, mute/panic).
 - Review fixes: ordinary barks via Giggle (no chat log), honest test claims, EMI mirror listed; rgate GATE-OK (run 38460174466), committed 5f2c3ddfb.
+
+## avalonia-port/adaptive-side-art: +278
+- AdaptiveSideArt.CollapseBelow ported to Avalonia and applied to 21 side-art views with WPF thresholds; row feat-adaptive-side-art updated (not verified).
+- Headless resize test fail-proven; source-scan test pins all 21 thresholds to WPF; rgate GATE-OK.
