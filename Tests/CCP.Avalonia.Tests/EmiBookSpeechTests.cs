@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -19,12 +20,13 @@ public sealed class EmiBookSpeechTests
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 
     [Fact]
-    public Task OpeningAndNavigatingSpeakTheCardsMarginAndReaction() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task OpeningAndNavigatingSpeakTheCardsMarginAndReaction() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var bookmark = EmiState.Current.BookCard;
@@ -39,11 +41,11 @@ public sealed class EmiBookSpeechTests
             Assert.Equal(".", text.Text);
             Assert.Equal("0_0", owner.Face);
             Assert.False(bubble.IsHitTestVisible);
-            await WaitFor(() => text.Text == cards[0].MarginEn);
+            StepUntil(owner, () => text.Text == cards[0].MarginEn);
             Assert.Equal(cards[0].MarginFace, owner.Face);
             owner.OpenBook(cards[1].Id);
             Assert.Equal(".", text.Text);
-            await WaitFor(() => text.Text == cards[1].MarginEn);
+            StepUntil(owner, () => text.Text == cards[1].MarginEn);
             Assert.Equal(cards[1].MarginFace, owner.Face);
             owner.CancelChain();
             Assert.False(bubble.IsVisible);
@@ -54,10 +56,11 @@ public sealed class EmiBookSpeechTests
             owner.CloseBook(); owner.CancelChain(); owner.Close();
             EmiState.Current.BookCard = bookmark; EmiState.Current.CodexOpens = opens;
         }
+        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task CancellingSpeechHidesTheBubbleAndNeverRunsCompletion() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task CancellingSpeechHidesTheBubbleAndNeverRunsCompletion() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var owner = new EmiDeskWindow();
@@ -69,16 +72,17 @@ public sealed class EmiBookSpeechTests
             var bubble = Assert.IsType<Border>(owner.BubbleHost.Children.FirstOrDefault(c => c is Border));
             owner.CancelChain();
             Assert.False(bubble.IsVisible);
-            await Task.Delay(600);
+            Assert.False(owner.StepSpeech());
             Assert.False(done);
             Assert.False(bubble.IsVisible);
             Assert.False(owner.ChainLive);
         }
         finally { owner.CancelChain(); owner.Close(); }
+        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task BookOpenFlipAndCloseNotifyAndMoveTheLiveBubble() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task BookOpenFlipAndCloseNotifyAndMoveTheLiveBubble() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var bookmark = EmiState.Current.BookCard;
@@ -95,7 +99,7 @@ public sealed class EmiBookSpeechTests
             Assert.True(notices > 0);
             Assert.Equal(1, owner.BookSide);
             var bubble = Assert.IsType<Border>(owner.BubbleHost.Children.First(c => c is Border));
-            await Task.Delay(80);
+            Dispatcher.UIThread.RunJobs();
             var leftWhenBookRight = Canvas.GetLeft(bubble);
             int beforeFlip = notices;
             owner.Position = new PixelPoint(work.Right - (int)EmiDeskWindow.OverlayPadX - (int)owner.BodyWidth - 300,
@@ -104,7 +108,7 @@ public sealed class EmiBookSpeechTests
             var moved = (EventHandler)typeof(EmiDeskWindow).GetField("Moved",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(owner)!;
             moved(owner, EventArgs.Empty);
-            await Task.Delay(80);
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(-1, owner.BookSide);
             Assert.True(notices > beforeFlip);
             Assert.True(Canvas.GetLeft(bubble) > leftWhenBookRight);
@@ -123,10 +127,11 @@ public sealed class EmiBookSpeechTests
             owner.CloseBook(); owner.CancelChain(); owner.Close();
             EmiState.Current.BookCard = bookmark; EmiState.Current.CodexOpens = opens;
         }
+        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task RegisteredPanicStopsTheRealWidgetsSpeech() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task RegisteredPanicStopsTheRealWidgetsSpeech() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var owner = EmiDeskService.Instance.BeginPresentation()!;
@@ -138,17 +143,19 @@ public sealed class EmiBookSpeechTests
             PanicSurfaces.All.Single(s => s.Id == "emi-speech").Stop(null);
             Assert.False(owner.ChainLive);
             Assert.False(bubble.IsVisible);
-            await Task.Delay(600);
+            Assert.False(owner.StepSpeech());
             Assert.False(completed);
             Assert.False(bubble.IsVisible);
         }
         finally { owner.ShutDown(); }
+        return Task.CompletedTask;
     });
 
-    private static async Task WaitFor(Func<bool> condition)
+    // Steps the speech player frame by frame (P08: no real timers); the margin is a handful of frames.
+    private static void StepUntil(EmiDeskWindow owner, Func<bool> condition)
     {
-        var until = DateTime.UtcNow.AddSeconds(4);
-        while (!condition() && DateTime.UtcNow < until) await Task.Delay(20);
+        for (int i = 0; i < 64 && !condition(); i++)
+            if (!owner.StepSpeech()) break;
         Assert.True(condition());
     }
 }

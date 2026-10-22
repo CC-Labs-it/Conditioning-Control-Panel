@@ -55,6 +55,14 @@ public partial class EmiDeskWindow
         done?.Invoke();
     }
 
+    /// <summary>Test seam: fire the pending speech frame now instead of waiting on the timer.</summary>
+    internal bool StepSpeech()
+    {
+        if (_speechTimer is null) return false;
+        SpeechTick(_speechTimer, EventArgs.Empty);
+        return true;
+    }
+
     private void ShowSpeechFrame()
     {
         var frame = _speechFrames![_speechIndex];
@@ -126,6 +134,13 @@ public partial class EmiDeskWindow
     }
 
     private void LayoutBubble()
+    {
+        // Runs from timer ticks and SizeChanged; a layout failure must not escape (WPF Bubble.cs:303).
+        try { LayoutBubbleCore(); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] bubble layout failed"); }
+    }
+
+    private void LayoutBubbleCore()
     {
         if (_speechBubble?.IsVisible != true || _speechText is null) return;
         double bw = BodyWidth;

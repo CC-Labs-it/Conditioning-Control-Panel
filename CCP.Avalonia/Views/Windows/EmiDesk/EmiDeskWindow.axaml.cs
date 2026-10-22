@@ -925,10 +925,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` and is constant false on this head. It is
-            // in the expression anyway: this is the one place that decides whether an idle beat may
-            // interrupt her, and a gate that has to be REMEMBERED when the chain player lands is a
-            // gate that will be forgotten.
+            // ChainLive is the WPF gate's `_player.IsLive`: true while a spoken line (book margin)
+            // is on screen, so an idle beat never interrupts her mid-sentence.
             if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
