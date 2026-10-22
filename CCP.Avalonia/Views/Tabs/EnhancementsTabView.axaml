@@ -73,13 +73,10 @@
                      parked on tab switch). The canvas parks itself when unloaded either way. -->
                 <fx:AmbientFxCanvas x:Name="SkillTreeFx"/>
 
-                <!-- ponytail: local drop of SkillTreeScrollViewerStyle
-                     (Resources/Theme/MainWindow.xaml:1198). That WPF template exists only to strip
-                     the vertical scrollbar out of the ScrollViewer chrome; Avalonia's stock
-                     ScrollViewer with VerticalScrollBarVisibility="Disabled" already draws exactly
-                     that, and a property-only ControlTheme here would blank the control (CLAUDE.md
-                     trap 4). -->
+                <!-- WPF EnhancementsTabView.xaml:81 SkillTreeScrollViewerStyle (Theme/Styles.xaml):
+                     content row plus the 20px pink-thumb horizontal bar, no vertical bar. -->
                 <ScrollViewer x:Name="SkillTreeScroller"
+                              Theme="{StaticResource SkillTreeScrollViewerStyle}"
                               HorizontalScrollBarVisibility="Visible"
                               VerticalScrollBarVisibility="Disabled">
                     <Canvas x:Name="SkillTreeCanvas" Width="3760" Height="460" HorizontalAlignment="Left">

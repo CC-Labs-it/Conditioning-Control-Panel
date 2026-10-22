@@ -119,4 +119,88 @@ public sealed class MainWindowThemeParityTests
         finally { host.Close(); }
         return Task.CompletedTask;
     });
+
+    // MainWindow.xaml:341 implicit Slider + :409-500 implicit ScrollBar (WPF ScrollViewer keeps
+    // the bar beside the content, never over it).
+    [Fact]
+    public Task UnthemedSlidersAndScrollBarsWearTheWpfChrome() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var slider = new Slider();
+        var viewer = new ScrollViewer
+        {
+            Height = 200,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = new Border { Height = 2000 },
+        };
+        var panel = new DockPanel();
+        DockPanel.SetDock(slider, Dock.Top);
+        panel.Children.Add(slider);
+        panel.Children.Add(viewer);
+        var host = new Window { Width = 300, Height = 300, Content = panel };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Assert.Equal(18, slider.Height);
+            Assert.Contains(slider.GetVisualDescendants(), v => v is Border { Name: "TrackGroove" });
+
+            var bar = viewer.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.ScrollBar>()
+                .Single(b => b.Name == "PART_VerticalScrollBar");
+            Assert.Equal(8, bar.Bounds.Width);
+            var presenter = viewer.GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ScrollContentPresenter>().Single();
+            Assert.Equal(viewer.Bounds.Width - 8, presenter.Bounds.Width);
+
+            var thumb = bar.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.Thumb>().Single();
+            Assert.Same(host.FindResource("PanelAccentHoverBrush"), thumb.Background);
+            host.MouseMove(thumb.TranslatePoint(new Point(4, 10), host)!.Value);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(host.FindResource("PinkBrush"), thumb.Background);
+
+            // The track halves are WPF's LineUp/LineDown: one click scrolls one SmallChange.
+            bar.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_LineDownButton")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(viewer.SmallChange.Height, viewer.Offset.Y);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // MainWindow.xaml:1211 SkillTreeScrollBarStyle / :1260 SkillTreeScrollViewerStyle on
+    // EnhancementsTabView.xaml:81: one 20px pink-thumb horizontal bar, no vertical bar.
+    [Fact]
+    public Task SkillTreeScrollerUsesTheWpfSkillTreeScrollChrome() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var tab = new EnhancementsTabView();
+        var host = new Window { Width = 1200, Height = 700, Content = tab };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var scroller = tab.FindControl<ScrollViewer>("SkillTreeScroller")!;
+            Assert.Same(Application.Current!.FindResource("SkillTreeScrollViewerStyle"), scroller.Theme);
+            var bars = scroller.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.ScrollBar>()
+                .Where(b => b.TemplatedParent == scroller).ToArray();
+            var bar = Assert.Single(bars);
+            Assert.Equal(20, bar.Bounds.Height);
+            Assert.True(bar.Bounds.Bottom <= scroller.Bounds.Height);
+            var thumb = bar.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.Thumb>().Single();
+            Assert.Same(host.FindResource("PinkBrush"), thumb.Background);
+
+            // Dragging the thumb scrolls the tree (Track.Value is two-way to the ScrollBar).
+            var start = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, 10), host)!.Value;
+            host.MouseMove(start);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Color.Parse("#FF85C4"), ((ISolidColorBrush)thumb.Background!).Color);
+            host.MouseDown(start, MouseButton.Left);
+            host.MouseMove(start + new Vector(120, 0));
+            host.MouseUp(start + new Vector(120, 0), MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(scroller.Offset.X > 0, $"offset {scroller.Offset.X}");
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
 }

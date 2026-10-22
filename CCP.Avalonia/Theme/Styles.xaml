@@ -658,6 +658,119 @@
     </Setter>
   </ControlTheme>
 
+  <!-- MainWindow.xaml:341. The implicit Slider: every slider that names no theme is a PinkSlider
+       (Height 18 / Margin 0 already folded into PinkSlider above). -->
+  <ControlTheme x:Key="{x:Type Slider}" TargetType="Slider" BasedOn="{StaticResource PinkSlider}"/>
+
+  <!-- MainWindow.xaml:409-500. The app-wide ScrollBar: 8px, a faint PanelAccent track, a
+       neutral thumb that turns pink under the pointer and while dragged, no arrow buttons.
+       The two track halves are WPF's LineUp/LineDown commands, so they are named as Avalonia's
+       line buttons (a click steps one SmallChange, not a page). The thumb paints its own
+       Background so a window-local ScrollBar style (ChaosHudWindow) can still tint it. -->
+  <ControlTheme x:Key="InvisibleRepeatButton" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="RepeatButton">
+        <Border Background="Transparent"/>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="SimpleCuteThumb" TargetType="Thumb">
+    <Setter Property="MinWidth" Value="6"/>
+    <Setter Property="MinHeight" Value="30"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="Background" Value="{DynamicResource PanelAccentHoverBrush}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Thumb">
+        <Border x:Name="Bd" Opacity="0.9" Background="{TemplateBinding Background}"
+                CornerRadius="{TemplateBinding CornerRadius}"/>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover"><Setter Property="Background" Value="{DynamicResource PinkBrush}"/></Style>
+    <Style Selector="^:pointerover /template/ Border#Bd"><Setter Property="Opacity" Value="0.85"/></Style>
+    <Style Selector="^:pressed"><Setter Property="Background" Value="{DynamicResource PinkBrush}"/></Style>
+    <Style Selector="^:pressed /template/ Border#Bd"><Setter Property="Opacity" Value="1"/></Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ScrollBar">
+        <Grid Background="{TemplateBinding Background}">
+          <Border x:Name="TrackBg" Background="{DynamicResource PanelAccentBrush}" CornerRadius="4"
+                  Opacity="0.2" Margin="1"/>
+          <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}"
+                 Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                 Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+            <Track.DecreaseButton>
+              <RepeatButton x:Name="PART_LineUpButton" Theme="{StaticResource InvisibleRepeatButton}"/>
+            </Track.DecreaseButton>
+            <Track.IncreaseButton>
+              <RepeatButton x:Name="PART_LineDownButton" Theme="{StaticResource InvisibleRepeatButton}"/>
+            </Track.IncreaseButton>
+            <Thumb x:Name="ThumbElement" Theme="{StaticResource SimpleCuteThumb}"/>
+          </Track>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:horizontal"><Setter Property="Height" Value="8"/></Style>
+    <Style Selector="^:horizontal /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="False"/></Style>
+    <Style Selector="^:horizontal /template/ Thumb#ThumbElement">
+      <Setter Property="MinWidth" Value="30"/>
+      <Setter Property="MinHeight" Value="6"/>
+    </Style>
+    <Style Selector="^:vertical"><Setter Property="Width" Value="8"/></Style>
+    <Style Selector="^:vertical /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="True"/></Style>
+    <Style Selector="^:disabled /template/ Border#TrackBg"><Setter Property="Opacity" Value="0.1"/></Style>
+  </ControlTheme>
+
+  <!-- MainWindow.xaml:1211-1290. The skill tree's own horizontal bar: 20px tall, a pink pill
+       thumb (radius 8, 2px inset) that lightens on hover and deepens while dragged, no track
+       buttons. The ScrollViewer theme lays it out as WPF did: content row, then the bar row,
+       no vertical bar at all. -->
+  <ControlTheme x:Key="SkillTreeScrollThumb" TargetType="Thumb">
+    <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Thumb">
+        <Border Background="{TemplateBinding Background}" CornerRadius="8" Margin="2"/>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover"><Setter Property="Background" Value="#FF85C4"/></Style>
+    <Style Selector="^:pressed"><Setter Property="Background" Value="#FF4D9E"/></Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="SkillTreeScrollBarStyle" TargetType="ScrollBar">
+    <Setter Property="Background" Value="{DynamicResource DarkerBgBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ScrollBar">
+        <Grid>
+          <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="False"
+                 Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                 Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+            <Thumb x:Name="SkillThumb" Theme="{StaticResource SkillTreeScrollThumb}"/>
+          </Track>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:horizontal"><Setter Property="Height" Value="20"/></Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="SkillTreeScrollViewerStyle" TargetType="ScrollViewer">
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ScrollViewer">
+        <Grid RowDefinitions="*,Auto">
+          <ScrollContentPresenter x:Name="PART_ContentPresenter" Grid.Row="0"
+                                  Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"/>
+          <ScrollBar x:Name="PART_HorizontalScrollBar" Grid.Row="1" Orientation="Horizontal"
+                     Theme="{StaticResource SkillTreeScrollBarStyle}"/>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
   <!-- MainWindow.xaml:1234. Restyles the Fluent ComboBox parts rather than replacing the
        template: the popup, item presenter and toggle are a part contract worth keeping. Visual
        contract kept: 8px radius, dark surface, pink border on hover/open, 24px min height. The

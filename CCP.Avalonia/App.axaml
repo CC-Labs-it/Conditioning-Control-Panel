@@ -26,5 +26,11 @@
     <FluentTheme />
     <!-- Icon size ramp + semantic icon brushes (Controls/Icons, fluent icons 2026-10-10). -->
     <StyleInclude Source="avares://CCP.Avalonia/Theme/Icons.axaml"/>
+    <!-- WPF's ScrollViewer gives its bars their own column/row beside the content; Fluent's
+         auto-hide mode overlays them on it. The app-wide ScrollBar (Theme/Styles.xaml,
+         MainWindow.xaml:457) is always drawn, so it must sit beside the content as in WPF. -->
+    <Style Selector="ScrollViewer">
+      <Setter Property="AllowAutoHide" Value="False"/>
+    </Style>
   </Application.Styles>
 </Application>
