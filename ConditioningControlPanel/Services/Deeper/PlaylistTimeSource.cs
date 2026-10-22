@@ -1,5 +1,4 @@
 using System;
-using System.Windows;
 using ConditioningControlPanel.Services.AudioPlayer;
 
 namespace ConditioningControlPanel.Services.Deeper
@@ -69,7 +68,7 @@ namespace ConditioningControlPanel.Services.Deeper
         public void Pause() { if (CanDrive) _playlist.Pause(); }
         public void Play() { if (CanDrive) _playlist.Play(); }
 
-        public Rect GetVideoRect() => Rect.Empty;
+        public PlaybackRect GetVideoRect() => PlaybackRect.Empty;
 
         public void Dispose() => Detach();
     }
