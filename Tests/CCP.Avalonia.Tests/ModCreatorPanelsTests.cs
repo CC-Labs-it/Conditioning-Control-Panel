@@ -79,7 +79,9 @@ public sealed class ModCreatorPanelsTests
             Assert.Equal("Keeper Skills", result.EnhancementOverrides!.TreeTitle);
             Assert.Equal(200, result.EnhancementOverrides.LuckyBubbleLabel!.Length);
             Assert.Equal("Rush now", result.EnhancementOverrides.BoostTooltips!["pink_rush"]);
-            Click(row.Children.OfType<Button>().Single());
+            var del = row.Children.OfType<Button>().Single();
+            Assert.Equal("Remove", global::Avalonia.Automation.AutomationProperties.GetName(del));
+            Click(del);
             Assert.Null(w.BuildManifestFromForm().EnhancementOverrides!.BoostTooltips);
         });
     }

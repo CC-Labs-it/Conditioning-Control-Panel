@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Styling;
@@ -157,7 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var btn = new Button
             {
                 Content = label,
-                Theme = (ControlTheme)this.FindResource("SecondaryButton"),
+                Theme = (ControlTheme)this.FindResource("SecondaryButton")!,
                 Padding = new Thickness(10, 5, 10, 5),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 8, 0, 0),
@@ -178,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var keyBox = new TextBox
             {
-                Theme = (ControlTheme)this.FindResource("DarkTextBox"),
+                Theme = (ControlTheme)this.FindResource("DarkTextBox")!,
                 Text = keyText,
                 FontSize = 12,
                 Padding = new Thickness(6, 4, 6, 4),
@@ -201,7 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var valueBox = new TextBox
             {
-                Theme = (ControlTheme)this.FindResource("DarkTextBox"),
+                Theme = (ControlTheme)this.FindResource("DarkTextBox")!,
                 Text = valueText,
                 FontSize = 12,
                 Padding = new Thickness(6, 4, 6, 4),
@@ -223,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Padding = new Thickness(6, 0, 6, 0),
                 VerticalAlignment = VerticalAlignment.Center,
+                [AutomationProperties.NameProperty] = "Remove",
             };
             delBtn.Click += (_, _) =>
             {
