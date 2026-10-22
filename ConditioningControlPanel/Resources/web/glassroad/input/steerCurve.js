@@ -3,13 +3,15 @@
  * A source tags its steer with `steerKind`: 'key' (digital), 'stick' (gamepad) or 'touch'. The action
  * map (core/actions.js) shapes each tagged source before the sources are merged:
  * - key: a held key BUILDS instead of snapping: it starts at input.keyStart and ramps to full over
- *   input.keyRampS; a release or a change of side starts over. A tap is a small correction.
- * - stick / touch: expo (input.stickExpo / input.touchExpo): fine near centre, full at the edge.
+ *   input.keyRampS on an ease-in (input.keyRampPow, 1 = linear); a release or a change of side starts
+ *   over. A tap is a small correction, full lock needs a held key (polish 4: progressive).
+ * - stick / touch: a power curve |x|^p (input.stickPow / input.touchPow): gentle near centre, full at
+ *   the edge. expo() stays for callers that want the Phase A blend.
  * Never mirrors or inverts (owner law: left stays left); sign in = sign out. Bots never pass here.
  */
 
 /** Slice defaults; feel.json wins when a feel is given (read through feel first). */
-export const INPUT_DEFAULTS = Object.freeze({ keyStart: 0.35, keyRampS: 0.3, stickExpo: 0.35, touchExpo: 0.2 });
+export const INPUT_DEFAULTS = Object.freeze({ keyStart: 0.12, keyRampS: 0.4, keyRampPow: 1.6, stickPow: 2, touchPow: 1.8 });
 
 export const inputNum = (feel, k) => {
   if (feel) { try { const v = feel.get('input.' + k); if (typeof v === 'number') return v; } catch (e) { /* not in this feel */ } }
@@ -24,21 +26,27 @@ export function expo(x, e) {
   return (1 - k) * v + k * v * v * v;
 }
 
-/** Key ramp value after holding one side for heldS seconds (0 when nothing is held). */
-export function keyRampValue(heldS, start, rampS) {
+/** Power curve sign(x) |x|^p, p clamped to 1..4: odd, 0 -> 0 and 1 -> 1, flat at centre for p > 1. */
+export function powCurve(x, p) {
+  const v = clamp1(+x || 0), k = Math.max(1, Math.min(4, +p || 1));
+  return v < 0 ? -Math.pow(-v, k) : Math.pow(v, k);
+}
+
+/** Key ramp value after holding one side for heldS seconds (0 when nothing is held); pow eases it in. */
+export function keyRampValue(heldS, start, rampS, pow = 1) {
   if (!(heldS >= 0)) return 0;
   const t = rampS > 0 ? Math.min(1, heldS / rampS) : 1;
-  return start + (1 - start) * t;
+  return start + (1 - start) * (pow === 1 ? t : Math.pow(t, Math.max(0.5, pow)));
 }
 
 /** One digital source's ramp state. step(raw, dtS, start, rampS) -> shaped steer. */
 export function createKeyRamp() {
   let side = 0, held = 0;
   return {
-    step(raw, dtS, start, rampS) {
+    step(raw, dtS, start, rampS, pow = 1) {
       const s = raw > 0 ? 1 : raw < 0 ? -1 : 0;
       if (s !== side) { side = s; held = 0; } else if (s) held += Math.max(0, dtS);
-      return s ? s * keyRampValue(held, start, rampS) : 0;
+      return s ? s * keyRampValue(held, start, rampS, pow) : 0;
     },
     reset() { side = 0; held = 0; },
   };
@@ -46,8 +54,8 @@ export function createKeyRamp() {
 
 /** Shape one source's steer by its kind. ramp is that source's createKeyRamp() (keys only). */
 export function shapeSteer(raw, kind, dtS, feel, ramp) {
-  if (kind === 'key') return ramp ? ramp.step(raw, dtS, inputNum(feel, 'keyStart'), inputNum(feel, 'keyRampS')) : raw;
-  if (kind === 'stick') return expo(raw, inputNum(feel, 'stickExpo'));
-  if (kind === 'touch') return expo(raw, inputNum(feel, 'touchExpo'));
+  if (kind === 'key') return ramp ? ramp.step(raw, dtS, inputNum(feel, 'keyStart'), inputNum(feel, 'keyRampS'), inputNum(feel, 'keyRampPow')) : raw;
+  if (kind === 'stick') return powCurve(raw, inputNum(feel, 'stickPow'));
+  if (kind === 'touch') return powCurve(raw, inputNum(feel, 'touchPow'));
   return raw;
 }

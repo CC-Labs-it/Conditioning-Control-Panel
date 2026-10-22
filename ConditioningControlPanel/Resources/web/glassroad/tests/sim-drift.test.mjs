@@ -49,7 +49,7 @@ test('hop starts a drift into the turn above min speed, curves into it, cancels 
   const a = acts({ throttle: 1, hop: true, hopPressed: true, steer: -0.5 });
   run(st, tr, feel, a, 1, rec);
   assert.deepEqual(rec.first('hop').payload.speed > 19, true);
-  assert.deepEqual(rec.first('drift-start').payload, { dir: -1 });
+  assert.deepEqual(rec.first('drift-start').payload, { dir: -1, via: 'hop' });
   assert.equal(rec.first('land').payload.tier, 0, 'a plain hop lands soft: no landing thud on every drift (polish 2)');
   assert.ok(st[S.yawRate] < 0, 'curving left');
   assert.equal(st[S.driftDir], -1, 'drift kept through the landing');
@@ -71,4 +71,74 @@ test('drift cancels on low slip', () => {
   const c = rec.first('drift-cancel');
   assert.equal(c.payload.reason, 'slip');
   near(c.t, feel.get('drift.cancelSlipS'), 1.5 * DT);
+});
+
+test('a charged drift that straightens out by itself pays like a release (fixer: every completed drift pays)', () => {
+  const feel = makeFeel({ 'drift.yawMul': 0.05 }), tr = fakeTrack({ w: 400 }), rec = recorder();
+  const st = place(tr, { speed: 25 });
+  st[S.driftDir] = 1; st[S.driftCharge] = feel.get('drift.miniMinS') + 0.05;
+  run(st, tr, feel, acts({ throttle: 1, hop: true }), 1, rec);
+  assert.ok(rec.first('drift-boost'), 'paid');
+  assert.ok(!rec.first('drift-cancel'), 'not cancelled');
+});
+
+// polish 4: the power slide (brake while steering, throttle held), the mini-turbo and drift-boost
+import { skidOf, isPowerSlide } from '../sim/drift.js';
+
+test('power slide: throttle held, a brake press while steering at speed starts a held slide that keeps its speed', () => {
+  const feel = makeFeel(), tr = fakeTrack({ w: 400 }), rec = recorder();
+  const st = place(tr, { speed: 25 });
+  run(st, tr, feel, acts({ throttle: 1, brake: 1, steer: 1 }), 1, rec);
+  assert.deepEqual(rec.first('drift-start').payload, { dir: 1, via: 'brake' });
+  assert.ok(rec.first('drift-start').t <= 2 * DT, 'starts on the press');
+  assert.equal(st[S.driftDir], 1); assert.ok(isPowerSlide(st)); assert.equal(skidOf(st), 1, 'skid flag');
+  assert.ok(!rec.first('drift-cancel'));
+  assert.ok(st[S.engineV] > 21, 'the brake does not brake in a power slide: ' + st[S.engineV]);
+  // brake with no throttle is a real brake: no slide, the kart slows hard
+  const b = place(tr, { speed: 25 }), rb = recorder();
+  run(b, tr, feel, acts({ brake: 1, steer: 1 }), 0.5, rb);
+  assert.ok(!rb.first('drift-start')); assert.ok(b[S.engineV] < 16, 'braked ' + b[S.engineV]);
+  // a brake held first and steered later is a brake too
+  const c = place(tr, { speed: 25 }), rc = recorder(), a = acts({ throttle: 1, brake: 1 });
+  run(c, tr, feel, a, 0.3, rc); a.steer = 1; run(c, tr, feel, a, 0.3, rc);
+  assert.ok(!rc.first('drift-start'), 'a stale brake never slides');
+  assert.equal(skidOf(c), 0);
+});
+
+test('power slide: tier 1 inside half a second, letting off the brake pays the tier with drift-boost', () => {
+  const feel = makeFeel(), tr = fakeTrack({ w: 400 }), rec = recorder();
+  const st = place(tr, { speed: 25 }), a = acts({ throttle: 1, brake: 1, steer: 1 });
+  run(st, tr, feel, a, 0.7, rec);
+  const t1 = rec.first('drift-tier');
+  assert.ok(t1 && t1.t <= 0.5, 'tier 1 at ' + (t1 && t1.t));
+  a.brake = 0; run(st, tr, feel, a, DT, rec);
+  assert.deepEqual(rec.first('drift-release').payload, { tier: 1 });
+  assert.deepEqual(rec.first('drift-boost').payload, { tier: 1, dir: 1 });
+  assert.equal(st[S.boostKind], BOOST.DRIFT1); assert.equal(st[S.driftDir], 0); assert.equal(skidOf(st), 0);
+});
+
+test('power slide: straightening the stick releases and pays', () => {
+  const feel = makeFeel(), tr = fakeTrack({ w: 400 }), rec = recorder();
+  const st = place(tr, { speed: 25 }), a = acts({ throttle: 1, brake: 1, steer: 1 });
+  run(st, tr, feel, a, 0.6, rec);
+  a.steer = 0; run(st, tr, feel, a, 0.4, rec);
+  const r = rec.first('drift-release');
+  assert.ok(r, 'released');
+  near(r.t - 0.6, feel.get('drift.straightenS'), 2 * DT, 'after straightenS');
+  assert.ok(rec.first('drift-boost'), 'paid');
+});
+
+test('every completed drift of 0.4 s pays at least the mini-turbo; tier 1 by 0.5 s with the stick neutral', () => {
+  const feel = makeFeel(), tr = fakeTrack({ w: 400 }), rec = recorder();
+  assert.ok(feel.get('drift.tierS')[0] <= 0.5);
+  const st = place(tr, { speed: 25 });
+  st[S.driftDir] = 1;
+  run(st, tr, feel, acts({ throttle: 1, hop: true }), 0.45, rec);
+  assert.equal(st[S.driftStage], 0, 'no tier yet');
+  run(st, tr, feel, acts({ throttle: 1 }), DT, rec);
+  assert.deepEqual(rec.first('drift-boost').payload, { tier: 0, dir: 1 });
+  const bs = rec.first('boost-start').payload;
+  assert.equal(bs.kind, 'drift'); assert.equal(bs.tier, 0);
+  near(bs.amount, feel.get('boost.miniAmount'), 1e-9); near(bs.holdS, feel.get('boost.miniHoldS'), 1e-9);
+  assert.ok(bs.amount < feel.get('boost.tierAmount')[0], 'smaller than tier 1');
 });

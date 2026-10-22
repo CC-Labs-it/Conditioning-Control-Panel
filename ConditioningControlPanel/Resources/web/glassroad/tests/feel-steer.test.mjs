@@ -1,11 +1,12 @@
 // tests/feel-steer.test.mjs - polish 2 FEEL lane: the calmed grip yaw law, the human steering response
-// curve, steering sensitivity, the softer camera heading follow and the tighter hop.
+// curve, steering sensitivity, the softer camera heading follow and the tighter hop. Polish 4: the calmer
+// law (about a third off again), the progressive key ramp and the stick / touch power curve.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { S, createState } from '../sim/state.js';
 import { qaxis } from '../core/math.js';
 import { baseYaw, calmMul, gripYaw, bendSpeed, yawParams } from '../sim/steer.js';
-import { expo, keyRampValue, createKeyRamp, shapeSteer, INPUT_DEFAULTS } from '../input/steerCurve.js';
+import { expo, powCurve, keyRampValue, createKeyRamp, shapeSteer, INPUT_DEFAULTS } from '../input/steerCurve.js';
 import { createActionMap } from '../core/actions.js';
 import { createRacers } from '../sim/racers.js';
 import { createCamRig } from '../render/cameraMath.js';
@@ -13,22 +14,43 @@ import { DT, makeFeel, fakeTrack, place, recorder, acts, run } from './sim-fake.
 
 const near = (a, b, e, msg = '') => assert.ok(Math.abs(a - b) <= e, `${msg} ${a} vs ${b} (+-${e})`);
 
-test('calm: base law when slow, about a third off at cruise, more at top, half at boosted top', () => {
+test('calm: base law when slow, then the feel multipliers at cruise, top and boosted top', () => {
   const f = makeFeel();
   assert.equal(calmMul(0, f), 1);
   assert.equal(calmMul(f.get('steer.calmFromMps'), f), 1, 'nimble when slow');
-  near(calmMul(20, f), 0.67, 1e-9, 'cruise');
-  near(calmMul(30, f), 0.64, 1e-9, 'top');
-  near(calmMul(39, f), 0.5, 1e-9, 'boosted top');
-  near(calmMul(60, f), 0.5, 1e-9, 'held above');
+  near(calmMul(20, f), f.get('steer.cruiseYawMul'), 1e-9, 'cruise');
+  near(calmMul(30, f), f.get('steer.topYawMul'), 1e-9, 'top');
+  near(calmMul(39, f), f.get('steer.boostYawMul'), 1e-9, 'boosted top');
+  near(calmMul(60, f), f.get('steer.boostYawMul'), 1e-9, 'held above');
   near(calmMul(-20, f), calmMul(20, f), 1e-12, 'reverse reads |v|');
   let last = 1;
   for (let v = 0; v <= 45; v += 0.5) { const m = calmMul(v, f); assert.ok(m <= last + 1e-12, 'never rises with speed at ' + v); last = m; }
-  // full-lock numbers in deg/s against the Phase A law
-  const deg = (r) => r * 180 / Math.PI;
-  near(deg(gripYaw(20, f)) / deg(baseYaw(20, f)), 0.67, 1e-9);
-  assert.ok(deg(gripYaw(30, f)) < 0.67 * deg(baseYaw(30, f)), 'top is calmer than cruise');
-  near(deg(gripYaw(39, f)), deg(baseYaw(39, f)) / 2, 1e-9);
+  assert.ok(gripYaw(30, f) < f.get('steer.cruiseYawMul') * baseYaw(30, f), 'top is calmer than cruise');
+});
+
+test('polish 4: full-lock grip yaw is about a third under polish 3 at 20, 30 and 39 m/s', () => {
+  const f = makeFeel(), deg = (r) => r * 180 / Math.PI;
+  // polish 3 full-lock deg/s: 51.2, 40.0, 26.9
+  for (const [v, was] of [[20, 51.2], [30, 40.0], [39, 26.9]]) {
+    const now = deg(gripYaw(v, f));
+    assert.ok(now < was * 0.75 && now > was * 0.6, `${v} m/s: ${now.toFixed(1)} deg/s vs ${was}`);
+  }
+  near(deg(gripYaw(8, f)), 104.2, 0.1, 'slow is still nimble');
+  // full lock at top is a wide arc: over 55 m
+  assert.ok(30 / gripYaw(30, f) > 55);
+});
+
+test('polish 4: every bend radius of Threshold (36 to 70 m) is makeable at top speed with a drift', () => {
+  const f = makeFeel(), top = f.get('speed.topMps');
+  const drift = f.get('drift.yawMul') * baseYaw(top, f);
+  for (const r of [36, 48, 56, 70]) {
+    const need = top / r;
+    assert.ok(drift * f.get('drift.tightMax') >= need * 1.5, 'drift has room at r ' + r);
+    // a held grip key alone makes the wide ones at near top, the tight ones only after a lift
+    const v = bendSpeed(180 / Math.PI / r, f, 1);
+    assert.ok(v > 20, 'grip turn at r ' + r + ' holds ' + v.toFixed(1) + ' m/s');
+  }
+  assert.ok(drift * f.get('drift.tightMin') < top / 36 * 1.1, 'stick away from the turn widens a drift to about the helix');
 });
 
 test('sensitivity: steer.userMul scales grip yaw; bots hold it at 1, the player follows the option', () => {
@@ -93,10 +115,38 @@ test('steer curve: a held key builds from keyStart to full over keyRampS; a side
   assert.equal(shapeSteer(0.5, null, 0.016, null, r), 0.5, 'untagged sources pass through');
 });
 
-test('action map: keys ramp in wall time, sticks get the expo, the tag never leaks, a long gap never jumps', () => {
+test('polish 4: a held key eases in to full over 0.35 to 0.45 s; stick and touch are gentle near centre', () => {
+  const f = makeFeel(), s0 = f.get('input.keyStart'), rs = f.get('input.keyRampS'), p = f.get('input.keyRampPow');
+  assert.ok(rs >= 0.35 && rs <= 0.45, 'ramp ' + rs);
+  assert.ok(s0 <= 0.2, 'a tap is small: ' + s0);
+  assert.ok(keyRampValue(rs / 2, s0, rs, p) < s0 + (1 - s0) / 2, 'eases in (progressive)');
+  assert.equal(keyRampValue(rs, s0, rs, p), 1);
+  let last = 0;
+  for (let t = 0; t <= rs + 0.05; t += 0.01) { const v = keyRampValue(t, s0, rs, p); assert.ok(v >= last); last = v; }
+  // the kart's slewed steer under a held key: half lock takes a third of a second
+  const key = { poll(into) { into.steer = 1; into.steerKind = 'key'; }, dispose() {} };
+  const map = createActionMap([key], { feel: f });
+  let slew = 0, t50 = -1;
+  for (let i = 0; i < 60 && t50 < 0; i++) {
+    const a = map.sample({ nowS: 5 + i * DT });
+    const tc = f.get('steer.slewCentreS') + (f.get('steer.slewFullS') - f.get('steer.slewCentreS')) * Math.abs(slew);
+    slew += (a.steer - slew) * (1 - Math.exp(-DT / tc));
+    if (slew >= 0.5) t50 = i * DT;
+  }
+  assert.ok(t50 > 0.25 && t50 < 0.45, 'half lock at ' + t50);
+  for (const k of ['stickPow', 'touchPow']) {
+    const e = f.get('input.' + k);
+    assert.ok(e >= 1.8 && e <= 2.2, k);
+    near(powCurve(-0.5, e), -Math.pow(0.5, e), 1e-12, 'left stays left');
+    assert.equal(powCurve(0, e), 0); near(powCurve(1, e), 1, 1e-12); near(powCurve(-3, e), -1, 1e-12);
+    assert.ok(shapeSteer(0.3, k === 'stickPow' ? 'stick' : 'touch', DT, f, null) < 0.12, 'gentle near centre');
+  }
+});
+
+test('action map: keys ramp in wall time, sticks get the curve, the tag never leaks, a long gap never jumps', () => {
   const key = { steer: 0, poll(into) { into.steer = this.steer; into.steerKind = 'key'; }, dispose() {} };
   const stick = { steer: 0, poll(into) { into.steer = this.steer; into.steerKind = 'stick'; }, dispose() {} };
-  const f = makeFeel({ 'input.keyStart': 0.4, 'input.keyRampS': 0.2 });
+  const f = makeFeel({ 'input.keyStart': 0.4, 'input.keyRampS': 0.2, 'input.keyRampPow': 1 });
   const map = createActionMap([key, stick], { items: true, feel: f });
   key.steer = 1;
   let a = map.sample({ nowS: 10 });
@@ -105,7 +155,7 @@ test('action map: keys ramp in wall time, sticks get the expo, the tag never lea
   a = map.sample({ nowS: 10.1 }); near(a.steer, 0.7, 1e-9, 'half the ramp');
   a = map.sample({ nowS: 10.2 }); near(a.steer, 1, 1e-9, 'full');
   key.steer = 0; stick.steer = -0.5;
-  a = map.sample({ nowS: 10.25 }); near(a.steer, expo(-0.5, f.get('input.stickExpo')), 1e-12);
+  a = map.sample({ nowS: 10.25 }); near(a.steer, powCurve(-0.5, f.get('input.stickPow')), 1e-12);
   stick.steer = 0; key.steer = -1;
   map.sample({ nowS: 11 }); a = map.sample({ nowS: 30 });
   near(a.steer, -(0.4 + 0.6 * 0.1 / 0.2), 1e-9, 'a 19 s gap counts as 0.1 s');

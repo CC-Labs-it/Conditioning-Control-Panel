@@ -9,7 +9,7 @@
  * Polish 1: a source may set `padLost` (the gamepad in use left); it reads as a pause edge in `pause`
  * and is never copied out, so a pause card's resume (the pad's own Start) cannot see it.
  * Polish 2: a source that tags `steerKind` ('key' | 'stick' | 'touch') gets its steer shaped by the
- * response curve (input/steerCurve.js: a key ramp that builds, expo on stick and touch) before the
+ * response curve (input/steerCurve.js: a key ramp that builds, a power curve on stick and touch) before the
  * merge; `steerKind` is never copied out. createActionMap(sources, { feel }) reads the curve numbers
  * from feel.json `input.*` (slice defaults without a feel); sample({ nowS }) lets a test drive time.
  */

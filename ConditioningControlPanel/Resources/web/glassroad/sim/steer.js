@@ -5,7 +5,8 @@
  * easing to steer.cruiseYawMul at steer.cruiseMps, steer.topYawMul at steer.topCalmMps and
  * steer.boostYawMul at steer.boostCalmMps (boosted) and above. steer.userMul is the player's steering
  * sensitivity (Options, 0.6 to 1.4); bots hold it at 1 (sim/racers.js).
- * Drift yaw keeps the uncalmed base law (sim/drift.js), so a drift is the strong turn.
+ * Drift yaw keeps the uncalmed base law (sim/drift.js), so a drift is the strong turn. Polish 4 takes about
+ * another third off at cruise and top (feel numbers only; FEEL.md "steer" has the before / after deg/s).
  * The bots solve corner speeds many times a tick, so the law reads feel once into a plain record
  * (yawParams) and the math runs on that.
  */

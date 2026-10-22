@@ -4,17 +4,35 @@
  * to top * (1 + amount) over boost.riseS, so a kart at cruise really takes riseS to gain it, holds for
  * the tier's hold, then the extra decays with time constant boost.tailTcS. boost-end fires as the
  * tail starts, so fx and audio ease back over the same tail constant the engine does.
+ * Polish 4: a drift kind with tier 0 is the mini-turbo every completed drift pays (boost.miniAmount,
+ * boost.miniHoldS), and BOOST_TRICK (6, next after the frozen BOOST kinds) is the trick landing boost,
+ * whose size and hold the caller passes (sim/trick.js).
  */
 import { S, BOOST } from './state.js';
 import { gap } from './gaps.js';
 
-export const BOOST_NAME = Object.freeze(['', 'drift', 'drift', 'drift', 'pad', 'launch']);
+export const BOOST_TRICK = 6;
+export const BOOST_NAME = Object.freeze(['', 'drift', 'drift', 'drift', 'pad', 'launch', 'trick']);
 
-/** Start a boost: kind BOOST.*, tier 1..3 (ignored for PAD). Replaces any running boost. Emits boost-start. */
-export function applyBoost(st, kind, tier, feel, events) {
+/** Seconds of hold left on the running boost (0 with none or in its tail). */
+export function boostHoldLeftS(st, feel) {
+  if (st[S.boostKind] === BOOST.NONE) return 0;
+  return Math.max(0, feel.get('boost.riseS') + st[S.boostHoldS] - st[S.boostT]);
+}
+
+/**
+ * Start a boost: kind BOOST.* (or BOOST_TRICK), tier 1..3 (ignored for PAD; 0 on a drift kind = the
+ * mini-turbo). `over` { amount, holdS } sets the size (BOOST_TRICK needs it). Replaces any running
+ * boost. Emits boost-start.
+ */
+export function applyBoost(st, kind, tier, feel, events, over = null) {
   let amount, hold;
-  if (kind === BOOST.PAD) {
+  if (over) {
+    amount = over.amount; hold = over.holdS; tier = tier | 0;
+  } else if (kind === BOOST.PAD) {
     amount = feel.get('pad.amount'); hold = feel.get('pad.holdS'); tier = 0;
+  } else if ((tier | 0) <= 0 && kind >= BOOST.DRIFT1 && kind <= BOOST.DRIFT3) {
+    amount = feel.get('boost.miniAmount'); hold = feel.get('boost.miniHoldS'); tier = 0;
   } else {
     const i = Math.min(3, Math.max(1, tier | 0)) - 1;
     amount = feel.get('boost.tierAmount')[i]; hold = feel.get('boost.tierHoldS')[i]; tier = i + 1;
