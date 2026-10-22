@@ -14,7 +14,8 @@ namespace ConditioningControlPanel.Services.Commands
 
         public Task<bool> ExecuteAsync()
         {
-            var intensity = Math.Clamp(_data.Intensity, 0, MaxIntensity);
+            // Null for "off" (and for an "on" with no intensity): the saved opacity is the user's.
+            var opacity = AiOverlayOpacity.ToWrite(_data.On, _data.Intensity, MaxIntensity);
 
             try
             {
@@ -23,7 +24,7 @@ namespace ConditioningControlPanel.Services.Commands
                     var settings = App.Settings?.Current;
                     if (settings == null || App.Overlay == null) return;
 
-                    settings.SpiralOpacity = intensity;
+                    if (opacity is int o) settings.SpiralOpacity = o;
                     settings.SpiralEnabled = _data.On;
 
                     if (!App.Overlay.IsRunning)
