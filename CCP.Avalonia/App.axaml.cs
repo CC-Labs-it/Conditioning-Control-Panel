@@ -906,6 +906,7 @@ namespace ConditioningControlPanel.Avalonia
                     CoreEngine.Stop();
                     StopDesktopOverlays();
                     Views.Overlays.CornerGifOverlay.StopAll();   // WPF CornerGifService.OnMainWindowClosing / OnExit
+                    Views.Overlays.SpeakCueOverlay.CloseActive();   // a topmost window must not outlive the shell
                     Views.Windows.LockCardWindow.ForceCloseAll();
                 };
                 // WPF App.xaml.cs:2602: restore at ApplicationIdle, once startup has settled (#709).
