@@ -608,6 +608,10 @@ namespace ConditioningControlPanel
             // declared null! until then - so the provider must not capture it now.
             CoreWebcam.IsAvailableProvider = () => Webcam != null;
             CoreWebcam.RevokeConsentAction = () => Webcam?.RevokeConsent();
+            // The Deeper engine and its host moved to Core; the effects and the tracker stay here.
+            Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Services.Deeper.RealActionDispatcher();
+            Services.Deeper.EnhancementHostService.WebcamProvider = () =>
+                Webcam == null ? null : (_deeperWebcam ??= new Services.Deeper.EnhancementWebcamAdapter(Webcam));
 
             // Speech capability, for the views that ask whether voice input is worth offering.
             // SpeechService itself stays here - it owns a capture device. Reading ModelStatus
@@ -1223,6 +1227,7 @@ namespace ConditioningControlPanel
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
+        private static Services.Deeper.EnhancementWebcamAdapter? _deeperWebcam;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
         public static FocusGameService FocusGame { get; private set; } = null!;

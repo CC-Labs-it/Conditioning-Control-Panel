@@ -2543,3 +2543,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/goongame-core-d: +194
 - Cloud session unit (goongame-core-d); reviewed and gated locally.
+
+## avalonia-port/deeper-core-c: +519
+- Cloud session unit (deeper-core-c); reviewed and gated locally.

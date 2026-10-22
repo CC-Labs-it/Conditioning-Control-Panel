@@ -36,17 +36,9 @@ namespace ConditioningControlPanel.Services.Deeper
         /// <summary>
         /// Screen-space rect of the rendered video frame, used to normalize
         /// gaze-target rules' [x, y, w, h] (0..1) into screen DIPs. Returns
-        /// PlaybackRect.Empty for audio-only sources or when no window is visible —
+        /// Rect.Empty for audio-only sources or when no window is visible —
         /// the engine then skips gaze evaluation silently.
         /// </summary>
         PlaybackRect GetVideoRect();
-    }
-
-    /// <summary>System.Windows.Rect's part in the engine: the rendered video frame in screen
-    /// units. <see cref="Empty"/> is what an audio source answers (gaze rules then skip).</summary>
-    public readonly record struct PlaybackRect(double X, double Y, double Width, double Height)
-    {
-        public static readonly PlaybackRect Empty = new(0, 0, -1, -1);
-        public bool IsEmpty => Width < 0 || Height < 0;
     }
 }

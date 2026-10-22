@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Windows;
+using Serilog;
 using ConditioningControlPanel.Models.Deeper;
 
 namespace ConditioningControlPanel.Services.Deeper
@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services.Deeper
         private readonly Enhancement _enhancement;
         private readonly IPlaybackTimeSource _source;
         private readonly IActionDispatcher _dispatcher;
-        private readonly Services.WebcamTrackingService? _webcam;
+        private readonly IEnhancementWebcam? _webcam;
         private readonly Action<string>? _diag;
 
         private List<TimelineEntry> _timeline = new();
@@ -136,7 +136,7 @@ namespace ConditioningControlPanel.Services.Deeper
             Enhancement enhancement,
             IPlaybackTimeSource source,
             IActionDispatcher dispatcher,
-            Services.WebcamTrackingService? webcam = null,
+            IEnhancementWebcam? webcam = null,
             Action<string>? diag = null)
         {
             _enhancement = enhancement ?? throw new ArgumentNullException(nameof(enhancement));
@@ -446,7 +446,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
 
             _running = true;
-            App.Logger?.Information("EnhancementEngine started: {Name} ({Tl} timeline entries, {Rules} reactive rules)",
+            Log.Information("EnhancementEngine started: {Name} ({Tl} timeline entries, {Rules} reactive rules)",
                 _enhancement.Metadata?.Name, _timeline.Count, _reactiveRules.Count);
 
             int blinkRules = _reactiveRules.Count(i => i.Trigger is BlinkDetectedTrigger);
@@ -456,7 +456,7 @@ namespace ConditioningControlPanel.Services.Deeper
             int webcamRules = blinkRules + gazeRules + mouthRules + attentionRules;
             if (webcamRules > 0 && _webcam == null)
             {
-                Diag($"⚠ {webcamRules} webcam rule(s) but App.Webcam is null — they will never fire.");
+                Diag($"⚠ {webcamRules} webcam rule(s) but no webcam tracker is attached — they will never fire.");
             }
             else if (webcamRules > 0)
             {
@@ -486,7 +486,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 {
                     _completedFired = true;
                     try { PlaybackCompleted?.Invoke(); }
-                    catch (Exception ex) { App.Logger?.Debug("EnhancementEngine fallback PlaybackCompleted error: {Error}", ex.Message); }
+                    catch (Exception ex) { Log.Debug("EnhancementEngine fallback PlaybackCompleted error: {Error}", ex.Message); }
                 }
             }
 
@@ -494,12 +494,12 @@ namespace ConditioningControlPanel.Services.Deeper
             // clearing _running, so the dispatcher's Stop actions are not
             // short-circuited by the running check.
             try { FlushActiveBands(_lastTickTime >= 0 ? _lastTickTime : 0); }
-            catch (Exception ex) { App.Logger?.Debug("EnhancementEngine FlushActiveBands: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("EnhancementEngine FlushActiveBands: {Error}", ex.Message); }
 
             // Safety belt: FlushActiveBands issues a Stop for every open band (which balances the
             // overlay z-order band depth), but if any Stop dispatch was dropped, hard-zero the depth so
             // a leaked band can't strand overlays pinned above the next mandatory video.
-            try { App.Overlay?.ResetDeeperOverlayBands(); }
+            try { (_dispatcher as IEnhancementRunCleanup)?.ResetOverlayBands(); }
             catch { }
 
             // One-shot (point-fired) haptics play out on the mixer's own clock and are
@@ -508,8 +508,8 @@ namespace ConditioningControlPanel.Services.Deeper
             // authored length. If this run dispatched any haptic, silence the device.
             if (_hapticDispatched)
             {
-                try { _ = App.Haptics?.StopAsync(); }
-                catch (Exception ex) { App.Logger?.Debug("EnhancementEngine stop-haptics: {Error}", ex.Message); }
+                try { _ = CoreHaptics.Service?.StopAsync(); }
+                catch (Exception ex) { Log.Debug("EnhancementEngine stop-haptics: {Error}", ex.Message); }
             }
 
             // Flip _running first so any in-flight tick / dispatch short-circuits
@@ -531,13 +531,13 @@ namespace ConditioningControlPanel.Services.Deeper
             // generation, so it survived the cancel and outlived the media.
             if (_flashDispatched)
             {
-                try { App.Flash?.StopOneShotFlashes(); }
-                catch (Exception ex) { App.Logger?.Debug("EnhancementEngine stop-flash: {Error}", ex.Message); }
+                try { (_dispatcher as IEnhancementRunCleanup)?.StopOneShotFlashes(); }
+                catch (Exception ex) { Log.Debug("EnhancementEngine stop-flash: {Error}", ex.Message); }
             }
             if (_subliminalDispatched)
             {
-                try { App.Subliminal?.StopOneShotSubliminals(); }
-                catch (Exception ex) { App.Logger?.Debug("EnhancementEngine stop-subliminal: {Error}", ex.Message); }
+                try { (_dispatcher as IEnhancementRunCleanup)?.StopOneShotSubliminals(); }
+                catch (Exception ex) { Log.Debug("EnhancementEngine stop-subliminal: {Error}", ex.Message); }
             }
 
             try { _source.PlaybackTimeChanged -= OnPlaybackTime; } catch { }
@@ -555,7 +555,7 @@ namespace ConditioningControlPanel.Services.Deeper
             try { _runCts?.Dispose(); } catch { }
             _runCts = null;
 
-            App.Logger?.Information("EnhancementEngine stopped: {Name}", _enhancement.Metadata?.Name);
+            Log.Information("EnhancementEngine stopped: {Name}", _enhancement.Metadata?.Name);
         }
 
         public void Dispose()
@@ -684,13 +684,13 @@ namespace ConditioningControlPanel.Services.Deeper
                     {
                         _completedFired = true;
                         try { PlaybackCompleted?.Invoke(); }
-                        catch (Exception ex) { App.Logger?.Debug("EnhancementEngine PlaybackCompleted subscriber error: {Error}", ex.Message); }
+                        catch (Exception ex) { Log.Debug("EnhancementEngine PlaybackCompleted subscriber error: {Error}", ex.Message); }
                     }
                 }
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementEngine tick error: {Error}", ex.Message);
+                Log.Debug("EnhancementEngine tick error: {Error}", ex.Message);
             }
         }
 
@@ -768,7 +768,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 var band = FindBandById(id);
                 if (band == null) continue;
                 try { _ = _dispatcher.DispatchAsync(band.BuildStopAction(), ctx, CancellationToken.None); }
-                catch (Exception ex) { App.Logger?.Debug("FlushActiveBands dispatch: {Error}", ex.Message); }
+                catch (Exception ex) { Log.Debug("FlushActiveBands dispatch: {Error}", ex.Message); }
             }
             _activeBandIds.Clear();
         }
@@ -818,7 +818,7 @@ namespace ConditioningControlPanel.Services.Deeper
 
         public void InjectBlink() => OnBlinkCore();
         public void InjectMouthOpen() => OnMouthOpenCore();
-        public void InjectGaze(System.Windows.Point screenPoint) => OnGazeMoveCore(screenPoint);
+        public void InjectGaze(PlaybackPoint screenPoint) => OnGazeMoveCore(screenPoint);
 
         /// <summary>
         /// Simulate an attention-lost gap of the given duration. Live rules
@@ -843,10 +843,10 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private void OnBlink() => MarshalToUi(_onBlinkCore);
         private void OnMouthOpen() => MarshalToUi(_onMouthOpenCore);
-        private void OnGazeMove(System.Windows.Point screenPoint)
+        private void OnGazeMove(double x, double y)
         {
             // Capture by value to avoid sharing the struct across threads.
-            var p = screenPoint;
+            var p = new PlaybackPoint(x, y);
             MarshalToUi(() => OnGazeMoveCore(p));
         }
         private void OnFaceLost() => MarshalToUi(_onFaceLostCore);
@@ -860,10 +860,7 @@ namespace ConditioningControlPanel.Services.Deeper
 
         private static void MarshalToUi(Action action)
         {
-            var d = Application.Current?.Dispatcher;
-            if (d == null || d.HasShutdownStarted) return;
-            if (d.CheckAccess()) { action(); return; }
-            try { d.BeginInvoke(action); } catch { /* dispatcher shutting down */ }
+            CoreDispatch.Post(action);
         }
 
         private void OnBlinkCore()
@@ -882,7 +879,7 @@ namespace ConditioningControlPanel.Services.Deeper
             Diag($"• mouth_open ({eligible} rule(s), {fired} fired)");
         }
 
-        private void OnGazeMoveCore(System.Windows.Point screenPoint)
+        private void OnGazeMoveCore(PlaybackPoint screenPoint)
         {
             if (!_running) return;
             var videoRect = _source.GetVideoRect();
@@ -961,7 +958,7 @@ namespace ConditioningControlPanel.Services.Deeper
             }
         }
 
-        private static bool HitsRect(System.Windows.Point screenPoint, PlaybackRect videoRect, double[] normalized)
+        private static bool HitsRect(PlaybackPoint screenPoint, PlaybackRect videoRect, double[] normalized)
         {
             if (normalized == null || normalized.Length < 4) return false;
             var rx = videoRect.X + normalized[0] * videoRect.Width;
@@ -1077,7 +1074,7 @@ namespace ConditioningControlPanel.Services.Deeper
             catch (OperationCanceledException) { /* engine stopped mid-dispatch */ }
             catch (Exception ex)
             {
-                App.Logger?.Debug("EnhancementEngine dispatch error: {Error}", ex.Message);
+                Log.Debug("EnhancementEngine dispatch error: {Error}", ex.Message);
             }
         }
 
@@ -1133,7 +1130,7 @@ namespace ConditioningControlPanel.Services.Deeper
             public string? PatternName;
             public List<double[]>? CustomPattern;
             public double Intensity = 1.0;
-            public Services.Haptics.Core.ToyRole? Target;
+            public ConditioningControlPanel.Services.Haptics.Core.ToyRole? Target;
 
             public static BandEffect? FromTimelineItem(TimelineItem item)
             {
