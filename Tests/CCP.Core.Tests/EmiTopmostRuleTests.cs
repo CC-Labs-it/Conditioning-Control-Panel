@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>ccp-bugs #1171: EMI is put back in the topmost band only when she lost the flag.</summary>
 public class EmiTopmostRuleTests

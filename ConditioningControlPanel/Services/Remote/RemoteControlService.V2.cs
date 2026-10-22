@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Services
             // The button acts here first: Easy and Stop mean something even if the network
             // never answers. The controller stays connected either way.
             if (kind == "easy") DispatcherHelper.RunOnUISync(ApplyEasy);
-            else if (kind == "stop") DispatcherHelper.RunOnUISync(() => StopAllRemoteEffects(force: true));
+            else if (kind == "stop") DispatcherHelper.RunOnUISync(() => StopAllRemoteEffects(RemoteEndCause.Panic));
 
             var unifiedId = App.UnifiedUserId;
             if (string.IsNullOrEmpty(unifiedId)) return false;
