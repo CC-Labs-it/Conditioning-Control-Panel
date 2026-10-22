@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private static readonly Color BadgeRed = Color.FromRgb(0xFF, 0x2D, 0x55);
         private static readonly Color CreditMint = Color.FromRgb(0x5F, 0xFF, 0xD0);
         private static readonly IBrush Keyline = new SolidColorBrush(Color.FromRgb(0x17, 0x12, 0x2A));
-        private static readonly FontFamily Mono = new("Consolas, Courier New");
+        private static FontFamily Mono => Platform.FontGuard.Mono;   // WPF ChasterRailChip.cs:177
         private static readonly FontFamily Display = new("Fredoka, Segoe UI");
         private static readonly Color DebtRed = Color.FromRgb(0xFF, 0x6B, 0x8A);
         private static readonly Color PeekMuted = Color.FromRgb(0xB8, 0xB0, 0xCC);

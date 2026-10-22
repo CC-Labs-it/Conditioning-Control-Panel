@@ -53,7 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
             _label = new TextBlock
             {
-                FontFamily = new FontFamily("Consolas, Courier New"), FontSize = 9.5, FontWeight = FontWeight.Bold,
+                FontFamily = Platform.FontGuard.Mono, FontSize = 9.5, FontWeight = FontWeight.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xA9, 0xA3, 0xC4)),
                 HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 5),
             };
@@ -92,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             Children.Add(_word);
             _factor = new TextBlock
             {
-                FontFamily = new FontFamily("Consolas, Courier New"), FontSize = 11, FontWeight = FontWeight.Bold,
+                FontFamily = Platform.FontGuard.Mono, FontSize = 11, FontWeight = FontWeight.Bold,
                 Foreground = new SolidColorBrush(WarmGold), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 1, 0, 0),
             };
             Children.Add(_factor);

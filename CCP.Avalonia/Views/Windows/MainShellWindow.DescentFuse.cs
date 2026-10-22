@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     else ToolTip.SetTip(spark, NewFuseTip(_fuseTooltipDigits = new TextBlock
                     {
                         Text = remaining,
-                        FontFamily = new FontFamily("Consolas, Courier New, monospace"),
+                        FontFamily = Platform.FontGuard.Mono,   // WPF MainWindow.DescentFuse.cs:258
                         FontSize = 14,
                         Foreground = FuseNeutralDigits,
                     }));

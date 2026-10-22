@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -121,7 +122,7 @@ public sealed class InvitePanel : Border
         grid.Children.Add(new TextBlock
         {
             Text = slot.Code, Foreground = isOpen ? Pink : Muted, FontSize = 15, FontWeight = FontWeight.SemiBold,
-            FontFamily = FriendsDrawer.Mono, VerticalAlignment = VerticalAlignment.Center,
+            [!TextBlock.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"), VerticalAlignment = VerticalAlignment.Center,
         });
         var (label, brush) = slot.State switch
         {
@@ -298,7 +299,7 @@ public sealed class InvitePanel : Border
         _box = new TextBox
         {
             Background = RowBg, Foreground = Text, BorderBrush = Edge, BorderThickness = new Thickness(1), Padding = new Thickness(10, 7, 10, 7),
-            FontSize = 14, MaxLength = 80, FontFamily = FriendsDrawer.Mono, CaretBrush = Pink, Tag = "invite-code",
+            FontSize = 14, MaxLength = 80, [!TextBox.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"), CaretBrush = Pink, Tag = "invite-code",
         };
         _box.TextChanged += (_, _) => { if (_box.Text is { } t && t != t.ToUpperInvariant()) { var c = _box.CaretIndex; _box.Text = t.ToUpperInvariant(); _box.CaretIndex = c; } };
         _box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Redeeming = RedeemAsync(); };

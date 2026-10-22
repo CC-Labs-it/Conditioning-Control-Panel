@@ -349,6 +349,9 @@ namespace ConditioningControlPanel.Avalonia
         {
             AvaloniaXamlLoader.Load(this);
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
+            // WPF App.xaml.cs:2221: strike an installed-but-unreadable font out of every chain before
+            // any window is built. After Load so it can overwrite App.axaml's Font.Mono.
+            Platform.FontGuard.Verify();
 
             // Load the language table before any view binds a string. The WPF head does this in
             // App.OnStartup; every head must, because LocalizationManager holds no language until

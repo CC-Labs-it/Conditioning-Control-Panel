@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             IsHitTestVisible = false;
             Figure = new TextBlock
             {
-                Text = plan.Text, FontFamily = new FontFamily("Cascadia Mono, Consolas, monospace"), FontSize = 15,
+                Text = plan.Text, FontFamily = Platform.FontGuard.Mono, FontSize = 15,
                 FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.FromUInt32(plan.Colour)),
                 TextAlignment = TextAlignment.Center, RenderTransform = new TranslateTransform(), IsHitTestVisible = false,
             };

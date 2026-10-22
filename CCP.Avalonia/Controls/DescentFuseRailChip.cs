@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private static readonly IBrush GoldBrush = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(FuseGold);
         private static readonly IBrush NeutralDigits = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(0xC9, 0xC4, 0xD6));
         private static readonly IBrush FaintDigits = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromArgb(0x8A, 0xC9, 0xC4, 0xD6));
-        private static readonly FontFamily Mono = new("Cascadia Mono, Consolas, Courier New, monospace");
+        private static FontFamily Mono => Platform.FontGuard.Mono;   // WPF DescentFuseRailChip.cs:225
 
         private const double BurstPeakDegrees = 8.0, RareBurstPeriodSeconds = 20.0, FrequentBurstPeriodSeconds = 9.0;
         private const double TrembleDegrees = 3.0, TrembleHalfCycleSeconds = 0.45, ViolentHalfCycleSeconds = 0.11;

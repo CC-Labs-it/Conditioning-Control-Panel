@@ -390,7 +390,7 @@
                 <TextBlock DockPanel.Dock="Right" x:Name="TxtMiniTimelineReadout"
                            Text="0:00 / 0:00"
                            Foreground="{DynamicResource TextMutedBrush}"
-                           FontSize="10" FontFamily="monospace"
+                           FontSize="10" FontFamily="Consolas, Courier New"
                            VerticalAlignment="Center"/>
             </DockPanel>
             <Border x:Name="MiniTimelineHost"
