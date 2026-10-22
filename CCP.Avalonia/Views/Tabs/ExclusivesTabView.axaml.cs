@@ -163,7 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // WPF VaultLivery.Apply at hero weight: tiered = livery + 4px living rim; untiered = resting/gold edge.
             TierFxBorder.SetRimThickness(card, 4);
             TierFxBorder.SetTier(card, spot.Tier);
-            card.BorderBrush = spot.Tier > 0 ? ExclusiveCardRow.Livery(spot.Tier) : spot.FreeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(ExclusiveCardRow.AccentWithAlpha(0x66));
+            card.BorderBrush = SpotEdge(spot.Tier, spot.FreeToday);
             card.BorderThickness = new Thickness(spot.Tier > 0 ? 4 : spot.FreeToday ? 2 : 1);
             card.Cursor = spot.Cursor;
             ToolTip.SetTip(card, spot.UnavailableTip);
@@ -171,7 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             open.IsEnabled = spot.IsAvailable;
             ToolTip.SetTip(open, spot.UnavailableTip);
             ToolTip.SetShowOnDisabled(open, true);
-            // WPF RefreshExclusivesTab re-tints the spotlight chrome on every mod switch.
+            // WPF RetintVaultChrome re-tints the spotlight chrome on every mod switch.
+            if (Resources["SpotTitleGlow"] is DropShadowEffect titleGlow) titleGlow.Color = ExclusiveCardRow.Accent;
             foreach (var name in new[] { "SpotBadge", "SpotVeilPill" })
                 if (this.FindControl<Border>(name)?.Background is LinearGradientBrush fill)
                     foreach (var stop in fill.GradientStops)
@@ -201,6 +202,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------
         // Motion (WPF Start/StopExclusivesMotion, ApplyVeilLockBreath, ApplyFreeTodayPulse, sheens)
         // ------------------------------------------------------------------
+
+        /// <summary>WPF VaultLivery at hero weight; untiered = SpotlightEdgeDefault (accent at 0x66).</summary>
+        internal static IBrush SpotEdge(int tier, bool freeToday) =>
+            tier > 0 ? ExclusiveCardRow.Livery(tier) : freeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(ExclusiveCardRow.AccentWithAlpha(0x66));
 
         private static readonly Color FreeTodayGold = Color.FromRgb(0xFF, 0xD2, 0x7A);
         private readonly ScaleTransform _kenBurns = new();
@@ -443,6 +448,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         public IBrush EdgeBrush => Tier > 0 ? Livery(Tier) : FreeToday ? EdgeFree : new SolidColorBrush(PartnerWithAlpha(0x4D));
         public Thickness EdgeThickness => new(Tier > 0 ? 3 : FreeToday ? 2 : 1);
+
+        /// <summary>WPF AccentGradient(0xFF, 0xFF): the NEW/BETA badge.</summary>
+        public IBrush BadgeFill => AccentGradient(0xFF, 0xFF);
+        /// <summary>WPF AccentGradient(0xE6, 0xD9): the locked veil's unlock pill.</summary>
+        public IBrush PillFill => AccentGradient(0xE6, 0xD9);
+        /// <summary>WPF AccentTitleShadow(): the card title's accent glow.</summary>
+        public IEffect TitleGlow => new DropShadowEffect { Color = Accent, BlurRadius = 10, OffsetX = 0, OffsetY = 0, Opacity = 0.7 };
+
+        private static LinearGradientBrush AccentGradient(byte alphaA, byte alphaB) => new()
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+            GradientStops = { new GradientStop(AccentWithAlpha(alphaA), 0), new GradientStop(PartnerWithAlpha(alphaB), 1) },
+        };
 
         internal static Color Accent
         {

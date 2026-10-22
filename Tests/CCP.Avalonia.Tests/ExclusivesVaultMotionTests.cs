@@ -29,7 +29,7 @@ public sealed class ExclusivesVaultMotionTests
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var old = (s.MotionLevel, s.PerformanceMode);
