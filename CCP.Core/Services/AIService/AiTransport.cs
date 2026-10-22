@@ -103,6 +103,14 @@ namespace ConditioningControlPanel.Services.AIService
         public static AiCallOptions ChatWithEffects { get; } =
             new() { Purpose = AiPurpose.Chat, MaxTokens = 350, Temperature = 0.7, Interactive = true };
 
+        /// <summary>
+        /// Chat while Slut Mode is on: the bite block asks for two to four sentences
+        /// (SlutModeBite), which the 100-token cap cut to nine tokens on the owner's first desk
+        /// run (2026-10-16). 220 fits four sentences with room; providers still clamp.
+        /// </summary>
+        public static AiCallOptions ChatSpice { get; } =
+            new() { Purpose = AiPurpose.Chat, MaxTokens = 220, Temperature = 0.8, Interactive = true };
+
         /// <summary>Ambient defaults: cheapest tier, non-interactive, short reply.</summary>
         public static AiCallOptions Reaction { get; } =
             new() { Purpose = AiPurpose.Reaction, MaxTokens = 60, Temperature = 0.8, Interactive = false };

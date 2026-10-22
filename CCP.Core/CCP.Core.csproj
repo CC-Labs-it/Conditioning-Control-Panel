@@ -61,10 +61,10 @@
          own OpenCV + ONNX Runtime natives, so nothing native ships from here. -->
     <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.20.1" />
-    <!-- SkiaSharp (managed + its own win/mac natives): the compositor layers in Services/Compositor.
-         2.88.8 = what SkiaSharp.Views.WPF pins in the WPF head, so WPF ships unchanged; the Avalonia
-         head gets 3.119.x through Avalonia.Skia and that wins there. Linux natives come from each
-         head (Avalonia.Skia brings them; the Core test project references them itself). -->
+    <!-- SkiaSharp (managed + its own win/mac natives): the compositor layers and text rules in
+         Services/Compositor (GlyphFallback.cs). 2.88.8 = what SkiaSharp.Views.WPF pins in the WPF head,
+         so WPF ships unchanged; the Avalonia head resolves 3.119.x through Avalonia.Skia and that wins there.
+         Linux natives come from each head (Avalonia.Skia brings them; the Core test project references them itself). -->
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
   </ItemGroup>
 

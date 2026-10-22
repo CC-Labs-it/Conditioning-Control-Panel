@@ -348,6 +348,14 @@ public sealed partial class FriendsDrawer : Border
         }
         return t;
     }
+    /// <summary>WPF OpenOn: the drawer opened on a friend's card (a corner notice's body click).</summary>
+    internal void OpenOn(string friendId)
+    {
+        if (_openId != friendId) Toggle(friendId);
+    }
+
+    internal string? OpenId => _openId;
+
     internal void Toggle(string friendId)
     {
         _openId = _openId == friendId ? null : friendId;
@@ -623,9 +631,9 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>The window a word outside the drawer flies over. The drawer lives in a popup (not a Window) and is
     /// detached once folded, so its host (the rail chip) sets this to its own window.</summary>
     internal Func<Window?> OwnerWindow { get; set; }
-    /// <summary>WPF TellOutside(always) -> FriendsLanding.Say: a floating word over the window.</summary>
-    private void Say(string text, bool good) =>
-        Overlays.FloatingWord.Throw(OwnerWindow(), text, pink: !good, small: true);
+    /// <summary>WPF TellOutside(always) -> FriendsLanding.Tell: a floating word over the active game, the
+    /// panel or the launcher, else over the drawer's own window.</summary>
+    private void Say(string text, bool good) => Platform.FriendsLanding.Tell(text, good, OwnerWindow());
     internal static TextBlock Label(string text, double size, IBrush fg, FontFamily? font = null, FontWeight weight = FontWeight.Normal) => new()
     {
         Text = text, FontSize = size, Foreground = fg, FontFamily = font ?? FontFamily.Default, FontWeight = weight,

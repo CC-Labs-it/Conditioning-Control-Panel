@@ -35,7 +35,7 @@ public sealed class FriendsDrawerTests
          "incoming":[{"id":"u_req","name":"Ann","via":null,"at":"2026-09-01T00:00:00Z"}],"outgoing":[],"blocked":[{"id":"u_bad","name":"Bob"}]}
         """;
 
-    private sealed class Wire : HttpMessageHandler
+    internal sealed class Wire : HttpMessageHandler
     {
         public readonly List<string> Ops = new();
         /// <summary>The bodies of every "send" (poke / invite / watch), in order.</summary>
@@ -56,7 +56,7 @@ public sealed class FriendsDrawerTests
 
     /// <summary>Lets a click's async handler finish: dispatcher turns until done or a 10 s wall-clock cap.
     /// A turn count alone ran out on a loaded gate before the thread-pool send continuation posted back.</summary>
-    private static async Task Until(Func<bool> done)
+    internal static async Task Until(Func<bool> done)
     {
         var end = DateTime.UtcNow.AddSeconds(10);
         while (!done() && DateTime.UtcNow < end)
@@ -190,7 +190,7 @@ public sealed class FriendsDrawerTests
         public void Fire() { _ticked = true; Tick?.Invoke(this, EventArgs.Empty); }
     }
 
-    private static (FriendsService Svc, Wire Wire) Service(string? account = "u_me")
+    internal static (FriendsService Svc, Wire Wire) Service(string? account = "u_me")
     {
         var wire = new Wire();
         var shared = false;

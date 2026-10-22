@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,7 +61,7 @@ internal static class RemoteMediaCache
 
     /// <summary>Filename prefix. The <c>ccp_temp_</c> half is load-bearing — see the class
     /// remarks — and <c>remote_</c> is what makes our sweep ours alone.</summary>
-    private const string TempPrefix = "ccp_temp_remote_";
+    internal const string TempPrefix = ScrolllerDiskCache.TempPrefix;
 
     private const int CopyBufferBytes = 81920;
 
@@ -70,7 +71,11 @@ internal static class RemoteMediaCache
     {
         public byte[] Bytes = Array.Empty<byte>();
         public long Stamp;          // LRU: last touched, monotonically increasing
+        public DateTime DownloadedUtc;   // the 24 h max age counts from here, never from a use
     }
+
+    /// <summary>The clock for the max age. Replaceable by tests.</summary>
+    internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
 
     private static readonly object Gate = new();
     private static readonly Dictionary<string, CacheEntry> Cache = new(StringComparer.Ordinal);
@@ -80,25 +85,18 @@ internal static class RemoteMediaCache
     /// image once per flash.</summary>
     private static readonly Dictionary<string, Task<byte[]?>> InFlight = new(StringComparer.Ordinal);
 
-    private static readonly List<string> TempFiles = new();
+    /// <summary>A refused delete (a clip LibVLC still has open) stays on these books and is
+    /// retried on the next sweep; it used to be dropped and left on disk until the next launch.</summary>
+    private static readonly MediaTempFileLedger Temps = new(MaxTrackedTempFiles);
 
     private static long _bytes;
     private static long _tick;
 
     private static readonly HttpClient Http = CreateClient();
 
-    /// <summary>Same browser-ish headers <see cref="ScrolllerSource"/> uses for the API. The
-    /// CDN hotlinks fine without a Referer, but sending what its own site sends is the
-    /// cheapest possible insurance against that changing.</summary>
-    private static HttpClient CreateClient()
-    {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
-        return c;
-    }
+    /// <summary>The same honest identity <see cref="ScrolllerSource"/> uses for the API: the
+    /// app's own user-agent and no Referer.</summary>
+    internal static HttpClient CreateClient() => ScrolllerDiskCache.CreateClient();
 
     // ---- public surface ------------------------------------------------------------
 
@@ -147,6 +145,8 @@ internal static class RemoteMediaCache
     {
         var bytes = await GetBytesAsync(url, ct).ConfigureAwait(false);
         if (bytes == null) return null;
+        // Read now, before the write: a burst of stores can evict the memory row meanwhile.
+        var downloaded = DownloadTimeOf(url);
 
         string? path = null;
         try
@@ -159,6 +159,9 @@ internal static class RemoteMediaCache
                       ?? Helpers.MediaTypeSniffer.DefaultImageExtension;
             path = Path.Combine(App.GetMediaTempPath(), $"{TempPrefix}{Guid.NewGuid():N}{ext}");
             await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
+            // The file is born when its bytes were DOWNLOADED (a copy of a cached copy is no
+            // younger than it), so every sweep that reads the creation time honours the day limit.
+            if (downloaded != null) { try { File.SetCreationTimeUtc(path, downloaded.Value); } catch { } }
         }
         catch (Exception ex)
         {
@@ -184,8 +187,7 @@ internal static class RemoteMediaCache
         // release bookkeeping must not be able to delete the user's own file through us.
         if (!IsOurTempFile(path)) return;
 
-        lock (Gate) TempFiles.Remove(path);
-        TryDelete(path);
+        Temps.Release(path);
     }
 
     /// <summary>
@@ -216,6 +218,75 @@ internal static class RemoteMediaCache
             App.Logger?.Information("[remote media] swept {Count} stale temp file(s)", deleted);
     }
 
+    /// <summary>The temp folder the sweeps below walk, or null for none. Replaceable by tests.</summary>
+    internal static Func<string?> TempDirProvider = () =>
+    {
+        try { return App.GetMediaTempPath(); }
+        catch { return null; }
+    };
+
+    /// <summary>The system temp folder, where <see cref="App.GetMediaTempPath"/> falls back when the
+    /// assets folder cannot hold a .temp: swept too, or a fallback copy would never age out. Null
+    /// for none. Replaceable by tests.</summary>
+    internal static Func<string?> SystemTempDirProvider = () =>
+    {
+        try { return Path.GetTempPath(); }
+        catch { return null; }
+    };
+
+    /// <summary>
+    /// Licence day limit (owner, 2026-10-21): deletes every <c>ccp_temp_remote_</c> file (in the
+    /// assets .temp and the system temp folder) whose creation time (= its download time, see
+    /// <see cref="MaterializeAsync(string, CancellationToken, bool)"/>) is at least
+    /// <paramref name="age"/> old. A file a player still holds refuses and is retried by the next
+    /// sweep. <see cref="TimeSpan.Zero"/> = every one (the off switch). Returns how many went;
+    /// never throws.
+    /// </summary>
+    public static int SweepTempFilesOlderThan(TimeSpan age)
+    {
+        int deleted = 0;
+        try
+        {
+            var now = UtcNow();
+            var dirs = new[] { TempDirProvider(), SystemTempDirProvider() }
+                .Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d))
+                .Select(d => Path.GetFullPath(d!).TrimEnd(Path.DirectorySeparatorChar))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in dirs)
+            foreach (var file in Directory.GetFiles(dir, TempPrefix + "*"))
+            {
+                try
+                {
+                    if (now - File.GetCreationTimeUtc(file) < age) continue;
+                    File.Delete(file);
+                    deleted++;
+                }
+                catch { /* still open: the next sweep */ }
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("[remote media] day-limit sweep failed: {E}", ex.Message); }
+        if (deleted > 0) App.Logger?.Information("[remote media] {Count} temp file(s) past the day limit deleted", deleted);
+        return deleted;
+    }
+
+    /// <summary>When the in-memory copy of <paramref name="url"/> was downloaded, or null.</summary>
+    private static DateTime? DownloadedUtcOfMemory(string url)
+    {
+        lock (Gate) return Cache.TryGetValue(url, out var e) ? e.DownloadedUtc : null;
+    }
+
+    /// <summary>When the bytes of <paramref name="url"/> were downloaded: the memory copy, else the
+    /// device cache's row. A Scrolller url neither knows is taken as old as a copy may be (the next
+    /// sweep deletes its temp file). Null for anything else (not Scrolller's: no day limit).</summary>
+    internal static DateTime? DownloadTimeOf(string url)
+    {
+        var at = DownloadedUtcOfMemory(url) ?? ScrolllerDiskCache.DownloadedUtcOf(url);
+        if (at != null) return at;
+        return global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url)
+            ? UtcNow() - ScrolllerDiskCache.MaxAge
+            : null;
+    }
+
     /// <summary>
     /// True when the bytes are already in memory, so a consumer on the UI thread can pick this
     /// URL knowing the decode will not wait on a network round trip. Prefetchers use this to
@@ -224,7 +295,35 @@ internal static class RemoteMediaCache
     public static bool IsCached(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return false;
-        lock (Gate) return Cache.ContainsKey(url);
+        lock (Gate) return Cache.TryGetValue(url, out var e) && !DropIfExpiredLocked(url, e);
+    }
+
+    /// <summary>Drops every in-memory entry past the max age (24 h from its download), or past it
+    /// before the next hourly sweep. Returns how many went.</summary>
+    internal static int DropExpiredMemory()
+    {
+        lock (Gate)
+        {
+            var old = new List<string>();
+            foreach (var kvp in Cache)
+                if (ScrolllerCacheBook.IsExpiredAt(kvp.Value.DownloadedUtc, UtcNow() + ScrolllerDiskCache.SweepPeriod)) old.Add(kvp.Key);
+            foreach (var url in old)
+            {
+                _bytes -= Cache[url].Bytes.LongLength;
+                Cache.Remove(url);
+            }
+            return old.Count;
+        }
+    }
+
+    /// <summary>The max-age rule on one entry: past it, the entry leaves memory. True when it was
+    /// expired. Caller holds <see cref="Gate"/>.</summary>
+    private static bool DropIfExpiredLocked(string url, CacheEntry e)
+    {
+        if (!ScrolllerCacheBook.IsExpiredAt(e.DownloadedUtc, UtcNow())) return false;
+        _bytes -= e.Bytes.LongLength;
+        Cache.Remove(url);
+        return true;
     }
 
     /// <summary>
@@ -256,6 +355,9 @@ internal static class RemoteMediaCache
             App.Logger?.Debug("[remote media] refused non-media url from {Host}", Logging.UrlLog.Host(url));
             return null;
         }
+        // Licence switch off: a Scrolller url reads as a failed fetch (cache hits too, so
+        // nothing of theirs keeps showing). Same null every caller already handles.
+        if (ScrolllerPolicyService.Blocks(url)) return null;
 
         try
         {
@@ -281,7 +383,7 @@ internal static class RemoteMediaCache
     {
         lock (Gate)
         {
-            if (Cache.TryGetValue(url, out var hit))
+            if (Cache.TryGetValue(url, out var hit) && !DropIfExpiredLocked(url, hit))
             {
                 hit.Stamp = ++_tick;
                 return Task.FromResult<byte[]?>(hit.Bytes);
@@ -299,6 +401,16 @@ internal static class RemoteMediaCache
     {
         try
         {
+            // Scrolller media goes through the device cache (owner, 2026-10-19): a cached copy
+            // costs no network and nothing against the daily share, a fresh one is charged.
+            if (global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url))
+            {
+                var viaDisk = await FromScrolllerCacheAsync(url).ConfigureAwait(false);
+                // The memory copy expires with the disk one: same download time, not a fresh day.
+                if (viaDisk != null) Store(url, viaDisk, ScrolllerDiskCache.DownloadedUtcOf(url) ?? UtcNow());
+                return viaDisk;
+            }
+
             // ResponseHeadersRead so an oversized body is refused on Content-Length rather
             // than after we have already buffered all of it.
             using var resp = await Http
@@ -322,7 +434,7 @@ internal static class RemoteMediaCache
             var bytes = await ReadBoundedAsync(resp, url).ConfigureAwait(false);
             if (bytes == null || bytes.Length == 0) return null;
 
-            Store(url, bytes);
+            Store(url, bytes, UtcNow());
             return bytes;
         }
         catch (Exception ex)
@@ -336,6 +448,40 @@ internal static class RemoteMediaCache
         {
             lock (Gate) InFlight.Remove(url);
         }
+    }
+
+    /// <summary>How a url that missed the in-memory layer is served.</summary>
+    internal enum Route { Network, DiskHit, FreshThroughDisk, Refused }
+
+    /// <summary>The routing rule, pure: a non-Scrolller url goes to the network as it always did;
+    /// a Scrolller url is read from the device cache when it is there, else fetched INTO it when a
+    /// fresh fetch is allowed (switch on, share left, someone watching), else refused (null, and
+    /// every caller already falls back to local media).</summary>
+    internal static Route RouteFor(bool isScrolller, bool diskHit, bool mayFetchFresh)
+    {
+        if (!isScrolller) return Route.Network;
+        if (diskHit) return Route.DiskHit;
+        return mayFetchFresh ? Route.FreshThroughDisk : Route.Refused;
+    }
+
+    private static async Task<byte[]?> FromScrolllerCacheAsync(string url)
+    {
+        var path = ScrolllerDiskCache.TryGetPath(url);
+        switch (RouteFor(true, path != null, ScrolllerPolicyService.MayFetchFresh(url)))
+        {
+            case Route.DiskHit: break;
+            case Route.FreshThroughDisk:
+                // This cache's own per-item cap goes along, so an oversized body is refused on
+                // its Content-Length before a byte is read or charged (as the plain path does).
+                path = await ScrolllerDiskCache.GetOrFetchAsync(url, null, MaxSingleEntryBytes, CancellationToken.None).ConfigureAwait(false);
+                break;
+            default:
+                return null;
+        }
+        if (path == null) return null;
+        var info = new FileInfo(path);
+        if (!info.Exists || info.Length > MaxSingleEntryBytes) return null;
+        return await File.ReadAllBytesAsync(path, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>Body → bytes, abandoning anything that grows past the per-item cap mid-stream
@@ -364,8 +510,8 @@ internal static class RemoteMediaCache
         return buffer.ToArray();
     }
 
-    /// <summary>Insert and evict least-recently-used until both caps hold.</summary>
-    private static void Store(string url, byte[] bytes)
+    /// <summary>Insert and evict least-recently-used until both caps hold. Internal for tests.</summary>
+    internal static void Store(string url, byte[] bytes, DateTime downloadedUtc)
     {
         lock (Gate)
         {
@@ -390,33 +536,18 @@ internal static class RemoteMediaCache
                 Cache.Remove(oldest);
             }
 
-            Cache[url] = new CacheEntry { Bytes = bytes, Stamp = ++_tick };
+            Cache[url] = new CacheEntry { Bytes = bytes, Stamp = ++_tick, DownloadedUtc = downloadedUtc };
             _bytes += bytes.LongLength;
         }
     }
 
     // ---- temp bookkeeping ----------------------------------------------------------
 
-    private static void TrackTempFile(string path)
-    {
-        List<string>? sweep = null;
-        lock (Gate)
-        {
-            TempFiles.Add(path);
-            int over = TempFiles.Count - MaxTrackedTempFiles;
-            if (over > 0)
-            {
-                // Oldest-first, never the ones just handed out: those are the likeliest to be
-                // open in a player right now. A delete that fails is dropped from tracking
-                // anyway — retrying it every call would burn I/O on a file we cannot have, and
-                // the ccp_temp_ prefix means the next launch sweeps it regardless.
-                sweep = TempFiles.GetRange(0, over);
-                TempFiles.RemoveRange(0, over);
-            }
-        }
-        if (sweep == null) return;
-        foreach (var stale in sweep) TryDelete(stale);
-    }
+    // Oldest-first, never the ones just handed out: those are the likeliest to be open in a
+    // player right now. A delete that is refused is HELD and retried on the next sweep
+    // (ccp-bugs #1433 review): dropping it left every clip that was still on screen at sweep
+    // time on disk for the rest of the session.
+    private static void TrackTempFile(string path) => Temps.Track(path);
 
     private static void TryDelete(string? path)
     {

@@ -81,6 +81,13 @@ public sealed class FriendsRailChip : Grid
         _popup.IsOpen = true;
     }
 
+    /// <summary>WPF FriendsRailChip.OpenDrawer :395: the drawer open, on <paramref name="friendId"/>'s card when given.</summary>
+    internal void OpenDrawer(string? friendId = null)
+    {
+        if (!_popup.IsOpen) { Rebind(); _popup.IsOpen = true; }
+        if (!string.IsNullOrEmpty(friendId)) Drawer.OpenOn(friendId);
+    }
+
     private void Rebind()
     {
         var next = Drawer.Service ?? Platform.FriendsHead.Service;
