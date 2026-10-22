@@ -61,8 +61,17 @@ public partial class MainShellWindow
 
     private void OnSpiralProfileLoaded() => Dispatcher.UIThread.Post(() =>
     {
-        if (!_profileSpiralClosed) RefreshProfileSpiralAccount();
+        if (_profileSpiralClosed) return;
+        RefreshProfileSpiralAccount();
+        // WPF MainWindow.xaml.cs:724: profile load asks again, floored, so a same-account block lands.
+        _profileDescent?.RequestRefresh("profile loaded");
     });
+
+    /// <summary>WPF MainWindow.ProfileVat.cs:111, the one ungated ask: opening the card lets a dark key light up.</summary>
+    internal void OnProfileSpiralCardShown()
+    {
+        if (!_profileSpiralClosed) _profileDescent?.RequestRefresh("trainer card open");
+    }
 
     private void OnSpiralBlockChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
     {

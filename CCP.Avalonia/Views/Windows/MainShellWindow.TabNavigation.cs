@@ -239,7 +239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // WPF DiscordTabView IsVisibleChanged -> MainWindow.ProfileFx.cs:OnProfileTabVisibilityChanged
                     // (incoming tab): sharing footer, share-button gate, me-first, OG loop + card stagger.
                     // ponytail: its vat poll half needs MainShellWindow.ProfileVat.cs (DescentService).
-                    case "discord": UpdateProfileSharingSummary(); RefreshProfileShareButton(); ProfilePage?.EnsureProfileMeFirst(); OnProfileTabShownFx(); MaybeShowFeatureIntro("profile-hub", "discord"); break;
+                    case "discord": UpdateProfileSharingSummary(); RefreshProfileShareButton(); ProfilePage?.EnsureProfileMeFirst(); OnProfileTabShownFx(); OnProfileSpiralCardShown(); MaybeShowFeatureIntro("profile-hub", "discord"); break;
 
                     // WPF MainWindow.TabNavigation.cs:292/367: throttled share-status polls on tab open.
                     case "presets":

@@ -38,6 +38,9 @@ namespace ConditioningControlPanel.Services.Descent
             _client = client ?? new V2AuthService(_settings);
         }
 
+        /// <summary>The floor's clock; tests swap it to step past the 10s floor.</summary>
+        internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
+
         /// <summary>One fetch in the air at a time.</summary>
         private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -150,7 +153,7 @@ namespace ConditioningControlPanel.Services.Descent
                 DescentRefreshVerdict verdict;
                 TimeSpan retryIn;
                 lock (_refreshGate)
-                    verdict = _refreshGate.Ask(DateTime.UtcNow, unifiedId, authToken, offline, inFlight: !haveGate, force, reason, out retryIn);
+                    verdict = _refreshGate.Ask(UtcNow(), unifiedId, authToken, offline, inFlight: !haveGate, force, reason, out retryIn);
 
                 switch (verdict)
                 {
@@ -165,7 +168,7 @@ namespace ConditioningControlPanel.Services.Descent
                 }
 
                 int generation = Volatile.Read(ref _generation);
-                lock (_refreshGate) _refreshGate.BeginFetch(DateTime.UtcNow, unifiedId!, authToken!);
+                lock (_refreshGate) _refreshGate.BeginFetch(UtcNow(), unifiedId!, authToken!);
 
                 var userNode = await _client.GetUserProfileNodeAsync(unifiedId!).ConfigureAwait(false);
 
