@@ -120,7 +120,7 @@ public partial class FriendsDrawerTests
         foreach (var r in ReportReason.All) keys.Add("friends_menu_report_" + r);
 
         var dir = SourceRoots.LanguagesDirectory;
-        foreach (var lang in new[] { "en", "de", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN" })
+        foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
         {
             var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(dir, lang + ".json")));
             foreach (var k in keys)
@@ -501,5 +501,16 @@ public partial class FriendsDrawerTests
         public void MoveTrail(SentTrail t) { Trails[t.FriendId] = t; SentTrailsChanged?.Invoke(); }
         public List<ReceiptReport> Reports { get; } = new();
         public void ReportReceipt(ReceiptReport report) => Reports.Add(report);
+
+        // ---- friend links (D1) ----
+        public FriendLink? Link { get; set; }
+        public FriendLink? Fresh { get; set; }
+        public ClaimResult NextClaim { get; set; } = ClaimResult.Friends;
+        public List<string> Claims { get; } = new();
+        public TaskCompletionSource<FriendLink?>? LinkGate { get; set; }
+        public int NewLinkCalls { get; private set; }
+        public Task<FriendLink?> GetLinkAsync() => LinkGate?.Task ?? Task.FromResult(Link);
+        public Task<FriendLink?> NewLinkAsync() { NewLinkCalls++; Link = Fresh; return Task.FromResult(Fresh); }
+        public Task<ClaimResult> ClaimLinkAsync(string linkOrToken) { Claims.Add(linkOrToken); return Task.FromResult(NextClaim); }
     }
 }
