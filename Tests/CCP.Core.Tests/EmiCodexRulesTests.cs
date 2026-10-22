@@ -10,22 +10,22 @@ public sealed class EmiCodexRulesTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ccp-codex-" + Guid.NewGuid().ToString("N"));
 
     [Theory]
-    [InlineData(false, false, 0, false)]
-    [InlineData(false, true, 0, false)]
-    [InlineData(false, false, 1, false)]
-    [InlineData(false, true, 1, false)]
-    [InlineData(true, false, 0, true)]
-    [InlineData(true, true, 0, false)]
-    [InlineData(true, false, 1, false)]
-    [InlineData(true, true, 1, false)]
-    public void EachOfferBrakeRefusesIndependently(bool content, bool open, int opens, bool allowed)
-        => Assert.Equal(allowed, EmiCodexRules.CanOffer(content, open, () => opens));
+    [InlineData(false, false, 0, "there is no book in this build")]
+    [InlineData(false, true, 0, "there is no book in this build")]
+    [InlineData(false, false, 1, "there is no book in this build")]
+    [InlineData(false, true, 1, "there is no book in this build")]
+    [InlineData(true, false, 0, null)]
+    [InlineData(true, true, 0, "the book is already open")]
+    [InlineData(true, false, 1, "they have read it")]
+    [InlineData(true, true, 1, "the book is already open")]
+    public void EachOfferBrakeRefusesWithWpfsReason(bool content, bool open, int opens, string? reason)
+        => Assert.Equal(reason, EmiCodexRules.OfferRefusal(content, open, () => opens));
 
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, true)]
     public void ContentAndOpenBrakesDoNotReadTheProfile(bool content, bool open)
-        => Assert.False(EmiCodexRules.CanOffer(content, open,
+        => Assert.NotNull(EmiCodexRules.OfferRefusal(content, open,
             () => throw new InvalidOperationException("state must not be read")));
 
     [Fact]

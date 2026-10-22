@@ -695,11 +695,8 @@ public static class EmiCodex
     {
         try
         {
-            if (!EmiCodexRules.CanOffer(HasContent, IsOpen, () => EmiState.Current.CodexOpens))
-            {
-                Log.Debug("[{Tag}] no offer: absent, open, or already read", LogTag);
-                return;
-            }
+            var refusal = EmiCodexRules.OfferRefusal(HasContent, IsOpen, () => EmiState.Current.CodexOpens);
+            if (refusal != null) { Log.Debug("[{Tag}] no offer: {Why}", LogTag, refusal); return; }
 
             App.EmiDesk?.Fire("bookOffer", new { why = why ?? "idle" });
         }

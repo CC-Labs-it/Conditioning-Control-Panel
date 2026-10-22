@@ -43,7 +43,13 @@ public static class EmiCodexRules
 
     /// <summary>The three brakes before firing bookOffer. The engine still owns the ever/1
     /// budget and ask cadence; passing here does not bypass either. The count stays lazy so
-    /// absent content or an open window refuses before reading the persisted profile.</summary>
-    public static bool CanOffer(bool hasContent, bool isOpen, Func<int> codexOpens)
-        => hasContent && !isOpen && codexOpens() <= 0;
+    /// absent content or an open window refuses before reading the persisted profile.
+    /// Returns null when the offer may fire, else WPF's per-brake log reason.</summary>
+    public static string? OfferRefusal(bool hasContent, bool isOpen, Func<int> codexOpens)
+    {
+        if (!hasContent) return "there is no book in this build";
+        if (isOpen) return "the book is already open";
+        if (codexOpens() > 0) return "they have read it";
+        return null;
+    }
 }
