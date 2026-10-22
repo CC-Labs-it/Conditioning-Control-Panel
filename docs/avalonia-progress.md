@@ -2475,3 +2475,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/chaos-vibe-trail: +482
 - VibePopping pointer glow + fading trail overlay ported (Core `ChaosVibeTrail` maths, click-through Avalonia window, panic surface); row stays stub until the vibe window starts it.
+
+## avalonia-port/chaster-help-price-edit: +693
+- Chaster tab: menu boards (rows write ChasterPrices, red flash switch), how-it-works card, menu hint, Reset times and a per-row price editor on Core TabPriceEdit. Esc belongs to the box (Windows only; X11 has no claim yet), and a starting lock closes and freezes it.
+- `ChasterMenuTests` (2 tests, 6 breaks each turned a test red); the render frame shows the menu states; views-chaster-help-price-edit -> wired.
