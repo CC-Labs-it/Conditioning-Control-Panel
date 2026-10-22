@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            var want = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.DualMonitorEnabled, screens.Count, primary);
+            var want = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             if (want.Length == 0) return;
             var targets = want.Select(i => screens[i].Bounds).ToArray();
             var fit = Math.Min(ChaosFlashWash.MaxDecodeDim, targets.Max(b => Math.Max(b.Width, b.Height)));
