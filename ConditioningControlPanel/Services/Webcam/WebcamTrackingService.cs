@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Win32;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Newtonsoft.Json;
@@ -136,7 +137,7 @@ namespace ConditioningControlPanel.Services
         private const int HiResCaptureHeight = 720;
 
         // Below this measured rate the smoothing chain (IrisSmoothFrames 12,
-        // GazeBufferSize 30, the One-Euro filter's dt term) is being fed at a
+        // LongStareDetector.BufferSize 30, the One-Euro filter's dt term) is being fed at a
         // rate none of it was tuned for and the cursor lags visibly. Sits just
         // under TargetFps so an ordinary 27 fps camera is KEPT, while the YUY2
         // fallback case (~10-15 fps) is caught with a wide margin — the gap
@@ -345,11 +346,7 @@ namespace ConditioningControlPanel.Services
         private const int TeethMaxSat = 50;
         private const int ShadowMaxVal = 40;            // very dark = shadow / mouth interior void (excluded)
 
-        // Gaze parameters
-        private const int GazeBufferSize = 30;
-        private const int LongStareDurationMs = 3000;
-        private const double LongStareMaxDeviationPx = 60.0;
-        private const int LongStareCooldownMs = 5000;
+        // Gaze parameters (long stare): Core LongStareDetector.
 
         // One-Euro filter tunables for the cursor-projection path. The rolling-mean
         // buffer above still feeds the gaze-side classifier (which has its own
@@ -379,6 +376,15 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _state == WebcamTrackingState.Tracking || _state == WebcamTrackingState.FaceLost;
         public WebcamCalibrationData? Calibration { get; private set; }
 
+        private readonly object _monitorLock = new();
+        private System.Windows.Forms.Screen[] _gazeScreens = Array.Empty<System.Windows.Forms.Screen>();
+        private System.Windows.Forms.Screen? _gazeScreen;
+        private string? _gazeMonitorName;
+        private bool _gazeMonitorFallback;
+        private int _gazeMonitorRevision;
+        internal int GazeMonitorRevision => Volatile.Read(ref _gazeMonitorRevision);
+
+
         /// <summary>
         /// Returns the System.Windows.Forms.Screen that matches the monitor the
         /// current calibration ran on, or null when (a) no calibration is loaded,
@@ -389,21 +395,59 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public System.Windows.Forms.Screen? GetCalibratedScreen()
         {
-            var name = Calibration?.MonitorBounds?.DeviceName;
-            if (string.IsNullOrEmpty(name)) return null;
-            try
+            lock (_monitorLock)
             {
-                foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+                RefreshGazeMonitor();
+                return string.IsNullOrEmpty(_gazeMonitorName) || _gazeMonitorFallback ? null : _gazeScreen;
+            }
+        }
+
+        internal System.Windows.Forms.Screen? GetGazeScreen()
+        {
+            lock (_monitorLock)
+            {
+                RefreshGazeMonitor();
+                return _gazeScreen;
+            }
+        }
+
+        private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatch(() =>
+        {
+            if (!_disposed) RefreshGazeMonitor(force: true);
+        });
+
+        private void RefreshGazeMonitor(bool force = false)
+        {
+            lock (_monitorLock)
+            {
+                try
                 {
-                    if (string.Equals(screen.DeviceName, name, StringComparison.OrdinalIgnoreCase))
-                        return screen;
+                    var screens = System.Windows.Forms.Screen.AllScreens;
+                    var name = Calibration?.MonitorBounds?.DeviceName;
+                    bool sameName = string.Equals(name, _gazeMonitorName, StringComparison.OrdinalIgnoreCase);
+                    bool sameScreens = screens.Length == _gazeScreens.Length;
+                    for (int i = 0; sameScreens && i < screens.Length; i++)
+                        sameScreens = screens[i].DeviceName == _gazeScreens[i].DeviceName
+                            && screens[i].Bounds == _gazeScreens[i].Bounds
+                            && screens[i].Primary == _gazeScreens[i].Primary;
+                    if (!force && sameName && sameScreens) return;
+
+                    var choice = WebcamMonitorRule.Select(name, screens.Select(s => s.DeviceName).ToArray(),
+                        Array.FindIndex(screens, s => s.Primary));
+                    if (sameName && _gazeMonitorFallback && !choice.TemporaryFallback)
+                        App.Logger?.Information("WebcamTrackingService: calibrated monitor {Name} returned", name);
+                    // Runtime-only resolution. Never overwrite the saved monitor or calibration geometry.
+                    _gazeScreens = screens;
+                    _gazeMonitorName = name;
+                    _gazeMonitorFallback = choice.TemporaryFallback;
+                    _gazeScreen = choice.Index >= 0 ? screens[choice.Index] : null;
+                    Interlocked.Increment(ref _gazeMonitorRevision);
+                }
+                catch (Exception ex)
+                {
+                    App.Logger?.Warning(ex, "WebcamTrackingService: monitor enumeration failed");
                 }
             }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning(ex, "WebcamTrackingService.GetCalibratedScreen: enumeration failed");
-            }
-            return null;
         }
 
         /// <summary>
@@ -608,8 +652,7 @@ namespace ConditioningControlPanel.Services
         // The frame-free gaze chain (smoothing, gates, side stability, projection, follower,
         // face-lost counting, head pose) lives in Core GazeEngine; the tuning notes stay here.
         private readonly GazeEngine _gaze = new();
-        private DateTime _lastLongStareAt = DateTime.MinValue;
-        private readonly Queue<(DateTime Time, System.Windows.Point ScreenPoint)> _gazeBuffer = new();
+        private readonly LongStareDetector _longStare = new();
         private CvRect? _lastFaceRect;
         private CvRect? _lastLeftEyeRect;
         private CvRect? _lastRightEyeRect;
@@ -742,21 +785,9 @@ namespace ConditioningControlPanel.Services
         // target's broad region is treated as intent — the cursor tends hard
         // to the target. Sway still drains the lock so a user who clearly
         // moves on is released gradually.
-        private const double GazeLockMaxStrength = 0.93; // deviation contraction at full engagement
-        private const double GazeLockCaptureFrac = 3.5;  // capture zone, × radius — quadrant-scale for a typical bubble
-        private const double GazeLockBuildRate = 0.22;   // per-frame engagement growth toward 1 (~0.2s to lock at 30fps)
-        private const double GazeLockLeaveDrain = 0.05;  // per-frame drain while outside the capture zone (~0.6s release)
-        private const double GazeLockSwayFrac = 1.4;     // sway (EMA dips) above this ×radius starts draining the lock
-        private const double GazeLockSwayDrain = 0.12;   // drain rate per unit of excess swayNorm
-        private volatile GazeAttractorTarget? _attractor;
+        // Constants, engagement state and the contraction itself: Core GazeLock.
+        private readonly GazeLock _lock = new();
 
-        // Lock state — touched only on the capture thread inside EmitGazeEvents.
-        private double _lockEngage;
-        private double _lockCenterX = double.NaN, _lockCenterY = double.NaN;
-        private double _gazeEmaX = double.NaN, _gazeEmaY = double.NaN;
-        private double _swayEma;
-
-        private sealed record GazeAttractorTarget(double X, double Y, double Radius);
         private sealed record GazeSnapshot(double X, double Y);
         private volatile GazeSnapshot? _lastPreLockGaze;
 
@@ -771,9 +802,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Declare the current gaze target (coordinates in the OnGazeMove DIP space). Safe to call every tick with a drifting center — lock engagement carries over unless the center jumps by more than the radius. UI-thread safe; the capture thread picks it up next frame.</summary>
         public void SetGazeAttractor(double centerX, double centerY, double radius)
-            => _attractor = new GazeAttractorTarget(centerX, centerY, radius);
+            => _lock.SetTarget(centerX, centerY, radius);
 
-        public void ClearGazeAttractor() => _attractor = null;
+        public void ClearGazeAttractor() => _lock.Clear();
 
         // NOTE: a dispersion-lock fixation stabilizer (I-DT-style centroid
         // hold as the final output stage) was tried here and REVERTED after
@@ -827,6 +858,7 @@ namespace ConditioningControlPanel.Services
         {
             App.Logger?.Information("WebcamTrackingService: constructed");
             Calibration = WebcamCalibrationData.Load();
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         }
 
         /// <summary>
@@ -1146,6 +1178,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_disposed) return;
             _disposed = true;
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             try { Stop(); } catch (Exception ex) { App.Logger?.Warning(ex, "WebcamTrackingService.Dispose: Stop() threw"); }
             App.Logger?.Information("WebcamTrackingService: disposed");
         }
@@ -1606,7 +1639,7 @@ namespace ConditioningControlPanel.Services
 
         private void ResetHeuristicState()
         {
-            _gazeBuffer.Clear();
+            _longStare.Clear();
             _gaze.Reset();
             _lastFaceRect = null;
             _lastLeftEyeRect = null;
@@ -1906,7 +1939,7 @@ namespace ConditioningControlPanel.Services
             // (GazeEngine.FaceMissing dropped the gaze-smoothing state above.)
             if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2)
             {
-                _gazeBuffer.Clear();
+                _longStare.Clear();
                 _lastFaceRect = null;
             }
         }
@@ -1989,114 +2022,30 @@ namespace ConditioningControlPanel.Services
                 // (calibration bubble test) can read the unflattered point.
                 _lastPreLockGaze = new GazeSnapshot(p.X, p.Y);
 
-                p = ApplyGazeLock(p);
+                var locked = _lock.Apply(p.X, p.Y);
+                p = new System.Windows.Point(locked.X, locked.Y);
 
                 // Final motion shaping (Core GazeEngine.Follow): a slowed follower of the
                 // mapped point, never a snap.
                 var f = _gaze.Follow(p.X, p.Y);
                 p = new System.Windows.Point(f.X, f.Y);
 
-                Dispatch(() => OnGazeMove?.Invoke(p));
-                UpdateLongStareHeuristic(p);
+                Dispatch(() =>
+                {
+                    // Also catches a changed screen set before the display event reaches this dispatcher.
+                    RefreshGazeMonitor();
+                    OnGazeMove?.Invoke(p);
+                });
+                if (_longStare.Push(DateTime.UtcNow, p.X, p.Y) is { } stare)
+                {
+                    var stareCenter = new System.Windows.Point(stare.X, stare.Y);
+                    Dispatch(() => OnLongStare?.Invoke(stareCenter));
+                }
             }
         }
 
         // Follower tuning (FollowMin 0.22 / FollowMax 0.48 / RampDist 360, settings-backed and
         // clamped below 1 so it never snaps) and SoftEdge: Core GazeEngine.
-
-        /// <summary>
-        /// Stateful target lock-on (see the constant block by SetGazeAttractor).
-        /// Engagement builds while the PRE-lock gaze lingers inside the capture
-        /// zone and drains when it leaves or when the measured sway outgrows
-        /// the target radius — the release is gradual, never a snap. Sway and
-        /// distance are always measured on the raw point, so the lock can't
-        /// feed its own output back and hold forever. Capture thread only.
-        /// </summary>
-        private System.Windows.Point ApplyGazeLock(System.Windows.Point p)
-        {
-            var att = _attractor;
-            if (att == null)
-            {
-                _lockEngage = 0;
-                _lockCenterX = _lockCenterY = double.NaN;
-                _gazeEmaX = _gazeEmaY = double.NaN;
-                _swayEma = 0;
-                return p;
-            }
-
-            // Target switch (a different bubble, not the same one drifting):
-            // engagement doesn't carry over to a new target.
-            if (!double.IsNaN(_lockCenterX))
-            {
-                double mdx = att.X - _lockCenterX, mdy = att.Y - _lockCenterY;
-                if (Math.Sqrt(mdx * mdx + mdy * mdy) > att.Radius) _lockEngage = 0;
-            }
-            _lockCenterX = att.X;
-            _lockCenterY = att.Y;
-
-            // Sway estimate: EMA of the deviation from a short-horizon EMA of
-            // the raw gaze — roughly the wobble amplitude in DIPs.
-            if (double.IsNaN(_gazeEmaX)) { _gazeEmaX = p.X; _gazeEmaY = p.Y; }
-            _gazeEmaX += (p.X - _gazeEmaX) * 0.25;
-            _gazeEmaY += (p.Y - _gazeEmaY) * 0.25;
-            double wx = p.X - _gazeEmaX, wy = p.Y - _gazeEmaY;
-            _swayEma += (Math.Sqrt(wx * wx + wy * wy) - _swayEma) * 0.15;
-
-            double dx = p.X - att.X, dy = p.Y - att.Y;
-            double dist = Math.Sqrt(dx * dx + dy * dy);
-
-            if (dist <= att.Radius * GazeLockCaptureFrac)
-                _lockEngage += (1.0 - _lockEngage) * GazeLockBuildRate;
-            else
-                _lockEngage -= GazeLockLeaveDrain;
-
-            double swayNorm = _swayEma / Math.Max(1e-6, att.Radius);
-            if (swayNorm > GazeLockSwayFrac)
-                _lockEngage -= (swayNorm - GazeLockSwayFrac) * GazeLockSwayDrain;
-
-            _lockEngage = Math.Max(0, Math.Min(1, _lockEngage));
-            if (_lockEngage <= 0) return p;
-
-            // Distance taper: full pull inside the radius, fading to nothing
-            // by 4× — quadrant reach, so an engaged lock draws the cursor in
-            // from anywhere in the target's region of the screen.
-            double taper = dist <= att.Radius
-                ? 1.0
-                : dist <= att.Radius * 4.0
-                    ? (att.Radius * 4.0 - dist) / (att.Radius * 3.0)
-                    : 0.0;
-            double k = GazeLockMaxStrength * _lockEngage * taper;
-            if (k <= 0) return p;
-            return new System.Windows.Point(p.X - dx * k, p.Y - dy * k);
-        }
-
-        private void UpdateLongStareHeuristic(System.Windows.Point point)
-        {
-            var now = DateTime.UtcNow;
-            _gazeBuffer.Enqueue((now, point));
-            while (_gazeBuffer.Count > GazeBufferSize) _gazeBuffer.Dequeue();
-            if (_gazeBuffer.Count < 5) return;
-
-            var oldest = _gazeBuffer.Peek();
-            if ((now - oldest.Time).TotalMilliseconds < LongStareDurationMs) return;
-            if ((now - _lastLongStareAt).TotalMilliseconds < LongStareCooldownMs) return;
-
-            double cx = 0, cy = 0;
-            foreach (var s in _gazeBuffer) { cx += s.ScreenPoint.X; cy += s.ScreenPoint.Y; }
-            cx /= _gazeBuffer.Count;
-            cy /= _gazeBuffer.Count;
-
-            foreach (var s in _gazeBuffer)
-            {
-                var ddx = s.ScreenPoint.X - cx;
-                var ddy = s.ScreenPoint.Y - cy;
-                if ((ddx * ddx + ddy * ddy) > LongStareMaxDeviationPx * LongStareMaxDeviationPx) return;
-            }
-
-            _lastLongStareAt = now;
-            var stareCenter = new System.Windows.Point(cx, cy);
-            Dispatch(() => OnLongStare?.Invoke(stareCenter));
-        }
 
         // ─────────────────────────────────────────────────────────────────────────
         //  Helpers
