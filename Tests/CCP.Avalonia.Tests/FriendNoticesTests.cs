@@ -167,6 +167,18 @@ public sealed class FriendNoticesTests
         await Task.CompletedTask;
     });
 
+    /// <summary>Panic takes the notices down like the knock cards (P06; WPF left them up); a poke waits in the Inbox.</summary>
+    [Fact]
+    public Task PanicFoldsTheNoticesIntoTheInbox() => Run(async (_, _, _, _) =>
+    {
+        FriendsLanding.Router!.OnDelivered(Poke("p1", "u_on", "hi"));
+        Assert.True(FriendNotices.AnyUp);
+        ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "friend-notices").Stop(null);
+        Assert.Null(FriendNotices.Current);
+        Assert.True(Filed("friends:p1"));
+        await Task.CompletedTask;
+    });
+
     /// <summary>WPF FriendsRailChip.OpenDrawer :395: the drawer opens on the friend's card.</summary>
     [Fact]
     public Task TheChipOpensItsDrawerOnAFriend() => AvaloniaTestDispatcher.RunAsync(async () =>

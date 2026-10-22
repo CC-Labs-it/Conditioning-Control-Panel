@@ -45,7 +45,7 @@ internal sealed class FriendNotices : Window
 {
     private const double CardWidth = 300;
     // WPF's 50 ms lifetime clock (bars + timers), not an ambient render loop: it stops with the window.
-    private const int TickMs = 50, AgoEveryTicks = 20;   // the relative time re-reads once a second
+    private const int TickMs = 50;
     private static readonly IBrush Ground = new SolidColorBrush(Color.FromArgb(0xF2, 0x22, 0x16, 0x41));   // WPF Ground 0xF2
     private static readonly IBrush BarLilac = new SolidColorBrush(Color.FromArgb(0xCC, 0xB9, 0x9C, 0xFF));
     private static readonly IBrush BarPink = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0x5F, 0xB4));
@@ -170,7 +170,7 @@ internal sealed class FriendNotices : Window
         var gone = _stack.Tick(elapsedMs);
         foreach (var n in _stack.Visible)
             if (_drawn.TryGetValue(n, out var d)) d.Bar.ScaleX = n.Fraction;
-        if (++_agoTick >= AgoEveryTicks)
+        if (++_agoTick >= 1000 / TickMs)   // the relative time re-reads once a second
         {
             _agoTick = 0;
             foreach (var n in _stack.Visible)

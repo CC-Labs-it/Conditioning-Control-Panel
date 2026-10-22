@@ -148,6 +148,8 @@ internal static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 

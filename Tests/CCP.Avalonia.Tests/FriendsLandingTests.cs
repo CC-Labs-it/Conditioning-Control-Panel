@@ -64,6 +64,17 @@ public sealed class FriendsLandingTests
     private static InboxItem Poke(string id, string poke) =>
         new(id, SendKind.Poke, "u_on", "Mia", null, poke, null, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
 
+    /// <summary>WPF DestinationName :199: a Race or Breakout invite names its game, not the Back Room.</summary>
+    [Theory]
+    [InlineData(InviteDestination.Race, "Racing Thoughts")]
+    [InlineData(InviteDestination.Breakout, "Breakout")]
+    public void AnInviteNamesItsGame(string dest, string name)
+    {
+        var item = new InboxItem("i", SendKind.Invite, "u_on", "Mia", null, null, dest, "c", null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
+        Assert.Equal($"invites you to {name}", FriendsLanding.KnockLine(item));   // English: the test host's language
+    }
+
     /// <summary>WPF Sink.Poke: Emi says "{name} says {word}" with the poke's face and the word floats over
     /// the panel, pink for a tease; with the bell off, nothing.</summary>
     [Fact]
