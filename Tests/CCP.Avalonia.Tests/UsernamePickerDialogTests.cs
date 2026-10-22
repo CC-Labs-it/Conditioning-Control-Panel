@@ -28,9 +28,6 @@ public sealed class UsernamePickerDialogTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
