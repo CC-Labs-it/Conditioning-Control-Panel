@@ -829,5 +829,11 @@
       0.71991
     ],
     "lod": 1
-  }
+  },
+  {"id":"fx-crack","file":"textures/fx-crack.ktx2","kind":"texture","tris":0,"texBytes":1398100,"boundRadiusM":0,"materialSlots":["fx_crack"],"palette":"all","width":512,"height":512,"mipLevels":10,"encoding":"ETC1S","colorSpace":"linear","wrap":["clamp","clamp"],"texBytesBlock16":349552,"sampleChannel":"r","meaning":"white is effect strength"},
+  {"id":"fx-frost-edge","file":"textures/fx-frost-edge.ktx2","kind":"texture","tris":0,"texBytes":5592404,"boundRadiusM":0,"materialSlots":["fx_frost_edge"],"palette":"all","width":1024,"height":1024,"mipLevels":11,"encoding":"ETC1S","colorSpace":"linear","wrap":["clamp","clamp"],"texBytesBlock16":1398128,"sampleChannel":"r","meaning":"white is effect strength"},
+  {"id":"fx-iris","file":"textures/fx-iris.ktx2","kind":"texture","tris":0,"texBytes":1398100,"boundRadiusM":0,"materialSlots":["fx_iris"],"palette":"all","width":512,"height":512,"mipLevels":10,"encoding":"ETC1S","colorSpace":"linear","wrap":["clamp","clamp"],"texBytesBlock16":349552,"sampleChannel":"r","meaning":"white is visible aperture"},
+  {"id":"fx-melt-flow","file":"textures/fx-melt-flow.ktx2","kind":"texture","tris":0,"texBytes":5592404,"boundRadiusM":0,"materialSlots":["fx_melt_flow"],"palette":"all","width":1024,"height":1024,"mipLevels":11,"encoding":"ETC1S","colorSpace":"linear","wrap":["repeat","repeat"],"texBytesBlock16":1398128,"sampleChannel":"r","meaning":"0.5 is neutral displacement"},
+  {"id":"fx-melt-spiral","file":"textures/fx-melt-spiral.ktx2","kind":"texture","tris":0,"texBytes":1398100,"boundRadiusM":0,"materialSlots":["fx_melt_spiral"],"palette":"all","width":512,"height":512,"mipLevels":10,"encoding":"ETC1S","colorSpace":"linear","wrap":["clamp","clamp"],"texBytesBlock16":349552,"sampleChannel":"r","meaning":"white is effect strength"},
+  {"id":"fx-noise","file":"textures/fx-noise.ktx2","kind":"texture","tris":0,"texBytes":349524,"boundRadiusM":0,"materialSlots":["fx_noise"],"palette":"all","width":256,"height":256,"mipLevels":9,"encoding":"ETC1S","colorSpace":"linear","wrap":["repeat","repeat"],"texBytesBlock16":87408,"sampleChannel":"r","meaning":"white is effect strength"}
 ]

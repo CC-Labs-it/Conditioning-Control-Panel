@@ -355,3 +355,38 @@ Review PNGs are evidence only, not runtime inputs.
 
 Each family branch starts directly from the same main snapshot. When integrating families,
 append their distinct manifest rows and retain all family ART.md sections. The sampled palettes are identical.
+
+## Wave 2: screen-effect masks
+
+Six neutral ETC1S scalar fields. Sample .r in linear space; .g and .b are not data.
+White is effect strength, except iris where white is the visible aperture.
+Melt flow uses 0.5 as neutral displacement. Controls, strength, duration, tint and
+Gentle Visuals remain with the host. No timing, flash or full-screen white fill is baked.
+
+Frost has a clear central window and branches growing in from each edge.
+Melt flow repeats both axes, with long vertical runs. Melt spiral is a clamped disc with
+broad warped arms and attached drips. Crack is sparse, soft branching glass lines.
+Iris is a soft circular aperture; adjust aspect in the host to keep the window round.
+Noise is toroidal ranked high-pass blue noise for dissolves and dithering. Neighbouring
+samples differ across its wrap seam just as they do elsewhere; no edge stripe is forced.
+
+Wrap Melt flow and noise; clamp the other four. For noise, sample the base mip with nearest
+filtering when used as a threshold. Mips are included for consistent asset handling,
+not for a dither threshold. The decoded noise low/mid spatial power ratio is 0.063.
+
+Source: original seeded procedural fields. No external image, media or font input.
+Private masters, decoded previews and quantitative checks are in glassroad-art/w2/masks.
+Contact sheets are PR attachments only.
+
+| Asset | Size | Tris | RGBA8 residency including mips |
+|---|---|---:|---:|
+| fx-frost-edge | 1024 square | 0 | 5.333 MiB |
+| fx-melt-flow | 1024 square | 0 | 5.333 MiB |
+| fx-melt-spiral | 512 square | 0 | 1.333 MiB |
+| fx-crack | 512 square | 0 | 1.333 MiB |
+| fx-iris | 512 square | 0 | 1.333 MiB |
+| fx-noise | 256 square | 0 | 0.333 MiB |
+
+Family adds 15 MiB; running Wave 1 plus Wave 2 family total is 84.333 MiB including
+all palettes and mips. Runtime render targets and engine-owned icons are additional.
+KTX strict validation, periodic-flow checks and decoded-file visual review passed.
