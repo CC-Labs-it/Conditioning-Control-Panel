@@ -4,6 +4,7 @@
 import * as stats from './stats.js';
 import { createFeed } from './feed.js';
 import { createPage } from './surfaces.js';
+import { carrier } from '../shared/carrier.js';
 
 const PAGE_TRANSITION_MS = 340;
 // Neighbour pages this many steps from the active one stay mounted in PREVIEW
@@ -43,7 +44,8 @@ const track = $('track');
 
 // ---------- bridge ----------
 
-const bridge = window.chrome?.webview;
+// WebView2's chrome.webview on WPF, the WebKitGTK string carrier on Avalonia (shared/carrier.js).
+const bridge = carrier(window);
 function post(msg) {
   try { bridge?.postMessage(msg); } catch { /* host gone */ }
 }
@@ -81,6 +83,7 @@ let remoteReqInFlight = false;
 let lastRemoteReqAt = 0;
 let remoteDryUntil = 0;     // backoff after an ok-but-empty batch (channels drained)
 let remoteDryStep = 0;      // rung of the escalating dry ladder (reset by any fresh clip)
+let remoteAppendNew = null; // ids the last assets-append added that this page never held (null = no append since the last status)
 let remoteFailStreak = 0;   // consecutive online-status verdicts with ok:false
 let autoFellBackToLibrary = false; // the session-only fallback already fired once
 let remoteExhausted = false; // every channel drained: the feed is recycling on purpose
@@ -442,7 +445,10 @@ function hardReset() {
 function updateCaption() {
   const cap = pageAt(activeIdx)?.caption();
   $('caption-name').textContent = cap?.filename ?? '';
-  $('caption-folder').textContent = cap?.folder ?? '';
+  // Online clips all come from Scrolller: credit them under the clip (owner, 2026-10-17).
+  $('caption-folder').textContent = cap?.online
+    ? [cap.folder, 'via Scrolller'].filter(Boolean).join(' · ')
+    : (cap?.folder ?? '');
 }
 
 function setMuted(m) {
@@ -999,6 +1005,7 @@ function eyeStatusText() {
     case 'consent': return 'Webcam permission declined - eye control is off.';
     case 'no-camera': return 'Webcam unavailable - eye control is off.';
     case 'error': return 'Webcam error - eye control is off.';
+    case 'unsupported': return 'Eye control is not available in this version yet.';
     default: break;
   }
   if (!settings.eyeControl) return null;
@@ -1416,6 +1423,9 @@ function onHostMessage(data) {
       const known = new Set(remoteAssets.map((a) => a.id));
       const fresh = list.filter((a) => a && a.id && !known.has(a.id));
       remoteAssets.push(...fresh);
+      // The page's own count wins in the online-status that follows: a spent or away batch
+      // is cached files we may already hold, and those are not fresh.
+      remoteAppendNew = (remoteAppendNew || 0) + fresh.length;
       if (started && feed && sourceUsesRemote() && fresh.length) {
         const wasEmpty = feed.comps.length === 0;
         feed.append(fresh);
@@ -1428,7 +1438,9 @@ function onHostMessage(data) {
         updateEmptyState();
       }
       updateOnlineUi();
-      ensureRemoteBuffer();
+      // Nothing new: leave the next ask to the online-status that follows, which arms the
+      // dry ladder. Asking here would race it and poll the host again at once.
+      if (fresh.length) ensureRemoteBuffer();
       break;
     }
     case 'online-status': {
@@ -1439,7 +1451,12 @@ function onHostMessage(data) {
       // `fresh` is the honest count of ids we had never seen. `added` used to be the
       // raw batch size, which a drained channel still fills with re-served ids — that
       // is exactly why the backoff below never armed and the page polled every ~1.1 s.
-      const fresh = Number.isFinite(data.fresh) ? Number(data.fresh) : Number(data.added) || 0;
+      // The host counts ids it never sent this page; the page's own count of what the
+      // append before this status really added wins when there was one (a pruned niche
+      // coming back is new to the page, a cached batch it already holds is not).
+      const hostFresh = Number.isFinite(data.fresh) ? Number(data.fresh) : Number(data.added) || 0;
+      const fresh = remoteAppendNew !== null ? remoteAppendNew : hostFresh;
+      remoteAppendNew = null;
       const now = performance.now();
       if (!data.ok) {
         remoteDryUntil = now + REMOTE_OFFLINE_BACKOFF_MS; // transport, not exhaustion

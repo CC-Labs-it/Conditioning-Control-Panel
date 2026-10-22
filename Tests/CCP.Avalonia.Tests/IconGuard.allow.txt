@@ -4,6 +4,7 @@
 # CONTENT for IconEmojiRatchet. Only content belongs here at the finish (L12); "font:" entries are temporary.
 # Liveness is checked on comment-stripped code. A "path:" literal is listed once per line it covers (a new Path built
 # the same way fails the count). Literal `*` (path: only) exempts every file whose path starts with the entry's path.
+# A "verbatim:" reason with `*` exempts ONE exact file (Stack rule 4 import) from the emoji and prefixed-loc ratchets.
 
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" :: font: temporary - MDL2 settings gear, the one icon-font site at L0b; L10 converts it to IconGlyph Kind=Settings
@@ -36,6 +37,8 @@ Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: tr
 
 # --- content (c).3: emoji inside head-authored sentences ---
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 🔮 prism! 10x :: run event-feed sentence, WPF ChaosModeService.cs:1837 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 🪨 heavy drop! x3 :: run event-feed sentence, WPF ChaosModeService.cs:1870 verbatim (content (c).3)
 
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations
@@ -96,3 +99,7 @@ Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Down => "\u2193", :: trend a
 Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Flat => "\u2192", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
 Views/Controls/Companion/CompanionRoomPreviewWindow.axaml :: narrow ⇄ wide :: arrow between two words of a dev-preview button label, typography (content (c).4)
 App.axaml.cs :: Glyph = "👗" :: InboxItem.Glyph is Core row data, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon - IconMap maps 👗 to Wand once it draws via IconGlyph Emoji=
+Platform/FriendsLanding.cs :: ? "✨" : item.Kind == SendKind.Invite ? "🚪" : "🎁" :: InboxItem.Glyph is Core row data copied from WPF FriendsLanding.cs:283, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon
+
+# --- verbatim imports (Stack rule 4); each follow-up converts the file and deletes its entry ---
+Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3c0aabdedc9280218757373970439ed4); step Icon strings are data mapped via IconMap at render; follow-up tutorials-icons converts the data and removes this exemption

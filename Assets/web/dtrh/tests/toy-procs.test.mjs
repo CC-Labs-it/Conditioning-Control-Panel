@@ -56,3 +56,26 @@ test('the tooltip line reads plainly', () => {
   assert.equal(procLine('rubber_up', 1), 'wakes once, on your first detonation');
   assert.equal(procLine('nope', 1), '');
 });
+
+test('grabbing a held toy takes it one level deeper, to the top and no further', async () => {
+  const { regrab, canDeepen } = await import('../game/toyProcs.js');
+  const ladder = [3, 4, 5];
+  const toy = { level: 1, power: 3, maxed: false, cooldownLeft: 9 };
+  assert.equal(canDeepen(toy, ladder), true);
+  assert.equal(regrab(toy, ladder), true);
+  assert.deepEqual([toy.level, toy.power, toy.maxed, toy.cooldownLeft], [2, 4, false, 0]);
+  assert.equal(regrab(toy, ladder), true);
+  assert.deepEqual([toy.level, toy.power, toy.maxed], [3, 5, true]);
+  toy.cooldownLeft = 7;
+  assert.equal(canDeepen(toy, ladder), false);
+  assert.equal(regrab(toy, ladder), false);
+  assert.deepEqual([toy.level, toy.power, toy.cooldownLeft], [3, 5, 0]);
+});
+
+test('Overload doubles the E-Stim share and stops at the cap', async () => {
+  const { estimChance, OVERLOAD_CAP } = await import('../game/toyProcs.js');
+  assert.deepEqual([1, 2, 3].map((l) => estimChance(l, false)), [0.10, 0.15, 0.20]);
+  assert.equal(estimChance(3, true), 0.30);
+  assert.deepEqual([1, 2, 3].map((l) => estimChance(l, false, 2)), [0.20, 0.30, 0.40]);
+  assert.equal(estimChance(3, true, 2), OVERLOAD_CAP);
+});

@@ -584,6 +584,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CoreProgression.AddXP(xpAmount, "LockCard");
                 // WPF AchievementService.TrackLockCardCompletion:544, the quest half (programs-3a decision).
                 App.Quests?.TrackLockCardCompleted();
+                try { Completed?.Invoke(); } catch (Exception ex) { Log.Debug("lock card completed handler: {E}", ex.Message); }
             }
 
             // ponytail: the rest stays stubbed and has no Core seam to reach through.
@@ -1142,9 +1143,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Height = b.Height / screen.Scaling;
         }
 
+        /// <summary>A real (not test) card was completed (WPF TotalLockCardsCompleted; the leash task counts these).</summary>
+        internal static event Action? Completed;
+
         /// <summary>The CoreLockCard surface (seeded in App): draw the next phrase and resolve its repeat
         /// count through the three modes exactly as WPF LockCardService.ShowLockCard does.</summary>
-        internal static void ShowNext(bool isTest)
+        internal static void ShowNext(bool isTest) => ShowNext(isTest, null);
+
+        /// <param name="strict">Null: the player's own setting. The leash passes false (never a strict card).</param>
+        internal static void ShowNext(bool isTest, bool? strict)
         {
             var phrase = LockCardScheduler.Instance.PickPhrase(LockCardScheduler.EnabledPhrases());
             if (phrase is null) return;   // no enabled phrases: nothing to lock behind
@@ -1153,7 +1160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 s.LockCardRandomRepeats, s.LockCardRepeatsMin, s.LockCardRepeats,
                 s.LockCardTargetLengthEnabled, s.LockCardTargetLength,
                 s.LockCardTargetLengthVariance, Random.Shared.NextDouble());
-            ShowOnAllMonitors(phrase, repeats, s.LockCardStrict, isTest, s.LockCardVoiceMode);
+            ShowOnAllMonitors(phrase, repeats, strict ?? s.LockCardStrict, isTest, s.LockCardVoiceMode);
         }
 
         /// <summary>The card that owns the keyboard, and what it has counted. Tests read these.</summary>
