@@ -13,10 +13,10 @@
 
      Controls.xaml keys are shared here, including the three Deeper button themes.
      Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
-     ponytail: SecondaryButton/PinkButton HudPlank depth and the ToggleStyle timing gaps below
-     remain wire-theme-controls-b. -->
+     SecondaryButton/PinkButton carry WPF's opt-in HudPlank depth parts (fx:HudPlank.Kind). -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
                     xmlns:theme="clr-namespace:ConditioningControlPanel.Avalonia.Theme">
 
   <!-- MainWindow.xaml:525 -->
@@ -181,7 +181,10 @@
     </Style>
   </ControlTheme>
 
-  <!-- Controls.xaml:95. Same shape as ActionButton, different palette. -->
+  <!-- Controls.xaml:95. Same shape as ActionButton, different palette. Depth (Controls.xaml:104):
+       opt-in through fx:HudPlank.Kind="Plank" (Save on the START row) - a drop band, the lamp's
+       sheen and bevel over the plate, and HudPlank.cs moves DepthFace; the 0.97 press squash then
+       stands down (WPF MultiTrigger IsPressed + Kind=None) so a press is ONE motion, the travel. -->
   <ControlTheme x:Key="SecondaryButton" TargetType="Button">
     <Setter Property="Background" Value="{DynamicResource PanelAccentBrush}"/>
     <Setter Property="Foreground" Value="White"/>
@@ -191,22 +194,43 @@
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="Button">
-        <Border x:Name="border" CornerRadius="8" Padding="{TemplateBinding Padding}"
-                Background="{TemplateBinding Background}"
-                RenderTransformOrigin="50%,50%">
-          <ContentPresenter Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+        <Grid>
+          <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
+                  CornerRadius="0,0,7,7" Background="{DynamicResource DepthDropBand}"
+                  IsHitTestVisible="False" IsVisible="False"/>
+          <Grid x:Name="DepthFace">
+            <Border x:Name="border" CornerRadius="8" Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    RenderTransformOrigin="50%,50%">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <Border x:Name="DepthSheen" CornerRadius="8" Background="{DynamicResource DepthRaisedSheen}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+            <Border x:Name="DepthBevel" CornerRadius="8" BorderThickness="1"
+                    BorderBrush="{DynamicResource DepthRaisedBevel}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+          </Grid>
+        </Grid>
       </ControlTemplate>
     </Setter>
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource PanelAccentHoverBrush}"/>
     </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthDrop">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthSheen">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthBevel">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
     <Style Selector="^ /template/ Border#border">
       <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
     </Style>
-    <Style Selector="^:pressed /template/ Border#border">
+    <Style Selector="^[(fx|HudPlank.Kind)=None]:pressed /template/ Border#border">
       <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
@@ -276,24 +300,35 @@
              InvalidCastException.
 
          Storyboard EnterActions/ExitActions  ->  Transitions (the knob slide, the track fade and
-             the spark's growth) plus one keyframe Animation (the spark's opacity decay, which is
-             a one-shot and runs when :checked starts matching, exactly like the WPF
-             EnterActions storyboard). A Transition is inherently two-way, which is what the first
+             the spark's growth); the knob's two directions and the spark's opacity are ToggleFx.cs. A Transition is inherently two-way, which is what the first
              three want. RenderTransform HAS to be a transition rather than a keyframe: Avalonia
              registers no keyframe animator for it - see the note on the spark below.
 
-         BackEase Amplitude="0.6" / "0.35"    ->  BackEaseOut. Avalonia's easings take no
-             amplitude, so the overshoot is whatever BackEaseOut gives. The 43.4-of-44 sum in the
-             comment below still holds for the resting position; only the overshoot peak differs.
+         Separate enter/exit knob storyboards ->  two Transitions sets below (0.34s BackEase(0.6) on,
+             0.30s BackEase(0.35) off; theme:BackEaseOutAmplitude is WPF's BackEase arithmetic),
+             applied by Controls/ToggleFx.cs before it moves the knob. A :checked style cannot do it:
+             on uncheck the position reverts before the Transitions do. The track is 0.28 both ways.
 
-         Separate enter/exit durations        ->  one duration per property. WPF used 0.34 in /
-             0.30 out on the knob and 0.28 both ways on the track; a Transition has a single
-             duration, so the knob keeps the 0.34 enter value.
-
-         Spark exit (0.08s fade to 0)         ->  dropped. Unchecking stops the style matching, so
-             the spark snaps back to its parked Opacity="0" - the same "cut it dead" intent the
-             WPF comment states, minus the 80ms ramp. -->
+         Spark opacity (flash on, 0.08s fade off)  ->  ToggleFx.cs too: a keyframe animation with no
+             0% frame starts from the BASE value, so no style can fade "from wherever it is". All
+             three XAML tries failed the stepped-clock test. The scale keeps its two-way 0.45s
+             tween (WPF holds it; it is invisible once the fade ends). -->
+  <Transitions x:Key="ToggleKnobEnterTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.34">
+      <TransformOperationsTransition.Easing>
+        <theme:BackEaseOutAmplitude Amplitude="0.6"/>
+      </TransformOperationsTransition.Easing>
+    </TransformOperationsTransition>
+  </Transitions>
+  <Transitions x:Key="ToggleKnobExitTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.30">
+      <TransformOperationsTransition.Easing>
+        <theme:BackEaseOutAmplitude Amplitude="0.35"/>
+      </TransformOperationsTransition.Easing>
+    </TransformOperationsTransition>
+  </Transitions>
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
+    <Setter Property="fx:ToggleFx.IsEnabled" Value="True"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
         <Grid x:Name="toggleRoot">
@@ -316,17 +351,7 @@
                without re-checking that sum. -->
           <Border x:Name="thumb" Width="16" Height="16" CornerRadius="8"
                       Background="White" HorizontalAlignment="Left" Margin="3,0,0,0"
-                      RenderTransform="translateX(0px)">
-            <Border.Transitions>
-              <Transitions>
-                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.34">
-                  <TransformOperationsTransition.Easing>
-                    <BackEaseOut/>
-                  </TransformOperationsTransition.Easing>
-                </TransformOperationsTransition>
-              </Transitions>
-            </Border.Transitions>
-          </Border>
+                      RenderTransform="translateX(0px)"/>
           <!-- Spark: parked invisible at the ON edge (centre x = 33, where the knob
                lands). Scales from its own centre, so it never moves anything. -->
           <Ellipse x:Name="spark" Width="12" Height="12" Fill="White"
@@ -351,30 +376,13 @@
     <Style Selector="^:checked /template/ Border#trackOn">
       <Setter Property="Opacity" Value="1"/>
     </Style>
-    <Style Selector="^:checked /template/ Border#thumb">
-      <Setter Property="RenderTransform" Value="translateX(22px)"/>
-    </Style>
     <Style Selector="^:checked /template/ Ellipse#spark">
       <!-- The 0.4 -> 3 growth is a Setter + the transition above, NOT a keyframe: Avalonia ships
            no keyframe animator for RenderTransform, and an <Animation> touching it dies at
            TEMPLATE APPLY time with "No animator registered for the property RenderTransform" -
            i.e. the toggle takes the whole window down before it ever draws. Found by rendering.
-           The opacity decay below is genuinely keyframed (three WPF LinearDoubleKeyFrames), and
-           Opacity does have a built-in animator. -->
+           The knob's slide and the spark's opacity (flash on, 80ms fade off) are ToggleFx.cs. -->
       <Setter Property="RenderTransform" Value="scale(3)"/>
-      <Style.Animations>
-        <Animation Duration="0:0:0.45" FillMode="Forward">
-          <KeyFrame Cue="0%">
-            <Setter Property="Opacity" Value="0"/>
-          </KeyFrame>
-          <KeyFrame Cue="13%">
-            <Setter Property="Opacity" Value="0.9"/>
-          </KeyFrame>
-          <KeyFrame Cue="100%">
-            <Setter Property="Opacity" Value="0"/>
-          </KeyFrame>
-        </Animation>
-      </Style.Animations>
     </Style>
 
     <!-- A locked toggle used to be pixel-identical to a live one (users read the two as "a bit
@@ -441,7 +449,11 @@
     </Style>
   </ControlTheme>
 
-  <!-- Controls.xaml:342 -->
+  <!-- Controls.xaml:342. Depth (Controls.xaml:377): opt-in through fx:HudPlank.Kind, so every
+       PinkButton without it draws as before. Plank / Chunky raise the plate: drop band, the lamp's
+       sheen and bevel over the plate colour (Chunky: DepthPlankSheen/Bevel), plate border off, and
+       HudPlank.cs moves DepthFace. Hover sets the Button's Background as WPF does, so a caller's
+       local Background (START's gradient) is kept. -->
   <ControlTheme x:Key="PinkButton" TargetType="Button">
     <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="Foreground" Value="White"/>
@@ -453,18 +465,58 @@
     <Setter Property="BorderThickness" Value="1.5"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="Button">
-        <Border x:Name="border" Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="8" Padding="{TemplateBinding Padding}">
-          <ContentPresenter Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+        <Grid>
+          <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
+                  CornerRadius="0,0,7,7" Background="{DynamicResource DepthDropBand}"
+                  IsHitTestVisible="False" IsVisible="False"/>
+          <Grid x:Name="DepthFace">
+            <Border x:Name="border" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="8"/>
+            <Border x:Name="DepthSheen" CornerRadius="8" Background="{DynamicResource DepthRaisedSheen}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+            <Border x:Name="DepthBevel" CornerRadius="8" BorderThickness="1"
+                    BorderBrush="{DynamicResource DepthRaisedBevel}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="Transparent"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Grid>
+        </Grid>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:pointerover /template/ Border#border">
+    <Style Selector="^:pointerover">
       <Setter Property="Background" Value="{DynamicResource DarkPinkBrush}"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthDrop">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthSheen">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthBevel">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#border">
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#DepthDrop">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#DepthSheen">
+      <Setter Property="IsVisible" Value="True"/>
+      <Setter Property="Background" Value="{DynamicResource DepthPlankSheen}"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#DepthBevel">
+      <Setter Property="IsVisible" Value="True"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource DepthPlankBevel}"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#border">
+      <Setter Property="BorderThickness" Value="0"/>
     </Style>
   </ControlTheme>
 

@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -14,6 +15,10 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
+using HudPlank = ConditioningControlPanel.Avalonia.Controls.HudPlank;
+using HudPlankKind = ConditioningControlPanel.Avalonia.Controls.HudPlankKind;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -168,6 +173,148 @@ public sealed class SharedDeeperThemeTests
             Assert.Same(Theme("DeeperRoundButton"), hub.FindControl<Button>("BtnDeeperOpenPlayer")!.Theme);
         }
         finally { editor.Close(); player.Close(); host.Close(); CoreSettings.Current.MotionLevel = oldMotion; }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ToggleKnobEntersAndExitsOnWpfCurvesAndTheSparkFadesIn80ms() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var enter = Application.Current!.FindResource("ToggleKnobEnterTransitions");
+        var exit = Application.Current!.FindResource("ToggleKnobExitTransitions");
+        var toggle = new CheckBox { Theme = Theme("ToggleStyle") };
+        var window = new Window { Content = toggle, Width = 200, Height = 100 };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var thumb = toggle.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "thumb");
+            var spark = toggle.GetVisualDescendants().OfType<Ellipse>().Single(e => e.Name == "spark");
+            var clock = new StepClock();
+            thumb.SetValue(StepClock.Property, clock.Instance);
+            spark.SetValue(StepClock.Property, clock.Instance);
+            double X() => thumb.RenderTransform?.Value.M31 ?? 0;
+            // ON: 340 ms BackEase(0.6). At t = 0.5 that is 1 - (0.125 - 0.6 * 0.5) = 1.175 of the 22 px slide
+            // (Avalonia's amplitude-1 BackEaseOut would read 1.375).
+            toggle.IsChecked = true; Dispatcher.UIThread.RunJobs();
+            Assert.Same(enter, thumb.Transitions);
+            clock.Step(0); clock.Step(170);
+            Assert.Equal(22 * 1.175, X(), 3);
+            clock.Step(340);
+            Assert.Equal(22, X(), 3);
+            double lit = spark.Opacity;   // the 450 ms decay, three quarters through
+            Assert.InRange(lit, 0.1, 0.5);
+            // OFF: 300 ms BackEase(0.35): at t = 0.5, 1 - (0.125 - 0.175) = 1.05 of the way back, i.e. -1.1 px.
+            toggle.IsChecked = false; Dispatcher.UIThread.RunJobs();
+            Assert.Same(exit, thumb.Transitions);
+            clock.Step(1000); clock.Step(1040);
+            // The spark fades over 80 ms (WPF ExitActions), it is not cut dead.
+            Assert.InRange(spark.Opacity, 0.01, lit - 0.01);
+            clock.Step(1080);
+            Assert.Equal(0, spark.Opacity, 3);
+            clock.Step(1150);
+            Assert.Equal(-1.1, X(), 3);
+            clock.Step(1300);
+            Assert.Equal(0, X(), 3);
+            // ON again: the flash wins over the fade (0.9 at 60 ms).
+            toggle.IsChecked = true; Dispatcher.UIThread.RunJobs();
+            clock.Step(2000); clock.Step(2060);
+            Assert.InRange(spark.Opacity, 0.8, 0.95);
+        }
+        finally { window.Close(); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var oldMotion = CoreSettings.Current.MotionLevel;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        static double Base(AvaloniaObject o, StyledProperty<double> p) => o.GetBaseValue(p) is { HasValue: true } v ? v.Value : double.NaN;
+        try
+        {
+            foreach (var (key, kind) in new[]
+            {
+                ("PinkButton", HudPlankKind.None), ("PinkButton", HudPlankKind.Plank), ("PinkButton", HudPlankKind.Chunky),
+                ("SecondaryButton", HudPlankKind.None), ("SecondaryButton", HudPlankKind.Plank),
+            })
+            {
+                var button = new Button { Theme = Theme(key), Content = "Test", Width = 120, Height = 40 };
+                HudPlank.SetKind(button, kind);
+                var window = new Window { Content = button, Width = 200, Height = 100 };
+                window.Show(); Dispatcher.UIThread.RunJobs();
+                try
+                {
+                    Control Part(string n) => button.GetVisualDescendants().OfType<Control>().Single(c => c.Name == n);
+                    bool raised = kind != HudPlankKind.None;
+                    Assert.Equal(raised, Part("DepthDrop").IsVisible);
+                    Assert.Equal(raised, Part("DepthSheen").IsVisible);
+                    Assert.Equal(raised, Part("DepthBevel").IsVisible);
+                    if (key == "PinkButton") Assert.Equal(raised ? 0 : 1.5, ((Border)Part("border")).BorderThickness.Top);
+                    bool chunky = kind == HudPlankKind.Chunky;
+                    Assert.Same(Application.Current!.FindResource(chunky ? "DepthPlankSheen" : "DepthRaisedSheen"), ((Border)Part("DepthSheen")).Background);
+                    Assert.Same(Application.Current!.FindResource(chunky ? "DepthPlankBevel" : "DepthRaisedBevel"), ((Border)Part("DepthBevel")).BorderBrush);
+                    if (!raised) continue;
+
+                    var drop = Part("DepthDrop");
+                    double h = chunky ? 7 : 5;   // StartPx / RaisedPx + HoverLiftPx
+                    Assert.Equal(h, drop.Height);
+                    Assert.Equal(-h, drop.Margin.Bottom);
+                    var slide = (TranslateTransform)Part("DepthFace").RenderTransform!;
+                    var clock = new StepClock();
+                    slide.SetValue(StepClock.Property, clock.Instance);
+                    double Travel() => Base(slide, TranslateTransform.YProperty);
+                    double Drop() => Base((ScaleTransform)drop.RenderTransform!, ScaleTransform.ScaleYProperty) * h;
+                    // Rest: on the sheet, RaisedPx drop (StartPx for START).
+                    Assert.Equal(0, Travel(), 3); Assert.Equal(chunky ? 5 : 3, Drop(), 3);
+                    // Hover lifts 2 px and lengthens the drop by the same.
+                    window.MouseMove(new Point(100, 50)); Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(-2, Travel(), 3); Assert.Equal(h, Drop(), 3);
+                    // Press drops 2 px and the shadow goes; a plank SecondaryButton does not also squash.
+                    window.MouseDown(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(2, Travel(), 3); Assert.Equal(0, Drop(), 3);
+                    if (key == "SecondaryButton") Assert.Null(Part("border").RenderTransform);
+                    clock.Step(0); clock.Step(500);
+                    Assert.Equal(2, slide.Y, 3);
+                    // Release springs back through 1 px past rest at 60% of 140 ms (WPF keyframes): 2 -> -3 -> -2.
+                    window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(-2, Travel(), 3);
+                    clock.Step(1000); clock.Step(1084);
+                    Assert.Equal(-3, slide.Y, 3);
+                    clock.Step(1140);
+                    Assert.Equal(-2, slide.Y, 3);
+                    // Disabled: flat, no shadow.
+                    button.IsEnabled = false; Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(0, Travel(), 3); Assert.Equal(0, Drop(), 3);
+                }
+                finally { window.Close(); }
+            }
+
+            // The real callers: WPF MainWindow.xaml:2243-2427 (Remember, START, the caret, Save, Exit).
+            var oldProvider = CoreSettings.ServiceProvider;
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            MainShellWindow? shell = null;
+            try
+            {
+                shell = new MainShellWindow();
+                shell.Show(); Dispatcher.UIThread.RunJobs();
+                foreach (var (name, kind) in new[]
+                {
+                    ("BtnRemember", HudPlankKind.Plank), ("BtnStart", HudPlankKind.Chunky), ("BtnStartMenu", HudPlankKind.Plank),
+                    ("BtnSaveAll", HudPlankKind.Plank), ("BtnExit", HudPlankKind.Plank),
+                })
+                {
+                    var b = shell.Named<Button>(name)!;
+                    Assert.Equal(kind, HudPlank.GetKind(b));
+                    var drop = b.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "DepthDrop");
+                    Assert.True(drop.IsVisible, name);
+                    Assert.Equal(kind == HudPlankKind.Chunky ? 7 : 5, drop.Height);
+                }
+            }
+            finally { shell?.Close(); CoreSettings.ServiceProvider = oldProvider; }
+        }
+        finally { CoreSettings.Current.MotionLevel = oldMotion; }
         await Task.CompletedTask;
     });
 }
