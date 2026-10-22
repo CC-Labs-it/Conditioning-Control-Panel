@@ -195,7 +195,19 @@ internal sealed partial class FirstShowStageWindow : Window
     internal const long MaxPictureBytes = 24L * 1024 * 1024;
     /// <summary>The show's own temp dir, swept on every open, so a crash mid-show leaves nothing behind for long.</summary>
     internal static readonly string TempDir = Path.Combine(Path.GetTempPath(), "ccp-first-show");
-    internal static void SweepTemp() { try { if (Directory.Exists(TempDir)) foreach (var f in Directory.GetFiles(TempDir)) Release(f); } catch (IOException) { } }
+    /// <summary>Deletes the show's Scrolller copies written at least <paramref name="olderThan"/> ago (default: all).
+    /// Also the device cache's hourly sweep and off-switch purge (WPF RemoteMediaCache.SweepTempFilesOlderThan, main a1a08fce2).</summary>
+    internal static void SweepTemp(TimeSpan olderThan = default)
+    {
+        try
+        {
+            if (!Directory.Exists(TempDir)) return;
+            var cutoff = DateTime.UtcNow - olderThan;
+            foreach (var f in Directory.GetFiles(TempDir))
+                if (olderThan <= TimeSpan.Zero || File.GetLastWriteTimeUtc(f) <= cutoff) Release(f);
+        }
+        catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
     private static async Task<string?> DownloadAsync(string url, CancellationToken token)
     {
         using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);

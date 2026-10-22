@@ -1,6 +1,7 @@
 using System;
 using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -31,11 +32,40 @@ internal static class ScrolllerHead
                 ScrolllerAllowance.WatchAccount();   // Start's other half: the daily share follows sign-in
                 Log.Information("ScrolllerPolicy: sandboxed profile without its own API - licence switch not read");
             }
+            SeedHooks();
             // The device cache loads its books in the background, then sweeps (24 h licence) now and hourly.
             _ = ScrolllerDiskCache.WarmAsync();
             ScrolllerDiskCache.StartSweeper();
         }
         catch (Exception ex) { Log.Warning(ex, "Scrolller start failed"); }
+    }
+
+    /// <summary>Every Scrolller copy this head holds (WPF ScrolllerCopySweeper.SeedCoreHooks): the device cache and the
+    /// first show's demo pictures. A hook already set (a test's fake) is kept.</summary>
+    internal static void SeedHooks()
+    {
+        if (ScrolllerDiskCache.SweepAllCopies == null) ScrolllerDiskCache.SweepAllCopies = SweepAll;
+        if (ScrolllerDiskCache.PurgeAllCopies == null) ScrolllerDiskCache.PurgeAllCopies = PurgeAll;
+    }
+
+    /// <summary>WPF ScrolllerCopySweeper.SweepAll (main a1a08fce2/89be77210): no copy outlives 24 h from its download,
+    /// swept one period ahead. Each step guarded on its own. Never throws.</summary>
+    internal static void SweepAll()
+    {
+        Step(() => ScrolllerDiskCache.SweepExpired());
+        Step(() => FirstShowStageWindow.SweepTemp(ScrolllerDiskCache.MaxAge - ScrolllerDiskCache.SweepPeriod));
+    }
+
+    /// <summary>WPF ScrolllerCopySweeper.PurgeAll: the off switch deletes every copy now. Never throws.</summary>
+    internal static void PurgeAll(string reason)
+    {
+        Step(() => ScrolllerDiskCache.PurgeAll(reason));
+        Step(() => FirstShowStageWindow.SweepTemp());
+    }
+
+    private static void Step(Action step)
+    {
+        try { step(); } catch (Exception ex) { Log.Debug("[scrolller sweep] step failed: {E}", ex.Message); }
     }
 
     /// <summary>WPF App.OnExit:6206-6209: the ledger and the device cache index have debounced writes.</summary>
