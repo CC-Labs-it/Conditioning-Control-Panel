@@ -263,6 +263,41 @@ public sealed class AssetsTabTests
     });
 
     [Fact]
+    public Task PackCardSheenFollowsARealPointerMove() => Run(async (shell, tab, s) =>
+    {
+        // Same path as above, but through headless mouse input and the shell's hit testing.
+        tab.PacksSection.IsVisible = true;
+        var cards = await Realized(shell, () =>
+        {
+            var found = tab.PackCardsItemsControl.GetVisualDescendants().OfType<Border>()
+                .Where(c => c.Classes.Contains("packCard")).ToArray();
+            return found.Length >= 2 ? found : null;
+        });
+        cards[0].BringIntoView();
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var layer = AdornerLayer.GetAdornerLayer(cards[0])!;
+        Point Centre(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), shell)!.Value;
+        void Move(Point p)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // hit testing reads the last rendered frame
+            shell.MouseMove(p, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Move(Centre(cards[0]));
+        var first = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.Same(cards[0], AdornerLayer.GetAdornedElement(first));
+        Move(Centre(cards[1]));
+        var second = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.NotSame(first, second);
+        Assert.False(first.IsTicking);
+        Move(new Point(1, 1));
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(second.IsTicking);
+    });
+
+    [Fact]
     public Task PackCardSheenDetachesWhenTheStripOrTabHidesAndMotionOffRefusesIt() => Run(async (shell, tab, s) =>
     {
         tab.PacksSection.IsVisible = true;
