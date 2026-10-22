@@ -1,3 +1,6 @@
+// possession-head-a: the effect runtime (lease, off-limits tree, deck-driven host, 4 effects) is in
+// CCP.Avalonia/Possession/; this partial (the target walk) is possession-head-b.
+//
 // STILL A STUB from ConditioningControlPanel/MainWindow/MainWindow.Possession.cs (673 lines) - the
 // window as a haunted room: two overlay canvases, the registry of controls that opted in via
 // poss:Possession.Role, and the walk that turns the visual tree into possession targets.

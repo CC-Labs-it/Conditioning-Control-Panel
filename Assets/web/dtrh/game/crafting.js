@@ -28,7 +28,7 @@ export const MATERIALS = [
   { id: 'pills',    ch: 'P', name: 'Pink Pills', glyph: '💊', weight: 20, tint: 'rgb(255,148,196)' },
   { id: 'lace',     ch: 'L', name: 'Lace',     glyph: '🎀', weight: 14, tint: 'rgb(244,226,255)' },
   { id: 'lube',     ch: 'O', name: 'Lube',     glyph: '🧴', weight: 12, tint: 'rgb(168,230,255)' },
-  { id: 'chrome',   ch: 'C', name: 'Chrome',   glyph: '⛓', weight: 12, tint: 'rgb(206,214,228)' },
+  { id: 'chrome',   ch: 'C', name: 'Chrome',   glyph: '⛓', weight: 20, tint: 'rgb(206,214,228)' },   // was 12: most recipes want chrome (owner, 2026-10-12)
 ];
 
 export const MATERIAL_IDS = MATERIALS.map((m) => m.id);

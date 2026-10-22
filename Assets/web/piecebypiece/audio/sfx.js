@@ -1,6 +1,7 @@
 import { createCrowdVoices } from './crowd-voices.js';
 import { createCrowd } from './crowd.js';
 import { createTrance } from './trance.js';
+import { createReactCues } from './react-cues.js';
 
 /* ============================================================================
  * audio/sfx.js - the board makes sounds.
@@ -289,7 +290,9 @@ export function createSfx({ bus, game = null, group = null, squareOf = null, roo
     if (!crowdVoices) crowdVoices = createCrowdVoices({ ctx, master: beds || master, noise });
     crowdVoices.play(kind);
   }
+  let reactCues = null;   // the stands' six reactions (audio/react-cues.js), on the beds like the crowd
   const cues = {
+    react(p = {}) { reactCues ||= createReactCues({ ctx, master: beds || master, noise }); return reactCues.play(p.id, p) ? [p.id] : []; },
     crowdApplause() { audience('crowdApplause'); },
     crowdCheer() { audience('crowdCheer'); },
     crowdBoo() { audience('crowdBoo'); },

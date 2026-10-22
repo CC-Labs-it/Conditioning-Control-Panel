@@ -1,155 +1,285 @@
-/* Piece by Piece - the front door. One glass card over the live board; the
-   board itself is the scenery and keeps drifting behind it (Law III). Every
-   screen is the same card with different contents, so the eye learns one
-   place. The ONE foreground BREATH per screen is the primary button's glow;
-   nothing else on the card loops.
+/* Piece by Piece - the front door. One card over the live board; the board
+   itself is the scenery and keeps drifting behind it (Law III). Every screen
+   is the same card with different contents, so the eye learns one place.
+
+   The card belongs to the opening card (ui/open-intro.js): its brass gear and
+   rim, its Fredoka letters in pink with an ink edge, its 1858 serif line, its
+   stamp ("Mostly."). Things you can press look pressable: a raised face on a
+   dark edge that lifts on hover, sinks and squashes on press and springs back
+   (THUD on the way back). Chips pop when picked. Screens stagger in and leave
+   as a ghost (door/screen-fx.js). The ONE foreground BREATH per screen is the
+   primary button's glow; nothing else on the card loops.
 
    Reduced motion (.door.still, from the host switch or the OS query) takes the
    STATE and not the travel: transitions and animations are cut, classes still
    land, so a screen that "should" be there simply is (trap 92's lesson). */
 
-.door { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+@font-face { font-family: 'PbpFredoka'; src: url('../assets/fonts/fredoka-latin.woff2') format('woff2'); font-weight: 300 700; font-display: swap; }
+
+.door {
+  --d-ink: #150a20; --d-edge: #0a0410; --d-plum: #2a1840; --d-plum-hi: #3b2459;
+  --d-cream: #fbf1e2; --d-pink: #ff5fa2; --d-pink-hi: #ff9fd0; --d-pink-dk: #a8285f; --d-hot: #ff2d8a; --d-mute: #cbbfd8;
+  --d-brass-hi: #ffe29a; --d-brass: #e2a544; --d-brass-lo: #8a5a1c; --d-brass-ink: #3a2208;
+  --d-face: 'PbpFredoka', 'Segoe UI', system-ui, sans-serif;
+  --d-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --d-thud: cubic-bezier(.2, 1.5, .4, 1);
+  --d-rim: 0 2px 0 var(--d-ink), 2px 0 0 var(--d-ink), -2px 0 0 var(--d-ink), 0 -2px 0 var(--d-ink),
+    1.5px 1.5px 0 var(--d-ink), -1.5px 1.5px 0 var(--d-ink), 1.5px -1.5px 0 var(--d-ink), -1.5px -1.5px 0 var(--d-ink);
+  position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; pointer-events: none;
+}
 .door[hidden] { display: none !important; }
 .door > * { pointer-events: auto; }
 
 /* the veil: the board reads through it, dimmer, so the card is the subject */
 .door-veil {
   position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 42%, rgba(26, 26, 62, 0.18) 0%, rgba(26, 26, 62, 0.62) 100%);
-  opacity: 0; transition: opacity 420ms ease;
+  background: radial-gradient(ellipse at 50% 42%, rgba(21, 10, 32, 0.2) 0%, rgba(21, 10, 32, 0.66) 100%);
+  animation: door-veil-in 300ms ease both;
 }
-.door.up .door-veil { opacity: 1; }
+@keyframes door-veil-in { from { opacity: 0; } to { opacity: 1; } }
 /* the end card wants the board seen: the men are the result */
-.door.screen-end .door-veil { background: radial-gradient(ellipse at 50% 42%, rgba(26, 26, 62, 0) 0%, rgba(26, 26, 62, 0.5) 100%); }
+.door.screen-end .door-veil { background: radial-gradient(ellipse at 50% 42%, rgba(21, 10, 32, 0) 0%, rgba(21, 10, 32, 0.55) 100%); }
 
+/* --- the card: ink face, brass rim with a screw in each corner, a dark edge under it --- */
 .door-card {
-  position: relative; width: min(440px, 92vw); max-height: 86vh; overflow: hidden;
-  display: flex; flex-direction: column; gap: 18px; padding: 26px 26px 20px;
-  border-radius: 18px; background: rgba(20, 20, 46, 0.74);
-  border: 1px solid rgba(245, 230, 200, 0.14); backdrop-filter: blur(9px);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
-  color: var(--pbp-ink);
-  /* REVEAL 340ms cubic-bezier(.2,1.5,.4,1): the card arrives with a little overshoot, once */
-  animation: door-reveal 340ms cubic-bezier(.2, 1.5, .4, 1) both;
+  position: relative; width: min(460px, calc(100vw - 32px)); max-height: min(92vh, calc(100dvh - 24px));
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; padding: 18px 22px 20px; border-radius: 22px;
+  border: 3px solid transparent;
+  background:
+    radial-gradient(circle, var(--d-brass-hi) 0 1.4px, var(--d-brass-lo) 2.4px, transparent 3.2px) left 6px top 6px / 8px 8px no-repeat padding-box,
+    radial-gradient(circle, var(--d-brass-hi) 0 1.4px, var(--d-brass-lo) 2.4px, transparent 3.2px) right 6px top 6px / 8px 8px no-repeat padding-box,
+    radial-gradient(circle, var(--d-brass-hi) 0 1.4px, var(--d-brass-lo) 2.4px, transparent 3.2px) left 6px bottom 6px / 8px 8px no-repeat padding-box,
+    radial-gradient(circle, var(--d-brass-hi) 0 1.4px, var(--d-brass-lo) 2.4px, transparent 3.2px) right 6px bottom 6px / 8px 8px no-repeat padding-box,
+    linear-gradient(180deg, #22123a 0%, #170b27 60%, #13081f 100%) padding-box,
+    linear-gradient(145deg, var(--d-brass-hi), var(--d-brass) 34%, var(--d-brass-lo) 68%, #d9a24c) border-box;
+  box-shadow: inset 0 0 0 1.5px rgba(58, 34, 8, 0.95), inset 0 2px 0 1.5px rgba(255, 226, 154, 0.08), 0 7px 0 var(--d-edge), 0 26px 60px rgba(0, 0, 0, 0.5);
+  color: var(--d-cream); font-family: var(--d-face);
+  scrollbar-width: thin; scrollbar-color: rgba(255, 95, 162, 0.55) transparent;
+  /* REVEAL 340ms THUD: the card arrives with a little overshoot, once */
+  animation: door-reveal 340ms var(--d-thud) both;
 }
 @keyframes door-reveal {
-  from { opacity: 0; transform: translateY(14px) scale(0.94); }
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-/* a screen swap inside the card: 160ms crossfade, the card itself stays put */
-.door-body { display: flex; flex-direction: column; gap: 14px; min-height: 0; animation: door-swap 160ms ease both; }
-@keyframes door-swap { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.door-card *, .door-card { scrollbar-width: thin; scrollbar-color: rgba(255, 95, 162, 0.55) transparent; }
+.door-card ::-webkit-scrollbar, .door-card::-webkit-scrollbar { width: 6px; height: 6px; }
+.door-card ::-webkit-scrollbar-track, .door-card::-webkit-scrollbar-track { background: transparent; }
+.door-card ::-webkit-scrollbar-thumb, .door-card::-webkit-scrollbar-thumb { background: rgba(255, 95, 162, 0.5); border-radius: 999px; }
+/* a screen inside the card; the screen motion is door/screen-fx.js (no CSS swap, so a poll's repaint never flickers) */
+.door-body { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.door-body.fx-ghost { z-index: 2; }
 
-.door-title { margin: 0; font-size: 12px; letter-spacing: 0.34em; text-transform: lowercase; opacity: 0.55; }
-.door-title b { font-weight: 500; opacity: 1; color: var(--pbp-cream); }
-.door-h { margin: 0; font-size: 22px; font-weight: 400; letter-spacing: 0.02em; color: var(--pbp-cream); }
-.door-sub { margin: 0; font-size: 12px; letter-spacing: 0.12em; opacity: 0.55; text-transform: lowercase; }
-.door-sub b { font-weight: 500; opacity: 1; color: var(--pbp-pink); }
+/* --- the top of every panel: Back, the name of the screen, something small --- */
+.door-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; min-height: 36px; }
+.door-top > :first-child { justify-self: start; }
+.door-top-r { justify-self: end; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.door-title { margin: 0; font: 600 20px/1.1 var(--d-face); letter-spacing: 0.01em; color: var(--d-cream); text-align: center; white-space: nowrap; }
+.door-count-k { font: 500 12px/1 var(--d-face); opacity: 0.55; white-space: nowrap; }
+.door-sub { margin: 0; font: 500 13px/1.35 var(--d-face); opacity: 0.72; }
+.door-sub b { font-weight: 600; color: var(--d-pink); }
 
-/* --- buttons --- */
-.door-btn {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; min-height: 48px; padding: 0 18px; border-radius: 14px; cursor: pointer;
-  font: 12px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--pbp-ink); background: rgba(245, 230, 200, 0.06);
-  border: 1px solid rgba(245, 230, 200, 0.22);
-  transition: transform 140ms cubic-bezier(.2, 1.5, .4, 1), background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+/* the Back button (door/back-button.js): brass edge, an arrow that leans the way it goes */
+.door-back {
+  display: inline-flex; align-items: center; gap: 3px; height: 34px; padding: 0 13px 0 6px; border-radius: 999px; cursor: pointer;
+  font: 600 14px/1 var(--d-face); color: var(--d-cream); border: 2px solid transparent;
+  background: linear-gradient(180deg, var(--d-plum-hi), var(--d-plum)) padding-box, linear-gradient(145deg, var(--d-brass-hi), var(--d-brass) 45%, var(--d-brass-lo)) border-box;
+  box-shadow: 0 3px 0 var(--d-edge);
+  transition: transform 220ms var(--d-thud), box-shadow 140ms ease, color 140ms ease;
 }
-.door-btn:hover { background: rgba(245, 230, 200, 0.11); border-color: rgba(245, 230, 200, 0.4); }
-/* BOUNCE on press: 0.97 and back, the button admits it was touched */
-.door-btn:active { transform: scale(0.97); }
-.door-btn:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 2px; }
+.door-back-ico { width: 20px; height: 20px; transition: transform 220ms var(--d-thud); }
+.door-back:hover { transform: translateY(-1px); color: var(--d-pink-hi); box-shadow: 0 4px 0 var(--d-edge); }
+.door-back:hover .door-back-ico { transform: translateX(-3px); }
+.door-back:active { transform: translateY(2px) scale(0.96, 0.92); box-shadow: 0 1px 0 var(--d-edge); transition-duration: 70ms; }
+.door-back:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 3px; }
+.door-body > .door-back { align-self: flex-start; }   /* a screen that sets Back on its own, without the top row */
+
+/* --- the menu's header: the gear, the name in the opening card's letters, the serif line --- */
+.door-brand { display: flex; align-items: center; gap: 12px; margin: 2px 0 2px; }
+.door-gear { width: 48px; height: 48px; flex: none; filter: drop-shadow(0 3px 0 var(--d-edge)); animation: door-gear-in 620ms var(--d-thud) 80ms both; transition: transform 520ms var(--d-thud); }
+@keyframes door-gear-in { from { transform: rotate(-108deg) scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+/* the wheel turns a tooth while you think about the main button */
+.door-body:has(.door-btn.primary:hover) .door-gear { transform: rotate(36deg); }
+.door-brand-t { min-width: 0; }
+/* the opening card's letters: a top-lit pink to violet fill over a thick ink edge (its own layer, so the fill stays clean) */
+.door-logo { position: relative; isolation: isolate; margin: 0; font: 700 32px/1.05 var(--d-face); letter-spacing: 0.005em; white-space: nowrap; }
+.door-logo::before {
+  content: attr(data-text); position: absolute; left: 0; top: 0; color: var(--d-ink);
+  -webkit-text-stroke: 6px var(--d-ink); text-shadow: 0 4px 0 var(--d-ink), 0 0 20px rgba(255, 45, 138, 0.45);
+}
+.door-logo span {
+  position: relative; z-index: 1; color: transparent;
+  background: linear-gradient(180deg, #ffe3f4 0%, #ff9fd0 30%, var(--d-pink) 62%, #b45cff 100%); -webkit-background-clip: text; background-clip: text;
+}
+.door-h { margin: 6px 0 0; font: italic 500 17px/1.2 var(--d-serif); color: var(--d-cream); opacity: 0.85; }
+.door-tag { gap: 6px; padding: 5px 11px 5px 8px; border-radius: 999px; background: rgba(251, 241, 226, 0.06); border: 1px solid rgba(251, 241, 226, 0.12); font: 500 13px/1 var(--d-face); max-width: 100%; }
+.door-tag .ico { width: 16px; height: 16px; color: var(--d-brass); flex: none; }
+.door-tag b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.door-tag .ladder-chip { font-size: 12px; }
+.door-top-gap { display: block; }
+
+/* --- buttons: a raised face on a dark edge --- */
+.door-btn {
+  position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+  width: 100%; min-height: 52px; padding: 8px 16px; border-radius: 16px; cursor: pointer; text-align: left;
+  font: 600 16px/1.1 var(--d-face); letter-spacing: 0.01em; text-transform: none;
+  color: var(--d-cream); background: linear-gradient(180deg, var(--d-plum-hi), var(--d-plum));
+  border: 1.5px solid rgba(251, 241, 226, 0.14);
+  box-shadow: 0 4px 0 var(--d-edge), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  transition: transform 220ms var(--d-thud), box-shadow 140ms ease, border-color 140ms ease, filter 140ms ease;
+}
+.door-btn .ico { width: 24px; height: 24px; flex: none; color: var(--d-brass); transition: transform 260ms var(--d-thud), color 140ms ease; }
+.door-btn .lbl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.door-btn .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.door-btn .k { font: 500 12px/1.1 var(--d-face); letter-spacing: 0.02em; opacity: 0.62; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.door-btn:hover { transform: translateY(-2px); border-color: rgba(255, 159, 208, 0.45); box-shadow: 0 6px 0 var(--d-edge), inset 0 1px 0 rgba(255, 255, 255, 0.09); }
+.door-btn:hover .ico { color: var(--d-pink-hi); transform: scale(1.1) rotate(-6deg); }
+/* the press: down onto its edge and a little flatter, then the THUD springs it back */
+.door-btn:active { transform: translateY(3px) scale(0.985, 0.95); box-shadow: 0 1px 0 var(--d-edge); transition-duration: 70ms; }
+.door-btn:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 3px; }
+.door-btn.big { min-height: 64px; font-size: 20px; }
+.door-btn.big .ico { width: 30px; height: 30px; }
+.door-btn.big .k { font-size: 13px; }
+.door-btn.slim { min-height: 42px; justify-content: center; font-size: 14px; }
+.door-btn.center { justify-content: center; }
 .door-btn.primary {
-  color: #1A1A3E; background: var(--pbp-pink); border-color: var(--pbp-pink); font-weight: 600;
-  box-shadow: 0 0 0 rgba(255, 105, 180, 0);
-  /* THE BREATH: the one thing on the card that loops, 3600ms like the HUD's vignette */
+  color: var(--d-ink); background: linear-gradient(180deg, #ffadd6 0%, var(--d-pink) 55%, #f2448f 100%);
+  border-color: #ffc6e2; box-shadow: 0 5px 0 var(--d-pink-dk), 0 12px 24px rgba(255, 45, 138, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.door-btn.primary .ico { color: var(--d-ink); }
+.door-btn.primary .k { opacity: 0.68; }
+.door-btn.primary:hover { border-color: #ffd9ec; filter: brightness(1.04); box-shadow: 0 7px 0 var(--d-pink-dk), 0 16px 30px rgba(255, 45, 138, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.6); }
+.door-btn.primary:hover .ico { color: var(--d-ink); }
+.door-btn.primary:active { box-shadow: 0 1px 0 var(--d-pink-dk), 0 4px 10px rgba(255, 45, 138, 0.2); }
+/* THE BREATH: the one thing on the card that loops, 3600 ms like the HUD's vignette; a glow layer, opacity only */
+.door-btn.primary::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 20px; pointer-events: none;
+  box-shadow: 0 0 24px 3px rgba(255, 95, 162, 0.6); opacity: 0.2;
   animation: door-breath 3600ms ease-in-out infinite;
 }
-@keyframes door-breath {
-  0%, 100% { box-shadow: 0 0 14px rgba(255, 105, 180, 0.25); }
-  50% { box-shadow: 0 0 26px rgba(255, 105, 180, 0.6); }
-}
-.door-btn.primary:hover { background: #FF7DBE; border-color: #FF7DBE; }
-/* off (no lobby, or nobody to play as): dim, still, and it does not breathe -
-   a button that glows and does nothing reads as broken */
-.door-btn:disabled, .door-btn.primary:disabled { opacity: 0.4; cursor: default; animation: none; box-shadow: none; transform: none; }
-.door-btn.primary:disabled:hover { background: var(--pbp-pink); border-color: var(--pbp-pink); }
-.door-btn .k { font-size: 10px; opacity: 0.55; letter-spacing: 0.1em; }
+@keyframes door-breath { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.75; } }
+/* off (no lobby, or nobody to play as): dim, still, and it does not breathe - a button that glows and does nothing reads as broken */
+.door-btn:disabled, .door-btn:disabled:hover { opacity: 0.42; cursor: default; transform: none; filter: none; }
+.door-btn:disabled::after { display: none; }
+.door-btn:disabled .ico { transform: none; }
+.door-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.door-pair .door-btn { min-height: 60px; padding: 8px 12px; gap: 10px; }
 .door-row { display: flex; gap: 10px; }
 .door-row .door-btn { flex: 1; }
-.door-links { display: flex; justify-content: center; gap: 22px; margin-top: 2px; }
-.door-link {
-  background: none; border: 0; padding: 6px 2px; cursor: pointer; color: var(--pbp-ink);
-  font: 11px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.5;
-  border-bottom: 1px solid transparent; transition: opacity 140ms ease, border-color 140ms ease;
-}
-.door-link:hover { opacity: 0.95; border-bottom-color: rgba(255, 105, 180, 0.6); }
-.door-link:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 2px; opacity: 1; }
-.door-foot { display: flex; justify-content: space-between; align-items: center; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.38; }
-.door-foot .name { text-transform: none; letter-spacing: 0.06em; }
-.door-foot .name b { color: var(--pbp-cream); font-weight: 500; }
 
-/* --- lists (lobby, past games) --- */
-.door-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; overflow-y: auto; max-height: 44vh; scrollbar-width: thin; scrollbar-color: rgba(255, 105, 180, 0.5) transparent; }
+/* the small doors: past games, profile, ladder, pictures, as four tiles you can press */
+.door-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.door-tiles.three { grid-template-columns: repeat(3, 1fr); }
+.door-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0;
+  min-height: 66px; padding: 9px 4px 8px; border-radius: 14px; cursor: pointer;
+  font: 600 13px/1.1 var(--d-face); color: var(--d-cream);
+  background: rgba(251, 241, 226, 0.045); border: 1.5px solid rgba(251, 241, 226, 0.12); box-shadow: 0 3px 0 var(--d-edge);
+  transition: transform 220ms var(--d-thud), box-shadow 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+.door-tile span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.door-tile .ico { width: 26px; height: 26px; color: var(--d-brass); transition: transform 280ms var(--d-thud), color 140ms ease; }
+.door-tile:hover { transform: translateY(-2px); border-color: rgba(255, 159, 208, 0.45); background-color: rgba(255, 95, 162, 0.07); box-shadow: 0 5px 0 var(--d-edge); }
+.door-tile:hover .ico { color: var(--d-pink-hi); transform: rotate(-9deg) scale(1.12); }
+.door-tile:active { transform: translateY(2px) scale(0.96, 0.92); box-shadow: 0 1px 0 var(--d-edge); transition-duration: 70ms; }
+.door-tile:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 3px; }
+
+/* --- chips: the level, the setup, a table's clock, the stake. The pick is pink and raised --- */
+.level-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 0; }
+.level-pill, .stake-pill {
+  cursor: pointer; padding: 7px 12px; border-radius: 999px; color: var(--d-cream);
+  background: rgba(251, 241, 226, 0.05); border: 1.5px solid rgba(251, 241, 226, 0.16); box-shadow: 0 2px 0 var(--d-edge);
+  font: 600 13px/1 var(--d-face); letter-spacing: 0.01em; text-transform: none;
+  transition: transform 200ms var(--d-thud), background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.level-pill:hover, .stake-pill:hover { border-color: rgba(255, 95, 162, 0.55); transform: translateY(-1px); }
+.level-pill:active, .stake-pill:active { transform: translateY(1px) scale(0.95); box-shadow: 0 1px 0 var(--d-edge); transition-duration: 60ms; }
+.level-pill.on, .stake-pill.on { color: var(--d-ink); background: linear-gradient(180deg, #ffadd6, var(--d-pink)); border-color: #ffc6e2; box-shadow: 0 3px 0 var(--d-pink-dk); }
+.level-pill:focus-visible, .stake-pill:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 2px; }
+.level-blurb { margin: 6px 0 0; text-align: center; font: italic 500 14px/1.2 var(--d-serif); opacity: 0.75; }
+.level-slot { margin-top: -4px; }
+
+/* solo setup: one disclosure, chip rows inside */
+.door-setup { border-radius: 14px; background: rgba(251, 241, 226, 0.035); border: 1px solid rgba(251, 241, 226, 0.09); }
+.door-setup summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none; font: 600 14px/1 var(--d-face); border-radius: 14px; transition: background-color 140ms ease; }
+.door-setup summary::-webkit-details-marker { display: none; }
+.door-setup summary:hover { background: rgba(251, 241, 226, 0.05); }
+.door-setup summary .k { margin-left: auto; font-weight: 500; font-size: 12px; opacity: 0.6; }
+.door-setup .chev { width: 8px; height: 8px; border-right: 2px solid var(--d-brass); border-bottom: 2px solid var(--d-brass); transform: rotate(-45deg); transition: transform 240ms var(--d-thud); margin: 0 4px 0 2px; }
+.door-setup[open] .chev { transform: rotate(45deg); }
+.door-setup summary:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 2px; }
+.door-settings { display: grid; gap: 10px; padding: 2px 12px 12px; }
+.setup-row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; }
+.setup-k { font: 500 12px/1.2 var(--d-face); opacity: 0.65; }
+.setup-row .level-row { justify-content: flex-start; }
+
+/* --- the stamp: the opening card's "Mostly.", a word that lands tilted with an ink edge --- */
+.door-stamp {
+  display: inline-block; align-self: center; font: 700 34px/1 var(--d-face); color: var(--d-pink); white-space: nowrap;
+  text-shadow: var(--d-rim), 0 0 16px rgba(255, 45, 138, 0.45);
+  transform: rotate(-6deg); animation: door-stamp-in 320ms var(--d-thud) 180ms both;
+}
+@keyframes door-stamp-in {
+  0% { opacity: 0; transform: scale(1.9) rotate(-14deg); }
+  60% { opacity: 1; transform: scale(0.94) rotate(-5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-6deg); }
+}
+.door-stamp.big { font-size: 48px; }
+.door-stamp.draw { color: var(--d-cream); text-shadow: var(--d-rim), 0 0 14px rgba(251, 241, 226, 0.25); }
+/* a loss subtracts: muted ink, no glow, a small shiver once it lands */
+.door-stamp.loss { color: var(--d-mute); text-shadow: var(--d-rim); animation: door-stamp-in 320ms var(--d-thud) 180ms both, door-shiver 250ms ease-in-out 520ms; }
+.door-stamp.small { font-size: 14px; padding: 4px 8px; border: 2px solid currentColor; border-radius: 7px; text-shadow: none; transform: rotate(-5deg); }
+@keyframes door-shiver { 0%, 100% { translate: 0 0; } 25% { translate: -3px 0; } 50% { translate: 3px 0; } 75% { translate: -2px 0; } }
+
+/* --- lists (past games) --- */
+.door-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 2px 4px 6px 0; list-style: none; overflow-y: auto; max-height: min(56vh, 460px); }
 .door-item {
-  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px;
-  padding: 10px 12px; border-radius: 12px; background: rgba(245, 230, 200, 0.05);
-  border: 1px solid rgba(245, 230, 200, 0.1);
-  animation: door-swap 200ms ease both;
+  display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 14px; background: rgba(251, 241, 226, 0.045); border: 1px solid rgba(251, 241, 226, 0.1);
+  animation: door-item-in 280ms var(--d-thud) both; animation-delay: calc(140ms + var(--i, 0) * 40ms);
+  transition: border-color 140ms ease, transform 200ms var(--d-thud);
 }
-.door-item .who { font-size: 14px; color: var(--pbp-cream); letter-spacing: 0.02em; }
-.door-item .meta { font-size: 11px; letter-spacing: 0.1em; opacity: 0.5; text-transform: lowercase; font-variant-numeric: tabular-nums; }
-.door-item .meta.win { color: #8CF0B4; opacity: 0.9; }
-.door-item .meta.loss { color: #FF6E8A; opacity: 0.9; }
-.door-item .meta.draw { color: var(--pbp-cream); opacity: 0.7; }
+@keyframes door-item-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+.door-item:hover { border-color: rgba(255, 95, 162, 0.35); transform: translateX(2px); }
+.door-item .res { justify-self: center; padding: 3px 7px; border: 2px solid currentColor; border-radius: 7px; font: 700 13px/1 var(--d-face); transform: rotate(-5deg); color: var(--d-cream); opacity: 0.75; }
+.door-item .res.win { color: var(--d-pink); opacity: 1; }
+.door-item .res.loss { color: var(--d-mute); opacity: 0.8; }
+.door-item .res.none { opacity: 0.45; }
+.door-item .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; font: 600 16px/1.15 var(--d-face); color: var(--d-cream); }
+.door-item .meta { font: 500 12px/1.2 var(--d-face); opacity: 0.55; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .door-pill {
-  cursor: pointer; padding: 7px 12px; border-radius: 999px; color: var(--pbp-pink);
-  background: rgba(255, 105, 180, 0.08); border: 1px solid rgba(255, 105, 180, 0.5);
-  font: 10px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.18em; text-transform: uppercase;
-  transition: transform 140ms cubic-bezier(.2, 1.5, .4, 1), background-color 140ms ease;
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+  color: var(--d-pink-hi); background: rgba(255, 95, 162, 0.1); border: 1.5px solid rgba(255, 95, 162, 0.5); box-shadow: 0 2px 0 var(--d-edge);
+  font: 600 13px/1 var(--d-face); letter-spacing: 0.01em; text-transform: none;
+  transition: transform 200ms var(--d-thud), background-color 140ms ease, box-shadow 140ms ease;
 }
-.door-pill:hover { background: rgba(255, 105, 180, 0.2); }
-.door-pill:active { transform: scale(0.95); }
-.door-pill:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 2px; }
-.door-item.leaving { animation: door-leave 180ms ease both; }
-
-/* --- the computer's strength: five pills under Play solo, the pick lit --- */
-.level-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: -2px 0 0; }
-.level-pill {
-  cursor: pointer; padding: 6px 11px; border-radius: 999px; color: var(--pbp-ink);
-  background: rgba(245, 230, 200, 0.05); border: 1px solid rgba(245, 230, 200, 0.2);
-  font: 10px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.12em; text-transform: uppercase;
-  transition: transform 140ms cubic-bezier(.2, 1.5, .4, 1), background-color 140ms ease, border-color 140ms ease;
-}
-.level-pill:hover { border-color: rgba(255, 105, 180, 0.5); }
-.level-pill:active { transform: scale(0.95); }
-.level-pill.on { color: var(--pbp-pink); background: rgba(255, 105, 180, 0.16); border-color: rgba(255, 105, 180, 0.7); }
-.level-pill:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 2px; }
-.level-blurb { margin: 2px 0 0; text-align: center; font-size: 11px; opacity: 0.55; }
+.door-pill .ico { width: 16px; height: 16px; }
+.door-pill:hover { background: rgba(255, 95, 162, 0.2); transform: translateY(-1px); box-shadow: 0 3px 0 var(--d-edge); }
+.door-pill:active { transform: translateY(1px) scale(0.95); box-shadow: 0 0 0 var(--d-edge); transition-duration: 60ms; }
+.door-pill:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 2px; }
+.door-pill.hot { color: var(--d-ink); background: linear-gradient(180deg, #ffadd6, var(--d-pink)); border-color: #ffc6e2; box-shadow: 0 3px 0 var(--d-pink-dk); }
+.door-empty { padding: 18px 4px; font: 500 13px/1.35 var(--d-face); opacity: 0.65; display: flex; align-items: center; gap: 10px; }
+.door-empty.big { flex-direction: column; text-align: center; padding: 26px 18px; font-size: 15px; }
+.door-empty.big .ico { width: 36px; height: 36px; color: var(--d-brass); }
+/* the waiting dot: on the lobby it is the screen's BREATH instead of the button (there is no primary while you wait) */
+.door-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--d-pink); box-shadow: 0 0 8px rgba(255, 105, 180, 0.8); animation: door-breath-dot 1800ms ease-in-out infinite; }
+@keyframes door-breath-dot { 0%, 100% { opacity: 0.35; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.1); } }
+.door.looking .door-btn.primary::after { display: none; }
+.door.looking .door-btn.primary { opacity: 0.6; }
 
 /* --- the stake row: one line of small pills, the pick lit; online games only --- */
 .stake-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.stake-k { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.55; margin-right: 4px; }
-.stake-pill {
-  cursor: pointer; padding: 6px 10px; border-radius: 999px; color: var(--pbp-ink);
-  background: rgba(245, 230, 200, 0.05); border: 1px solid rgba(245, 230, 200, 0.2);
-  font: 10px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.12em; text-transform: uppercase;
-  transition: transform 140ms cubic-bezier(.2, 1.5, .4, 1), background-color 140ms ease, border-color 140ms ease;
-}
-.stake-pill:hover { border-color: rgba(255, 105, 180, 0.5); }
-.stake-pill:active { transform: scale(0.95); }
-.stake-pill.on { color: var(--pbp-pink); background: rgba(255, 105, 180, 0.16); border-color: rgba(255, 105, 180, 0.7); }
+.stake-k { font: 500 12px/1 var(--d-face); opacity: 0.6; margin-right: 4px; }
 .stake-pill:disabled { cursor: default; opacity: 0.45; transform: none; }
 .stake-pill.on:disabled { opacity: 0.8; }
-.stake-pill:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 2px; }
-.stake-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 11px; letter-spacing: 0.1em; }
-.stake-chip { padding: 4px 9px; border-radius: 999px; background: rgba(245, 230, 200, 0.08); opacity: 0.85; }
-.stake-chip b, .stake-live b { font-weight: 500; color: var(--pbp-cream); }
-.stake-note { opacity: 0.55; text-transform: lowercase; }
+.stake-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; font: 500 12px/1.2 var(--d-face); }
+.stake-chip { padding: 4px 9px; border-radius: 999px; background: rgba(251, 241, 226, 0.08); opacity: 0.85; }
+.stake-chip b, .stake-live b { font-weight: 600; color: var(--pbp-cream); }
+.stake-note { opacity: 0.6; }
 .door-found .stake-slot { align-self: stretch; }
-.door-found .stake-row { justify-content: center; }
-.door-found .stake-meta { justify-content: center; }
-.stake-result { margin: 0; font-size: 13px; letter-spacing: 0.08em; color: var(--pbp-pink); }
+.door-found .stake-row, .door-found .stake-meta { justify-content: center; }
+.stake-result { margin: 0; font: 600 14px/1.2 var(--d-face); color: var(--d-pink); }
 .stake-result:empty { display: none; }
 /* over the board while an online game with a stake runs */
 .stake-live {
@@ -162,157 +292,179 @@
 .stake-live .lock { opacity: 0.55; }
 /* narrow: the two clock chips take the top, so the stake sits above the focus line */
 @media (max-width: 760px) { .stake-live { top: auto; bottom: 140px; } }
-@keyframes door-leave { to { opacity: 0; transform: translateX(10px); } }
-.door-empty { padding: 18px 4px; font-size: 12px; letter-spacing: 0.12em; opacity: 0.55; text-transform: lowercase; display: flex; align-items: center; gap: 10px; }
-/* the waiting dot: on the lobby it is the screen's BREATH instead of the button (there is no primary while you wait) */
-.door-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pbp-pink); box-shadow: 0 0 8px rgba(255, 105, 180, 0.8); animation: door-breath-dot 1800ms ease-in-out infinite; }
-@keyframes door-breath-dot { 0%, 100% { opacity: 0.35; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.1); } }
-.door.looking .door-btn.primary { animation: none; opacity: 0.55; }
 
-/* --- the incoming challenge: a small line at the top of the card, one tap --- */
+/* --- the incoming challenge: a line at the top of the card, two buttons --- */
 .door-ask {
-  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px;
-  padding: 10px 12px; border-radius: 12px; background: rgba(255, 105, 180, 0.1);
-  border: 1px solid rgba(255, 105, 180, 0.45); font-size: 12px; letter-spacing: 0.06em;
-  animation: door-reveal 340ms cubic-bezier(.2, 1.5, .4, 1) both;
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px;
+  padding: 10px 12px; border-radius: 14px; background: rgba(255, 95, 162, 0.1);
+  border: 1.5px solid rgba(255, 95, 162, 0.5); font: 500 14px/1.2 var(--d-face);
+  animation: door-reveal 340ms var(--d-thud) both;
 }
-.door-ask b { color: var(--pbp-cream); font-weight: 500; }
-.door-ask .door-link { padding: 4px 6px; }
+.door-ask b { color: var(--d-cream); font-weight: 700; }
 
-/* --- match found: the JACKPOT-shaped beat, kept small --- */
-.door-found { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0 4px; text-align: center; }
-/* THE THUD 340ms cubic-bezier(.2,1.5,.4,1): scale 2.1 -> 0.86 -> 1, brightness 2.2 -> 1 */
-.door-found .line { margin: 0; font-size: 22px; color: var(--pbp-cream); animation: door-thud 340ms cubic-bezier(.2, 1.5, .4, 1) both; }
-@keyframes door-thud {
-  0% { transform: scale(2.1); filter: brightness(2.2); opacity: 0; }
-  55% { transform: scale(0.86); filter: brightness(1.3); opacity: 1; }
-  100% { transform: scale(1); filter: brightness(1); opacity: 1; }
-}
-.door-found .side { margin: 0; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.6; }
-.door-found .side b { font-weight: 600; padding: 2px 8px; border-radius: 6px; }
-.door-found .side b.w { color: #1A1A3E; background: var(--pbp-cream); }
-.door-found .side b.b { color: var(--pbp-cream); background: #3B2A63; }
+/* --- match found: the stamp, who, which side, the count --- */
+.door-found { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 4px 0 2px; text-align: center; }
+.door-found .door-stamp { font-size: 44px; }
+.door-found .line { margin: 4px 0 0; font: italic 500 18px/1.2 var(--d-serif); color: var(--d-cream); }
+.door-found .line b { font: 700 22px/1 var(--d-face); font-style: normal; color: var(--d-pink); text-shadow: var(--d-rim); }
+.door-found .side { margin: 0; font: 500 13px/1 var(--d-face); opacity: 0.8; }
+.door-found .side b { font-weight: 700; padding: 3px 9px; border-radius: 7px; }
+.door-found .side b.w { color: var(--d-ink); background: var(--d-cream); }
+.door-found .side b.b { color: var(--d-cream); background: #3b2a63; }
 /* CHIME LADDER, drawn: 3 2 1 each land with a small BOUNCE, the tone under them rises */
-.door-count { font-size: 44px; line-height: 1; color: var(--pbp-pink); font-variant-numeric: tabular-nums; min-height: 48px; }
-.door-count.tick { animation: door-bounce 300ms cubic-bezier(.2, 1.5, .4, 1) both; }
+.door-count { font: 700 52px/1 var(--d-face); color: var(--d-pink); text-shadow: var(--d-rim); font-variant-numeric: tabular-nums; min-height: 54px; }
+.door-count.tick { animation: door-bounce 300ms var(--d-thud) both; }
 @keyframes door-bounce { 0% { transform: scale(0.6); opacity: 0.3; } 100% { transform: scale(1); opacity: 1; } }
-.door-found .skip { opacity: 0.4; }
 
-/* --- the end card --- */
-.door-end { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding-top: 4px; }
-.door-end .result { margin: 0; font-size: 26px; color: var(--pbp-cream); animation: door-thud 340ms cubic-bezier(.2, 1.5, .4, 1) both; }
-.door-end .result.win { color: var(--pbp-pink); }
-/* a loss gets sympathy: a SHIVER on the line, then it settles; never silence */
-.door-end .result.loss { animation: door-thud 340ms cubic-bezier(.2, 1.5, .4, 1) both, door-shiver 250ms ease-in-out 340ms both; }
-@keyframes door-shiver { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-2px); } }
-.door-end .tally { margin: 0; font-size: 12px; letter-spacing: 0.16em; opacity: 0.55; text-transform: lowercase; font-variant-numeric: tabular-nums; }
-/* the slot the XP and recap agent fills; empty it takes no room */
+/* --- the end card: the result stamp, how, the rating band, the two choices, then the fall --- */
+.door-end { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding-top: 2px; }
+.door-end .result { margin: 6px 0 0; font: italic 500 18px/1.2 var(--d-serif); color: var(--d-cream); opacity: 0.9; }
+.door-end .result:empty { display: none; }
+.door-end .tally { margin: 0; font: 500 13px/1 var(--d-face); opacity: 0.62; font-variant-numeric: tabular-nums; }
+/* the ladder's +N roll (ui/ladder.js) gets a framed band of its own */
+.end-rating { align-self: stretch; margin-top: 6px; padding: 8px 10px; border-radius: 14px; background: rgba(251, 241, 226, 0.04); border: 1.5px dashed rgba(226, 165, 68, 0.4); }
+.end-rating:has(.rating-slot:empty) { display: none; }
+.end-acts .door-btn { justify-content: center; }
 #door-recap:empty { display: none; }
-#door-recap { width: 100%; }
+#door-recap { width: 100%; padding-top: 12px; border-top: 1px dashed rgba(251, 241, 226, 0.14); }
 /* the fall (door/fall.js): where your IQ went, the line it took, the move it left on.
    The curve draws on once as the card lands; reduced motion gets it drawn. */
-.fall { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.fall { display: flex; flex-direction: column; gap: 10px; text-align: center; }
 .fall-row { display: grid; justify-items: center; gap: 4px; }
-.fall-who { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.5; }
-.fall-iq { margin: 0; font-size: 34px; line-height: 1.1; color: var(--pbp-cream); font-variant-numeric: tabular-nums; }
-.fall-iq .from { font-size: 0.55em; letter-spacing: 0.08em; opacity: 0.6; }
+.fall-who { font: 500 11px/1 var(--d-face); letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.55; }
+.fall-iq { margin: 0; font: 600 30px/1.1 var(--d-face); color: var(--d-cream); font-variant-numeric: tabular-nums; }
+.fall-iq .from { font-size: 0.55em; opacity: 0.6; }
 .fall-iq .arrow { font-size: 0.6em; opacity: 0.45; }
-.fall-iq .to { font-weight: 500; color: var(--pbp-pink); }
+.fall-iq .to { font-weight: 700; color: var(--d-pink); }
 .fall-curve { width: min(220px, 70vw); height: auto; overflow: visible; }
-.fall-curve path { fill: none; stroke: var(--pbp-pink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
+.fall-curve path { fill: none; stroke: var(--d-pink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
   stroke-dasharray: 1 1; animation: fall-draw 900ms ease-out 200ms both; }
 .fall-curve .base { stroke: rgba(245, 230, 200, 0.18); stroke-width: 1; stroke-dasharray: 2 3; }
-.fall-curve circle { fill: var(--pbp-cream); stroke: var(--pbp-pink); stroke-width: 1.5; animation: door-swap 200ms ease 1000ms both; }
+.fall-curve circle { fill: var(--d-cream); stroke: var(--d-pink); stroke-width: 1.5; animation: door-item-in 200ms ease 1000ms both; }
 @keyframes fall-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-.fall-line { margin: 0; font-size: 13px; letter-spacing: 0.02em; color: var(--pbp-ink); opacity: 0.85; }
-/* two players here: a compact row each */
+.fall-line { margin: 0; font: italic 500 15px/1.3 var(--d-serif); opacity: 0.88; }
 .fall.two { gap: 8px; }
-.fall.two .fall-iq { font-size: 24px; }
+.fall.two .fall-iq { font-size: 22px; }
 .fall.two .fall-curve { width: min(180px, 60vw); }
-.fall.two .fall-line { font-size: 12px; }
+.fall.two .fall-line { font-size: 13px; }
 /* watch the fall, save the picture, copy it; one quiet line says how it went */
-.fall-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 2px; }
-.fall-note { margin: 0; font-size: 11px; letter-spacing: 0.06em; opacity: 0.7; }
+.fall-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+.fall-note { margin: 0; font: 500 12px/1.2 var(--d-face); opacity: 0.75; }
 .fall-note:empty { display: none; }
 
-/* --- profile --- */
-.door-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.door-stat { padding: 12px 10px; border-radius: 12px; background: rgba(245, 230, 200, 0.05); border: 1px solid rgba(245, 230, 200, 0.1); text-align: center; }
-.door-stat .n { display: block; font-size: 22px; color: var(--pbp-cream); font-variant-numeric: tabular-nums; }
-.door-stat .n.pink { color: var(--pbp-pink); }
-.door-stat .l { display: block; margin-top: 4px; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.45; }
-.door-stat.wide { grid-column: 1 / -1; }
-.door-name { display: flex; align-items: center; gap: 10px; }
-.door-name input {
-  flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; color: var(--pbp-cream);
-  background: rgba(245, 230, 200, 0.05); border: 1px solid rgba(245, 230, 200, 0.16);
-  font: 14px 'Segoe UI', system-ui, sans-serif;
+/* --- profile: a name plate, the record with its bar, then the small numbers --- */
+.door-plate { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: rgba(251, 241, 226, 0.04); border: 1px solid rgba(251, 241, 226, 0.1); }
+.door-mono {
+  display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%;
+  font: 700 25px/1 var(--d-face); color: var(--d-brass-ink);
+  background: radial-gradient(circle at 35% 30%, var(--d-brass-hi), var(--d-brass) 55%, var(--d-brass-lo));
+  border: 2px solid var(--d-brass-ink); box-shadow: inset 0 -3px 0 rgba(58, 34, 8, 0.45), 0 3px 0 var(--d-edge);
 }
-.door-name input:focus { outline: 2px solid var(--pbp-pink); outline-offset: 1px; }
+.door-name { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.door-name input {
+  width: 100%; min-width: 0; padding: 2px 0 4px; border: 0; border-bottom: 1.5px dashed rgba(251, 241, 226, 0.3); border-radius: 0;
+  background: transparent; color: var(--d-cream); font: 600 20px/1.2 var(--d-face);
+}
+.door-name input:focus { outline: none; border-bottom: 1.5px solid var(--d-pink); }
 /* hosted, the name is the account's and is shown, not typed */
-.door-name input[readonly] { opacity: 0.6; cursor: default; }
-.door-name input[readonly]:focus { outline: none; }
+.door-name input[readonly] { border-bottom-color: transparent; cursor: default; }
+.door-name-k { display: flex; align-items: center; gap: 8px; font: 500 12px/1 var(--d-face); opacity: 0.6; }
+.door-name-k .ladder-chip { opacity: 1; }
+.door-plate .door-stamp.small { margin-right: 4px; }
+.door-record { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; padding: 2px 4px; }
+.door-record .rec { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.door-record .n { font: 700 34px/1 var(--d-face); font-variant-numeric: tabular-nums; text-shadow: var(--d-rim); }
+.door-record .l { font: 500 12px/1 var(--d-face); opacity: 0.62; }
+.door-record .win .n { color: var(--d-pink); }
+.door-record .loss .n { color: var(--d-mute); }
+.door-record .draw .n { color: var(--d-cream); }
+.rec-bar { grid-column: 1 / -1; display: flex; height: 8px; margin-top: 8px; border-radius: 999px; overflow: hidden; background: rgba(251, 241, 226, 0.08); transform-origin: left center; animation: door-bar-grow 700ms cubic-bezier(.2, 1, .3, 1) 260ms both; }
+.rec-bar i { display: block; width: var(--w, 0%); height: 100%; }
+.rec-bar .win { background: var(--d-pink); }
+.rec-bar .loss { background: #6d5a80; }
+.rec-bar .draw { background: rgba(251, 241, 226, 0.55); }
+@keyframes door-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.door-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.door-stat {
+  padding: 11px 6px 10px; border-radius: 12px; text-align: center; background: rgba(251, 241, 226, 0.045);
+  border: 1px solid rgba(251, 241, 226, 0.1); box-shadow: 0 2px 0 var(--d-edge);
+  animation: door-item-in 300ms var(--d-thud) both;
+}
+.door-stat:nth-child(2) { animation-delay: 40ms; } .door-stat:nth-child(3) { animation-delay: 80ms; }
+.door-stat:nth-child(4) { animation-delay: 120ms; } .door-stat:nth-child(5) { animation-delay: 160ms; } .door-stat:nth-child(6) { animation-delay: 200ms; }
+.door-stat .n { display: block; font: 600 20px/1.1 var(--d-face); color: var(--d-cream); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.door-stat.pink .n { color: var(--d-pink); }
+.door-stat .l { display: block; margin-top: 5px; font: 500 11px/1 var(--d-face); letter-spacing: 0.04em; opacity: 0.58; }
+.door-stat.wide { grid-column: 1 / -1; }
+.door-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font: 500 12px/1.2 var(--d-face); opacity: 0.6; }
 
 /* --- replay: the card folds down to a strip so the board is the subject --- */
-.door.screen-replay { align-items: flex-end; padding-bottom: 26px; }
-.door.screen-replay .door-veil { opacity: 0; }
-.door.screen-replay .door-card { width: min(520px, 94vw); padding: 14px 16px; gap: 10px; }
-.door-strip { display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 10px; }
-.door-strip .san { font-size: 13px; color: var(--pbp-cream); text-align: center; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
-.door-strip .san i { font-style: normal; opacity: 0.45; margin-right: 8px; }
-.door-scrub { width: 100%; accent-color: var(--pbp-pink); }
-.door-ico { width: 40px; min-height: 40px; padding: 0; font-size: 14px; letter-spacing: 0; }
+.door.screen-replay { align-items: flex-end; padding-bottom: 24px; }
+.door.screen-replay .door-veil { opacity: 0; animation: none; }
+.door.screen-replay .door-card { width: min(540px, calc(100vw - 32px)); padding: 12px 16px 14px; }
+.door.screen-replay .door-body { gap: 10px; }
+.door.screen-replay .door-top { grid-template-columns: auto 1fr; }
+.replay-title { font: 500 13px/1.2 var(--d-face); opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.door-strip { display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 8px; }
+.door-strip .san { font: 600 17px/1 var(--d-face); color: var(--d-cream); text-align: center; font-variant-numeric: tabular-nums; }
+.door-strip .san i { font-style: normal; opacity: 0.5; margin-right: 8px; }
+.door-ico { width: 44px; min-height: 42px; padding: 0; justify-content: center; font-size: 15px; letter-spacing: 0; }
+.door-scrub {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 8px; margin: 6px 0 2px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(to right, var(--d-pink) var(--p, 0%), rgba(251, 241, 226, 0.12) var(--p, 0%));
+}
+.door-scrub::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--d-brass-ink);
+  background: radial-gradient(circle at 35% 30%, var(--d-brass-hi), var(--d-brass) 60%, var(--d-brass-lo)); box-shadow: 0 2px 0 var(--d-edge);
+  transition: transform 180ms var(--d-thud);
+}
+.door-scrub:active::-webkit-slider-thumb { transform: scale(1.18); }
+.door-scrub:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 4px; }
 
 /* the HUD and the camera row step aside while the door is up */
 .hud.parked, .cam-views.parked { opacity: 0 !important; pointer-events: none !important; transition: opacity 260ms ease; }
 
+/* the OUT of the whole door (door.js leaveCard): a frozen copy sinks and fades over the game that has already started */
+.door.door-out { pointer-events: none !important; z-index: 7; }
+.door.door-out > * { pointer-events: none !important; }
+.door.door-out .door-veil { animation: door-veil-out 240ms ease-in both; }
+.door.door-out .door-card { animation: door-card-out 200ms cubic-bezier(.4, 0, 1, 1) both; }
+.door.door-out .door-card * { animation: none !important; }
+@keyframes door-veil-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes door-card-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(16px) scale(0.95); } }
+
 /* reduced motion: state, not travel */
 .door.still *, .door.still { animation: none !important; transition: none !important; }
-
-/* Setup stays behind one disclosure; the play choices remain the front door. */
-.door-card { overflow-y: auto; background: rgba(20,20,46,.94); }
-.door-setup { font-size: 13px; color: var(--pbp-cream); }
-.door-setup summary { cursor: pointer; padding: 6px 0; }
-.door-settings { display: grid; gap: 12px; padding: 12px 0 4px; }
-.door-settings label { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 10px; }
-.door-settings select { min-width: 0; padding: 8px; color: var(--pbp-cream); background: #262641; border: 1px solid #76718c; border-radius: 8px; font: inherit; }
-.door-settings select:focus-visible, .door-setup summary:focus-visible { outline: 2px solid var(--pbp-pink); outline-offset: 3px; }
-.door-sub, .door-foot { opacity: .8; }
-@media (max-width: 480px) { .door-btn { letter-spacing: .06em; padding: 0 10px; } .door-settings label { grid-template-columns: 80px 1fr; } }
-
-.door-end .result { font-size: clamp(22px, 3vw, 30px); line-height: 1.25; }
-.door-end .tally { opacity: .8; letter-spacing: .05em; }
 
 /* --- open tables: a list you browse, one tap on Join sits you down ---
    The scroll region holds the open tables and the games on now; the card
    around it stays put. Rows land once (stagger, then never again on a poll),
    the Join pill lifts on hover and dips on press, and reduced motion keeps
    every state without the travel (.door.still above). */
-.door.screen-lobby .door-card { width: min(520px, 94vw); }
+.door.screen-lobby .door-card { width: min(540px, calc(100vw - 32px)); }
 .tables-panel { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .tables-side { display: flex; flex-direction: column; gap: 12px; }
-.tables-actions .door-btn { min-width: 0; }
-.host-btn.on { color: var(--pbp-pink); border-color: rgba(255, 105, 180, 0.7); background: rgba(255, 105, 180, 0.12); }
+.tables-sub { text-align: center; }
+.tables-actions .door-btn { min-width: 0; justify-content: center; }
+.ladder-me { gap: 6px; padding: 6px 11px 6px 8px; }
+.ladder-me .ladder-chip { font-size: 13px; }
+.ladder-me .ladder-rank:empty { display: none; }
+.host-btn.on { color: var(--d-pink); border-color: rgba(255, 95, 162, 0.7); background: rgba(255, 95, 162, 0.12); }
 .host-btn:disabled.on { opacity: 1; }
-.tc-row { justify-content: flex-start; margin: 0; }
-.tables-note { margin: 0; min-height: 0; font-size: 12px; letter-spacing: 0.08em; color: #FF8FB8; }
+.tc-row { justify-content: center; margin: 0; }
+.tables-note { margin: 0; min-height: 0; font: 500 13px/1.2 var(--d-face); text-align: center; color: #ff8fb8; }
 .tables-note:empty { display: none; }
 .tables-note:not(:empty) { animation: door-shiver 250ms ease-in-out both; }
 
 .tables-scroll {
   max-height: min(46vh, 440px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
   -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding: 2px 4px 10px 2px; margin-right: -4px;
-  scrollbar-width: thin; scrollbar-color: rgba(255, 105, 180, 0.55) transparent;
   border-radius: 12px;
   /* the bottom edge fades, so a list that goes on reads as one that goes on */
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
 }
 .tables-scroll:focus-visible { outline: 2px solid rgba(255, 105, 180, 0.6); outline-offset: 2px; }
-.tables-scroll::-webkit-scrollbar { width: 6px; }
-.tables-scroll::-webkit-scrollbar-track { background: transparent; }
-.tables-scroll::-webkit-scrollbar-thumb { background: rgba(255, 105, 180, 0.45); border-radius: 999px; }
-.tables-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 105, 180, 0.8); }
 .tables-list, .playing-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
 
 .table-row {
@@ -320,19 +472,18 @@
   align-items: center; padding: 11px 12px 11px 16px; border-radius: 14px;
   background: linear-gradient(100deg, rgba(245, 230, 200, 0.07), rgba(245, 230, 200, 0.03));
   border: 1px solid rgba(245, 230, 200, 0.1);
-  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms cubic-bezier(.2, 1.5, .4, 1);
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms var(--d-thud);
 }
-.table-row.fresh { animation: table-land 300ms cubic-bezier(.2, 1.5, .4, 1) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.table-row.fresh { animation: table-land 300ms var(--d-thud) both; animation-delay: calc(var(--i, 0) * 40ms); }
 @keyframes table-land { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
 .table-row:hover { border-color: rgba(255, 105, 180, 0.38); background-color: rgba(255, 105, 180, 0.05); }
 .table-name {
   grid-column: 1; grid-row: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 20px; line-height: 1.15; font-weight: 500; letter-spacing: 0.01em; color: var(--pbp-cream);
-  transition: transform 160ms ease;
+  font: 600 20px/1.15 var(--d-face); color: var(--d-cream); transition: transform 160ms ease;
 }
 .table-row:hover .table-name { transform: translateX(2px); }
-.table-meta { grid-column: 1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; letter-spacing: 0.08em; opacity: 0.62; text-transform: lowercase; font-variant-numeric: tabular-nums; }
-.table-meta b { font-weight: 600; color: var(--pbp-pink); opacity: 1; }
+.table-meta { grid-column: 1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 12px/1.2 var(--d-face); opacity: 0.62; font-variant-numeric: tabular-nums; }
+.table-meta b { font-weight: 600; color: var(--d-pink); opacity: 1; }
 .table-meta .rating::before { content: '\2605  '; opacity: 0.7; }
 .table-row.mine { border-style: dashed; border-color: rgba(255, 105, 180, 0.5); }
 .table-row.mine .door-dot { grid-column: 2; grid-row: 1 / span 2; margin-right: 18px; }
@@ -342,43 +493,72 @@
 .table-join {
   grid-column: 2; grid-row: 1 / span 2; display: inline-flex; align-items: center; gap: 8px;
   min-width: 84px; min-height: 42px; justify-content: center; padding: 0 20px; border-radius: 999px; cursor: pointer;
-  font: 600 12px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.2em; text-transform: uppercase;
-  color: #1A1A3E; background: linear-gradient(180deg, #FF8CC8, var(--pbp-pink));
-  border: 1px solid rgba(255, 190, 225, 0.9);
-  box-shadow: 0 3px 0 #B83A7E, 0 6px 14px rgba(255, 105, 180, 0.25);
-  transition: transform 140ms cubic-bezier(.2, 1.5, .4, 1), box-shadow 140ms ease, filter 140ms ease;
+  font: 700 14px/1 var(--d-face); letter-spacing: 0.04em; text-transform: capitalize;
+  color: var(--d-ink); background: linear-gradient(180deg, #ffadd6, var(--d-pink));
+  border: 1px solid #ffc6e2;
+  box-shadow: 0 3px 0 var(--d-pink-dk), 0 6px 14px rgba(255, 105, 180, 0.25);
+  transition: transform 200ms var(--d-thud), box-shadow 140ms ease, filter 140ms ease;
 }
-.table-join:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.06); box-shadow: 0 5px 0 #B83A7E, 0 10px 22px rgba(255, 105, 180, 0.45); }
-.table-join:active { transform: translateY(2px) scale(0.95); box-shadow: 0 1px 0 #B83A7E, 0 2px 6px rgba(255, 105, 180, 0.3); transition-duration: 60ms; }
-.table-join:focus-visible { outline: 2px solid var(--pbp-cream); outline-offset: 3px; }
-.table-join:disabled { cursor: default; opacity: 0.35; transform: none; filter: none; box-shadow: 0 2px 0 #B83A7E; }
+.table-join:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.06); box-shadow: 0 5px 0 var(--d-pink-dk), 0 10px 22px rgba(255, 105, 180, 0.45); }
+.table-join:active { transform: translateY(2px) scale(0.95); box-shadow: 0 1px 0 var(--d-pink-dk), 0 2px 6px rgba(255, 105, 180, 0.3); transition-duration: 60ms; }
+.table-join:focus-visible { outline: 2px solid var(--d-brass-hi); outline-offset: 3px; }
+.table-join:disabled { cursor: default; opacity: 0.35; transform: none; filter: none; box-shadow: 0 2px 0 var(--d-pink-dk); }
 .table-row.sitting .table-join { opacity: 1; }
-.table-join .door-dot { background: #1A1A3E; box-shadow: none; }
+.table-join .door-dot { background: var(--d-ink); box-shadow: none; }
 
-.tables-h { margin: 18px 2px 8px; font-size: 11px; font-weight: 500; letter-spacing: 0.3em; text-transform: lowercase; opacity: 0.55; }
-.playing-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(245, 230, 200, 0.03); }
-.playing-row .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--pbp-cream); }
-.playing-row .who i { font-style: normal; font-size: 11px; letter-spacing: 0.14em; opacity: 0.45; margin: 0 4px; }
-.playing-row .meta { flex: none; font-size: 11px; letter-spacing: 0.08em; opacity: 0.55; font-variant-numeric: tabular-nums; }
-.tables-none { margin: 0 2px; font-size: 12px; letter-spacing: 0.1em; opacity: 0.5; }
+.tables-h { margin: 18px 2px 8px; font: 600 13px/1 var(--d-face); opacity: 0.65; }
+.playing-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(245, 230, 200, 0.03); }
+.playing-row .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px/1.2 var(--d-face); color: var(--d-cream); }
+.playing-row .who i { font-style: italic; font-family: var(--d-serif); font-size: 13px; opacity: 0.55; margin: 0 4px; }
+.playing-row .meta { flex: none; margin-left: auto; font: 500 12px/1 var(--d-face); opacity: 0.55; font-variant-numeric: tabular-nums; }
+.playing-row .table-join { min-height: 34px; min-width: 70px; padding: 0 14px; font-size: 13px; }
+.tables-none { margin: 0 2px; font: 500 13px/1.2 var(--d-face); opacity: 0.55; }
 .tables-empty { padding: 14px 4px; }
 
-/* a phone upright: the pills tighten and the buttons drop their small print */
+/* a phone upright: tighter card, the same pieces */
 @media (max-width: 480px) {
+  .door-card { padding: 14px 14px 16px; }
+  .door-body { gap: 12px; }
+  .door-logo { font-size: 28px; }
+  .door-h { font-size: 15px; }
+  .door-gear { width: 40px; height: 40px; }
+  .door-btn.big { min-height: 58px; font-size: 18px; }
+  .door-pair .door-btn { min-height: 56px; font-size: 15px; gap: 8px; padding: 8px 10px; }
+  .door-pair .door-btn .ico { width: 22px; height: 22px; }
+  .door-tile { min-height: 60px; font-size: 12px; }
+  .door-tile .ico { width: 22px; height: 22px; }
+  .level-row { gap: 4px; }
+  .level-pill, .stake-pill { padding: 7px 8px; font-size: 12px; }
+  .tables-actions .door-btn { font-size: 15px; padding: 8px 10px; }
+  .tables-actions .door-btn .ico { display: none; }
+  .setup-row { grid-template-columns: 1fr; gap: 6px; }
+  .door-tag b { max-width: 110px; }
+  .door-stamp.big { font-size: 40px; }
+  .door-record .n { font-size: 30px; }
   .tables-actions { gap: 8px; }
   .tables-actions .door-btn .k { display: none; }
   .table-name { font-size: 18px; }
   .table-join { min-width: 72px; padding: 0 14px; }
   /* the card is tall here, so the list takes what is left of it */
-  .tables-scroll { max-height: max(220px, calc(86vh - 270px)); }
+  .tables-scroll { max-height: max(220px, calc(86vh - 300px)); }
+}
+/* a short window (a laptop with a toolbar, a phone on its side): the menu drops its air */
+@media (max-height: 640px) {
+  .door-card { padding-top: 12px; padding-bottom: 14px; }
+  .door-body { gap: 10px; }
+  .door-gear { width: 40px; height: 40px; }
+  .door-logo { font-size: 28px; }
+  .door-btn.big { min-height: 54px; }
+  .door-pair .door-btn { min-height: 52px; }
+  .door-tile { min-height: 56px; }
 }
 /* a phone on its side: two columns, the buttons left and the list right, so the list gets the height */
 @media (max-height: 500px) and (min-width: 600px) {
-  .door.screen-lobby .door-card { width: min(820px, 96vw); max-height: 94vh; padding: 14px 16px 10px; gap: 8px; }
+  .door.screen-lobby .door-card { width: min(820px, 96vw); max-height: 94vh; padding: 12px 16px 10px; }
   .door.screen-lobby .door-body { gap: 8px; }
   .tables-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; align-items: start; }
   .tables-side { gap: 8px; }
   .tables-actions { flex-direction: column; gap: 8px; }
   .tables-actions .door-btn { min-height: 42px; }
-  .tables-scroll { max-height: calc(94vh - 74px); }
+  .tables-scroll { max-height: calc(94vh - 90px); }
 }
