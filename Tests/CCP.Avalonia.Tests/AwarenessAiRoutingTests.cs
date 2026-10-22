@@ -28,7 +28,7 @@ public sealed class AwarenessAiRoutingTests
     private static async Task WithTube(bool v2, bool consent, Func<AvatarTubeWindow, List<string>, Task> body)
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();

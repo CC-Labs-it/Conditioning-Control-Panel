@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Services.Awareness
         private readonly MediaSessionWatcher _watcher;
         private volatile bool _disposed;
 
-        public SmtcMediaWatcher() => _watcher = new MediaSessionWatcher(InitializeAsync, ReadAsync);
+        public SmtcMediaWatcher() => _watcher = new MediaSessionWatcher(InitializeAsync, LoggedReadAsync);
         public MediaSample? Current => _watcher.Current;
         public bool IsAvailable => _watcher.IsAvailable;
         public void Start() => _watcher.Start();
@@ -52,12 +52,29 @@ namespace ConditioningControlPanel.Services.Awareness
                 var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
                 if (_disposed) return false;
                 _manager = manager;
-                return manager != null;
+                if (manager == null)
+                {
+                    Log.Debug("AwarenessObserver: SMTC returned no session manager - media signal off");
+                    return false;
+                }
+                Log.Debug("AwarenessObserver: SMTC media watcher armed");
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Debug("AwarenessObserver: SMTC unavailable - {Error}", ex.Message);
                 return false;
+            }
+        }
+
+        // Core keeps the last good sample on a throw; this only restores WPF's debug line.
+        private async Task<MediaSample?> LoggedReadAsync()
+        {
+            try { return await ReadAsync().ConfigureAwait(false); }
+            catch (Exception ex)
+            {
+                Log.Debug("AwarenessObserver: SMTC read failed - {Error}", ex.Message);
+                throw;
             }
         }
 
