@@ -32,7 +32,9 @@ namespace ConditioningControlPanel
         // emotionLineId (bark audio-filename stem) rides along so a QUEUED bark still drives the
         // portrait emotion when its bubble finally renders, not when it was enqueued. Null for
         // non-bark speech (AI/triggers/canned) → no emotion change.
-        private readonly Queue<(string text, SpeechSource source, string? emotionLineId, string? mood)> _speechQueue = new();
+        // unprompted (ccp-bugs #1468) rides along too, so a queued idle line is still held when it
+        // finally renders with the engine off.
+        private readonly Queue<(string text, SpeechSource source, string? emotionLineId, string? mood, bool unprompted)> _speechQueue = new();
         private bool _isGiggling = false;
         private bool _isWaitingForAi = false; // Blocks other giggles while waiting for AI
         private DispatcherTimer? _speechTimer;
@@ -185,7 +187,7 @@ namespace ConditioningControlPanel
                 return;
             }
 
-            var (nextText, source, nextEmotionLineId, nextMood) = _speechQueue.Dequeue();
+            var (nextText, source, nextEmotionLineId, nextMood, nextUnprompted) = _speechQueue.Dequeue();
             App.Logger?.Debug("Dequeued speech ({Source}, line={LineId}, {Chars} chars)",
                 source, nextEmotionLineId ?? "-", (nextText ?? "").Length);
 
@@ -202,7 +204,7 @@ namespace ConditioningControlPanel
                 _speechDelayTimer.Tick += (s, e) =>
                 {
                     _speechDelayTimer.Stop();
-                    ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood);
+                    ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted);
                 };
                 _speechDelayTimer.Start();
                 App.Logger?.Debug("Delaying speech by {Delay:F1}s", remainingDelay);
@@ -210,14 +212,14 @@ namespace ConditioningControlPanel
             else
             {
                 // Show immediately
-                ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood);
+                ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted);
             }
         }
 
         /// <summary>
         /// Shows speech based on its source (triggers play audio, others don't)
         /// </summary>
-        private void ShowSpeechBySource(string text, SpeechSource source, string? emotionLineId = null, string? mood = null)
+        private void ShowSpeechBySource(string text, SpeechSource source, string? emotionLineId = null, string? mood = null, bool unprompted = false)
         {
             if (source == SpeechSource.Trigger)
             {
@@ -228,7 +230,7 @@ namespace ConditioningControlPanel
             {
                 // Determine sound: always for AI, 1 in 5 for presets
                 bool playSound = source == SpeechSource.AI || (source == SpeechSource.Preset && ++_presetGiggleCounter % 5 == 0);
-                ShowGiggle(text, playSound, source, emotionLineId: emotionLineId, mood: mood);
+                ShowGiggle(text, playSound, source, emotionLineId: emotionLineId, mood: mood, unprompted: unprompted);
             }
         }
 
@@ -236,8 +238,10 @@ namespace ConditioningControlPanel
         /// Queues a speech bubble to be displayed. Bubbles are shown one at a time.
         /// Blocked while waiting for AI response or while AI bubble is visible.
         /// Plays giggle sound 1 in 5 times for preset phrases.
+        /// <paramref name="unprompted"/>: an idle-timer line (ccp-bugs #1468); its sound obeys
+        /// <see cref="Services.Companion.CompanionIdleVoice"/>, its bubble shows regardless.
         /// </summary>
-        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
+        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false)
         {
             if (_isPlayingUninterruptibleClip) return; // an uninterruptible clip is speaking
 
@@ -273,7 +277,7 @@ namespace ConditioningControlPanel
 
                 if (_isGiggling)
                 {
-                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood));
+                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted));
                     App.Logger?.Debug("Queued preset speech (line={LineId}, {Chars} chars)", emotionLineId ?? "-", (text ?? "").Length);
                     return;
                 }
@@ -287,7 +291,7 @@ namespace ConditioningControlPanel
                     // Queue it and let the delay system handle it. The queue now carries emotionLineId so
                     // the portrait emotion still fires when the bubble renders; audio is still text-only on
                     // this delayed path (barks normally fire idle, so the immediate path below is the norm).
-                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood));
+                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted));
                     _isGiggling = true;
                     ProcessNextSpeech();
                 }
@@ -299,7 +303,7 @@ namespace ConditioningControlPanel
                     _presetGiggleCounter++;
                     bool playSound = _presetGiggleCounter % 5 == 0;
                     ShowGiggle(text, playSound, SpeechSource.Preset, phraseAudioPath, barkVoice: barkVoice,
-                        emotionLineId: emotionLineId, mood: mood);
+                        emotionLineId: emotionLineId, mood: mood, unprompted: unprompted);
                 }
             });
         }
@@ -319,7 +323,7 @@ namespace ConditioningControlPanel
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
+        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false)
         {
             if (_isPlayingUninterruptibleClip) return; // an uninterruptible clip is speaking
             string? emotionLineId = phraseAudioPath != null
@@ -349,12 +353,15 @@ namespace ConditioningControlPanel
 
                 // Capture AI reply for chat history
                 AddToChatHistory(text, isUser: false);
+                // ...and for the Companion page, which reads the brain's log (#1443).
+                if (aiGenerated) App.Brain?.NoteTubeLine(text);
 
                 // aiGenerated: when true, the bubble shows the "AI" badge. Most call sites that route
                 // through GigglePriority are AI replies, but the awareness keyword path can fall back
                 // to canned phrases when the AI is unavailable — those callers pass false.
                 ShowGiggle(text, playSound: playSound, source: SpeechSource.AI, aiGenerated: aiGenerated,
-                    phraseAudioPath: phraseAudioPath, barkVoice: barkVoice, emotionLineId: emotionLineId, mood: mood);
+                    phraseAudioPath: phraseAudioPath, barkVoice: barkVoice, emotionLineId: emotionLineId, mood: mood,
+                    unprompted: unprompted);
 
                 App.Logger?.Debug("Priority speech, queue cleared (line={LineId}, {Chars} chars)", emotionLineId ?? "-", (text ?? "").Length);
             });
@@ -410,7 +417,8 @@ namespace ConditioningControlPanel
         /// <param name="text">The text to display</param>
         /// <param name="playSound">Whether to play a giggle sound</param>
         /// <param name="source">The source of the speech (for delay calculation)</param>
-        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null)
+        /// <param name="unprompted">An idle-timer line: no sound with the engine off unless opted in (#1468)</param>
+        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null, bool unprompted = false)
         {
             // An uninterruptible recorded clip owns the bubble — only its own (bypassing) call may render.
             if (_isPlayingUninterruptibleClip && !bypassClipLock) return;
@@ -475,10 +483,14 @@ namespace ConditioningControlPanel
             // Drive the emotive portrait to this line's emotion (pose A → linger → pose B → idle after
             // the dwell). lineId is the explicit arg or the bark audio filename stem. No-ops when the
             // portrait system is off, the line is unknown, or there's no audio (canned/AI/trigger text).
+            // ccp-bugs #1468: an idle-timer line with the engine off keeps its bubble, not its sound
+            // (voice, giggle and fallback pop alike), unless the player opted in. Decided once here so
+            // the avatar does not lip-sync a line that will stay silent.
+            bool heldIdle = !Services.Companion.CompanionIdleVoice.ShouldVoiceNow(unprompted);
             PlayEmotionForLine(
                 emotionLineId ?? (phraseAudioPath != null
                     ? System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath) : null),
-                phraseAudioPath, text, mood);
+                phraseAudioPath, text, mood, silent: heldIdle);
 
             // Any new bubble cuts off the previous spoken line (covers the giggle-sound/fallback branches
             // below, which otherwise wouldn't stop an in-flight voiceline → overlap).
@@ -493,8 +505,10 @@ namespace ConditioningControlPanel
             {
                 if (!_isGiggling) return; // a newer bubble took over during the lead-in
 
+                if (heldIdle && !_isMuted) Services.Audio.EngineOffAudioLog.NoteHeld("companion-voice", "idle line");
+
                 // Audio only when NOT muted — mute silences the voice but keeps the text bubble (#445).
-                if (!_isMuted)
+                if (!_isMuted && !heldIdle)
                 {
                     // Play sound for the speech bubble
                     if (phraseAudioPath != null)
@@ -944,8 +958,25 @@ namespace ConditioningControlPanel
                     if (bx != _bubbleX || by != _bubbleY)
                     {
                         _bubbleX = bx; _bubbleY = by;
-                        SetWindowPos(_bubbleHandle, IntPtr.Zero, bx, by, 0, 0,
-                            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                        // Moving a visible WPF window waits on the render thread twice (HwndTarget
+                        // disables the render target on WM_WINDOWPOSCHANGING and flushes
+                        // synchronously, then again on re-enable). When the render thread is backed
+                        // up, this call is where the UI thread parks (ccp-bugs #1412, the same family
+                        // as the lock card's #494). Nothing here can shorten that wait; the mark and
+                        // the line below only make the next report say so. No behaviour change.
+                        long moveStart = Environment.TickCount64;
+                        using (VideoDiag.UiScope(BubbleMoveMark))
+                        {
+                            SetWindowPos(_bubbleHandle, IntPtr.Zero, bx, by, 0, 0,
+                                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                        }
+                        long moveMs = Environment.TickCount64 - moveStart;
+                        if (IsSlowBubbleMove(moveMs))
+                        {
+                            App.Logger?.Warning(
+                                "Speech bubble move waited {Ms} ms on the render thread (lockCard={LockCard}, bubbleVisible={Visible})",
+                                moveMs, LockCardWindow.IsAnyOpen(), _bubbleWindow?.IsVisible == true);
+                        }
                     }
                 }
 
@@ -1104,6 +1135,12 @@ namespace ConditioningControlPanel
             catch { /* a bubble that pops the app forward beats a bubble that never shows */ }
             return IntPtr.Zero;
         }
+
+        /// <summary>What a hang report names when the UI thread is parked in the bubble's move.</summary>
+        internal const string BubbleMoveMark = "AvatarTube.SpeechBubble.Move";
+        /// <summary>A healthy move is a few ms; past this the render thread kept the UI thread waiting.</summary>
+        internal const int SlowBubbleMoveMs = 250;
+        internal static bool IsSlowBubbleMove(long elapsedMs) => elapsedMs >= SlowBubbleMoveMs;
 
         private bool _placingSpeechBubble;
         private bool _speechBubblePlacementHooked;
@@ -1584,7 +1621,7 @@ namespace ConditioningControlPanel
             // pool-wide no-repeat rotation. Preset phrases are just the no-barks fallback.
             // (flashes_audio voicelines are flash material and no longer spoken here.)
             if (App.Bark != null) App.Bark.DispatchIdle();
-            else Giggle(GetRandomBambiPhrase());
+            else Giggle(GetRandomBambiPhrase(), unprompted: true);
         }
 
         // ============================================================
@@ -1829,7 +1866,9 @@ namespace ConditioningControlPanel
             var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
             if (masterVolume <= 0f) return;
             // Idle voicelines were full-volume (×1.0); -20% so today's hotter v3 lines sit under the barks.
-            var volume = (float)Math.Pow(masterVolume, 1.5) * 0.8f;
+            // The player's Voice level rides on top (CompanionVoiceGain; its default changes nothing).
+            var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.IdleTrim);
+            if (volume <= 0f) return; // Voice level 0: the bubble still shows, the line is silent
             PlaySpokenAudio(filePath, volume);
         }
 
@@ -2046,6 +2085,9 @@ namespace ConditioningControlPanel
 
         private void OnTriggerTick(object? sender, EventArgs e)
         {
+            // Post-panic quiet: no trigger, sound or haptic pulse, muted or not (PanicAftermath).
+            if (Services.Safety.PanicAftermath.TriggersSilenced()) return;
+
             // Skip if speech is on cooldown or currently showing
             if (!IsSpeechReady()) return;
 
@@ -2084,7 +2126,7 @@ namespace ConditioningControlPanel
                 if (_isGiggling || timeSinceLastSpeech < requiredDelay)
                 {
                     // Queue the trigger and let delay system handle it
-                    _speechQueue.Enqueue((trigger, SpeechSource.Trigger, null, null));
+                    _speechQueue.Enqueue((trigger, SpeechSource.Trigger, null, null, false));
                     App.Logger?.Debug("Queued trigger speech: {Trigger}", trigger);
                     if (!_isGiggling)
                     {
@@ -2104,6 +2146,7 @@ namespace ConditioningControlPanel
         /// </summary>
         private void ShowTriggerBubbleImmediate(string trigger)
         {
+            if (Services.Safety.PanicAftermath.TriggersSilenced()) { _isGiggling = false; ProcessNextSpeech(); return; } // a queued trigger, post-panic
             // ALWAYS trigger haptic, even when muted/off-screen
             _ = App.Haptics?.TriggerSubliminalPatternAsync(trigger);
 
@@ -2128,6 +2171,7 @@ namespace ConditioningControlPanel
             Action speak = () =>
             {
                 if (!_isGiggling) return; // a newer bubble took over during the lead-in
+                if (Services.Safety.PanicAftermath.TriggersSilenced()) { _isGiggling = false; ProcessNextSpeech(); return; } // a panic during the lead-in
 
                 // Play trigger audio only when avatar is visible
                 App.Subliminal?.PlayTriggerAudio(trigger);
@@ -2378,7 +2422,10 @@ namespace ConditioningControlPanel
                 });
 
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.9f; // a touch louder — it's a once-ever moment
+                // a touch louder — it's a once-ever moment. Voice level applies here too; at 0 the
+                // clip still runs (silent), so the latch below unwinds the usual way.
+                var volume = masterVolume <= 0f ? 0f
+                    : Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.NoteTrim);
 
                 // onFinished is guaranteed to fire exactly once — including when playback is
                 // refused outright — so the uninterruptible latch can never stick on (#778).
@@ -2408,7 +2455,8 @@ namespace ConditioningControlPanel
 
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 0) / 100f;
                 if (masterVolume <= 0f) return; // muted
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.85f;
+                var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.BarkTrim);
+                if (volume <= 0f) return; // Voice level 0
                 PlaySpokenAudio(audioPath, volume); // unified channel → no overlap
             }
             catch (Exception ex)
@@ -2428,7 +2476,8 @@ namespace ConditioningControlPanel
                 var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
                 if (masterVolume <= 0f) return;
                 // Event lines were ×0.7; -20% (→ ×0.56) so today's hotter v3 lines sit under the barks.
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.56f;
+                var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.EventTrim);
+                if (volume <= 0f) return; // Voice level 0
                 PlaySpokenAudio(audioPath, volume); // unified channel → no overlap
             }
             catch (Exception ex)
@@ -2513,7 +2562,9 @@ namespace ConditioningControlPanel
                 if (System.IO.File.Exists(audioPath))
                 {
                     var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                    var volume = (float)Math.Pow(masterVolume, 1.5);
+                    // A spoken line, so it follows the Voice level like the rest of the voice.
+                    var volume = masterVolume <= 0f ? 0f
+                        : Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.FullTrim);
 
                     App.Audio?.PlayOneShot(audioPath, volume, "cum-and-collapse");
                 }
@@ -2666,6 +2717,11 @@ namespace ConditioningControlPanel
             var elapsed = DateTime.UtcNow - lastSeen.Value;
             if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
 
+            // A long absence across a closed tier names it once, warm and without guilt (proposal
+            // 4d). The bubble frames it; the only button for it is the neutral Inbox row.
+            if (elapsed >= TimeSpan.FromDays(3) && TakeLapseGreeting() is string lapseLine)
+                return FormatGreetingName(lapseLine, App.UserDisplayName);
+
             string[] templates;
             if (elapsed < TimeSpan.FromHours(6))
             {
@@ -2724,6 +2780,48 @@ namespace ConditioningControlPanel
 
             var template = templates[_random.Next(templates.Length)];
             return FormatGreetingName(template, App.UserDisplayName);
+        }
+
+        /// <summary>
+        /// The lapse welcome-back line, once per closed tier, or null. Only for a close the server
+        /// confirmed (ConversionRules.DecideLapse) and never for a dead Patreon grant, which is a
+        /// Reconnect, not a lapse. The stamp is written on the main dispatcher (settings live there).
+        /// </summary>
+        private string? TakeLapseGreeting()
+        {
+            try
+            {
+                var s = App.Settings?.Current;
+                if (s == null || App.Patreon?.GrantLooksDead == true) return null;
+                if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return null;   // never from memory alone
+                var reading = Services.Startup.Conversion.ConversionRules.DecideLapse(s.PatreonTier, s.ServerTierSeen,
+                    s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
+                if (reading.Row != Services.Startup.Conversion.LapseRow.Closed || MainWindow.LiveCovers(reading.Tier)) return null;
+                const string key = Services.Startup.Conversion.ConversionRules.KeyLapseGreeting;
+                if (!Services.Startup.Conversion.ConversionRules.Owed(s.InboxStamps, key, reading.Stamp)) return null;
+
+                var stamp = reading.Stamp;
+                Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var cur = App.Settings?.Current;
+                    if (cur != null && Services.Startup.Conversion.ConversionRules.Stamp(cur.InboxStamps, key, stamp))
+                        App.Settings?.Save();
+                }), System.Windows.Threading.DispatcherPriority.Normal);
+
+                var tier = reading.Tier >= 2 ? "Prime" : "Basic";
+                var lines = new[]
+                {
+                    "Welcome back, {name}. Your " + tier + " closed while you were away; everything you set is still here. 💕",
+                    "There you are~ " + tier + " closed while you were gone, and I kept all your settings warm. ✨",
+                    "Hi again, {name}! Your " + tier + " ended, nothing is lost, it is all right where you left it. 💖",
+                };
+                return lines[_random.Next(lines.Length)];
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Lapse greeting skipped: {Error}", ex.Message);
+                return null;
+            }
         }
 
         /// <summary>

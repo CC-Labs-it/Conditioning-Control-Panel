@@ -55,6 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
 
+        /// <summary>WPF BubbleService.OnBubblePopped (the leash bubble task counts these).</summary>
+        internal static event Action? Popped;
+
         // CCP_FRAME_STATS=1: one stdout line per 10 s - step+region cost per frame with N bubbles.
         private static readonly bool Stats = Environment.GetEnvironmentVariable("CCP_FRAME_STATS") == "1";
         private static readonly Stopwatch StatClock = new();
@@ -74,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             LoadBubbleImage();
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
+            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
                 var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
@@ -160,6 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
+            try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
         }
 
         internal static void OnFrame(TimeSpan now)

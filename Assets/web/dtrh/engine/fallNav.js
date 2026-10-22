@@ -12,6 +12,7 @@
  * ==========================================================================*/
 
 import * as THREE from 'three';
+import { fallRamp, VEIN_RUSH } from './fallPace.js';
 
 const MIN_SPEED = 0.15;      // floor: near-still lingering is possible
 const MAX_SPEED = 30;        // hard cap (u/s)
@@ -217,7 +218,7 @@ export function createFallNav({ camera, canvas, layout, getTargetSpeed, onFirstI
 
     // desired speed: the director's target scaled by the player trim; during
     // the intro, blend from the plunge speed down into the game speed.
-    let desired = clamp((getTargetSpeed ? getTargetSpeed() : 6) * trim, MIN_SPEED, MAX_SPEED * capMult);
+    let desired = clamp((getTargetSpeed ? getTargetSpeed() : 6) * trim * fallRamp(driftT), MIN_SPEED, MAX_SPEED * capMult);
     if (introT < 1) desired = INTRO_SPEED + (desired - INTRO_SPEED) * introE;
     speed += (desired - speed) * clamp(dt * ACCEL_LERP, 0, 1);
     speed = clamp(speed, MIN_SPEED, MAX_SPEED * capMult);
@@ -249,7 +250,7 @@ export function createFallNav({ camera, canvas, layout, getTargetSpeed, onFirstI
     // player trim still applies). At the tail the vein hands off to a freshly
     // rebased loop via onVeinEnd -> scene rebuilds the tunnel -> rebaseTo().
     if (track === 'vein' && veinCurve) {
-      vt = clamp(vt + (speed * dt) / Math.max(1, veinLen), 0, 1);
+      vt = clamp(vt + (speed * VEIN_RUSH * dt) / Math.max(1, veinLen), 0, 1);
       veinCurve.getPoint(vt, _pos);
       veinCurve.getPoint(Math.min(1, vt + VEIN_AHEAD), _ahead);
       orientAndPlace(introE);
