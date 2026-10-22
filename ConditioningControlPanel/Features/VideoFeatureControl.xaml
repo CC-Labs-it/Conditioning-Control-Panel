@@ -115,6 +115,19 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_cut_random_start}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{loc:Str setting_video_cut_random_start}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkVideoCutRandomStart" Style="{StaticResource ToggleStyle}"
+                                          VerticalAlignment="Center"
+                                          Checked="ChkVideoCutRandomStart_Changed" Unchecked="ChkVideoCutRandomStart_Changed"/>
+                            </Grid>
+                            <TextBlock Text="{loc:Str tooltip_video_cut_random_start}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
@@ -129,6 +142,97 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkStrict_Changed" Unchecked="ChkStrict_Changed"/>
                             </Grid>
+
+                            <!-- Shows as: full screen (default) or a floating window. A strict video
+                                 stays full screen (MandatoryVideoPresentation.ShouldFloat). -->
+                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_video_appearance}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="CmbAppearance"
+                                          Width="180" VerticalAlignment="Center"
+                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                          SelectionChanged="CmbAppearance_Changed"/>
+                            </Grid>
+                            <!-- Floating only (progressive disclosure): size, drift speed, and the most at once. -->
+                            <StackPanel x:Name="PanelFloatingOptions" Visibility="Collapsed">
+                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_video_appearance_size}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_size}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <Slider Grid.Column="1" x:Name="SliderFloatingSize" Minimum="15" Maximum="60" Value="33"
+                                            VerticalAlignment="Center" Margin="14,0"
+                                            ToolTip="{loc:Str tooltip_video_appearance_size}"
+                                            ValueChanged="SliderFloatingSize_Changed"/>
+                                    <TextBlock Grid.Column="2" x:Name="TxtFloatingSize" Text="33%" HorizontalAlignment="Right"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                               FontSize="13" FontWeight="Bold"/>
+                                </Grid>
+                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_video_appearance_speed}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_speed}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <Slider Grid.Column="1" x:Name="SliderFloatingSpeed" Minimum="10" Maximum="100" Value="35"
+                                            VerticalAlignment="Center" Margin="14,0"
+                                            ToolTip="{loc:Str tooltip_video_appearance_speed}"
+                                            ValueChanged="SliderFloatingSpeed_Changed"/>
+                                    <TextBlock Grid.Column="2" x:Name="TxtFloatingSpeed" Text="35%" HorizontalAlignment="Right"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                               FontSize="13" FontWeight="Bold"/>
+                                </Grid>
+                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_video_appearance_count}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_count}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <ComboBox Grid.Column="1" x:Name="CmbFloatingCount"
+                                              Width="180" VerticalAlignment="Center"
+                                              Style="{DynamicResource DarkComboBoxStyle}"
+                                              SelectionChanged="CmbFloatingCount_Changed"/>
+                                </Grid>
+                                <!-- One trigger fills every free slot at once (MandatoryVideoPresentation.WindowsToOpen). -->
+                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_float_together}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_float_together}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <CheckBox Grid.Column="1" x:Name="ChkFloatingTogether" Style="{StaticResource ToggleStyle}"
+                                              VerticalAlignment="Center"
+                                              Checked="ChkFloatingTogether_Changed" Unchecked="ChkFloatingTogether_Changed"/>
+                                </Grid>
+                                <!-- A new window joins muted while another has the sound (FloatingAudioFocus.Join). -->
+                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_float_keep_sound}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_video_float_keep_sound}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <CheckBox Grid.Column="1" x:Name="ChkFloatingKeepSound" Style="{StaticResource ToggleStyle}"
+                                              VerticalAlignment="Center"
+                                              Checked="ChkFloatingKeepSound_Changed" Unchecked="ChkFloatingKeepSound_Changed"/>
+                                </Grid>
+                                <TextBlock Text="{loc:Str video_appearance_no_checks_note}" FontSize="11"
+                                           Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="14,0,0,2"/>
+                            </StackPanel>
+                            <TextBlock x:Name="TxtAppearanceNote" Text="{loc:Str video_appearance_strict_note}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
+                                       Visibility="Collapsed"/>
 
                             <!-- Power-user rows, folded (house rule: progressive disclosure). -->
                             <feat:MoreFold x:Name="FoldMore">
@@ -237,6 +341,20 @@
                                 <TextBlock Grid.Column="2" x:Name="TxtTargetSize" Text="70" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
+                            </Grid>
+
+                            <!-- Off: a failed check still counts, the video just ends. Strict and
+                                 Lockdown always replay (MandatoryVideoPresentation.ReplaysAfterCheck). -->
+                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_replay_failed_check}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_replay_failed_check}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkReplayFailedCheck" Style="{StaticResource ToggleStyle}"
+                                          feat:SessionLock.Owned="True" VerticalAlignment="Center"
+                                          Checked="ChkReplayFailedCheck_Changed" Unchecked="ChkReplayFailedCheck_Changed"/>
                             </Grid>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>

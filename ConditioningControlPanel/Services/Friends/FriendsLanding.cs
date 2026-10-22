@@ -154,6 +154,23 @@ public static class FriendsLanding
         try { return read(); } catch { return false; }
     }
 
+    /// <summary>Where a corner notice that is not from a friend lands (the online media meter's
+    /// spent notice): the game in front, else the panel, else the launcher, else null (primary).</summary>
+    internal static Window? NoticeAnchor() => ActiveGameWindow() ?? Anchor();
+
+    /// <summary>A session, Lockdown, Strict Lock or program holds: corner notices fold away on the
+    /// next tick, so a notice that is not from a friend waits until this reads false.</summary>
+    internal static bool Holding()
+    {
+        try { return ReadWorld().Holding; } catch { return true; }
+    }
+
+    /// <summary>A Lockdown is running (a corner notice then offers no "See plans").</summary>
+    internal static bool LockdownActive()
+    {
+        try { return App.Lockdown?.IsActive == true; } catch { return false; }
+    }
+
     /// <summary>Where a card or a word lands when there is no game: the panel, else the launcher.</summary>
     private static Window? Anchor()
     {
@@ -184,6 +201,8 @@ public static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -533,6 +552,21 @@ public static class FriendsLanding
                 if (!InviteDestination.IsChallengeId(item.Code)) return;
                 try { ConditioningControlPanel.Services.PieceByPiece.PieceByPieceHostService.JoinFriendChallenge(item.Code!); }
                 catch (Exception ex) { App.Logger?.Warning(ex, "[Friends] chess launch failed"); }
+                return;
+
+            case InviteDestination.Race:
+                // A web race (no code): the friend is on app.cclabs.app/race, so is the join.
+                Helpers.BrowserLauncher.OpenUrlOrPrompt(InviteDestination.RaceWebUrl, Str("friends_land_dest_race", "Racing Thoughts"));
+                return;
+
+            case InviteDestination.Breakout:
+                // The station's own doors: the full game when the account has it, else the demo.
+                try
+                {
+                    if (BackRoom.BreakoutAccess.FullAllowed) BackRoom.BreakoutHostService.LaunchFull();
+                    else BackRoom.BreakoutHostService.LaunchDemo();
+                }
+                catch (Exception ex) { App.Logger?.Warning(ex, "[Friends] breakout launch failed"); }
                 return;
 
             case InviteDestination.Ramp:
