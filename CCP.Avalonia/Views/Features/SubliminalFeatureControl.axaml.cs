@@ -8,6 +8,8 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Features
@@ -73,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             {
                 _hooked = CoreSettings.Current;
                 _hooked.PropertyChanged += OnSettingsPropertyChanged;
+                CoreMods.ModChanged += OnVoiceModChanged;
             }
             LoadFromSettings();
         }
@@ -81,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (_hooked != null) _hooked.PropertyChanged -= OnSettingsPropertyChanged;
             _hooked = null;
+            CoreMods.ModChanged -= OnVoiceModChanged;
         }
 
         /// <summary>
@@ -163,7 +167,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 SelectFont(s.SubliminalFont);
             }
             finally { _isLoading = false; }
+            RefreshSilentHint();
         }
+
+        private void OnVoiceModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(RefreshSilentHint);
+
+        internal void RefreshSilentHint() => TxtWhispersSilentHint.IsVisible = ChkWhispers.IsChecked == true
+            && SpokenClipRule.AnySilent(CoreSettings.Current.SubliminalPool.Where(p => p.Value).Select(p => p.Key),
+                SubliminalWhisperShow.HasRecordedVoice);
 
         private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
@@ -237,6 +248,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (s.SubAudioEnabled == on) return;
             s.SubAudioEnabled = on;
             CoreSettings.Save();
+            RefreshSilentHint();
         }
 
         private void SliderWhisperVol_Changed(object? sender, RangeBaseValueChangedEventArgs e)
@@ -292,6 +304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CoreMods.GetDefaultSubliminalPool().Keys, StringComparer.OrdinalIgnoreCase);
 
             var dialog = new Dialogs.TextEditorDialog("Subliminal Messages", s.SubliminalPool);
+            dialog.MarkSilentLines(SubliminalWhisperShow.HasRecordedVoice);
             if (await dialog.ShowDialogSafe<bool?>(owner) != true || dialog.ResultData == null) return;
 
             // Remember hand-added phrases (and forget removed ones) so the cross-mod prune
@@ -313,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             s.SubliminalPool = dialog.ResultData;
             CoreSettings.Save();
+            RefreshSilentHint();
             Log.Information("Subliminal pool updated: {Count} items", dialog.ResultData.Count);
         }
 

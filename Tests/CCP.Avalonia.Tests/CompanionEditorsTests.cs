@@ -31,9 +31,7 @@ public sealed class CompanionEditorsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+            global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
         LocalizationManager.Instance.SetLanguage("en");
     }
 

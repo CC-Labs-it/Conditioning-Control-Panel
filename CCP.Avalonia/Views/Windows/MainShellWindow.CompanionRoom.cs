@@ -132,6 +132,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             s.SlutModeEnabled = enabled;
             CoreSettings.Save();
+            // WPF 1249e3846: point to the chat box through the preset-line path.
+            _avatarTubeWindow?.Giggle(Loc.Get(enabled ? "companion_spice_on_line" : "companion_spice_off_line"));
             return enabled;
         }
 

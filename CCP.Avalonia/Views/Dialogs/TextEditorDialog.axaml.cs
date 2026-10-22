@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly TextBox _txtNewItem;
         private readonly ItemsControl _itemList;
         private bool _hasChanges = false;
+        private Func<string, bool>? _hasVoice;
         private bool? _dialogResult;
 
         /// <summary>
@@ -49,7 +50,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         public Dictionary<string, bool>? ResultData { get; private set; }
 
         /// <summary>Render/design constructor: sample data so --render-view can draw the dialog.</summary>
-        internal TextEditorDialog() : this("Sample", new Dictionary<string, bool> { ["first item"] = true, ["second item"] = false }) { }
+        internal TextEditorDialog() : this("Sample", new Dictionary<string, bool> { ["first item"] = true, ["second item"] = false })
+        {
+            // Render-proof sample shows the spoken-list hint and one silent line.
+            MarkSilentLines(text => text == "first item");
+        }
 
         public TextEditorDialog(string title, Dictionary<string, bool> data)
         {
@@ -89,6 +94,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _itemList.AddHandler(InputElement.PointerPressedEvent, ItemList_PointerPressed);
         }
 
+        /// <summary>WPF ec388b526: spoken lists use the player's own recorded-clip lookup.</summary>
+        public void MarkSilentLines(Func<string, bool> hasVoice)
+        {
+            _hasVoice = hasVoice;
+            foreach (var item in _items)
+                item.IsSilent = Services.SpokenClipRule.IsSilent(item.Text, hasVoice);
+            RefreshSilentHint();
+        }
+
+        private void RefreshSilentHint() => this.FindControl<TextBlock>("TxtSilentHint")!.IsVisible =
+            _hasVoice != null && Services.SpokenClipRule.AnySilent(_items.Select(x => x.Text), _hasVoice);
+
         private async void AddNewItem()
         {
             var text = (_txtNewItem.Text ?? "").Trim().ToUpperInvariant();
@@ -104,9 +121,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 return;
             }
 
-            var added = new TextItem { Text = text, IsEnabled = true };
+            var added = new TextItem { Text = text, IsEnabled = true,
+                IsSilent = _hasVoice != null && Services.SpokenClipRule.IsSilent(text, _hasVoice) };
             added.PropertyChanged += TextItem_Changed;
             _items.Add(added);
+            RefreshSilentHint();
             _txtNewItem.Clear();
             _txtNewItem.Focus();
             _hasChanges = true;
@@ -154,6 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 if (confirm == true)
                 {
                     _items.Remove(item);
+                    RefreshSilentHint();
                     _hasChanges = true;
                 }
                 return;
@@ -197,6 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 {
                     _items.Remove(item);
                 }
+                RefreshSilentHint();
                 _hasChanges = true;
             }
         }
@@ -321,6 +342,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     /// for why {loc:Str} becomes a binding.</summary>
     public sealed class TextEditorViewModel
     {
+        public string LocSilentHint => Loc.Get("hint_silent_lines");
+        public string LocSilentTooltip => Loc.Get("tooltip_silent_line");
         public string LocDialogTextManager => Loc.Get("dialog_text_manager");
         public string LocBtnSortAZ => Loc.Get("btn_sort_a_z");
         public string LocBtnToggleAll => Loc.Get("btn_toggle_all");
@@ -340,6 +363,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private string _text = "";
         private bool _isEnabled = true;
         private bool _isSelected = false;
+        private bool _isSilent;
+
+        public bool IsSilent
+        {
+            get => _isSilent;
+            set { _isSilent = value; OnPropertyChanged(nameof(IsSilent)); }
+        }
 
         public string Text
         {

@@ -43,9 +43,7 @@ public sealed class CompanionPersonalityZoneTests
     public Task PresetChipsSpiceAndResetGoThroughTheGate() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+            global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;

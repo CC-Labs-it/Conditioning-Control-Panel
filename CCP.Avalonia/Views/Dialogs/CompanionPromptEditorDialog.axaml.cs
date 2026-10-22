@@ -36,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     {
         private readonly CompanionPromptSettings _defaults;
         private bool _hasUnsavedChanges;
+        private bool _customWasOn;
         /// <summary>WPF's <c>DialogResult.HasValue</c>: set by Save/Cancel (and by an answered X
         /// prompt) so their Close(x) skips the unsaved-changes prompt in OnClosing.</summary>
         private bool _closeDecided;
@@ -206,19 +207,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             _chkUseCustom.IsChecked = settings.UseCustomPrompt;
 
-            // Load values, falling back to defaults if empty
-            _txtPersonality.Text = string.IsNullOrWhiteSpace(settings.Personality)
-                ? _defaults.Personality : settings.Personality;
-            _txtExplicitReaction.Text = string.IsNullOrWhiteSpace(settings.ExplicitReaction)
-                ? _defaults.ExplicitReaction : settings.ExplicitReaction;
-            _txtSlutMode.Text = string.IsNullOrWhiteSpace(settings.SlutModePersonality)
-                ? _defaults.SlutModePersonality : settings.SlutModePersonality;
-            _txtKnowledgeBase.Text = string.IsNullOrWhiteSpace(settings.KnowledgeBase)
-                ? _defaults.KnowledgeBase : settings.KnowledgeBase;
-            _txtContextReactions.Text = string.IsNullOrWhiteSpace(settings.ContextReactions)
-                ? _defaults.ContextReactions : settings.ContextReactions;
-            _txtOutputRules.Text = string.IsNullOrWhiteSpace(settings.OutputRules)
-                ? _defaults.OutputRules : settings.OutputRules;
+            // WPF 24756ace8: a disabled override is stored history, not the running prompt.
+            _customWasOn = settings.UseCustomPrompt;
+            _txtPersonality.Text = ActivePersonaPromptText.EditorField(_customWasOn, settings.Personality, _defaults.Personality);
+            _txtExplicitReaction.Text = ActivePersonaPromptText.EditorField(_customWasOn, settings.ExplicitReaction, _defaults.ExplicitReaction);
+            _txtSlutMode.Text = ActivePersonaPromptText.EditorField(_customWasOn, settings.SlutModePersonality, _defaults.SlutModePersonality);
+            _txtKnowledgeBase.Text = ActivePersonaPromptText.EditorField(_customWasOn, settings.KnowledgeBase, _defaults.KnowledgeBase);
+            _txtContextReactions.Text = ActivePersonaPromptText.EditorField(_customWasOn, settings.ContextReactions, _defaults.ContextReactions);
+            _txtOutputRules.Text = ActivePersonaPromptText.EditorField(_customWasOn, settings.OutputRules, _defaults.OutputRules);
 
             UpdateEnabledState();
             _hasUnsavedChanges = false;
@@ -234,12 +230,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // the settings model's fields are non-nullable strings.
             // ONLY what the user changed: a box still showing the persona's text persists blank
             // (WPF Persist -> ActivePersonaPromptText.PersistedField, which also coalesces null).
-            settings.Personality = ActivePersonaPromptText.PersistedField(_txtPersonality.Text, _defaults.Personality);
-            settings.ExplicitReaction = ActivePersonaPromptText.PersistedField(_txtExplicitReaction.Text, _defaults.ExplicitReaction);
-            settings.SlutModePersonality = ActivePersonaPromptText.PersistedField(_txtSlutMode.Text, _defaults.SlutModePersonality);
-            settings.KnowledgeBase = ActivePersonaPromptText.PersistedField(_txtKnowledgeBase.Text, _defaults.KnowledgeBase);
-            settings.ContextReactions = ActivePersonaPromptText.PersistedField(_txtContextReactions.Text, _defaults.ContextReactions);
-            settings.OutputRules = ActivePersonaPromptText.PersistedField(_txtOutputRules.Text, _defaults.OutputRules);
+            // Off on open and still off: preserve the custom text the boxes did not show.
+            if (_customWasOn || settings.UseCustomPrompt)
+            {
+                settings.Personality = ActivePersonaPromptText.PersistedField(_txtPersonality.Text, _defaults.Personality);
+                settings.ExplicitReaction = ActivePersonaPromptText.PersistedField(_txtExplicitReaction.Text, _defaults.ExplicitReaction);
+                settings.SlutModePersonality = ActivePersonaPromptText.PersistedField(_txtSlutMode.Text, _defaults.SlutModePersonality);
+                settings.KnowledgeBase = ActivePersonaPromptText.PersistedField(_txtKnowledgeBase.Text, _defaults.KnowledgeBase);
+                settings.ContextReactions = ActivePersonaPromptText.PersistedField(_txtContextReactions.Text, _defaults.ContextReactions);
+                settings.OutputRules = ActivePersonaPromptText.PersistedField(_txtOutputRules.Text, _defaults.OutputRules);
+            }
+            _customWasOn = settings.UseCustomPrompt;
 
             // Un-ticking "use custom prompt" also drops the community id (WPF SaveSettings).
             if (!settings.UseCustomPrompt)

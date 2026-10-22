@@ -26,6 +26,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class SubliminalWhisperShow
     {
+        /// <summary>The UI marks the exact lookup Whisper uses, irrespective of mute/volume.</summary>
+        internal static bool HasRecordedVoice(string text) => FindRecordedVoice(text) != null;
+
+        private static string? FindRecordedVoice(string text) => SubliminalWhisper.FindLinkedAudio(text,
+            SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath), SubAudioDir, App.Mods?.ActiveModId);
+
         private static readonly Random Rng = new();
         private static Action? _stopWhisper;
         private static int _gen;   // bumped by StopAll: anything scheduled before it is stale
@@ -109,8 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool Whisper(string text)
         {
             var s = CoreSettings.Current;
-            var path = SubliminalWhisper.FindLinkedAudio(text, SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath),
-                SubAudioDir, App.Mods?.ActiveModId);
+            var path = FindRecordedVoice(text);
             if (path == null || !s.SubAudioAudible) return false;
 
             var entry = Volatile.Read(ref _gen);   // a Stop after this drops this whisper and its card

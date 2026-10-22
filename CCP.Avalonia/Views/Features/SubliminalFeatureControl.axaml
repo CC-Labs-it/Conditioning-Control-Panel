@@ -138,6 +138,10 @@
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
 
+                            <TextBlock x:Name="TxtWhispersSilentHint" Text="{loc:Str hint_silent_lines}"
+                                       IsVisible="False" TextWrapping="Wrap" FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,8"/>
+
                             <!-- Solid mode: shared-host renderer, mirrors the Flashes/Bubble Pop toggle -->
                             <Grid Height="34" Background="Transparent" ToolTip.Tip="Draws subliminal text on one shared overlay instead of a dedicated window per screen - lighter on the renderer and friendlier to fullscreen games. Ignored while 'steal focus' is on. Applies to the next flash.">
                                 <Grid.ColumnDefinitions>
