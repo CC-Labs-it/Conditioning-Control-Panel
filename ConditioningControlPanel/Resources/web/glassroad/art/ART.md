@@ -1358,8 +1358,10 @@ Private source and native masters are reproducible. Build seating, export the ra
 ## EMI seated kart motion and opposing wobble
 
 The kart has 26 clips timed at 30 fps, 15 joints and two draws. Ten assembly actions
-use contact-dense 120 fps keys; the other 16 retain 30 fps keys. This keeps opposing
-tilt contact stable between samples. Use GLB timestamps, not a fixed frame stride. Its original 13
+use 120 fps base keys with exact support-switch timestamps. The other 16 use 30 fps.
+The extra keys represent the cusp where the lowest cup-foot support changes,
+keeping gaps stable without oversized uniform sampling. Use GLB timestamps, not
+a fixed frame stride. Its original 13
 joint names remain, with cup_body and saucer_body added beside rider_mount.
 The corrected seated model supplies the actual floor, brim and original feet.
 Motion appends samples to the final packed binary without changing its existing
@@ -1404,13 +1406,15 @@ together. Drive the common host root for physics, road alignment and rescue trav
 Soles meet the actual cup floor at Y 0.320. Supported hand pads meet the actual
 brim annulus at Y 0.510, radii 0.374-0.400 m. Ordinary driving keeps the soles planted.
 The floor/brim surface patches are embedded in the binding file for integration.
-At 120 fps, with dense assembly checked at 240 fps, supported palms deviate at most 0.084 mm and planted sole patches at most
-0.129 mm. Intentional foot/hand release windows are explicit per action.
+At 120 fps, with dense assembly checked at 240 fps plus actual-key midpoints, supported palms deviate at most 0.084 mm and planted sole patches at most
+0.130 mm. Intentional foot/hand release windows are explicit per action.
 
 The controls are siblings, with independently opposing model-space slopes about
-the actual seat center. Full-hop peak is cup+4 deg and saucer-3 deg at frame 13,
+the actual seat center. Full-hop peak is cup+6 deg and saucer-4.5 deg at frame 13,
 followed by opposite rebounds at 20/26 and a damped return to rest. Takeoff and
-impacts use smaller opposition; ramp/hit pitch complements the roll.
+impacts use smaller opposition; ramp/hit pitch complements the roll. Relative to
+R 3, angular envelopes are 1.5 x and impact separation 1.3 x. Full-air cup/rider
+gaps are 120/300 mm, with the same 3 mm breathing and unchanged phase timing.
 
 Evaluate the tilted saucer seat plane, then translate cup/rider along its normal
 until the actual lowest cup-foot patch has the desired signed clearance. Compose
@@ -1420,8 +1424,8 @@ or a common-root lift do not maintain these relative contacts.
 
 The full hop lasts 1.20 s: hands release by frame 5, external takeoff at 6, cup separates
 at 9, rider separates at 12, saucer touchdown at 21, cup seats at 25, soles at 29,
-hands at 32 and antenna settles at 36. The reference peak uses 90 mm cup clearance
-and 240 mm sole-to-floor clearance. Air breathing adds at most 3 mm. Body pitch/roll
+hands at 32 and antenna settles at 36. The reference peak uses 120 mm cup clearance
+and 300 mm sole-to-floor clearance. Air breathing adds at most 3 mm. Body pitch/roll
 is gated above 230 mm sole clearance, because the brim is 190 mm above the floor.
 Bump/hit reactions use smaller separate responses. Antenna base remains attached.
 The complete hop is a legacy/review alternative to the split jump, never layered
@@ -1434,7 +1438,7 @@ signal, capture the evaluated saucer offset, cup/sole gaps, saucer/cup/rider qua
 arm pose and antenna pose. Apply the binding's exact landing envelopes from that
 entry. Zero gap stays closed within 0.2 mm interpolation tolerance, and partial
 separation only closes. Post-sampling contact solve removes the residual. Do not crossfade a
-partial takeoff into the canonical 90/240 mm first sample or wait for takeoff to end.
+partial takeoff into the canonical 120/300 mm first sample or wait for takeoff to end.
 
 Landing decays captured saucer/cup orientation and adds a small opposing, damped
 rebound. Soft landing closes the cup by 35% and soles by 60% of its 0.60 s duration. Heavy uses
@@ -1442,13 +1446,13 @@ rebound. Soft landing closes the cup by 35% and soles by 60% of its 0.60 s durat
 then antenna finishes. Blend free arm/antenna entry over the first 18% while solving
 contacts. Every final local transform returns to rest. Zero-gap, early, normal
 and long-air probes replay the same captured-entry recipe and pass independent
-240 fps midpoint checks. Worst zero-gap residual is 0.198 mm; no plane/triangle
+240 fps plus every actual-key/midpoint check. Worst zero-gap residual is 0.000 mm; no plane/triangle
 penetration or uncovered seat contact exceeds the fixed numerical tolerances.
 
 Use one primary normal-blend rig action. Disable conflicting procedural bone
 writes and duplicate spin/body reactions. Preserve physics, road-normal alignment,
 tint, ghost wash, faces and marks. Solve contacts after any crossfade. The sampled
-bound 1.481 m includes 3 mm margin; it does not certify arbitrary layered combinations.
+bound 1.590 m includes 3 mm margin; it does not certify arbitrary layered combinations.
 Actual saucer-seat, floor and brim triangle coverage/ray checks pass. These contact
 checks do not constitute a full triangle self-intersection test of every mesh part.
 
@@ -1483,16 +1487,16 @@ Wave/lob are outward raised casts with original short arms, below the case roof.
 
 This model has 4,892 tris and two 512 px UASTC atlases using 2,796,200 B conservative
 RGBA 8 residency including all mips. Motion adds zero texture memory. Validation
-checks actual exported skin at 120/240 fps, exact loops/rest exits/named joins, source
+checks actual exported skin at 120/240 fps plus actual-key midpoints, exact loops/rest exits/named joins, source
 payload preservation, full 0..1 blank emi_screen UVs, tints and head_attach.
 Final packed visual review/video and engine integration are separate evidence.
 
 
 ### Final runtime verification and budgets
 
-The final 564,024 byte GLB has SHA256
-8ba8a107e5ba5082a8a26afc2bc7fa589fb6f76c33699bd76325f2dcb387eaee.
-The event-binding sidecar pins that hash. Its animated bound is 1.481 m;
+The final 569,428 byte GLB has SHA256
+7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1.
+The event-binding sidecar pins that hash. Its animated bound is 1.59 m;
 the padded rest bound is 1.113 m. Dimensions are 1.469185 x 1.099799 x 1.44 m.
 
 Both replacement UASTC atlases pass strict Khronos KTX2 validation. The packed

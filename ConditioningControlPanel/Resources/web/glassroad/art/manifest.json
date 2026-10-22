@@ -345,7 +345,7 @@
     "kind": "kart",
     "tris": 4892,
     "texBytes": 2796200,
-    "boundRadiusM": 1.481,
+    "boundRadiusM": 1.59,
     "materialSlots": [
       "kart_surface",
       "emi_screen"
@@ -536,8 +536,9 @@
       "saucer_body",
       "rider_mount"
     ],
-    "animationBoundsScope": "All26 clips checked at120fps, dense assembly at240fps, plus3mm margin; arbitrary blends require contact solve.",
-    "assemblySampleFps": 120
+    "animationBoundsScope": "All26 clips checked at120fps, dense assembly at240fps plus every actual key and interval midpoint, plus3mm margin; arbitrary blends require contact solve.",
+    "assemblySampleFps": 120,
+    "contactSwitchKeys": true
   },
   {
     "id": "emi-kart-event-bindings",
