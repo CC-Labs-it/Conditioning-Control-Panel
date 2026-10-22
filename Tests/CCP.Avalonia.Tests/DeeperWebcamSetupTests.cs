@@ -48,6 +48,8 @@ public sealed class DeeperWebcamSetupTests
             Assert.Equal(Loc.Get("blink_trainer_consent_required"), deeper.FindControl<TextBlock>("DeeperWebcamConsentStatus")!.Text);
             Assert.False(deeper.FindControl<Button>("BtnDeeperWebcamRevokeConsent")!.IsVisible);
             Assert.Equal(Color.FromRgb(0xFF, 0xD0, 0x80), ((ISolidColorBrush)deeper.FindControl<Border>("DeeperWebcamConsentCard")!.BorderBrush!).Color);
+            // WPF UpdateBlinkTrainerTrackerButton (MainWindow.BlinkTrainer.cs:378): the label follows the tracker.
+            Assert.Equal("Start tracker", deeper.FindControl<Button>("BtnDeeperWebcamStartStopTracker")!.Content);
 
             // The free Deeper card uses the same modal even while the premium Blink Trainer tab is hidden.
             deeper.FindControl<Button>("BtnDeeperWebcamManageConsent")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
