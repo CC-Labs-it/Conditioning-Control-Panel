@@ -170,6 +170,14 @@ internal sealed class AchievementEngine
         if (Progress.TotalFlashImages >= AchievementRules.RetinalBurnFlashImages) TryUnlock("retinal_burn");
     }
 
+    /// <summary>WPF GamificationBridge.OnGazePopped: one bubble popped by gaze, hands_free (exclusive) at 50.</summary>
+    public void TrackGazePop()
+    {
+        Progress.GazePops++;
+        _isDirty = true;
+        if (Progress.GazePops >= AchievementRules.HandsFreeGazePops) TryUnlockExclusive("hands_free");
+    }
+
     /// <summary>WPF AchievementService.TrackMindWipeDuration: clean_slate at 60 s of continuous loop.</summary>
     public void TrackMindWipeDuration(double seconds)
     {
