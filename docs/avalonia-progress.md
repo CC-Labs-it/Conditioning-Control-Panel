@@ -2546,3 +2546,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/deeper-core-c: +519
 - Cloud session unit (deeper-core-c); reviewed and gated locally.
+
+## avalonia-port/bureau-core-a: +490
+- Cloud session unit (bureau-core-a); reviewed and gated locally.
