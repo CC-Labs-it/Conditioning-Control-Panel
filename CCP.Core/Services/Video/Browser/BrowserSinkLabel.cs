@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
     /// <c>setSinkId</c>; every failure path page-side reports back and leaves audio on the
     /// Windows default, so a wrong or stale label can never silence a clip.
     ///
-    /// This is deliberately dormant in the field today: <see cref="BrowserVideoGate"/> still
+    /// This is deliberately dormant in the field today: <c>BrowserVideoGate</c> (WPF head) still
     /// routes device-pinned users to LibVLC (#938), so a real user with a chosen device never
     /// reaches the player page. The label still flows for the surfaces the gate does not govern
     /// once that demotion is retired — a separate change, made only after this path has proven
@@ -28,8 +28,8 @@ namespace ConditioningControlPanel.Services.Video.Browser
         {
             string? env = null;
             try { env = Environment.GetEnvironmentVariable(TestOverrideVariable); } catch { }
-            var s = CoreSettings.Service?.Current;
-            return Resolve(s?.AudioOutputDeviceId, s?.AudioOutputDeviceName, env);
+            var s = CoreSettings.Current;
+            return Resolve(s.AudioOutputDeviceId, s.AudioOutputDeviceName, env);
         }
 
         /// <summary>

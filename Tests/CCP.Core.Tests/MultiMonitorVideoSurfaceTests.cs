@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Xunit;
 using static ConditioningControlPanel.Services.VideoSurfaceHealth;
 
@@ -326,19 +327,23 @@ public class MultiMonitorVideoSurfaceTests
     }
 
     [Fact]
-    public void Report_SendsTheSurfaceLineToTheHeadsTraceSink()
+    public void Report_HandsTheSurfaceLineToTheHeadsVideoTrace()
     {
-        // The WPF head seeds TraceSink with VideoDiag.Log at startup; the line it gets is the same
-        // FormatSurfaceLine the Serilog sink logs.
-        var seen = new System.Collections.Generic.List<(string Tag, string Line)>();
-        var before = TraceSink;
-        TraceSink = (tag, line) => seen.Add((tag, line));
-        try { Report("libvlc", "DISPLAY2", primary: true, firstFrameMs: 40, failureReason: null); }
-        finally { TraceSink = before; }
+        // VideoDiag (video-diag.log) stays head-side; Core reaches it through DiagSink.
+        var seen = new List<(string Tag, string Line)>();
+        var prev = DiagSink;
+        try
+        {
+            DiagSink = (tag, line) => seen.Add((tag, line));
+            Report("browser", "DISPLAY2", primary: false, firstFrameMs: 12, failureReason: null);
+            Assert.Equal(("SURFACE", "engine=browser monitor=DISPLAY2 role=secondary firstFrame=12ms"), Assert.Single(seen));
 
-        var hit = Assert.Single(seen);
-        Assert.Equal("SURFACE", hit.Tag);
-        Assert.Equal(FormatSurfaceLine("libvlc", "DISPLAY2", true, 40, null), hit.Line);
+            DiagSink = (_, _) => throw new InvalidOperationException("sink down");
+            Report("libvlc", "DISPLAY1", primary: true, firstFrameMs: -1, failureReason: "x");   // never throws
+            DiagSink = null;
+            Report("libvlc", "DISPLAY1", primary: true, firstFrameMs: -1, failureReason: "x");   // Serilog only
+        }
+        finally { DiagSink = prev; }
     }
 
     // ---- browser first-frame deadline arming (round 4 blocker) ----

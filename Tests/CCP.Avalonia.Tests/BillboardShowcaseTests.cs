@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -8,12 +9,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls.Billboard;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -53,7 +56,9 @@ public sealed class BillboardShowcaseTests
         File.WriteAllBytes(video, new byte[] { 0 });
         var clip = new ShowcaseClip("dtrh", ShowcaseTier.Prime, "showcase-dtrh.mp4", 1, "", "showcase-dtrh.jpg", 1, "", 6);
         string? Copy(string key) { var v = Loc.Get(key); return v == key ? null : v; }
-        var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, poster, null), Copy)!;
+        EnsureApp();
+        var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, poster, null), Copy);
+        Assert.NotNull(card);
         var fake = new FakeShowcase(card);
         MainShellWindow.MakeShowcase = () => fake;
 
@@ -87,6 +92,125 @@ public sealed class BillboardShowcaseTests
         }
         return Task.CompletedTask;
     });
+
+    /// <summary>WPF ClipArtView with no clip: the card still wears the clip art, on its plain dark
+    /// ground, and makes no player even where motion is allowed. A regression guard: it already passes
+    /// on the base; fail-proven by changing the ground colour in ClipArtView.</summary>
+    [Fact]
+    public Task ShowcaseCardWithoutAClipStandsOnItsPlainGround() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ClipArtView.MotionAllowed = () => true;
+        string? Copy(string key) { var v = Loc.Get(key); return v == key ? null : v; }
+        var clip = new ShowcaseClip("dtrh", ShowcaseTier.Prime, "showcase-dtrh.mp4", 1, "", "showcase-dtrh.jpg", 1, "", 6);
+        EnsureApp();
+        var card = ShowcaseRules.BuildCard(clip, null, Copy);
+        Assert.NotNull(card);
+        var shell = ShowHome(card, out var undo);
+        try
+        {
+            var art = Assert.Single(shell.BillboardHost!.GetLogicalDescendants().OfType<ClipArtView>());
+            Assert.Null(art.Poster.Source);
+            Assert.False(art.HasPlayer);
+            Assert.Equal(Color.FromRgb(0x0c, 0x0d, 0x1a), Assert.IsType<SolidColorBrush>(art.Background).Color);
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); undo(); }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>A real clip decodes on Home, and the view holds its decoder the moment it leaves the
+    /// visual tree, whoever takes it off; closing the shell then frees it. Skips where ffmpeg (to
+    /// make the clip) or libvlc is missing.</summary>
+    [Fact]
+    public async Task ShowcaseClipDecodesOnHomeAndHoldsWhenDetached()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-showcase-").FullName;
+        var video = Path.Combine(dir, "dtrh.mp4");
+        try
+        {
+            try
+            {
+                using var ff = Process.Start(new ProcessStartInfo("ffmpeg",
+                    $"-v error -f lavfi -i testsrc=d=10:s=320x240:r=25 -pix_fmt yuv420p \"{video}\"") { UseShellExecute = false })!;
+                ff.WaitForExit();
+            }
+            catch (Exception) { }
+            if (!File.Exists(video)) Assert.Skip("ffmpeg not available to generate a test clip");
+            try { _ = new LibVlcAudio("--aout=dummy"); }
+            catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
+
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                ClipArtView.MotionAllowed = () => true;
+                string? Copy(string key) { var v = Loc.Get(key); return v == key ? null : v; }
+                var clip = new ShowcaseClip("dtrh", ShowcaseTier.Prime, "showcase-dtrh.mp4", 1, "", "showcase-dtrh.jpg", 1, "", 6);
+                var played = new List<string>();
+                EnsureApp();
+                var card = ShowcaseRules.BuildCard(clip, new ShowcaseClipArt("dtrh", video, null, played.Add), Copy);
+                Assert.NotNull(card);
+                var shell = ShowHome(card, out var undo);
+                try
+                {
+                    var art = Assert.Single(shell.BillboardHost!.GetLogicalDescendants().OfType<ClipArtView>());
+                    Assert.True(await Until(() => art.Decoding && played.Count == 1), "the clip never decoded on Home");
+
+                    ((Panel)art.Parent!).Children.Remove(art);
+                    Assert.True(await Until(() => !art.Decoding), "the clip kept decoding off the visual tree");
+                    Assert.True(art.HasPlayer);   // held, not freed: a Run resumes it
+
+                    shell.Close();
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(art.HasPlayer);   // the slide still carries its art: the shell frees it (P68)
+                }
+                finally { shell.Close(); Dispatcher.UIThread.RunJobs(); undo(); }
+            });
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    private static async Task<bool> Until(Func<bool> done)
+    {
+        for (var i = 0; i < 100 && !done(); i++) await Task.Delay(50);
+        return done();
+    }
+
+    /// <summary>A shown shell whose deck is the house cards plus this showcase card, turned to it.
+    /// Motion Off keeps the deck still; <see cref="ClipArtView.MotionAllowed"/> decides the clip.</summary>
+    /// <summary>The test app (whose Initialize loads the strings) exists before a card is built.</summary>
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+
+    private static MainShellWindow ShowHome(BillboardCardSpec card, out Action undo)
+    {
+        EnsureApp();
+        var old = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.DashboardBrowserCollapsed = true;
+        s.MotionLevel = MotionLevel.Off;
+        s.PerformanceMode = false;
+        s.BillboardSnoozedUntil.Clear();
+        MainShellWindow.MakeShowcase = () => new FakeShowcase(card);
+        undo = () =>
+        {
+            s.BillboardSnoozedUntil.Clear();
+            s.MotionLevel = MotionLevel.Full;
+            CoreSettings.ServiceProvider = old;
+        };
+
+        var shell = new MainShellWindow();
+        shell.Show();
+        Dispatcher.UIThread.RunJobs();
+        var host = shell.BillboardHost!;
+        while (host.CurrentCard?.Spec.Id != card.Id) host.Advance();
+        Dispatcher.UIThread.RunJobs();
+        return shell;
+    }
 
     /// <summary>The board stays silent: the clip player is muted and opens no audio track.</summary>
     [Fact]

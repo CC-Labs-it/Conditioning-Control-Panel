@@ -79,7 +79,7 @@ public class StrictMediaKeyLockTests
     // ---- locks 1 + 2: the page halves ----
     //
     // player.js is plain JS with no test home in this repo, so its half of the contract is asserted
-    // against the product source the same way BrowserSinkLabelWiringTests asserts the sink contract.
+    // against the product source the same way BrowserSinkLabelTests asserts the sink contract.
 
     [Fact]
     public void PlayerPage_ArmsTheMediaKeyGuardFromTheLoadMessage()

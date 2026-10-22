@@ -1,21 +1,16 @@
+using System;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Video.Browser;
 using Xunit;
 
 namespace CCP.Core.Tests;
 
 /// <summary>
-/// #938 plumbing — audio-output routing on the first-party player page (https://ccp.game).
-///
-/// <para>Two halves must stay true together. The C# half (<see cref="BrowserSinkLabel"/>) decides
-/// WHETHER a device label rides the <c>load</c> message at all — null is the "leave audio on the
-/// Windows default" signal and must come out of every configuration that cannot be routed. The
-/// page half (player.js <c>applySink</c>) matches that label against <c>enumerateDevices()</c> and
-/// applies <c>setSinkId</c>, with the fail-safe contract that every failure path posts
-/// <c>{type:'sink', ok:false}</c> and changes nothing.</para>
-///
-/// <para>The page half cannot run under xunit; its wiring is pinned by static reads of the product
-/// sources in the WPF suite's BrowserSinkLabelWiringTests.</para>
+/// #938 plumbing, the C# half: <see cref="BrowserSinkLabel"/> decides whether a device label rides the
+/// player page's <c>load</c> message. Null is the "leave audio on the Windows default" signal. The page
+/// half and the engine wiring are pinned by the WPF suite's source scans.
 /// </summary>
+[Collection(SessionStatics.Name)]
 public class BrowserSinkLabelTests
 {
     // =====================================================================================
@@ -79,5 +74,30 @@ public class BrowserSinkLabelTests
     {
         // The PR body / manual verification script names this variable; a rename must be loud.
         Assert.Equal("CCP_BROWSER_SINK_TEST_LABEL", BrowserSinkLabel.TestOverrideVariable);
+    }
+
+    [Fact]
+    public void Resolve_Live_ReadsTheCoreSettingsSeam()
+    {
+        // The parameterless overload used to read App.Settings; in Core it reads CoreSettings.Current.
+        var s = CoreSettings.Current;
+        var (id, name) = (s.AudioOutputDeviceId, s.AudioOutputDeviceName);
+        var env = Environment.GetEnvironmentVariable(BrowserSinkLabel.TestOverrideVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(BrowserSinkLabel.TestOverrideVariable, null);
+            s.AudioOutputDeviceId = "{guid}";
+            s.AudioOutputDeviceName = " Headphones ";
+            Assert.Equal("Headphones", BrowserSinkLabel.Resolve());
+
+            s.AudioOutputDeviceId = "";
+            Assert.Null(BrowserSinkLabel.Resolve());
+        }
+        finally
+        {
+            s.AudioOutputDeviceId = id;
+            s.AudioOutputDeviceName = name;
+            Environment.SetEnvironmentVariable(BrowserSinkLabel.TestOverrideVariable, env);
+        }
     }
 }

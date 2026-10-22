@@ -6,73 +6,96 @@ using Xunit;
 namespace CCP.Core.Tests;
 
 /// <summary>
-/// The browser engine's "never again" list, now in CCP.Core: a file that failed in the player page
-/// routes to LibVLC from then on, a content-pack clip keys on its pack identity rather than its
-/// per-play temp path, and a re-encode (new size) gets a fresh chance. CorePaths.UserData is this
-/// assembly's temp profile, so the debounced save never reaches a real one.
+/// The browser-unsafe list after its move to Core: keyed by stable identity + size, so a content-pack
+/// clip's per-play temp path still hits, and a re-encode (new size) gets a fresh chance. Runs in this
+/// assembly's CCP_USERDATA_DIR sandbox (RoadmapTestProfile), so the persisted file never touches a profile.
 /// </summary>
 public sealed class BrowserUnsafeVideoCacheTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "ccp-unsafe-" + Guid.NewGuid().ToString("N"));
+    // Stepped clock: the 3 s debounced save never runs on a real timer after a test ends.
+    private readonly PopQuizSchedulerTests.FakeClock _clock = new();
 
-    public BrowserUnsafeVideoCacheTests() => Directory.CreateDirectory(_dir);
+    public BrowserUnsafeVideoCacheTests()
+    {
+        BrowserUnsafeVideoCache.ResetForTests();
+        BrowserUnsafeVideoCache.Clock = _clock;
+    }
 
     public void Dispose()
     {
-        try { Directory.Delete(_dir, recursive: true); } catch { }
+        BrowserUnsafeVideoCache.ResetForTests();
+        BrowserUnsafeVideoCache.Clock = TimeProvider.System;
     }
 
-    private string Clip(string name, int bytes)
+    private static string TempClip(int bytes)
     {
-        var p = Path.Combine(_dir, name);
-        File.WriteAllBytes(p, new byte[bytes]);
-        return p;
-    }
-
-    [Fact]
-    public void AFailedFileIsRememberedAndOthersAreNot()
-    {
-        var bad = Clip("bad.mp4", 10);
-        var good = Clip("good.mp4", 10);
-
-        Assert.False(BrowserUnsafeVideoCache.Contains(bad));
-        BrowserUnsafeVideoCache.Add(bad, "test");
-
-        Assert.True(BrowserUnsafeVideoCache.Contains(bad));
-        Assert.False(BrowserUnsafeVideoCache.Contains(good));
+        var path = Path.Combine(Path.GetTempPath(), "ccp-unsafe-" + Guid.NewGuid().ToString("N") + ".mp4");
+        File.WriteAllBytes(path, new byte[bytes]);
+        return path;
     }
 
     [Fact]
-    public void AReEncodeOfTheSameNameGetsAFreshChance()
+    public void AddedFile_IsContained_UntilItsSizeChanges()
     {
-        var clip = Clip("same.mp4", 10);
-        BrowserUnsafeVideoCache.Add(clip, "test");
+        var clip = TempClip(10);
+        try
+        {
+            Assert.False(BrowserUnsafeVideoCache.Contains(clip));
+            BrowserUnsafeVideoCache.Add(clip, "test");
+            Assert.True(BrowserUnsafeVideoCache.Contains(clip));
 
-        File.WriteAllBytes(clip, new byte[20]);
-        Assert.False(BrowserUnsafeVideoCache.Contains(clip));
+            File.WriteAllBytes(clip, new byte[11]);   // a re-encode
+            Assert.False(BrowserUnsafeVideoCache.Contains(clip));
+        }
+        finally { File.Delete(clip); }
     }
 
     [Fact]
-    public void APackClipKeysOnItsStableIdentityAcrossTempPaths()
+    public void PackTempPaths_ShareTheRegisteredStableKey()
     {
+        var first = TempClip(20);
+        var second = TempClip(20);
         var key = "pack:" + Guid.NewGuid().ToString("N") + "/clip.mp4";
-        var firstPlay = Clip("ccp_temp_" + Guid.NewGuid().ToString("N") + ".mp4", 32);
-        var secondPlay = Clip("ccp_temp_" + Guid.NewGuid().ToString("N") + ".mp4", 32);
+        try
+        {
+            BrowserUnsafeVideoCache.RegisterStableKey(first, key);
+            BrowserUnsafeVideoCache.RegisterStableKey(second, key);
+            Assert.Equal(key, BrowserUnsafeVideoCache.ResolveStableKey(second));
 
-        BrowserUnsafeVideoCache.RegisterStableKey(firstPlay, key);
-        Assert.Equal(key, BrowserUnsafeVideoCache.ResolveStableKey(firstPlay));
-        BrowserUnsafeVideoCache.Add(firstPlay, "test");
-
-        BrowserUnsafeVideoCache.RegisterStableKey(secondPlay, key);
-        Assert.True(BrowserUnsafeVideoCache.Contains(secondPlay));
-        Assert.Null(BrowserUnsafeVideoCache.ResolveStableKey(Clip("loose.mp4", 32)));
+            BrowserUnsafeVideoCache.Add(first, "test");
+            Assert.True(BrowserUnsafeVideoCache.Contains(second));
+        }
+        finally { File.Delete(first); File.Delete(second); }
     }
 
     [Fact]
-    public void EmptyPathsAreNeverUnsafe()
+    public void AddedFile_IsSavedAfterTheDebounce_AndSurvivesAReload()
     {
+        var clip = TempClip(30);
+        var file = Path.Combine(ConditioningControlPanel.CorePaths.UserData, "browser_unsafe_videos.json");
+        string Saved() => File.Exists(file) ? File.ReadAllText(file) : "";
+        var marker = Path.GetFileName(clip);
+        try
+        {
+            BrowserUnsafeVideoCache.Add(clip, "test");
+            _clock.Advance(TimeSpan.FromMilliseconds(2900));
+            Assert.DoesNotContain(marker, Saved());   // still inside the debounce
+
+            _clock.Advance(TimeSpan.FromMilliseconds(200));
+            Assert.Contains(marker, Saved());
+
+            BrowserUnsafeVideoCache.ResetForTests();   // a fresh session reads the file back
+            Assert.True(BrowserUnsafeVideoCache.Contains(clip));
+        }
+        finally { File.Delete(clip); }
+    }
+
+    [Fact]
+    public void BlankInput_NeverThrowsAndIsNeverContained()
+    {
+        BrowserUnsafeVideoCache.Add(null, "test");
+        BrowserUnsafeVideoCache.RegisterStableKey("", "k");
         Assert.False(BrowserUnsafeVideoCache.Contains(null));
-        Assert.False(BrowserUnsafeVideoCache.Contains(""));
-        BrowserUnsafeVideoCache.Add(null, "test");   // never throws
+        Assert.Null(BrowserUnsafeVideoCache.ResolveStableKey(null));
     }
 }

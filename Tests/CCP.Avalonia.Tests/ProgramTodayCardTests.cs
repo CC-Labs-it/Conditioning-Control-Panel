@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -61,6 +62,8 @@ public sealed class ProgramTodayCardTests
         settings.MotionLevel = MotionLevel.Full;
         settings.PerformanceMode = false;
         MainShellWindow? shell = null;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
         try
         {
             AvApp.Programs = new ProgramService(path, readOnly: true);
@@ -86,6 +89,7 @@ public sealed class ProgramTodayCardTests
             Assert.True(F<Rectangle>("ProgramTodayArt").IsVisible);
             Assert.Equal(5, F<Canvas>("ProgramTodaySparkles").Children.Count);
             Assert.True(dash.ProgramBannerFxRunning);
+            BannerLoopsFollowWpfAndTheWidth(shell, dash, time);
 
             // P01: the shell hides the tab, not the card -> the loops stop; showing it restarts them.
             dash.IsVisible = false;
@@ -132,8 +136,66 @@ public sealed class ProgramTodayCardTests
             (settings.MotionLevel, settings.PerformanceMode) = (motion, perf);
             (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro) = (seenTab, seenIntro);
             Directory.Delete(dir, true);
+            BeatLoop.Time = TimeProvider.System;
         }
     });
+
+    /// <summary>The banner loops on the 30 fps beat, stepped (P08), on WPF MainWindow.ProgramBanner.cs's
+    /// curves, read against the card's CURRENT width (a resize mid-run used to keep the first width), and
+    /// the hover nudge really slides the art (it was an Animation on a Transform: inert, P82).</summary>
+    private static void BannerLoopsFollowWpfAndTheWidth(MainShellWindow shell, SettingsTabView dash, SteppedTime time)
+    {
+        T F<T>(string n) where T : Control => dash.FindControl<T>(n)!;
+        void Step(double s) { time.Advance(TimeSpan.FromSeconds(s)); BeatLoop.StepAll(); }
+        var decor = F<Grid>("ProgramTodayDecor");
+        var fog = (TranslateTransform)F<Rectangle>("ProgramTodayFog").RenderTransform!;
+        var sheen = (TranslateTransform)F<Rectangle>("ProgramTodaySheen").RenderTransform!;
+        var accent = F<Border>("ProgramTodayAccent");
+        var dots = F<Canvas>("ProgramTodaySparkles").Children.OfType<Ellipse>().ToArray();
+        var mine = BeatLoop.Running.Where(l => l.Owner == F<Button>("ProgramTodayCard")).ToArray();
+        Assert.Single(mine);
+        Assert.True(mine[0].OnFrameBeat, "the banner loop is not on the window's frames");   // StepAll skips the clock
+        Assert.Equal(0.55, accent.Opacity, 3);
+        Assert.Equal(-160, sheen.X, 3);
+        Assert.All(dots, d => Assert.Equal(0, d.Opacity, 3));
+
+        Step(0.85);                                                          // half the 1.7 s sweep (:317)
+        var w = decor.Bounds.Width;
+        Assert.Equal(-160 + (w + 220) * 0.5, sheen.X, 2);
+        Assert.Equal(0.9 * 0.45 / 0.85, dots[0].Opacity, 3);                 // fading, 0.9 at 0.45 -> 0 at 1.3 (:452-456)
+        Assert.Equal(0, dots[1].Opacity, 3);                                 // still before its 1.15 s BeginTime
+        Step(3.4 - 0.85);
+        Assert.Equal(1.0, accent.Opacity, 3);                                // 0.55 <-> 1 over 3.4 s (:333)
+
+        var card = F<Button>("ProgramTodayCard");
+        card.Width = w - 300;                                                // a resize mid-run (the shell scales a fixed design width)
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var w2 = decor.Bounds.Width;
+        Assert.True(Math.Abs(w2 - w) > 50, $"the card did not resize ({w} -> {w2})");
+        Step(11.85 - 3.4);
+        Assert.Equal(-160 + (w2 + 220) * 0.5, sheen.X, 2);                   // the next sweep spans the new width
+        Assert.Equal(-w2 * 0.55 * BeatLoop.Breath(11.85, 26), fog.X, 2);     // 26 s each way, sine (:303)
+        card.Width = double.NaN;
+        shell.UpdateLayout();
+
+        // Hover nudge (:478-490): 260 ms quadratic ease-out to -10, per rendered frame.
+        var art = F<Rectangle>("ProgramTodayArt");
+        typeof(SettingsTabView).GetMethod("NudgeProgramBannerArt", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(dash, new object[] { -10.0 });                               // what PointerEntered calls
+        Assert.True(art.IsVisible, "no banner art - the nudge test proves nothing");
+        double Nudged(double seconds)
+        {
+            time.Advance(TimeSpan.FromSeconds(seconds));
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            return ((TranslateTransform)art.RenderTransform!).X;
+        }
+        var p = 0.13 / 0.26;
+        Assert.Equal(-10 * (1 - (1 - p) * (1 - p)), Nudged(0.13), 3);       // halfway in time, 75% of the way
+        Nudged(0.2);
+        Assert.Equal(-10, ((TranslateTransform)art.RenderTransform!).X, 3);
+    }
 
     [Fact]
     public void BannerFallsBackToTheDefaultArtWhenAProgramShipsNone()

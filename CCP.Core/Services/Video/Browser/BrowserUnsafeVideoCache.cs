@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
     /// <summary>
     /// The set of video files the browser engine has proven it cannot play. A file lands here when
     /// the player page reports a media error for it, or never reports <c>playing</c> within the
-    /// no-playing window; from then on <see cref="BrowserVideoGate"/> routes it to LibVLC forever,
+    /// no-playing window; from then on <c>BrowserVideoGate</c> (WPF head) routes it to LibVLC forever,
     /// so the user never pays the fallback cost twice for the same clip.
     ///
     /// NOT populated by <c>ProcessFailed</c>: a dead browser process says nothing about the file.
@@ -40,7 +40,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
         private static readonly HashSet<string> _keys = new(StringComparer.OrdinalIgnoreCase);
         private static readonly List<string> _order = new();   // insertion order, for the cap
         private static bool _loaded;
-        private static Timer? _saveTimer;
+        private static ITimer? _saveTimer;
+
+        /// <summary>Clock for the debounced save; tests step it instead of waiting.</summary>
+        internal static TimeProvider Clock { get; set; } = TimeProvider.System;
 
         // path (usually a ccp_temp_<GUID> decrypt) -> stable identity of the underlying content.
         private static readonly Dictionary<string, string> _stableKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -166,9 +169,22 @@ namespace ConditioningControlPanel.Services.Video.Browser
 
         private static void ScheduleSave()
         {
-            _saveTimer ??= new Timer(_ => Save(), null, Timeout.Infinite, Timeout.Infinite);
-            try { _saveTimer.Change(SaveDebounceMs, Timeout.Infinite); }
+            _saveTimer ??= Clock.CreateTimer(_ => Save(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            try { _saveTimer.Change(TimeSpan.FromMilliseconds(SaveDebounceMs), Timeout.InfiniteTimeSpan); }
             catch (Exception ex) { Log.Debug("BrowserVideo: unsafe-cache save schedule failed: {E}", ex.Message); }
+        }
+
+        /// <summary>Tests: drop the pending save and the in-memory list so the next call reloads from disk.</summary>
+        internal static void ResetForTests()
+        {
+            lock (_lock)
+            {
+                _saveTimer?.Dispose();
+                _saveTimer = null;
+                _keys.Clear();
+                _order.Clear();
+                _loaded = false;
+            }
         }
 
         private static void Save()

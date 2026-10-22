@@ -66,6 +66,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
+            // or a Lines task reopens the card the press just dismissed.
+            try { Platform.LeashTaskHost.OnPanicPress(this); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
 
             // Same evaluation order as WPF: asking the palette closes it, so never ask with a card up.
             bool lockCardOpen = LockCardWindow.IsAnyOpen();
@@ -90,6 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StopCameraForPanic();
                 return;
             }
+            // WPF MainWindow.xaml.cs:1755: ladder mode only (the override rung and game hand-offs return first),
+            // after the grace pause and before the stop pass: her calm safety line, then 6 s of no other bark.
+            if (rung == PanicPolicy.Rung.RunLadder && !gameOwnedTheScreen) Platform.BarkHead.Engine?.Raise("Panic");
             bool wasRunning = CoreEngine.IsRunning;
             PanicSurfaces.StopAll("panic key", this);
             if (wasRunning) ShowFromTray();   // WPF: Show + Activate the main window after a running stop

@@ -4,6 +4,7 @@
 
 using System;
 using System.IO;
+using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -54,6 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 
         internal Image Poster => _poster;
 
+        /// <summary>The decoder is running right now (test seam).</summary>
+        internal bool Decoding => _player?.IsPlaying == true;
+
         public void Run()
         {
             if (_released || _failed || _art == null) return;
@@ -75,6 +79,14 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             _running = false;
             try { if (_player?.IsPlaying == true) _player.SetPause(true); }
             catch (Exception ex) { Fail(ex.Message); }
+        }
+
+        /// <summary>Off the visual tree the clip holds, whoever took it off: nothing decodes unseen.
+        /// WPF's MediaElement (UnloadedBehavior Manual) kept running; the next Run resumes it.</summary>
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            Hold();
+            base.OnDetachedFromVisualTree(e);
         }
 
         public void Release()
