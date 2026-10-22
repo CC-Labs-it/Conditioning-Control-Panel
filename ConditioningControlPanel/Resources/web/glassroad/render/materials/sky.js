@@ -7,10 +7,16 @@
  * arms, weighted by `galaxy` (dawn, deep, afterglow) from the same palette mix the road uses.
  */
 import { MeshBasicNodeMaterial, BackSide, Vector3 } from 'three/webgpu';
-import { uniform, positionLocal, normalize, atan, acos, asin, log, sin, mix, smoothstep, clamp, vec2, vec3, dot, texture, float } from 'three/tsl';
+import { uniform, positionLocal, normalize, atan, acos, asin, log, sin, mix, smoothstep, clamp, vec2, vec3, dot, texture, float, cameraPosition } from 'three/tsl';
 import { LOOK } from '../look.js';
 
 export const SKY_PALETTES = ['dawn', 'deep', 'afterglow'];
+
+/** Polish 2 sky depth; LOOK.skyDepth overrides. layers: [radius m, u tiling, gain, palette tint]. */
+export const SKY_DEPTH = Object.freeze({
+  layers: Object.freeze([Object.freeze([650, 3, 0.55, 0.35]), Object.freeze([1400, 2, 0.4, 0.55])]),
+  floor: 0.25, hazeR: 1800, hazeGain: 0.22,
+});
 
 export function createSkyMaterial(pal, art = null) {
   const u = { turn: uniform(0), twist: uniform(0), contrast: uniform(LOOK.skyContrast), rescue: uniform(0),
@@ -36,6 +42,29 @@ export function createSkyMaterial(pal, art = null) {
       if (s) stars = stars.add(texture(s, eq).r.mul(w[i]));
     });
     ground = ground.add(haze.mul(LOOK.artGalaxyGain).mul(u.contrast)).add(stars.mul(LOOK.artStarGain));
+    // polish 2: parallax star layers. The dome rides with the kart, so these layers are read as if
+    // they hung on spheres round the world origin (radius R): the view ray from the camera meets
+    // them at camera + d * R, so nearer layers slide as you drive. Each layer turns the field to a
+    // fresh orientation and tiles it finer, tinted toward the palette; no time term, no twinkle.
+    const deepStars = art.tex('sky-deep-stars') || art.tex('sky-dawn-stars');
+    if (deepStars) {
+      const S = { ...SKY_DEPTH, ...(LOOK.skyDepth || {}) };
+      S.layers.forEach(([R, tile, gain, tint], i) => {
+        const q = normalize(cameraPosition.add(d.mul(R)));
+        const r = i % 2 ? vec3(q.z, q.y, q.x.negate()) : vec3(q.x.negate(), q.y, q.z.negate());
+        const e = vec2(atan(r.z, r.x).div(Math.PI * 2).add(0.5).mul(tile), float(0.5).sub(asin(clamp(r.y, -1, 1)).div(Math.PI)));
+        const s = smoothstep(S.floor, 1, texture(deepStars, e).r);
+        ground = ground.add(mix(vec3(1, 1, 1), pal.col(i % 3), tint).mul(s.mul(gain)));
+      });
+      // the galaxy haze also gets a slow far layer, so the clouds have a near and a far
+      if (S.hazeGain > 0) {
+        const q = normalize(cameraPosition.add(d.mul(S.hazeR)));
+        const e = vec2(atan(q.x, q.z).div(Math.PI * 2).add(0.5), float(0.5).sub(asin(clamp(q.y, -1, 1)).div(Math.PI)));
+        let far = vec3(0, 0, 0);
+        SKY_PALETTES.forEach((id, i) => { const g = art.tex(`sky-${id}-galaxy`); if (g) far = far.add(texture(g, e).rgb.mul(w[i])); });
+        ground = ground.add(far.mul(S.hazeGain).mul(u.contrast));
+      }
+    }
   }
   const col = mix(ground, bands, arm.mul(u.contrast));
   const eye = smoothstep(0, 1.2, r).oneMinus();

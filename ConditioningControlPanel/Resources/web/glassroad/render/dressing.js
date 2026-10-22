@@ -8,10 +8,10 @@
  * flash limiter and Gentle Visuals own every moving or bright surface. Transmission glass is dropped
  * for a plain translucent tint (a transmission pass per ring is not worth it on phones).
  *
- * Scatter: a fresh layout per seed. A prop is rejected when it would sit in the tube over the road
- * (lateral gap < its bound radius + scatterMarginM while within scatterAirM above the surface, so
- * jump arcs stay clear) or overlap another prop. Placements use track.query, so a prop beside one
- * stretch is also checked against every other stretch that passes near it.
+ * Scatter: a fresh layout per seed (render/colossiMath.js placeScatter). A prop is rejected when it
+ * would sit in the tube over the road (lateral gap < its bound radius + scatterMarginM while within
+ * scatterAirM above the surface, so jump arcs stay clear), overlap another prop or touch a colossus.
+ * Every road stretch is checked, so a prop beside one stretch also clears one passing near it.
  */
 import {
   Group, InstancedMesh, Object3D, Matrix4, Quaternion, Vector3, MeshBasicNodeMaterial, CanvasTexture,
@@ -21,6 +21,8 @@ import { uniform, uv, vec2, texture, cos, sin, float, smoothstep, length, positi
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
+import { placeScatter, sampleTrack, worldLook } from './colossiMath.js';
+import { createSoftMaterial } from './materials/colossus.js';
 
 const M4 = new Matrix4(), V = new Vector3(), SC = new Vector3(), ZB = new Vector3();
 
@@ -192,34 +194,21 @@ export function buildFinish(art, track, pal) {
 }
 
 /** Seeded scatter of floating props. Returns { object, update(dt, spinMul) } or null with no props. */
-export function buildScatter(art, track, seed) {
+export function buildScatter(art, track, seed, { pal = null, avoid = [], samples = null } = {}) {
   if (!art) return null;
-  let st = (seed >>> 0) % 2147483646 + 1;
-  const rnd = (a, b) => { st = (st * 16807) % 2147483647; return a + (st / 2147483647) * (b - a); };
   const kinds = LOOK.artScatterKinds.filter((k) => art.model(k.id) && art.row(k.id));
   if (!kinds.length) return null;
-  const total = kinds.reduce((a, k) => a + k.w, 0);
-  const pick = () => { let x = rnd(0, total); for (const k of kinds) { if ((x -= k.w) <= 0) return k; } return kinds[0]; };
-
-  const placed = [], L = track.lengthM;
+  const W = worldLook();
   // the tier picked at boot sets the count (a later governor step leaves the layout alone)
-  const want = Math.round(LOOK.artScatter * (Q.scatter ?? 1)), tries = want * 8;
-  for (let i = 0; i < tries && placed.length < want; i++) {
-    const k = pick(), scale = rnd(k.scale[0], k.scale[1]), R = art.row(k.id).boundRadiusM * scale;
-    const f = track.frameAt(rnd(0, L)), side = rnd(0, 1) < 0.5 ? -1 : 1;
-    const off = f.w / 2 + R + rnd(LOOK.artScatterSideM[0], LOOK.artScatterSideM[1]), up = rnd(LOOK.artScatterUpM[0], LOOK.artScatterUpM[1]);
-    const p = [0, 1, 2].map((j) => f.p[j] + f.b[j] * side * off + f.n[j] * up);
-    const qq = track.query(p[0], p[1], p[2]);
-    const w = track.frameAt(qq.s).w, gap = Math.abs(qq.lateral) - w / 2;
-    const inTube = gap < R + LOOK.artScatterMarginM && qq.height > -R - LOOK.artScatterMarginM && qq.height < R + LOOK.artScatterAirM;
-    if (inTube) continue;
-    if (placed.some((x) => Math.hypot(x.p[0] - p[0], x.p[1] - p[1], x.p[2] - p[2]) < x.R + R)) continue;
-    placed.push({ k, p, R, scale, rot: [rnd(0, 6.28), rnd(0, 6.28), rnd(0, 6.28)], spin: rnd(-1, 1) * k.spin });
-  }
+  const want = Math.round(W.scatter * (Q.scatter ?? 1));
+  const placed = placeScatter(track, kinds, (id) => art.row(id), seed,
+    { want, avoid, W, samples: samples || sampleTrack(track, W.stepM) });
+  // huge things turn slowly: the spin share falls with the size multiplier
+  for (const x of placed) x.spin *= W.scatterSpinMul;
   if (!placed.length) return null;
 
   // one InstancedMesh per mesh part of each kind; instance matrix = placement * part matrix
-  const group = new Group(), parts = [];
+  const group = new Group(), parts = [], soft = new Map();
   for (const k of kinds) {
     const mine = placed.filter((x) => x.k === k);
     if (!mine.length) continue;
@@ -227,7 +216,12 @@ export function buildScatter(art, track, seed) {
     root.updateMatrixWorld(true);
     root.traverse((m) => {
       if (!m.isMesh) return;
-      const im = new InstancedMesh(m.geometry, m.material, mine.length);
+      let mat = m.material;
+      if (pal && mat && !Array.isArray(mat)) {
+        if (!soft.has(mat)) soft.set(mat, createSoftMaterial(mat, pal).material);
+        mat = soft.get(mat);
+      }
+      const im = new InstancedMesh(m.geometry, mat, mine.length);
       im.frustumCulled = false;
       group.add(im); parts.push({ im, local: m.matrixWorld.clone(), mine });
     });
@@ -251,7 +245,7 @@ export function buildScatter(art, track, seed) {
     count: placed.length,
     update(dt, spinMul) {
       if (!spinMul) return;
-      for (const x of placed) { x.rot[1] += x.spin * dt * spinMul; x.rot[0] += x.spin * 0.3 * dt * spinMul; }
+      for (const x of placed) { x.rot[1] += x.spin * dt * spinMul; if (!x.upright) x.rot[0] += x.spin * 0.3 * dt * spinMul; }
       write();
     },
   };
