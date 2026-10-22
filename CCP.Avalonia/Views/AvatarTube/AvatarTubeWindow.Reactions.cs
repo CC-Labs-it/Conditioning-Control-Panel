@@ -18,7 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// with v2 on WPF's arbiter speaks instead and titles stay local. This head has no v2 observer,
     /// so with v2 on it says the preset and nothing leaves (<see cref="MaySendToAi"/>,
     /// docs/avalonia-decisions.md). The deny list and incognito drop run in the poll, before any
-    /// event. ponytail: WPF's queued <c>Giggle</c> is <see cref="GigglePriority"/> (no speech queue).</para>
+    /// event. An AI line is <see cref="GigglePriority"/>, a preset queues through <see cref="Giggle"/>
+    /// (WPF Reactions.cs:145-153, 261-264).</para>
     /// </summary>
     public partial class AvatarTubeWindow
     {
@@ -37,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void AttachAwareness()
         {
+            // OnOpened runs on every Hide/Show, OnClosed once: a second += outlived the window.
+            DetachAwareness();
             App.WindowAwareness.ActivityChanged += OnActivityChanged;
             App.WindowAwareness.StillOnActivity += OnStillOnActivity;
             App.WindowAwareness.Start();
@@ -82,8 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (string.IsNullOrWhiteSpace(reaction)) return;
 
                 App.WindowAwareness.MarkReaction();
-                if (isAi) PlayDoubleBounce();
-                GigglePriority(reaction, aiGenerated: isAi);
+                if (isAi) { PlayDoubleBounce(); GigglePriority(reaction); }
+                else Giggle(reaction);
                 Log.Debug("Awareness reaction fired ({Category}, app {AppChars} chars, line {Chars} chars)",
                     e.Category, displayName.Length, reaction.Length);
             }
@@ -120,7 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 }
 
                 App.WindowAwareness.MarkStillOnReaction();
-                GigglePriority(reaction!, aiGenerated: isAi);
+                if (isAi) GigglePriority(reaction!);
+                else Giggle(reaction!);
             }
             catch (Exception ex) { Log.Warning(ex, "OnStillOnActivity handler failed"); }
         }

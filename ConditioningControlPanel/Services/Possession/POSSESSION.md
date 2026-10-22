@@ -1,7 +1,7 @@
 # Possession - the haunted-UI layer of Lockdown
 
 > Read this before touching anything under `Services/Possession/`, the Lockdown card, or the
-> tripwire hooks. Contracts live in `PossessionHostContracts.cs` (enums in CCP.Core `PossessionContracts.cs`); this file is the WHY and the rules.
+> tripwire hooks. Contracts live in CCP.Core `PossessionContracts.cs` (WPF typed reads in `PossessionHostContracts.cs`); this file is the WHY and the rules.
 
 ## What it is
 
@@ -236,11 +236,11 @@ effect is big: use the `target` context value.
 
 ```
 Services/Possession/
-  PossessionHostContracts.cs  contracts (stable - change only with a reason written here); the
-                              rung/intensity/role enums and bark triggers are in CCP.Core's
-                              Services/Possession/PossessionContracts.cs
+  PossessionHostContracts.cs  WPF half of the contracts (IWpfPossessionHost, typed Element/Window
+                              reads); the contracts themselves (stable - change only with a reason
+                              written here) are in CCP.Core's Services/Possession/PossessionContracts.cs
   POSSESSION.md               this file
-  PossessionDirector.cs       state machine: rung from elapsed fraction, weighted deck, cooldowns,
+  PossessionDirector.cs       (CCP.Core; head hooks in PossessionWpfHead.cs) state machine: rung from elapsed fraction, weighted deck, cooldowns,
                               concurrency caps, tick loop, tripwire reactions, reassembly exit
   PossessionDeck.cs           (CCP.Core) pure logic: rung math, weighting, cooldown picks; so are
                               PossessionOffLimits (name rule) and Effects/ToastLines + RewritePools
@@ -322,7 +322,7 @@ the shipped behaviour, not the plan.
 | Timer restart handling (`LockdownService.TimerRestarted`): rung -> Settle, `_barkedRungs` cleared, UndoAll over 1 s, EdgePulse, bark `PossessionBarkTriggers.TimerRestarted` | FOUNDATION | `PossessionDirector.cs` |
 | B1 ghost cursor, B2 predictive dodge incl. title-bar X/min, B3 real Start/Stop swap + "Stay" relabel, B4 slider ghost-thumb creep + toggle lies, B5 label rewrite + glyph rot (per-mod line packs) | Opus EFFECTS-A | `Effects/GhostCursorEffect.cs`, `Effects/Dodge*` (edit), `Effects/Swap*` (edit), `Effects/SliderCreepEffect.cs`, `Effects/ToggleLieEffect.cs`, `Effects/RewriteEffect.cs`, `Effects/GlyphRotEffect.cs`, `Effects/PossessionEffectCatalog.WaveA.cs` |
 | B7 XP drain / level lie, B8 tube steals an ACTIVE card (a usable card on the current tab - the option is really gone until reassembly), B9 room tilt/sag/deepen + per-escape 1 px shrink/2 px nudge (self-contained service on the lockdown events), B10 tab misroute + door reorder, B11 crimson toasts, B14 scroll hijack, C1 fake "deleting your sessions" dialog (Full Doki) | Opus EFFECTS-B | `Effects/XpDrainEffect.cs`, `Effects/StealCardEffect.cs` (+ `Warden.cs` steal verb), `Effects/RoomWarpEffect.cs`, `Effects/MisrouteEffect.cs`, `Effects/ReorderDoorsEffect.cs`, `Effects/ToastEffect.cs`, `Effects/ScrollHijackEffect.cs`, `Effects/DeleteDialogEffect.cs`, `Effects/PossessionEffectCatalog.WaveB.cs`, `MainWindow/MainWindow.NavRail.cs` (misroute hook only) |
-| B12 chat knows (lockdown flag in the companion prompt), B13 audio tics (ember tick SFX on big effects + 300 ms pitch-dip at rung change / tripwire repeat 3), C2 it remembers (flag + next-launch tic + line), C3 portrait glitch frames (R4, photosafe-gated), C4 Full Doki retitle at R3 + note in the empty tube | Opus COMPANION | `Services/Possession/PossessionAudio.cs`, `Effects/RetitleEffect.cs`, `Warden.cs` (note), `AvatarTubeWindow` glitch hook, companion prompt builder, `Models/AppSettings.cs` (`LockdownPossessionRemembers*`), `Effects/PossessionEffectCatalog.WaveC.cs` |
+| B12 chat knows (lockdown flag in the companion prompt), B13 audio tics (ember tick SFX on big effects + 300 ms pitch-dip at rung change / tripwire repeat 3), C2 it remembers (flag + next-launch tic + line), C3 portrait glitch frames (R4, photosafe-gated), C4 Full Doki retitle at R3 + note in the empty tube | Opus COMPANION | `CCP.Core/Services/Possession/PossessionAudio.cs`, `Effects/RetitleEffect.cs`, `Warden.cs` (note), `AvatarTubeWindow` glitch hook, companion prompt builder, `Models/AppSettings.cs` (`LockdownPossessionRemembers*`), `Effects/PossessionEffectCatalog.WaveC.cs` |
 
 REJECTED by owner: B6 name drop (sensitive userbase - never use the Windows username), D2/D3
 (content windows stay clean, full stop). Build mutex + loc-additions rule: see
@@ -347,7 +347,8 @@ a "you are the warden" instruction in either would be recorded as something the 
 Injectable as a ctor `Func<string?>` for tests. Escape count comes from `PossessionRemember`, which
 counts `EscapeAttempted.Total` (LockdownService keeps its own total private).
 
-**B13 audio tics** - `Services/Possession/PossessionAudio.cs`, gated by the new
+**B13 audio tics** - `CCP.Core/Services/Possession/PossessionAudio.cs` (moved to Core in
+possession-core-b2; the head passes its Lockdown and director to `PossessionAudio.Install`), gated by the new
 `AppSettings.LockdownAudioTics` (bool, default true). Two synthesized cues, rendered once into
 `%LOCALAPPDATA%/ConditioningControlPanel/possession/` and played through `AudioService.PlayOneShot`
 like any bubble pop, so device selection, the one-shot cap, the endpoint circuit breaker and disposal
@@ -360,7 +361,8 @@ effect. Deliberately NOT gated on `LockdownPhotosafe` - photosafe is a visual ac
 service subscribes to the director only while a lockdown runs; the setting is re-read at PLAY time so
 flipping it mid-lockdown takes effect at once.
 
-**C2 it remembers** - `Services/Possession/PossessionRemember.cs` +
+**C2 it remembers** - `CCP.Core/Services/Possession/PossessionRemember.cs` (rules: arm, spend-once flag,
+window-ready clock, escape counter) + `Services/Possession/PossessionWpfHead.cs` InstallRemember (WPF: timer, door, line) +
 `AppSettings.LockdownPossessionRememberPending` (bool, default false). Set when a lockdown ends and the
 intensity WAS Full Doki (read at deactivate time, not next launch). About 20 s after the main window is
 up on the next launch, the Lockdown door takes one ember charge (its own `EmberAttribution` over

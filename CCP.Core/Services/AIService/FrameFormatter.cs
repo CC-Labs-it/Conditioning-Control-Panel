@@ -140,5 +140,10 @@ namespace ConditioningControlPanel.Services.AIService
 
         /// <summary>Ambient descriptor for a finished mandatory video.</summary>
         public static string VideoDoneEvent(string title) => $"user finished the mandatory video \"{title}\"";
+
+        /// <summary>Ambient descriptor for Takeover's random Comment: nothing happened, the companion
+        /// just feels like a tease. Says the user asked for nothing, so the model never casts them as the brat.</summary>
+        public static string TakeoverCommentEvent() =>
+            "user is busy in the app and asked for nothing; tease them out of nowhere";
     }
 }

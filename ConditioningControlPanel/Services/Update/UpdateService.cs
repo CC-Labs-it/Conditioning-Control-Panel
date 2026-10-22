@@ -20,13 +20,195 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.5";
+        public const string AppVersion = "7.1.14";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.5 - Stay Tuned
+        public const string CurrentPatchNotes = @"v7.1.14 - Bring a Friend
+
+NEW IN 7.1.14
+
+ONLINE MEDIA
+- online media kept on your PC now clears itself 24 hours after it was downloaded. switching online media off clears it at once.
+- the built-in browser pages clear their own copies of online media too.
+- the ""Media from Scrolller"" line now sits on the Assets card and on the wallpaper credit.
+- a Scrolller picture is never left behind as your Windows wallpaper. a plain one takes its place when the wallpaper switches off.
+- bug reports no longer carry which online posts you looked at.
+
+NEW IN 7.1.13
+
+FRIENDS
+- friend links: press Copy link in the Friends drawer and send it anywhere. whoever opens it becomes your friend, on the desktop, the phone or app.cclabs.app. a link lasts 7 days or 25 uses, and New link retires the old one.
+- paste a friend's link into the add box to claim it, even when it sits inside a longer message.
+- online friends show where they are: a small PC, phone or globe mark next to their name.
+- friends on the web can invite you to Racing Thoughts and Breakout, and the invite opens the right place.
+
+ONLINE MEDIA, GOING OFFICIAL
+- we're finalising a commercial licence with Scrolller and starting the work now. every online picture, GIF and clip carries a small ""via Scrolller"" mark.
+- each plan gets a daily share of online media. the meter in the title bar shows today's use in percent and resets at midnight, your time.
+- anything you've seen in the last 24 hours is kept on your PC and replays free. sessions mix it with fresh picks, so the share goes further.
+- when the share runs out, kept media and your own files keep playing. fresh online media is back at midnight.
+- Basic gets more each day than Free, and Prime the most. a new install gets extra on its first day.
+- the meter is counted on your PC only. a one-time card explains all this the first time you use online media.
+
+GAMES
+- Arcademy: the Records Annex cameras show the whole picture on wide screens.
+- Goon: a listed table says so, and reminds you that you never see your own table in the list.
+
+VIDEOS
+- floating mandatory videos have three new switches on the Video page: Pop up together opens every window at once (up to Most at once), Keep sound stays on the video you're watching while new ones join muted, and Replay after a failed check can be turned off. strict videos and Lockdown always replay.
+
+COMPANION
+- personality studio: edit and delete your own personalities. Save now updates yours instead of adding a copy, and the name box shows the whole name.
+
+ACCOUNT AND HOME
+- an account with no display name is asked for one after signing in.
+- the Discord pill on Home is now a round Discord bubble.
+
+FIXES IN 7.1.13
+- haptics synced to audio no longer stop at 30:00.
+- lock cards accept punctuation: PROCESS, COMPLY, REPEAT matches PROCESS. COMPLY. REPEAT.
+- drone program: day 12 no longer gets stuck. optional tasks keep counting after the required ones finish the day.
+- Ollama setup: Finish saves the host it checked, and the Engine Room shows it.
+- the Strict note on the Video page says which modes keep videos full screen.
+- new pop-ups wait until a running session or Lockdown is over.
+
+v7.1.12 - Hold Still
+
+NEW IN 7.1.12
+- mandatory videos have a small mute button and a close X in the top right. the X is hidden on strict videos and in Lockdown, and neither shows during a Down the Rabbit Hole run.
+- floating videos open with a short animation, and only once the picture is ready: no more black or empty frame. they no longer clear your flashes, and the ""via"" card now shows over the end of the clip instead of after it.
+- online media meter: a pill in the title bar and a card on the Assets page show how much of today's online media you have used. it is counted per account, and a new ? button explains how the daily share and the cache work.
+- online pictures and clips are kept on your PC once seen, so watching them again costs nothing from your daily share.
+- companion: a new switch keeps idle lines silent while the engine is off. on by default. the bubble still shows.
+
+FIXES IN 7.1.12
+- panic: nothing comes back on its own after a panic. a remote controller can no longer resume or restart your session, Trigger Mode stays quiet, your companion stays quiet, and Lockdown no longer restarts the engine. pressing START yourself brings everything back and resumes your session.
+- GIFs keep animating round after round in flashes, and GIFs saved for later stay animated instead of turning into stills.
+- Escape keeps working in every game: it pauses Arcademy, Goon, the Back Room and Intake, and pause cards in chess and Breakout resume properly.
+- capped clips start at a random point instead of always at the beginning.
+- floating mandatory videos no longer overlap now and then.
+- Down the Rabbit Hole: a clip on the tube's stage now leaves with the descent.
+- Circe's Tab: the Locktober banner and the lock calendar agree on your counted days, and they clear when you sign out or switch accounts.
+- the Sign in button at the top right opens the sign-in dialog.
+- the dashboard logo has rounded corners, and the patron achievements note says what is locked.
+- smaller fixes: sparkle cleanup, remote video stop, gaze monitors, Italian wording.
+
+v7.1.11 - Stay Tuned
+
+NEW IN 7.1.11
+- Leash: a small ? next to every command. hover it to see what lands on the other player's screen, with a little picture: Assign, Reward, Punish, Tug, every punishment and reward row, and Let go.
+- just subscribed and still locked? press ""I just subscribed"" on the Premium page. the app also checks again on its own when you come back from the checkout page, and a small card tells you when your Basic or Prime is on.
+- Italiano (beta) rewritten line by line, so it reads like Italian and not like a translation.
+- a flag next to each language in the language picker.
+- online pictures and clips now say where they come from: a small ""via Scrolller"" credit wherever they show, and the app tells Scrolller plainly who it is.
+
+ARCADEMY
+- Daily Trigger: one paid try a day. it counts as soon as the class starts, so leaving with Esc uses it; after that it runs as a retake. the day now turns over at the same time as the credits (midnight UTC).
+
+FIXES IN 7.1.11
+- Patreon: patrons who sign in with Discord no longer lose access after 14 days while they are paying.
+- Takeover: Mind Wipe only plays when Mind Wipe is switched on.
+- changing the wallpaper can no longer freeze the app.
+- flashes that stay until popped are no longer trimmed by ""Max on screen"" (up to 40, as the setting says).
+- keyword triggers written as patterns now fire on screen text too, not only on typing.
+- Bubble Count tells you when it has no videos to play instead of staying silent.
+- 12 dead or VIP-only video links removed from the built-in lists.
+- Leash: long words on the holder buttons shrink instead of being cut, row names show in full, Chaster chips read +15m / +30m / +1h.
+- Circe's Tab: during the raffle month a day in credit still counts. the first slip-up of the day goes to your lock and the credit pays the rest.
+- wording: ""Basic tier"" and ""Prime tier"", ""Down the Rabbit Hole run"" instead of ""Chaos run"", Goon tables say they start on Friends, and Slut Mode is no longer listed as a Patreon perk (it is for everyone).
+
+v7.1.10 - Stay Tuned
+
+NEW IN 7.1.10
+- Italiano (beta): the whole app in Italian. pick it under Settings > Language. it is a first pass, so odd lines are expected; tell us in #bug-reports.
+- Slut Mode has teeth: with the switch on, every persona talks dirty in the chat box, not only the ones that had a filthy variant. your companion says so when you flip it. nothing else changes: barks, voice lines and triggers stay as they were.
+- the tube chat box closes when you send, so it no longer sits over the reply. click the avatar or press the chat key to type the next line.
+
+FIXES IN 7.1.10
+- online clips are capped at 720p, so the engine stops pulling 4K files for a thumbnail-sized flash.
+- Back Room: wall screens that light up together now show different pictures.
+
+v7.1.9 - Stay Tuned
+
+PIECE BY PIECE
+- watch a game: public games have a Watch button in the Lobby. you see the real board about 15 s behind, can swap sides, use the same camera and Options, and see both players' IQ. players still never see each other's. ""Let people watch my games"" sits in Options, on by default.
+- a featured game on the Home board, rotating every 20 s. Watch is one click.
+- reactions: six of them, each with its own little sound, with a cooldown so nobody can flood the board. players see them float up and can turn them off (""Play watchers' reactions"") or mute them.
+- the stands replay the turn player's Distraction with your own pictures. games between players on older versions get calm ambient pictures instead.
+- name tags: both players float at their end of the board, hop when they move, flinch when they lose a piece, and sweat and tremble in check.
+- rating and ladder: your rating sits by your name, the Ladder shows the top 50 and your rank, and the end card rolls your rating up or down. unrated games say why.
+- a short opening card when the game opens, and a clockwork board intro where the pieces rise through brass gears. both can be switched off in Options.
+- the menus are rebuilt: a Back button on every screen, clearer buttons, sounds, and things that react when you press them.
+
+NEW IN 7.1.9
+- Gentle visuals, for light-sensitive eyes: one switch in Settings > Performance. everything fades in and out (you pick 0.25 to 2 s), GIFs and spirals slow down (down to 0.25x), brightness eases in instead of snapping, nothing flickers, and subliminals lose their black card. videos fade but play at normal speed.
+- local AI setup: the first page now says plainly that the AI runs on your own graphics card and memory, shows what your PC has, and warns when it is under 16 GB memory or 8 GB graphics memory.
+- Intake: unlimited graded Intake for Basic too, not only Prime.
+
+FIXES IN 7.1.9
+- a lock card sent by the companion or Remote with no count showed 0 / 0 and never closed. it always asks for at least one now.
+- Flash ""Max on screen"" is now the ceiling in every mode. Stay mode could reach 40.
+- what the avatar says in the tube chat now shows in the Companion page history too.
+
+NEW IN 7.1.8
+- audio player: a playlist card on the Deeper page. add your own files, play, skip, seek. it has its own volume, Deeper enhancements can ride the current track, and panic or engine Stop silences it. .ogg files are not supported.
+- Goon: toys now react during matches. a cue never goes above your own slider, and the other player can only lower it. no toy cues in practice.
+- companion: a Voice Level slider.
+- CCP Default: 44 more companion lines have a recorded voice.
+- Intake: spoken answers work while the wake word is on. the card melt never lands on a timed question and scores nothing.
+- favourites drawer on every page, and Ctrl+K leads with your pinned favourites.
+- Mandatory Video: the ""Video length"" row now cuts web videos and floating videos at your max too. a video you asked for in chat plays whole.
+- plans: locked features show Basic and Prime with their price, and the button opens the right checkout.
+- invites: the app tells you when someone uses your invite code, and when a friend you invited subscribes.
+
+DOWN THE RABBIT HOLE
+- dock toys wake on their own as you play. no key, no button. grabbing a toy again takes it a level deeper for the fall, and Overload works again.
+- a calmer feel: a detonation dips the sound and the colour instead of flashing, and pops climb a little scale.
+- bubbles move, every spiral is woven live in the chamber's colours, and online gifs play instead of sitting still.
+- tube cards show pictures first, clips later. a popped flash card leaves in style.
+- Escape pauses the run.
+
+BREAKOUT
+- Endless: the board name fades once you have arrived.
+- story level 8 keeps your launch held while the finale ring forms.
+- the pendulum hint no longer sits on the ""move to play"" line.
+
+FIXES IN 7.1.8
+- content packs: a pack video is no longer loaded whole into memory. with packs active this could eat several GB and make the whole PC crawl.
+- a web video started by the companion could run past your max video length. it stops there now.
+- Mind Wipe, one-shot sounds and the Mantra drone follow the master volume.
+- Deeper and Mantra volume no longer move the app's volume in the Windows mixer.
+- subliminals show above a playing video.
+- the Audio action names the right folder, and falls back to your mod's recorded clips.
+- Presets says what a preset covers.
+- temp files that could not be deleted are retried instead of piling up.
+
+NEW IN 7.1.7
+- lines with no recorded voice on your current mod wear a small muted-speaker mark in the phrase editor, and Audio Whispers says so when some of your lines will stay silent. nothing changed in what plays: a line with no recording was always silent.
+- Awareness keyword triggers play their sound only while the engine or a session is running. the Test button still plays.
+- bug reports now say which sound started while the engine was off, and name the companion speech bubble if the app hangs there. if you get stray sounds or a freeze, send a report right after.
+
+NEW IN 7.1.6
+- mandatory videos can float. Studio > Mandatory Video > ""Shows as"" > Floating window: small bordered windows you can drag across monitors and throw around. up to four at once, with sliders for size and drift speed. the lit one has the sound; touch another to move it. floating videos have no attention checks.
+- Bubble Count: a new option pauses the other effects while a round runs.
+- the bottom bar shows the session name and the time left while a session runs.
+- Leash: ""What each level allows"" at the level picker explains Soft, Standard and Strict.
+- chess: the board explains what IQ means.
+
+FIXES IN 7.1.6
+- Library: with an online source picked, the list no longer runs under the Start bar, so the ""add your own community"" field can be reached. the Asset Browser no longer vanishes after switching back to your own assets.
+- red hold-to-pop bubbles no longer let the click through to the window behind. a bubble on top of a flash image takes the click.
+- the corner GIF shows only while the engine runs.
+- applying Her Favor no longer drops the frame rate for a few seconds.
+- detached companion: the invisible areas around it no longer block clicks.
+- companion personality: ""Fork and edit by hand"" opens the current prompt, the editor no longer cuts your text short, and Screen Awareness Reactions can be edited again.
+- ending a Remote session no longer stops your own running session.
+- a Deeper file played as a mandatory video shows all of its subliminals.
+- haptics: a test only plays the test, and says so when haptics are switched off.
+- updates: a stalled download times out and retries instead of sitting on the startup window.
 
 FIXES SINCE 7.1.0
 - new Companion > AI page: the connection (cloud, local or your own model), how often your companion talks (idle chatter, bubble time, voice lines, triggers, tube look) and its memory, all in one place and never folded away. 7.1.0 and 7.1.1 left some of them with no way in.
@@ -85,8 +267,8 @@ FIXES
 EVERYTHING ELSE
 every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 notes on the release page.";
 
-        private const string GitHubOwner = "CodeBambi";
-        private const string GitHubRepo = "Conditioning-Control-Panel---CSharp-WPF";
+        private const string GitHubOwner = "CC-Labs-it";
+        private const string GitHubRepo = "Conditioning-Control-Panel";
 
         /// <summary>
         /// Manual-download fallback shown whenever an automatic install could not complete.
@@ -98,9 +280,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
         // Release parsing, asset selection, markers and helper-script text live in Core
         // (ReleaseFeed) so every head shares one copy; this class keeps network, process and exit.
         private const double SkipMarkerLifetimeHours = ReleaseFeed.SkipMarkerLifetimeHours;
-
-        /// <summary>Exit code slot for "the helper never recorded one".</summary>
-        internal const int UnknownExitCode = ReleaseFeed.UnknownExitCode;
 
         private AppUpdateInfo? _latestUpdate;
         private bool _disposed;
@@ -145,28 +324,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             {
                 using var key = Registry.CurrentUser.OpenSubKey(@"Software\CodeBambi\Conditioning Control Panel");
                 return key?.GetValue("InstallPath") as string;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// The folder the running exe actually lives in, but only when that folder is a real
-        /// Inno install (its uninstaller sits next to the exe). This is the ground truth for an
-        /// in-place upgrade: unlike the HKCU InstallPath echo it cannot go stale, and it moves
-        /// with the folder when a user relocates the install by hand. Returns null for a
-        /// portable/dev run, or when the exe path can't be resolved.
-        /// </summary>
-        private static string? GetRunningInstallDir()
-        {
-            try
-            {
-                var exeDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule?.FileName);
-                if (string.IsNullOrEmpty(exeDir)) return null;
-
-                return File.Exists(Path.Combine(exeDir, "unins000.exe")) ? exeDir : null;
             }
             catch
             {
@@ -339,9 +496,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
 
         private static void ClearPendingUpdateAttempt() => ReleaseFeed.ClearPendingUpdateAttempt(App.UserDataPath);
 
-        internal static bool DidUpdateSucceed(string attemptedVersion, string currentVersion, int exitCode) =>
-            ReleaseFeed.DidUpdateSucceed(attemptedVersion, currentVersion, exitCode);
-
         /// <summary>
         /// Reads back the previous run's install attempt and clears the marker. Returns null when no
         /// attempt was pending (or it was too old to be worth reporting).
@@ -439,26 +593,22 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
                         using var contentStream = await downloadResponse.Content.ReadAsStreamAsync();
                         using var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
 
-                        var buffer = new byte[8192];
-                        int bytesRead;
                         var lastProgress = -1;
 
-                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
-                        {
-                            await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
-                            downloadedBytes += bytesRead;
-
-                            if (totalBytes > 0)
+                        // HttpClient.Timeout stops counting once the headers are in
+                        // (ResponseHeadersRead), so the body had no timeout at all: a connection
+                        // that went quiet left the progress window up for hours with the main
+                        // window hidden and no way out. A stalled read now fails the attempt.
+                        downloadedBytes = await CopyWithStallTimeoutAsync(contentStream, fileStream, DownloadStallTimeout,
+                            copied =>
                             {
-                                var progress = (int)(downloadedBytes * 100 / totalBytes);
-                                if (progress != lastProgress)
-                                {
-                                    lastProgress = progress;
-                                    progressCallback?.Invoke(progress);
-                                    DownloadProgressChanged?.Invoke(this, progress);
-                                }
-                            }
-                        }
+                                if (totalBytes <= 0) return;
+                                var progress = (int)(copied * 100 / totalBytes);
+                                if (progress == lastProgress) return;
+                                lastProgress = progress;
+                                progressCallback?.Invoke(progress);
+                                DownloadProgressChanged?.Invoke(this, progress);
+                            }, ct);
 
                         App.Logger?.Information("Installer downloaded successfully: {Path} ({Size:F1} MB)",
                             installerPath, downloadedBytes / (1024.0 * 1024.0));
@@ -467,7 +617,7 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
                         lastException = null;
                         break;
                     }
-                    catch (Exception ex) when (attempt < maxRetries && IsTransientNetworkError(ex))
+                    catch (Exception ex) when (attempt < maxRetries && ReleaseFeed.IsTransientNetworkError(ex))
                     {
                         lastException = ex;
                         App.Logger?.Warning(ex, "Download attempt {Attempt} failed with transient error", attempt);
@@ -491,6 +641,45 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             finally
             {
                 IsDownloading = false;
+            }
+        }
+
+        /// <summary>How long the installer download may receive nothing before the attempt fails.</summary>
+        internal static readonly TimeSpan DownloadStallTimeout = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// Copies <paramref name="source"/> to <paramref name="destination"/> and gives up with a
+        /// <see cref="TimeoutException"/> when a single read waits longer than
+        /// <paramref name="stallTimeout"/>. The clock restarts on every chunk, so a slow but moving
+        /// download is never cut. The caller's own cancellation still surfaces as cancellation.
+        /// Returns the bytes copied.
+        /// </summary>
+        internal static async Task<long> CopyWithStallTimeoutAsync(Stream source, Stream destination,
+            TimeSpan stallTimeout, Action<long>? onProgress, CancellationToken ct)
+        {
+            var buffer = new byte[81920];
+            long copied = 0;
+            using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            while (true)
+            {
+                stall.CancelAfter(stallTimeout);
+                int read;
+                try
+                {
+                    read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), stall.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"The download stalled: no data for {stallTimeout.TotalSeconds:F0} seconds.");
+                }
+                if (read <= 0) return copied;
+
+                // The write is local disk: it runs on the caller's token, off the stall clock.
+                stall.CancelAfter(Timeout.InfiniteTimeSpan);
+                await destination.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                copied += read;
+                onProgress?.Invoke(copied);
             }
         }
 
@@ -553,7 +742,9 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             // available (ccp-bugs#973, #849, #567, #554). Upgrading whatever copy is running
             // also self-heals an install that already drifted.
             var registryPath = GetInstalledPath();
-            var installPath = GetRunningInstallDir();
+            string? installPath;
+            try { installPath = ReleaseFeed.InnoInstallDirOf(Process.GetCurrentProcess().MainModule?.FileName); }
+            catch { installPath = null; } // the pre-move GetRunningInstallDir swallowed this too
 
             if (string.IsNullOrEmpty(installPath))
             {
@@ -613,7 +804,7 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             // Elevate the helper (not the installer) so the UAC prompt appears now, while the app
             // is still on screen and we can detect a decline; the installer then inherits the
             // elevated token and the wait-for-exit handoff is unchanged.
-            var needsElevation = NeedsElevationToInstall(installPath);
+            var needsElevation = ReleaseFeed.NeedsElevationToInstall(installPath);
 
             var helperPath = WriteUpdateHelperScript(
                 installerPath, installPath, pid, appExe, logPath, GetAttemptResultFilePath(), needsElevation);
@@ -670,37 +861,6 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             App.Logger?.Information("Exiting application for silent update (helper will install + relaunch)...");
             Application.Current.Shutdown();
             return true;
-        }
-
-        /// <summary>
-        /// True when the install directory cannot be written by the current token, i.e. the silent
-        /// installer needs admin rights. Per-user installs stay prompt-free.
-        /// </summary>
-        private static bool NeedsElevationToInstall(string? installPath)
-        {
-            if (string.IsNullOrEmpty(installPath)) return false;
-
-            try
-            {
-                if (!Directory.Exists(installPath)) return false;
-
-                var probe = Path.Combine(installPath, $".ccp-write-probe-{Guid.NewGuid():N}.tmp");
-                using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return true;
-            }
-            catch (IOException)
-            {
-                return true;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning(ex, "Could not probe install dir writability, assuming elevation is needed");
-                return true;
-            }
         }
 
         /// <summary>
@@ -1318,35 +1478,9 @@ every 7.0.x fix is in here too. coming from 6.11.5 or older? read the 7.0.0 note
             }
         }
 
-        /// <summary>
-        /// Determines if an exception is a transient network error that should be retried.
-        /// </summary>
-        private static bool IsTransientNetworkError(Exception ex)
-        {
-            // Check for common transient network errors
-            if (ex is System.Net.Http.HttpRequestException ||
-                ex is System.IO.IOException ||
-                ex is System.Net.Sockets.SocketException ||
-                ex is TaskCanceledException)
-            {
-                return true;
-            }
-
-            // Check inner exception
-            if (ex.InnerException != null)
-            {
-                return IsTransientNetworkError(ex.InnerException);
-            }
-
-            // Check message for common transient error patterns
-            var message = ex.Message.ToLowerInvariant();
-            return message.Contains("forcibly closed") ||
-                   message.Contains("connection was closed") ||
-                   message.Contains("network") ||
-                   message.Contains("timeout") ||
-                   message.Contains("transport");
-        }
-
+        /// <summary>Whether a failed release/download request is worth retrying (Core ReleaseFeed);
+        /// a stalled download (TimeoutException) counts.</summary>
+        internal static bool IsTransientNetworkError(Exception ex) => ReleaseFeed.IsTransientNetworkError(ex);
         public void Dispose()
         {
             if (_disposed) return;

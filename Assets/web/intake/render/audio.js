@@ -516,6 +516,11 @@ export const SFX_CUE_EVENT = 'intake-sfx';
 
 export function createAudio({ caps } = {}) {
   let ctx = null;
+  let paused = false;
+  function setPaused(on) {
+    paused = !!on;
+    if (ctx) (paused ? ctx.suspend() : ctx.resume()).catch(() => {});
+  }
   let dead = false;             // constructor unavailable / failed: stop trying
   let resumeHook = null;
 
@@ -566,12 +571,12 @@ export function createAudio({ caps } = {}) {
   }
 
   function ensureCtx() {
-    if (dead) return null;
+    if (dead || paused) return null;
     if (!ctx) {
       const AC = (typeof window !== 'undefined') && (window.AudioContext || window.webkitAudioContext);
       if (!AC) { dead = true; return null; }
       try { ctx = new AC(); } catch (_e) { dead = true; return null; }
-      resumeHook = () => { if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); };
+      resumeHook = () => { if (!paused && ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); };
       if (typeof window !== 'undefined') {
         GESTURES.forEach((ev) => window.addEventListener(ev, resumeHook, { passive: true }));
       }
@@ -1716,7 +1721,7 @@ export function createAudio({ caps } = {}) {
     binBus = fxBus = voiceBus = null;   // rebuilt (from live prefs) on a fresh ctx
   }
 
-  return { setDepth, chime, garnishCue, pop, sfx: playSfx, emerge, dispose, setMuted, isMuted,
+  return { setDepth, chime, garnishCue, pop, sfx: playSfx, emerge, dispose, setMuted, isMuted, setPaused,
            suspendBed, resumeBed, glitch, errorSpam, voice: playVoice, voiceStop: stopVoice,
            voiceInfo, rumbleRiser };
 }
