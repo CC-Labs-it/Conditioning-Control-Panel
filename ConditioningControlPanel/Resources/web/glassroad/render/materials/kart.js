@@ -13,9 +13,10 @@ export function shade(colour) {
   return colour.mul(lit).add(rim);
 }
 
-export function createKartMaterial() {
+/** tint: [r, g, b] multiplied into the vertex colours (rival karts, render/kartPose.js tintRgb). */
+export function createKartMaterial(tint = [1, 1, 1]) {
   const m = new MeshBasicNodeMaterial();
-  m.colorNode = shade(vertexColor());
+  m.colorNode = shade(vertexColor().mul(vec3(...tint)));
   return { material: m };
 }
 

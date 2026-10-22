@@ -1,6 +1,9 @@
-/* render/post.js - RenderPipeline (r183+ name for PostProcessing): scene pass, bloom at the tier's
- * resolution, then one tiny composite: edge tint, vignette, rescue white fade, finish swell.
- * Every number that moves here comes from FxState, which already asked photosafe and Gentle.
+/* render/post.js - RenderPipeline (r183+ name for PostProcessing): scene pass, the item screen effect
+ * (render/screenfx.js, CONTRACT-B1), bloom at the tier's resolution, then one tiny composite: edge tint,
+ * vignette, rescue white fade, finish swell.
+ * Bloom reads the raw scene and is added AFTER the screen effect, so rails and the racing line glow
+ * through every effect (never fully blind). Every number that moves here comes from FxState, which
+ * already asked photosafe and Gentle; fx.screen (fx/effects.js) drives the screen effect.
  */
 import { RenderPipeline, Color } from 'three/webgpu';
 import { pass, uniform, screenUV, smoothstep, mix, vec3, vec4, clamp } from 'three/tsl';
@@ -8,17 +11,25 @@ import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
 
+// the SCREENFX lane's module; a missing or broken one leaves the plain scene (the race still runs)
+const screenMod = await import('./screenfx.js').catch((e) => { console.warn('[glassroad/post] no screenfx: ' + (e && e.message)); return null; });
+
 const rgb = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
+const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, prevKind: 'none', prevK: 0,
+  params: Object.freeze({ gentle: false, corner: false, dimOnly: false, blurMul: 1, flicker: false, cover: 0, seed: 0, by: -1 }) });
 
 export function createPost(three, scene, camera) {
   const pipe = new RenderPipeline(three);
   const u = { strength: uniform(LOOK.bloomStrength), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0) };
   const col = pass(scene, camera).getTextureNode('output');
+  let screen = null;
+  try { screen = screenMod ? screenMod.createScreenFx(three) : null; } catch (e) { console.warn('[glassroad/post] screenfx failed: ' + (e && e.message)); }
+  const base = screen ? screen.node(col) : col.rgb;
   let bloomNode = null, builtBloom = null;
 
   function build() {
     if (bloomNode) { bloomNode.dispose(); bloomNode = null; }
-    let out = col.rgb;
+    let out = base;
     if (Q.bloom) {
       bloomNode = bloom(col, u.strength, LOOK.bloomRadius, LOOK.bloomThreshold);
       bloomNode.setResolutionScale(Q.bloomScale);
@@ -39,7 +50,8 @@ export function createPost(three, scene, camera) {
     pipe,
     /** Call after a quality step. */
     retier() { if (builtBloom !== Q.bloom) build(); else if (bloomNode) bloomNode.setResolutionScale(Q.bloomScale); },
-    update(fx) {
+    update(fx, dt = 0, aspect = 16 / 9) {
+      if (screen) screen.update((fx && fx.screen) || NONE, dt, aspect);
       if (!fx) return;
       u.strength.value = LOOK.bloomStrength * (1 + (fx.bloomBoost || 0) * LOOK.bloomBoostGain);
       u.white.value = fx.whiteFade || 0;
@@ -48,6 +60,6 @@ export function createPost(three, scene, camera) {
       u.side.value = fx.edgeSide || 0;
     },
     render() { pipe.render(); },
-    dispose() { if (bloomNode) bloomNode.dispose(); pipe.dispose(); },
+    dispose() { if (bloomNode) bloomNode.dispose(); if (screen) screen.dispose(); pipe.dispose(); },
   };
 }

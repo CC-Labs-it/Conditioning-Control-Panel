@@ -61,4 +61,28 @@ export const LOOK = {
     { id: 'chess-rook-lod0', w: 1, scale: [6, 12], spin: 0.18 }, { id: 'chess-bishop-lod0', w: 1, scale: [6, 12], spin: 0.18 },
     { id: 'chess-knight-lod0', w: 1, scale: [6, 12], spin: 0.18 }, { id: 'chess-pawn-lod0', w: 1.5, scale: [6, 12], spin: 0.18 },
   ],
+  // B1 karts (render/karts.js, render/kartPose.js). Tint 0 is the player; the mix keeps the porcelain readable
+  kartTints: ['#ffffff', '#ff7eb6', '#7fc8ff', '#ffc46b', '#b48cff', '#7fe8c0', '#ff9a7a', '#e6e0ff'],
+  kartTintMix: 0.8, ghostEmissive: '#fff4fa', ghostGain: 0.45, ghostRiseS: 0.15,
+  leanPerRadps: 0.13, leanMaxRad: 0.2, leanTcS: 0.12, driftLeanRad: 0.1, boostPitchRad: 0.05, pitchTcS: 0.2,
+  wobbleRad: 0.26, wobbleHz: 3.2, wobbleTcS: 0.35, wobbleGentle: 0.4, botSquashGoneS: 0.25,
+  antSwayPerMps2: 0.012, antSwayMaxRad: 0.5, antTcS: 0.09, armsUpRad: 0.9, armsTcS: 0.18,
+  tagNearM: 40, tagFadeM: 8, tagHideNearM: [5, 10], tagUpM: 1.75, tagSizeM: [1.3, 0.32], tagFont: '600 34px system-ui, sans-serif',
+  // B1 particles: shapes 0 soft disc, 1 sparkle (four arms), 2 petal; tier ladder adds rate, size and petals
+  sparkRateByTier: [70, 130, 190], sparkSizeByTier: [0.1, 0.15, 0.2], sparkPetalByTier: [0, 0.1, 0.3],
+  sparkSpin: 6, burstPetals: 0.35, botSparkMul: 0.6,
+  ringPool: 8, ringColour: '#fff4fa', ringLifeS: 0.45, ringMaxM: [1.8, 2.6, 3.4], ringWidth: 0.1, ringGain: 0.45,
+  bumpSparks: [10, 36], bumpColours: ['#ffffff', '#ff8cc6', '#ffd36b'], bumpSpeedMps: 5,
+  popCount: 26, popColours: ['#bff4ff', '#ffc2df', '#ffffff', '#e6d6ff'], popSpeedMps: 3.5, popSizeM: 0.16,
+  boxCount: 22, boxColours: ['#ffd36b', '#ffffff', '#ff8cc6'],
+  wispRate: 60, wispColour: '#e8f6ff', wispSizeM: 0.12, wispSpeedMps: 14, wispLifeS: 0.3,
+  // boost ribbon (render/wakes.js): a flat strip behind the saucer, one draw for every kart
+  trailWidthM: 0.55, trailUpM: 0.12, trailStepM: 0.55, trailAlpha: 0.7, trailFadeTcS: 0.25, padTrail: '#ffd36b', launchTrail: '#ffffff',
+  // ambient motes (render/motes.js): a wrapped box around the player; deep sections thicken them
+  moteBoxM: [70, 26, 70], moteSizeM: [0.05, 0.16], moteDrift: [0.012, 0.02, 0.012], moteBase: 0.3, moteDeep: 1,
+  moteAlpha: 0.55, moteNearM: 2.5, moteGentle: 0.5,
+  // road glass sheen from road-glass-normal: a fixed key light and a view fresnel, no extra light pass
+  sheenDir: [-0.3, 0.75, -0.6], sheenPow: 40, sheenGain: 0.25, sheenBump: 0.35, sheenFresnel: 0.07, sheenGentle: 0.5,
+  // menu attract orbit around the player kart
+  menuOrbitRadps: 0.18, menuOrbitM: 6.5, menuOrbitUpM: 2.2, menuLookUpM: 0.7,
 };

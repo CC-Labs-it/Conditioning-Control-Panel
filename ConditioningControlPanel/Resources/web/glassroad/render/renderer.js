@@ -52,13 +52,14 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2 
       p.render(); // builds the bloom and composite pipelines while the start card is up
     },
     resize,
-    render({ scene, camera, fx }) {
+    /** dt (frame seconds) reaches post.update for the item screen effect (CONTRACT-B1). */
+    render({ scene, camera, fx, dt = 0 }) {
       const now = performance.now();
       const step = last ? gov.sample(now - last) : null;
       last = now;
       const p = postFor(scene, camera);
       if (step) { setTier(step); resize(); p.retier(); for (const fn of tierFns) fn(step); }
-      p.update(fx);
+      p.update(fx, dt, Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight));
       p.render();
     },
     stats() {

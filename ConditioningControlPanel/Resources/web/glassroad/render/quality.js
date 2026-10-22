@@ -5,11 +5,12 @@
  * so tests/render-quality.test.mjs runs it under bare node.
  */
 
-/** Per tier: DPR cap, bloom on and its resolution scale, particle budget, speed line count. */
+/** Per tier: DPR cap, bloom on and its resolution scale, particle budget, speed line count, ambient motes,
+ * the distance past which a rival kart drops its bone pose, sparks and name tag (kartLodM), boost ribbon points. */
 export const TIERS = Object.freeze({
-  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160, scatter: 1 }),
-  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100, scatter: 0.7 }),
-  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 500, speedLines: 60, scatter: 0.45 }),
+  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160, scatter: 1, motes: 1400, kartLodM: 90, trailPoints: 28 }),
+  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100, scatter: 0.7, motes: 800, kartLodM: 60, trailPoints: 20 }),
+  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 700, speedLines: 60, scatter: 0.45, motes: 400, kartLodM: 40, trailPoints: 14 }),
 });
 /** Lowest first; the governor moves one step along this list. */
 export const ORDER = Object.freeze(['phone', 'mid', 'high']);

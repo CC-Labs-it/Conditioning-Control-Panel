@@ -14,7 +14,7 @@ const WRAP = { repeat: RepeatWrapping, clamp: ClampToEdgeWrapping };
 
 /** The ids buildWorld asks for; anything else in the manifest stays on disk until a later wave. */
 export const WANT = [
-  'road-bands-mask', 'road-glass-roughness', 'rail-glow-mask', 'boost-chevron-mask',
+  'road-bands-mask', 'road-glass-roughness', 'road-glass-normal', 'rail-glow-mask', 'boost-chevron-mask',
   'sky-dawn-galaxy', 'sky-deep-galaxy', 'sky-afterglow-galaxy', 'sky-dawn-stars', 'sky-deep-stars', 'sky-afterglow-stars',
   'sky-spiral-open-mask', 'emi-teacup-kart', 'countdown-ring', 'finish-portal-lod0',
   'bubble', 'card-drop', 'card-lens', 'card-orbit', 'card-petal', 'pocket-watch', 'spiral-disc', 'slot-cabinet-lod0',

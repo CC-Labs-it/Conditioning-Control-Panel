@@ -4,6 +4,10 @@
  * opts.art (render/art.js) dresses the world in the wave 1 art: textured road, rails, pads and sky,
  * the EMI kart, countdown rings, the finish arch and a seeded scatter (render/dressing.js). Without
  * it, or for any asset that failed, the greybox stand-in stays.
+ * B1 (CONTRACT-B1 render/world.js): eight karts (render/karts.js: tints, pose, ghost, name tags), the
+ * sprite particles for every kart plus world bursts from bus events (bumps, pickup pops, item boxes,
+ * landings), boost ribbons and ground rings (render/wakes.js), ambient motes (render/motes.js), the
+ * road sheen and the SCREENFX lane's item visuals (render/items/visuals.js).
  */
 import {
   Scene, Group, Mesh, InstancedMesh, Object3D, BufferGeometry, BufferAttribute, Float32BufferAttribute, Color, Vector2,
@@ -13,16 +17,25 @@ import {
 import { S } from '../sim/state.js';
 import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.js';
 import { LOOK, SKIES, FALLBACK_SKY } from './look.js';
+import { Q } from './quality.js';
 import { createPalette } from './materials/palette.js';
 import { createRoadMaterial } from './materials/road.js';
 import { createRailMaterial } from './materials/rails.js';
 import { createPadMaterial } from './materials/pads.js';
 import { createSkyMaterial, SKY_PALETTES } from './materials/sky.js';
-import { buildKart, buildCountdown, buildFinish, buildScatter } from './dressing.js';
-import { createKartMaterial, createPropMaterial } from './materials/kart.js';
+import { buildCountdown, buildFinish, buildScatter } from './dressing.js';
+import { createPropMaterial } from './materials/kart.js';
 import { createGlowMaterial } from './materials/glow.js';
 import { createParticles } from './particles.js';
 import { createSpeedLines } from './speedlines.js';
+import { buildKarts } from './karts.js';
+import { createWakes } from './wakes.js';
+import { createMotes } from './motes.js';
+import { kickSquash, kickWobble, moteDensity, bumpCount } from './kartPose.js';
+import { racerLabels } from '../hud/format.js';
+
+// the SCREENFX lane's item visuals; missing or broken, the race runs without them
+const itemsMod = await import('./items/visuals.js').catch((e) => { console.warn('[glassroad/world] no item visuals: ' + (e && e.message)); return null; });
 
 /** Track MeshData -> Mesh, or null when the data is empty. */
 export function meshFrom(d, material) {
@@ -81,7 +94,7 @@ function props(track) {
   return im;
 }
 
-export function buildWorld(track, feel, { art = null, bus = null, seed = 1 } = {}) {
+export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8 } = {}) {
   const scene = new Scene();
   const pal = createPalette();
   const owned = [], offs = [];
@@ -116,16 +129,53 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1 } = {
   }
   if (finish) add(finish.object);
 
-  const kart = add(new Group());
-  const body = buildKart(art) || new Mesh(kartGeometry(), createKartMaterial().material);
-  kart.add(body);
+  const karts = buildKarts(art, count, art && art.model('emi-teacup-kart') ? null : kartGeometry());
+  for (const k of karts.list) add(k.root);
+  const kartObjs = karts.list.map((k) => k.root);
+  const kart = kartObjs[0];
   const ring = createGlowMaterial(LOOK.ringColour);
   const ringMesh = new Mesh(new RingGeometry(LOOK.saucerR * 0.9, LOOK.saucerR * 1.1, 48).rotateX(-Math.PI / 2), ring.material);
   ringMesh.position.y = 0.03; kart.add(ringMesh);
   const tendril = createGlowMaterial(LOOK.tendrilColour);
   const tendrilMesh = add(new Mesh(new CylinderGeometry(0.15, 0.6, 1, 12, 1, true).translate(0, 0.5, 0), tendril.material));
-  const particles = createParticles(feel), lines = createSpeedLines();
-  add(particles.object); add(lines.object);
+  const particles = createParticles(feel), lines = createSpeedLines(), wakes = createWakes(feel, count), motes = createMotes(pal, seed);
+  add(particles.object); add(lines.object); add(motes.object);
+  for (const o of wakes.objects) add(o);
+  let itemVis = null;
+  try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
+
+  // positional juice from the bus, applied in the next update (bus events flush before world.update)
+  const pending = [];
+  if (bus) {
+    const on = (name, fn) => offs.push(bus.on(name, (p) => pending.push(fn(p || {}))));
+    on('land', ({ tier = 0 }) => ['land', 0, tier]);
+    on('racer-event', ({ racer = -1, name, p = {} }) => [name, racer, (p && p.tier) || 0]);
+    on('bump', (p) => ['bump', p.a, p.dv || 0, p.p]);
+    on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
+    on('item-box', (p) => ['box', p.racer, 0, p.p]);
+    on('item-hit', (p) => ['hit', p.victim, p.verdict, p.p, p.kind]);
+  }
+  const posOf = (i) => { const o = kartObjs[i]; return o ? [o.position.x, o.position.y, o.position.z] : null; };
+  function juice(e, gentle) {
+    const [kind, i, a, p, b] = e, k = karts.list[i], obj = kartObjs[i], few = gentle ? 0.6 : 1;
+    const sq = feel.get('air.squash');
+    if (kind === 'land' && a >= 1 && k && obj.visible) {
+      particles.dust(obj, a);
+      wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[Math.min(a, 3) - 1], { gentle });
+      if (i > 0) kickSquash(k.pose, sq[Math.min(a, 3) - 1]);
+    } else if (kind === 'hop' && k && i > 0) kickSquash(k.pose, sq[0]);
+    else if (kind === 'bump') particles.burst(p || posOf(i), Math.round(bumpCount(a, LOOK) * few), { colours: LOOK.bumpColours, speed: LOOK.bumpSpeedMps, sparkle: 0.7 });
+    else if (kind === 'pop') {
+      particles.burst(p || posOf(i), Math.round(LOOK.popCount * few), { colours: LOOK.popColours, speed: LOOK.popSpeedMps, sizeM: LOOK.popSizeM, petal: 0.3, sparkle: 0.3, g: 0.15 });
+      if (obj && obj.visible) wakes.ring(p || posOf(i), obj.quaternion, LOOK.ringMaxM[0], { gentle, gain: LOOK.ringGain * 0.6 });
+    } else if (kind === 'box') particles.burst(p || posOf(i), Math.round(LOOK.boxCount * few), { colours: LOOK.boxColours, speed: 4, sparkle: 0.8, up: 2 });
+    else if (kind === 'hit' && k) {
+      if (a === 'hit') kickWobble(k.pose, LOOK, gentle, b === 'shatter' ? 0.5 : 1);
+      else if (a === 'glass' || a === 'golden' || a === 'decoy') {
+        particles.burst(p || posOf(i), Math.round(14 * few), { colours: a === 'golden' ? LOOK.boxColours : LOOK.popColours, speed: 3, sparkle: 0.8 });
+      }
+    }
+  }
 
   let lastT = null, padPhase = 0, eyeSet = false;
   const fwd = [0, 0, -1], head = [0, 0, -1], eye = [0, -1, 0], eR = [1, 0, 0], eU = [0, 0, -1], q = [0, 0, 0, 1], F = [0, 0, -1], UP = [0, 1, 0];
@@ -148,17 +198,37 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1 } = {
   const secs = track.sections;
   const sec = (i) => secs[clamp(i | 0, 0, secs.length - 1)];
 
+  const solo = [{ st: null, meta: null, fxv: null }];
+  // tag names match the HUD toasts, minimap and results (hud/format.js racerLabels); rebuilt only
+  // when the racer list changes
+  let labelsOf = null, labels = [];
   function update(view) {
     const { kart: k, fx } = view;
+    solo[0].st = k;
+    const racers = view.karts && view.karts.length ? view.karts : solo;
+    if (labelsOf !== racers || labels.length !== racers.length) {
+      labelsOf = racers;
+      labels = racerLabels(racers.map((r, i) => (r && r.meta) || { i, name: '', isBot: i > 0 }));
+    }
     const dt = lastT === null ? 0 : clamp(view.timeS - lastT, 0, 0.1);
     lastT = view.timeS;
     const gentle = !!feel.get('gentle.on');
     const scroll = gentle ? feel.get('gentle.scrollMul') : 1, contrast = gentle ? feel.get('gentle.contrastMul') : 1;
 
-    kart.position.set(k[S.posX], k[S.posY], k[S.posZ]);
-    kart.quaternion.set(k[S.quatX], k[S.quatY], k[S.quatZ], k[S.quatW]);
-    const sq = fx.squash || 0;
-    body.scale.set(1 + sq / 2, 1 - sq, 1 + sq / 2);
+    // karts: pose every racer, hide the unused slots; distance to the player picks rival LOD and tags
+    const topMps = feel.get('speed.topMps');
+    for (let i = 0; i < karts.list.length; i++) {
+      const r = racers[i], kk = karts.list[i];
+      if (!r || !r.st) { karts.hide(kk); continue; }
+      const d = i ? Math.hypot(r.st[S.posX] - k[S.posX], r.st[S.posY] - k[S.posY], r.st[S.posZ] - k[S.posZ]) : 0;
+      karts.pose(kk, r.st, r.fxv, dt, d, { squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '' });
+      kk.root.updateMatrixWorld();
+      const near = i === 0 || d <= Q.kartLodM;
+      if (near) particles.kart(kk.root, r.st, kk.mem, dt, { mul: i ? LOOK.botSparkMul : 1, slip: (r.fxv && r.fxv.slip) || 0 });
+      wakes.kart(i, kk.root, r.st, dt, near);
+    }
+    for (const e of pending) juice(e, gentle);
+    pending.length = 0;
 
     const pm = fx.paletteMix || { from: view.sectionIdx, to: view.sectionIdx, t: 1 };
     // the from side is a weighted blend when a gate came mid-fade (fx/reactions.js shownWeights)
@@ -170,9 +240,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1 } = {
     for (const [x, w] of fromW) gw[gi(x.palette)] += w * (1 - t);
     gw[gi(b.palette)] += t;
     sky.uniforms.galaxy.value.set(gw[0], gw[1], gw[2]);
+    motes.update(dt, kart.position, moteDensity(gw[gi('deep')], LOOK, gentle), scroll);
     const band = mixOf((x) => x.bandSpeed) * (fx.bandSpeedMul || 1) * scroll;
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
+    road.uniforms.sheen.value = gentle ? LOOK.sheenGentle : 1;
     // beat breath: a soft swell with no step at the beat (rises over breathRise of the beat, falls to
     // the next); under 10% luminance, so it is not a photosafe transition (owner call, see CONTRACT)
     const ph = view.beat.phase, r = LOOK.beatBreathRise;
@@ -206,14 +278,18 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1 } = {
     if (finish) finish.update(dt, turn * 0.5);
     if (scatter) scatter.update(dt, scroll);
 
-    particles.update(dt, k, fx, kart);
+    particles.update(dt);
+    wakes.update(dt);
     lines.update(dt, k, fx, kart);
+    if (view.mode === 'menu') lines.object.visible = false;
+    if (itemVis && view.items) itemVis.update(view.items, dt, racers);   // visuals read racer .st (CONTRACT-B1 view.karts)
   }
 
   function dispose() {
     for (const o of owned) o.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
-    particles.dispose(); lines.dispose();
+    particles.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); karts.dispose();
+    if (itemVis) itemVis.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, update, dispose };
+  return { scene, kart, karts: kartObjs, update, dispose };
 }
