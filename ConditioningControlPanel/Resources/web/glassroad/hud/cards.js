@@ -6,25 +6,21 @@
  * back to the card that opened it; on any other card Escape does nothing here and is never
  * swallowed (the host hears it). Options and Controls open themselves and Back returns by
  * itself; the hud still emits each name so boot can follow. Copy is dry and short.
+ * Polish 1: the Controls card and the pause hint name the buttons of the device used last (hud/
+ * labels.js); a pad without the standard mapping gets a layout button there. The menu doors and
+ * the results wear the SVG kit when it has loaded (the `kit-*` classes on #card).
  */
 import { formatTime, ordinal, pauseLine, resultRows } from './format.js';
 import { cleanOptions, loadOptions, saveOptions, stepVolume } from './options.js';
+import { controlRows, deviceView, pauseHint } from './labels.js';
+import { PROFILES, nextProfile } from '../input/padmap.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
 
-const CONTROLS = [
-  ['Steer', 'A D or arrows', 'Left stick', 'Drag on the left half'],
-  ['Throttle', 'W or Up', 'RT', 'Automatic'],
-  ['Brake', 'S or Down', 'LT', ''],
-  ['Hop and drift', 'Space or Shift, hold', 'A, hold', 'Hold the right half'],
-  ['Use item', 'E', 'X', 'Tap the item'],
-  ['Drop it behind', 'Hold S, then E', 'Stick down, then X', ''],
-  ['Pause', 'Esc', 'Start', 'Pause button'],
-];
 const VOL_ROWS = [['volMaster', 'Volume'], ['volMusic', 'Music'], ['volSfx', 'Effects']];
 
-export function createCards(card, { doc = globalThis.document, emit } = {}) {
+export function createCards(card, { doc = globalThis.document, emit, devices = null, kit = null } = {}) {
   const body = card.querySelector('.card-body');
   const title = card.querySelector('.card-title');
   const note = card.querySelector('.card-note');
@@ -67,7 +63,8 @@ export function createCards(card, { doc = globalThis.document, emit } = {}) {
       title.textContent = 'Paused';
       note.textContent = pauseLine(data) || 'The race waits';
       extra.innerHTML = '<div class="c-list">' + btn('resume', 'Resume', 'hot') + btn('restart', 'Restart') +
-        btn('options', 'Options') + btn('quit', 'Quit to menu', 'quiet') + '</div>';
+        btn('options', 'Options') + btn('quit', 'Quit to menu', 'quiet') + '</div><p class="c-hint"></p>';
+      hint();
     } else if (k === 'options') {
       if (typeof data.hostGentle === 'boolean') host.gentle = data.hostGentle;
       title.textContent = 'Options';
@@ -76,12 +73,11 @@ export function createCards(card, { doc = globalThis.document, emit } = {}) {
     } else if (k === 'controls') {
       title.textContent = 'Controls';
       note.hidden = true;
-      extra.innerHTML = '<table class="c-keys"><thead><tr><th></th><th>Keys</th><th>Pad</th><th>Touch</th></tr></thead><tbody>' +
-        CONTROLS.map((r) => '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + (r[3] || '') + '</td></tr>').join('') +
-        '</tbody></table><div class="c-list">' + btn('back', 'Back', 'quiet') + '</div>';
+      extra.innerHTML = '<div class="c-keyswrap">' + keysHtml() + '</div><div class="c-list">' + btn('back', 'Back', 'quiet') + '</div>';
     } else if (k === 'results') {
       const me = data.me || {}, o = ordinal(me.place || 0);
-      title.innerHTML = '<span class="c-place">' + o.n + '<sup>' + o.suf + '</sup></span>';
+      const flag = kit && kit.ok('flag-finish') ? '<img class="c-flag" src="' + kit.url('flag-finish') + '" alt="" draggable="false">' : '';
+      title.innerHTML = flag + '<span class="c-place">' + o.n + '<sup>' + o.suf + '</sup></span>';
       note.textContent = formatTime(me.timeS) + (me.bestLapS > 0 ? ', best lap ' + formatTime(me.bestLapS) : '');
       const rows = resultRows(data, data.metas || null);
       extra.innerHTML = '<ol class="c-rows">' + rows.map((r) =>
@@ -101,6 +97,38 @@ export function createCards(card, { doc = globalThis.document, emit } = {}) {
       tog('assist', 'Steering assist', opts.assist, 'Soft rails keep you on', false) +
       VOL_ROWS.map(([key, label]) => '<label class="c-opt"><span>' + label + '</span><input type="range" min="0" max="1" step="0.05" data-key="' +
         key + '" value="' + opts[key] + '" aria-label="' + label + '"></label>').join('') + '</div>';
+  }
+
+  /** The controls table for the device used last, plus the layout button for a non-standard pad. */
+  function keysHtml() {
+    const v = deviceView(devices || {}), pad = devices && devices.pad;
+    const rows = controlRows(v.family, v.profile);
+    const lay = pad && !pad.standard
+      ? '<div class="c-opt c-layout"><span>Pad layout<small>Try the next one if the buttons feel wrong</small></span>' +
+        btn('layout', esc((PROFILES[pad.profile] || PROFILES.standard).label), 'c-tog') + '</div>'
+      : '';
+    return '<table class="c-keys" data-last="' + v.last + '"><thead><tr><th></th><th class="k">Keys</th><th class="p">' + esc(v.padName) +
+      '</th><th class="t">Touch</th></tr></thead><tbody>' +
+      rows.map((r) => '<tr><th>' + r[0] + '</th><td class="k">' + esc(r[1]) + '</td><td class="p">' + esc(r[2]) + '</td><td class="t">' + esc(r[3]) + '</td></tr>').join('') +
+      '</tbody></table>' + lay;
+  }
+  function hint() {
+    const h = extra.querySelector('.c-hint');
+    if (!h) return;
+    const text = pauseHint(devices || {});
+    h.textContent = text; h.hidden = !text;
+  }
+  /** The device in use changed: rename the buttons on the open card, keeping focus where it was. */
+  function refreshDevice() {
+    if (card.hidden) return;
+    if (kind === 'pause') { hint(); return; }
+    const wrap = kind === 'controls' && extra.querySelector('.c-keyswrap');
+    if (!wrap) return;
+    const focusAct = wrap.contains(doc.activeElement) && doc.activeElement.dataset ? doc.activeElement.dataset.act : null;
+    wrap.innerHTML = keysHtml();
+    const back = focusAct && wrap.querySelector('[data-act="' + focusAct + '"]');
+    if (back) back.focus?.({ preventScroll: true });
+    else if (focusAct) focusFirst();
   }
 
   function setOption(key, value) {
@@ -127,6 +155,11 @@ export function createCards(card, { doc = globalThis.document, emit } = {}) {
       return;
     }
     if (a === 'online') { note.textContent = 'Online opens later'; emit('online', {}); return; }
+    if (a === 'layout') {
+      const pad = devices && devices.pad;
+      if (pad) devices.setLayout(pad.id, nextProfile(pad.profile));   // devices tells the hud, which refreshes this card
+      return;
+    }
     if (a === 'options' || a === 'controls') {
       stack[a] = { kind, data };
       show(a, a === 'options' ? { from: kind, hostGentle: host.gentle } : { from: kind });
@@ -197,7 +230,7 @@ export function createCards(card, { doc = globalThis.document, emit } = {}) {
   });
 
   return {
-    show, nav,
+    show, nav, refreshDevice,
     get kind() { return card.hidden ? null : kind; },
     get options() { return { ...opts }; },
     setReady(r, n) { ready = !!r; if (n) waitNote = n; if (kind === 'start' && !card.hidden) show('start', data); },

@@ -6,6 +6,8 @@
  * that may be added (owner law: left stays left).
  * B1: createActionMap(sources, { items: true }) also ORs `item` (an edge, latched like the hop edge)
  * and `back` (held). Without the option the Phase A shape is unchanged.
+ * Polish 1: a source may set `padLost` (the gamepad in use left); it reads as a pause edge in `pause`
+ * and is never copied out, so a pause card's resume (the pad's own Start) cannot see it.
  */
 
 /** @returns {{steer: number, throttle: number, brake: number, hop: boolean, hopPressed: boolean, pause: boolean}} */
@@ -32,7 +34,9 @@ export function createActionMap(sources = [], { items = false } = {}) {
     zero(out, items);
     for (const src of list) {
       zero(tmp, items);
+      tmp.padLost = false;
       try { src.poll(tmp); } catch (e) { continue; }
+      if (tmp.padLost) out.pause = true;               // the pad in use left mid-race: pause, never resume
       if (Math.abs(tmp.steer) > Math.abs(out.steer)) out.steer = tmp.steer;
       out.throttle = Math.max(out.throttle, tmp.throttle);
       out.brake = Math.max(out.brake, tmp.brake);

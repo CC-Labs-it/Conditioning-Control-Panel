@@ -5,10 +5,15 @@
  * speed bottom right, drift pips under the kart. The credit slot stays empty until media shows.
  * Toasts are rare and short. Cards live in hud/cards.js. Writes touch the DOM only on a change.
  * Phase A API kept: setCard, setReady, update, onStart, onResume, onRestart, credit, dispose.
+ * Polish 1: Astra's SVG kit (hud/kit.js) dresses the place numeral, item slot, drift pips, lap
+ * divider, minimap frame and the countdown flag once it loads; the DOM look is the fallback and
+ * all text stays in the DOM. A short note says when a controller connects or leaves.
  */
 import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
 import { createMinimap } from './minimap.js';
 import { createCards } from './cards.js';
+import { createKit, placeArt } from './kit.js';
+import { devices as sharedDevices } from '../input/device.js';
 
 export { formatTime };
 
@@ -16,31 +21,34 @@ const NAMES = ['race', 'online', 'options', 'controls', 'back', 'resume', 'resta
 const TOAST_S = 1.6, TOAST_GAP_S = 0.6;
 
 /** @returns {Hud} */
-export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now() } = {}) {
+export function createHud({ root, card }, feel, bus, { doc = globalThis.document, now = () => performance.now(), devices = sharedDevices } = {}) {
   root.classList.add('hud');
   root.dataset.screen = 'race';
   root.innerHTML =
     '<div class="hud-race">' +
-      '<div class="hud-tl"><span class="hud-lap"></span><span class="hud-time"></span><span class="hud-best"></span></div>' +
+      '<div class="hud-tl"><span class="hud-lap"></span><i class="hud-div" aria-hidden="true"></i><span class="hud-time"></span><span class="hud-best"></span></div>' +
       '<button type="button" class="hud-item empty" tabindex="-1" aria-label="Item"><i class="hud-item-ring"></i><img alt="" draggable="false" hidden></button>' +
-      '<canvas class="hud-map" aria-hidden="true"></canvas>' +
-      '<div class="hud-place" aria-live="polite" hidden><b></b><sup></sup><small></small></div>' +
+      '<div class="hud-mapbox"><canvas class="hud-map" aria-hidden="true"></canvas></div>' +
+      '<div class="hud-place" aria-live="polite" hidden><img class="hud-place-art" alt="" draggable="false" hidden><b></b><sup></sup><small></small></div>' +
       '<span class="hud-pips"><i></i><i></i><i></i></span>' +
       '<span class="hud-speed"><b>0</b> km/h</span>' +
       '<div class="hud-toast" role="status"></div>' +
     '</div>' +
-    '<div class="hud-count" aria-hidden="true"></div>' +
+    '<div class="hud-count" aria-hidden="true"><img class="hud-count-flag" alt="" draggable="false" hidden><span></span></div>' +
+    '<div class="hud-note" role="status"></div>' +
     '<div class="hud-credit" data-slot="credit"></div>';
   const $ = (sel) => root.querySelector(sel);
   const el = {
-    lap: $('.hud-lap'), time: $('.hud-time'), best: $('.hud-best'), count: $('.hud-count'), speed: $('.hud-speed b'),
+    lap: $('.hud-lap'), time: $('.hud-time'), best: $('.hud-best'), count: $('.hud-count'), countN: $('.hud-count span'),
+    flag: $('.hud-count-flag'), speed: $('.hud-speed b'),
     pips: [...root.querySelectorAll('.hud-pips i')], item: $('.hud-item'), icon: $('.hud-item img'),
-    place: $('.hud-place'), placeN: $('.hud-place b'), placeSuf: $('.hud-place sup'), placeOf: $('.hud-place small'),
-    toast: $('.hud-toast'),
+    place: $('.hud-place'), placeArt: $('.hud-place-art'), placeN: $('.hud-place b'), placeSuf: $('.hud-place sup'), placeOf: $('.hud-place small'),
+    toast: $('.hud-toast'), note: $('.hud-note'),
   };
   const map = createMinimap($('.hud-map'), { doc });
   // warm the icon cache so the roll never waits on a load
   const warm = ICON_IDS.map((id) => { const im = doc.createElement('img'); im.src = iconOf(id); return im; });
+  const kit = createKit({ doc, onGroup: (g) => { root.classList.add('kit-' + g); card.classList.add('kit-' + g); } });
 
   const listeners = Object.fromEntries(NAMES.map((n) => [n, []]));
   const fns = { start: [], resume: [], restart: [] };
@@ -49,7 +57,19 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     const list = (listeners[name] || []).length ? listeners[name] : fns[name] || [];
     for (const fn of list.slice()) { try { fn(payload); } catch (e) { console.warn('[hud]', name, e); } }
   }
-  const cards = createCards(card, { doc, emit: fire });
+  const cards = createCards(card, { doc, emit: fire, devices, kit });
+  let noteTimer = 0;
+  function note(text) {
+    el.note.textContent = text;
+    el.note.classList.add('on');
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => el.note.classList.remove('on'), 2400);
+  }
+  const offDev = devices.on((type, info) => {
+    if (type === 'connect') note('Controller connected');
+    else if (type === 'lost') note('Controller disconnected');
+    cards.refreshDevice();
+  });
   el.item.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fire('item', {}); });
 
   let labels = [], metas = null, laps = 1, leader = -1, goUntil = 0, countN = 0;
@@ -121,6 +141,13 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   function setPlace(place, count) {
     if (!(place > 0)) { el.place.hidden = true; return; }
     el.place.hidden = false;
+    const art = kit.group('place') ? placeArt(place) : null;
+    if (art !== last.art) {
+      last.art = art;
+      if (art) el.placeArt.src = kit.url(art);
+      el.placeArt.hidden = !art;
+      el.place.classList.toggle('art', !!art);
+    }
     if (place !== last.place) {
       const moved = last.place > 0, up = moved && place < last.place;
       last.place = place;
@@ -146,7 +173,10 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     put('best', el.best, bestLapS > 0 ? 'best ' + formatTime(bestLapS) : '');
     put('speed', el.speed, String(Math.round(Math.max(0, speedPct) * feel.get('speed.topMps') * 3.6)));
     const n = countdown || countN;
-    put('count', el.count, n > 0 ? String(n) : now() < goUntil ? 'Go' : '');
+    const countText = n > 0 ? String(n) : now() < goUntil ? 'Go' : '';
+    put('count', el.countN, countText);
+    const flagOn = !!countText && kit.ok('flag-start');
+    if (flagOn !== last.flag) { last.flag = flagOn; if (flagOn && !el.flag.src) el.flag.src = kit.url('flag-start'); el.flag.hidden = !flagOn; }
     root.classList.toggle('paused', !!paused);
     root.classList.toggle('finished', !!finished);
     setPlace(place, count);
@@ -183,6 +213,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     toast,
     item: el.item,
     credit: root.querySelector('.hud-credit'),
-    dispose() { offs.forEach((off) => off()); warm.length = 0; },
+    /** A short note at the bottom, on any screen (the controller notes use it). */
+    note,
+    dispose() { offs.forEach((off) => off()); offDev(); clearTimeout(noteTimer); kit.dispose(); warm.length = 0; },
   };
 }

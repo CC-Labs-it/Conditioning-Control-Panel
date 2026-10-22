@@ -1,64 +1,92 @@
-/* input/gamepad.js - gamepad InputSource, standard mapping (CONTRACT.md section 4), lifted from
- * dtrh/race/input.js. Left stick steer (dead zone rescaled, never inverted), RT throttle, LT brake,
- * A hop and drift, Start pause. rumble() is skipped by the caller under Gentle.
+/* input/gamepad.js - gamepad InputSource (CONTRACT.md section 4), lifted from dtrh/race/input.js.
+ * Left stick steer (dead zone rescaled, never inverted), RT throttle, LT brake, A hop and drift,
+ * Start pause (and only pause). rumble() is skipped by the caller under Gentle.
  * B1: X item (an edge), stick down past 0.5 or the d-pad down = back (held, drops the item behind).
+ * Polish 1: RB is a second item button; LB is unused (there is no look behind). Pads without the
+ * standard mapping read through a fallback layout (input/padmap.js). A pad that was being played
+ * with and then leaves sets `padLost` once (the action map turns it into a pause edge). The shared
+ * `devices` hears which pad is in use and every connect and leave, for the HUD.
  * takeNav() hands the cards one edge per press: d-pad or stick up / down / left / right, A ok, B back.
  */
+import { readPad, profileFor, padFamily, loadChoices } from './padmap.js';
+import { devices as sharedDevices } from './device.js';
+
 const DEADZONE = 0.16;
-const BTN = { a: 0, b: 1, x: 2, lt: 6, rt: 7, start: 9, up: 12, down: 13, left: 14, right: 15 };
-const clamp01 = (v) => Math.max(0, Math.min(1, v || 0));
 
-export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigator : null } = {}) {
-  let wasA = false, wasStart = false, wasX = false, navWas = null, navEdge = null;
+export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigator : null, devices = sharedDevices, choices = null } = {}) {
+  let was = {}, navWas = null, navEdge = null, lostEdge = false;
+  let active = -1;                       // index of the pad being played with, -1 until one is used
+  const known = new Map();               // index -> id, for the connect and leave notes
+  const seen = new Map();                // id -> trigger axes seen moving
+  let kept = choices || loadChoices();
+  const r = {};
+  const offDev = devices.on((type) => { if (type === 'layout') kept = loadChoices(); });
 
-  function pad() {
+  const idOf = (g) => g.id || 'pad';
+  const infoOf = (g) => ({ id: idOf(g), family: padFamily(g), profile: profileFor(g, kept), standard: g.mapping === 'standard' });
+
+  /** Notes connects and leaves; returns the pad to read: the one in use, else a standard one, else any. */
+  function scan() {
     const list = nav && nav.getGamepads ? nav.getGamepads() : null;
-    if (!list) return null;
-    let any = null;
-    for (let i = 0; i < list.length; i++) {
+    let pick = null, std = null, any = null;
+    const live = new Set();
+    if (list) for (let i = 0; i < list.length; i++) {
       const g = list[i];
       if (!g || !g.connected) continue;
-      if (g.mapping === 'standard') return g;
-      any = any || g;
+      const k = typeof g.index === 'number' ? g.index : i;
+      live.add(k);
+      if (known.get(k) !== idOf(g)) { known.set(k, idOf(g)); devices.connected(infoOf(g)); }
+      if (k === active) pick = { g, k };
+      if (!std && g.mapping === 'standard') std = { g, k };
+      any = any || { g, k };
     }
-    return any;
+    for (const [k, id] of [...known]) {
+      if (live.has(k)) continue;
+      known.delete(k);
+      const wasActive = k === active;
+      if (wasActive) { active = -1; lostEdge = true; was = {}; navWas = null; }
+      devices.lost({ id, active: wasActive });
+    }
+    return pick || std || any;
   }
-  const btn = (g, i) => {
-    const b = g.buttons && g.buttons[i];
-    return b ? (typeof b.value === 'number' ? b.value : b.pressed ? 1 : 0) : 0;
-  };
 
   function poll(into) {
-    const g = pad();
-    if (!g) { wasA = false; wasStart = false; wasX = false; navWas = null; return; }
-    const ax = g.axes && g.axes.length ? g.axes[0] || 0 : 0;
+    const hit = scan();
+    into.padLost = lostEdge; lostEdge = false;
+    if (!hit) { was = {}; navWas = null; return; }
+    const { g, k } = hit, id = idOf(g);
+    if (!seen.has(id)) seen.set(id, {});
+    readPad(g, profileFor(g, kept), seen.get(id), r);
+    const ax = r.x, ay = r.y;
     into.steer = Math.abs(ax) > DEADZONE ? Math.sign(ax) * Math.min(1, (Math.abs(ax) - DEADZONE) / (1 - DEADZONE)) : 0;
-    into.throttle = clamp01(btn(g, BTN.rt));
-    into.brake = clamp01(btn(g, BTN.lt));
-    const a = btn(g, BTN.a) > 0.5, start = btn(g, BTN.start) > 0.5;
-    into.hop = a;
-    into.hopPressed = a && !wasA;
-    into.pause = start && !wasStart;
-    const x = btn(g, BTN.x) > 0.5, ay = g.axes && g.axes.length > 1 ? g.axes[1] || 0 : 0;
-    into.item = x && !wasX;
-    into.back = ay > 0.5 || btn(g, BTN.down) > 0.5;
+    into.throttle = r.rt;
+    into.brake = r.lt;
+    into.hop = r.south;
+    into.hopPressed = r.south && !was.south;
+    into.pause = r.start && !was.start;
+    into.item = (r.west && !was.west) || (r.rb && !was.rb);
+    into.back = ay > 0.5 || r.down;
     // one nav edge per press for the cards (never fed to the sim)
-    const dir = btn(g, BTN.up) > 0.5 || ay < -0.6 ? 'up' : btn(g, BTN.down) > 0.5 || ay > 0.6 ? 'down'
-      : btn(g, BTN.left) > 0.5 || ax < -0.6 ? 'left' : btn(g, BTN.right) > 0.5 || ax > 0.6 ? 'right'
-        : a ? 'ok' : btn(g, BTN.b) > 0.5 ? 'back' : null;
+    const dir = r.up || ay < -0.6 ? 'up' : r.down || ay > 0.6 ? 'down'
+      : r.left || ax < -0.6 ? 'left' : r.right || ax > 0.6 ? 'right'
+        : r.south ? 'ok' : r.east ? 'back' : null;
     if (dir && dir !== navWas) navEdge = dir;
     navWas = dir;
-    wasA = a; wasStart = start; wasX = x;
+    const used = r.south || r.east || r.west || r.north || r.lb || r.rb || r.start || r.select ||
+      r.up || r.down || r.left || r.right || r.lt > 0.1 || r.rt > 0.1 || Math.abs(ax) > 0.5 || Math.abs(ay) > 0.5;
+    if (used) { active = k; devices.use('pad', infoOf(g)); }
+    was = { south: r.south, start: r.start, west: r.west, rb: r.rb };
   }
   /** The last card nav edge since the previous call, or null. */
   function takeNav() { const d = navEdge; navEdge = null; return d; }
   function rumble(strong, weak, ms) {
-    const g = pad(), act = g && g.vibrationActuator;
+    const hit = scan(), act = hit && hit.g.vibrationActuator;
     if (!act || typeof act.playEffect !== 'function') return;
+    const c = (v) => Math.max(0, Math.min(1, v || 0));
     try {
-      const p = act.playEffect('dual-rumble', { startDelay: 0, duration: ms, strongMagnitude: clamp01(strong), weakMagnitude: clamp01(weak) });
+      const p = act.playEffect('dual-rumble', { startDelay: 0, duration: ms, strongMagnitude: c(strong), weakMagnitude: c(weak) });
       if (p && p.catch) p.catch(() => {});
     } catch (e) { /* no rumble on this pad */ }
   }
-  return { poll, rumble, takeNav, dispose() { wasA = false; wasStart = false; wasX = false; } };
+  return { poll, rumble, takeNav, dispose() { was = {}; offDev(); } };
 }

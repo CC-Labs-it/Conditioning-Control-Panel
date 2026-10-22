@@ -14,6 +14,8 @@
  * ids with the fingers still down so a swallowed pointerup never strands a drift.
  *   createTouch({ root, win, doc }) -> null, or { el, poll(into), dispose() }
  */
+import { devices } from './device.js';
+
 export const STEER_LOCK_PX = 72;
 export const STEER_DEAD_PX = 6;
 export const STEER_SIDE = 0.55;
@@ -61,13 +63,14 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn'));
   const sideOf = (x) => { const r = layer.getBoundingClientRect(); return x - r.left < (r.width || 1) * STEER_SIDE ? 'left' : 'right'; };
 
-  const onPause = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); touched = true; pauseEdge = true; };
+  const onPause = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); touched = true; pauseEdge = true; devices.use('touch'); };
   pauseBtn.addEventListener('pointerdown', onPause);
 
   function endSteer() { steerId = -1; steer = 0; pad.style.display = 'none'; }
   function onDown(e) {
     if (disposed || onBtn(e.target)) return;
     touched = true;
+    devices.use('touch');
     if (sideOf(e.clientX) === 'left') {
       if (steerId >= 0) return;
       const r = layer.getBoundingClientRect();

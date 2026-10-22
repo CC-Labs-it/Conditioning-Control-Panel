@@ -5,6 +5,8 @@
  * pause) are latched until the next poll. A field being typed in keeps its keys; a focused button
  * keeps its Space; everywhere else game keys never scroll the page. No axis is ever remapped.
  */
+import { devices } from './device.js';
+
 const HELD = {
   KeyW: 'throttle', ArrowUp: 'throttle', KeyS: 'brake', ArrowDown: 'brake',
   KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
@@ -22,6 +24,7 @@ export function createKeyboard({ target = window } = {}) {
     if (e.altKey || e.metaKey || e.ctrlKey) return;
     const code = e.code || '', tag = (e.target && e.target.tagName) || '';
     if (TYPING.test(tag)) return;
+    if (e.type === 'keydown') devices.use('keyboard');
     const what = HELD[code];
     if (e.type === 'keydown') {
       if (code === 'Escape') { if (!e.repeat) pauseEdge = true; return; }

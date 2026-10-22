@@ -51,8 +51,9 @@
 @keyframes hud-fade { from { opacity: 0.5; } to { opacity: 1; } }
 
 /* minimap */
-.hud-map { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right));
-  width: 132px; height: 104px; border-radius: 10px; background: rgba(14, 10, 22, 0.32); }
+.hud-mapbox { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right));
+  width: 132px; height: 104px; }
+.hud-map { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 10px; background: rgba(14, 10, 22, 0.32); }
 
 /* place numeral, bottom left */
 .hud-place { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom));
@@ -91,6 +92,39 @@
 .hud-credit:empty { display: none; }
 .hud.paused .hud-count { visibility: hidden; }
 
+/* controller notes: a paper slip at the bottom, on every screen */
+.hud-note { position: absolute; left: 50%; bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px)); transform: translate(-50%, 4px);
+  padding: 5px 12px; border-radius: 4px; background: var(--paper); color: var(--paper-ink); border: 1.5px solid var(--paper-ink);
+  box-shadow: 3px 3px 0 var(--shade); font: 700 13px/1.2 var(--font); text-shadow: none; white-space: nowrap;
+  opacity: 0; transition: opacity 0.22s, transform 0.22s; }
+.hud-note.on { opacity: 1; transform: translate(-50%, 0); }
+.hud.gentle .hud-note { transition: opacity 0.4s; transform: translate(-50%, 0); }
+.hud-count span { display: block; }
+.hud-count-flag { display: block; width: 72px; height: auto; margin: 0 auto 4px; }
+.hud-count-flag[hidden] { display: none; }
+
+/* the SVG HUD kit (hud/kit.js): each kit-* class lands only when its files loaded; without it the plain look above stays */
+.hud-div { display: none; }
+.hud.kit-divider .hud-div { display: block; width: 108px; height: 9px; margin: 1px 0 2px;
+  background: url(art/ui/lap-time-divider.svg) left center / contain no-repeat; }
+.hud.kit-slot .hud-item { border: 0; box-shadow: none; background: url(art/ui/item-slot-frame.svg) center / 100% 100% no-repeat; }
+.hud.kit-slot .hud-item img { width: 56%; height: 56%; }
+.hud.kit-slot .hud-item-ring { inset: 13%; }
+.hud.kit-slot .hud-item.held .hud-item-ring { border: 2px solid var(--pink); }
+.hud.kit-map .hud-mapbox { width: 168px; height: 128px; background: url(art/ui/minimap-frame.svg) center / 100% 100% no-repeat; }
+.hud.kit-map .hud-map { inset: 15.79% auto auto 12%; width: 76%; height: 68.42%; border-radius: 0; background: none; }
+.hud.kit-pips .hud-pips { gap: 4px; }
+.hud.kit-pips .hud-pips i { width: 22px; height: 22px; border: 0; border-radius: 0; background: center / contain no-repeat;
+  opacity: 0.3; transition: opacity 0.12s; }
+.hud.kit-pips .hud-pips i:nth-child(1) { background-image: url(art/ui/drift-pip-pink.svg); }
+.hud.kit-pips .hud-pips i:nth-child(2) { background-image: url(art/ui/drift-pip-white.svg); }
+.hud.kit-pips .hud-pips i:nth-child(3) { background-image: url(art/ui/drift-pip-gold.svg); }
+.hud.kit-pips .hud-pips i.on { background-color: transparent; opacity: 1; }
+.hud-place-art { height: 96px; width: auto; vertical-align: bottom; }
+.hud-place-art[hidden] { display: none; }
+.hud-place.art b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hud-place.art sup { top: 10px; }
+
 /* Gentle: no spin, no bob, no scale pops (fades only) */
 .hud.gentle .hud-item-ring, .hud.gentle .hud-item img, .hud.gentle .hud-count.pulse { animation: none; }
 
@@ -100,7 +134,10 @@
   .hud-place b { font-size: 54px; }
   .hud-place sup { font-size: 20px; top: 4px; }
   .hud-place small { display: none; }
-  .hud-map { top: calc(max(14px, env(safe-area-inset-top)) + 52px); left: max(16px, env(safe-area-inset-left)); right: auto; width: 92px; height: 72px; }
+  .hud-mapbox { top: calc(max(14px, env(safe-area-inset-top)) + 52px); left: max(16px, env(safe-area-inset-left)); right: auto; width: 92px; height: 72px; }
+  .hud.kit-map .hud-mapbox { width: 112px; height: 85px; }
+  .hud-place-art { height: 56px; }
+  .hud.kit-divider .hud-div { width: 84px; }
   .hud-item { width: 58px; height: 58px; margin-left: -29px; }
   .hud-toast { top: calc(max(12px, env(safe-area-inset-top)) + 68px); }
   .hud-lap { font-size: 15px; }
@@ -162,6 +199,24 @@
 .c-keys td { font-family: var(--mono); }
 @media (hover: none) and (pointer: coarse) { .c-keys td:nth-child(2), .c-keys th:nth-child(2) { display: none; } }
 @media (hover: hover) { .c-keys td:nth-child(4), .c-keys th:nth-child(4) { display: none; } }
+/* the device used last: its column always shows, in pink */
+.c-keys[data-last="keyboard"] .k, .c-keys[data-last="touch"] .t { display: table-cell; }
+.c-keys[data-last="pad"] .p, .c-keys[data-last="keyboard"] .k, .c-keys[data-last="touch"] .t { color: var(--paper-pink); font-weight: 700; }
+.c-layout { margin: -6px 0 14px; text-align: left; }
+.c-hint { margin: 12px 0 0; font: 12px/1.3 var(--mono); color: var(--paper-dim); }
+.c-hint[hidden] { display: none; }
+.c-flag { display: block; width: 64px; height: auto; margin: 0 auto 2px; }
+
+/* menu doors in the kit frames: labels in the frame's label band, the line in its description box */
+#card.kit-doors[data-kind="menu"] .card-body { width: min(420px, calc(100vw - 32px)); }
+#card.kit-doors .c-door, #card.kit-doors .c-door.hot { aspect-ratio: 256 / 168; min-height: 0; padding: 0; border: 0; border-radius: 0;
+  background: url(art/ui/menu-race-frame.svg) center / 100% 100% no-repeat; color: #fff8ef; }
+#card.kit-doors .c-door[data-act="online"] { background-image: url(art/ui/menu-online-frame.svg); }
+#card.kit-doors .c-door b { position: absolute; left: 10.5%; top: 71.4%; width: 76.6%; height: 14.9%; display: flex; align-items: center;
+  font-size: 15px; line-height: 1; }
+#card.kit-doors .c-door em { position: absolute; left: 38.3%; top: 22.6%; width: 42.6%; height: 36.3%; font-size: 11px; line-height: 1.2; overflow: hidden; }
+#card.kit-doors .c-door.soon { opacity: 0.75; color: #fff8ef; }
+@media (max-width: 420px) { #card.kit-doors .c-doors { grid-template-columns: 1fr; } #card.kit-doors .c-door b { font-size: 17px; } #card.kit-doors .c-door em { font-size: 12px; } }
 
 #card[data-kind="results"] .card-title { margin-bottom: 0; }
 .c-place { font-size: 64px; font-weight: 900; line-height: 1; }
