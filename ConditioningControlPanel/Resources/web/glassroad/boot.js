@@ -85,6 +85,21 @@ function createFallSteer(track, st, feel) {
   };
 }
 
+/** Distance to the nearest live item box in front of the kart (within 25 degrees), or -1. Dev only (?bot=1). */
+const boxFwd = v3(), boxQ = [0, 0, 0, 1], BOX_F = [0, 0, -1];
+function boxAhead(st, boxes) {
+  boxQ[0] = st[S.quatX]; boxQ[1] = st[S.quatY]; boxQ[2] = st[S.quatZ]; boxQ[3] = st[S.quatW];
+  qrotate(boxFwd, boxQ, BOX_F);
+  let best = -1;
+  for (const b of boxes || []) {
+    if (!b.alive || !b.p) continue;
+    const dx = b.p[0] - st[S.posX], dy = b.p[1] - st[S.posY], dz = b.p[2] - st[S.posZ];
+    const d = Math.hypot(dx, dy, dz), along = dx * boxFwd[0] + dy * boxFwd[1] + dz * boxFwd[2];
+    if (d > 0 && along > d * 0.9 && (best < 0 || d < best)) best = d;
+  }
+  return best < 0 ? -1 : Math.round(best * 10) / 10;
+}
+
 /** The closed centreline as x, z pairs for the minimap. */
 function centreline(track, stepM = 4) {
   const n = Math.max(8, Math.floor(track.lengthM / stepM)), xz = new Float32Array(n * 2);
@@ -319,8 +334,10 @@ async function boot() {
     racers.interpolate(alpha);                                    // 6. camera
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
+    const iv = items.view();
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: clock.simTime, beat: clock.beat,
-      sectionIdx: pst[S.sectionIdx], items: items.view(), mode });
+      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera });
+    if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: paused ? 0 : frameDt });   // 7. render
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud

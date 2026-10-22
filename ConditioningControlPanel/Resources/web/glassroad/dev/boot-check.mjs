@@ -138,12 +138,19 @@ async function run(backend, httpPort) {
     if (await until(['menu'], 30000)) { await sleep(800); await shot('menu'); await click('race'); }
     const t0 = Date.now();
     let st = null, startShot = false, packShot = false, midShot = false, fxShot = false, dropAt = 0, dropShot = false, resultsAt = 0, lastSample = 0;
+    let goShot = false, boxShot = false, heldAt = 0, heldShot = false;
     while (Date.now() - t0 < SECONDS * 1000) {
       await sleep(200);
       st = await state();
       if (!st) continue;
       if (st.phase === 'failed') break;
       if (!startShot && st.phase === 'countdown') { startShot = true; await sleep(300); await shot('start-grid'); }
+      // polish 1: the pack just off the line (rival tints and accessories close up), an item box ahead,
+      // and a held bubble in the HUD slot once its roll has settled
+      if (!goShot && st.phase === 'racing' && st.timeS > 1.5) { goShot = true; await shot('pack-start'); }
+      if (!boxShot && st.phase === 'racing' && st.boxAheadM > 3 && st.boxAheadM < 9) { boxShot = true; report.boxAheadM = st.boxAheadM; await shot('item-box'); }
+      if (st.phase === 'racing' && st.item) { if (!heldAt) heldAt = Date.now(); } else heldAt = 0;
+      if (!heldShot && heldAt && Date.now() - heldAt > 1500) { heldShot = true; await shot('held-bubble'); }
       if (!packShot && st.phase === 'racing' && st.timeS > 5) { packShot = true; await shot('mid-race-pack'); }
       if (!midShot && st.phase === 'racing' && st.timeS > 40) { midShot = true; await shot('mid-race'); }
       if (!fxShot && st.effectNow) { fxShot = true; await sleep(350); await shot('effect-' + st.effectNow); }

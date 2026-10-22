@@ -85,4 +85,20 @@ export const LOOK = {
   sheenDir: [-0.3, 0.75, -0.6], sheenPow: 40, sheenGain: 0.25, sheenBump: 0.35, sheenFresnel: 0.07, sheenGentle: 0.5,
   // menu attract orbit around the player kart
   menuOrbitRadps: 0.18, menuOrbitM: 6.5, menuOrbitUpM: 2.2, menuLookUpM: 0.7,
+  // polish 1: finish arch membrane (render/dressing.js): fade-in distance, lit share, Gentle share, spin share
+  artMembraneNearM: [5, 18], artMembraneLit: 0.22, artMembraneGentle: 0.5, artMembraneTurnMul: 0.6,
+  // polish 1: particle atlas numbers (render/atlas.js re-exports this as FXART_LOOK)
+  fxArt: Object.freeze({
+    // sprite size share per cell (the art has a gutter and soft edges; the old discs filled the sprite)
+    cellSize: Object.freeze({ disc: 1, spark: 2, glint: 1.5, glitter: 1.8, petal: 1.2, ring: 1.6, smoke: 1.6,
+      drip: 1.1, shard: 1.2, frost: 1.5, swirl: 1.4, bubble: 1.5, star: 1.3 }),
+    ringCellR: 0.58,              // the ring cell's radius as a share of the cell half width (measured)
+    // ambient motes: petal and swirl shares (afterglow brings petals, deep brings swirls)
+    motePetal: [0.12, 0.55], moteSwirl: [0, 0.35], moteCellSize: 1.3,
+    // item-hit bursts (Freeze crystals, Golden stars, Melt drips)
+    hitCount: 18, hitSpeedMps: 3, hitSizeM: 0.2,
+    frostColours: Object.freeze(['#dff4ff', '#bfe8ff', '#ffffff']),
+    goldColours: Object.freeze(['#ffd36b', '#fff1c2', '#ffffff']),
+    meltColours: Object.freeze(['#ff7cc8', '#ffc2df', '#e6a0ff']),
+  }),
 };

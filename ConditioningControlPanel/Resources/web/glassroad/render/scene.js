@@ -171,6 +171,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     } else if (kind === 'box') particles.burst(p || posOf(i), Math.round(LOOK.boxCount * few), { colours: LOOK.boxColours, speed: 4, sparkle: 0.8, up: 2 });
     else if (kind === 'hit' && k) {
       if (a === 'hit') kickWobble(k.pose, LOOK, gentle, b === 'shatter' ? 0.5 : 1);
+      // atlas sprays first (frost, stars, drips, glass pops); the plain burst stays the fallback
+      if (particles.hit(p || posOf(i), a === 'hit' ? b : a, { few })) { /* sprayed */ }
       else if (a === 'glass' || a === 'golden' || a === 'decoy') {
         particles.burst(p || posOf(i), Math.round(14 * few), { colours: a === 'golden' ? LOOK.boxColours : LOOK.popColours, speed: 3, sparkle: 0.8 });
       }
@@ -275,14 +277,14 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
 
     const turn = LOOK.artRingTurnRadps * scroll;
     if (countdown) countdown.update(dt, turn, gentle);
-    if (finish) finish.update(dt, turn * 0.5);
+    if (finish) finish.update(dt, turn * 0.5, gentle);
     if (scatter) scatter.update(dt, scroll);
 
     particles.update(dt);
     wakes.update(dt);
     lines.update(dt, k, fx, kart);
     if (view.mode === 'menu') lines.object.visible = false;
-    if (itemVis && view.items) itemVis.update(view.items, dt, racers);   // visuals read racer .st (CONTRACT-B1 view.karts)
+    if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera);   // visuals read racer .st (CONTRACT-B1 view.karts)
   }
 
   function dispose() {
