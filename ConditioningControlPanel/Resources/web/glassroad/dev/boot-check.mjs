@@ -1,8 +1,10 @@
 // dev/boot-check.mjs - headless boot check over CDP (Edge or Chrome), no npm deps (Node 22+ WebSocket).
 // Run: node dev/boot-check.mjs [--out <dir>] [--seconds 60] [--browser <exe>] [--only webgpu|webgl2] [--finish] [--cards] [--flags '&gentle=1']
-// For each backend it serves this tree, opens ?bot=1&botFall=1, collects console errors and
-// exceptions, logs fps / draw calls / triangles from window.__glassroad, and saves screenshots:
-// start, mid-race, during the rescue after the bot's planned drop, and the end. Screenshots only
+// For each backend it serves this tree, opens ?bot=1 (B1: the menu first; the check presses the Race door,
+// then the AI drives the player against 7 bots), collects console errors and exceptions, logs fps / draw
+// calls / triangles, place, item events and screen effects from window.__glassroad, and saves screenshots:
+// menu, start grid, mid-race with karts in view, a screen effect when one fires, the end, and with
+// --finish the results card. --fall adds &botFall=1 and a rescue shot. Screenshots only
 // (Page.captureScreenshot), never a pixel readback. Kills only the processes it started, by PID.
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -12,13 +14,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
-const OUT = arg('out', 'C:/wt-glassroad-run/shots');
-const SECONDS = Number(arg('seconds', 60));
+const OUT = arg('out', 'C:/wt-glassroad-run/shots/b1');
+const FINISH = process.argv.includes('--finish');   // run on to the results card (3 laps plus the wait)
+const FALL = process.argv.includes('--fall');       // the player steers off the first open corner once
+const SECONDS = Number(arg('seconds', FINISH ? 300 : 60));
 const BROWSER = arg('browser', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe');
 const ONLY = arg('only', null);
 const FLAGS = arg('flags', '');   // extra url flags, e.g. '&gentle=1&feel=1'
 const CARDS = process.argv.includes('--cards');     // no bot: start card, Enter, Escape pause card, resume
-const FINISH = process.argv.includes('--finish');   // run on to the finish card (3 laps, about 2.5 min)
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 mkdirSync(OUT, { recursive: true });
@@ -96,7 +99,7 @@ async function run(backend, httpPort) {
     await c.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, sid);
     await c.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sid);
     const flag = backend === 'webgl2' ? '&renderer=webgl2' : '';
-    const query = CARDS ? '/?x=1' : '/?bot=1&botFall=1';
+    const query = CARDS ? '/?x=1' : '/?bot=1' + (FALL ? '&botFall=1' : '');
     await c.send('Page.navigate', { url: 'http://127.0.0.1:' + httpPort + query + flag + FLAGS }, sid);
     const state = async () => {
       const r = await c.send('Runtime.evaluate', { expression: 'JSON.stringify(window.__glassroad || null)', returnByValue: true }, sid);
@@ -109,7 +112,9 @@ async function run(backend, httpPort) {
       report.shots.push(file);
     };
     const key = async (k, code, vk) => {
-      for (const type of ['keyDown', 'keyUp']) await c.send('Input.dispatchKeyEvent', { type, key: k, code, windowsVirtualKeyCode: vk }, sid);
+      // Enter carries its text so a focused button is pressed the way a real key presses it
+      const text = k === 'Enter' ? '\r' : undefined;
+      for (const type of ['keyDown', 'keyUp']) await c.send('Input.dispatchKeyEvent', { type, key: k, code, windowsVirtualKeyCode: vk, ...(type === 'keyDown' && text ? { text } : {}) }, sid);
     };
     const until = async (want, ms) => {
       const end = Date.now() + ms;
@@ -117,8 +122,9 @@ async function run(backend, httpPort) {
       report.errors.push('cards: phase never reached ' + want.join('|'));
       return null;
     };
-    if (CARDS) {   // no bot: start card, a key starts, Escape pauses, a key resumes
-      if (await until(['ready'], 30000)) await shot('card-start');
+    const click = (act) => c.send('Runtime.evaluate', { expression: "(document.querySelector('#card [data-act=" + act + "]') || {}).click && document.querySelector('#card [data-act=" + act + "]').click(), true", returnByValue: true }, sid);
+    if (CARDS) {   // no bot: menu card, Enter on the Race door, Escape pauses, Enter resumes
+      if (await until(['menu'], 30000)) { await sleep(600); await shot('card-menu'); }
       await key('Enter', 'Enter', 13);
       if (await until(['countdown', 'racing'], 5000)) await sleep(2500);
       await key('Escape', 'Escape', 27);
@@ -128,25 +134,35 @@ async function run(backend, httpPort) {
       report.final = await state();
       throw null;   // done: skip the bot loop
     }
+    // menu first: a look, then the Race door (the page's own attract timer is the fallback)
+    if (await until(['menu'], 30000)) { await sleep(800); await shot('menu'); await click('race'); }
     const t0 = Date.now();
-    let st = null, startShot = false, midShot = false, dropAt = 0, dropShot = false, finishAt = 0;
+    let st = null, startShot = false, packShot = false, midShot = false, fxShot = false, dropAt = 0, dropShot = false, resultsAt = 0, lastSample = 0;
     while (Date.now() - t0 < SECONDS * 1000) {
-      await sleep(250);
+      await sleep(200);
       st = await state();
       if (!st) continue;
       if (st.phase === 'failed') break;
-      if (!startShot && (st.phase === 'countdown' || st.phase === 'racing')) { startShot = true; await sleep(400); await shot('start'); }
-      if (!midShot && st.phase === 'racing' && st.timeS > 12) { midShot = true; await shot('mid-race'); }
-      if (FINISH && st.phase === 'finished' && !finishAt) finishAt = Date.now();
-      if (finishAt && Date.now() - finishAt > 2500) { await shot('finish'); break; }
-      if (!dropAt && st.drops > 0) dropAt = Date.now();
+      if (!startShot && st.phase === 'countdown') { startShot = true; await sleep(300); await shot('start-grid'); }
+      if (!packShot && st.phase === 'racing' && st.timeS > 5) { packShot = true; await shot('mid-race-pack'); }
+      if (!midShot && st.phase === 'racing' && st.timeS > 40) { midShot = true; await shot('mid-race'); }
+      if (!fxShot && st.effectNow) { fxShot = true; await sleep(350); await shot('effect-' + st.effectNow); }
+      if (FALL && !dropAt && st.drops > 0) dropAt = Date.now();
       if (dropAt && !dropShot && Date.now() - dropAt > 700) { dropShot = true; await shot('rescue'); }
-      if ((Date.now() - t0) % 5000 < 250 && st.fps) report.samples.push({ t: Math.round((Date.now() - t0) / 1000), fps: st.fps, drawCalls: st.drawCalls, triangles: st.triangles, tier: st.tier, phase: st.phase });
-      if (!FINISH && dropShot && st.rescues > 0 && Date.now() - dropAt > 4000) break;
+      if (st.fps && Date.now() - lastSample >= 5000) {
+        lastSample = Date.now();
+        report.samples.push({ t: Math.round((Date.now() - t0) / 1000), fps: st.fps, drawCalls: st.drawCalls, triangles: st.triangles, tier: st.tier, phase: st.phase, place: st.place, lap: st.lap });
+      }
+      if (FINISH && st.phase === 'results' && !resultsAt) resultsAt = Date.now();
+      if (resultsAt && Date.now() - resultsAt > 1200) { await shot('results'); break; }
+      if (!FINISH && midShot && (!FALL || (dropShot && st.rescues > 0))) break;
     }
     if (st) await shot('end');
+    const ev = (st && st.events) || {}, pick = (re) => Object.fromEntries(Object.entries(ev).filter(([k]) => re.test(k)));
     report.final = st && { phase: st.phase, backend: st.backend, tier: st.tier, fps: st.fps, drawCalls: st.drawCalls,
-      triangles: st.triangles, lap: st.lap, s: Math.round(st.s), drops: st.drops, rescues: st.rescues, laps: st.laps, events: st.events };
+      triangles: st.triangles, lap: st.lap, place: st.place, s: Math.round(st.s), drops: st.drops, rescues: st.rescues, laps: st.laps,
+      result: st.result, effectsSeen: st.effects, items: pick(/^(item-|bubble-pop)/), screen: pick(/^effect-/),
+      race: pick(/^(bump|slipstream|overtake|place-change|race-|racer-event)/), seed: st.seed };
     try { await c.send('Browser.close'); } catch (e) { /* closing */ }
   } catch (e) {
     if (e) report.errors.push('harness: ' + e.message);

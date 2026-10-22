@@ -20,6 +20,9 @@
     html, body { margin: 0; height: 100%; background: #0b0a12; color: #f4eef8; overflow: hidden; }
     #view { display: block; width: 100vw; height: 100vh; touch-action: none; outline: none; }
     #card { position: fixed; inset: 0; display: grid; place-items: center; font: 16px/1.4 system-ui, sans-serif; }
+    /* above the touch layer (input/touch.js, z 12): the HUD item slot takes taps, the cards take every press */
+    #hud { z-index: 13; }
+    #card { z-index: 14; }
     #card[hidden] { display: none; }
   </style>
 </head>
