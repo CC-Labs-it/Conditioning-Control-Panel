@@ -68,6 +68,27 @@ public sealed class MandatoryVideoFloatingTests
     }
 
     [Fact]
+    public void A_Lockdown_keeps_the_video_full_screen()
+    {
+        var s = CoreSettings.Current;
+        var (saved, previous) = (s.MandatoryVideoFloating, ConditioningControlPanel.Services.LockdownService.Current);
+        try
+        {
+            s.MandatoryVideoFloating = true;
+            Assert.True(MandatoryVideoOverlay.Floats(strict: false));
+            var ld = ConditioningControlPanel.Services.LockdownService.Current = new ConditioningControlPanel.Services.LockdownService();
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.False(MandatoryVideoOverlay.Floats(strict: false));
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.LockdownService.Current?.Deactivate();
+            ConditioningControlPanel.Services.LockdownService.Current = previous;
+            s.MandatoryVideoFloating = saved;
+        }
+    }
+
+    [Fact]
     public async Task A_floating_video_is_one_small_unfocused_window_and_strict_stays_full_screen()
     {
         try { _ = new LibVlcAudio("--aout=dummy"); }
