@@ -368,8 +368,7 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
-                var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.7f;
+                var volume = CompanionVoiceGain.Current(CompanionVoiceGain.PreviewTrim);
                 App.Audio?.PlayOneShot(path, volume, "phrase-audio");
             }
             catch (Exception ex)

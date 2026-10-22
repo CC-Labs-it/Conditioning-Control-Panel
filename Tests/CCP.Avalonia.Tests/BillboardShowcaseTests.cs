@@ -217,7 +217,7 @@ public sealed class BillboardShowcaseTests
         var code = File.ReadAllText(Path.Combine(d!.FullName, "CCP.Avalonia/Controls/Billboard/ClipArtView.cs"));
         code = Regex.Replace(code, @"//[^\n]*|/\*.*?\*/", "", RegexOptions.Singleline);
         Assert.Matches(@"new MediaPlayer\(vlc\)\s*\{[^}]*Mute = true", code);
-        Assert.Contains("AddOption(\":no-audio\")", code, StringComparison.Ordinal);
+        Assert.Contains("AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption)", code, StringComparison.Ordinal);
     }
 
     private sealed class FakeShowcase(BillboardCardSpec card) : IBillboardProvider
