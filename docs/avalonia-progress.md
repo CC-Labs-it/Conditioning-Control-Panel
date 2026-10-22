@@ -2371,3 +2371,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/dtrh-feel-port: +77
 - DTRH feel rework delta ledger (27 rows: 22 ported-by-merge, 5 needs-port -> lane game-dtrh-host), parity row game-dtrh (missing), DtrhMotionWire git mv to Core with fail-proven Core tests. Local gate GATE-OK (P97 fallback; Windows runs in PR CI).
+
+## avalonia-port/sparkle-wallet: +688
+- Header Sparkle wallet + invite/help popups on BeatLoops; balance from SkillPoints, award cue via SparklePointRewards (moved to Core).
+- ctrl-sparkle-wallet -> stub (EmiFace), shell-sparkle-wallet -> stub (no Avalonia award producer yet).
