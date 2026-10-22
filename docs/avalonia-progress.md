@@ -2530,3 +2530,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-dvd-overlay: +674
 - Chaos DVD bounce: Core ChaosDvdFlock (fail-proven maths) + one click-through host window on the existing frame source; panic/run-end close it; refuses without a compositor.
 - Rows chaos-dvd-overlay + chaos-dvd-host missing -> stub (no caller until the ChaosModeService toy layer lands).
+
+## avalonia-port/theme-converters: +1
+- theme-converters row missing -> wired: every WPF shared converter maps to an Avalonia built-in (IsVisible bool, `!` negation) or is made unnecessary by native colour emoji/IconGlyph; no new converter.
