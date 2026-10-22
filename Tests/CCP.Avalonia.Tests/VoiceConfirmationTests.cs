@@ -84,6 +84,23 @@ public sealed class VoiceConfirmationTests
             Assert.False(quiet.IsCompleted, "The mic must wait out the echo tail after the clip.");
             tail.SetResult();
             await quiet.WaitAsync(TimeSpan.FromSeconds(2));
+
+            // A bark that cuts her confirmation is still her voice (WPF polls IsSpeakingAudio):
+            // the mic waits for THAT clip too, not just the confirmation's own callback.
+            var tail2 = new TaskCompletionSource();
+            var tail2Started = new TaskCompletionSource();
+            shell.VoiceEchoTail = _ => { tail2Started.TrySetResult(); return tail2.Task; };
+            host.Say(picked.Value.Text, picked.Value.Audio);
+            Dispatcher.UIThread.RunJobs();
+            var quiet2 = host.WaitQuiet(true);
+            shell.Tube!.GigglePriority("a bark cuts in", aiGenerated: false, phraseAudioPath: clip, barkVoice: true);
+            Dispatcher.UIThread.RunJobs();
+            var barkFinish = finish!;
+            await Assert.ThrowsAsync<TimeoutException>(() => tail2Started.Task.WaitAsync(TimeSpan.FromMilliseconds(300)));
+            barkFinish();
+            await tail2Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            tail2.SetResult();
+            await quiet2.WaitAsync(TimeSpan.FromSeconds(2));
             Assert.Null(host.PickVoiceLine("unknown"));
             host.Say("unvoiced fallback", null);
             Dispatcher.UIThread.RunJobs();

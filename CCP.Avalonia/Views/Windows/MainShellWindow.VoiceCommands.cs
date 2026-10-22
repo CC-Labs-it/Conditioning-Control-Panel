@@ -80,7 +80,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var ct = _voicePromptCts?.Token ?? default;
             try
             {
-                try { await _voiceConfirmationSpoken.WaitAsync(TimeSpan.FromMilliseconds(5800), ct).ConfigureAwait(false); }
+                var deadline = DateTime.UtcNow.AddMilliseconds(5800);
+                try
+                {
+                    await _voiceConfirmationSpoken.WaitAsync(TimeSpan.FromMilliseconds(5800), ct).ConfigureAwait(false);
+                    // WPF polls IsSpeakingAudio, not just its own line: a bark that cut the confirmation
+                    // is still her voice, so follow whatever clip is now in the air, within the same cap.
+                    while (_avatarTubeWindow?.SpokenAudioDone is { IsCompleted: false } speaking)
+                    {
+                        var left = deadline - DateTime.UtcNow;
+                        if (left <= TimeSpan.Zero) break;
+                        await speaking.WaitAsync(left, ct).ConfigureAwait(false);
+                    }
+                }
                 catch (TimeoutException) { /* WPF's speaking cap: a broken audio backend cannot wedge voice. */ }
                 await VoiceEchoTail(ct).ConfigureAwait(false);
             }
