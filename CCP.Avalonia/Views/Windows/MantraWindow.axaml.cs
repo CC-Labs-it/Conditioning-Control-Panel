@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly MantraService _service = App.Mantra;
         private DispatcherTimer? _floatTimer;
         private DispatcherTimer? _idleTimer;
+        private DispatcherTimer? _completionCloseTimer;
         private long _startTime;
 
         /// <summary>The animation clock (float drift, storyboards). Tests step it.</summary>
@@ -393,7 +394,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PlayTone(523, 400);
 
             // Auto-close after 5 seconds
-            var closeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _completionCloseTimer?.Stop();
+            var closeTimer = _completionCloseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             closeTimer.Tick += (_, _) =>
             {
                 closeTimer.Stop();
@@ -482,6 +484,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 _drone = DroneOpener(Platform.ToneWav.Drone());
+                var watch = Services.Audio.MasterVolumeWatch.Shared;
+                watch.EnsureHooked();
+                watch.Changed -= OnMasterVolumeChanged;
+                watch.Changed += OnMasterVolumeChanged;
                 ApplyDroneVolume();
             }
             catch (Exception ex)
@@ -496,8 +502,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ApplyDroneVolume()
         {
             if (_drone == null) return;
-            var masterVol = _droneRamped ? CoreSettings.Current.MantraDroneVolume / 100.0 : 1.0;
-            _drone.Volume = Platform.ToneWav.VlcVolume(_droneCurrentGain * masterVol * Platform.ToneWav.DronePeak);
+            var featureGain = _droneRamped ? CoreSettings.Current.MantraDroneVolume / 100.0 : 1.0;
+            var masterGain = Math.Clamp(CoreSettings.Current.MasterVolume / 100.0, 0, 1);
+            _drone.Volume = Platform.ToneWav.VlcVolume(_droneCurrentGain * featureGain * masterGain * Platform.ToneWav.DronePeak);
         }
 
         /// <summary>Panic (PanicSurfaces "mantra"): WPF KillAllAudio's "Stop mantra lab audio" ->
@@ -506,20 +513,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopForPanic()
         {
             _open?.StopDrone();
+            _open?._completionCloseTimer?.Stop();
             App.Mantra.Dispose();
         }
+
+        // Settings can change on a remote/preset thread; player changes belong on the UI thread.
+        private void OnMasterVolumeChanged(int _) => Dispatcher.UIThread.Post(ApplyDroneVolume);
 
         private static MantraWindow? _open;   // the opener refuses a second window, so one is enough
 
         private void StopDrone()
         {
+            Services.Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged;
             try { _drone?.Dispose(); } catch { }
             _drone = null;
         }
 
         private static void PlayTone(double frequency, int durationMs)
         {
-            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f, "mantra"); }
+            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f), "mantra"); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to play mantra tone"); }
         }
 
@@ -528,6 +540,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_open == this) _open = null;
             _floatTimer?.Stop();
             _idleTimer?.Stop();
+            _completionCloseTimer?.Stop();
+            _completionCloseTimer = null;
             StopDrone();
 
             _service.StreakChanged -= OnStreakChanged;

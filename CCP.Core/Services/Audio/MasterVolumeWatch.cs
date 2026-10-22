@@ -36,8 +36,8 @@ namespace ConditioningControlPanel.Services.Audio
         {
             try
             {
-                var service = App.Settings;
-                if (service == null) return;
+                var service = CoreSettings.Service;
+                if (service == null) { Hook(CoreSettings.Current); return; }
                 lock (_gate)
                 {
                     if (!_hookedReplace)
@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Services.Audio
         {
             try
             {
-                var current = App.Settings?.Current;
+                var current = CoreSettings.Current;
                 Hook(current);
                 // A swapped settings object can carry a different level without any change event.
                 if (current != null) Raise(current.MasterVolume);

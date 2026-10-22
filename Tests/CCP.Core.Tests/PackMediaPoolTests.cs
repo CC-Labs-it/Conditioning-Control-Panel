@@ -137,4 +137,34 @@ public sealed class PackMediaPoolTests : IDisposable
         Assert.False(File.Exists(Path.Combine(temp, "ccp_temp_old.png")));
         Assert.True(File.Exists(Path.Combine(temp, "keep.png")));
     }
+    [Fact]
+    public void RefusedCleanup_RetainsTheDecryptAndRetriesAfterPlayerRelease()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.ImageType, new Random(1), () => store);
+        var path = pool.TryDraw(0)!;
+        var tempDir = Path.GetDirectoryName(path)!;
+        using (var playing = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            // Windows denies deletion while open; Unix denies it through the directory permissions.
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(tempDir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            try
+            {
+                pool.CleanupTemps();
+                Assert.True(File.Exists(path));
+                Assert.Equal(1, pool.TempCount);
+                Assert.True(store.TryGetSourceKey(path, out _));
+            }
+            finally
+            {
+                if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(tempDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+        pool.CleanupTemps();
+        Assert.False(File.Exists(path));
+        Assert.Equal(0, pool.TempCount);
+        Assert.False(store.TryGetSourceKey(path, out _));
+    }
+
 }
