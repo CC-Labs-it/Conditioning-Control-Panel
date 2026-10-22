@@ -56,7 +56,7 @@
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
      </StackPanel>
      <!-- ponytail: the row's game/claim door is not wired in this slice. -->
-     <Button Grid.Column="1" IsEnabled="False" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
+     <Button Grid.Column="1" IsEnabled="{Binding CanPress}" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal" Spacing="4"><fx:IconGlyph Kind="LockClosed" Size="12" IsVisible="{Binding Locked}"/><TextBlock Text="{Binding ButtonText}"/></StackPanel>
      </Button>
     </Grid>
@@ -75,8 +75,12 @@
    </StackPanel>
    <StackPanel Grid.Row="1">
     <WrapPanel>
-     <Button x:Name="BtnHostChess" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_chess}"/></Button>
-     <Button x:Name="BtnHostGoon" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_goon}"/></Button>
+     <Button x:Name="BtnHostChess" Theme="{StaticResource LobbyPill}" IsEnabled="False">
+      <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph x:Name="ChessHostLock" Kind="LockClosed" Size="13"/><TextBlock Text="{loc:Str lobby_host_chess}"/></StackPanel>
+     </Button>
+     <Button x:Name="BtnHostGoon" Theme="{StaticResource LobbyPill}" IsEnabled="False">
+      <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph x:Name="GoonHostLock" Kind="LockClosed" Size="13"/><TextBlock Text="{loc:Str lobby_host_goon}"/></StackPanel>
+     </Button>
      <Button x:Name="BtnBecomeASubject" Theme="{StaticResource LobbyPill}" Click="BtnBecomeASubject_Click" ToolTip.Tip="{loc:Str desc_optin_directory_consent}">
       <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph x:Name="RemoteHostLock" Kind="LockClosed" Size="13"/><TextBlock Text="{loc:Str lobby_host_remote}"/></StackPanel>
      </Button>
