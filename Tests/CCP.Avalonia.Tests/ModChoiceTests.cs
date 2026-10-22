@@ -306,9 +306,9 @@ public sealed class ModChoiceTests
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);   // never the real profile
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var zip = BuildZip();
         var sha = Convert.ToHexString(SHA256.HashData(zip)).ToLowerInvariant();
