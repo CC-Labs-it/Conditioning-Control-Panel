@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Chaos
 {
     /// <summary>
     /// The DtRH manifest's online half (WPF Services/Chaos/DtrhAssetManifest.cs "remote media", moved here so
-    /// both heads share it). A bounded cache of provider urls (dtrh_remote_media.json, 3-day TTL, 30 per kind)
+    /// both heads share it). A bounded cache of provider urls (dtrh_remote_media.json, 24 h TTL, 30 per kind)
     /// rides on top of the library when the app-wide source has left "local" and the user consented. Each entry
     /// gets a copy on this machine (under <c>&lt;assets&gt;/.temp</c>), and a copied entry goes out as the head's
     /// asset url so the page's WebGL layer may draw it (hostMedia.js decides remote-ness by origin). Three kinds:
@@ -38,7 +38,8 @@ namespace ConditioningControlPanel.Services.Chaos
         private const string RemoteConsumerId = "dtrh";
         internal const int MaxRemoteEntries = 60;
         internal const int RemoteKindLowWater = 12;
-        internal const long RemoteEntryTtlSeconds = 3 * 24 * 3600;
+        /// <summary>Licence day limit (owner, 2026-10-21): a remote entry, and any copy of its bytes, lives at most a day.</summary>
+        internal const long RemoteEntryTtlSeconds = 24 * 3600;
         internal const int OnlineOnlyMinCopies = 8;
         internal const int MaxClipCopies = 24;
         internal const int CopyReadyEvery = 10;
@@ -89,14 +90,18 @@ namespace ConditioningControlPanel.Services.Chaos
         /// never push the last stills out.</summary>
         internal static void Prune(List<RemoteEntry> cache, long nowUnix)
         {
-            long cutoff = nowUnix - RemoteEntryTtlSeconds;
-            cache.RemoveAll(e => e.AtUnix < cutoff);
+            cache.RemoveAll(e => !RemoteEntryFresh(e, nowUnix));
             foreach (var kind in new Func<RemoteEntry, bool>[] { e => e.IsImage, e => e.IsLoop, e => !e.IsImage && !e.IsLoop })
             {
                 int over = cache.Count(e => kind(e)) - MaxRemoteEntries / 2;
                 if (over > 0) cache.RemoveAll(e => kind(e) && over-- > 0);
             }
         }
+
+        /// <summary>The day limit on one entry (WPF DtrhAssetManifest.RemoteEntryFresh): fresh while younger than
+        /// <see cref="RemoteEntryTtlSeconds"/>. No time (0) or a time more than an hour ahead (the clock went back) is stale.</summary>
+        internal static bool RemoteEntryFresh(RemoteEntry e, long nowUnix)
+            => e.AtUnix > 0 && e.AtUnix - nowUnix <= 3600 && nowUnix - e.AtUnix < RemoteEntryTtlSeconds;
 
         /// <summary>(stills, clips) in the cache; loops count as clips.</summary>
         internal static (int Stills, int Clips) CountKinds(IReadOnlyCollection<RemoteEntry>? cache)
@@ -185,7 +190,8 @@ namespace ConditioningControlPanel.Services.Chaos
                 foreach (var e in pool)
                 {
                     var url = e.Url;
-                    if (LocalCopies.TryGetValue(e.Url, out var copy) && File.Exists(copy)) { url = copyUrl(copy); copies++; }
+                    if (LocalCopies.TryGetValue(e.Url, out var copy) && File.Exists(copy)
+                        && !DropStaleCopy(e.Url, copy, DateTime.UtcNow, copier.Release)) { url = copyUrl(copy); copies++; }
                     entries.Add((e.IsImage, EntryName(pct, e), url));
                 }
                 KickRefill(copier);
@@ -251,6 +257,43 @@ namespace ConditioningControlPanel.Services.Chaos
                 }
             });
         }
+
+        /// <summary>The day limit on one copy (WPF DtrhAssetManifest.DropStaleCopy): a file whose creation time (its
+        /// download time) is a day old at <paramref name="nowUtc"/> leaves the map and is released. True when it went.</summary>
+        private static bool DropStaleCopy(string url, string path, DateTime nowUtc, Action<string> release)
+        {
+            DateTime born;
+            try { born = File.GetCreationTimeUtc(path); } catch { born = DateTime.MinValue; }
+            if (!ScrolllerCacheBook.IsExpiredAt(born, nowUtc)) return false;
+            if (LocalCopies.TryRemove(new KeyValuePair<string, string>(url, path))) release(path);
+            return true;
+        }
+
+        /// <summary>The hourly sweep (WPF DtrhAssetManifest.SweepLocalCopies): every copy past the day limit, or past it
+        /// before the next sweep, is dropped and released. <paramref name="all"/> drops every copy (the off switch).
+        /// Returns how many went; never throws.</summary>
+        internal static int SweepLocalCopies(Action<string> release, bool all = false)
+        {
+            int gone = 0;
+            try
+            {
+                var ahead = DateTime.UtcNow + ScrolllerDiskCache.SweepPeriod;
+                foreach (var kvp in LocalCopies.ToArray())
+                {
+                    if (all ? LocalCopies.TryRemove(kvp) && Release(kvp.Value) : DropStaleCopy(kvp.Key, kvp.Value, ahead, release)) gone++;
+                }
+            }
+            catch (Exception ex) { Log.Debug("DtrhRemoteMedia: copy sweep failed: {E}", ex.Message); }
+            return gone;
+
+            bool Release(string path) { release(path); return true; }
+        }
+
+        /// <summary>Tests only: park a copy as <see cref="KickCopies"/> would.</summary>
+        internal static bool AddLocalCopyForTests(string url, string path) => LocalCopies.TryAdd(url, path);
+
+        /// <summary>Tests only: is <paramref name="url"/> still mapped to a copy?</summary>
+        internal static bool HasLocalCopyForTests(string url) => LocalCopies.ContainsKey(url);
 
         private static void RaiseCopiesReady()
         {

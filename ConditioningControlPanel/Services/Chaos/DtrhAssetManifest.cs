@@ -262,6 +262,23 @@ internal static class DtrhAssetManifest
         remove => DtrhRemoteMedia.CopiesReady -= value;
     }
 
+    /// <summary>Licence day limit (owner, 2026-10-21): a remote entry, and any copy of its bytes,
+    /// lives at most a day (Core <see cref="DtrhRemoteMedia.RemoteEntryTtlSeconds"/>).</summary>
+    internal static TimeSpan RemoteEntryTtl => TimeSpan.FromSeconds(DtrhRemoteMedia.RemoteEntryTtlSeconds);
+
+    /// <summary>Core <see cref="DtrhRemoteMedia.RemoteEntryFresh"/>.</summary>
+    internal static bool RemoteEntryFresh(DtrhRemoteMedia.RemoteEntry e, long nowUnix) => DtrhRemoteMedia.RemoteEntryFresh(e, nowUnix);
+
+    /// <summary>The hourly sweep (<see cref="Fyp.Online.ScrolllerCopySweeper"/>): every copy past the day
+    /// limit is dropped and deleted; <paramref name="all"/> drops every copy (the off switch).</summary>
+    internal static int SweepLocalCopies(bool all = false) => DtrhRemoteMedia.SweepLocalCopies(Copier.Release, all);
+
+    /// <summary>Tests only: park a copy as the copy pass would.</summary>
+    internal static bool AddLocalCopyForTests(string url, string path) => DtrhRemoteMedia.AddLocalCopyForTests(url, path);
+
+    /// <summary>Tests only: is <paramref name="url"/> still mapped to a copy?</summary>
+    internal static bool HasLocalCopyForTests(string url) => DtrhRemoteMedia.HasLocalCopyForTests(url);
+
     private static readonly DtrhRemoteMedia.Copier Copier = new(
         (url, ct) => RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true),
         RemoteMediaCache.ReleaseTempFile);

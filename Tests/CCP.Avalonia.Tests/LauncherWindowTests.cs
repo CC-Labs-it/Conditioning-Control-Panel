@@ -146,7 +146,7 @@ public sealed class LauncherWindowTests
     });
 
     private static void ClickPlay(Control tile) =>
-        tile.GetVisualDescendants().OfType<Button>().Single()
+        tile.GetVisualDescendants().OfType<Button>().Single(b => !Equals(b.Tag, "tile-shortcut"))
             .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
     [Fact]

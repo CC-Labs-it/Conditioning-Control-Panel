@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Chaos;
 /// input-receiving WebView2 window (via <see cref="ChaosWebViewHost"/>), the virtual-host
 /// mappings (ccp.game -> Resources/web, ccp.assets -> the user's active preset), and the
 /// bridge protocol (v1):
-///   - fire-payload -> the REAL desktop conditioning effects (EffectPayloadFactory)
+///   - fire-payload -> desktop audio payloads only (EffectPayloadFactory; DtrhNativePayloadRule refuses video)
 ///   - meta-command -> <see cref="DtrhMetaBridge"/> (chaos_meta.json stays C#-owned)
 ///   - run-started/run-ended -> crash sentinel, barks, XP payout + payout-result reply
 ///   - payload-state (video) -> page pauses while a mandatory video covers it; focus returns after
@@ -295,7 +295,11 @@ internal static class DtrhHostService
                 // the hub's Descent tab opens on the user's own choices.
                 runSetup = DtrhRunWire.RunSetup(App.Settings?.Current),
                 m2Test = _testMode,
+                // The plan list (contract C1, PlanCatalog) for the run summary's end card. The
+                // page shows a price only when this is present.
+                plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
             });
+            _ = Vault.PlanCatalog.GetAsync();   // warm the cache for the next launch; never awaited here
             if (_meta != null) _host?.Post(_meta.SnapshotMessage());
             PostManifest();
             // Online media copied to this machine after this frame reaches the page as a fresh
@@ -447,6 +451,11 @@ internal static class DtrhHostService
             case "pong":
                 _lastHeartbeatUtc = DateTime.UtcNow;
                 break;
+            case Funnel.FunnelPageMessage.Type:   // the run summary's end card (contract C10)
+                // Counted always (aggregate only); a checkout never opens over a running descent
+                // or from the capture rig.
+                if (!_testMode) Funnel.FunnelPageMessage.Handle(o, mayOpen: !_runActive && !_exiting);
+                break;
         }
     }
 
@@ -540,9 +549,9 @@ internal static class DtrhHostService
     /// <summary>fire-payload {kind, strength?, durationMult?} -> a native effect.
     /// Since the 2026-07 hard cutover the browser game renders every VISUAL effect in-world
     /// (dtrh/game/payloadFx.js) - no more native WPF layered windows over the game surface.
-    /// Only the two non-visual / native-by-necessity kinds still ride this bridge:
-    ///   - video: a mandatory covering video window (in-world port is separate future work)
-    ///   - audio: a one-shot whisper on the native audio path
+    /// Only audio still rides this bridge: a one-shot whisper on the native audio path. The
+    /// video card is in-world too, and a native video here would outlive the run
+    /// (<see cref="DtrhNativePayloadRule"/>, ccp-bugs #1470).
     /// Any other kind arriving here means a page/host version mismatch - log and ignore.</summary>
     private static void FirePayload(JObject o)
     {
@@ -551,20 +560,15 @@ internal static class DtrhHostService
             var kindStr = (string?)o["kind"];
             if (string.IsNullOrWhiteSpace(kindStr)) return;
 
-            EffectPayload payload;
-            if (string.Equals(kindStr, "video", StringComparison.OrdinalIgnoreCase))
-                payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Video);
-            else if (string.Equals(kindStr, "audio", StringComparison.OrdinalIgnoreCase))
-            {
-                payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Audio);
-                if (_runActive) _runSubliminalsHeard++;   // native whisper = a subliminal heard
-            }
-            else
+            if (!DtrhNativePayloadRule.Accepts(kindStr))
             {
                 // Visual effects are in-world now; the page should never send them here.
                 App.Logger?.Warning("DtrhHost: payload kind '{K}' is in-world since the cutover - ignored", kindStr);
                 return;
             }
+
+            EffectPayload payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Audio);
+            if (_runActive) _runSubliminalsHeard++;   // native whisper = a subliminal heard
 
             payload.Strength = Math.Clamp((int?)o["strength"] ?? 60, 0, 100);
             payload.DurationMult = Math.Clamp((double?)o["durationMult"] ?? 1.0, 0.1, 10.0);
@@ -573,6 +577,14 @@ internal static class DtrhHostService
         }
         catch (Exception ex) { App.Logger?.Warning("DtrhHost.FirePayload: {E}", ex.Message); }
     }
+
+    /// <summary>
+    /// Whether a finished run was opened by the Daily Gift: today's server-named free key is
+    /// <c>dtrh</c> and the account holds no Prime grant of its own. The capture rig never counts.
+    /// Drives the <c>plan</c> / <c>daily_gift</c> fields of payout-result (contract C10).
+    /// </summary>
+    internal static bool RunCameFromDailyGift(bool testMode, bool hasLabAccess, bool dtrhFreeToday)
+        => !testMode && !hasLabAccess && dtrhFreeToday;
 
     /// <summary>run-ended -> XP payout (C#-owned formula, identical to the WPF EndRun) +
     /// meta banking via the shared AwardRunRewards, answered with payout-result.</summary>
@@ -676,6 +688,8 @@ internal static class DtrhHostService
             }
             catch (Exception ex) { App.Logger?.Debug("DtrhHost session-metrics record: {E}", ex.Message); }
 
+            bool dailyGift = RunCameFromDailyGift(_testMode, App.Patreon?.HasLabAccess == true,
+                App.DailyFree?.IsFreeToday("dtrh") == true);
             _host?.Post(new
             {
                 type = "payout-result",
@@ -686,6 +700,10 @@ internal static class DtrhHostService
                 previousBest,
                 rankUp = rankUp?.ToString(),
                 dryRun = _testMode,
+                // End card (contract C10): a run opened by the Daily Gift, not by a Prime grant,
+                // gets "Open today. Prime keeps it open." under the result.
+                plan = dailyGift ? "prime" : null,
+                daily_gift = dailyGift,
             });
             App.Logger?.Information(
                 "DtrhHost: web run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks{T}",

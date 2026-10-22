@@ -1750,6 +1750,21 @@ html[data-motion="off"] .cf-wake-ring { display: none; }
 }
 .cf-recap-rankup { color: #ffd700; font-weight: 800; letter-spacing: 0.1em; }
 .cf-recap-btns { margin-top: 16px; display: flex; gap: 12px; justify-content: center; }
+/* THE PLAN ROW (brief C10, game/planCard.js): last on the card, a slow fade and nothing else. A trance game's
+   offer is the quietest thing on the screen: no glow, no colour pop, no motion beyond opacity. */
+.cf-recap-plan {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 105, 180, 0.15);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+.cf-recap-plan.is-in { opacity: 1; }
+.cf-recap-card .cf-recap-plan-line { flex-basis: 100%; margin: 0; font-size: 0.86rem; opacity: 0.75; }
+.cf-recap-plan-btn, .cf-recap-plan-btn:visited { display: inline-block; text-decoration: none; }
+.cf-recap-plan-price { font-size: 0.78rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
+html[data-motion="off"] .cf-recap-plan { transition: none; }
 
 /* [hidden] must beat the .cf-overlay display:flex rule (UA attribute rule loses to a class) */
 .cf-overlay[hidden] { display: none; }
