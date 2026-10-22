@@ -39,6 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
                 ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
+                // WPF LauncherCatalogue :241: Lab tier (or the daily-free drop); GameWindow.Launch runs DemandLab.
+                [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
 
         /// <summary>WPF LauncherEntry.IsRevealed: a race without a track is WPF's mystery card pointing at the
@@ -90,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildTiles();
             HookVeil();
             HookFx();
+            HookLinks();
             PaintSoundButton();
         }
 
@@ -649,6 +652,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 new SolidColorBrush(Color.FromRgb(0x2A, 0x1C, 0x08)), 10));
             if (card.IsNew) plate.Children.Add(Pill("exclusives_badge_new", null, Res("AccentGradientBrush"), Brushes.White,
                 needsAccount || locked ? 40 : 10));
+            plate.Children.Add(ShortcutButton(tile, card.Id));
             body.Children.Add(plate);
 
             // --- title, blurb, play: fixed heights so every title sits on the same line ---

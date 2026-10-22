@@ -39,6 +39,7 @@ export function installExitHold({ target, leave, holdMs = 1200,
   let timer = 0;
   const onDown = (e) => {
     if (!e || e.key !== 'Escape' || e.repeat) return;
+    if (e.isTrusted === false) return;   // a kept Escape the page replays has no key-up: never a hold
     clearTimer(timer);
     timer = setTimer(() => { timer = 0; leave(); }, holdMs);
   };

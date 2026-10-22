@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Services.Deeper
     /// <summary>
     /// Decorator that records every action it forwards to an inner dispatcher.
     /// Used by editor preview mode to drive real devices via
-    /// <see cref="RealActionDispatcher"/> while still surfacing the "last N
+    /// the head's RealActionDispatcher while still surfacing the "last N
     /// fired actions" overlay that LoggingActionDispatcher provides for
     /// dry-run preview. RecentActions is capped at 50; ActionLogged fires
     /// after the inner dispatcher returns.
@@ -182,5 +182,4 @@ namespace ConditioningControlPanel.Services.Deeper
         public void StopOneShotFlashes() => (_inner as IEnhancementRunCleanup)?.StopOneShotFlashes();
         public void StopOneShotSubliminals() => (_inner as IEnhancementRunCleanup)?.StopOneShotSubliminals();
     }
-
 }
