@@ -61,6 +61,30 @@ namespace ConditioningControlPanel
             EffectiveAssetsProvider?.Invoke() ?? Path.Combine(UserData, "assets");
 
         /// <summary>
+        /// Returns a temp directory for media files (decrypted packs, video downloads, etc.)
+        /// located inside the effective assets path so it lives on the same drive as assets.
+        /// Falls back to system temp if the assets path isn't available yet.
+        /// </summary>
+        public static string MediaTemp()
+        {
+            try
+            {
+                var assetsPath = EffectiveAssets;
+                if (!string.IsNullOrEmpty(assetsPath))
+                {
+                    var tempDir = Path.Combine(assetsPath, ".temp");
+                    Directory.CreateDirectory(tempDir);
+                    return tempDir;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("GetMediaTempPath: Could not use assets temp dir, falling back to system temp: {Error}", ex.Message);
+            }
+            return Path.GetTempPath();
+        }
+
+        /// <summary>
         /// Ensures a configured custom assets folder and its standard subfolders
         /// (images/videos/audio/wallpapers) exist. The default UserAssetsPath subdirs are
         /// created unconditionally at startup, but a custom path is only known after

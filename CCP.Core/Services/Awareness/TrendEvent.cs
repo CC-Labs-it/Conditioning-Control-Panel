@@ -55,6 +55,9 @@ namespace ConditioningControlPanel.Services.Awareness
         int DwellSeconds,
         TimeSpan? SinceLastVisit)
     {
+        /// <summary>Minimum visits today before <see cref="TrendKind.ReturnVisit"/> is worth saying.</summary>
+        public const int ReturnVisitMinimum = 3;
+
         /// <summary>
         /// True when the event is backed by persisted history rather than by a live signal alone.
         /// This is exactly the test the tier ladder uses: a trend with ledger history behind it earns

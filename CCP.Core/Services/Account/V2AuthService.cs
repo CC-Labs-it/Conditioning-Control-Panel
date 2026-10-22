@@ -174,6 +174,11 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("display_name")]
             public string? DisplayName { get; set; }
 
+            // Onboarding contract (2026-10-20): true while the account has no name. Absent on
+            // older servers; NeedsDisplayNameRule then reads the empty name instead.
+            [JsonProperty("needs_display_name")]
+            public bool? NeedsDisplayName { get; set; }
+
             [JsonProperty("discord_id")]
             public string? DiscordId { get; set; }
 
@@ -211,6 +216,11 @@ namespace ConditioningControlPanel.Services
 
             [JsonProperty("patreon_is_active")]
             public bool PatreonIsActive { get; set; }
+
+            // When the server last saw an ACTIVE Patreon reading (webhook, reconcile, validate), or
+            // absent. Raw token: read through InviteRules.ParseUtc, never a throw (PatreonActiveRule).
+            [JsonProperty("patreon_confirmed_at")]
+            public JToken? PatreonConfirmedAtRaw { get; set; }
 
             [JsonProperty("patreon_is_whitelisted")]
             public bool PatreonIsWhitelisted { get; set; }
@@ -847,6 +857,55 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex)
             {
                 Log.Debug("Failed to check server announcement: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>The server-controlled update banner, as <c>GET /config/update-banner</c> serves it (WPF MainWindow.Marquee.cs UpdateBannerResponse).</summary>
+        public class ServerUpdateBanner
+        {
+            [JsonProperty("enabled")] public bool Enabled { get; set; }
+            [JsonProperty("version")] public string? Version { get; set; }
+            [JsonProperty("message")] public string? Message { get; set; }
+            [JsonProperty("url")] public string? Url { get; set; }
+        }
+
+        /// <summary>
+        /// WPF MainWindow.CheckServerUpdateBanner (Marquee.cs:799-826): the banner only when it is enabled, names a
+        /// version, and that version is newer than <paramref name="current"/>. Null otherwise, and on any failure.
+        /// </summary>
+        public async Task<ServerUpdateBanner?> GetUpdateBannerAsync(Version current)
+        {
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));   // WPF's 10 s client
+                var response = await _http.GetAsync($"{SERVER_URL}/config/update-banner", cts.Token);
+                if (!response.IsSuccessStatusCode) return null;
+                var b = JsonConvert.DeserializeObject<ServerUpdateBanner>(await response.Content.ReadAsStringAsync());
+                if (b is not { Enabled: true } || string.IsNullOrWhiteSpace(b.Version)) return null;
+                return System.Version.TryParse(b.Version, out var v) && v > current ? b : null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Failed to check server update banner: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>WPF MainWindow.RefreshMarqueeFromSettings (Marquee.cs:740): the server's marquee line, or null. Never throws.</summary>
+        public async Task<string?> GetMarqueeMessageAsync()
+        {
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var response = await _http.GetAsync($"{SERVER_URL}/config/marquee", cts.Token);
+                if (!response.IsSuccessStatusCode) return null;
+                var message = JObject.Parse(await response.Content.ReadAsStringAsync())["message"]?.ToString();
+                return string.IsNullOrWhiteSpace(message) ? null : message;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Failed to refresh marquee from server: {Error}", ex.Message);
                 return null;
             }
         }

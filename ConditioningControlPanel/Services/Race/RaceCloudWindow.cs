@@ -212,6 +212,7 @@ internal sealed class RaceCloudWindow : IDisposable
             if (_disposed || _web.CoreWebView2 == null) return;
 
             var core = _web.CoreWebView2;
+            global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(core);
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsZoomControlEnabled = true;   // their site, their reading size

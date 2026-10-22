@@ -2,6 +2,7 @@ import { readCheckpoint, writeCheckpoint, checkpointFromSnapshot, newEndlessSeed
 import { breakoutAccess } from './access.js';
 import { createOfficeEnding } from './office-ending.js';
 import {currentMusic} from '../../shared/sound/music.js';
+import { buildEndCard, planOf, loadEndCardCss, postFunnel } from '../../shared/win/end-card.js';
 /* ============================================================================
  * stations/breakout/station.js - CONTRACT section 7 module for the Breakout
  * cabinet. mount(ctx) -> { open, close, suspend, destroy }. One 2D canvas in
@@ -30,7 +31,7 @@ import { routeFinaleAudio } from './finale-audio.js';
 import { WORD_KEYS } from './word-fx.js';
 import { createVoice } from '../../shared/hypno/voice.js';
 import { createHostFx } from './host-fx.js';
-import { createPageFx, routeFx } from './page-fx.js';
+import { createPageFx, routeFx, desktopHosted } from './page-fx.js';
 import { createPerfPanel } from './perf.js';
 import { createRenderBudget } from './render-budget.js';
 import { createHaptics } from './haptics.js';
@@ -254,7 +255,9 @@ export async function mount(ctx) {
     el.append(endingActions);ui.endingActions=endingActions;
     const demoCard = document.createElement('section'); demoCard.className = 'bo-demo-complete'; demoCard.hidden = true;
     demoCard.setAttribute('role','dialog'); demoCard.setAttribute('aria-modal','true'); demoCard.setAttribute('aria-labelledby','bo-demo-title');
-    demoCard.innerHTML = '<div class="bo-pause-card"><p>THREE LEVELS CLEARED</p><h2 id="bo-demo-title">A little colour goes a long way.</h2><p>The full game has all eight Story levels and Endless. Included with Tier 2.</p><button type="button" data-demo="replay">Play again</button><button type="button" data-demo="menu">Menu</button></div>';
+    demoCard.innerHTML = '<div class="bo-pause-card"><p>THREE LEVELS CLEARED</p><h2 id="bo-demo-title">A little colour goes a long way.</h2><p>The full game has all eight Story levels and Endless. Included with Prime.</p><button type="button" data-demo="replay">Play again</button><button type="button" data-demo="menu">Menu</button></div>';
+    // THE PLAN ROW (brief C10): "Included with Prime" gets its button. A link, so the card's first <button> (Play again) keeps the focus.
+    try { loadEndCardCss(); demoCard.querySelector('.bo-pause-card > p:nth-of-type(2)').after(buildEndCard({ plan: planOf(ctx.plans ?? globalThis.__backroom?.state?.plans, 'prime'), feature: 'breakout_demo', cls: 'bo-demo-plan' })); } catch (e) { /* the card stands without it */ }
     el.append(demoCard); ui.demoCard = demoCard;
     officeEnding=createOfficeEnding(el,{reduced,actions:endingActions});
     const perfSlot=document.createElement('div');perfSlot.className='bo-perf-slot';
@@ -420,6 +423,7 @@ export async function mount(ctx) {
         ui.demoCard.hidden = false; ui['ghost-hint'].hidden = true;
         el.classList.add('is-demo-complete'); audio?.stop(); audioOn = false; haptics?.stop();
         ui.demoCard.querySelector('button').focus();
+        postFunnel('gate_shown', 'breakout_demo', 'prime');
         break;
       case 'finaleCoreReached':
         mouseLock?.release();                        // the ending card wants a visible pointer, from this frame on
@@ -680,7 +684,7 @@ export async function mount(ctx) {
     const gates = ctx.gates || {};
     // The desktop draws the five big-beat effects inside the game window, like the web (owner, 2026-09-27);
     // the site shim already does that in-page, so the web keeps ctx.fx as it is.
-    const hosted = !!globalThis.chrome?.webview;
+    const hosted = desktopHosted();
     pageFx = hosted ? createPageFx({ parent: el, media: () => media, reduced }) : null;
     const fx = routeFx({ hosted, fx: typeof ctx.fx === 'function' ? ctx.fx : null, page: pageFx });
     subs = createSubliminals({ words: () => media.words, enabled: gates.subliminal !== false, fx, w: W, h: H });
@@ -743,7 +747,7 @@ export async function mount(ctx) {
       if(action==='new-run'){startFresh=true;previewRun=null;syncModeMenu();pressStart();}
       if(action==='save-menu')returnToMenu();
       if(action==='resume'){setPaused(false);canvas.focus();if(e.pointerType!=='touch'&&!endingUnderway())mouseLock?.request({pointerType:'mouse'});}   // the Resume click is the gesture that re-takes the mouse; the ending keeps it free
-      if(action==='exit'&&globalThis.chrome?.webview)back();
+      if(action==='exit'&&desktopHosted())back();
       if(action==='options'){
         optionsFrom=button;if(!menuOpen)setPaused(true);
         pace.value=String(game.snapshot().speedScale);
@@ -811,9 +815,7 @@ export async function mount(ctx) {
       if(typing || game.snapshot().demoComplete)return;
       if(!menuOpen&&game.snapshot().finale?.phase!=='outro'&&(e.key==='Escape'||e.key.toLowerCase()==='p')){
         e.preventDefault();
-        // Desktop (tester report 2026-09-30): the panel keeps a first Escape as the pause, and an Escape on any
-        // pause card leaves, as in chess (owner call). The web (no panel) keeps Escape as a pause toggle.
-        if(e.key==='Escape'&&paused&&ctx.hostKeepsEscape){back();return;}
+        // Escape pauses or resumes on every host. Leaving is a button, never a key.
         setPaused(!paused);if(paused)el.querySelector('[data-menu="resume"]').focus();else canvas.focus();return;
       }
       if(paused)return;
@@ -825,7 +827,7 @@ export async function mount(ctx) {
         return;                                                // the tiles are buttons: Enter and Space are theirs
       }
       if (menuOpen) {
-        if (e.key === 'Escape') { e.preventDefault(); back(); }
+        if (e.key === 'Escape') { e.preventDefault(); }
         else if ((e.key === 'Enter' || e.key === ' ') &&
           (e.target === ui.play || e.target === document.body || e.target === el)) {
           e.preventDefault(); pressStart();
@@ -850,7 +852,7 @@ export async function mount(ctx) {
     });
     // A blur pauses only when the page is still out of focus a moment later. The desktop panel hands a kept
     // Escape over and gives the game the keyboard back in the same beat, which blurs and refocuses the page at
-    // once; pausing on that blur put the real Escape on a pause card, and Escape there leaves (desk run 2026-09-30).
+    // once; pausing on that blur would let the same Escape resume the game instead of pausing it.
     let blurWait = 0;
     on(window, 'blur', () => {
       if (!moved || blurWait) return;
@@ -859,7 +861,7 @@ export async function mount(ctx) {
     on(document, 'visibilitychange', () => { if (document.hidden) pageFx?.cancelAll(); if (document.hidden && moved) setPaused(true); });
     if (ui.back) on(ui.back, 'click', back);
     on(window,'keydown',e=>{
-      if(e.key!=='F2' || globalThis.chrome?.webview)return;
+      if(e.key!=='F2' || desktopHosted())return;
       e.preventDefault();e.stopImmediatePropagation();
       const show=ui.dev.hidden;
       ui.gear.hidden=!show;setDevOpen(show);if(show)syncDev();

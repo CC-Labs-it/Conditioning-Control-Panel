@@ -6,14 +6,15 @@
 // AvatarTubeLeft/Top stay in WPF's DIPs, so a WPF-written file reads unchanged: px = dip * DesktopScaling.
 //
 // ponytail: skipped from WPF - make-room (moving main so she fits), the mirrored art on a right
-// dock, measured mod-art insets (stock 239/353 are used), Ctrl+scroll zoom (so AvatarTubeScale is
-// neither applied nor written) and the floating bob. Add each when a user misses it.
+// dock, measured mod-art insets (stock 239/353 are used), Ctrl+scroll / arrow-key zoom (the menu's
+// Shrink/Grow below do zoom, and write AvatarTubeScale) and the floating bob. Add each when a user misses it.
 
 using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.AvatarTubeLayout;
 using Serilog;
 
@@ -27,6 +28,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private const double DockDaylight = 3;           // WPF Windowing.cs:1079
 
         private double _scaleFactor = 1.0;
+        private const double MinScale = 0.5;    // WPF Windowing.cs:106-108
+        private const double MaxScale = 1.5;
+        private const double ScaleStep = 0.25;
+        private double _currentScale = 1.0;
+        internal double CurrentScale => _currentScale;
         private bool _restoringPlacement;
         private bool _restorePending = true;
 
@@ -103,6 +109,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (_isAttached == attached) return;
             _isAttached = attached;
             _restorePending = false;   // the user's own mode change wins over the saved one
+            // WPF Windowing.cs:2352-2359: attach resets her to the base size (not saved).
+            if (attached && _currentScale != 1.0) { _currentScale = 1.0; ApplyScale(); }
             RefreshTubeGlass();
             RefreshTubeLayout();
             ApplyModeChrome();
@@ -116,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>Topmost, drag cursors, frame hit-testing and the menu, per WPF's mode switch and
-        /// UpdateContextMenuForState. Shrink/Grow/Dismiss stay hidden: zoom and dismiss did not port.</summary>
+        /// UpdateContextMenuForState (WPF Windowing.cs:2480-2507): Shrink/Grow/Dismiss only when free.</summary>
         private void ApplyModeChrome()
         {
             Topmost = !_isAttached;
@@ -125,6 +133,62 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _imgTubeFrame.IsHitTestVisible = !_isAttached;
             if (this.FindControl<MenuItem>("MenuItemDetach") is { } d) d.IsVisible = _isAttached;
             if (this.FindControl<MenuItem>("MenuItemAttach") is { } a) a.IsVisible = !_isAttached;
+            foreach (var n in new[] { "MenuItemShrink", "MenuItemGrow", "MenuItemDismiss" })
+                if (this.FindControl<MenuItem>(n) is { } m) m.IsVisible = !_isAttached;
+            if (!_isAttached) UpdateResizeMenuState();
+        }
+
+        /// <summary>WPF MenuItemShrink_Click / MenuItemGrow_Click (ChatInput.cs:1019-1052): a free
+        /// tube steps 25% between 50% and 150%, then stays at least half on screen.</summary>
+        internal void StepScale(double delta)
+        {
+            if (_isAttached) return;
+            var next = Math.Clamp(_currentScale + delta, MinScale, MaxScale);
+            if (next == _currentScale) return;
+            _currentScale = next;
+            ApplyScale();
+            UpdateResizeMenuState();
+            ClampOnScreen();
+        }
+
+        /// <summary>WPF ApplyScale (Windowing.cs:2456-2478): size from the screen fit times her
+        /// scale; a free tube's scale is saved (#669), never during a restore.</summary>
+        private void ApplyScale()
+        {
+            Width = DesignWidth * _scaleFactor * _currentScale;
+            Height = DesignHeight * _scaleFactor * _currentScale;
+            if (_isAttached || _restoringPlacement) return;
+            if (CoreSettings.Current.AvatarTubeScale == _currentScale) return;
+            CoreSettings.Current.AvatarTubeScale = _currentScale;
+            CoreSettings.Save();
+        }
+
+        /// <summary>WPF UpdateResizeMenuState (Windowing.cs:2512-2530).</summary>
+        private void UpdateResizeMenuState()
+        {
+            if (this.FindControl<MenuItem>("MenuItemShrink") is { } shrink)
+            {
+                shrink.IsEnabled = _currentScale > MinScale;
+                shrink.Header = IconLabel.ForKey(shrink.IsEnabled ? "menu_shrink" : "menu_shrink_min");
+                shrink.Foreground = shrink.IsEnabled ? global::Avalonia.Media.Brushes.White : global::Avalonia.Media.Brushes.Gray;
+            }
+            if (this.FindControl<MenuItem>("MenuItemGrow") is { } grow)
+            {
+                grow.IsEnabled = _currentScale < MaxScale;
+                grow.Header = IconLabel.ForKey(grow.IsEnabled ? "menu_grow" : "menu_grow_max");
+                grow.Foreground = grow.IsEnabled ? global::Avalonia.Media.Brushes.White : global::Avalonia.Media.Brushes.Gray;
+            }
+        }
+
+        /// <summary>WPF ClampAvatarPosition after a resize: at least half of her on a connected screen.</summary>
+        private void ClampOnScreen()
+        {
+            var k = Screens.ScreenFromWindow(this)?.Scaling ?? DesktopScaling;
+            var screens = Screens.All.Select(sc => (ToBox(sc.Bounds), sc.Scaling, ToBox(sc.WorkingArea))).ToList();
+            if (screens.Count == 0) return;
+            var size = TubePixelSize;
+            var (x, y) = TubeWindowMath.RestoreDetached(Position.X / k, Position.Y / k, size.Width, size.Height, screens, DesktopScaling);
+            Position = new PixelPoint(x, y);
         }
 
         /// <summary>WPF starts a manual drag only on her visible parts; BeginMoveDrag hands it to the WM.</summary>
@@ -156,8 +220,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (screen == null) return;
             var wa = screen.WorkingArea;
             _scaleFactor = TubeWindowMath.FitScale(wa.Width / screen.Scaling, wa.Height / screen.Scaling);
-            Width = DesignWidth * _scaleFactor;
-            Height = DesignHeight * _scaleFactor;
+            Width = DesignWidth * _scaleFactor * _currentScale;
+            Height = DesignHeight * _scaleFactor * _currentScale;
         }
 
         private PixelSize TubePixelSize => PixelSize.FromSize(new Size(Width, Height), DesktopScaling);
@@ -202,10 +266,18 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var here = Screens.ScreenFromWindow(this);
             if (!_restorePending || (!force && here != null && Math.Abs(here.Scaling - DesktopScaling) > 0.01)) return;
             _restorePending = false;   // once per open: a later monitor change must not yank her back
-            if (_isAttached || double.IsNaN(s.AvatarTubeLeft) || double.IsNaN(s.AvatarTubeTop)) return;
+            if (_isAttached) return;
             _restoringPlacement = true;
             try
             {
+                // WPF Windowing.cs:2715-2720: the saved scale first, so the clamp uses her real size.
+                if (!double.IsNaN(s.AvatarTubeScale) && s.AvatarTubeScale > 0)
+                {
+                    _currentScale = Math.Clamp(s.AvatarTubeScale, MinScale, MaxScale);
+                    ApplyScale();
+                    UpdateResizeMenuState();
+                }
+                if (double.IsNaN(s.AvatarTubeLeft) || double.IsNaN(s.AvatarTubeTop)) return;
                 var screens = Screens.All.Select(sc => (ToBox(sc.Bounds), sc.Scaling, ToBox(sc.WorkingArea))).ToList();
                 var size = TubePixelSize;
                 var (cx, cy) = TubeWindowMath.RestoreDetached(s.AvatarTubeLeft, s.AvatarTubeTop,

@@ -36,14 +36,14 @@ public sealed class LeashHeadTests
     }
 
     /// <summary>No leash call may leave the test.</summary>
-    private sealed class NoLeashWire : ILeashApi
+    internal sealed class NoLeashWire : ILeashApi
     {
         public Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default) => Task.FromResult<JObject?>(new JObject { ["ok"] = true });
     }
 
     private static JObject P(string id, string name) => new() { ["id"] = id, ["name"] = name, ["avatar"] = null };
 
-    private static JObject BlockWithPunishment()
+    internal static JObject BlockWithPunishment()
     {
         var at = DateTimeOffset.UtcNow.AddHours(-1);
         var pun = new JObject
@@ -72,7 +72,7 @@ public sealed class LeashHeadTests
         var (oldService, oldDue, oldPresent) = (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider);
         try
         {
-            MainShellWindow.PresentLeashGateProvider = _ => { };   // a gate the panel can show
+            MainShellWindow.PresentLeashGateProvider = null;   // LeashHead.Start brings the panel's gate
             // AuthToken lives in CoreSecrets, which is swapped for `secrets` above and restored in finally:
             // the write never reaches the real store, so there is no old token to put back.
             (s.UnifiedId, s.AuthToken, s.OfflineMode) = ("u_me", "tok", false);
@@ -87,6 +87,7 @@ public sealed class LeashHeadTests
             Assert.Same(LeashHead.Targets.Instance, LeashCutSafety.LiveTargets);
             Assert.NotNull(LeashCutSafety.RunOnUi);
             Assert.NotNull(LeashTaskRunner.TimerFactory);
+            Assert.NotNull(MainShellWindow.PresentLeashGateProvider);
             Assert.False(MainShellWindow.LeashBlocksGames);
             Assert.False(LeashGuard.IsLeashed());
 
@@ -109,6 +110,7 @@ public sealed class LeashHeadTests
 
             LeashHead.Stop();                    // WPF App.OnExit
             Assert.Null(LeashHead.Service);
+            Assert.Null(MainShellWindow.PresentLeashGateProvider);
             Assert.False(MainShellWindow.LeashBlocksGames);
         }
         finally

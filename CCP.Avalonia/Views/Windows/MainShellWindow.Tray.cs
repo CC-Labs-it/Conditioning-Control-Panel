@@ -117,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// a missing tray host, really closes.</summary>
         protected override void OnClosing(WindowClosingEventArgs e)
         {
+            WelcomeShow.FirstShowService.Stop();   // WPF WindowChrome.cs:128, before the Lockdown refusal
             // WPF WindowChrome.cs:131: under Lockdown the user's close is refused (not even hidden),
             // after the Close tripwire. OS / application shutdown still goes through: the recovery
             // file puts the real panic key and Strict Lock back on the next start.

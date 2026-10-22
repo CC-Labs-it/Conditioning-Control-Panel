@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Program;
@@ -54,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private IBrush? _borderBrush, _washBrush, _sigilGlowBrush, _edgeBrush, _cometBrush;
         private LinearGradientBrush? _counterBrush;
         private RadialGradientBrush? _waveBrush;
-        private DropShadowEffect? _railGlow, _bossGlow;
+        private BoxShadows _railGlow, _bossGlow;   // WPF DropShadowEffects; a BoxShadow under the comet/flare (P82)
 
         private string? _runKeySeen, _dayCompletePopped, _chapterSealed, _chapterBaselineRun, _graduationCelebrated;
         private bool _dayJustCompleted;
@@ -90,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             StopIgnitionLoops();
             StopMoments();
-            _accentFadeCts?.Cancel();
+            StopAccentFade();
         }
 
         /// <summary>One-shot moments are cancelled on hide/detach (and settle at rest via their done hooks).</summary>
@@ -135,7 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var key = RunKey(enrollment);
             if (_runAccent == null || !string.Equals(_runAccentKey, key, StringComparison.Ordinal))
             {
-                _accentFadeCts?.Cancel();
+                StopAccentFade();
                 _runAccent = new SolidColorBrush(target);
                 _runAccentKey = key;
                 _runAccentTarget = target;
@@ -149,13 +150,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void FadeAccent(Color target)
         {
-            _accentFadeCts?.Cancel();
+            StopAccentFade();
             var brush = _runAccent!;
             if (!Env.AllowTransitions) { brush.Color = target; return; }
             var from = brush.Color;
             _accentFadeCts = new CancellationTokenSource();
-            Drive(AccentFadeSeconds, false, new QuadraticEaseInOut(), p => brush.Color = Mix(from, target, p),
+            Drive(AccentFadeSeconds, new QuadraticEaseInOut(), p => brush.Color = Mix(from, target, p),
                 _accentFadeCts.Token, () => { if (_runAccentTarget == target) brush.Color = target; });
+        }
+
+        private void StopAccentFade()
+        {
+            _accentFadeCts?.Cancel();
+            _accentFadeCts?.Dispose();
+            _accentFadeCts = null;
         }
 
         private Color AccentNow => _runAccentTarget ?? _runAccent?.Color ?? Colors.HotPink;
@@ -209,13 +217,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     var amp = ProgramHeat.BreathAmplitude(_heat);
                     sigilGlow.RenderTransformOrigin = RelativePoint.Center;
-                    sigilGlow.RenderTransform = new ScaleTransform();
-                    _ = Run(Pulse(breath, OpacityProperty, Math.Clamp(SigilRestOpacity - amp, 0.10, 1.0),
-                        Math.Clamp(SigilRestOpacity + amp, 0.10, 0.95)), sigilGlow, token);
-                    var swell = Pulse(breath, ScaleTransform.ScaleXProperty, 1.0, 1.0 + amp * 0.35);
-                    swell.Children[0].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, 1.0));
-                    swell.Children[1].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, 1.0 + amp * 0.35));
-                    _ = Run(swell, sigilGlow, token);
+                    var scale = new ScaleTransform();
+                    sigilGlow.RenderTransform = scale;
+                    Pulse(sigilGlow, token, breath, Math.Clamp(SigilRestOpacity - amp, 0.10, 1.0),
+                        Math.Clamp(SigilRestOpacity + amp, 0.10, 0.95), v => sigilGlow.Opacity = v);
+                    Pulse(sigilGlow, token, breath, 1.0, 1.0 + amp * 0.35, v => scale.ScaleX = scale.ScaleY = v);
                 }
 
                 // T2+: the border turns (WPF :508); parked at 35 degrees otherwise.
@@ -224,7 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _borderRotate.Angle = 35;
                     var rotate = _borderRotate;
                     if (_tier >= ProgramHeatTier.Charged && ambient)
-                        Drive(ProgramHeat.BorderLapSeconds(_heat), true, new LinearEasing(), p => rotate.Angle = 360 * p, token);
+                        Spin(Find<Border>("TodayPanel"), token, ProgramHeat.BorderLapSeconds(_heat), 0, 360, v => rotate.Angle = v);
                 }
 
                 // Wash: present at every tier, blooming from T3 (WPF :539).
@@ -232,10 +238,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var peak = ProgramHeat.WashOpacity(_heat);
                 wash.Opacity = peak;
                 if (_tier >= ProgramHeatTier.Hot && ambient)
-                    _ = Run(Pulse(breath * 1.7, OpacityProperty, peak * 0.68, peak), wash, token);
+                    Pulse(wash, token, breath * 1.7, peak * 0.68, peak, v => wash.Opacity = v);
 
                 // T2+: static rail glow (WPF :567).
-                Find<Border>("RailProgressFill").Effect = _tier >= ProgramHeatTier.Charged ? _railGlow : null;
+                Find<Border>("RailProgressFill").BoxShadow = _tier >= ProgramHeatTier.Charged ? _railGlow : default;
 
                 // T3+: counter shimmer through the text's own ink (WPF :578).
                 var counter = Find<TextBlock>("TxtRunDayCounter");
@@ -243,9 +249,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 {
                     // Above the XAML DynamicResource (a local binding that otherwise keeps winning).
                     counter.SetValue(TextBlock.ForegroundProperty, _counterBrush, BindingPriority.Animation);
-                    var w = Math.Max(60, counter.Bounds.Width);
                     var ink = (TranslateTransform)_counterBrush.Transform!;
-                    Drive(breath * 2.2, true, new LinearEasing(), p => ink.X = -w + 2 * w * p, token);
+                    Spin(counter, token, breath * 2.2, -1, 1, v => ink.X = v * Math.Max(60, counter.Bounds.Width));
                 }
                 else counter.SetValue(TextBlock.ForegroundProperty, AvaloniaProperty.UnsetValue, BindingPriority.Animation);
 
@@ -256,15 +261,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     edge.Fill = _edgeBrush;
                     var edgePeak = ProgramHeat.EdgeGlowOpacity(_heat);
                     edge.Opacity = edgePeak;
-                    if (ambient) _ = Run(Pulse(breath * 2.4, OpacityProperty, edgePeak * 0.55, edgePeak), edge, token);
+                    if (ambient) Pulse(edge, token, breath * 2.4, edgePeak * 0.55, edgePeak, v => edge.Opacity = v);
                 }
                 else { edge.Opacity = 0; edge.Fill = null; }
 
                 // Boss day: the badge flares, a soft glow, never a flash (WPF :642).
                 var badge = Find<Border>("TodayBossBadge");
-                badge.Effect = _bossToday ? _bossGlow : null;
+                badge.BoxShadow = _bossToday ? _bossGlow : default;
                 badge.Opacity = 1;
-                if (_bossToday && ambient) _ = Run(Pulse(breath * 1.35, OpacityProperty, 0.72, 1.0), badge, token);
+                if (_bossToday && ambient) Pulse(badge, token, breath * 1.35, 0.72, 1.0, v => badge.Opacity = v);
 
                 ApplyRailComet(ambient, token);
                 ApplyParticles(accent);
@@ -301,10 +306,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (Env.AllowGlow(Env.CurrentTier))
             {
                 var cap = Env.MaxGlowBlurRadius(Env.CurrentTier);
-                _railGlow = new DropShadowEffect { Color = accent, OffsetX = 0, OffsetY = 0, BlurRadius = Math.Min(cap, 6 + 10 * heat), Opacity = 0.45 + 0.35 * heat };
-                _bossGlow = new DropShadowEffect { Color = accent, OffsetX = 0, OffsetY = 0, BlurRadius = Math.Min(cap, 14), Opacity = 0.7 };
+                _railGlow = Glow(accent, Math.Min(cap, 6 + 10 * heat), 0.45 + 0.35 * heat);   // WPF :420
+                _bossGlow = Glow(accent, Math.Min(cap, 14), 0.7);                            // WPF :427
             }
-            else _railGlow = _bossGlow = null;
+            else _railGlow = _bossGlow = default;
         }
 
         /// <summary>WPF ApplyProgramRailComet (:686): gate on a measured rail, retry below input, give up quietly.</summary>
@@ -334,8 +339,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             comet.Fill = _cometBrush;
             comet.Opacity = 1;
-            _ = Run(Spin(ProgramHeat.CometLapSeconds(_heat), TranslateTransform.XProperty, -140, gate.Width + 40),
-                comet, token);
+            var slide = (TranslateTransform)comet.RenderTransform!;
+            Spin(comet, token, ProgramHeat.CometLapSeconds(_heat), -140, gate.Width + 40, v => slide.X = v);
         }
 
         /// <summary>WPF ApplyProgramParticles (:761): a share of the tier's budget, through the shared canvas.</summary>
@@ -401,7 +406,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             wave.Fill = _waveBrush;
             var grow = (ScaleTransform)_waveBrush.Transform!;
-            Drive(0.95, false, new CubicEaseOut(), p => grow.ScaleX = grow.ScaleY = 0.02 / 1.15 + (1 - 0.02 / 1.15) * p, token);
+            Drive(0.95, new CubicEaseOut(), p => grow.ScaleX = grow.ScaleY = 0.02 / 1.15 + (1 - 0.02 / 1.15) * p, token);
             _ = Run(Keys(0.95, OpacityProperty, (0, 0.0), (0.18, 0.75), (0.95, 0.0)), wave, token, () => wave.Opacity = 0);
 
             xp.Text = Loc.GetF("label_0_xp_3", ProgramHeat.DayXp(day?.Intensity ?? 0.0, day?.IsBoss == true));
@@ -481,20 +486,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static KeyFrame Frame(double cue, AvaloniaProperty property, object value) =>
             new() { Cue = new Cue(cue), Setters = { new Setter(property, value) } };
 
-        /// <summary>A forever sine yo-yo (WPF AutoReverse + RepeatBehavior.Forever + SineEase).</summary>
-        private static Animation Pulse(double seconds, AvaloniaProperty property, double from, double to) => new()
-        {
-            Duration = TimeSpan.FromSeconds(seconds), IterationCount = IterationCount.Infinite,
-            PlaybackDirection = PlaybackDirection.Alternate, Easing = new SineEaseInOut(),
-            Children = { Frame(0, property, from), Frame(1, property, to) },
-        };
+        /// <summary>A forever sine yo-yo (WPF AutoReverse + RepeatBehavior.Forever + SineEase) on the
+        /// window's 30 fps beat (WPF SetDesiredFrameRate(AmbientFrameRate = 30), MainWindow.AmbientFx.cs:15),
+        /// never an infinite Animation (P82). Parks while <paramref name="owner"/> is hidden or the window
+        /// minimised; stops with the run's token.</summary>
+        private static void Pulse(Visual owner, CancellationToken token, double seconds, double from, double to, Action<double> set) =>
+            Beat(owner, token, t => set(from + (to - from) * BeatLoop.Breath(t, seconds)));
 
-        /// <summary>A forever linear lap (WPF RepeatBehavior.Forever, no easing).</summary>
-        private static Animation Spin(double seconds, AvaloniaProperty property, double from, double to) => new()
+        /// <summary>A forever linear lap (WPF RepeatBehavior.Forever, no easing), same beat.</summary>
+        private static void Spin(Visual owner, CancellationToken token, double seconds, double from, double to, Action<double> set) =>
+            Beat(owner, token, t => set(from + (to - from) * (t / seconds % 1)));
+
+        private static void Beat(Visual owner, CancellationToken token, Action<double> step)
         {
-            Duration = TimeSpan.FromSeconds(seconds), IterationCount = IterationCount.Infinite, Easing = new LinearEasing(),
-            Children = { Frame(0, property, from), Frame(1, property, to) },
-        };
+            var loop = new BeatLoop(owner, step);
+            loop.Start();
+            token.Register(loop.Stop);
+        }
+
+        private static BoxShadows Glow(Color c, double blur, double opacity) =>
+            new(new BoxShadow { Blur = blur, Color = WithAlpha(c, (byte)Math.Round(255 * opacity)) });
 
         /// <summary>WPF DoubleAnimationUsingKeyFrames with linear frames, times in seconds.</summary>
         private static Animation Keys(double seconds, AvaloniaProperty property, params (double at, double value)[] frames)
@@ -515,8 +526,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>Per-frame driver for brushes and their transforms: eased progress 0..1 over
-        /// <paramref name="seconds"/>, laps forever or ends with <paramref name="done"/> (also on cancel).</summary>
-        private void Drive(double seconds, bool forever, IEasing easing, Action<double> apply, CancellationToken token, Action? done = null)
+        /// <paramref name="seconds"/>, ends with <paramref name="done"/> (also on cancel).</summary>
+        private void Drive(double seconds, IEasing easing, Action<double> apply, CancellationToken token, Action? done = null)
         {
             TimeSpan? start = null;
             void Frame(TimeSpan now)
@@ -524,8 +535,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (token.IsCancellationRequested) { done?.Invoke(); return; }
                 start ??= now;
                 var t = (now - start.Value).TotalSeconds / seconds;
-                var end = !forever && t >= 1;
-                apply(easing.Ease(forever ? t % 1 : Math.Min(t, 1)));
+                var end = t >= 1;
+                apply(easing.Ease(Math.Min(t, 1)));
                 if (end) done?.Invoke();
                 else if (TopLevel.GetTopLevel(this) is { } top) top.RequestAnimationFrame(Frame);
             }

@@ -143,6 +143,9 @@ namespace ConditioningControlPanel.Avalonia
                         card.RequiresAccount && !CoreAccount.IsLoggedIn, CoreSettings.Current.AudioOnlySession),
                     () => OnUi(() =>
                     {
+                        // A game opens its host through the launcher's Play (leash gate first), not the panel.
+                        if (Views.Games.GameWindow.Games.ContainsKey(card.Id))
+                            return MainShellWindow.Current is { } shell && LauncherWindow.LaunchGame(shell, card.Id);
                         if (LauncherWindow.Instance is { } launcher) { launcher.OpenPanel(dest.Open); return true; }
                         if (MainShellWindow.Current is not { } panel) return false;
                         panel.ShowFromTray();

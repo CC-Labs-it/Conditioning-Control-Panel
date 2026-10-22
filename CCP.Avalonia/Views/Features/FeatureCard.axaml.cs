@@ -259,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private void ApplyActiveState()
         {
             // A locked feature can't really be "on" even if the underlying setting is true.
-            var showActive = IsActive && !IsLocked;
+            var showActive = (IsActive || TutorialPreview) && !IsLocked;
             _activeBorder.IsVisible = showActive;
             ApplyActiveBreath(showActive);
         }
@@ -267,6 +267,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>WPF FeatureCard.RefreshFx (:613): re-reads the motion/tier/focus gates. Called by
         /// the shell's ApplyDashboardFxLoops on a motion/performance change and window activation.</summary>
         internal void RefreshFx() => ApplyActiveState();
+
+        /// <summary>WPF SetTutorialPreview (:535): the welcome guide lights the card it points at. Appearance
+        /// only; the setting is untouched, and clearing it puts the card back to its truth.</summary>
+        internal void SetTutorialPreview(bool active)
+        {
+            if (TutorialPreview == active) return;
+            TutorialPreview = active;
+            ApplyActiveState();
+        }
+        internal bool TutorialPreview { get; private set; }
 
         /// <summary>True while the breath clock runs (test seam).</summary>
         internal bool IsBreathing => _breath != null;
