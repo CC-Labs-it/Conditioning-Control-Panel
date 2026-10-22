@@ -39,8 +39,11 @@ public sealed class SubliminalStealsFocusTests
                 .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        // Other classes can initialize a bare headless app first. This fixture uses the same
-        // bundled face as the shipped app, independent of that process's default font manager.
+        // Other classes can initialize a bare headless app first, and Application.Current is
+        // process-wide, so that bootstrap wins. Run the shipped font setup on it by hand
+        // (AfterSetupCallback is where WithInterFont/ConfigureFonts register) so the card's
+        // bundled face resolves whatever ran first.
+        // Present, not Show: headless X11Overlay.IsAvailable is false, so Show returns early (P04).
         if (!FontManager.Current.TryGetGlyphTypeface(new Typeface(new FontFamily(AppFonts.Inter)), out _))
         {
             var builder = AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -73,6 +76,17 @@ public sealed class SubliminalStealsFocusTests
             Assert.False(on.IsHitTestVisible);
             Assert.False(on.Focusable);
             Assert.False(on.ShowActivated);   // shown passive first, as WPF's SWP_NOACTIVATE show, then activated
+
+            // X11 map race: a refused first request is retried once after Avalonia's queue runs;
+            // an accepted one is not repeated.
+            var calls = 0;
+            SubliminalOverlay.RequestFocus(on, _ => ++calls > 1);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, calls);
+            calls = 0;
+            SubliminalOverlay.RequestFocus(on, _ => ++calls > 0);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, calls);
 
             // A platform that refuses the focus never breaks the card.
             SubliminalOverlay.ActivateCard = _ => throw new InvalidOperationException("refused");

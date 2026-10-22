@@ -68,11 +68,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>Native focus request; tests substitute it without touching a desktop.</summary>
-        internal static Action<Window> ActivateCard = w =>
+        internal static Action<Window> ActivateCard = w => RequestFocus(w, NativeFocus);
+
+        /// <summary>The native request itself; a test seam for the retry below.</summary>
+        internal static Func<Window, bool> NativeFocus = X11Overlay.ActivateClickThrough;
+        private static bool _warnedFocus;
+
+        /// <summary>X11: the request travels on our own connection and can beat Avalonia's XMapWindow
+        /// (BadMatch on an unmapped window). Retry once after the dispatcher has run Avalonia's queue;
+        /// only a second refusal is reported, once, at Warning. The card shows either way.</summary>
+        internal static void RequestFocus(Window w, Func<Window, bool> focus)
         {
-            // X11: a focus request can race the map and be refused (BadMatch); the card still shows.
-            if (!X11Overlay.ActivateClickThrough(w)) Log.Debug("Subliminal: platform refused the focus request");
-        };
+            if (focus(w)) return;
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!w.IsVisible || focus(w) || _warnedFocus) return;
+                _warnedFocus = true;
+                Log.Warning("Subliminal: the platform refused the focus request; cards show without focus");
+            }, global::Avalonia.Threading.DispatcherPriority.Background);
+        }
 
         /// <summary>WPF ShowSubliminalVisuals: show passively, then activate when SubliminalStealsFocus
         /// is on (SubliminalService.cs:661-662). A refused focus request never prevents the card's

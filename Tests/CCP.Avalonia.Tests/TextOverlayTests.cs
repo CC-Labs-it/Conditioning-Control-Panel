@@ -174,6 +174,8 @@ public sealed class TextOverlayTests
         Assert.True(AvaloniaTestDispatcher.IsDispatcherThread);
         if (Application.Current is null)
         {
+            // Shipped font setup: whichever class boots the process-wide app first decides fonts,
+            // and a bare bootstrap leaves the subliminal card's bundled face unresolved.
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont()
                 .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
