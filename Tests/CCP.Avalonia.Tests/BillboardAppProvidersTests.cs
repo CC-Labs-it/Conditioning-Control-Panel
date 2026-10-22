@@ -71,13 +71,12 @@ public sealed class BillboardAppProvidersTests
             Assert.Equal(string.Format(Loc.Get("billboard_card_quests_line"), 1, 3), quest.Line);
             Assert.DoesNotContain(board.Deck.Cards, c => c.Spec.Kind == BillboardCardKind.Event);
 
-            // A session ends: the log's LogReady marks the deck dirty (posted to the UI thread) and
-            // the next dot press rebuilds it with the Resume card.
+            // A session ends: the log's LogReady marks the deck dirty (posted to the UI thread) and,
+            // the board being on screen, the deck refreshes at once with the Resume card (WPF 58e0c8532).
             runner.SessionLog.BeginSession(new Session { Id = "gone-session", Name = "Gone Session" });
             runner.SessionLog.EndSession(false, TimeSpan.FromSeconds(5), 0);
             Dispatcher.UIThread.RunJobs();
-            Assert.True(board.Deck.IsDirty);
-            Click((Button)board.ChipButtons[1]);   // not the card on screen: that only pauses
+            Assert.False(board.Deck.IsDirty);
             int at = board.Deck.Cards.ToList().FindIndex(c => c.Spec.Id == ResumeCards.CardSession);
             Assert.True(at >= 0, "the Resume card joins the deck");
             Click((Button)board.ChipButtons[at]);

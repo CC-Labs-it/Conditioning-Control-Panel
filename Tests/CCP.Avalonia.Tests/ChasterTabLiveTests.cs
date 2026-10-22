@@ -54,11 +54,13 @@ public sealed class ChasterTabLiveTests
         try
         {
             var fake = new FakeChaster();
-            Assert.Null(await ChasterHead.Create("sandbox", null, fake).GetLocksAsync());
-            Assert.Null(await ChasterHead.Create("sandbox", "https://evil.example/", fake).GetLocksAsync());
+            // Create subscribes to the static account-change event; dispose each service.
+            using (var c = ChasterHead.Create("sandbox", null, fake)) Assert.Null(await c.GetLocksAsync());
+            using (var c = ChasterHead.Create("sandbox", "https://evil.example/", fake)) Assert.Null(await c.GetLocksAsync());
             Assert.Empty(fake.Seen);
 
-            var locks = await ChasterHead.Create("sandbox", "http://127.0.0.1:47999/", fake).GetLocksAsync();
+            using var live = ChasterHead.Create("sandbox", "http://127.0.0.1:47999/", fake);
+            var locks = await live.GetLocksAsync();
             Assert.Equal("Test Cage", Assert.Single(locks!).Title);
             Assert.Equal("http://127.0.0.1:47999/locks?status=active", Assert.Single(fake.Seen).ToString());
 

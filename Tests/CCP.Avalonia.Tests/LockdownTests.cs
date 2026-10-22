@@ -284,6 +284,7 @@ public sealed class LockdownTests
                 ld.Dispose();
                 LockdownService.Current = null;
                 ConditioningControlPanel.Avalonia.Platform.ChasterHead.Service = null;
+                chaster.Dispose();
                 CoreSettings.Current.HideLockdownTimer = false;
                 win.Close();
             }
