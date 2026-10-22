@@ -170,6 +170,25 @@ internal sealed class AchievementEngine
         if (Progress.TotalFlashImages >= AchievementRules.RetinalBurnFlashImages) TryUnlock("retinal_burn");
     }
 
+    /// <summary>WPF AchievementService.TrackSkillPointsSpent: the Prestige metric; window_shopping at 100.</summary>
+    public void TrackSkillPointsSpent(int amount)
+    {
+        if (amount <= 0) return;
+        Progress.LifetimeSkillPointsSpent += amount;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
+    }
+
+    /// <summary>WPF AchievementService.ReconcileLifetimePointsSpent: adopt the server total only when it is ahead
+    /// (Prestige never lowers); the same window_shopping check, so an older spend unlocks it retroactively.</summary>
+    public void ReconcileLifetimePointsSpent(long serverValue)
+    {
+        if (serverValue <= Progress.LifetimeSkillPointsSpent) return;
+        Progress.LifetimeSkillPointsSpent = serverValue;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
+    }
+
     /// <summary>WPF AchievementService.TrackMindWipeDuration: clean_slate at 60 s of continuous loop.</summary>
     public void TrackMindWipeDuration(double seconds)
     {

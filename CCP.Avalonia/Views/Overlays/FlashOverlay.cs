@@ -140,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
+            // WPF RollLuckyFlash raises LuckyProc as it rolls; MainWindow.OnLuckyProc shows the toast.
+            if (multiplier > 1) Windows.LuckyToast.Proc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
             var w = new FlashOverlayWindow(bmp)

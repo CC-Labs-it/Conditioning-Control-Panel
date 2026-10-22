@@ -79,14 +79,20 @@
 //   private static LeaderboardTierBand BuildTierBand(…)
 //   private void UpdateYouBar(…)
 //   private static string FormatCompact(…)
-//   private void UpdateTrophyCaseColumns(…)
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // Deliberately empty - see the header. No member of this partial is referenced from
-        // MainShellWindow.axaml, and the parts that are not service-bound already live on
-        // CCP.Avalonia/Views/Tabs/LeaderboardTabView.
+        // See the header. No member of this partial is referenced from MainShellWindow.axaml, and the
+        // parts that are not service-bound already live on CCP.Avalonia/Views/Tabs/LeaderboardTabView.
+
+        /// <summary>WPF MainWindow.Leaderboard.cs:1439 UpdateTrophyCaseColumns: the Streak column and Best Session
+        /// line follow the trophy_case skill. Called the moment the skill is bought (EnhancementsTabView.Purchase.cs).</summary>
+        internal void UpdateTrophyCaseColumns()
+        {
+            if (Named<Tabs.LeaderboardTabView>("LeaderboardTab") is { } tab)
+                tab.ShowTrophyStats = ConditioningControlPanel.Models.SkillTreeRules.HasSkill(CoreSettings.Current, "trophy_case");
+        }
     }
 }
