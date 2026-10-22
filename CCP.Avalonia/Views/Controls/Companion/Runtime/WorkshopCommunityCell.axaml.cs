@@ -24,20 +24,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     {
         // The existing Core service is shared with WPF; only presentation and native pickers live here.
         private CommunityPromptService? _service;
-        internal CommunityPromptService Service => _service ??= CreateService();
+        internal CommunityPromptService Service { get => _service ??= CreateService(); set => _service = value; }
         internal Func<Task<string?>>? ImportFileForTests { get; set; }
         internal Func<Task<string?>>? ExportFileForTests { get; set; }
         private Window? Owner => TopLevel.GetTopLevel(this) as Window;
 
-        private CommunityPromptService CreateService() => CreateService(() => Owner);
-
-        /// <summary>Also used by Z4's Community link (MakeHerYoursView): WPF routes both to one service.</summary>
-        internal static CommunityPromptService CreateService(Func<Window?> ownerOf)
+        private CommunityPromptService CreateService()
         {
             var service = new CommunityPromptService();
             service.ValidationAdvisory += (_, count) => global::Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
             {
-                if (ownerOf() is { } owner)
+                if (Owner is { } owner)
                     await MessageDialog.ShowAsync(owner, Loc.Get("community_prompt_warning_title"), Loc.GetF("community_prompt_warning_body", count));
             });
             return service;

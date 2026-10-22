@@ -200,13 +200,14 @@ public sealed class WorkshopCommunityCellTests
 
             // WPF re-reads Z4 straight after Activate/Remove (MainWindow.CompanionTab.cs:184), not on the next tab show.
             var z4 = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single().ViewModel;
-            var active = Loc.GetF("companion_personality_active_custom_fmt", id);
+            var active = Loc.GetF("companion_personality_active_custom_fmt", "Room persona");   // installed NAME, as WPF
             Assert.NotEqual(active, z4.ActivePersonalityLine);
             cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ActivatePrompt").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(active, z4.ActivePersonalityLine);
             cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "RemovePrompt").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.NotEqual(active, z4.ActivePersonalityLine);
+            Assert.False(z4.CanResetPersonality);   // removing the active prompt disables Reset at once
         }
         finally { shell.Close(); s.InstalledCommunityPromptIds.Remove(id); s.ActiveCommunityPromptId = null; File.Delete(file); }
         return Task.CompletedTask;

@@ -11,9 +11,11 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -83,7 +85,10 @@ public sealed class MakeHerYoursCommunityTests
             shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single();
-            view.ViewModel.PromptService = prompts;
+            // The one shared service is the room's Workshop COMMUNITY cell's (WPF App.CommunityPrompts).
+            var cell = (view.FindAncestorOfType<CompanionRoomView>()!.WorkshopZone.DataContext as WorkshopRuntimeVm)!.Parts.Community;
+            cell.Service = prompts;
+            bool CellLists(string name) => cell.FindControl<StackPanel>("InstalledPromptsPanel")!.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == name);
             File.WriteAllText(Path.Combine(dir, "community-prompts", "installed-id.json"),
                 JsonConvert.SerializeObject(new CommunityPrompt { Id = "installed-id", Name = "Installed friendly name" }));
             s.ActiveCommunityPromptId = "installed-id";
@@ -122,6 +127,7 @@ public sealed class MakeHerYoursCommunityTests
             Assert.Equal(1, handler.Downloads);
             Assert.Contains("new", s.InstalledCommunityPromptIds);
             Assert.Equal("installed-id", s.ActiveCommunityPromptId);
+            Assert.True(CellLists("New personality"));   // WPF UpdateCommunityPromptsUI: the Workshop rows follow a Z4 install
 
             // Everything installed.
             ClickLink();
@@ -131,7 +137,7 @@ public sealed class MakeHerYoursCommunityTests
             Dispatcher.UIThread.RunJobs();
 
             // Offline with no cache: no prompts.
-            view.ViewModel.PromptService = emptyPrompts;
+            cell.Service = emptyPrompts;
             s.OfflineMode = true;
             ClickLink();
             var none = await NextDialog();

@@ -34,7 +34,7 @@
 //   CreatePromptRow           (CCP.Core/Services/Companion/CommunityPromptService.cs) and the rows,
 //                             consent gate and Z4 re-sync live in the cell that owns the controls,
 //                             Views/Controls/Companion/Runtime/WorkshopCommunityCell.
-//   GetActivePromptDisplayName - reachable now (Core service); not wired: Z4 still shows the prompt id.
+//   GetActivePromptDisplayName - DONE: MakeHerYoursViewModel.Sync shows the installed name through the cell's service.
 //   BtnCompanionPersonality_Click - a Microsoft.Win32.OpenFileDialog seeded from
 //                             App.EffectiveAssetsPath (CorePaths answers that half) plus
 //                             CompanionService.GetAssignedPromptName. The picker maps to Avalonia's
