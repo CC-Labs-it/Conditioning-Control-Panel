@@ -44,6 +44,15 @@ public sealed class AttentionCheckControlTests
         var visuals = Assert.IsType<Grid>(control.Content).Children;
         Assert.DoesNotContain(visuals, visual => visual.Effect != null);
         Assert.Equal(2, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0));
+        // WPF's ring glow is the ring's own effect: invisible when nothing is filled.
+        Assert.Equal(expected, control.FindControl<Border>("DotRingGlow")!.Opacity, 8);
+    });
+
+    [Fact]
+    public void RingGlowStartsDark() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        Assert.Equal(0, new AttentionCheckControl().FindControl<Border>("DotRingGlow")!.Opacity);
     });
 
     [Fact]
@@ -56,6 +65,7 @@ public sealed class AttentionCheckControlTests
         var control = new AttentionCheckControl();
         var ring = control.FindControl<Ellipse>("DotRingFg")!;
         var scale = ((TransformGroup)ring.RenderTransform!).Children.OfType<ScaleTransform>().Single();
+        var glowScale = Assert.IsType<ScaleTransform>(control.FindControl<Border>("DotRingGlow")!.RenderTransform);
         var window = new Window { Width = 150, Height = 150, Content = control };
         try
         {
@@ -68,6 +78,8 @@ public sealed class AttentionCheckControlTests
             BeatLoop.StepAll();
             Assert.Equal(1.09, scale.ScaleX, 8);
             Assert.Equal(scale.ScaleX, scale.ScaleY);
+            Assert.Equal(scale.ScaleX, glowScale.ScaleX);
+            Assert.Equal(scale.ScaleX, glowScale.ScaleY);
             time.Advance(TimeSpan.FromMilliseconds(210));
             BeatLoop.StepAll();
             Assert.Equal(1.18, scale.ScaleX, 8);
@@ -85,6 +97,7 @@ public sealed class AttentionCheckControlTests
             Assert.DoesNotContain(BeatLoop.Running, p => p.Owner == control);
             Assert.Equal(1, scale.ScaleX);
             Assert.Equal(1, scale.ScaleY);
+            Assert.Equal(1, glowScale.ScaleX);
             control.StopPulse();
         }
         finally

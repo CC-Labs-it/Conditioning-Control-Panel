@@ -33,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     {
         private readonly Ellipse _dotRingFg;
         private readonly ScaleTransform _dotRingScale;
+        private readonly Border _dotRingGlow;
+        private readonly ScaleTransform _glowScale;
         private BeatLoop? _pulse;
 
         public AttentionCheckControl()
@@ -44,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // rejects x:Name on a ScaleTransform outright (AVLN2000, only a StyledElement can be
             // named), so the WPF markup's x:Name="DotRingScale" could not be kept.
             _dotRingScale = ((TransformGroup)_dotRingFg.RenderTransform!).Children.OfType<ScaleTransform>().First();
+            _dotRingGlow = this.FindControl<Border>("DotRingGlow")!;
+            _glowScale = (ScaleTransform)_dotRingGlow.RenderTransform!;
         }
 
         /// <summary>
@@ -61,6 +65,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             double visible = progress * units;
             double gap = Math.Max(0.001, units - visible);
             _dotRingFg.StrokeDashArray = new AvaloniaList<double> { visible, gap };
+            // WPF's glow was the ring's own DropShadowEffect: nothing drawn, nothing glows.
+            _dotRingGlow.Opacity = progress;
         }
 
         public void StartPulse()
@@ -70,9 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // ponytail: keep this dormant control dormant; WPF removed its service's UI/start path.
             _pulse ??= new BeatLoop(this, seconds =>
             {
-                double scale = 1.0 + 0.18 * BeatLoop.Breath(seconds, 0.42);
-                _dotRingScale.ScaleX = scale;
-                _dotRingScale.ScaleY = scale;
+                SetScale(1.0 + 0.18 * BeatLoop.Breath(seconds, 0.42));
             });
             _pulse.Start();
         }
@@ -86,8 +90,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public void StopPulse()
         {
             _pulse?.Stop();
-            _dotRingScale.ScaleX = 1.0;
-            _dotRingScale.ScaleY = 1.0;
+            SetScale(1.0);
+        }
+
+        private void SetScale(double scale)
+        {
+            _dotRingScale.ScaleX = _dotRingScale.ScaleY = scale;
+            _glowScale.ScaleX = _glowScale.ScaleY = scale;
         }
     }
 }

@@ -29,8 +29,15 @@
     <Grid>
         <Ellipse x:Name="DotRingBg" Width="84" Height="84"
                  Stroke="#33FFFFFF" StrokeThickness="3"/>
-        <Border Width="84" Height="84" CornerRadius="42" Background="Transparent"
-                BoxShadow="0 0 14 0 #B3FF69B4"/>
+        <!-- Ring glow: WPF's DropShadowEffect sat on DotRingFg, so it was absent at progress 0 and
+             pulsed with the ring. Opacity follows progress and the pulse scales it (code-behind);
+             it is still a full halo, not traced along the arc. -->
+        <Border x:Name="DotRingGlow" Width="84" Height="84" CornerRadius="42" Background="Transparent"
+                BoxShadow="0 0 14 0 #B3FF69B4" Opacity="0" RenderTransformOrigin="50%,50%">
+            <Border.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Border.RenderTransform>
+        </Border>
         <Ellipse x:Name="DotRingFg" Width="84" Height="84"
                  Stroke="#FFFF69B4" StrokeThickness="4"
                  StrokeDashArray="0,10000" StrokeLineCap="Round"
