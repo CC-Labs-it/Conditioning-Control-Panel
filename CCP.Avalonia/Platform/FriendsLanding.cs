@@ -235,6 +235,8 @@ internal static class FriendsLanding
     /// <summary>WPF FriendsSfx.DrawerOpen / DrawerClose (FriendsRailChip.cs:407/428).</summary>
     internal static void DrawerOpen() => Sfx("chaos/cards_in.mp3", 0.14f, "friends-open");
     internal static void DrawerClose() => Sfx("chaos/ui_unequip.mp3", 0.10f, "friends-close");
+    /// <summary>WPF FriendsSfx.Click (FriendsSfx.cs:25).</summary>
+    internal static void Click() => Sfx("chaos/ui_click.mp3", 0.12f, "friends-click");
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
     private static void Sfx(string rel, float scale, string tag, bool incoming = false)

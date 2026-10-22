@@ -243,6 +243,43 @@ public sealed partial class FriendsDrawerTests
         Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_bad"));
     });
 
+    /// <summary>WPF FriendsDrawer.Feed.cs:189-195 + FriendsRailChip.UpdateBadge: a line shown in the OPEN drawer is read,
+    /// so the chip's pink badge drops it at once; the line keeps its dot until the drawer folds; a line about a
+    /// friend opens their card.</summary>
+    [Fact]
+    public Task TheOpenDrawerReadsTheFeedAndTheChipBadgeDropsIt() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var feed = new FriendsFeed(() => "u_me");
+        var chip = new FriendsRailChip(svc, feed);
+        await svc.RefreshAsync();
+        Assert.True(feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "p1")));
+        Assert.Equal(1, chip.UnreadBadge);
+        Assert.Contains(Loc.GetF("friends_feed_new", 1), ToolTip.GetTip(chip) as string);
+        var d = chip.Drawer;
+        d.Render(); // built but never opened: reads nothing
+        Assert.Equal(1, feed.Unread);
+
+        d.OnOpened();
+        Assert.Equal(new[] { "p1" }, d.FeedLineKeys);
+        Assert.Equal(0, feed.Unread);
+        Assert.Equal(0, chip.UnreadBadge);
+        Assert.NotNull(Tagged<Border>(d, "friends-feed-new"));
+        // A line landing while the drawer is open is drawn on top and read too.
+        feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, "p2"));
+        Assert.Equal(new[] { "p2", "p1" }, d.FeedLineKeys);
+        Assert.Equal(0, chip.UnreadBadge);
+
+        d.OnClosed();
+        d.OnOpened();
+        Assert.Null(Tagged<Border>(d, "friends-feed-new"));
+        d.OpenFromFeed("u_on");
+        Assert.NotNull(Tagged<StackPanel>(d, "friends-card"));
+        d.OpenFromFeed("u_on"); // WPF OpenOn: a second press never folds it
+        Assert.NotNull(Tagged<StackPanel>(d, "friends-card"));
+        d.OnClosed();
+    });
+
     /// <summary>audit #1976: a click inside the drawer routes through the Popup to the chip; it must
     /// not toggle the drawer shut (WPF's HWND popup never reached the chip at all).</summary>
     [Fact]
