@@ -324,8 +324,9 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
     [Fact]
     public void No_image_encoder_touches_cached_online_media()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Fyp", "Online");
-        var files = Directory.GetFiles(dir, "*.cs");
+        // The cache, the policy and the reuse rules moved to CCP.Core; the WebView2 gate stays in the head.
+        var files = SourceRoots.ProductDirectories.Select(r => Path.Combine(r, "Services", "Fyp", "Online"))
+            .Where(Directory.Exists).SelectMany(d => Directory.GetFiles(d, "*.cs")).ToArray();
         Assert.Contains(files, f => f.EndsWith("ScrolllerDiskCache.cs"));
         Assert.Contains(files, f => f.EndsWith("ScrolllerWebGate.cs"));
         Assert.Contains(files, f => f.EndsWith("RemoteMediaCache.cs"));

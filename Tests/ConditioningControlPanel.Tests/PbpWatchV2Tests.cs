@@ -98,7 +98,7 @@ public class PbpWatchV2Tests
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
             dir = dir.Parent;
         Assert.True(dir != null, "repo root not found from " + AppContext.BaseDirectory);
-        var prefs = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Resources", "web",
+        var prefs = File.ReadAllText(Path.Combine(dir!.FullName, "Assets", "web",
             "piecebypiece", "game", "preferences.js"));
         var m = Regex.Match(prefs, @"const AMOUNTS = \[([^\]]*)\]");
         Assert.True(m.Success, "AMOUNTS not found in game/preferences.js");

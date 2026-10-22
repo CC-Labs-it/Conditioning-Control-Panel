@@ -213,7 +213,7 @@ namespace ConditioningControlPanel.Services.Commands
         {
             try
             {
-                var folder = MediaCommand.AudioFolderUnder(App.EffectiveAssetsPath);
+                var folder = MediaCommand.AudioFolderUnder(CorePaths.EffectiveAssets);
                 // "Had something to play" covers the recorded mod clips that stand in for an
                 // empty folder, so a clip that did not start never blames the folder.
                 return FormatFailedAudio(folder, MediaCommand.CurrentAudioPool().Pool != MediaCommand.AudioPool.None);

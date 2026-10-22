@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
@@ -42,6 +43,17 @@ internal static class ScrolllerPolicy
     {
         get => Volatile.Read(ref _official) == 1;
         set => Volatile.Write(ref _official, value ? 1 : 0);
+    }
+
+    /// <summary>True for scrolller.com or a subdomain over http(s) (WPF ScrolllerCredit.IsScrolllerUrl forwards here).</summary>
+    internal static bool IsScrolllerUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+        if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) return false;
+        var host = uri.Host;
+        return string.Equals(host, "scrolller.com", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".scrolller.com", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Applies the server's answer. A cap above the default is ignored (the server

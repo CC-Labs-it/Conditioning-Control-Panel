@@ -162,10 +162,7 @@ public class CompanionVoiceGainTests
     [Fact]
     public void BothLocKeys_AreInEveryLanguageFile_AndTranslated()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization", "Languages")))
-            dir = dir.Parent;
-        var files = Directory.GetFiles(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages"), "*.json");
+        var files = Directory.GetFiles(SourceRoots.LanguagesDirectory, "*.json");
         Assert.True(files.Length >= 9);
 
         string Line(string file, string key) =>

@@ -934,7 +934,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
 
         private static bool SpiceOn
         {
-            get { try { return App.Settings?.Current?.SlutModeEnabled == true; } catch { return false; } }
+            get { try { return CoreSettings.Service?.Current?.SlutModeEnabled == true; } catch { return false; } }
         }
 
         private static string PurposeInstruction(AiPurpose purpose) => purpose switch

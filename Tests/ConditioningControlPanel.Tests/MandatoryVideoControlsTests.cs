@@ -167,7 +167,7 @@ public class MandatoryVideoControlsTests
     [Fact]
     public void The_tooltips_exist_in_every_language()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var f in files)

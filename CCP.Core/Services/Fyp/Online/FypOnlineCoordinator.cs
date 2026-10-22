@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
 
@@ -424,13 +425,13 @@ internal sealed class FypOnlineCoordinator
             List<FypAssetManifest.Entry> mixed, dropped;
             lock (_lock) mixed = ScrolllerReuse.Mix(fresh, cached, share, _rng, out dropped);
             foreach (var d in dropped) channel.ServedIds.Remove(d.Id);
-            App.Logger?.Debug("[FYP online] {Consumer}: {Cached} cached + {Fresh} fresh", _consumerId,
+            Log.Debug("[FYP online] {Consumer}: {Cached} cached + {Fresh} fresh", _consumerId,
                 cached.Count, mixed.Count - cached.Count);
             return mixed;
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("FypOnline[{Consumer}]: reuse mix skipped: {E}", _consumerId, ex.Message);
+            Log.Debug("FypOnline[{Consumer}]: reuse mix skipped: {E}", _consumerId, ex.Message);
             return fresh;
         }
     }
@@ -462,7 +463,7 @@ internal sealed class FypOnlineCoordinator
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("FypOnline[{Consumer}]: cached pick failed: {E}", _consumerId, ex.Message);
+            Log.Debug("FypOnline[{Consumer}]: cached pick failed: {E}", _consumerId, ex.Message);
             return new List<FypAssetManifest.Entry>();
         }
     }

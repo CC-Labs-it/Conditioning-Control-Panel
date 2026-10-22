@@ -63,8 +63,8 @@ public class ScrolllerCreditTests
     [Fact]
     public void PlayerPage_HoldsTheEndCardAndReportsItsOwnPress()
     {
-        var js = ReadProduct("ConditioningControlPanel", "Resources", "web", "player", "player.js");
-        var html = ReadProduct("ConditioningControlPanel", "Resources", "web", "player", "index.html");
+        var js = ReadProduct("Assets", "web", "player", "player.js");
+        var html = ReadProduct("Assets", "web", "player", "index.html");
         Assert.Contains("post({ type: 'creditClick' })", js);
         Assert.Contains("case 'creditQueued':", js);
         Assert.Contains("showOutro(c)", js);
@@ -92,7 +92,7 @@ public class ScrolllerCreditTests
         // The only other door: the longest-video limit cutting a clip its end card was laid over.
         Assert.Equal(1, core.Split("OpenQueuedCreditLink();").Length - 1);
 
-        var html = ReadProduct("ConditioningControlPanel", "Resources", "web", "player", "index.html");
+        var html = ReadProduct("Assets", "web", "player", "index.html");
         Assert.Contains("id=\"credit\"", html);
         Assert.Contains("id=\"outro\"", html);
     }

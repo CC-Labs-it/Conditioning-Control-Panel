@@ -124,7 +124,7 @@ public sealed partial class ChasterService
     internal void WatchIdentity()
     {
         if (Interlocked.Exchange(ref _watchingIdentity, 1) == 0)
-            App.UnifiedIdentityChanged += OnIdentityChanged;
+            CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
     }
 
     private void OnIdentityChanged(object? sender, EventArgs e) => ForgetRaffle();
@@ -254,7 +254,7 @@ public sealed partial class ChasterService
     private void DisposeLadder()
     {
         if (Interlocked.Exchange(ref _watchingIdentity, 0) == 1)
-            App.UnifiedIdentityChanged -= OnIdentityChanged;
+            CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
         Interlocked.Exchange(ref _ladderRetry, null)?.Dispose();
     }
 }

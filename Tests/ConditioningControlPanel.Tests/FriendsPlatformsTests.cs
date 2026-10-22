@@ -135,7 +135,7 @@ public class FriendsPlatformsTests
 
         var art = LandingRules.KnockArt(item);
         Assert.Equal("features/" + dest + ".png", art);
-        Assert.True(File.Exists(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", art.Replace('/', Path.DirectorySeparatorChar))), art);
+        Assert.True(File.Exists(Path.Combine(RepoRoot(), "Assets", art.Replace('/', Path.DirectorySeparatorChar))), art);
 
         var line = FriendsFeedRules.Describe(new FriendEvent(FriendEventKind.InviteReceived, "u_1", "Ann", DateTime.UtcNow, "k", dest));
         Assert.Equal("friends_invite_" + dest, line.Detail);
@@ -158,7 +158,7 @@ public class FriendsPlatformsTests
             "friends_platform_desktop", "friends_platform_phone", "friends_platform_web",
             "friends_invite_race", "friends_invite_breakout", "friends_land_dest_race", "friends_land_dest_breakout",
         };
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var file in files)

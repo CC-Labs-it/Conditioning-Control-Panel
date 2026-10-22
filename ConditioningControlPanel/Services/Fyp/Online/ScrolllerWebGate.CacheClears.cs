@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 /// </summary>
 internal static partial class ScrolllerWebGate
 {
-    internal const string ClearsFileName = "webview-clears.json";
+    internal const string ClearsFileName = ScrolllerDiskCache.WebViewClearsFileName;
 
     private sealed class LiveCore
     {

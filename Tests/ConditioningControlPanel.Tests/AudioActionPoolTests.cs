@@ -131,10 +131,13 @@ public class AudioActionPoolTests
     [Fact]
     public void The_random_pick_plays_through_the_master_volume_sink_and_never_synthesises()
     {
-        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Commands", "MediaCommand.cs"));
+        var src = SourceRoots.ReadProductFile("Services", "Commands", "MediaCommand.cs");
+        // CCP.Core MediaCommand plays through the head's AudioSurface; WPF seeds it in App.AiEffects.cs.
+        var surface = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "App.AiEffects.cs"));
 
         Assert.Contains("var (pool, candidates) = CurrentAudioPool();", src);
-        Assert.Contains("App.Audio?.PlaySound(path, 100)", src);     // the sink that sits under the master dial
+        Assert.Contains("AudioSurface is { } play && await play(path)", src);
+        Assert.Contains("Audio?.PlaySound(path, 100)", surface);     // the sink that sits under the master dial
         Assert.DoesNotContain("SpeechSynthesizer", src);
         Assert.DoesNotContain("System.Speech", src);
     }

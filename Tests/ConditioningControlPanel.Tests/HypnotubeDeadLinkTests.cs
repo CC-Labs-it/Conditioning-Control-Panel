@@ -26,19 +26,15 @@ public class HypnotubeDeadLinkTests
         Path.Combine("Models", "BuiltInMods.cs"),
         Path.Combine("AvatarTube", "AvatarTubeWindow.Speech.cs"),
         Path.Combine("Services", "BambiSprite.cs"),
+        Path.Combine("Services", "HypnotubeDefaultLinks.cs"),   // CCP.Core: the default pools + known titles moved here
     };
 
     [Fact]
     public void BuiltInPools_CarryNoVipOrDeadLink()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-
         foreach (var rel in PoolFiles)
         {
-            var src = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", rel));
+            var src = SourceRoots.ReadProductFile(rel);
             foreach (var slug in Dropped)
                 Assert.DoesNotContain("hypnotube.com/video/" + slug + ".html", src);
         }

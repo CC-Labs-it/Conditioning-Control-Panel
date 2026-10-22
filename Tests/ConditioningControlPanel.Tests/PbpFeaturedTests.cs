@@ -26,7 +26,7 @@ public class PbpFeaturedTests
     }
 
     private static Dictionary<string, string> Language(string file) =>
-        JObject.Parse(File.ReadAllText(Path.Combine(AppDir(), "Localization", "Languages", file)))
+        JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, file)))
             .Properties().ToDictionary(p => p.Name, p => (string?)p.Value ?? "");
 
     private static readonly Lazy<Dictionary<string, string>> English = new(() => Language("en.json"));
@@ -154,7 +154,7 @@ public class PbpFeaturedTests
         Assert.Equal("watch:" + Id, card.Action.Target);
         Assert.Equal("Watch", card.Action.Label);
         Assert.Contains(card.ArtKey, CardArt.All);
-        Assert.True(File.Exists(Path.Combine(AppDir(), "Resources", (string)card.ArtData!)));
+        Assert.True(File.Exists(Path.Combine(SourceRoots.RepoRoot, "Assets", (string)card.ArtData!)));   // art lives in /Assets
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class PbpFeaturedTests
     [Fact]
     public void Every_language_carries_the_featured_keys()
     {
-        var files = Directory.GetFiles(Path.Combine(AppDir(), "Localization", "Languages"), "*.json");
+        var files = Directory.GetFiles(SourceRoots.LanguagesDirectory, "*.json");
         Assert.Equal(10, files.Length);
         var keys = new[]
         {

@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
 
@@ -210,7 +211,7 @@ internal static class ScrolllerDiskCache
     /// <summary>The cache folder, or null when there is none. Replaceable by tests.</summary>
     internal static Func<string?> RootProvider = () =>
     {
-        try { return Path.Combine(App.EffectiveAssetsPath, FolderName); }
+        try { return Path.Combine(CorePaths.EffectiveAssets, FolderName); }
         catch { return null; }
     };
 
@@ -236,7 +237,7 @@ internal static class ScrolllerDiskCache
     /// Replaceable by tests.</summary>
     internal static Func<bool> RemoteConsent = () =>
     {
-        var s = App.Settings?.Current;
+        var s = CoreSettings.Service?.Current;
         return s != null && s.MediaSource != "local" && s.HasRemoteMediaConsent;
     };
 
@@ -255,9 +256,31 @@ internal static class ScrolllerDiskCache
     private static Timer? _saveTimer;
     private static Timer? _sweepTimer;
     private static readonly ConcurrentDictionary<string, Lazy<Task<string?>>> InFlight = new(StringComparer.Ordinal);
+    /// <summary>Prefix of the <c>ccp_temp_remote_</c> files the players, wallpaper and games write
+    /// (WPF RemoteMediaCache.TempPrefix forwards here).</summary>
+    internal const string TempPrefix = "ccp_temp_remote_";
+
+    /// <summary>The WebView2 cache-clear stamp file in the cache root (WPF ScrolllerWebGate.ClearsFileName).</summary>
+    internal const string WebViewClearsFileName = "webview-clears.json";
+
+    /// <summary>Head hooks: every Scrolller copy the head holds (WPF ScrolllerCopySweeper: wallpaper,
+    /// DtRH copies, temp files, WebView2 caches). Unseeded: only this device cache is swept/purged.</summary>
+    internal static volatile Action? SweepAllCopies;
+    internal static volatile Action<string>? PurgeAllCopies;
+
+    /// <summary>An HttpClient with the honest Scrolller user-agent and no Referer (WPF
+    /// RemoteMediaCache.CreateClient forwards here).</summary>
+    internal static HttpClient CreateClient()
+    {
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ScrolllerSource.HonestUserAgent);
+        c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
+        return c;
+    }
+
     private static readonly Lazy<HttpClient> Http = new(() =>
     {
-        var c = RemoteMediaCache.CreateClient();   // honest user-agent, no Referer
+        var c = CreateClient();   // honest user-agent, no Referer
         c.Timeout = DownloadBudget;
         return c;
     });
@@ -348,7 +371,7 @@ internal static class ScrolllerDiskCache
             await WarmAsync().WaitAsync(ct).ConfigureAwait(false);   // never a cold miss that fetches a cached url
             var hit = TryGetPath(url);
             if (hit != null) return hit;
-            if (!global::ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerUrl(url)
+            if (!ScrolllerPolicy.IsScrolllerUrl(url)
                 || !ScrolllerPolicyService.MayFetchFresh(url)) return null;
 
             Lazy<Task<string?>>? mine = null;
@@ -379,7 +402,7 @@ internal static class ScrolllerDiskCache
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("[scrolller cache] write refused: {E}", ex.Message);
+            Log.Debug("[scrolller cache] write refused: {E}", ex.Message);
             return null;
         }
     }
@@ -469,9 +492,9 @@ internal static class ScrolllerDiskCache
                 }
             }
             if (dropped) ScheduleSave();
-            if (count > 0) App.Logger?.Information("[scrolller cache] swept {Count} file(s) past the day limit or unknown", count);
+            if (count > 0) Log.Information("[scrolller cache] swept {Count} file(s) past the day limit or unknown", count);
         }
-        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] sweep failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[scrolller cache] sweep failed: {E}", ex.Message); }
         return count;
     }
 
@@ -481,7 +504,7 @@ internal static class ScrolllerDiskCache
     public static void PurgeAll(string reason)
     {
         var old = SweepOldRoots(offSwitch: true);
-        if (old > 0) App.Logger?.Information("[scrolller cache] {Reason}: deleted {Count} file(s) in folders no longer used", reason, old);
+        if (old > 0) Log.Information("[scrolller cache] {Reason}: deleted {Count} file(s) in folders no longer used", reason, old);
         try
         {
             var root = RootProvider();
@@ -503,9 +526,9 @@ internal static class ScrolllerDiskCache
                 }
                 WriteIndex(new ScrolllerCacheBook().ToJson(), Path.Combine(root, IndexFileName), Interlocked.Increment(ref _saveSeq));
             }
-            if (deleted > 0) App.Logger?.Information("[scrolller cache] {Reason}: deleted {Count} cached file(s)", reason, deleted);
+            if (deleted > 0) Log.Information("[scrolller cache] {Reason}: deleted {Count} cached file(s)", reason, deleted);
         }
-        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] purge failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[scrolller cache] purge failed: {E}", ex.Message); }
     }
 
     /// <summary>Starts the hourly sweep of every Scrolller copy (<see cref="ScrolllerCopySweeper"/>);
@@ -518,14 +541,14 @@ internal static class ScrolllerDiskCache
             lock (SaveLock)
             {
                 if (_sweepTimer != null) return;
-                _sweepTimer = new Timer(_ => ScrolllerCopySweeper.SweepAll(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _sweepTimer = new Timer(_ => { if (SweepAllCopies is { } all) all(); else SweepExpired(); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             }
             _ = WarmAsync().ContinueWith(_ =>
             {
                 lock (SaveLock) { try { _sweepTimer?.Change(TimeSpan.Zero, SweepPeriod); } catch { } }
             }, TaskScheduler.Default);
         }
-        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] sweeper start failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[scrolller cache] sweeper start failed: {E}", ex.Message); }
     }
 
     // ---- folders no longer used ------------------------------------------------------
@@ -539,7 +562,7 @@ internal static class ScrolllerDiskCache
     /// <summary>Where the list of cache folders ever used is kept, or null for none. Replaceable by tests.</summary>
     internal static Func<string?> RootsFileProvider = () =>
     {
-        try { return Path.Combine(App.UserDataPath, RootsFileName); }
+        try { return Path.Combine(CorePaths.UserData, RootsFileName); }
         catch { return null; }
     };
 
@@ -548,10 +571,10 @@ internal static class ScrolllerDiskCache
     internal static Func<IEnumerable<string>> SeedRootsProvider = () =>
     {
         var list = new List<string>();
-        try { list.Add(Path.Combine(App.UserAssetsPath, FolderName)); } catch { }
+        try { list.Add(Path.Combine(CorePaths.UserData, "assets", FolderName)); } catch { }
         try
         {
-            var custom = App.Settings?.Current?.CustomAssetsPath;
+            var custom = CoreSettings.Service?.Current?.CustomAssetsPath;
             if (!string.IsNullOrWhiteSpace(custom)) list.Add(Path.Combine(custom, FolderName));
         }
         catch { }
@@ -600,7 +623,7 @@ internal static class ScrolllerDiskCache
             File.WriteAllText(tmp, new JArray(roots).ToString(Newtonsoft.Json.Formatting.None));
             File.Move(tmp, file, overwrite: true);
         }
-        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] roots save failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[scrolller cache] roots save failed: {E}", ex.Message); }
     }
 
     /// <summary>Remembers <paramref name="root"/> as a folder this install used. Never throws.</summary>
@@ -658,7 +681,7 @@ internal static class ScrolllerDiskCache
             }
             var temp = TempDirBeside(root);
             if (temp != null && Directory.Exists(temp))
-                foreach (var file in Directory.GetFiles(temp, RemoteMediaCache.TempPrefix + "*"))
+                foreach (var file in Directory.GetFiles(temp, TempPrefix + "*"))
                     if (TryDelete(file)) deleted++; else left = true;
         }
         catch { left = true; }
@@ -685,9 +708,9 @@ internal static class ScrolllerDiskCache
                 count += deleted;
                 if (!left) ForgetRoot(root);
             }
-            if (count > 0) App.Logger?.Information("[scrolller cache] deleted {Count} file(s) in cache folders no longer used", count);
+            if (count > 0) Log.Information("[scrolller cache] deleted {Count} file(s) in cache folders no longer used", count);
         }
-        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] old folder sweep failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[scrolller cache] old folder sweep failed: {E}", ex.Message); }
         return count;
     }
 
@@ -718,7 +741,7 @@ internal static class ScrolllerDiskCache
     /// never swept as strangers.</summary>
     internal static bool IsBookFile(string name)
         => name.StartsWith(IndexFileName, StringComparison.OrdinalIgnoreCase)
-           || name.StartsWith(ScrolllerWebGate.ClearsFileName, StringComparison.OrdinalIgnoreCase);
+           || name.StartsWith(WebViewClearsFileName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Check every body's own bytes before it becomes (or stays) an entry. Tests that
     /// write placeholder bytes switch it off through <see cref="ResetForTests"/>.</summary>
@@ -862,7 +885,7 @@ internal static class ScrolllerDiskCache
         {
             RememberRoot(_bookRoot);
             var (deleted, _) = PurgeFolder(_bookRoot);
-            if (deleted > 0) App.Logger?.Information("[scrolller cache] the cache folder moved: deleted {Count} file(s) left behind", deleted);
+            if (deleted > 0) Log.Information("[scrolller cache] the cache folder moved: deleted {Count} file(s) left behind", deleted);
             _book = null;
             _bookRoot = null;
         }
@@ -892,7 +915,7 @@ internal static class ScrolllerDiskCache
                 lock (Gate) Install(root, book);
                 ScheduleSave();
             }
-            catch (Exception ex) { App.Logger?.Debug("[scrolller cache] load failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("[scrolller cache] load failed: {E}", ex.Message); }
         });
         return _warm;
     }
@@ -922,7 +945,7 @@ internal static class ScrolllerDiskCache
         // the orphan pass below deletes its file.
         var expired = book.Expired(UtcNow());
         foreach (var e in expired) book.Remove(e.Url);
-        if (expired.Count > 0) App.Logger?.Information("[scrolller cache] {Count} cached file(s) past the day limit: deleted", expired.Count);
+        if (expired.Count > 0) Log.Information("[scrolller cache] {Count} cached file(s) past the day limit: deleted", expired.Count);
 
         // Records whose file is gone, has the wrong size, or whose bytes are not what the url and
         // label say (an error page, a still under a gif label: kept by builds before the format
@@ -942,7 +965,7 @@ internal static class ScrolllerDiskCache
             catch { book.Remove(e.Url); }
         }
         if (FormatCheck) book.FormatChecked = true;
-        if (misfits > 0) App.Logger?.Information("[scrolller cache] dropped {Count} file(s) whose bytes did not match their label", misfits);
+        if (misfits > 0) Log.Information("[scrolller cache] dropped {Count} file(s) whose bytes did not match their label", misfits);
         var known = new HashSet<string>(book.Snapshot().Select(e => Path.GetFileName(e.Path)), StringComparer.OrdinalIgnoreCase);
         try
         {
@@ -995,7 +1018,7 @@ internal static class ScrolllerDiskCache
             if (!FileFits(url, meta.Kind, part))
             {
                 TryDelete(part);
-                App.Logger?.Debug("[scrolller cache] body from {Host} is not the {Kind} its url names: not kept", Logging.UrlLog.Host(url), meta.Kind);
+                Log.Debug("[scrolller cache] body from {Host} is not the {Kind} its url names: not kept", Logging.UrlLog.Host(url), meta.Kind);
                 return null;
             }
             string final;
@@ -1028,7 +1051,7 @@ internal static class ScrolllerDiskCache
         catch (Exception ex)
         {
             TryDelete(part);
-            App.Logger?.Debug("[scrolller cache] commit failed: {E}", ex.Message);
+            Log.Debug("[scrolller cache] commit failed: {E}", ex.Message);
             return null;
         }
     }
@@ -1048,13 +1071,13 @@ internal static class ScrolllerDiskCache
             using var resp = await (http ?? Http.Value).GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
-                App.Logger?.Debug("[scrolller cache] HTTP {Code} for {Host}", (int)resp.StatusCode, Logging.UrlLog.Host(url));
+                Log.Debug("[scrolller cache] HTTP {Code} for {Host}", (int)resp.StatusCode, Logging.UrlLog.Host(url));
                 return null;
             }
             long? declared = resp.Content.Headers.ContentLength;
             if (declared > cap)
             {
-                App.Logger?.Debug("[scrolller cache] item from {Host} is {Size} bytes, over the {Cap} cap: skipped unread",
+                Log.Debug("[scrolller cache] item from {Host} is {Size} bytes, over the {Cap} cap: skipped unread",
                     Logging.UrlLog.Host(url), declared, cap);
                 return null;
             }
@@ -1081,7 +1104,7 @@ internal static class ScrolllerDiskCache
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("[scrolller cache] download from {Host} failed: {E}", Logging.UrlLog.Host(url), ex.Message);
+            Log.Debug("[scrolller cache] download from {Host} failed: {E}", Logging.UrlLog.Host(url), ex.Message);
             return null;
         }
         finally
@@ -1162,7 +1185,7 @@ internal static class ScrolllerDiskCache
             }
             WriteIndex(json, path, seq);
         }
-        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] index save failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[scrolller cache] index save failed: {E}", ex.Message); }
     }
 
     /// <summary>One writer of the .tmp at a time; a snapshot older than the last one written is
@@ -1180,7 +1203,7 @@ internal static class ScrolllerDiskCache
                 _writtenSeq = seq;
             }
         }
-        catch (Exception ex) { App.Logger?.Debug("[scrolller cache] index save failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[scrolller cache] index save failed: {E}", ex.Message); }
     }
 
     /// <summary>Deletes the file. True when it is gone (or never was).</summary>

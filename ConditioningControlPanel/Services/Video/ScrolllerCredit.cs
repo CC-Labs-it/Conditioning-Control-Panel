@@ -54,15 +54,7 @@ namespace ConditioningControlPanel.Services.Video
 
         /// <summary>An absolute http(s) url on scrolller.com or any of its subdomains
         /// (api, images, v, meta...). Never a look-alike such as notscrolller.com.</summary>
-        internal static bool IsScrolllerUrl(string? url)
-        {
-            if (string.IsNullOrEmpty(url)) return false;
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
-            if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) return false;
-            var host = uri.Host;
-            return string.Equals(host, "scrolller.com", StringComparison.OrdinalIgnoreCase)
-                || host.EndsWith(".scrolller.com", StringComparison.OrdinalIgnoreCase);
-        }
+        internal static bool IsScrolllerUrl(string? url) => Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(url);
 
         /// <summary>Is the thing a surface is about to show Scrolller's? A scrolller url, an entry
         /// id shaped "scrolller/&lt;sub&gt;/&lt;postId&gt;", or a RemoteMediaCache temp copy. A local file,

@@ -59,7 +59,7 @@ public class ScrolllerCreditCardsTests
     {
         foreach (var lang in Languages)
         {
-            var path = Path.Combine(App(), "Localization", "Languages", lang + ".json");
+            var path = Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json");
             var bytes = File.ReadAllBytes(path);
             Assert.False(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, lang + " carries a BOM");
             var line = File.ReadAllLines(path).SingleOrDefault(l => l.TrimStart().StartsWith("\"online_cache_day_line\"", StringComparison.Ordinal));

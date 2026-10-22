@@ -22,7 +22,7 @@ public class FypScrolllerCreditTests
     }
 
     private static string Page(string file) =>
-        File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "web", "fyp", file));
+        File.ReadAllText(Path.Combine(RepoRoot(), "Assets", "web", "fyp", file));
 
     [Fact]
     public void Caption_reports_online_from_the_entry_origin()

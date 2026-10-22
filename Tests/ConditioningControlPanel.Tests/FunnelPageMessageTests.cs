@@ -134,13 +134,25 @@ public class FunnelPageMessageTests
 
     [Theory]
     [InlineData("Services/Chaos/DtrhHostService.cs")]
-    [InlineData("Services/BackRoom/BackRoomBridge.cs")]
     [InlineData("Services/GoonGame/GoonHostService.cs")]
     public void EveryEndCardHostForwardsTheFunnelMessage(string file)
     {
         var src = File.ReadAllText(Path.Combine(AppDir(), file));
         Assert.Contains("FunnelPageMessage.Type", src);
         Assert.Contains("FunnelPageMessage.Handle(", src);
+    }
+
+    /// <summary>The Back Room bridge moved to CCP.Core, which cannot see FunnelPageMessage: it routes the
+    /// "funnel" message through its FunnelMessage hook, and this head seeds the hook with Handle.</summary>
+    [Fact]
+    public void TheBackRoomBridgeForwardsTheFunnelMessageThroughItsHook()
+    {
+        Assert.Equal("funnel", FunnelPageMessage.Type);
+        var bridge = SourceRoots.ReadProductFile("Services", "BackRoom", "BackRoomBridge.cs");
+        Assert.Contains("case \"funnel\":", bridge);
+        Assert.Contains("FunnelMessage?.Invoke(m, !Quiet);", bridge);
+        var app = File.ReadAllText(Path.Combine(AppDir(), "App.xaml.cs"));
+        Assert.Contains("BackRoomBridge.FunnelMessage = (m, mayOpen) => Services.Funnel.FunnelPageMessage.Handle(m, mayOpen);", app);
     }
 
     [Theory]

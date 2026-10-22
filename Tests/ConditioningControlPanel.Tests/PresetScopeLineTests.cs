@@ -36,7 +36,7 @@ public class PresetScopeLineTests
     [Fact]
     public void ScopeLine_IsInEveryLanguage_AndTranslated()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.True(files.Length >= 9, "expected at least nine language files, found " + files.Length);
 

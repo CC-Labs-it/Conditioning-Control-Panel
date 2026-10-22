@@ -88,8 +88,8 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     /// <summary>The app says who it is to Scrolller: no browser user-agent, no scrolller.com
     /// Origin or Referer (owner, 2026-10-17; Scrolller had noticed the app posing as their own
     /// site). Probed the same day: the API answers 200 and the CDN 206 with this alone.</summary>
-    internal static readonly string HonestUserAgent =
-        $"ConditioningControlPanel/{UpdateService.AppVersion} (+https://cclabs.app)";
+    internal static string HonestUserAgent =>   // read per use: the head seeds the version at startup
+        $"ConditioningControlPanel/{CoreReleaseContent.AppVersion} (+https://cclabs.app)";
 
     internal static HttpClient CreateClient()
     {

@@ -227,7 +227,7 @@ public class LocktoberAccountChangeTests
     [Fact]
     public void The_app_builds_its_chaster_service_watching_the_account()
     {
-        var src = Source("Services", "Chaster", "ChasterService.App.cs");
+        var src = Source("Services", "Chaster", "ChasterServiceApp.cs");   // this head: a static class, not a partial (Core holds ChasterService)
         var create = src[src.IndexOf("public static ChasterService CreateForApp()", StringComparison.Ordinal)..];
         create = create[..create.IndexOf("\n    }", StringComparison.Ordinal)];
         Assert.Contains("svc.WatchIdentity();", create);

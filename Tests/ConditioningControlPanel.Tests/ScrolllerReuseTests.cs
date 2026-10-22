@@ -288,7 +288,7 @@ public sealed class ScrolllerReuseTests : IDisposable
         while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        var js = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "Resources", "web", "fyp", "main.js"));
+        var js = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "Assets", "web", "fyp", "main.js"));
         int append = js.IndexOf("case 'assets-append':", StringComparison.Ordinal);
         int status = js.IndexOf("case 'online-status':", StringComparison.Ordinal);
         Assert.True(append > 0 && status > append);

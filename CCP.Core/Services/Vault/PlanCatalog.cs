@@ -82,7 +82,7 @@ public static class PlanCatalog
     public static async Task<PlanSet> GetAsync(string? baseUrl = null)
     {
         if (DateTime.UtcNow - _readUtc < CacheFor) return _current;
-        if (App.Settings?.Current?.OfflineMode == true) return _current;   // Offline Mode: the built-in list
+        if (CoreSettings.Service?.Current?.OfflineMode == true) return _current;   // Offline Mode: the built-in list
         await Gate.WaitAsync().ConfigureAwait(false);
         try
         {

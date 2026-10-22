@@ -48,7 +48,7 @@ public class PersonalityStudioOwnPresetTests
     [Fact]
     public void DeletingTheActivePreset_TellsThePickers()
     {
-        var src = Source("ConditioningControlPanel", "Services", "Companion", "PersonalityService.cs");
+        var src = SourceRoots.ReadProductFile("Services", "Companion", "PersonalityService.cs");
         Assert.Contains("if (wasActive) PersonalityChanged?.Invoke(this, GetActivePreset());", src);
     }
 
@@ -59,7 +59,7 @@ public class PersonalityStudioOwnPresetTests
     [InlineData("companion_studio_delete_confirm")]
     public void EveryLanguageCarriesTheNewStudioKeys(string key)
     {
-        var dir = Path.Combine(Root(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var f in files)

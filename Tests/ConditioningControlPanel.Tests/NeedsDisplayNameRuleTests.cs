@@ -80,7 +80,7 @@ public class NeedsDisplayNameRuleTests
     [Fact]
     public void Every_new_key_is_in_all_ten_language_files_without_dashes_or_exclamations()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var file in files)
