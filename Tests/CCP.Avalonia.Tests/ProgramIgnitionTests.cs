@@ -266,7 +266,7 @@ public sealed class ProgramIgnitionTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                AppBuilder.Configure<AvApp>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
