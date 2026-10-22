@@ -1,0 +1,236 @@
+<UserControl x:Class="ConditioningControlPanel.Views.Controls.AudioPlaylistCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization">
+
+    <!-- The playlist player (ccp-bugs suggestion "a simple audio player"). One card on the Deeper
+         page, where the player's own audio files already live. Wears that page's card skin: the
+         wash is the page's own DeeperHueWashBrush, found through the tree (DynamicResource), so
+         no shade is picked here. Every value comes from AudioPlaylistCardModel. -->
+    <UserControl.Resources>
+        <Style x:Key="PlayerIconButton" TargetType="Button" BasedOn="{StaticResource DeeperRoundIconButton}">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource DeeperAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+        </Style>
+        <Style x:Key="PlayerTextButton" TargetType="Button" BasedOn="{StaticResource DeeperRoundButton}">
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource DeeperAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource SettingCardStyle}">
+        <Grid>
+            <Border Background="{DynamicResource DeeperHueWashBrush}" CornerRadius="11"/>
+            <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
+                    Background="{DynamicResource DeeperAccentBrush}"/>
+            <StackPanel Margin="16,10,16,12">
+
+                <!-- Kicker + the one way in -->
+                <DockPanel LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left" Text="{loc:Str audio_player_title}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource DeeperAccentBrush}"
+                               FontSize="10" FontWeight="Bold"/>
+                    <Button x:Name="BtnAdd" DockPanel.Dock="Right"
+                            Style="{StaticResource PlayerTextButton}"
+                            Content="{loc:Str audio_player_add}"
+                            ToolTip="{loc:Str audio_player_add_tip}"
+                            IsEnabled="{Binding IsAvailable}"
+                            Click="BtnAdd_Click"/>
+                </DockPanel>
+
+                <!-- Empty state -->
+                <TextBlock x:Name="TxtEmpty" Text="{loc:Str audio_player_empty}"
+                           Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}"
+                           Foreground="{DynamicResource TextMutedBrush}" FontSize="12"
+                           TextWrapping="Wrap" Margin="0,8,0,2"/>
+
+                <StackPanel x:Name="PlayerBody"
+                            Visibility="{Binding HasTracks, Converter={StaticResource BoolToVisibility}}">
+
+                    <!-- Transport: previous, play/pause, next, then what is loaded -->
+                    <Grid Margin="0,10,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Margin="-4,0,12,0">
+                            <Button x:Name="BtnPrevious" Style="{StaticResource PlayerIconButton}" Content="⏮"
+                                    ToolTip="{loc:Str audio_player_tip_previous}" Click="BtnPrevious_Click"/>
+                            <Button x:Name="BtnPlayPause" Style="{StaticResource PlayerIconButton}" Content="▶"
+                                    Width="36" Height="32" FontSize="14" Foreground="White"
+                                    Background="{DynamicResource DeeperAccentBrush}" BorderThickness="0"
+                                    Click="BtnPlayPause_Click"/>
+                            <Button x:Name="BtnNext" Style="{StaticResource PlayerIconButton}" Content="⏭"
+                                    ToolTip="{loc:Str audio_player_tip_next}" Click="BtnNext_Click"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                   Text="{Binding CurrentName}" ToolTip="{Binding CurrentName}"
+                                   Visibility="{Binding HasCurrent, Converter={StaticResource BoolToVisibility}}"
+                                   Foreground="{DynamicResource TextLightBrush}" FontSize="13" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                   Text="{loc:Str audio_player_nothing_loaded}"
+                                   Visibility="{Binding HasCurrent, Converter={StaticResource InverseBoolToVisibility}}"
+                                   Foreground="{DynamicResource TextMutedBrush}" FontSize="12"/>
+                    </Grid>
+
+                    <!-- Seek bar with elapsed / total -->
+                    <Grid Margin="0,0,0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="46"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="46"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding ElapsedText}" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                        <Slider Grid.Column="1" x:Name="SliderSeek" Margin="6,0" VerticalAlignment="Center"
+                                Minimum="0" Maximum="{Binding SeekMaximum, Mode=OneWay}"
+                                Value="{Binding PositionSeconds, Mode=OneWay}"
+                                IsEnabled="{Binding CanSeek}" IsMoveToPointEnabled="True" Focusable="False"
+                                Thumb.DragStarted="SliderSeek_DragStarted"
+                                Thumb.DragCompleted="SliderSeek_DragCompleted"
+                                ValueChanged="SliderSeek_ValueChanged"/>
+                        <TextBlock Grid.Column="2" Text="{Binding TotalText}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                    </Grid>
+
+                    <!-- Volume -->
+                    <Grid MinHeight="30" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="46"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="46"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{loc:Str audio_player_volume}" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"/>
+                        <Slider Grid.Column="1" x:Name="SliderVolume" Margin="6,0" VerticalAlignment="Center"
+                                Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                                Value="{Binding Volume, Mode=TwoWay}"/>
+                        <TextBlock Grid.Column="2" Text="{Binding VolumeText}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                    </Grid>
+
+                    <!-- The list. Click a name to play it; the row tools show on hover. -->
+                    <ScrollViewer MaxHeight="232" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="TrackList" ItemsSource="{Binding Rows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border x:Name="RowBorder" CornerRadius="6" Padding="6,3" Background="Transparent">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="26"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="RowNumber" Text="{Binding Number}" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                                            <Button Grid.Column="1" Click="RowPlay_Click" Cursor="Hand"
+                                                    ToolTip="{Binding Path}" Focusable="False"
+                                                    HorizontalContentAlignment="Left">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="Transparent" Padding="0,3">
+                                                            <TextBlock x:Name="RowName" Text="{Binding Name}"
+                                                                       Foreground="{DynamicResource TextLightBrush}"
+                                                                       FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                                <Setter TargetName="RowName" Property="Foreground"
+                                                                        Value="{DynamicResource DeeperAccentBrush}"/>
+                                                                <Setter TargetName="RowName" Property="FontWeight" Value="SemiBold"/>
+                                                            </DataTrigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                            <StackPanel x:Name="RowTools" Grid.Column="2" Orientation="Horizontal"
+                                                        Opacity="0" IsHitTestVisible="False">
+                                                <Button Style="{StaticResource PlayerIconButton}" Content="▲"
+                                                        Width="24" Height="24" FontSize="9"
+                                                        IsEnabled="{Binding CanMoveUp}" Click="RowUp_Click"
+                                                        ToolTip="{loc:Str audio_player_tip_move_up}"/>
+                                                <Button Style="{StaticResource PlayerIconButton}" Content="▼"
+                                                        Width="24" Height="24" FontSize="9"
+                                                        IsEnabled="{Binding CanMoveDown}" Click="RowDown_Click"
+                                                        ToolTip="{loc:Str audio_player_tip_move_down}"/>
+                                                <Button Style="{StaticResource PlayerIconButton}" Content="✕"
+                                                        Width="24" Height="24" FontSize="10"
+                                                        Foreground="{DynamicResource DangerBrush}" Click="RowRemove_Click"
+                                                        ToolTip="{loc:Str audio_player_tip_remove}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="RowBorder" Property="Background"
+                                                    Value="{DynamicResource DeeperAccentTransparent20Brush}"/>
+                                            <Setter TargetName="RowTools" Property="Opacity" Value="1"/>
+                                            <Setter TargetName="RowTools" Property="IsHitTestVisible" Value="True"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter TargetName="RowNumber" Property="Foreground"
+                                                    Value="{DynamicResource DeeperAccentBrush}"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Loop, shuffle and clear: one click away -->
+                    <feat:MoreFold x:Name="OptionsFold">
+                        <Grid MinHeight="34">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="BtnLoop" Style="{StaticResource PlayerTextButton}"
+                                    VerticalAlignment="Center" Click="BtnLoop_Click"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                <TextBlock Text="{loc:Str audio_player_shuffle}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                           Margin="0,0,10,0"/>
+                                <CheckBox x:Name="ChkShuffle" Style="{StaticResource ToggleStyle}"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding Shuffle, Mode=TwoWay}"/>
+                            </StackPanel>
+                            <Button Grid.Column="3" x:Name="BtnClear" Style="{StaticResource PlayerTextButton}"
+                                    VerticalAlignment="Center"
+                                    Foreground="{DynamicResource TextMutedBrush}"
+                                    Content="{loc:Str audio_player_clear}" Click="BtnClear_Click"/>
+                        </Grid>
+                        <!-- A track with a Deeper enhancement runs it. On by default (owner, 7.1.8). -->
+                        <DockPanel MinHeight="34" LastChildFill="True"
+                                   ToolTip="{loc:Str audio_player_enhancements_tip}">
+                            <CheckBox x:Name="ChkEnhancements" DockPanel.Dock="Right"
+                                      Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      IsChecked="{Binding Enhancements, Mode=TwoWay}"/>
+                            <TextBlock Text="{loc:Str audio_player_enhancements}" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                        </DockPanel>
+                    </feat:MoreFold>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

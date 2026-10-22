@@ -84,6 +84,8 @@ public sealed class FlashLayer : BaseLayer
         /// <summary>Natasha's dodge: Environment.TickCount64 when the ring empties (0 = no ring).</summary>
         internal long DodgeUntilMs;
         internal bool LuckyPulse;
+        /// <summary>A Scrolller picture: "via Scrolller" sits in its bottom-right corner.</summary>
+        internal bool Credit;
 
         internal double ElapsedSec;          // pulse clock, advanced by Update
         internal SKMaskFilter? BlurCache;    // rebuilt only when the quantized sigma changes
@@ -125,8 +127,14 @@ public sealed class FlashLayer : BaseLayer
     private readonly SKPaint _imagePaint = new() { FilterQuality = SKFilterQuality.Low };
     private readonly SKPaint _fillPaint = new();
     private readonly SKPaint _ringPaint = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+    private readonly SKPaint _creditPaint = new()
+    {
+        IsAntialias = true,
+        TextAlign = SKTextAlign.Right,
+        Typeface = SKTypeface.FromFamilyName("Segoe UI") ?? SKTypeface.Default,
+    };
 
-    public FlashLayer(CompositorEngine engine) : base(engine) { }
+    public FlashLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.Flash;
 
@@ -473,9 +481,27 @@ public sealed class FlashLayer : BaseLayer
                 }
             }
             if (item.DodgeUntilMs > 0 && item.Exit == null) DrawDodgeRing(canvas, fit, alpha, item.DodgeUntilMs);
+            if (item.Credit && item.Exit == null) DrawCredit(canvas, fit, alpha, dpiScale);
             canvas.RestoreToCount(saves);
             if (item.Exit != null) DrawSparks(canvas, item);
         }
+    }
+
+    /// <summary>"via Scrolller" in the picture's bottom-right corner, like the video badge: 11 DIP,
+    /// white at 75% of the flash's own alpha over a soft dark shadow, so it fades with the flash.</summary>
+    private void DrawCredit(SKCanvas canvas, SKRect fit, byte alpha, double dpiScale)
+    {
+        var scale = (float)(dpiScale > 0 ? dpiScale : 1.0);
+        var size = 11f * scale;
+        if (fit.Width < size * 8 || fit.Height < size * 3) return;   // too small to carry it
+        _creditPaint.TextSize = size;
+        var x = fit.Right - 8f * scale;
+        var y = fit.Bottom - 7f * scale;
+        var a = alpha * 0.75f;
+        _creditPaint.Color = new SKColor(0, 0, 0, (byte)Math.Clamp(a * 0.8f, 0, 255));
+        canvas.DrawText(Video.ScrolllerCredit.Mark, x + scale, y + scale, _creditPaint);
+        _creditPaint.Color = new SKColor(255, 255, 255, (byte)Math.Clamp(a, 0, 255));
+        canvas.DrawText(Video.ScrolllerCredit.Mark, x, y, _creditPaint);
     }
 
     private static readonly SKColor SparkPink = new(0xFF, 0x69, 0xB4);
