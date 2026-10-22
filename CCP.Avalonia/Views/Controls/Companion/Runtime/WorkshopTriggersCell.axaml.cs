@@ -127,7 +127,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 var dialog = new TextEditorDialog("Trigger Phrases", original);
                 if (await dialog.ShowDialogSafe<bool?>(owner) != true || dialog.ResultData is not { } edited) return;
                 // A cloud restore or mod switch during the modal editor must not overwrite its new pool.
-                if (!ReferenceEquals(settings, CoreSettings.Current) || !ReferenceEquals(mod, CoreMods.ActiveModToken)) return;
+                if (!ReferenceEquals(settings, CoreSettings.Current) || !ReferenceEquals(mod, CoreMods.ActiveModToken))
+                {
+                    Log.Warning("Trigger phrase edit dropped: settings were restored or the mod changed while the editor was open");
+                    return;
+                }
                 TriggerPhraseEdits.Apply(settings, original, edited, CoreMods.Service?.GetDefaultCustomTriggers());
                 CoreSettings.Save();
             }
