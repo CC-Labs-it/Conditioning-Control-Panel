@@ -95,7 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
-            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
+            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); };
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
@@ -246,6 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void CloseAllForPanic()
         {
+            _dtrhPanicEpoch++; // also cancels a recovery whose Closed callback re-enters panic
             GameWindow[] all;
             lock (Open) all = Open.ToArray();
             foreach (var w in all)

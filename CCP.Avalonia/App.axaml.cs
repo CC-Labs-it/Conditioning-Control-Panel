@@ -434,6 +434,8 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
+                // WPF App startup: report a previous native/heartbeat failure once, after logging is ready.
+                Services.Chaos.ChaosCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
                 // writes settings.json under CorePaths.UserData (~/.local/share on Linux), with
@@ -1202,6 +1204,8 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.Dispose(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
+            try { Views.Games.GameWindow.CloseAllForPanic(); } catch { /* stop watchdogs before clearing diagnostics */ }
+            Services.Chaos.ChaosCrashSentinel.Clear(); // WPF App.OnExit: a clean app shutdown disarms it
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }

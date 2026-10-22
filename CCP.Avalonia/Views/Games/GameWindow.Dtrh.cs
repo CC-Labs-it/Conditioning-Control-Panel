@@ -8,12 +8,14 @@
 // stay in GameWindow.HandleMessage.
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
-// ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
+// Slice C: heartbeat recovery (one relaunch per app session) and the shared crash sentinel.
+// ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
-// loom-*, favorites + asset-stats, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
+// loom-*, favorites + asset-stats, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
-// achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
-// tucking the panel to the tray, and SeasonRecap TrackFeature.
+// achievements bubble credit, RevealService.Sync, EMI desk fires, the audio-web pack request,
+// tucking the panel to the tray, and SeasonRecap TrackFeature. WebHost has no process-failed signal;
+// the heartbeat watch recovers silent ready pages only, not failures before ready.
 using System;
 using System.IO;
 using System.Linq;
@@ -50,6 +52,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private JObject? _dtrhLastProgress;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
 
+        private DispatcherTimer? _dtrhHeartbeatWatch;
+        private DateTime _dtrhLastHeartbeatUtc;
+        private bool _dtrhRecoveryQueued;
+        private static int _dtrhPanicEpoch;
+        // WPF's _relaunchedOnce is application-wide: closing/reopening the hub does not replenish it.
+        internal static bool DtrhRelaunchedOnce;
+        internal bool DtrhWatchRunning => _dtrhHeartbeatWatch?.IsEnabled == true;
+
         internal bool DtrhRunActive => _dtrhRunActive;
 
         /// <summary>WPF IsReady: the page said ready and is not on its way out.</summary>
@@ -76,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleDtrh(JObject o)
         {
+            if (_closing) return true; // a dead carrier cannot start a run or clear its crash evidence
             switch ((string?)o["type"])
             {
                 case "ready":
@@ -83,8 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnDtrhPageReady();
                     return true;
                 case "heartbeat":
+                    _dtrhLastHeartbeatUtc = DtrhUtcNow();
+                    return true;
                 case "pong":
-                    return true;   // the watchdog lands with game-dtrh-host-b
+                    return true; // WPF's DtRH watch consumes heartbeat, unlike the race's ping ladder
                 case "request-run":
                     OnDtrhRequestRun(o);
                     return true;
@@ -96,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     _dtrhRunActive = true;
                     _dtrhLastProgress = null;
                     _dtrhRunStartedUtc = DtrhUtcNow();
+                    ChaosCrashSentinel.Mark($"mode=dtrh-web diff={(string?)o["difficulty"] ?? "Gentle"}");
                     Log.Information("DtrhHost: run started (diff={D}, mode={M})", (string?)o["difficulty"] ?? "Gentle", (string?)o["mode"]);
                     return true;
                 case "run-ended":
@@ -195,6 +209,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);
                 CoreProgression.AddXP(booking.BaseXp, "Chaos");   // WPF AddXP(baseXp, XPSource.Chaos)
+                // Teardown books the last snapshot too, but a vanished page is still an abnormal end.
+                if (!fromTeardown) ChaosCrashSentinel.Clear();
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;
@@ -209,11 +225,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Warning("DtrhHost.OnRunEnded: {E}", ex.Message); }
         }
 
+        /// <summary>WPF StartHeartbeatWatch (:948): the page beats only after ready, every ~2 s.</summary>
+        private void StartDtrh()
+        {
+            _dtrhLastHeartbeatUtc = DtrhUtcNow();
+            _dtrhHeartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(DtrhHeartbeatRule.PollSeconds) };
+            _dtrhHeartbeatWatch.Tick += (_, _) => CheckDtrhHeartbeat(DtrhUtcNow());
+            _dtrhHeartbeatWatch.Start();
+        }
+
+        /// <summary>One production timer tick; tests step the same clock without sleeping.</summary>
+        internal string CheckDtrhHeartbeat(DateTime nowUtc)
+        {
+            if (_closing || _dtrhExiting || !IsReady) return "idle";
+            if (_dtrhRecoveryQueued) return "recovering";
+            if (!DtrhHeartbeatRule.ShouldRecover(IsReady, _dtrhExiting, _dtrhRunActive, nowUtc - _dtrhLastHeartbeatUtc))
+                return "ok";
+            _dtrhRecoveryQueued = true;
+            int panicEpoch = _dtrhPanicEpoch;
+            // WPF Recover dispatches before disposing. A panic/close queued ahead of this wins.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_closing || _dtrhExiting || panicEpoch != _dtrhPanicEpoch) return;
+                bool retry = !DtrhRelaunchedOnce;
+                if (retry) DtrhRelaunchedOnce = true;
+                Log.Warning("DtrhHost: heartbeat silent - {Action}", retry ? "relaunching once" : "giving up");
+                Close(); // stops the timer, banks the last snapshot, preserves the sentinel
+                if (retry && panicEpoch == _dtrhPanicEpoch)
+                {
+                    try { Launch(DtrhId); }
+                    catch (Exception ex) { Log.Warning(ex, "DtrhHost: recovery launch failed; giving up"); }
+                }
+            });
+            return "recovering";
+        }
+
         /// <summary>WPF DisposeAll (:1002): the window died with a descent still falling (frame X, Alt+F4, panic),
         /// so bank the last snapshot as an abandoned booking rather than dropping the run.</summary>
         private void DisposeDtrh()
         {
             if (!IsDtrh) return;
+            _dtrhHeartbeatWatch?.Stop();
+            _dtrhHeartbeatWatch = null;
             DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             if (DtrhRunCloseRule.ShouldBookOnClose(_dtrhRunActive, _dtrhLastProgress != null))
             {
