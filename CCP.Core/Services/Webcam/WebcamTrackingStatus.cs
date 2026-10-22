@@ -1,15 +1,15 @@
 namespace ConditioningControlPanel.Services;
 
-    public enum WebcamTrackingState
-    {
-        Stopped,
-        Starting,
-        Tracking,
-        FaceLost,
-        CameraInUse,
-        CameraDenied,
-        Error
-    }
+public enum WebcamTrackingState
+{
+    Stopped,
+    Starting,
+    Tracking,
+    FaceLost,
+    CameraInUse,
+    CameraDenied,
+    Error
+}
 
 public static class WebcamTrackingStatus
 {

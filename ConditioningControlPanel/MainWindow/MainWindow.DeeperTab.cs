@@ -763,12 +763,6 @@ namespace ConditioningControlPanel
         // part of the tab. Keeping one global handler makes the entire window — and thus
         // the whole Deeper tab — a uniform drop target.
 
-        // Extension gate only; ImportEnhancementFiles sniffs the JSON for the
-        // schema tag so a dropped settings.json is skipped quietly instead of
-        // producing an "Import failed" dialog.
-        private static bool IsImportableEnhancementPath(string path)
-            => Services.Deeper.EnhancementImportRules.IsImportablePath(path);
-
         private void ImportEnhancementFiles(System.Collections.Generic.IEnumerable<string> paths)
         {
             var lib = App.EnhancementLibrary;

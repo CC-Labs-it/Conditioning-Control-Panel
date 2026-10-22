@@ -112,6 +112,24 @@ public sealed class WebcamTrackerTests
         });
     }
 
+    [Fact]
+    public void RealStartStopAndFailedOpen_DriveTheTrackingState()
+    {
+        var src = new FakeSource();
+        WithConsent(true, () =>
+        {
+            var t = WebcamTracker.Instance;
+            WebcamTracker.SourceFactory = () => src;
+            Assert.True(t.Start(), t.LastError);
+            Assert.Equal(WebcamTrackingState.Tracking, t.TrackingState); // black frames: never found, never lost
+            t.Stop();
+            Assert.Equal(WebcamTrackingState.Stopped, t.TrackingState);
+            WebcamTracker.SourceFactory = () => new FakeSource { OpenResult = false };
+            Assert.False(t.Start());
+            Assert.Equal(WebcamTrackingState.Error, t.TrackingState);
+        });
+    }
+
     private static void WaitFor(Func<bool> cond)
     {
         var until = DateTime.UtcNow.AddSeconds(20);
