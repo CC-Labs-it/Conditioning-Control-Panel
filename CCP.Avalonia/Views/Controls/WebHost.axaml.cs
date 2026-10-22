@@ -103,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>
         internal int StampedRequests { get; private set; }
 
-        private void StampRequestHeader(WebResourceRequestedEventArgs e)
+        internal void StampRequestHeader(WebResourceRequestedEventArgs e)
         {
             try
             {

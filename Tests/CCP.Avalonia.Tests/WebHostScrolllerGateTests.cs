@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -89,5 +90,34 @@ public sealed class WebHostScrolllerGateTests
         Assert.False(web.GateScrolllerRequest(new Uri("https://notscrolller.com/a.jpg"), Get, Set));
         Assert.False(new WebHost { GateScrolller = false }.GateScrolllerRequest(Media, Get, Set));
         Assert.Equal("edge", headers["User-Agent"]);
+    });
+
+    /// <summary>The engine's own header collection, as the GTK/WebView2 adapters hand it over.</summary>
+    private sealed class Headers : WebViewWebRequestHeaders
+    {
+        public readonly Dictionary<string, string> D = new(StringComparer.OrdinalIgnoreCase);
+        public override int Count => D.Count;
+        public override IEnumerable<string> Keys => D.Keys;
+        public override IEnumerable<string> Values => D.Values;
+        public override bool TrySet(string name, string value) { D[name] = value; return true; }
+        public override bool TryRemove(string name) => D.Remove(name);
+        public override bool ContainsKey(string key) => D.ContainsKey(key);
+        public override bool TryGetValue(string key, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out string value) => D.TryGetValue(key, out value);
+        public override IEnumerator<KeyValuePair<string, string>> GetEnumerator() => D.GetEnumerator();
+    }
+
+    [Fact]
+    public Task TheEngineHandlerRewritesTheRequestItIsHanded() => WithSwitch(true, () =>
+    {
+        var web = new WebHost();
+        var h = new Headers();
+        (h.D["User-Agent"], h.D["Referer"]) = ("Mozilla/5.0 Edg/155", "https://reddit.com/r/x");
+        web.StampRequestHeader(new WebResourceRequestedEventArgs
+        {
+            Request = new WebViewWebResourceRequest { Uri = Media, Method = HttpMethod.Get, Headers = h },
+        });
+        Assert.Equal(ScrolllerSource.HonestUserAgent, h.D["User-Agent"]);
+        Assert.Equal("https://cclabs.app/", h.D["Referer"]);
+        Assert.Equal(1, web.ScrolllerRewrites);
     });
 }
