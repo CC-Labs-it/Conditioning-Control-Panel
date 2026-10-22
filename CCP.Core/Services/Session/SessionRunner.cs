@@ -327,7 +327,9 @@ namespace ConditioningControlPanel.Services
 
             try { SessionLog.EndSession(completed, elapsed, xp); }
             catch (Exception ex) { Log.Error(ex, "SessionLog.EndSession failed"); }
-            CoreDiscord.Service?.SetIdleActivity(); // WPF SessionEngine:390, after restored services
+            // WPF SessionEngine:390 sits between SessionStopped (386) and SessionCompleted (429); Stopped fuses
+            // both, so idle goes first: after it, a completion handler starting the next session would be clobbered.
+            CoreDiscord.Service?.SetIdleActivity();
             CurrentSession = null;
             // WPF SessionEngine.SessionStopped + SessionCompleted, as one call (ProgramEngineBridge).
             try { Stopped?.Invoke(session, completed); }
