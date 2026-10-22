@@ -739,3 +739,30 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 3 EMI screen faces
+
+One 1024 x 1024 sRGB UASTC atlas, sixteen 256px cells, 11 mips. Budget is
+5,592,404 bytes (5.333 MiB) as RGBA8 with mips, zero geometry.
+The manifest cells map is row-major with its origin at the top left.
+
+Neutral, happy, grin, wink, determined, drift focus, dizzy, sleepy, frozen,
+heart eyes, x eyes, smug, sad, sparkle, cheer and blank occupy all sixteen cells.
+Original face paths extend the project EMI face vocabulary: pink marks on a
+plum display, with pale highlights. There are no words, scan lines or animation.
+The blank cell is uniformly plum. Frozen uses a pale ice accent.
+
+Bind to the existing emi_screen material. Keep its original full 0..1 UV island;
+select a cell through the texture transform or shader, not by editing model UVs.
+For a cell (col,row), sample between pixel (256*col+1,256*row+1) and
+(256*(col+1)-1,256*(row+1)-1), using the atlas top-left convention and the host's
+existing glTF texture vertical orientation. The atlas has opaque RGB and sRGB
+decoding. Clamp wrapping; cap selected mip at 2 for the intended 64px display.
+The engine owns cell changes, transition timing, emission and Gentle Visuals.
+
+All sixteen packed cells were decoded and reviewed both enlarged and at 64px.
+Each has at least a 24px clear border; blank contains no expression pixels.
+Strict Khronos KTX validation passes. No kart mesh, screen UV or material is
+changed by this family. Expressions and accent choices are artistic assumptions.
+Source paths, generation script, masters and contact sheet stay private.
+Original work for CCP based on its existing EMI identity; project asset terms apply.
