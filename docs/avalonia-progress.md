@@ -2526,3 +2526,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/leash-receipts-hold: +836
 - Hold-to-cut: Core LeashHoldFlow; the ring and the "Cut the leash?" window run from the panic key (X11 key-up added). Early release never cuts, and the panic still fires on the first press.
 - Holder receipts list (LeashSentList) ported but not hosted yet; the row is stub until the holder card lands.
+
+## avalonia-port/chaos-dvd-overlay: +674
+- Chaos DVD bounce: Core ChaosDvdFlock (fail-proven maths) + one click-through host window on the existing frame source; panic/run-end close it; refuses without a compositor.
+- Rows chaos-dvd-overlay + chaos-dvd-host missing -> stub (no caller until the ChaosModeService toy layer lands).
