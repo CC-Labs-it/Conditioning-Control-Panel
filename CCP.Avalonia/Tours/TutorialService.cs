@@ -920,7 +920,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// looks like, how to stop everything, who the chip at the bottom of the rail is, what XP
         /// is for, where the system settings live, and how to get this back.
         ///
-        /// <para>The seven ids are API. <see cref="Services.EmiDesk.EmiTourNarrator"/> maps each one
+        /// <para>The seven ids are API. <see cref="Views.Windows.EmiDesk.EmiTourNarrator"/> maps each one
         /// onto the line pool <c>tour.&lt;stepId&gt;</c>, so renaming a step here silently mutes her
         /// for that card (docs/emi-desk/WAVE1-CONTRACT.md).</para>
         ///

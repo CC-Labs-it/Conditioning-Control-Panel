@@ -1,7 +1,9 @@
 // WPF MainWindow.Settings.cs shell entry points. Settings sections remain their own live
 // editors; Save persists their current model and offers a preset through the existing preset page.
 // Tours use TutorialHead/CoreTutorial, and folder migration uses the shared PackFolderMover.
-// ponytail: EMI tour narration and the Save tick/ripple remain with the head's FX/narration lanes.
+// Save plays the tick/ripple (FlashSaveAbsorb, HeroFx) and shell tours are narrated by EMI
+// (EmiTourNarrator, attached in TutorialHead.StartOnShell).
+// ponytail: the book offer after a tour ending (WPF EmiCodex.MaybeOfferSoon) is wire-shell-settings-b-next.
 
 using System;
 using System.Collections.Generic;
@@ -237,6 +239,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private async void BtnSave_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => await SaveSettingsAndOfferPreset();
+        {
+            // WPF MainWindow.Settings.cs:381: the tick + ripple first, on its own clock.
+            FlashSaveAbsorb();
+            await SaveSettingsAndOfferPreset();
+        }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using Window = global::Avalonia.Controls.Window;
 
 namespace ConditioningControlPanel.Avalonia.Tours
@@ -96,8 +97,11 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 showDeeper: () => shell.ShowTab("deeper"),
                 showTab: key => shell.ShowTab(key));
 
+            // WPF MainWindow.Settings.cs:570: EMI narrates from here, attached before Start so the
+            // first card's moment is heard; the overlay's Closed is the matching detach.
+            EmiTourNarrator.Attach(Service);
             Service.Start(type);
-            if (!Service.IsActive) return;
+            if (!Service.IsActive) { EmiTourNarrator.Detach(); return; }
 
             var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
             if (browser != null) browser.IsVisible = false;
@@ -106,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             overlay.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
+                EmiTourNarrator.Detach();
                 if (browser != null) browser.IsVisible = true;
             };
             overlay.Show();
@@ -157,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         internal static void ResetForTests()
         {
             try { if (Service.IsActive) Service.Skip(); } catch { }
+            EmiTourNarrator.Detach();
             _shellOverlay = null;
         }
     }

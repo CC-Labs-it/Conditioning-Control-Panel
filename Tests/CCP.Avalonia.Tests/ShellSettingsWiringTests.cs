@@ -15,6 +15,8 @@ using ConditioningControlPanel.Avalonia.Tours;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -118,6 +120,73 @@ public sealed class ShellSettingsWiringTests
         Assert.Equal(Loc.Get("title_name_taken"), notice.Title);
         Assert.Equal(2, service.Current.UserPresets.Count);
         notice.Close();
+    });
+
+    private const string TourLines = """
+        {"version":1,"moments":{
+          "tourStarted":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}},
+          "tour.welcome":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}},
+          "tourStep":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}},
+          "tourSkipped":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}}},
+         "pools":{"p":[{"id":"l","t":"line","spice":0}]}}
+        """;
+
+    [Fact]
+    public Task ShellTourSummonsEmiAndNarratesEachStepUntilTheOverlayCloses() => Run(async (shell, service) =>
+    {
+        var desk = EmiDeskService.Instance;
+        var previousEngine = desk.LineEngine;
+        desk.LineEngine = EmiLineEngine.FromJson(TourLines);
+        service.Current.EmiDeskEnabled = true;
+        service.Current.EmiDeskMuteAvatar = false;
+        try
+        {
+            Click(shell.Named<Button>("BtnMainHelp")!);
+            Click(shell.Named<Button>("BtnStartTutorial")!);
+            Assert.Equal("FullTour", CoreTutorial.CurrentTourName);
+            Assert.True(desk.IsOut);                                  // summoned for the tour
+            Assert.True(desk.LineEngine.EverSpent("tourStarted"));
+            Assert.True(desk.LineEngine.EverSpent("tour.welcome"));   // the first card's own pool
+            Assert.False(desk.LineEngine.EverSpent("tourStep"));
+            CoreTutorial.Next();                                      // avatar_intro: no pool, generic step
+            Assert.True(desk.LineEngine.EverSpent("tourStep"));
+            PanicSurfaces.All.Single(s => s.Id == "tour").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(desk.LineEngine.EverSpent("tourSkipped"));
+            Assert.Null(EmiTourNarrator.Active);                      // detached with the overlay
+        }
+        finally
+        {
+            desk.PanicSilence();
+            desk.Window?.ShutDown();
+            Dispatcher.UIThread.RunJobs();
+            desk.LineEngine = previousEngine;
+        }
+        await Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public Task SaveDrawsTheTickAndRippleUnlessMotionIsOff(MotionLevel level) => Run(async (shell, service) =>
+    {
+        service.Current.MotionLevel = level;
+        var tick = shell.Named<global::Avalonia.Controls.Shapes.Path>("SaveTick")!;
+        var ripple = shell.Named<Border>("SaveRipple")!;
+        Click(shell.Named<Button>("BtnSaveAll")!);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        if (level == MotionLevel.Off)
+        {
+            Assert.Equal(0, tick.Opacity);
+            Assert.Equal(0, ripple.Opacity);
+        }
+        else
+        {
+            Assert.True(tick.Opacity > 0.5, $"tick opacity {tick.Opacity}");
+            Assert.True(ripple.Opacity > 0.1, $"ripple opacity {ripple.Opacity}");
+        }
+        (await Dialog<MessageDialog>(shell)).Close();
     });
 
     [Fact]

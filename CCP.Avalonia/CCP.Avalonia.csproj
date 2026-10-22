@@ -46,6 +46,7 @@
          IconGlyphRenderTests proves it draws on 12.1.2 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Assets\emi\desk-lines.json" Link="Resources\emi\desk-lines.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.md. Linux loads the
          system libvlc (libvlc.so.5); only Windows needs the bundled natives. -->
     <PackageReference Include="LibVLCSharp" Version="3.10.1" />

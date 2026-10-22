@@ -512,12 +512,12 @@ public static class EmiChains
         => new("say", "SAY",
             new[]
             {
-                Fb("0_0", 420, "."),
-                Fb("0_0", 420, ".."),
-                Fb("0_0", 520, "..."),
+                Fb("0_0", EmiSpeechCadence.Dot1Ms, "."),
+                Fb("0_0", EmiSpeechCadence.Dot2Ms, ".."),
+                Fb("0_0", EmiSpeechCadence.Dot3Ms, "..."),
                 Fb(string.IsNullOrEmpty(reactionFace) ? "^_^" : reactionFace,
                    Math.Max(400, holdMs), line ?? string.Empty),
-                Fb("0_0", 200, null)
+                Fb("0_0", EmiSpeechCadence.RestMs, null)
             });
 
     /// <summary>
@@ -526,11 +526,7 @@ public static class EmiChains
     /// There is deliberately no ceiling; the growth is linear and her longest line is under 120
     /// characters.
     /// </summary>
-    public static int SayHoldMs(string? line)
-    {
-        int len = line?.Length ?? 0;
-        return Math.Max(4050, 1890 + 61 * len);
-    }
+    public static int SayHoldMs(string? line) => EmiSpeechCadence.HoldMs(line);
 
     // ---------------------------------------------------------------- the player
 

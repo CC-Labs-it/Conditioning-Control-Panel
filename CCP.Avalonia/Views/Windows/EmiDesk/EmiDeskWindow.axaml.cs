@@ -268,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True while a chain is on screen.</summary>
         // ponytail: needs EmiChains.Player (Services/EmiDesk/EmiChains.cs), wired when the chain
         // player moves to Core. Nothing on this head can start a chain, so nothing is ever live.
-        public bool ChainLive => false;
+        public bool ChainLive => _speechTimer != null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -898,15 +898,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: needs EmiChains.MakeSay / SayHoldMs / FrameForFace, none of them in Core.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
         {
-            done?.Invoke();
+            BeginSpeech(line, reactionFace, done);
         }
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
+            CancelSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -927,10 +927,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` and is constant false on this head. It is
-            // in the expression anyway: this is the one place that decides whether an idle beat may
-            // interrupt her, and a gate that has to be REMEMBERED when the chain player lands is a
-            // gate that will be forgotten.
+            // Speech owns the face until its final rest; an idle beat cannot interrupt the words.
             if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
@@ -2257,6 +2254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopIdleBeats();
                 DisarmPet();
                 CancelChain();
+                CancelHold();
                 TearDownReactions();
 
                 try { OnTearDownCore(); }
@@ -2611,8 +2609,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>ponytail: needs App.EmiDesk.ResetOnboarding() - the QA gesture replay.</summary>
         private void ResetOnboarding() { }
 
-        /// <summary>ponytail: needs App.EmiDesk.Fire(...) - her own event bus.</summary>
-        private void FireDeskEvent(string name) { }
+        private void FireDeskEvent(string name) => EmiDeskService.Instance.Fire(name);
 
         // ---------------------------------------------------------------- teardown
 
@@ -2637,6 +2634,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownReactions();
                 TearDownVox();
                 CancelChain();
+                CancelHold();
                 SweepFx(all: true);
                 Close();
             }
