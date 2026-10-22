@@ -73,13 +73,15 @@ public sealed class AudioDuckRescanTests
         using var release = new ManualResetEventSlim();
         var cancellation = TestContext.Current.CancellationToken;
         var enumerations = 0;
+        var released = false;
         var audio = new LibVlcAudio(args =>
         {
             if (!args.StartsWith("-f json")) return "";
             if (Interlocked.Increment(ref enumerations) == 1)
             {
                 entered.Set();
-                Assert.True(release.Wait(TimeSpan.FromSeconds(10), cancellation));
+                // The duck worker swallows exceptions, so record the result and assert on the test thread.
+                released = release.Wait(TimeSpan.FromSeconds(10), cancellation);
             }
             return Streams((7, 65536, 1));
         }, clock);
@@ -91,6 +93,7 @@ public sealed class AudioDuckRescanTests
             clock.Advance(TimeSpan.FromSeconds(20));
             release.Set();
             audio.Drain();
+            Assert.True(Volatile.Read(ref released));
             Assert.Equal(1, enumerations);
             clock.Advance(TimeSpan.FromMilliseconds(2500));
             audio.Drain();
