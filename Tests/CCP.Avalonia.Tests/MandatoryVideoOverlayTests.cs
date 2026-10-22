@@ -12,6 +12,8 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
+using LockdownService = ConditioningControlPanel.Services.LockdownService;
 
 namespace CCP.Avalonia.Tests;
 
@@ -42,6 +44,26 @@ public sealed class MandatoryVideoOverlayTests
             Assert.EndsWith(Loc.Get("video_add_files_hint"), MandatoryVideoOverlay.NoVideosMessage(empty));
         }
         finally { (s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds) = (min, max); }
+    }
+
+    /// <summary>Trigger a clip and wait (real LibVLC decode, bounded) until its window shows frames.</summary>
+    internal static async Task<Window> OpenClip(ConditioningControlPanel.Services.MandatoryVideoScheduler v, MandatoryVideoOverlay o, bool strict)
+    {
+        Assert.True(v.Trigger(strict));
+        Assert.Empty(o.Windows);                          // the 1.3 s pre-roll
+        await Until(() => o.Windows.Count > 0 && (o.Sink?.FrameCount ?? 0) >= 3 && o.FirstFrameMs >= 0);
+        Assert.Single(o.Windows);
+        Assert.True(o.Sink!.FrameCount >= 3, "frames decoded");
+        var w = o.Windows[0];
+        Assert.True(w.Topmost && w.WindowState == WindowState.FullScreen && w.IsVisible);
+        Assert.Same(o.Sink.Bitmap, o.Surfaces[0].Video.Source);
+        return w;
+    }
+
+    /// <summary>Real-time wait for LibVLC/dispatcher work, bounded at 5 s.</summary>
+    internal static async Task Until(Func<bool> done)
+    {
+        for (var i = 0; i < 100 && !done(); i++) await Task.Delay(50);
     }
 
     [Fact]
@@ -93,18 +115,7 @@ public sealed class MandatoryVideoOverlayTests
                             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                             .SetupWithoutStarting();
 
-                    async Task<Window> Open(bool strict)
-                    {
-                        Assert.True(v.Trigger(strict));
-                        Assert.Empty(o.Windows);                          // the 1.3 s pre-roll
-                        for (var i = 0; i < 100 && (o.Windows.Count == 0 || (o.Sink?.FrameCount ?? 0) < 3); i++) await Task.Delay(50);
-                        Assert.Single(o.Windows);
-                        Assert.True(o.Sink!.FrameCount >= 3, "frames decoded");
-                        var w = o.Windows[0];
-                        Assert.True(w.Topmost && w.WindowState == WindowState.FullScreen && w.IsVisible);
-                        Assert.Same(o.Sink.Bitmap, o.Surfaces[0].Video.Source);
-                        return w;
-                    }
+                    Task<Window> Open(bool strict) => OpenClip(v, o, strict);
 
                     // Strict with a live global panic listener: a close and the panic key are
                     // refused here (the global path stops it).
@@ -242,7 +253,7 @@ public sealed class MandatoryVideoOverlayTests
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
                     Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output replays the clip once");
-                    for (var i = 0; i < 100 && o.FirstFrameMs < 0; i++) await Task.Delay(50);
+                    await Until(() => o.FirstFrameMs >= 0);
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
                     Assert.False(v.IsPlaying, "lost again after the replay: the clip ends");
@@ -307,6 +318,138 @@ public sealed class MandatoryVideoOverlayTests
                 s.VideoMaxDurationSeconds = maxLen;
                 s.PanicOverridesAll = overrides;
                 CoreEngine.Video = engineVideo;
+            }
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>WPF 5a3e335ff/74dcf0445/51287db40/e3bba7adf: mute and close buttons in the corner of every
+    /// mandatory video once it plays. Mute silences this run only (kept across the output heal and an
+    /// attention-check replay, cleared when the run ends); the X is the Esc dismiss without the grace
+    /// pause, hidden on a strict clip and taken down by a Lockdown that starts mid-video.</summary>
+    [Fact]
+    public async Task MuteAndCloseButtonsFollowTheMandatoryVideoRule()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-mvbtn-").FullName;
+        var clip = Path.Combine(dir, "clip.y4m");
+        try
+        {
+            // A raw YUV4MPEG2 clip written here (CI has libvlc but no ffmpeg): 160x90, 25 fps, 10 s.
+            using (var f = File.Create(clip))
+            {
+                f.Write(System.Text.Encoding.ASCII.GetBytes("YUV4MPEG2 W160 H90 F25:1 Ip A1:1 C420jpeg\n"));
+                var frame = new byte[160 * 90 * 3 / 2];
+                for (var n = 0; n < 250; n++)
+                {
+                    Array.Fill(frame, (byte)(n % 200 + 30), 0, 160 * 90);
+                    Array.Fill(frame, (byte)128, 160 * 90, frame.Length - 160 * 90);
+                    f.Write(System.Text.Encoding.ASCII.GetBytes("FRAME\n"));
+                    f.Write(frame);
+                }
+            }
+            try { _ = new LibVlcAudio("--aout=dummy"); }
+            catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
+
+            var s = CoreSettings.Current;
+            var saved = (s.AudioDuckingEnabled, s.AttentionChecksEnabled, s.MercySystemEnabled, s.MasterVolume, s.VideoVolume, s.VideoMaxDurationSeconds);
+            (s.AudioDuckingEnabled, s.AttentionChecksEnabled, s.MercySystemEnabled, s.MasterVolume, s.VideoVolume, s.VideoMaxDurationSeconds) = (false, false, false, 80, 50, 0);
+            var lockdown = LockdownService.Current;
+            var o = MandatoryVideoOverlay.Instance;
+            var v = new ConditioningControlPanel.Services.MandatoryVideoScheduler(o, library: () => new[] { clip });
+            var real = o.Scheduler;
+            o.Scheduler = v;
+            try
+            {
+                await AvaloniaTestDispatcher.RunAsync(async () =>
+                {
+                    if (Application.Current is null)
+                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                            .UseSkia()
+                            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                            .SetupWithoutStarting();
+                    var sound = ConditioningControlPanel.Services.MandatoryVideoScheduler.EffectiveVolume(80, 50);
+
+                    // A plain clip: both buttons, top right, 0.6 at rest; the mouse mutes it.
+                    var w = await OpenClip(v, o, strict: false);
+                    var b = o.Surfaces[0].Buttons;
+                    Assert.True(b.Row.IsVisible && b.Mute.IsVisible && b.Close.IsVisible, "mute and close on a plain clip");
+                    Assert.Equal((IconKind.Speaker2, Loc.Get("video_btn_mute")), (b.MuteGlyph.Kind, (string?)ToolTip.GetTip(b.Mute)));
+                    Assert.Equal(0.6, b.Mute.Opacity);
+                    Assert.Equal(sound, o.PlayerVolume);
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Point Centre(Button x) => x.TranslatePoint(new Point(x.Bounds.Width / 2, x.Bounds.Height / 2), w)!.Value;
+                    var at = Centre(b.Mute);
+                    Assert.True(at.X > w.Bounds.Width - 80 && at.Y < 40, $"top-right corner ({at} in {w.Bounds})");
+                    w.MouseMove(at);
+                    Assert.Equal(1.0, b.Mute.Opacity);
+                    w.MouseDown(at, MouseButton.Left);
+                    w.MouseUp(at, MouseButton.Left);
+                    Assert.True(o.UserMuted && o.PlayerVolume == 0, $"muted (volume {o.PlayerVolume})");
+                    Assert.Equal((IconKind.SpeakerMute, Loc.Get("video_btn_unmute")), (b.MuteGlyph.Kind, (string?)ToolTip.GetTip(b.Mute)));
+                    o.UpdateVolume();   // Settings > Audio moving does not unmute the clip
+                    Assert.Equal(0, o.PlayerVolume);
+
+                    // The output heal replays the same clip: still muted.
+                    o.FrameTs -= Stopwatch.Frequency * 6;
+                    o.GuardTick();
+                    await Until(() => o.FirstFrameMs >= 0);
+                    Assert.True(v.IsPlaying && o.UserMuted && o.PlayerVolume == 0, "the heal replay stays muted");
+                    Assert.Equal(IconKind.SpeakerMute, o.Surfaces[0].Buttons.MuteGlyph.Kind);
+
+                    // An attention-check fail replays a fresh clip: still muted.
+                    s.AttentionChecksEnabled = true;
+                    o.Spawn(0);
+                    v.Ended();
+                    s.AttentionChecksEnabled = false;
+                    Assert.False(o.UserMuted);   // between clips, nothing is muted
+                    await Until(() => o.Windows.Count == 1 && o.FirstFrameMs >= 0 && o.Surfaces[0].Buttons.Row.IsVisible);
+                    Assert.True(v.IsPlaying && o.UserMuted && o.PlayerVolume == 0, "the attention replay stays muted");
+
+                    // The X: the Esc dismiss without the grace pause; the next clip has its sound.
+                    w = o.Windows[0];
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    at = Centre(o.Surfaces[0].Buttons.Close);
+                    w.MouseDown(at, MouseButton.Left);
+                    w.MouseUp(at, MouseButton.Left);
+                    Assert.False(v.IsPlaying || o.GracePaused, "the X dismisses at once");
+                    Assert.Empty(o.Windows);
+                    Assert.False(o.UserMuted);
+                    var ld = LockdownService.Current = new LockdownService();   // the app's service, up before the clip
+                    w = await OpenClip(v, o, strict: false);
+                    b = o.Surfaces[0].Buttons;
+                    Assert.True(!o.UserMuted && o.PlayerVolume == sound && b.MuteGlyph.Kind == IconKind.Speaker2, "the next clip has its sound");
+
+                    // A Lockdown that starts mid-video takes the X down; a press is refused. Mute stays.
+                    ld.Activate(TimeSpan.FromMinutes(30));
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Assert.True(b.Mute.IsVisible && !b.Close.IsVisible, "Lockdown hides the X");
+                    o.CloseFromButton();
+                    Assert.True(v.IsPlaying, "the X refuses under Lockdown");
+                    ld.Deactivate();
+                    v.End();
+
+                    // A strict clip: mute only, and the X refuses.
+                    w = await OpenClip(v, o, strict: true);
+                    b = o.Surfaces[0].Buttons;
+                    Assert.True(b.Row.IsVisible && b.Mute.IsVisible && !b.Close.IsVisible, "strict: mute only");
+                    o.CloseFromButton();
+                    Assert.True(v.IsPlaying, "strict: the X refuses");
+                    o.ToggleUserMute();
+                    Assert.True(o.UserMuted);
+                    v.Stop();   // engine stop / panic ends the run: the mute goes with it
+                    Assert.False(o.UserMuted);
+                    Assert.Empty(o.Windows);
+                });
+            }
+            finally
+            {
+                v.Stop();
+                if (!ReferenceEquals(LockdownService.Current, lockdown)) LockdownService.Current?.Deactivate();
+                LockdownService.Current = lockdown;
+                o.Scheduler = real;
+                (s.AudioDuckingEnabled, s.AttentionChecksEnabled, s.MercySystemEnabled, s.MasterVolume, s.VideoVolume, s.VideoMaxDurationSeconds) = saved;
             }
         }
         finally { Directory.Delete(dir, true); }
