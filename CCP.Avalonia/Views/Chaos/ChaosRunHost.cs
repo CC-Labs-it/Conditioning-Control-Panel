@@ -152,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 try { _overlay.Close(); } catch (Exception ex) { Log.Debug("Chaos overlay close: {E}", ex.Message); }
             }
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
+            ChaosGifCascadeOverlay.CloseActive();   // WPF ForceShutdown :3176
             CloseFx();   // WPF ForceShutdown :3189
             CleanupAfterRun();
         }
@@ -173,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
+            ChaosGifCascadeOverlay.CloseActive();   // WPF EndRun :3229
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
