@@ -89,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Width = 1280;
             Height = 800;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            Content = Web;
+            Content = spec.Id == JustDropId ? BuildJustDropChrome() : Web;
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);

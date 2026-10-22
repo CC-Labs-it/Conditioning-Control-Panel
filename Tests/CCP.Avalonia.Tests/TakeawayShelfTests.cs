@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -82,14 +83,28 @@ public sealed class TakeawayShelfTests
         var live = GameWindow.LaunchJustDropReplay("another-order", shell)!;
         Assert.Contains(Uri.EscapeDataString(JustDropHandoff.ReplayPath("code1")), live.PageUrl!.Query);
         Assert.Equal(WindowState.FullScreen, live.WindowState);
+        // WPF HostOwnedFullscreen: the strip's toggle is on screen in both modes and names the way it goes.
+        var toggle = live.FullscreenToggle!;
+        Assert.True(toggle.IsVisible);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_exit_fullscreen"), ((TextBlock)toggle.Content!).Text);
         live.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
         Assert.Equal(WindowState.Normal, live.WindowState);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_fullscreen"), ((TextBlock)toggle.Content!).Text);
         Assert.Equal(WindowState.Minimized, shell.WindowState);
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(WindowState.FullScreen, live.WindowState);
+        // Esc route 2: a focused page reports the key; the host consumes it.
+        live.HandleMessage("{\"type\":\"" + GameWindow.HostEscapeMessageType + "\"}");
+        Assert.Equal(WindowState.Normal, live.WindowState);
         // The shared game panic surface closes the real replay host and restores what it ducked.
         var surface = Assert.Single(PanicSurfaces.All, s => s.Id == "games");
         surface.Stop(shell);
         Assert.False(GameWindow.IsAnyOpen());
         Assert.Equal(prior, shell.WindowState);
+        // WPF RestoreMainWindow: anything but Maximized comes back Normal (never fullscreen again).
+        shell.WindowState = WindowState.FullScreen;
+        GameWindow.LaunchJustDropReplay("code1", shell)!.Close();
+        Assert.Equal(WindowState.Normal, shell.WindowState);
     });
 
     private sealed class Drawer : HttpMessageHandler
