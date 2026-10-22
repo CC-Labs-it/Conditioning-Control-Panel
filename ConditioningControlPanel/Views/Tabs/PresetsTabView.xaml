@@ -727,6 +727,11 @@
                                 </StackPanel>
                             </Border>
                         </WrapPanel>
+                        <!-- ccp-bugs #1427: says what a preset carries (Models/Preset.cs) and what
+                             it leaves alone. PresetScopeLineTests keeps the sentence honest. -->
+                        <TextBlock Text="{loc:Str sd_presets_scope}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"
+                                   Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
 

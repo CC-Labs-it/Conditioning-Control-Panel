@@ -70,16 +70,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal void Start(double frequencyPerHour, double volume)
         {
+            bool started = false;
             lock (_lock)
             {
                 if (!_running)
                 {
-                    _running = true;
+                    _running = started = true;
                     var every = MindWipeSchedule.TickInterval;
                     _tick = _time.CreateTimer(_ => Tick(), null, every, every);
                 }
             }
             UpdateSettings(frequencyPerHour, volume);
+            if (started) App.DiscordRpc?.SetMindWipeActivity();   // WPF MindWipeService.cs:179
             Log.Information("MindWipe: Started (frequency: {Freq}/hour, volume: {Vol}%, files: {Count})",
                 frequencyPerHour, volume * 100, ClipCount);
         }
@@ -89,8 +91,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             IVoice? oneShot;
             ITimer? tick;
+            bool wasRunning;
             lock (_lock)
             {
+                wasRunning = _running;
                 _running = false;
                 oneShot = _oneShot; _oneShot = null;
                 tick = _tick; _tick = null;
@@ -98,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             tick?.Dispose();
             oneShot?.Dispose();
             StopLoop();
+            if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF MindWipeService.cs:230, after the audio teardown
         }
 
         internal void UpdateSettings(double frequencyPerHour, double volume)

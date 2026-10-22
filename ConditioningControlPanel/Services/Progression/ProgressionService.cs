@@ -347,14 +347,7 @@ namespace ConditioningControlPanel.Services
         /// Gets the XP multiplier for session rewards based on player level.
         /// Higher level players earn more XP from sessions to compensate for increased requirements.
         /// </summary>
-        public double GetSessionXPMultiplier(int level)
-        {
-            if (level < 30) return 1.0;
-            if (level < 80) return 1.0 + ((level - 30) * 0.01);   // 1.0x → 1.5x
-            if (level < 125) return 1.5 + ((level - 80) * 0.02);  // 1.5x → 2.4x
-            if (level < 150) return 2.4 + ((level - 125) * 0.03); // 2.4x → 3.15x
-            return Math.Min(5.0, 3.15 + ((level - 150) * 0.03));   // 3.15x → 5.0x cap
-        }
+        public double GetSessionXPMultiplier(int level) => SessionXp.Multiplier(level); // Core rule (session-core-a)
 
         /// <summary>Lifetime XP of a ledger on this account's curve. See <see cref="XpCurve.GetTotalXP"/>.</summary>
         public double GetTotalXP(int level, double currentXP) => XpCurve.GetTotalXP(level, currentXP, ActiveCurveEpoch);

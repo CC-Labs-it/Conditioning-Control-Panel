@@ -471,6 +471,11 @@ public sealed class LanguageSelectorTests
         settings.Current.SeenFeatureIntros.AddRange(new[] { "daily-free", "one-account" });
         // Likewise the upgrade-only What moved card spends its flag when it opens (sync6-nav-search).
         settings.Current.WhatMovedCardShown = 1;
+        // The first Presets visit speaks her one-shot tutorial bark and latches it (a real save, WPF CommitFire).
+        settings.Current.MarkBarkFired("tut_presets");
+        // A v2 profile with no perk gets its bundle perk saved at companion start (WPF CompanionService ctor :140).
+        settings.Current.CompanionPerk = ConditioningControlPanel.Models.CompanionDefinition.GetById(
+            (ConditioningControlPanel.Models.CompanionId)settings.Current.ActiveCompanionId).BonusType;
         // Opening Presets notes it in the dashboard's RECENT rail (a real save, WPF NoteDestinationOpened);
         // already at the head here, so the visit below is not a write.
         settings.Current.RailRecent.Add("tab.presets");

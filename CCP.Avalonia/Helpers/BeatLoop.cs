@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private long _started;
         private bool _running;
         private Action? _unwatch;
+        private global::Avalonia.Controls.TopLevel? _top;
 
         public BeatLoop(Visual owner, Action<double> step)
         {
@@ -107,14 +108,34 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private void Sync()
         {
             if (!_running) return;
+            var top = global::Avalonia.Controls.TopLevel.GetTopLevel(_owner);
+            // A late Activated (headless posts it) can restart a loop on a window already closed.
+            if (top is { PlatformImpl: null }) { Stop(); return; }
+            // Watched even while parked: a loop that starts parked (hidden tab) is still in Live.
+            WatchTop(top);
             if (Parked) _clock.Stop();
             else _clock.Start();
         }
+
+        // A closed window never hides its content, so nothing above parks the loop: its clock kept
+        // re-arming frames on the shared compositor and Live kept it, so every closed window with an
+        // ambient loop stayed alive with all its Skia surfaces (suite-memory, 2026-10-12). Re-read on
+        // every Sync because an owner can start detached and be attached later.
+        private void WatchTop(global::Avalonia.Controls.TopLevel? top)
+        {
+            if (top == _top) return;
+            if (_top != null) _top.Closed -= OnTopClosed;
+            _top = top;
+            if (_top != null) _top.Closed += OnTopClosed;
+        }
+
+        private void OnTopClosed(object? sender, EventArgs e) => Stop();
 
         private void Unwatch()
         {
             _unwatch?.Invoke();
             _unwatch = null;
+            WatchTop(null);
         }
 
         private void Step() => _step(Time.GetElapsedTime(_started).TotalSeconds);

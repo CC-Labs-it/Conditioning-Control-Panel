@@ -54,15 +54,6 @@ namespace ConditioningControlPanel.Services
     internal static class NativeBundleGuard
     {
         /// <summary>
-        /// One repair attempt per version per window. A second failure inside it means the cache
-        /// was not the problem (or the delete could not land), and looping would be worse than
-        /// stopping: relaunch, fail, relaunch is indistinguishable from the app refusing to open.
-        /// </summary>
-        private static readonly TimeSpan RepairCooldown = TimeSpan.FromMinutes(10);
-
-        private const string StampFileName = "native-repair.stamp";
-
-        /// <summary>
         /// Verifies the bundled natives are loadable. Returns true when startup may continue.
         ///
         /// <para>Returns false when the caller must stop: either a repair relaunch is already on
@@ -100,7 +91,7 @@ namespace ConditioningControlPanel.Services
             {
                 // Healthy launch: drop any stamp so a future truncation gets its own full attempt
                 // instead of inheriting a months-old cooldown.
-                ClearStamp();
+                NativeBundleRepair.ClearStamp(App.UserDataPath);
                 return true;
             }
 
@@ -122,17 +113,17 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
 
-            if (RepairedRecently())
+            if (NativeBundleRepair.RepairedRecently(App.UserDataPath, UpdateService.AppVersion, DateTime.UtcNow))
             {
                 App.Logger?.Fatal("[NATIVES] Already cleared {Root} for v{Version} within the last {Minutes} minutes — not looping",
-                    cacheRoot, UpdateService.AppVersion, RepairCooldown.TotalMinutes);
+                    cacheRoot, UpdateService.AppVersion, NativeBundleRepair.RepairCooldown.TotalMinutes);
                 beforeExit?.Invoke();
                 ShowGiveUpDialog(cacheRoot, failure);
                 return false;
             }
 
             App.Logger?.Warning("[NATIVES] Clearing {Root} and relaunching to force a full re-extract", cacheRoot);
-            WriteStamp();
+            NativeBundleRepair.WriteStamp(App.UserDataPath, UpdateService.AppVersion, DateTime.UtcNow);
 
             if (!LaunchRepairHelper(cacheRoot, appExe))
             {
@@ -185,21 +176,10 @@ namespace ConditioningControlPanel.Services
                 // build reports a real path and never extracts anything. IL3000 warns about
                 // exactly that empty return — here it IS the signal we want, not a mistake.
 #pragma warning disable IL3000
-                if (!string.IsNullOrEmpty(Assembly.GetEntryAssembly()?.Location))
-                    return null;
+                return NativeBundleRepair.ExtractionRoot(
+                    Assembly.GetEntryAssembly()?.Location, Environment.ProcessPath,
+                    Environment.GetEnvironmentVariable("DOTNET_BUNDLE_EXTRACT_BASE_DIR"), Path.GetTempPath());
 #pragma warning restore IL3000
-
-                var exe = Environment.ProcessPath;
-                if (string.IsNullOrEmpty(exe))
-                    return null;
-
-                // Same precedence the host itself uses.
-                var baseDir = Environment.GetEnvironmentVariable("DOTNET_BUNDLE_EXTRACT_BASE_DIR");
-                if (string.IsNullOrWhiteSpace(baseDir))
-                    baseDir = Path.Combine(Path.GetTempPath(), ".net");
-
-                var root = Path.Combine(baseDir, Path.GetFileNameWithoutExtension(exe));
-                return Directory.Exists(root) ? root : null;
             }
             catch (Exception ex)
             {
@@ -225,46 +205,8 @@ namespace ConditioningControlPanel.Services
                 var helperPath = Path.Combine(helperDir, "native-repair.cmd");
                 var pid = Environment.ProcessId;
 
-                // Paths are baked in as literals (no positional args) so spaces are safe — the
-                // install dir is "…\Programs\Conditioning Control Panel".
-                var lines = new[]
-                {
-                    "@echo off",
-                    "setlocal enableextensions",
-                    $"set \"LOG={logPath}\"",
-                    $"set \"APPEXE={appExe}\"",
-                    $"set \"CACHE={cacheRoot}\"",
-                    $"echo [native-repair] start pid={pid} > \"%LOG%\"",
-                    // Wait for us to exit so the loaded image sections are released; without this
-                    // the rd below silently leaves the mapped DLLs behind. Capped at ~1min so a
-                    // recycled PID cannot hang the helper forever.
-                    "set /a tries=0",
-                    ":waitloop",
-                    $"tasklist /FI \"PID eq {pid}\" /NH 2>nul | find \"{pid}\" >nul",
-                    "if errorlevel 1 goto gone",
-                    "set /a tries+=1",
-                    "if %tries% GEQ 30 (",
-                    "  echo [native-repair] wait timed out, proceeding anyway >> \"%LOG%\"",
-                    "  goto gone",
-                    ")",
-                    "ping 127.0.0.1 -n 2 >nul",
-                    "goto waitloop",
-                    ":gone",
-                    "echo [native-repair] app exited (tries=%tries%), clearing cache >> \"%LOG%\"",
-                    "rd /s /q \"%CACHE%\" 2>nul",
-                    "if exist \"%CACHE%\" (",
-                    "  echo [native-repair] WARNING cache survived the delete >> \"%LOG%\"",
-                    ") else (",
-                    "  echo [native-repair] cache cleared >> \"%LOG%\"",
-                    ")",
-                    "echo [native-repair] relaunching app >> \"%LOG%\"",
-                    "start \"\" \"%APPEXE%\"",
-                    "echo [native-repair] done >> \"%LOG%\"",
-                    "endlocal",
-                };
-
                 // UTF-8 without BOM — a BOM breaks batch parsing of the first line.
-                File.WriteAllText(helperPath, string.Join("\r\n", lines) + "\r\n",
+                File.WriteAllText(helperPath, NativeBundleRepair.BuildRepairHelperScript(cacheRoot, appExe, logPath, pid),
                     new System.Text.UTF8Encoding(false));
 
                 // A .cmd is not a PE, so it needs an explicit interpreter. The helper outlives us
@@ -286,58 +228,6 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Fatal(ex, "[NATIVES] Could not launch the repair helper");
                 return false;
             }
-        }
-
-        private static string StampPath => Path.Combine(App.UserDataPath, StampFileName);
-
-        /// <summary>
-        /// True when this same version already burned its repair attempt inside the cooldown.
-        /// A version bump gets a fresh attempt: the new bundle has its own extraction folder and
-        /// deserves one.
-        /// </summary>
-        private static bool RepairedRecently()
-        {
-            try
-            {
-                if (!File.Exists(StampPath))
-                    return false;
-
-                var parts = File.ReadAllText(StampPath).Trim().Split('|');
-                if (parts.Length != 2)
-                    return false;
-                if (!string.Equals(parts[0], UpdateService.AppVersion, StringComparison.Ordinal))
-                    return false;
-                if (!long.TryParse(parts[1], out var ticks))
-                    return false;
-
-                return DateTime.UtcNow - new DateTime(ticks, DateTimeKind.Utc) < RepairCooldown;
-            }
-            catch
-            {
-                // An unreadable stamp must not block the repair — that would turn a transient IO
-                // hiccup into a permanently unstartable app.
-                return false;
-            }
-        }
-
-        private static void WriteStamp()
-        {
-            try
-            {
-                Directory.CreateDirectory(App.UserDataPath);
-                File.WriteAllText(StampPath, $"{UpdateService.AppVersion}|{DateTime.UtcNow.Ticks}");
-            }
-            catch { }
-        }
-
-        private static void ClearStamp()
-        {
-            try
-            {
-                if (File.Exists(StampPath))
-                    File.Delete(StampPath);
-            }
-            catch { }
         }
 
         /// <summary>
