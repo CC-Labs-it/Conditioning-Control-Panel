@@ -421,10 +421,12 @@ internal static partial class PieceByPieceHostService
     /// </summary>
     private static void OnMediaRequest(JObject o)
     {
-        var pool = DtrhAssetManifest.EnumerateActive()
-            .Select(e => (e.Rel, DtrhAssetManifest.AssetUrl(e.Rel), e.IsImage));
-        var media = PbpHostRules.SampleMedia(pool, PbpHostRules.ReadKinds(o["kinds"]),
+        // Sample relative paths, then build URLs for the kept few only (not the whole library).
+        var pool = DtrhAssetManifest.EnumerateActive().Select(e => (e.Rel, e.Rel, e.IsImage));
+        var rels = PbpHostRules.SampleMedia(pool, PbpHostRules.ReadKinds(o["kinds"]),
             PbpHostRules.ReadCount(o), Rng);
+        static string[] Urls(string[] r) => Array.ConvertAll(r, DtrhAssetManifest.AssetUrl);
+        var media = (Images: Urls(rels.Images), Gifs: Urls(rels.Gifs), Videos: Urls(rels.Videos));
         _host?.Post(PbpHostRules.MediaFrame(media));
         App.Logger?.Debug("PieceByPiece: media reply {I} images, {G} gifs, {V} videos",
             media.Images.Length, media.Gifs.Length, media.Videos.Length);
