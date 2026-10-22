@@ -2511,3 +2511,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-payout-fallin: +215
 - The Chaos hub's FALL IN starts a real run. Its end banks the WPF payout: XP, Sparks, reveals, the rank card and the loop-tip gold. The maths is in Core `ChaosPayout`, which WPF also uses. Panic pays nothing.
 - Fail-proven: `ChaosPayoutTests` (Core) and the headless test that clicks FALL IN, steps ticks to the end and checks the payout. Live panic steps are queued in live-queue/safety.md. The hub has no startup opener yet (its only opener is the recap), so no user path reaches FALL IN.
+
+## avalonia-port/chaos-estim-overlay: +576
+- Chaos E-Stim lightning (click-through, refuses without a compositor) and the X11Pointer cursor halo are ported visual-only, with Core `ChaosEStimMath`. Run end and panic close both. Rows are stub because nothing calls them on this head yet.

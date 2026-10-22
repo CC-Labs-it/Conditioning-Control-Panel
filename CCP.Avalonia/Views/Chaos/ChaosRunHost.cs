@@ -367,6 +367,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CloseBoonBar();   // WPF EndRun :3235
             ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
+            ChaosEStimOverlay.CloseActive();   // WPF EndRun :3238
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned, rankUp);
             Log.Information("Chaos run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks",
@@ -404,6 +405,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CloseBoonBar();
             ChaosCursorGlowOverlay.CloseActive();   // WPF CleanupAfterRun :3323
             ChaosVibeTrailOverlay.CloseActive();   // WPF ForceShutdown :3184 / CleanupAfterRun :3324
+            ChaosEStimOverlay.CloseActive();   // WPF ForceShutdown :3185 / :3325
             Overlays.ChaosFieldFxOverlay.CloseActive();   // WPF ChaosModeService.cs:3186/3239/3326
             CloseFx();   // WPF CleanupAfterRun :3338 (also covers an overlay closed mid-run)
             _runTimer = null;
