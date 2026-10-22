@@ -17,8 +17,8 @@ namespace ConditioningControlPanel.Services.Leash;
 /// <item>Stop a mandatory video that is running strict-locked, so nobody sits trapped in one.</item>
 /// <item>Strict Lock OFF, panic key ON, saved at once, panic hook + checkbox resynced. Always, even
 /// when the user turned Strict Lock on themselves.</item>
-/// <item>Circe's Tab: leash bookings not yet pushed would be dropped here. OWED (see
-/// <see cref="ITargets.DropUnpushedLeashBookings"/>); Chaster time already pushed stays.</item>
+/// <item>Circe's Tab: leash time not on the lock yet is dropped (<see cref="ITargets.DropUnpushedLeashBookings"/>,
+/// <c>CircesTab.DropUnpushedLeash</c>); Chaster time already pushed, or on the wire, stays.</item>
 /// </list>
 /// <para>Each step runs in its own try, so one failing step never stops the ones after it.</para>
 /// </summary>
@@ -42,7 +42,7 @@ public static class LeashCutSafety
         void StopVideo();
         /// <summary>StrictLockEnabled = false, PanicKeyEnabled = true, save now, resync the panic UI.</summary>
         void ReleaseSafetySettings();
-        /// <summary>Drop unpushed leash bookings from Circe's Tab. Returns false when it cannot.</summary>
+        /// <summary>Drop leash time not yet pushed from Circe's Tab. Returns false when nothing was dropped.</summary>
         bool DropUnpushedLeashBookings();
     }
 
@@ -131,13 +131,8 @@ public static class LeashCutSafety
             catch (Exception ex) { App.Logger?.Warning("[Leash] Panic-key UI sync failed: {Error}", ex.Message); }
         }
 
-        /// <summary>
-        /// OWED. Circe's Tab keeps one pooled balance (<c>TabState.BalanceSeconds</c>), not
-        /// per-booking rows it can take back: the entry log records what was booked, but nothing
-        /// marks which of the balance's seconds were already pushed, so "the unpushed leash part"
-        /// cannot be carved out cleanly. The live push also lands within about 30 s of a booking.
-        /// Needs a small tab API (leash seconds tracked apart until pushed) from the Chaster side.
-        /// </summary>
-        public bool DropUnpushedLeashBookings() => false;
+        /// <summary>Only the holder's leash time goes; the player's own slip-ups and credits stay.
+        /// False when there is no tab or nothing was dropped.</summary>
+        public bool DropUnpushedLeashBookings() => (App.Chaster?.DropUnpushedLeash() ?? 0) > 0;
     }
 }

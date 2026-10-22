@@ -37,8 +37,9 @@ namespace ConditioningControlPanel.Services.Safety
                                     bool panicKeyEnabled, bool strictLockEnabled)
         {
             if (blinkTrainerRunning) return Block.BlinkTrainer;
-            if (lockdownActive) return Block.Lockdown;
-            if (!panicKeyEnabled) return Block.NoEscape;
+            // The panic key's own reach, the same rule the voice panic asks (VoicePanicReach).
+            if (!VoicePanicReach.PanicKeyRuns(lockdownActive, panicKeyEnabled))
+                return lockdownActive ? Block.Lockdown : Block.NoEscape;
             if (strictLockEnabled) return Block.StrictLock;
             return Block.None;
         }

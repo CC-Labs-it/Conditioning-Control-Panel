@@ -149,10 +149,15 @@ export async function mount(ctx) {
     if (media?.words && game.setWords) game.setWords(media.words.map(w => w.text));
     lastSat = -1; lastState = ''; lastTimeScale = 1; lastBoardLabel = '';
   }
+  // The pause card's way out, in every mode (owner, 2026-10-22: on the phone, back only pauses, and a Story board had no exit).
+  // Endless saves first and stays put if the save fails; Story and the demo drop the board, so Play starts a fresh one.
   function returnToMenu() {
-    if (!saveEndless()) { ui.paused.querySelector('.bo-save-note').textContent = 'This browser could not save. Resume to keep playing, or try again.'; return; }
+    if (menuOpen || endingUnderway()) return;   // the ending has its own Menu button
+    const endless = activeEndless;
+    if (endless && !saveEndless()) { ui.paused.querySelector('.bo-save-note').textContent = 'This browser could not save. Resume to keep playing, or try again.'; return; }
     activeEndless = false; menuOpen = true; pageFx?.cancelAll();
     mouseLock?.release(); setPaused(false); audio?.stop(); audioOn = false;
+    if (!endless) { makeGame(); setSp(0); setCombo(0); }
     ui.menu.hidden = false; ui['ghost-hint'].hidden = true; ui['run-hud'].hidden = true;
     el.classList.add('is-menu'); moved = false; el.classList.remove('is-played');
     startFresh = false; previewRun = null; syncModeMenu();
@@ -301,7 +306,8 @@ export async function mount(ctx) {
     if (paused === p) return;
     input.left = input.right = input.launch = false; keysDown.l = keysDown.r = false; touchDrag = null;
     paused = p; ui.paused.hidden = !p; el.classList.toggle('is-paused', p);
-    ui.paused.querySelector('[data-menu="save-menu"]').hidden = !activeEndless;
+    const leave = ui.paused.querySelector('[data-menu="save-menu"]');
+    leave.textContent = activeEndless ? 'Save and menu' : 'Menu'; leave.hidden = endingUnderway();
     ui.paused.querySelector('.bo-save-note').hidden = !activeEndless;
     ui.paused.querySelector('.bo-save-note').textContent = 'Continue restarts this board with its starting colour. Best combo kept.';
     if (p) { mouseLock?.release(); pageFx?.cancelAll(); }   // the card needs a visible pointer and a clear field
