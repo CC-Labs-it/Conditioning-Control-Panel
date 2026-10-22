@@ -24,7 +24,7 @@ public sealed class IntakeLifecycleTests
     private static void Setup()
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            AppBuilder.Configure<AvApp>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }

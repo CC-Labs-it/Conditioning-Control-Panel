@@ -30,7 +30,7 @@ public sealed class IntakePageTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            AppBuilder.Configure<AvApp>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -195,7 +195,7 @@ public sealed class IntakePageTests
             File.CreateSymbolicLink(Path.Combine(content, "intake/assets/vo/link.mp3"), Path.Combine(outside, "secret.mp3"));
             using var server = new WebAssetServer(web) { ContentRoot = () => content };
             using var http = new HttpClient(new HttpClientHandler { UseCookies = false });
-            Assert.Equal(Path.Combine(content, rel), server.ResolveFile("/" + rel));
+            Assert.Equal(Path.GetFullPath(Path.Combine(content, rel)), server.ResolveFile("/" + rel));
             Assert.Equal(HttpStatusCode.Forbidden,
                 (await http.GetAsync($"http://127.0.0.1:{server.Port}/{rel}")).StatusCode);
             var response = await http.GetAsync(server.Url(rel));
