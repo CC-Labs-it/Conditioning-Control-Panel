@@ -142,6 +142,8 @@ public partial class ChasterTabView
         if (!FiguresEditable()) return;
         CancelPriceEdit();
         CoreSettings.Current.ChasterPriceOverrides = new();
-        CoreSettings.Save(); PaintStamps();
+        CoreSettings.Save();
+        Serilog.Log.Information("[Chaster] prices reset to the table by the player"); // WPF Help.cs:45
+        PaintStamps();
     }
 }

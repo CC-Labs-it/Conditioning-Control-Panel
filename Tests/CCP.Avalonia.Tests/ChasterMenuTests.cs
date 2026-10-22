@@ -190,14 +190,26 @@ public sealed class ChasterMenuTests
     public Task ARunningLockRefusesEditingAndClosesAnExistingEditor() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, _) =>
     {
         await chaster.RefreshLockAsync();
-        tab.RefreshHero();
+        tab.RepaintForLock();
         Assert.False(tab.BeginPriceEdit("attention"));
         ChasterHead.Service = null;
         Assert.True(tab.BeginPriceEdit("attention"));
         ChasterHead.Service = chaster;
-        tab.RefreshHero();
+        tab.RepaintForLock();
         Assert.Null(tab.EditingPriceId);
         Assert.False(tab.FindControl<Button>("BtnResetPrices")!.IsVisible);
+    }));
+
+    [Fact] // P07 / WPF ChasterTabView.xaml.cs:173: the 30 s hero tick leaves the stamps alone
+    public Task TheHeroTickDoesNotRepaintStampsALockChangeDoes() => AvaloniaTestDispatcher.RunAsync(() => Run((_, tab, _) =>
+    {
+        var stamp = tab.StampFor("attention")!;
+        stamp.Text = "sentinel";
+        tab.RefreshHero(); // what SlowTick runs
+        Assert.Equal("sentinel", stamp.Text);
+        tab.RepaintForLock();
+        Assert.NotEqual("sentinel", stamp.Text);
+        return Task.CompletedTask;
     }));
 
     [Fact]

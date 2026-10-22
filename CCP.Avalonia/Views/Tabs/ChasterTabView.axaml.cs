@@ -96,7 +96,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // All three arrive on whatever thread found out.
         private void OnLinkChanged() => Dispatcher.UIThread.Post(OnTabShown);
-        private void OnLockChanged() => Dispatcher.UIThread.Post(RefreshHero);
+        private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
+
+        // WPF :173: stamps repaint when the lock changes, not on the 30 s tick (P07).
+        internal void RepaintForLock() { RefreshHero(); PaintStamps(); }
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() => { RefreshHero(); RefreshAdded(); RefreshNumbers(); });
 
         internal void Refresh()
@@ -120,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowLinking(chaster?.IsLinking == true);
             TxtFactCap1.Text = TxtFactCap2.Text = CircesTab.Format((chaster?.Caps ?? TabLimits.Default).DailySeconds, signed: false);
             if (!linked) LockRow.IsVisible = false;
-            RefreshHero();
+            RepaintForLock();
             ConsentCard.IsVisible = false;
             if (!linked) return;
             var on = CoreSettings.Current.ChasterTabEnabled;
@@ -221,7 +224,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var linked = chaster?.IsLinked == true;
             PaintChasterChip(chaster);
             RefreshMood(chaster);
-            PaintStamps();
             HeroTitle.IsVisible = linked;
             HeroPills.Children.Clear();
             if (!linked)
