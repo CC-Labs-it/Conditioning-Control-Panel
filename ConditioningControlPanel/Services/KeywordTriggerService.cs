@@ -691,7 +691,11 @@ namespace ConditioningControlPanel.Services
                 return allowUnknown;
             }
 
-            return KeywordMatchRules.AppAllowed(settings, process, isOwn);
+            if (KeywordMatchRules.AppAllowed(settings, process, isOwn)) return true;
+            LogSuppressed(source, isOwn && ignoreOwnFocus ? "Control Panel itself has focus"
+                : scope == AwarenessAppScope.ExceptListed ? $"'{process}' is on the block list"
+                : $"'{process}' is not on the allow list");
+            return false;
         }
 
         #endregion

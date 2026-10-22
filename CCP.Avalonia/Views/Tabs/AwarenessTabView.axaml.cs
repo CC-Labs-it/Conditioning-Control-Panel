@@ -233,7 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ChkAwarenessMaster.IsChecked = true;   // deliberately outside the guard: routes through the master handler
 
             if (ChkAwarenessKeyboard.IsChecked == true) Platform.KeywordTriggerHead.Sync();
-            else Platform.KeywordTriggerHead.Stop();
+            else Platform.KeywordTriggerHead.DetachKeyboard();   // WPF :493: master, engine and clip stay
             // The shared hook stays available to panic, pause and push-to-talk.
         }
 

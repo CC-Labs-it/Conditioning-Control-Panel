@@ -36,13 +36,18 @@ internal static class KeywordTriggerHead
         else Stop();
     }
 
-    internal static void Stop()
+    internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
+
+    /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
+    internal static void DetachKeyboard()
     {
         Interlocked.Increment(ref _generation);
         if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
         _subscribed = false;
-        Engine.Stop();
     }
+
+    /// <summary>Panic cuts the clip; WPF leaves the trigger service itself running.</summary>
+    internal static void StopAudio() => Engine.StopAudio();
 
     private static void OnKey(int vk, string? name)
     {
@@ -112,6 +117,7 @@ internal sealed class KeywordAudioRuntime
     private Action? _stop;
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
+    internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
     internal void Start() { IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
@@ -171,7 +177,7 @@ internal sealed class KeywordAudioRuntime
         if (t?.Actions?.OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled) is { } audio) Play(audio);
     }
 
-    private void StopAudio()
+    internal void StopAudio()
     {
         _audio?.Cancel(); _audio?.Dispose(); _audio = null;
         var stop = _stop; _stop = null;
@@ -207,7 +213,7 @@ internal sealed class KeywordAudioRuntime
                 var count = Math.Max(1, audio.PlayCount);
                 for (var i = 0; i < count; i++)
                 {
-                    if (i > 0 && audio.DelayBetweenMs > 0) await Task.Delay(audio.DelayBetweenMs, token);
+                    if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                     token.ThrowIfCancellationRequested();
                     _stop?.Invoke();
                     var last = i == count - 1;
@@ -215,7 +221,7 @@ internal sealed class KeywordAudioRuntime
                         KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                         onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
                         {
-                            try { await Task.Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
+                            try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
                             catch (OperationCanceledException) { }
                         }); });
                 }

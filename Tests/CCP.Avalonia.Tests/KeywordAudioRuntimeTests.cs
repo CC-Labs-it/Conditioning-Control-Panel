@@ -88,13 +88,16 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
-    public Task StopCancelsPendingAudioRepeats() => RunAsync(async (engine, s, played) =>
+    public void StopCancelsPendingAudioRepeats() => Run((engine, s, played) =>
     {
         var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
         audio.PlayCount = 2; audio.DelayBetweenMs = 50;
+        var gap = new TaskCompletionSource();   // P08: the repeat gap ends when the test says so, not on a timer
+        engine.Delay = (_, _) => gap.Task;
         Type(engine, "sit"); Assert.Single(played);
         engine.Stop();
-        await Task.Delay(100);
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
         Assert.Single(played.Where(x => x.Path != "stopped"));
         Assert.Equal("stopped", played.Last().Path);
     });
@@ -128,19 +131,40 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
-    public void AwarenessSwitchStartsRuntimeAndPanicStopsIt() => Run((_, s, played) =>
+    public void AwarenessSwitchStartsRuntimeAndPanicCutsOnlyTheClip() => Run((_, s, played) =>
     {
         // Linux headless test deliberately never installs a native keyboard hook.
         s.KeywordTriggersEnabled = false;
+        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
+        var realNow = KeywordTriggerHead.Engine.Now;
+        KeywordTriggerHead.Engine.Now = () => clock;   // the re-type below must not depend on wall-clock cooldowns
+        try
+        {
         var view = new AwarenessTabView();
         view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = true;
         Assert.True(KeywordTriggerHead.Engine.IsActive);
         Type(KeywordTriggerHead.Engine, "sit");
         Assert.Single(played);
         PanicSurfaces.All.Single(x => x.Id == "keyword-triggers").Stop(null);
-        Assert.False(KeywordTriggerHead.Engine.IsActive);
         Assert.Equal("stopped", played.Last().Path);
-        Type(KeywordTriggerHead.Engine, "sit"); Assert.Equal(2, played.Count);
+        Assert.True(KeywordTriggerHead.Engine.IsActive);   // WPF panic leaves the service running
+        clock = clock.AddHours(2);   // the view clamps cooldowns to AwarenessCooldownScale (1 s..1 h); step past them
+        Type(KeywordTriggerHead.Engine, "sit"); Assert.Equal(3, played.Count);
+        // WPF MainWindow.Awareness.cs:493: Keyboard off drops the key source only; engine and clip stay.
+        view.FindControl<CheckBox>("ChkAwarenessKeyboard")!.IsChecked = false;
+        Assert.True(KeywordTriggerHead.Engine.IsActive);
+        Assert.NotEqual("stopped", played.Last().Path);
         view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = false;
+        }
+        finally { KeywordTriggerHead.Engine.Now = realNow; }
+    });
+
+    [Fact]
+    public void SavedOnSwitchArmsTheRuntimeWhenTheShellStarts() => Run((_, s, _) =>
+    {
+        KeywordTriggerHead.Stop();
+        Assert.False(KeywordTriggerHead.Engine.IsActive);
+        _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
+        Assert.True(KeywordTriggerHead.Engine.IsActive);
     });
 }
