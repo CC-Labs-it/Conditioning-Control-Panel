@@ -422,4 +422,38 @@ public sealed class AccountSettingsSectionTests
         finally { PanicSurfaces.All = oldSurfaces; StartupLadder.ResetForTests(); }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task FirstSignInWithDiscordOffersSharing(bool discord) => RunAsync(async (shell, section, s, secrets) =>
+    {
+        // WPF MainWindow.Login.cs:209 (#749): a Discord-first sign-in is a Discord link too.
+        s.DiscordShareAchievements = false;
+        var oldSurfaces = PanicSurfaces.All;
+        PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
+        StartupLadder.ResetForTests();
+        try
+        {
+            if (discord) AccountSeed.Discord!.StoreTokens("fake-access", "fake-refresh", DateTime.UtcNow.AddHours(1));
+            var login = shell.OpenUnifiedLoginDialog();
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<LoginDialog>());
+            typeof(LoginDialog).GetProperty(nameof(LoginDialog.Result))!.SetValue(dialog, new LoginDialog.LoginResult { Success = true });
+            dialog.Close(true);
+            Dispatcher.UIThread.RunJobs();
+            foreach (var notice in shell.OwnedWindows.OfType<MessageDialog>()
+                         .Where(d => d.Title == Loc.Get("login_not_remembered_title")).ToList())
+                notice.Close();
+            await login.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            var offers = shell.OwnedWindows.OfType<MessageDialog>().Where(d => d.Title == Loc.Get("title_discord_linked")).ToList();
+            Assert.Equal(discord ? 1 : 0, offers.Count);
+            if (discord) Assert.Equal(Loc.Get("label_yes"), ((TextBlock)offers[0].FindControl<Button>("BtnOk")!.Content!).Text);
+            foreach (var offer in offers) offer.Close(false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(s.DiscordShareAchievements);
+        }
+        finally { PanicSurfaces.All = oldSurfaces; StartupLadder.ResetForTests(); }
+    });
+
 }

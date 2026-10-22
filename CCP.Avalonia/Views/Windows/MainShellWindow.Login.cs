@@ -76,6 +76,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _notRememberedShown = true;
                     await MessageDialog.ShowAsync(owner ?? this, Loc.Get("login_not_remembered_title"), Loc.Get("login_not_remembered_body"));
                 }
+                // WPF MainWindow.Login.cs:209 (#749): a first sign-in through Discord attaches it
+                // too, so offer sharing here as the link flow does. The offer self-guards on consent.
+                if (AccountSeed.Discord?.IsAuthenticated == true)
+                    _ = OfferAchievementSharingAfterDiscordLink();
                 // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
                 try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
                 UpdateLevelDisplay();

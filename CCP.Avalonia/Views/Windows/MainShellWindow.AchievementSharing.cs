@@ -39,7 +39,7 @@ public partial class MainShellWindow
                 return;
             }
             if (await MessageDialog.ConfirmAsync(this, Loc.Get("title_discord_linked"),
-                    Loc.Get("msg_discord_share_achievements_prompt"), okText: "Yes", cancelText: "No"))
+                    Loc.Get("msg_discord_share_achievements_prompt"), okText: Loc.Get("label_yes")))
             {
                 s.DiscordShareAchievements = true;
                 CoreSettings.Save();
