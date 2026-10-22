@@ -24,9 +24,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// capture visibility, ignore-own-focus, the app scope mode and the highlight colour all read
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
-    /// <para>What is NOT restored is the runtime: nothing here starts or stops an engine. The
-    /// Patreon gate (<c>KeywordTriggerService.HasAccess</c>), the keyboard hook, ScreenOcr,
-    /// KeywordHighlight's overlay windows and the recently-seen-app ring are all head-side, and each stub below names the one it wants.</para>
+    /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
+    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
+    /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
     {
@@ -95,7 +95,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Tabs are shown and hidden rather than rebuilt, so re-read on every show: the master
             // switch is [JsonIgnore] session state and the app list can be edited elsewhere.
-            AttachedToVisualTree += (_, _) => SyncAwarenessTabUi();
+            AttachedToVisualTree += (_, _) =>
+            {
+                // WPF subscribes once for the window's life; a tab view subscribes while attached (P41).
+                Platform.KeywordTriggerHead.Engine.TriggerFired -= OnAwarenessTriggerFired;
+                Platform.KeywordTriggerHead.Engine.TriggerFired += OnAwarenessTriggerFired;
+                SyncAwarenessTabUi();
+            };
+            DetachedFromVisualTree += (_, _) => Platform.KeywordTriggerHead.Engine.TriggerFired -= OnAwarenessTriggerFired;
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty && IsVisible) SyncAwarenessTabUi();
@@ -147,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 AwarenessAppListPanel.IsVisible = s.KeywordTriggerAppScope != AwarenessAppScope.Everywhere;
 
                 UpdateStatusIndicator(masterOn);
+                RefreshAwarenessPulseFeed();
                 RefreshAwarenessPresetCards();
             }
             catch (Exception ex)
@@ -205,8 +213,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 CoreSettings.Current.KeywordTriggersEnabled = on;
 
-                // ponytail: this is where WPF starts/stops App.KeywordTriggers, the keyboard hook
-                // and App.ScreenOcr. All three are Win32 on that head; nothing arms here.
+                Platform.KeywordTriggerHead.Sync();
+                // ponytail: OCR/highlights and non-audio actions remain wire-shell-keyword-triggers-b.
 
                 _isLoading = true;
                 try { if ((ChkAwarenessKeyboard.IsChecked ?? false) != on) ChkAwarenessKeyboard.IsChecked = on; }
@@ -232,8 +240,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (ChkAwarenessKeyboard.IsChecked == true && ChkAwarenessMaster.IsChecked != true)
                 ChkAwarenessMaster.IsChecked = true;   // deliberately outside the guard: routes through the master handler
 
-            // ponytail: turning it OFF drops the keyboard hook on WPF when nothing else needs it
-            // (the panic key, OCR). The hook is Win32 and head-side.
+            if (ChkAwarenessKeyboard.IsChecked == true) Platform.KeywordTriggerHead.Sync();
+            else Platform.KeywordTriggerHead.DetachKeyboard();   // WPF :493: master, engine and clip stay
+            // The shared hook stays available to panic, pause and push-to-talk.
         }
 
         private void ChkAwarenessOcr_Changed(object? sender, RoutedEventArgs e)

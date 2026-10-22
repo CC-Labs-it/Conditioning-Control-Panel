@@ -98,6 +98,8 @@ internal static class Win32PanicKey
         return EnsureHook();
     }
 
+    internal static bool EnsureListening() => EnsureHook();
+
     private static bool EnsureHook()
     {
         if (!OperatingSystem.IsWindows()) return false;

@@ -138,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
+            Platform.KeywordTriggerHead.Sync(); // WPF MainWindow.xaml.cs:341: a saved-on switch arms at boot
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
             Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
             Closed += (_, _) => _avatarTubeWindow?.Close();

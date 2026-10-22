@@ -235,6 +235,7 @@ internal static class ChaosTunnelService
             if (_web.CoreWebView2 == null) { App.Logger?.Warning("ChaosTunnelService: WebView2 core null"); return; }
 
             var core = _web.CoreWebView2;
+            global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(core);
             var settings = core.Settings;
             settings.AreDevToolsEnabled = false;
             settings.AreDefaultContextMenusEnabled = false;
