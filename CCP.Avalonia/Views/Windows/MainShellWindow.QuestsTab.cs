@@ -6,8 +6,8 @@
 // ponytail, still missing:
 //   Quest art and mod/settings repaint now live in QuestsTabView.Art.cs.
 //   RefreshPunchCard / BuildPunchHole - IntakePunchCardService is WPF-only.
-//   BtnFixStreak_Click / StreakFixDay_Click / ExitStreakFixMode - SpendStreakFix, a server round trip.
-//   wire-shell-quests-tab-b owns the remaining service/spend work above.
+//   BtnFixStreak_Click / StreakFixDay_Click / ExitStreakFixMode: ported in QuestsTabView.StreakFix.cs.
+//   wire-shell-quests-tab-b-next owns the punch-card service above.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

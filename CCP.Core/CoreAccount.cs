@@ -79,6 +79,12 @@ namespace ConditioningControlPanel
         /// <summary>Delete this account and all its server-side data (GDPR). Irreversible.</summary>
         public static volatile Func<Task<(bool success, string? error)>?>? DeleteAccountProvider;
 
+        /// <summary>
+        /// Spend one streak-fix charge on the given invariant yyyy-MM-dd day (server-side; WPF
+        /// ProfileSync.UseOopsieInsuranceAsync). Null, or a null task, means no cloud account.
+        /// </summary>
+        public static volatile Func<string, Task<(bool success, string? error, int? credits)>?>? UseStreakFixProvider;
+
         /// <summary>Signed in with any provider, or holding a restored cloud identity.</summary>
         public static bool IsLoggedIn => Ask(IsLoggedInProvider);
 

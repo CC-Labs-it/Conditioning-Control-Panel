@@ -141,8 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
         }
 
-        /// <summary>MainWindow.QuestsTab.cs:188 RefreshQuestUI. The intake punch-card service and
-        /// manual streak-fix spend remain in the named follow-up lane.</summary>
+        /// <summary>MainWindow.QuestsTab.cs:188 RefreshQuestUI. The intake punch-card service remains
+        /// in the named follow-up lane.</summary>
         internal void RefreshQuestUI()
         {
             var quests = App.Quests;
@@ -251,9 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (width <= 0) return;
             var completed = new HashSet<DateTime>(quests.Progress.DailyQuestCompletionDates.Select(d => d.Date));
             var shielded = new HashSet<DateTime>(CoreSettings.Current.StreakShieldUsedDates.Select(d => d.Date));
-            IBrush accent;
-            try { accent = new SolidColorBrush(Color.Parse(CoreMods.AccentColorHex)); }
-            catch { accent = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4)); }
+            var accent = AccentBrush();
             var panel = this.TryFindResource("PanelBgBrush", out var p) && p is IBrush pb ? pb : Brushes.Transparent;
 
             var today = DateTime.Today;
@@ -294,6 +292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Canvas.SetTop(shield, centerY - size / 2 - 12);
                     StreakCalendarCanvas.Children.Add(shield);
                 }
+                if (_isStreakFixMode && !done && day < today) AddFixHighlight(day, x, centerY, size, accent);
                 prevX = x;
                 prevDone = done;
             }

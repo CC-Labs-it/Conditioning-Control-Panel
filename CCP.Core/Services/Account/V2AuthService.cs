@@ -777,6 +777,40 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// Spend one streak-fix charge ("Oopsie Insurance") on a missed day, server-validated (WPF
+        /// ProfileSyncService.UseOopsieInsuranceAsync). <paramref name="fixDate"/> is invariant yyyy-MM-dd. Credits is the
+        /// account's remaining balance, null when an older server omits it. The XP echo is ignored, as WPF ignores it.
+        /// </summary>
+        public async Task<(bool success, string? error, int? credits)> UseOopsieInsuranceAsync(string unifiedId, string fixDate)
+        {
+            try
+            {
+                var payload = new JObject { ["unified_id"] = unifiedId, ["fix_date"] = fixDate };
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/use-oopsie");
+                AddAuthHeader(request);
+                request.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
+                var response = await _http.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (await TryHandleMergedAsync(response, json))
+                        return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                    var error = ServerError(json, response.StatusCode);
+                    Log.Warning("Oopsie insurance failed: {Error}", error);
+                    return (false, error, null);
+                }
+                var credits = (int?)JObject.Parse(json)["oopsie_credits"];
+                Log.Information("Oopsie insurance used via server: {Credits} charge(s) left", credits);
+                return (true, null, credits);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Oopsie insurance request failed");
+                return (false, $"Connection failed: {ex.Message}", null);
+            }
+        }
+
+        /// <summary>
         /// Delete user account (GDPR). The error is the server's text (WPF ProfileSyncService.DeleteAccountAsync).
         /// </summary>
         public async Task<(bool success, string? error)> DeleteAccountAsync(string unifiedId)
