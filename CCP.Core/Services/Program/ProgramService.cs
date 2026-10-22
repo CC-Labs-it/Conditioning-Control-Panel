@@ -1114,17 +1114,54 @@ public class ProgramService : IDisposable
         if (enrollment is not { State: ProgramEnrollmentState.Active } || day == null) return;
 
         var record = EnsureTodayRecord();
-        if (record == null || record.DayCompleted) return;
+        if (record == null) return;
+
+        var dayWasClosed = record.DayCompleted;
+        var progressed = ApplyVerifiedProgress(day, record, category, amount, IsTaskBlocked, out var finished);
+        var taskFinished = finished.Count > 0;
+        foreach (var id in finished)
+            Log.Information("Program {Program} day {Day}: task '{Task}' completed",
+                enrollment.ProgramId, day.DayIndex, id);
+
+        if (!progressed) return;
+
+        MarkDirty();
+        // A closed day is never judged again: no second day XP, chapter or graduation.
+        if (!dayWasClosed) CheckDayCompletion();
+        RaiseTodayChanged();
+
+        // Verified work is the one thing in this file the user cannot redo: the signal came and
+        // went. The 30s timer could drop up to half a minute of it on a crash, so a finished task
+        // is written now. Progress ticks still ride the timer - they arrive far too often to
+        // justify a disk write each.
+        if (taskFinished) Save();
+    }
+
+    /// <summary>
+    /// Credit one verified signal to a day's ledger row. Pure: no saving, no judging the day.
+    ///
+    /// Once the required tasks have closed the day, OPTIONAL tasks keep counting for the rest of
+    /// it (ccp-bugs #1474: Firmware cycle 12's "accept 25 remote commands" froze the moment the
+    /// override run closed the day). A closed day credits nothing else: required tasks are done,
+    /// and ambient minutes no longer decide anything. Returns whether anything moved; the ids of
+    /// tasks this signal finished come back in <paramref name="finished"/>.
+    /// </summary>
+    internal static bool ApplyVerifiedProgress(ProgramDay day, ProgramDayRecord record,
+        QuestCategory category, int amount, Func<ProgramTask, bool> isBlocked, out List<string> finished)
+    {
+        finished = new List<string>();
+        if (amount <= 0) return false;
 
         var progressed = false;
-        var taskFinished = false;
+        var closed = record.DayCompleted;
 
         foreach (var task in day.Tasks)
         {
             if (task.Kind != ProgramTaskKind.AutoVerified) continue;
             if (task.Verifier != category) continue;
+            if (closed && !task.Optional) continue;
             if (record.CompletedTaskIds.Contains(task.Id)) continue;
-            if (IsTaskBlocked(task)) continue;
+            if (isBlocked(task)) continue;
 
             record.TaskProgress.TryGetValue(task.Id, out var current);
             current += amount;
@@ -1134,29 +1171,17 @@ public class ProgramService : IDisposable
             if (current >= EffectiveTarget(day, task, record))
             {
                 record.CompletedTaskIds.Add(task.Id);
-                taskFinished = true;
-                Log.Information("Program {Program} day {Day}: task '{Task}' completed",
-                    enrollment.ProgramId, day.DayIndex, task.Id);
+                finished.Add(task.Id);
             }
         }
 
-        if (day.Ambient is { RequiredMinutes: > 0 } ambient && ambient.Verifier == category)
+        if (!closed && day.Ambient is { RequiredMinutes: > 0 } ambient && ambient.Verifier == category)
         {
             record.AmbientMinutes += amount;
             progressed = true;
         }
 
-        if (!progressed) return;
-
-        MarkDirty();
-        CheckDayCompletion();
-        RaiseTodayChanged();
-
-        // Verified work is the one thing in this file the user cannot redo: the signal came and
-        // went. The 30s timer could drop up to half a minute of it on a crash, so a finished task
-        // is written now. Progress ticks still ride the timer - they arrive far too often to
-        // justify a disk write each.
-        if (taskFinished) Save();
+        return progressed;
     }
 
     /// <summary>

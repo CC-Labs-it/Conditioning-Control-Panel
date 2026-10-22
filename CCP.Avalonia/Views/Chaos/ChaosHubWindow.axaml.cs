@@ -230,6 +230,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             UpdateMuteIcon(CoreSettings.Current.ChaosMenuMusicMuted);
             ShowMenuView();      // the main menu is the landing view; the dollhouse waits behind it
             SetupMenuMotion();   // ponytail stub — see the method
+            Opened += (_, _) => IntroShown = OnHubOpenedReveals();   // WPF ChaosHubWindow.xaml.cs:81 Loaded
+        }
+
+        private bool _dollhouseBeatsFired;
+
+        /// <summary>The first-open pass, awaited by tests. Null until the window opened.</summary>
+        internal System.Threading.Tasks.Task? IntroShown { get; private set; }
+
+        /// <summary>WPF ChaosHubWindow.Reveals.cs:139-153: the first hub open ever shows the intro card
+        /// modally BEFORE anything else speaks, then marks <c>SeenIntroGuide</c> and saves - on any
+        /// close, panic included, exactly as WPF's ShowDialog returned. A render never opens it.
+        /// ponytail: the rest of that pass (SeenDollhouse + Bark first-open line :156-163, the
+        /// "hub_open" reveal flashes :165) needs RevealService/Bark on this head.</summary>
+        private async System.Threading.Tasks.Task OnHubOpenedReveals()
+        {
+            if (_dollhouseBeatsFired || RenderProof.Rendering) return;
+            _dollhouseBeatsFired = true;
+            try
+            {
+                if (!ChaosMeta.State.SeenIntroGuide)
+                {
+                    await new ChaosIntroWindow().ShowDialogSafe(this);
+                    ChaosMeta.State.SeenIntroGuide = true;
+                    ChaosMeta.Save();
+                }
+            }
+            catch (Exception ex) { Log.Warning("Chaos intro guide failed ({E})", ex.Message); }
         }
 
         /// <summary>Stand-in for <c>Services.Chaos.ChaosModeService.StoryModeEnabled</c>, which is
@@ -2027,12 +2054,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// plus an owner for the live instance. Nothing here is waiting on Core.</summary>
         private void OnHubStateChanged(WindowState state) => _optFullscreen.IsChecked = state == WindowState.Maximized;
 
-        /// <summary>Re-open the spoiler-free rules card on demand. WPF showed ChaosIntroWindow
-        /// modally OVER the dollhouse; that view is not in this layer, and routing to the menu's
-        /// HOW TO PLAY card instead would kick the player out of the tab they are on.
-        /// ponytail: needs ChaosIntroWindow, wired when that view is ported.</summary>
-        private void BtnGuide_Click(object? sender, RoutedEventArgs e) =>
-            Log.Debug("ChaosHub: guide requested; ChaosIntroWindow is not on this head yet");
+        /// <summary>Re-open the spoiler-free rules card on demand, modal over the dollhouse
+        /// (WPF ChaosHubWindow.xaml.cs:2942-2948). Never touches SeenIntroGuide.</summary>
+        private async void BtnGuide_Click(object? sender, RoutedEventArgs e)
+        {
+            try { await new ChaosIntroWindow().ShowDialogSafe(this); }
+            catch (Exception ex) { Log.Debug("Chaos guide reshow: {E}", ex.Message); }
+        }
 
         // ============================ helpers ============================
 

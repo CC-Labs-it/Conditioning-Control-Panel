@@ -79,6 +79,81 @@ namespace ConditioningControlPanel.Services
             return null;
         }
 
+        /// <summary>
+        /// Whether a failed release/download request is worth retrying: a network-layer exception
+        /// anywhere down the inner chain, or a message that reads like a dropped connection.
+        /// </summary>
+        public static bool IsTransientNetworkError(Exception ex)
+        {
+            if (ex is System.Net.Http.HttpRequestException or TimeoutException or IOException
+                or System.Net.Sockets.SocketException or System.Threading.Tasks.TaskCanceledException)
+                return true;
+
+            if (ex.InnerException != null)
+                return IsTransientNetworkError(ex.InnerException);
+
+            var message = ex.Message.ToLowerInvariant();
+            return message.Contains("forcibly closed") ||
+                   message.Contains("connection was closed") ||
+                   message.Contains("network") ||
+                   message.Contains("timeout") ||
+                   message.Contains("transport");
+        }
+
+        // ---- install location ---------------------------------------------------------------
+
+        /// <summary>
+        /// The folder <paramref name="exePath"/> lives in, but only when that folder is a real
+        /// Inno install (its uninstaller sits next to the exe). This is the ground truth for an
+        /// in-place upgrade: unlike the HKCU InstallPath echo it cannot go stale, and it moves
+        /// with the folder when a user relocates the install by hand. Null for a portable/dev run
+        /// or an unresolvable exe path.
+        /// </summary>
+        public static string? InnoInstallDirOf(string? exePath)
+        {
+            try
+            {
+                var exeDir = Path.GetDirectoryName(exePath);
+                if (string.IsNullOrEmpty(exeDir)) return null;
+                return File.Exists(Path.Combine(exeDir, "unins000.exe")) ? exeDir : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// True when the install directory cannot be written by the current token, i.e. the silent
+        /// installer needs admin rights. Per-user installs stay prompt-free.
+        /// </summary>
+        public static bool NeedsElevationToInstall(string? installPath)
+        {
+            if (string.IsNullOrEmpty(installPath)) return false;
+
+            try
+            {
+                if (!Directory.Exists(installPath)) return false;
+
+                var probe = Path.Combine(installPath, $".ccp-write-probe-{Guid.NewGuid():N}.tmp");
+                using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return true;
+            }
+            catch (IOException)
+            {
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Could not probe install dir writability, assuming elevation is needed");
+                return true;
+            }
+        }
+
         // ---- skip marker --------------------------------------------------------------------
 
         private static string SkipFile(string userData) => Path.Combine(userData, "update_skip.txt");

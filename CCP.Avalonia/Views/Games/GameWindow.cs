@@ -7,6 +7,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -25,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// <c>ready</c>, the host answers <c>init</c> (language + identity + Breakout access), a station's
     /// <c>media-request</c> gets a library deal (<see cref="GameMediaManifest.Deal"/>), <c>fx</c> gets its
     /// <c>fx-ack</c>, and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
-    /// Ported from trunk's Views/Games/GameWindow.cs with the Breakout demo and Piece by Piece (GameWindow.Pbp.cs) and Racing Thoughts (GameWindow.Race.cs) registered; every other
+    /// Ported from trunk's Views/Games/GameWindow.cs with the Breakout demo and Piece by Piece (GameWindow.Pbp.cs), Racing Thoughts (GameWindow.Race.cs) and Down the Rabbit Hole (GameWindow.Dtrh.cs) registered; every other
     /// game lands with its own frames.</para>
     /// </summary>
     internal sealed partial class GameWindow : Window
@@ -40,12 +41,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
             ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
+            [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
             // WPF JustDropHostService: the live shop at app.cclabs.app, not a page off disk (GameWindow.JustDrop.cs).
             [JustDropId] = new(JustDropId, "jd_door_title", "", JustDropDoorOpen),
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
             // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
+            // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
+            [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -92,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
         }
 
@@ -123,9 +128,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
             if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
+            if (IsDtrh && HandleDtrh(o)) return;
             switch ((string?)o["type"])
             {
                 case "ready":
@@ -139,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     int count = GameMediaManifest.MediaCount(o["count"]?.Type == JTokenType.Integer ? (int?)o["count"] : null);
                     // The library is walked once per window, like WPF's FlashService snapshot, not on every sit-down.
                     var server = _server;
-                    var library = _library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server));
+                    var library = _library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl));
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         object deal;
