@@ -132,8 +132,12 @@ export function mount(container, ctx) {
   }
 
   const durRow = mkSlider(S.lobby.duration, { min: DUR_MIN_SEC, max: DUR_MAX_SEC, step: 60 });
+  /* THE TOY ROW (ccp-bugs #1429). Live when the host says a toy is connected in CCP
+   * (session.caps.haptics, Lovense or Intiface alike); "No toy connected" otherwise. It was
+   * built disabled and never switched on, whatever was connected. */
   const toyRow = mkSlider(S.lobby.toyCap, { min: 0, max: 100, step: 5, disabled: true });
   toyRow.value.textContent = S.lobby.toyCapDisabled;
+  const toyLive = () => !!(ctx.session && ctx.session.caps && ctx.session.caps.haptics);
   const gapRow = mkSlider(S.lobby.gap, { min: GAP_MIN_SEC, max: GAP_MAX_SEC, step: 5 });
   const xferRow = mkCheck(S.lobby.transfer);
 
@@ -313,6 +317,24 @@ export function mount(container, ctx) {
     // A picked song owns the length: the slider would only fight it.
     durRow.input.disabled = !editable || !!match.song;
     gapRow.input.disabled = !editable;
+    paintToy();
+  }
+
+  /* Also on a slow poll: a toy can connect or drop in CCP with this screen up (haptics-state). */
+  function paintToy() {
+    const s = match.consentSheet;
+    const editable = match.phase === GoonMatchPhase.Consent;
+    const live = toyLive();
+    const toyPct = toyPercent(s.toy_cap);
+    toyRow.row.classList.toggle('is-disabled', !live);
+    toyRow.input.disabled = !live || !editable;
+    if (document.activeElement !== toyRow.input) toyRow.input.value = String(toyPct);
+    toyRow.value.textContent = live ? toyPct + '%' : S.lobby.toyCapDisabled;
+  }
+
+  function toyPercent(cap) {
+    const n = Math.round((Number(cap) || 0) * 100);
+    return n < 0 ? 0 : n > 100 ? 100 : n;
   }
 
   function paintConfirm() {
@@ -556,9 +578,10 @@ export function mount(container, ctx) {
     const gapSec = clampNum(gapRow.input.value, GAP_MIN_SEC, GAP_MAX_SEC);
     prefs?.set?.('matchLengthSec', durSec);
     prefs?.set?.('payloadGapSec', gapSec);
-    // toy_cap rides through untouched: the row is disabled, so the value the
-    // engine already holds is the one both sides agreed to.
-    match.proposeConsent(durSec, match.consentSheet.toy_cap, gapSec * 1000);
+    // With no toy here the row is disabled and toy_cap rides through untouched: the value
+    // the engine already holds is the one both sides agreed to.
+    const toyCap = toyLive() ? clampNum(toyRow.input.value, 0, 100) / 100 : match.consentSheet.toy_cap;
+    match.proposeConsent(durSec, toyCap, gapSec * 1000);
     paintSheet();
   }
 
@@ -578,6 +601,16 @@ export function mount(container, ctx) {
     });
     ledger.listen(row.input, 'change', propose);
   }
+  ledger.listen(toyRow.input, 'input', () => {
+    toyRow.value.textContent = clampNum(toyRow.input.value, 0, 100) + '%';
+  });
+  /* The player's OWN figure: the only thing that can raise what reaches their toy. A sheet the
+   * opponent proposes can lower it, never lift it past this (exec/toys.js capToyMessage). */
+  ledger.listen(toyRow.input, 'change', () => {
+    if (ctx.session) ctx.session.ownToyCap = clampNum(toyRow.input.value, 0, 100) / 100;
+    propose();
+  });
+  ledger.interval(paintToy, 1000);
 
   // One call, and the engine does the rest: it flips the local declaration, clears
   // BOTH confirmations and re-sends the sheet, so the lamp ripple this screen

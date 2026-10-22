@@ -578,7 +578,8 @@
       ..\Assets\web\piecebypiece\dev\**\*;
       ..\Assets\web\piecebypiece\**\*.md;
       ..\Assets\web\piecebypiece\package.json;
-      ..\Assets\web\dtrh\tests\**\*
+      ..\Assets\web\dtrh\tests\**\*;
+      ..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
          flash): its node tests ride along so the vendored copy stays checkable, but they are
@@ -607,7 +608,8 @@
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\dev\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\package.json;
-      $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*
+      $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
 

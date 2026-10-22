@@ -9,6 +9,6 @@ namespace ConditioningControlPanel.Services
     {
         /// <summary>The GitHub releases page — the manual-download fallback on every head.</summary>
         public const string ReleasesPageUrl =
-            "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest";
+            "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest";
     }
 }
