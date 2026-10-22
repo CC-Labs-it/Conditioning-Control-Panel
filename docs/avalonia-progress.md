@@ -2559,3 +2559,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/prizes-core-a: +171
 - Cloud session unit (prizes-core-a); reviewed and gated locally.
+
+## avalonia-port/remix-core-a: +158
+- Cloud session unit (remix-core-a); reviewed and gated locally.

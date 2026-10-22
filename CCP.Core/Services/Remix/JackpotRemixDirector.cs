@@ -2,11 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services.Prizes;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Remix;
 
@@ -137,9 +136,11 @@ public static class JackpotRemixRoll
 /// <summary>
 /// Owns the Jackpot Remix roll and its one-file cache for FlashService. Every flash asks
 /// <see cref="TakeForFlash"/>; a roll that lands with nothing built is carried until a file is
-/// ready. Builds run off the flash path through <see cref="JackpotRemixBuilder.Default"/>, only
+/// ready. Builds run off the flash path through the head's builder (the <c>build</c> seam), only
 /// when flashes are quiet (no flash up, no video) and memory is not tight, one at a time and
 /// never in a loop (a failed build waits <see cref="RetryDelay"/> before another is allowed).
+/// Ownership, motion level, the builder and the free-memory probe are head seams, so the rules
+/// here are shared by both heads.
 /// </summary>
 internal sealed class JackpotRemixDirector : IDisposable
 {
@@ -151,6 +152,11 @@ internal sealed class JackpotRemixDirector : IDisposable
     private readonly Func<bool> _videoPlaying;
     private readonly Func<bool> _enabled;
     private readonly string _outputFolder;
+    private readonly Func<bool> _owned;
+    private readonly Func<MotionLevel> _motion;
+    private readonly Func<bool> _builderDisabled;
+    private readonly Func<IReadOnlyList<string>, int, CancellationToken, Task<string?>> _build;
+    private readonly Func<ulong> _availablePhysicalBytes;
     private readonly int _odds;
     private readonly Random _rng = new();
     private readonly object _gate = new();
@@ -162,11 +168,16 @@ internal sealed class JackpotRemixDirector : IDisposable
     private bool _disposed;
 
     public JackpotRemixDirector(Func<IReadOnlyList<string>> gifPool, Func<bool> flashShowing, Func<bool> videoPlaying,
-        Func<bool> enabled, string outputFolder)
+        Func<bool> enabled, string outputFolder, Func<bool> owned, Func<MotionLevel> motion, Func<bool> builderDisabled,
+        Func<IReadOnlyList<string>, int, CancellationToken, Task<string?>> build, Func<ulong> availablePhysicalBytes,
+        int? odds = null)
     {
         _gifPool = gifPool; _flashShowing = flashShowing; _videoPlaying = videoPlaying; _enabled = enabled;
         _outputFolder = outputFolder;
-        _odds = JackpotRemixRoll.ResolveOdds(OddsOverride());
+        _owned = owned; _motion = motion; _builderDisabled = builderDisabled; _build = build;
+        _availablePhysicalBytes = availablePhysicalBytes;
+        // ponytail: odds is the tests' handle on the 1-in-N roll; the heads leave it null.
+        _odds = odds ?? JackpotRemixRoll.ResolveOdds(OddsOverride());
         _cached = NewestLeftover(outputFolder);
     }
 
@@ -184,8 +195,8 @@ internal sealed class JackpotRemixDirector : IDisposable
     }
 
     private bool Eligible(int gifCount)
-        => JackpotRemixRoll.Eligible(PrizeGrants.IsGranted(PrizeGrants.JackpotRemix), _enabled(), MotionFx.Level, gifCount)
-           && !JackpotRemixBuilder.Default.Disabled;
+        => JackpotRemixRoll.Eligible(_owned(), _enabled(), _motion(), gifCount)
+           && !_builderDisabled();
 
     /// <summary>
     /// Roll for this flash. Returns the built file to play, or null for an ordinary flash. A play
@@ -203,7 +214,7 @@ internal sealed class JackpotRemixDirector : IDisposable
             bool hit = eligible && JackpotRemixRoll.Hit(_rng, _odds);
             step = JackpotRemixRoll.Step(_state, eligible, hit, _cached != null, _rng.Next());
             if (step != JackpotRemixStep.None)
-                App.Logger?.Debug("JackpotRemix: {Step} (hit {Hit}, carried {Carried})", step, hit, _state.Carried);
+                Log.Debug("JackpotRemix: {Step} (hit {Hit}, carried {Carried})", step, hit, _state.Carried);
             if (step == JackpotRemixStep.Play)
             {
                 var path = _cached;
@@ -231,7 +242,7 @@ internal sealed class JackpotRemixDirector : IDisposable
         Consumed(path);
     }
 
-    private void Poll()
+    internal void Poll() // internal: tests drive one tick synchronously instead of waiting on the timer
     {
         if (_disposed) return;
         IReadOnlyList<string> pool;
@@ -243,7 +254,7 @@ internal sealed class JackpotRemixDirector : IDisposable
             pool = SafePool();
             bool quiet = JackpotRemixRoll.Quiet(Safe(_flashShowing), Safe(_videoPlaying));
             if (!JackpotRemixRoll.ShouldBuild(Eligible(pool.Count), _cached != null, _inFlight, quiet,
-                    JackpotRemixRoll.MemoryPressure(AvailablePhysicalBytes())))
+                    JackpotRemixRoll.MemoryPressure(_availablePhysicalBytes())))
                 return;
             seed = _state.Carried ? _state.Seed : _rng.Next();
             _inFlight = true;
@@ -259,11 +270,10 @@ internal sealed class JackpotRemixDirector : IDisposable
             var sources = JackpotRemixRoll.SelectSources(pool, seed, SizeOf);
             if (sources.Count > 0)
             {
-                var result = await JackpotRemixBuilder.Default.BuildAsync(sources, seed, CancellationToken.None).ConfigureAwait(false);
-                built = result?.FilePath;
+                built = await _build(sources, seed, CancellationToken.None).ConfigureAwait(false);
             }
         }
-        catch (Exception ex) { App.Logger?.Warning("JackpotRemix: prebuild failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Warning("JackpotRemix: prebuild failed: {E}", ex.Message); }
         lock (_gate)
         {
             _inFlight = false;
@@ -312,27 +322,4 @@ internal sealed class JackpotRemixDirector : IDisposable
         _disposed = true;
         Stop();
     }
-
-    /* ---------------------------------------------------------- memory -----*/
-
-    /// <summary>Free physical memory per GlobalMemoryStatusEx; ulong.MaxValue when the call fails (never a false gate).</summary>
-    internal static ulong AvailablePhysicalBytes()
-    {
-        try
-        {
-            var s = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
-            return GlobalMemoryStatusEx(ref s) ? s.ullAvailPhys : ulong.MaxValue;
-        }
-        catch { return ulong.MaxValue; }
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MEMORYSTATUSEX
-    {
-        public uint dwLength, dwMemoryLoad;
-        public ulong ullTotalPhys, ullAvailPhys, ullTotalPageFile, ullAvailPageFile, ullTotalVirtual, ullAvailVirtual, ullAvailExtendedVirtual;
-    }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
 }
