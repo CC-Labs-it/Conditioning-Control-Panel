@@ -137,6 +137,13 @@ public partial class EmiDeskWindow
         PlaceSpeechBubble();
     }
 
+    /// <summary>Which side the last laid-out line took: true = her left (the book or the screen edge pushed it).</summary>
+    internal bool SpeechFlipped { get; private set; }
+
+    /// <summary>WPF OnBookSideChanged/PostBubbleRelayout: the book opened, folded or flipped sides.
+    /// Posted, so the panel has finished placing itself before the bubble asks which side it took.</summary>
+    internal void NoteBookSideChanged() => Dispatcher.UIThread.Post(PlaceSpeechBubble, DispatcherPriority.Background);
+
     private void HideSpeechBubble()
     {
         if (_speechBubble != null) _speechBubble.IsVisible = false;
@@ -161,9 +168,12 @@ public partial class EmiDeskWindow
             workLeft = this.PointToClient(new PixelPoint(area.X, area.Y)).X;
             workRight = this.PointToClient(new PixelPoint(area.Right, area.Y)).X;
         }
-        // ponytail: the book-side arbitration awaits the book's SideOfHer event bridge.
+        // THE BOOK DODGE (WPF Bubble.cs LayoutBubble): the book paints over her, so the bubble takes
+        // the side the book is NOT on; the screen-edge arbitration still has the final word.
+        int bookSide = Book?.SideOfHer ?? 0;
         var (left, flip) = EmiBubblePlacement.Resolve(OverlayPadX + bw * .58,
-            OverlayPadX + bw * .42 - w, w, false, Width, workLeft, workRight);
+            OverlayPadX + bw * .42 - w, w, bookSide > 0, Width, workLeft, workRight);
+        SpeechFlipped = flip;
         var top = Math.Max(2, OverlayPad + bw * BodyAspect * .04 - h);
         Canvas.SetLeft(_speechBubble, Math.Round(left));
         Canvas.SetTop(_speechBubble, Math.Round(top));

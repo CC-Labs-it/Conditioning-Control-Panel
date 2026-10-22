@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
     /// <para>ponytail: not here yet, each a named WPF member: greeting,
-    /// backSoon/weekend/bedtime beats, ambient pet/ring nudges, the
+    /// backSoon/weekend/bedtime beats, the
     /// knock (<c>TryKnock</c>) and the tube hand-off (<c>TubeDeskVisibility</c>). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>
@@ -89,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.RunSummon();
                 bool first = !EmiState.Current.FirstBootSeen;
                 int summons = EmiState.NoteSummon();
-                _nudges.NoteSummon(summons);
+                StartNudges(summons);
                 RaiseOutChanged();
                 Log.Information("[EmiDesk] summoned ({Why}), firstBoot={First}, summon #{N}", why ?? "user", first, summons);
             }

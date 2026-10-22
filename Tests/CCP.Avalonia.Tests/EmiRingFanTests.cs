@@ -37,8 +37,11 @@ public sealed class EmiRingFanTests
         var st = EmiState.Current;
         var pins = st.Pins.ToList();
         int streak = st.RingIgnoreStreak, opens = st.RingOpens;
+        var oldEngine = EmiDeskService.Instance.LineEngine;
         try
         {
+            // A timed hold left on the shared engine by an earlier test would silence the cues (EmiSfx.Audible).
+            EmiDeskService.Instance.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
             CoreAudio.PlayOneShotProvider = (path, _, tag, _, _) => played.Add(tag + ":" + System.IO.Path.GetFileName(path));
             CoreSettings.Current.MasterVolume = 50;
             EmiSfx.Clock = clock;
@@ -82,6 +85,7 @@ public sealed class EmiRingFanTests
             CoreAudio.PlayOneShotProvider = oldProvider;
             CoreSettings.Current.MasterVolume = oldVolume;
             EmiSfx.Clock = TimeProvider.System;
+            EmiDeskService.Instance.LineEngine = oldEngine;
             st.Pins.Clear(); st.Pins.AddRange(pins);
             st.RingIgnoreStreak = streak; st.RingOpens = opens;
         }
@@ -98,8 +102,10 @@ public sealed class EmiRingFanTests
         var clock = new SteppedClock();
         var st = EmiState.Current;
         int pets = st.PetsTotal; bool gist = st.PetGistGot;
+        var oldEngine = EmiDeskService.Instance.LineEngine;
         try
         {
+            EmiDeskService.Instance.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
             CoreAudio.PlayOneShotProvider = (path, _, tag, _, _) => played.Add(tag);
             CoreSettings.Current.MasterVolume = 50;
             EmiSfx.Clock = clock;
@@ -122,6 +128,7 @@ public sealed class EmiRingFanTests
             CoreAudio.PlayOneShotProvider = oldProvider;
             CoreSettings.Current.MasterVolume = oldVolume;
             EmiSfx.Clock = TimeProvider.System;
+            EmiDeskService.Instance.LineEngine = oldEngine;
             st.PetsTotal = pets; st.PetGistGot = gist;
         }
         return Task.CompletedTask;

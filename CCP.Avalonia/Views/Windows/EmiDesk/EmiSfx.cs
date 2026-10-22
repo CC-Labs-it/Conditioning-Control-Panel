@@ -10,10 +10,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// scales and 130 ms per-cue throttle, played through Core <see cref="CoreAudio"/>. The first
     /// candidate that exists under Resources/sounds wins; none is silence.
     ///
-    /// <para>ponytail: WPF also stays silent while AudioService.IsOutputSuppressed or an
-    /// EmiLineEngine hold is active; EmiLineEngine is in Core but nothing on this head takes a hold
-    /// and AudioService does not exist here, so only master volume 0 mutes.
-    /// Files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
+    /// <para>SAFETY IS SILENCE (WPF EmiSfx.Audible): Core <see cref="CoreAudio.IsOutputSuppressed"/>, a
+    /// master volume of 0 and an active line-engine hold each mute her. The throttle slot is spent
+    /// before that gate, as on WPF, so a muted cue still counts against the 130 ms floor.
+    /// ponytail: files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
     /// mod's replacement cue, the .wav/.mp3 swap) has no Core sounds seam yet, so a mod cannot
     /// re-voice these here; a stock install sounds right.
     /// The toss cues (Lift/Bump/Thud/Chime) come with the toss port (row win-emi-desk-extras).</para>
@@ -62,13 +62,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }
         }
 
+        /// <summary>WPF EmiSfx.Audible: endpoint suppressed, master volume 0, or a hold => silent.</summary>
+        private static bool Audible(out float master)
+        {
+            master = 0f;
+            if (CoreAudio.IsOutputSuppressed) return false;
+            int level = CoreSettings.Current?.MasterVolume ?? 0;
+            if (level <= 0) return false;
+            if (EmiDeskService.Instance.LineEngine.HoldActive) return false;
+            master = Math.Clamp(level / 100f, 0f, 1f);
+            return master > 0f;
+        }
+
         private static void Play(string[] candidates, float scale, string tag)
         {
             try
             {
-                int level = CoreSettings.Current?.MasterVolume ?? 0;
-                if (level <= 0) return;
-                float master = Math.Clamp(level / 100f, 0f, 1f);
+                if (!Audible(out float master)) return;
                 foreach (var rel in candidates)
                 {
                     var path = ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));

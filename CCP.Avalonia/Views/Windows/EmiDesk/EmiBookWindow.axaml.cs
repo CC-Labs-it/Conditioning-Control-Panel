@@ -1189,12 +1189,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 _sweepHost.RenderTransformOrigin = new RelativePoint(_onHerLeft ? 1 : 0, 0.5, RelativeUnit.Relative);
 
-                // ponytail: needs EmiBook.NoteSideChanged (her bubble dodges to the side the panel
-                // is NOT on). The event itself is trivial, but its one subscriber is the bubble's
-                // LayoutBubble dodge in EmiDeskWindow.Bubble.cs, which is not ported on this head -
-                // so an event raised here today would have nobody listening.
+                // WPF EmiBook.NoteSideChanged: her bubble dodges to the side the panel is NOT on.
                 if (wasOnHerLeft != _onHerLeft)
+                {
+                    _owner?.NoteBookSideChanged();
                     Log.Debug("[EmiDesk] book changed side, now {Side}", SideOfHer);
+                }
             }
             catch (Exception ex)
             {
