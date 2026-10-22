@@ -747,6 +747,8 @@ The slot and wheel source images have identical SHA-256
 `6398c8fbd533cf378344d34c814c9c5eedeffd11fb2b5b1f62e19e4e3ceab053`.
 Canonical happy keeps the original caret eyes and flat underscore mouth.
 No new face glyphs, palettes, moving patterns or screen geometry are authored.
+The owner rejected the melty face. Both sad and sleepy now use classic 0_0
+(idle0_0), a quiet wide-eyed pause. No runtime state uses melt.
 
 The same 1024 x 1024 sRGB UASTC atlas has sixteen 256px cells and 11 mips.
 Budget stays 5,592,404 bytes (5.333 MiB) as RGBA8 with mips; extra allocation is 0.
@@ -763,12 +765,12 @@ The original face aspect is preserved. The blank cell samples that background.
 | determined | squeeze | 2 |
 | drift-focus | squeeze | 2 |
 | dizzy | dizzy | 6 |
-| sleepy | melt | 9 |
+| sleepy | idle0_0 | 3 |
 | frozen | idle0_0 | 3 |
 | heart-eyes | hearts | 7 |
 | x-eyes | squeeze | 2 |
 | smug | cute | 1 |
-| sad | melt | 9 |
+| sad | idle0_0 | 3 |
 | sparkle | stars | 5 |
 | cheer | happy | 0 |
 | blank | sampled background | none |
