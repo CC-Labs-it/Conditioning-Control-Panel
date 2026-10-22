@@ -2522,3 +2522,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-skia-fx: +723
 - chaos-skia-fx: Avalonia click-through sparkle/bloom overlay. The WPF `ChaosFxLayer` sim and painter moved to Core and is shared by both heads. The frame loop runs only while effects are live; refused without a compositor; panic closes it (`PanicSurfaces` `chaos-skia-fx`, ChaosRunHost).
 - Row stays stub until FALL IN or the bubble field emits effects. Tests are fail-proven (15 deliberate breaks, each caught). rgate GATE-OK, Windows included.
+
+## avalonia-port/leash-receipts-hold: +836
+- Hold-to-cut: Core LeashHoldFlow; the ring and the "Cut the leash?" window run from the panic key (X11 key-up added). Early release never cuts, and the panic still fires on the first press.
+- Holder receipts list (LeashSentList) ported but not hosted yet; the row is stub until the holder card lands.
