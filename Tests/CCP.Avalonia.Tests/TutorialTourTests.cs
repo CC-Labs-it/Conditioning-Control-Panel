@@ -265,6 +265,9 @@ public sealed class TutorialTourTests : IDisposable
             shell.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Dispatcher.UIThread.RunJobs();
             Assert.False(CoreTutorial.IsActive);
+            Assert.Same(second, ShellOverlay());               // WPF's 200 ms fade before the card closes
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (ShellOverlay() != null && sw.Elapsed < TimeSpan.FromSeconds(10)) Dispatcher.UIThread.RunJobs();
             Assert.Null(ShellOverlay());
             Assert.False(TutorialHead.Service.HasCompleted(TutorialType.ShortWalk));
         }

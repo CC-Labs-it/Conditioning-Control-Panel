@@ -108,8 +108,13 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
         internal static void OnPanic()
         {
+            EndingInstantly = true;   // panic skips the 200 ms card fade: every overlay leaves now
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            finally { EndingInstantly = false; }
         }
+
+        /// <summary>True only inside <see cref="OnPanic"/>: the overlay tears down without fading.</summary>
+        internal static bool EndingInstantly { get; private set; }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>
         internal static CoreTutorial.Step Project(TutorialStep s) => Projected.GetValue(s, static step => new CoreTutorial.Step
