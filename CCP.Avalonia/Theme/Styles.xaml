@@ -12,10 +12,12 @@
      writing down here rather than rediscovering it 193 times.
 
      Controls.xaml keys are shared here, including the three Deeper button themes.
-     ponytail: the WPF press/release tween timings and SecondaryButton/PinkButton HudPlank depth
-     behavior remain wire-theme-controls-b. -->
+     Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
+     ponytail: SecondaryButton/PinkButton HudPlank depth and the ToggleStyle timing gaps below
+     remain wire-theme-controls-b. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:theme="clr-namespace:ConditioningControlPanel.Avalonia.Theme">
 
   <!-- MainWindow.xaml:525 -->
   <ControlTheme x:Key="SectionPanel" TargetType="Border">
@@ -131,10 +133,22 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
   </ControlTheme>
 
+  <!-- Controls.xaml:60-87: press scales to 0.97 over 80ms (linear), release returns over 150ms
+       with BackEase EaseOut Amplitude 0.3. Avalonia has no Enter/ExitActions, so the direction is
+       chosen by which Transitions the Border carries: :pressed swaps in the 80ms set. -->
+  <Transitions x:Key="PressReleaseTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.15">
+      <TransformOperationsTransition.Easing>
+        <theme:BackEaseOutAmplitude Amplitude="0.3"/>
+      </TransformOperationsTransition.Easing>
+    </TransformOperationsTransition>
+  </Transitions>
+  <Transitions x:Key="PressDownTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.08"/>
+  </Transitions>
+
   <!-- Controls.xaml:36. The press-feedback Storyboards (scale 0.97 in, BackEase out) become a
-       :pressed RenderTransform: Avalonia has no Trigger EnterActions/ExitActions, and the
-       HelpButtonStyle above already sets the precedent of reproducing the visual rather than
-       guessing at unmappable trigger machinery.
+       :pressed RenderTransform plus the direction-specific Transitions above.
        WPF's bare <ContentPresenter/> also has to name what it presents on Avalonia. -->
   <ControlTheme x:Key="ActionButton" TargetType="Button">
     <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
@@ -158,7 +172,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource DarkPinkBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -185,7 +203,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource PanelAccentHoverBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -297,7 +319,7 @@
                       RenderTransform="translateX(0px)">
             <Border.Transitions>
               <Transitions>
-                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.34">
+                <TransformOperationsTransition Property="Border.RenderTransform" Duration="0:0:0.34">
                   <TransformOperationsTransition.Easing>
                     <BackEaseOut/>
                   </TransformOperationsTransition.Easing>
@@ -314,7 +336,7 @@
                    RenderTransform="scale(0.4)">
             <Ellipse.Transitions>
               <Transitions>
-                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.45">
+                <TransformOperationsTransition Property="Border.RenderTransform" Duration="0:0:0.45">
                   <TransformOperationsTransition.Easing>
                     <QuadraticEaseOut/>
                   </TransformOperationsTransition.Easing>
@@ -410,7 +432,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource TransparentPinkBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>

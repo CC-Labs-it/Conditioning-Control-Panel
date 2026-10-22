@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -25,7 +26,7 @@ public sealed class SharedDeeperThemeTests
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     private static ControlTheme Theme(string key) => (ControlTheme)Application.Current!.FindResource(key)!;
     private static Border Plate(Control control) => control.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "bd");
@@ -83,6 +84,35 @@ public sealed class SharedDeeperThemeTests
     });
 
     [Fact]
+    public Task ActionSecondaryOutlinePressIn80msAndReleaseWithBackEase03() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var release = (Transitions)Application.Current!.FindResource("PressReleaseTransitions")!;
+        var press = (Transitions)Application.Current!.FindResource("PressDownTransitions")!;
+        var releaseTween = Assert.IsType<TransformOperationsTransition>(Assert.Single(release));
+        Assert.Equal(TimeSpan.FromMilliseconds(150), releaseTween.Duration);
+        Assert.Equal(0.3, Assert.IsType<global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude>(releaseTween.Easing).Amplitude);
+        Assert.Equal(TimeSpan.FromMilliseconds(80), Assert.IsType<TransformOperationsTransition>(Assert.Single(press)).Duration);
+        foreach (var key in new[] { "ActionButton", "SecondaryButton", "OutlineButton" })
+        {
+            var button = new Button { Theme = Theme(key), Content = "Test", Width = 120, Height = 40 };
+            var window = new Window { Content = button, Width = 200, Height = 100 };
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                var border = button.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "border");
+                Assert.Same(release, border.Transitions);
+                window.MouseDown(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                Assert.Same(press, border.Transitions);
+                window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                Assert.Same(release, border.Transitions);
+            }
+            finally { window.Close(); }
+        }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public Task EditorPlayerAndHubUseTheSharedThemes() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
@@ -96,9 +126,11 @@ public sealed class SharedDeeperThemeTests
         {
             editor.Show(); player.Show(); host.Show(); Dispatcher.UIThread.RunJobs();
             Assert.Same(Theme("DeeperRoundIconToggleButton"), editor.FindControl<ToggleButton>("BtnCreatorLockToggle")!.Theme);
-            Assert.Contains(editor.GetVisualDescendants().OfType<Button>(), b => ReferenceEquals(b.Theme, Theme("DeeperRoundButton")));
-            Assert.Contains(player.GetVisualDescendants().OfType<Button>(), b => ReferenceEquals(b.Theme, Theme("DeeperRoundButton")));
-            Assert.Contains(hub.GetVisualDescendants().OfType<Button>(), b => ReferenceEquals(b.Theme, Theme("DeeperRoundButton")));
+            // Named buttons, not Contains-any: one stray themed button must not hide a lost implicit style.
+            Assert.Same(Theme("DeeperRoundButton"), editor.FindControl<Button>("BtnEditorHelp")!.Theme);
+            Assert.Same(Theme("DeeperRoundButton"), player.FindControl<Button>("BtnOpenInEditor")!.Theme);
+            Assert.Same(Theme("DeeperRoundButton"), player.FindControl<Button>("BtnPickAudio")!.Theme);
+            Assert.Same(Theme("DeeperRoundButton"), hub.FindControl<Button>("BtnDeeperOpenPlayer")!.Theme);
         }
         finally { editor.Close(); player.Close(); host.Close(); CoreSettings.Current.MotionLevel = oldMotion; }
         await Task.CompletedTask;
