@@ -22,6 +22,9 @@ namespace CCP.Avalonia.Tests;
 /// startup modal or update dialog holds them unspent (WPF FeatureIntroPopup.xaml.cs:211).</summary>
 public sealed class FeatureIntroWiringTests
 {
+    private static readonly FieldInfo UpdateOffered =
+        typeof(AppUpdater).GetField("_offering", BindingFlags.Static | BindingFlags.NonPublic)!;
+
     private static readonly FieldInfo UpdaterBusy =
         typeof(AppUpdater).GetField("_busy", BindingFlags.Static | BindingFlags.NonPublic)!;
 
@@ -53,6 +56,7 @@ public sealed class FeatureIntroWiringTests
             foreach (var w in opened.Where(w => w != shell).ToArray()) w.Close();
             shell.Close();
             MainShellWindow.IsStartupDialogShowing = false;
+            UpdateOffered.SetValue(null, false);
             UpdaterBusy.SetValue(null, false);
             seen.Clear();
             seen.AddRange(was);
@@ -112,12 +116,12 @@ public sealed class FeatureIntroWiringTests
         Assert.True(StartupLadder.Inbox.Contains("intro:lockdown")); // ModalUp parks it for later
 
         MainShellWindow.IsStartupDialogShowing = false;
-        UpdaterBusy.SetValue(null, true);
+        UpdateOffered.SetValue(null, true);
         ClickLockdown(shell);
         Assert.Empty(opened.OfType<FeatureIntroPopup>());
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
 
-        UpdaterBusy.SetValue(null, false);
+        UpdateOffered.SetValue(null, false);
         ClickLockdown(shell);
         Assert.Equal(FeatureIntros.All["lockdown"].Title, CardTitle(opened));
     }, "lockdown");
@@ -144,6 +148,17 @@ public sealed class FeatureIntroWiringTests
         Assert.Equal(FeatureIntros.All["studio-rack"].Title, CardTitle(opened));
         Assert.Contains("studio-rack", CoreSettings.Current.SeenFeatureIntros);
     }, "studio-rack");
+
+    [Fact]
+    public Task ManualUpdateCheckWaitingOnTheNetworkDoesNotHoldTheCard() => Run((opened, shell) =>
+    {
+        // WPF App.xaml.cs:5492-5507: _isCheckingForUpdates is separate; IsUpdateDialogActive rises
+        // only once a newer version is found, so a pending check neither refuses nor parks the card.
+        UpdaterBusy.SetValue(null, true);
+        ClickLockdown(shell);
+        Assert.Equal(FeatureIntros.All["lockdown"].Title, CardTitle(opened));
+        Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
+    }, "lockdown");
 
     [Fact]
     public Task ManuallyOpenedWhatsNewDoesNotHoldTheCard() => Run((opened, shell) =>
