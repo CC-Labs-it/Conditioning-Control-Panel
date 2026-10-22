@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Prizes;
 
@@ -91,14 +92,14 @@ public sealed class V2PurchaseService
         if (_adoptSp == null || string.IsNullOrEmpty(account)) return;
         if (sp is not JValue { Type: JTokenType.Integer } v) return;
         try { _adoptSp(account, fromBuy, v.Value<int>()); }
-        catch (Exception ex) { App.Logger?.Debug("[Prizes] adopt sp failed: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[Prizes] adopt sp failed: {Error}", ex.Message); }
     }
 
     /// <summary>A repaint no handler can turn into a stuck row.</summary>
     private void RaiseChanged()
     {
         try { Changed?.Invoke(); }
-        catch (Exception ex) { App.Logger?.Debug("[Prizes] Changed handler threw: {Error}", ex.Message); }
+        catch (Exception ex) { Log.Debug("[Prizes] Changed handler threw: {Error}", ex.Message); }
     }
 
     /// <summary>What the row for <paramref name="prizeId"/> shows right now.</summary>
@@ -142,8 +143,11 @@ public sealed class V2PurchaseService
             if (_fetching || (onlyIfUnknown && known)) return;
             _fetching = true;
         }
-        _ = Task.Run(FetchAsync);
+        LastBackgroundRead = Task.Run(FetchAsync);
     }
+
+    /// <summary>Test seam: the most recent background read Start launched, so tests await it instead of sleeping.</summary>
+    internal Task LastBackgroundRead { get; private set; } = Task.CompletedTask;
 
     /// <summary>
     /// Drop the cached counter (sign out, account switch). The next box to appear reads it fresh.
@@ -217,7 +221,7 @@ public sealed class V2PurchaseService
             if (priceNow != confirmedPriceSp)
             {
                 lock (_gate) _failures[prizeId] = "v2_get_error_changed";
-                App.Logger?.Information("[Prizes] standalone buy {Prize} refused: confirmed {Was} SP, counter says {Now} SP",
+                Log.Information("[Prizes] standalone buy {Prize} refused: confirmed {Was} SP, counter says {Now} SP",
                     prizeId, confirmedPriceSp, priceNow);
                 return false;
             }
@@ -242,12 +246,12 @@ public sealed class V2PurchaseService
                 // retry re-send it and be refused forever.
                 if (res.Reason == "catalog_changed") { _known = false; _catalogVersion = 0; repriced = true; }
             }
-            App.Logger?.Information("[Prizes] standalone buy {Prize}: ok={Ok} status={Status} reason={Reason}",
+            Log.Information("[Prizes] standalone buy {Prize}: ok={Ok} status={Status} reason={Reason}",
                 prizeId, res.Ok, res.Status, res.Reason ?? "-");
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("[Prizes] standalone buy {Prize} threw: {Error}", prizeId, ex.Message);
+            Log.Debug("[Prizes] standalone buy {Prize} threw: {Error}", prizeId, ex.Message);
             lock (_gate) _failures[prizeId] = "v2_get_error_generic";
         }
         finally
@@ -259,7 +263,7 @@ public sealed class V2PurchaseService
         if (bought)
         {
             try { Bought?.Invoke(prizeId); }
-            catch (Exception ex) { App.Logger?.Debug("[Prizes] Bought handler threw: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("[Prizes] Bought handler threw: {Error}", ex.Message); }
             // The receipt settled the balance and the grants; this is for `owned` (nothing came
             // back in that reply) and for the sale flags.
             Refresh();
@@ -344,7 +348,7 @@ public sealed class V2PurchaseService
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("[Prizes] counter state read failed: {Error}", ex.Message);
+            Log.Debug("[Prizes] counter state read failed: {Error}", ex.Message);
         }
         finally
         {

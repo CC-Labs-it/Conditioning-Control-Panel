@@ -2556,3 +2556,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/launcher-media-dialog: +805
 - Cloud session unit (launcher-media-dialog); reviewed and gated locally.
 - Review fixes: Done/link hover paint, Yes on consent, video volume follows master, stale veil comment.
+
+## avalonia-port/prizes-core-a: +171
+- Cloud session unit (prizes-core-a); reviewed and gated locally.

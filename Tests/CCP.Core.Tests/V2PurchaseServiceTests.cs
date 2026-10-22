@@ -8,7 +8,7 @@ using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// Buying a v2 prize from the options panel: the counter is read once and lazily, a buy is one
@@ -36,6 +36,8 @@ public class V2PurchaseServiceTests
         public TaskCompletionSource<bool>? HoldBuy;
         /// <summary>Set to hold a counter read open, so a press can land on top of one.</summary>
         public TaskCompletionSource<bool>? HoldState;
+        /// <summary>Set when a held counter read has reached the relay.</summary>
+        public readonly TaskCompletionSource<bool> HeldStateReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public IReadOnlyList<Call> Calls { get { lock (_gate) return _calls.ToArray(); } }
         public int CountOf(string op) => Calls.Count(c => c.Op == op);
@@ -45,7 +47,11 @@ public class V2PurchaseServiceTests
         {
             lock (_gate) _calls.Add(new Call(station, op, idem, body));
             if (op == "buy" && HoldBuy != null) await HoldBuy.Task.ConfigureAwait(false);
-            if (op == "state" && HoldState != null) await HoldState.Task.ConfigureAwait(false);
+            if (op == "state" && HoldState != null)
+            {
+                HeldStateReached.TrySetResult(true);
+                await HoldState.Task.ConfigureAwait(false);
+            }
             return op == "buy" ? BuyResult : StateResult;
         }
 
@@ -103,18 +109,7 @@ public class V2PurchaseServiceTests
         public async Task ReadCounterAsync()
         {
             Service.EnsureState();
-            await WaitFor(() => Service.RowFor(Flashes).State != V2PurchaseRowState.Loading);
-        }
-
-        /// <summary>
-        /// Wait for the service to reach a state. The budget is generous on purpose: this runs
-        /// alongside the whole suite, where a Task.Run can sit in the pool for a while, and a short
-        /// budget turns into a test that is only red on a loaded machine.
-        /// </summary>
-        public static async Task WaitFor(Func<bool> done)
-        {
-            for (var i = 0; i < 800 && !done(); i++) await Task.Delay(10);
-            Assert.True(done(), "the service never settled");
+            await Service.LastBackgroundRead;
         }
     }
 
@@ -134,7 +129,7 @@ public class V2PurchaseServiceTests
 
         h.Service.EnsureState();
         h.Service.EnsureState();
-        await Task.Delay(30);
+        await h.Service.LastBackgroundRead;
         Assert.Equal(1, h.Relay.CountOf("state"));         // cached for the session
     }
 
@@ -143,7 +138,7 @@ public class V2PurchaseServiceTests
     {
         var h = new Harness { Account = null };
         h.Service.EnsureState();
-        await Task.Delay(30);
+        await h.Service.LastBackgroundRead;
         Assert.Empty(h.Relay.Calls);
         Assert.Equal(V2PurchaseRowState.SignIn, h.Service.RowFor(Flashes).State);
     }
@@ -204,7 +199,7 @@ public class V2PurchaseServiceTests
         h.Relay.HoldBuy = new TaskCompletionSource<bool>();
 
         var first = h.Buy(Flashes);
-        await Harness.WaitFor(() => h.Service.RowFor(Flashes).State == V2PurchaseRowState.Busy);
+        Assert.Equal(V2PurchaseRowState.Busy, h.Service.RowFor(Flashes).State); // set before the buy's first await
 
         Assert.False(await h.Buy(Flashes));   // the row is already someone's
         h.Relay.HoldBuy!.SetResult(true);
@@ -300,7 +295,7 @@ public class V2PurchaseServiceTests
         var h = new Harness();
         h.Relay.StateResult = Refuse("offline", 0);
         h.Service.EnsureState();
-        await Task.Delay(40);
+        await h.Service.LastBackgroundRead;
 
         Assert.Equal(V2PurchaseRowState.Loading, h.Service.RowFor(Flashes).State);
         // A confirmed price with no counter behind it: the re-read fails too, so nothing is sent.
@@ -338,7 +333,7 @@ public class V2PurchaseServiceTests
         Assert.Equal("v2_get_error_changed", h.Service.RowFor(Flashes).MessageKey);
 
         // The row now shows 90, and a fresh confirm at 90 goes out - with the NEW version.
-        await Harness.WaitFor(() => h.Service.RowFor(Flashes).PriceSp == 90);
+        Assert.Equal(90, h.Service.RowFor(Flashes).PriceSp); // the press awaited its own re-read
         Assert.True(await h.Buy(Flashes));
         var buy = h.Relay.Calls.Single(c => c.Op == "buy");
         Assert.Equal(3, buy.Body?.Value<int>("catalogVersion"));
@@ -361,7 +356,8 @@ public class V2PurchaseServiceTests
         // Wait on the APPLIED price, never on the relay's call count: the call is recorded before
         // the reply lands, so counting it proves nothing about what the service knows.
         h.Relay.BuyResult = new BackRoomStationResult(true, 200, null, new JObject { ["ok"] = true });
-        await Harness.WaitFor(() => h.Service.RowFor(Flashes).PriceSp == 45);
+        await h.Service.LastBackgroundRead;   // the refusal's Refresh
+        Assert.Equal(45, h.Service.RowFor(Flashes).PriceSp);
 
         Assert.True(await h.Buy(Flashes));
         var buy = h.Relay.Calls.Last(c => c.Op == "buy");
@@ -380,10 +376,10 @@ public class V2PurchaseServiceTests
         h.Relay.HoldState = hold;
         h.Service.Invalidate();          // drops the version, so the press has to fetch
         h.Service.Refresh();
-        await Harness.WaitFor(() => h.Relay.CountOf("state") == 2);
+        await h.Relay.HeldStateReached.Task;
+        Assert.Equal(2, h.Relay.CountOf("state"));
 
         var press = h.Service.BuyAsync(Flashes, 30);
-        await Task.Delay(60);
         Assert.False(press.IsCompleted);             // waiting on the read, not refusing
         Assert.Equal(2, h.Relay.CountOf("state"));   // it joined that read, it did not start another
 
@@ -421,7 +417,7 @@ public class V2PurchaseServiceTests
         // A's receipt would lower B's wallet.
         h.Relay.HoldBuy = new TaskCompletionSource<bool>();
         var press = h.Buy(Flashes);
-        await Harness.WaitFor(() => h.Relay.CountOf("buy") == 1);
+        Assert.Equal(1, h.Relay.CountOf("buy"));   // recorded before the buy's first await
         h.Account = "u_two";
         h.Relay.HoldBuy.SetResult(true);
         await press;
@@ -475,7 +471,7 @@ public class V2PurchaseServiceTests
         var h = new Harness();
         h.Relay.StateResult = Refuse("offline", 0);
         h.Service.EnsureState();
-        await Task.Delay(40);
+        await h.Service.LastBackgroundRead;
         Assert.Empty(h.AdoptedCalls);
     }
 
@@ -499,7 +495,8 @@ public class V2PurchaseServiceTests
         Assert.Equal(1, h.Relay.CountOf("state"));
 
         await h.Buy(Flashes);
-        await Harness.WaitFor(() => h.Relay.CountOf("state") == 2);
+        await h.Service.LastBackgroundRead;
+        Assert.Equal(2, h.Relay.CountOf("state"));
     }
 
     [Fact]

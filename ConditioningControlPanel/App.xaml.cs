@@ -2727,7 +2727,23 @@ namespace ConditioningControlPanel
             _ = DailyFree.RefreshAsync();
             // Prize ownership. Pure constructor: no I/O, no network; it only reads the DEBUG
             // CCP_PRIZE_GRANTS desk-test override. The static PrizeGrants facade the effect lanes call forwards here.
-            Ownership = new Services.Prizes.OwnershipService();
+            // Core holds the rules; WPF hands it the UI-thread marshal (inline when already on the
+            // UI thread, dropped once the dispatcher is shutting down, synchronous with no Application).
+            Ownership = new Services.Prizes.OwnershipService(invoke =>
+            {
+                try
+                {
+                    var dispatcher = Current?.Dispatcher;
+                    if (dispatcher is null) { invoke(); return; }
+                    if (dispatcher.HasShutdownStarted) return;
+                    if (dispatcher.CheckAccess()) invoke();
+                    else dispatcher.BeginInvoke(invoke);
+                }
+                catch (Exception ex)
+                {
+                    Logger?.Debug("[Prizes] could not raise OwnershipChanged: {Error}", ex.Message);
+                }
+            });
             Services.Prizes.PrizeGrants.Attach(Ownership);
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on

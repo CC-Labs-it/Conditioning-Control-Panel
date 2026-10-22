@@ -4,7 +4,7 @@ using System.Linq;
 using ConditioningControlPanel.Services.Prizes;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// The Back Room prize ownership seam: override parser, snapshot rules and grant id spelling. The
@@ -268,3 +268,46 @@ public class PrizeGrantsFacadeTests
 [CollectionDefinition(nameof(PrizeGrantsFacadeCollection), DisableParallelization = true)]
 public class PrizeGrantsFacadeCollection { }
 
+
+/// <summary>
+/// The head-facing constructor: the account is Core's <see cref="ConditioningControlPanel.CoreAccount"/>
+/// (WPF's App.UnifiedUserId reads the same field) and events go through the marshal the head hands in.
+/// </summary>
+[Collection(CoreSecretsStatics.Name)] // CoreAccount.UnifiedUserId is process-global
+public class OwnershipServiceHeadSeamTests
+{
+    [Fact]
+    public void PublicCtor_ReadsCoreAccount_AndRaisesThroughTheHeadMarshal()
+    {
+        var saved = ConditioningControlPanel.CoreAccount.UnifiedUserId;
+        // The public ctor reads the real DEBUG override; a developer's CCP_PRIZE_GRANTS would grant everything.
+        var savedOverride = Environment.GetEnvironmentVariable(OwnershipService.OverrideEnvVar);
+        Environment.SetEnvironmentVariable(OwnershipService.OverrideEnvVar, null);
+        try
+        {
+            ConditioningControlPanel.CoreAccount.UnifiedUserId = "uid-core";
+            var marshalled = new List<Action>();
+            var svc = new OwnershipService(marshalled.Add);
+            var fired = 0;
+            svc.OwnershipChanged += (_, _) => fired++;
+
+            svc.ApplySnapshot("uid-other", 1, new[] { PrizeGrants.BubbleRain });
+            Assert.Empty(marshalled); // not the signed-in account: dropped
+
+            svc.ApplySnapshot("uid-core", 1, new[] { PrizeGrants.BubbleRain });
+            Assert.True(svc.IsGranted(PrizeGrants.BubbleRain));
+            var raise = Assert.Single(marshalled);
+            Assert.Equal(0, fired); // the head decides when it runs
+            raise();
+            Assert.Equal(1, fired);
+
+            ConditioningControlPanel.CoreAccount.UnifiedUserId = "uid-next";
+            Assert.False(svc.IsGranted(PrizeGrants.BubbleRain)); // grants are bound to the account
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreAccount.UnifiedUserId = saved;
+            Environment.SetEnvironmentVariable(OwnershipService.OverrideEnvVar, savedOverride);
+        }
+    }
+}

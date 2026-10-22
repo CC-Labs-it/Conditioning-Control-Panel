@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.Prizes;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// The standalone "Get it" row (owner decision, 2026-09-19). One rule table, two panels, so the
