@@ -11,8 +11,17 @@ const GAPS = {
   'drift.slideTcS': 0.25,     // the same bleed while drifting: sets the drift slip angle
   'drift.steerMin': 0.2,      // stick share that picks a drift direction and the soft-drift side
   'wall.minHitMps': 1.0,      // into-rail speed under this slides along the rail with no hit
+  'wall.topM': 1.5,           // polish 4: an airborne kart this far over the road plane clears a rail (the tube is 0.9 m)
   'boost.tailEndTcs': 4,      // a boost tail ends after this many tail time constants
   'respawn.hoverM': 2.0,      // hover height above the anchor node during a rescue
+  // polish 4 ROUTES (sim/routes.js): the drop shortcut's soft catch and its clean-landing boost
+  'route.catchPct': 0.25,     // a route landing keeps at most this share of top speed
+  'route.catchHoldS': 2.5,    // and thrust is capped there this long (the soft glass catch)
+  'route.cleanLenM': 24,      // clean: within this length of road around the pad
+  'route.cleanLatM': 3.5,     // and this far either side of the pad's centre
+  'route.cleanDeg': 25,       // with the nose this close to the road's heading
+  'route.cleanAmount': 0.15,  // clean landing boost: share of top over top, when the catch ends
+  'route.cleanHoldS': 0.6,
 };
 
 // feel.get throws on a missing key and a feel never gains keys (set refuses them), so a miss is remembered

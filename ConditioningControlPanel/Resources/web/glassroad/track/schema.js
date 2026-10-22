@@ -125,6 +125,34 @@ export function validate(t) {
       warn('nodes[' + i + '] jump flag with no jumps entry');
   }
 
+  // polish 4 drop shortcuts (optional): a rail gap on one side over nodes from..to-1, a forward landing stretch
+  if (t.routes !== undefined) {
+    if (!Array.isArray(t.routes)) err('routes must be an array');
+    else t.routes.forEach((r, i) => {
+      const at = 'routes[' + i + ']';
+      if (!r || !isStr(r.id)) { err(at + '.id missing'); return; }
+      if (r.kind !== 'drop') err(at + '.kind must be drop');
+      if (r.side !== 'L' && r.side !== 'R') err(at + '.side must be L or R');
+      if (!inRange(r.from) || !isInt(r.to) || r.to <= r.from || r.to > N) { err(at + ' needs from < to within the nodes'); return; }
+      if (!r.land || !inRange(r.land.from) || !inRange(r.land.to) || r.land.to < r.land.from) { err(at + '.land needs from <= to'); return; }
+      const ahead = ((r.land.from - r.from) % N + N) % N;
+      if (ahead <= r.to - r.from || ahead >= N / 2) err(at + '.land must lie ahead of the gap, within half a lap');
+      if (!r.pad || !isInt(r.pad.node) || r.pad.node < r.land.from || r.pad.node > r.land.to || !isNum(r.pad.x) || Math.abs(r.pad.x) > nodes[r.pad.node].w / 2)
+        err(at + '.pad must sit on the landing stretch');
+      else if (r.pad.ds !== undefined && (!isNum(r.pad.ds) || r.pad.ds < 0 || r.pad.ds > 15)) err(at + '.pad.ds must be 0..15 m');
+      if (r.open !== undefined) {
+        const span = Math.hypot(...[0, 1, 2].map((k) => nodes[r.to % N].p[k] - nodes[r.from].p[k]));
+        if (!r.open || !isNum(r.open.ds) || !isNum(r.open.len) || r.open.ds < 0 || r.open.len < 2 || r.open.ds + r.open.len > span + 1)
+          err(at + '.open needs ds >= 0 and len >= 2 inside the open stretch');
+      }
+      const shut = r.side === 'L' ? 'railL' : 'railR';
+      for (let k = r.from; k < r.to; k++) {
+        const fl = nodes[k].flags;
+        if (fl.includes('rail') || fl.includes(shut) || fl.includes('jump')) err(at + ' node ' + k + ' must leave the ' + r.side + ' side open');
+      }
+    });
+  }
+
   if (!t.ai || typeof t.ai !== 'object' || !Array.isArray(t.ai.lines) || !Array.isArray(t.ai.pace)) err('ai must have lines[] and pace[]');
   else {
     t.ai.lines.forEach((l, i) => { if (!l || !inRange(l.node) || !isNum(l.x)) err('ai.lines[' + i + '] needs node and x'); });

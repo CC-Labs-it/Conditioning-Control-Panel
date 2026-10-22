@@ -58,6 +58,14 @@ const BUBBLE_CLUSTERS = [
   { piece: 'L2', at: 0.1, dots: [[0, -2], [3, -1], [6, 0], [9, 1], [12, 2]] },
 ];
 const ITEM_JUMP_CLEAR_M = 40, ITEM_OPEN_CLEAR_M = 30, ITEM_PAD_CLEAR_M = 8;
+// Drop shortcuts (polish 4): the rail on `side` of `piece` is open from `from` to `to` (0..1 of the piece);
+// a kart that leaves that edge can land on `land` (landFrom..landTo of that piece) one ring lower. The pad
+// is the landing marker (`at` of the land piece, x metres + right). The checks below hold the drop height
+// and that the open edge sits over the landing road.
+const ROUTES = [
+  { id: 'helix-drop', kind: 'drop', side: 'L', piece: 'spiral', from: 0, to: 0.07, open: { ds: 13, len: 5 }, land: 'L3b', landFrom: 0, landTo: 0.9, pad: { at: 0.57, ds: 3, x: -1 } },
+];
+const ROUTE_DROP_M = [10, 16];
 
 const pieceLen = (p) => (p.turn ? Math.abs(p.turn) * DEG * p.r : p.len);
 const ease = (k, u) => (k === 'lin' ? u : k === 'kick' ? u * u : u * u * (3 - 2 * u));
@@ -170,6 +178,17 @@ function build() {
     c.dots.forEach(([ds, x]) => items.push({ node: i, x, kind: 'bubble', ds }));
   }
 
+  // drop shortcuts: open the rail on one side over the gap stretch, register the landing stretch
+  const routes = ROUTES.map((rt) => {
+    const pi = pieceIdx(rt.piece), li = pieceIdx(rt.land);
+    const idxs = meta.map((m, i) => (m.piece === pi && m.u >= rt.from - 1e-9 && m.u < rt.to ? i : -1)).filter((i) => i >= 0);
+    const keep = rt.side === 'L' ? 'railR' : 'railL';
+    for (const i of idxs) nodes[i].flags = nodes[i].flags.map((f) => (f === 'rail' ? keep : f));
+    const lands = meta.map((m, i) => (m.piece === li && m.u >= rt.landFrom - 1e-9 && m.u <= rt.landTo + 1e-9 ? i : -1)).filter((i) => i >= 0);
+    return { id: rt.id, kind: rt.kind, side: rt.side, from: idxs[0], to: idxs[idxs.length - 1] + 1, open: rt.open,
+      land: { from: lands[0], to: lands[lands.length - 1] }, pad: { node: nodeAt(li, rt.pad.at), ds: rt.pad.ds || 0, x: rt.pad.x } };
+  });
+
   const checkpoints = [0, 0.25, 0.5, 0.75].map((f) => {
     let best = 0, bd = 1e9;
     meta.forEach((m, i) => {
@@ -188,7 +207,7 @@ function build() {
     sections: sectionRows,
     checkpoints,
     spawn: { node: 0, grid: [[-3, -4], [3, -6], [-3, -8], [3, -10], [-3, -12], [3, -14], [-3, -16], [3, -18]] },
-    items, boosts, jumps, hazards: [], media: [],
+    items, boosts, jumps, routes, hazards: [], media: [],
     ai: { lines: [], pace: [1.0, 1.05, 1.1] },
     beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: Math.floor(minY - 25), edgeGraceM: 1.2, edgeGraceS: 0.8 },
@@ -252,7 +271,28 @@ function checks({ track, closure, lengthM, lipPiece, meta }) {
     report.push(f + ':' + x.toFixed(1) + 'm/' + t.toFixed(2) + 's');
     if (x < gap.len + 1) errs.push('jump not cleared at ' + f + ' of top: ' + x.toFixed(1) + ' m');
   }
-  return { errs, info: { nodes: N, lengthM: Math.round(lengthM), spacing: [r2(minGap), r2(maxGap)], minOverlapSepM: r2(minSep),
+  // drop shortcuts: every open-edge node sits 10 to 16 m over the landing road, and its open edge is over it
+  const routeInfo = [];
+  for (const rt of track.routes) {
+    const land = [];
+    for (let i = rt.land.from; i <= rt.land.to; i++) land.push(i);
+    let over = 0;
+    for (let i = rt.from; i < rt.to; i++) {
+      const a = P[i], b = P[i + 1], side = rt.side === 'L' ? -1 : 1;
+      const tx = b[0] - a[0], tz = b[2] - a[2], tl = Math.hypot(tx, tz);
+      const ex = a[0] + side * (-tz / tl) * track.nodes[i].w / 2, ez = a[2] + side * (tx / tl) * track.nodes[i].w / 2;
+      let best = 1e9, by = 0;
+      for (const j of land) { const d = Math.hypot(P[j][0] - ex, P[j][2] - ez); if (d < best) { best = d; by = P[j][1]; } }
+      const dy = a[1] - by;
+      if (dy < ROUTE_DROP_M[0] || dy > ROUTE_DROP_M[1]) errs.push('route ' + rt.id + ' drop ' + dy.toFixed(1) + ' m at node ' + i);
+      if (best < track.nodes[land[0]].w / 2 + 6) over++;
+    }
+    if (!over) errs.push('route ' + rt.id + ' open edge is not over its landing road');
+    const skip = (meta[rt.pad.node].s + rt.pad.ds) - meta[rt.from].s;
+    routeInfo.push(rt.id + ': nodes ' + rt.from + '..' + (rt.to - 1) + ' side ' + rt.side + ', s ' + meta[rt.from].s.toFixed(0) + '..' + meta[rt.to].s.toFixed(0) +
+      ' -> land s ' + meta[rt.land.from].s.toFixed(0) + '..' + meta[rt.land.to].s.toFixed(0) + ', pad s ' + (meta[rt.pad.node].s + rt.pad.ds).toFixed(0) + ' (skip ' + skip.toFixed(0) + ' m, ' + (100 * skip / lengthM).toFixed(0) + '% of a lap)');
+  }
+  return { errs, info: { nodes: N, lengthM: Math.round(lengthM), routes: routeInfo, spacing: [r2(minGap), r2(maxGap)], minOverlapSepM: r2(minSep),
     lipPitchDeg: r2(pitch / DEG), jumpLand: report.join(' '),
     items: track.items.filter((i) => i.kind === 'box').length + ' boxes, ' + track.items.filter((i) => i.kind === 'bubble').length + ' bubbles', autos: PIECES.filter((p) => p.auto).map((p) => p.id + '=' + p.len.toFixed(1)),
     yRange: [Math.min(...P.map((p) => p[1])), Math.max(...P.map((p) => p[1]))] } };

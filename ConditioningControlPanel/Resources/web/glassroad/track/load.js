@@ -44,6 +44,15 @@ export function loadTrack(json, { validate = true } = {}) {
     while (isGap(land) && land < j.node + N) land++;
     return { node: j.node, airLen: j.airLen, height: j.height, s: nodeS[j.node], landS: nodeS[land % N] };
   });
+  // polish 4 drop shortcuts: the open edge (fromS..toS on `side`), the landing stretch and its pad
+  const routes = (json.routes || []).map((r, idx) => {
+    const padS = wrap(nodeS[r.pad.node] + (r.pad.ds || 0), lengthM), pf = frameAt(padS);
+    const openS0 = nodeS[r.from] + (r.open ? r.open.ds : 0), openS1 = r.open ? openS0 + r.open.len : nodeS[r.to];
+    return { idx, id: r.id, kind: r.kind, side: r.side, from: r.from, to: r.to, fromS: nodeS[r.from], toS: nodeS[r.to], openS0, openS1,
+      land: { from: r.land.from, to: r.land.to, fromS: nodeS[r.land.from], toS: nodeS[r.land.to + 1] },
+      pad: { node: r.pad.node, x: r.pad.x, s: padS,
+        p: [pf.p[0] + pf.b[0] * r.pad.x, pf.p[1] + pf.b[1] * r.pad.x, pf.p[2] + pf.b[2] * r.pad.x], n: pf.n.slice(), t: pf.t.slice() } };
+  });
   const lm = json.limits;
   // B1 (CONTRACT-B1.md section 9): item boxes and pickup bubbles, s = node s + ds, wrapped
   const items = (json.items || []).map((e) => ({ kind: e.kind, node: e.node, x: e.x, ds: e.ds || 0, s: wrap(nodeS[e.node] + (e.ds || 0), lengthM) }));
@@ -59,7 +68,7 @@ export function loadTrack(json, { validate = true } = {}) {
 
   const track = {
     id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
-    sections, sectionAt, boosts, jumps, items,
+    sections, sectionAt, boosts, jumps, items, routes,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,

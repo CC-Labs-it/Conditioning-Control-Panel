@@ -35,6 +35,13 @@ const GAPS = {
   'ai.driftMaxDeg': 55,        // and lets go past this
   'ai.driftWideM': 4,          // how wide a bot sets up for a drift
   'ai.driftBankTolDeg': 4,     // bank change allowed over a drift
+  'ai.routeChance': 0.2,      // polish 4: chance per lap a tier 2 bot tries a drop shortcut (tier 1: x routeLowMul)
+  'ai.routeLowMul': 0,
+  'ai.routeHopLeadM': 3,       // hops this far before the opening, once the line has it at the kerb
+  'ai.routeLeadM': 70,         // starts lining up for the open edge this far before it
+  'ai.routeAimAheadM': 25,    // aims at a point this far past the landing pad: a straight line off the open edge
+  'ai.routeHopEdgeM': 2.2,     // hops the open edge's kerb once this close to it
+  'ai.routeLineM': 2.8,          // the line runs this far to the open side of the landing pad
 };
 // feel.get throws on a missing key, and a feel never gains keys (set refuses them), so a miss is
 // remembered per feel: no throw per bot per tick.
@@ -70,6 +77,7 @@ export function rng(seed) {
 const STEP = 2;                      // m between table samples
 const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] }, FR0 = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const NO_TRAPS = Object.freeze([]);
+const RT_AIM = [0, 0, 0];
 
 /** The live traps as rows with s and x: the items' cheap query when it has one, else its view. */
 function trapsOf(items) {
@@ -114,7 +122,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       const persona = i === 0 ? PERSONAS[0] : PERSONAS[(i + seed) % PERSONAS.length];
       b = { rand, persona, line: (rand() * 2 - 1), phase: rand() * Math.PI * 2, n1: rand() * 6.28, n2: rand() * 6.28,
         t: 0, driftT: -1, driftCool: 0, driftDir: 0, holdT: 0, itemCool: 0, stuckT: 0, reverseT: 0,
-        launched: false, launch: rand(), setupSide: 0, wantDrift: false, why: {} };
+        launched: false, launch: rand(), setupSide: 0, wantDrift: false, why: {}, routeLap: -1, route: null, routes: 0 };
       bots.set(i, b);
     }
     return b;
@@ -173,6 +181,9 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     const la = Math.max(feel.get('ai.lookAheadMinM'), speed * feel.get('ai.lookAheadS'));
     const p = b.persona, blind = r.mods ? clamp(r.mods.blind, 0, 1) : 0;
     const nearLip = lipAhead(s, fg(feel, 'ai.jumpGuardM'));
+
+    // polish 4: a drop shortcut, rolled once a lap as the bot nears its open edge
+    if (routeDrive(r, b, ctx, dt, out, s, speed, blind)) return;
 
     // the line
     const wander = feel.get('ai.lineWanderM') * p.wander * Math.sin(2 * Math.PI * b.t / feel.get('ai.lineWanderS') + b.phase);
@@ -263,7 +274,59 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     } else b.stuckT = 0;
 
     driftLogic(r, b, dt, out, s, lat, speed, la, nearLip, blind);
+    if (st[S.airborne] > 0 && st[S.airTime] > 0 && st[S.airTime] <= 0.1 && !b.trickRolled) { b.trickRolled = true; if (b.rand() < feel.get('trick.botChance')) out.hopPressed = true; } else if (st[S.grounded] > 0) b.trickRolled = false;
     if (r.item) itemLogic(r, b, ctx, dt, out);
+  }
+
+  /**
+   * Drop shortcuts (track.routes): once a lap, ai.routeLeadM + 40 m before an open edge, the bot rolls
+   * ai.routeChance (x ai.routeLowMul for tier 1 personas). Taking it, it aims straight at the landing pad
+   * from routeLeadM out, full throttle, no drift, until it is down on either road past the edge.
+   * @returns {boolean} true while the route drives the bot (out filled)
+   */
+  function routeDrive(r, b, ctx, dt, out, s, speed, blind) {
+    const rs = track.routes, st = r.st;
+    if (!rs || !rs.length || !r.meta || !r.meta.isBot) return false;
+    const lead = fg(feel, 'ai.routeLeadM'), lap = st[S.lap] | 0;
+    if (b.route) {
+      const rt = b.route, past = wrap(s - rt.toS, L);
+      if (st[S.respawnPhase] !== RESPAWN.NONE || (st[S.grounded] > 0 && past > 3 && past < L / 2)) b.route = null;
+    } else if (b.routeLap !== lap) {
+      for (const rt of rs) {
+        const d = wrap(rt.fromS - s, L);
+        if (d <= lead || d > lead + 40) continue;
+        b.routeLap = lap;
+        const chance = fg(feel, 'ai.routeChance') * (b.persona.tier >= 2 ? 1 : fg(feel, 'ai.routeLowMul'));
+        if (blind < 0.3 && b.rand() < chance) b.route = rt;
+      }
+    }
+    const rt = b.route;
+    if (!rt || (st[S.grounded] > 0 && wrap(rt.fromS - s, L) > lead && wrap(rt.fromS - s, L) < L / 2)) return false;
+    // follow the straight line through the landing pad along the lower road: the upper road bends away
+    // under it, so the open edge comes to the kart (a hop takes it over the kerb, below)
+    const ahead = fg(feel, 'ai.routeAimAheadM'), pt = rt.pad.t, pp = rt.pad.p, aim = RT_AIM;
+    const along = (st[S.posX] - pp[0]) * pt[0] + (st[S.posY] - pp[1]) * pt[1] + (st[S.posZ] - pp[2]) * pt[2] + ahead;
+    const pn = rt.pad.n, off = fg(feel, 'ai.routeLineM') * (rt.side === 'L' ? -1 : 1);   // the line sits toward the open side
+    const bx = pt[1] * pn[2] - pt[2] * pn[1], by = pt[2] * pn[0] - pt[0] * pn[2], bz = pt[0] * pn[1] - pt[1] * pn[0];
+    aim[0] = pp[0] + pt[0] * along + bx * off; aim[1] = pp[1] + pt[1] * along + by * off; aim[2] = pp[2] + pt[2] * along + bz * off;
+    const tx = aim[0] - st[S.posX], ty = aim[1] - st[S.posY], tz = aim[2] - st[S.posZ];
+    const qx = st[S.quatX], qy = st[S.quatY], qz = st[S.quatZ], qw = st[S.quatW];
+    const rx = 1 - 2 * (qy * qy + qz * qz), ry = 2 * (qx * qy + qw * qz), rz = 2 * (qx * qz - qw * qy);
+    const fx = -(2 * (qx * qz + qw * qy)), fy = -(2 * (qy * qz - qw * qx)), fz = -(1 - 2 * (qx * qx + qy * qy));
+    const x = tx * rx + ty * ry + tz * rz, z = tx * fx + ty * fy + tz * fz;
+    yawParams(r.feel, YP);
+    const soft = Math.max(0.2, calmOf(speed, YP) * YP.user);
+    out.steer = clamp(Math.atan2(x, Math.max(z, 0.1)) * feel.get('ai.steerGain') / soft, -1, 1);
+    out.throttle = 1;
+    b.driftT = -1;
+    // the open edge is a kerb on the ground: hop over it once the line has carried the kart to it
+    const hopLead = fg(feel, 'ai.routeHopLeadM'), into = wrap(s - (rt.openS0 - hopLead), L), sideLat = rt.side === 'L' ? -st[S.lateral] : st[S.lateral];
+    if (st[S.grounded] > 0 && into < rt.openS1 - rt.openS0 + hopLead && sideLat > half[at(s)] - fg(feel, 'ai.routeHopEdgeM')) {
+      out.hop = true; out.hopPressed = true;
+      out.steer = clamp(out.steer, -0.15, 0.15);          // a straight hop: no drift
+    }
+    if (r.item) itemLogic(r, b, ctx, dt, out);
+    return true;
   }
 
   /** Side (+1 right, -1 left) of a drift-worthy bend starting at s0: long, steady, no open edge, no jump. */

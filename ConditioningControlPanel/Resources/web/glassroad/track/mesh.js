@@ -100,7 +100,10 @@ export function buildMeshes(track, dl) {
   const railed = (q, side) => {
     if (dl.gap[q]) return false;
     const fl = track.nodeFlags(dl.seg[q]);
-    return fl.includes('rail') || fl.includes(side > 0 ? 'railR' : 'railL');
+    if (fl.includes('rail') || fl.includes(side > 0 ? 'railR' : 'railL')) return true;
+    // a drop shortcut's open side keeps its rail everywhere but the opening (polish 4)
+    const sm = (dl.s[q] + dl.s[q + 1]) / 2;
+    return (track.routes || []).some((r) => dl.seg[q] >= r.from && dl.seg[q] < r.to && (r.side === 'L' ? side < 0 : side > 0) && (sm < r.openS0 || sm > r.openS1));
   };
   for (const side of [-1, 1]) {
     for (const [q0, nq, closed] of runs(Q, (q) => railed(q, side))) {
@@ -141,5 +144,87 @@ export function buildMeshes(track, dl) {
     const w = track.frameAt(j.s - LIP_M).w;
     strip(jumps, j.s - LIP_M, LIP_M, 0, w, false);
   }
-  return { road: road.done(), rails: rails.done(), pads: pads.done(), jumps: jumps.done() };
+  const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
+  return { road: road.done(), rails: rails.done(), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand };
+}
+
+/* Polish 4 drop shortcuts (render/routes.js draws these). uv.x = a 0..1 coordinate a slow glow wave runs
+ * along (outward across the gap, round the ring, forward on the arrows), uv.y = that piece's gain.
+ * routeEdge: a low kerb strip along the open edge, chevrons pointing off it, a glowing post at each end of
+ * the break. routeLand: the soft catch zone, a ring round the landing pad and forward arrows inside it. */
+const KERB_W = 0.5, KERB_UP = 0.06, POST_H = 3.2, POST_W = 0.5, CHEV_STEP_M = 4, CHEV_ARM = 1.5, CHEV_W = 0.45;
+const RING_R = 4.6, RING_W = 0.45, RING_SEGS = 48, ZONE_LEN = 24, ZONE_HALF = 3.5, ZONE_LINE = 0.25;
+
+function buildRouteMeshes(track, builder) {
+  const edge = builder(), land = builder(), f = makeFrame();
+  const rs = track.routes || [];
+  // a flat quad on the road at frame fr: corners as [lateral, ahead] pairs (a b one row, c d the next)
+  const flat = (m, fr, pts, us, gain, lift = DECAL_M) => {
+    const ids = pts.map(([x, d], i) => m.v([fr.p[0] + fr.b[0] * x + fr.t[0] * d + fr.n[0] * lift, fr.p[1] + fr.b[1] * x + fr.t[1] * d + fr.n[1] * lift,
+      fr.p[2] + fr.b[2] * x + fr.t[2] * d + fr.n[2] * lift], fr.n, us[i], gain));
+    m.quad(ids[0], ids[1], ids[2], ids[3]);
+  };
+  for (const r of rs) {
+    const side = r.side === 'L' ? -1 : 1, s0 = r.openS0, len = r.openS1 - r.openS0;
+    // the kerb: follows the opening, u runs along it
+    const n = Math.max(2, Math.ceil(len / STRIP_STEP_M));
+    let prev = null;
+    for (let k = 0; k <= n; k++) {
+      track.frameAt(s0 + (len * k) / n, f);
+      const row = [side * (f.w / 2 - KERB_W), side * f.w / 2].map((x) => edge.v(off(f.p, f.b, x, f.n, KERB_UP), f.n, k / n, 0.8));
+      if (prev) edge.quad(prev[0], prev[1], row[0], row[1]);
+      prev = row;
+    }
+    // chevrons pointing off the edge, three across, through the opening and a little before it
+    for (let d = len / 2 - CHEV_STEP_M * 2; d <= len / 2 + 1e-6; d += CHEV_STEP_M) {
+      track.frameAt(s0 + d, f);
+      for (let j = 0; j < 3; j++) {
+        const tip = side * (f.w / 2 - 0.9 - j * 1.9), back = tip - side * CHEV_ARM, u = 1 - j / 3;
+        for (const s of [-1, 1]) {
+          const pts = [[tip, 0], [tip - side * CHEV_W, 0], [back, s * CHEV_ARM], [back - side * CHEV_W, s * CHEV_ARM]];
+          flat(edge, f, pts, [u, u, u - 0.1, u - 0.1], 1);
+        }
+      }
+    }
+    // glowing posts at both ends of the break (two crossed vertical quads each)
+    for (const s of [r.openS0, r.openS1]) {
+      track.frameAt(s, f);
+      const base = off(f.p, f.b, side * f.w / 2, f.n, 0);
+      const up = (p) => [p[0] + f.n[0] * POST_H, p[1] + f.n[1] * POST_H, p[2] + f.n[2] * POST_H];
+      for (const [ax, nrm] of [[f.t, f.b], [f.b, f.t]]) {
+        const a = [base[0] - ax[0] * POST_W / 2, base[1] - ax[1] * POST_W / 2, base[2] - ax[2] * POST_W / 2];
+        const b = [base[0] + ax[0] * POST_W / 2, base[1] + ax[1] * POST_W / 2, base[2] + ax[2] * POST_W / 2];
+        edge.quad(edge.v(a, nrm, 0, 1.2), edge.v(b, nrm, 0, 1.2), edge.v(up(a), nrm, 1, 1.2), edge.v(up(b), nrm, 1, 1.2));
+      }
+    }
+    // the landing: soft catch zone (fill and side lines), the ring, two forward arrows
+    const fill = (x0, x1, gain, lift) => {
+      const m = Math.ceil(ZONE_LEN / STRIP_STEP_M), rows = [];
+      for (let k = 0; k <= m; k++) {
+        const fr = track.frameAt(r.pad.s - ZONE_LEN / 2 + (ZONE_LEN * k) / m, f);
+        rows.push([x0, x1].map((x) => land.v(off(fr.p, fr.b, r.pad.x + x, fr.n, lift), fr.n, k / m, gain)));
+      }
+      for (let k = 0; k < m; k++) land.quad(rows[k][0], rows[k][1], rows[k + 1][0], rows[k + 1][1]);
+    };
+    fill(-ZONE_HALF, ZONE_HALF, 0.22, DECAL_M * 0.5);
+    fill(-ZONE_HALF, -ZONE_HALF + ZONE_LINE, 0.9, DECAL_M);
+    fill(ZONE_HALF - ZONE_LINE, ZONE_HALF, 0.9, DECAL_M);
+    track.frameAt(r.pad.s, f);
+    const cx = r.pad.x, ring = [];
+    for (let k = 0; k <= RING_SEGS; k++) {
+      const a = (k / RING_SEGS) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      ring.push([RING_R - RING_W, RING_R].map((rr) => land.v([
+        f.p[0] + f.b[0] * (cx + ca * rr) + f.t[0] * sa * rr + f.n[0] * DECAL_M * 2,
+        f.p[1] + f.b[1] * (cx + ca * rr) + f.t[1] * sa * rr + f.n[1] * DECAL_M * 2,
+        f.p[2] + f.b[2] * (cx + ca * rr) + f.t[2] * sa * rr + f.n[2] * DECAL_M * 2], f.n, k / RING_SEGS, 1)));
+    }
+    for (let k = 0; k < RING_SEGS; k++) land.quad(ring[k][0], ring[k][1], ring[k + 1][0], ring[k + 1][1]);
+    for (const [d0, u] of [[-1.6, 0.3], [0.6, 0.7]]) {
+      for (const s of [-1, 1]) {
+        const pts = [[cx, d0 + 1.4], [cx, d0 + 1.4 - CHEV_W * 1.5], [cx + s * 1.6, d0], [cx + s * 1.6, d0 - CHEV_W * 1.5]];
+        flat(land, f, pts, [u, u, u - 0.15, u - 0.15], 1, DECAL_M * 2);
+      }
+    }
+  }
+  return { routeEdge: edge.done(), routeLand: land.done() };
 }
