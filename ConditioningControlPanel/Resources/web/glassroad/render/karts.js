@@ -13,12 +13,15 @@
  * boost, place and item effects are read from state; attach({ bus, particles }) adds bumps, walls, the
  * countdown glance, finishes and the head sprays (stars, sweat).
  * Hierarchy per kart: root (state position and rotation) > body (pose) > model.
+ * Polish 3: the screen face draws larger and brighter (faces.js FACE_LOOK, gain feeds the bloom) and a head
+ * mark (faces.js MARK_IDS: dizzy swirl, sweat drop, zz, ice, heart, spark, anger) pops over EMI's head on
+ * a sprite (one shared atlas canvas), eased in and out by the reaction layer's markK.
  */
 import {
   Group, Mesh, Sprite, SpriteNodeMaterial, MeshBasicNodeMaterial, CanvasTexture, SRGBColorSpace, Quaternion, Vector2, Vector3,
   Euler, Color,
 } from 'three/webgpu';
-import { texture, uv, uniform } from 'three/tsl';
+import { texture, uv, uniform, vec2 } from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { LOOK } from './look.js';
@@ -28,7 +31,7 @@ import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
   createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor,
 } from './kartPose.js';
-import { createFaceCanvas, faceCell } from './faces.js';
+import { createFaceCanvas, faceCell, FACE_LOOK, MARK_LOOK, markCell, createMarkAtlas } from './faces.js';
 
 const QX = new Quaternion(), QH = new Quaternion(), QI = new Quaternion(), EU = new Euler(), V = new Vector3(), AX = new Vector3();
 const UPY = new Vector3(0, 1, 0), FZ = new Vector3(0, 0, 1), RX = new Vector3(1, 0, 0), GC = new Color();
@@ -55,6 +58,20 @@ function tagSprite(name, hex) {
   return s;
 }
 
+/** A head mark sprite on the shared mark atlas: cell picks the mark (row 0 on top), k fades and pops it, rot turns it. */
+function markSprite(tex) {
+  const u = { cell: uniform(new Vector2(0, 0)), k: uniform(0), rot: uniform(0) };
+  const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
+  // canvas texture with flipY: v = 1 is the canvas top, so row r spans v (1 - r - 1 .. 1 - r) / 2
+  const c = texture(tex, vec2(u.cell.x.add(uv().x).div(4), u.cell.y.oneMinus().add(uv().y).div(2)));
+  m.colorNode = c.rgb;
+  m.opacityNode = c.a.mul(u.k);
+  m.rotationNode = u.rot;
+  const s = new Sprite(m);
+  s.renderOrder = 5; s.visible = false; s.frustumCulled = false;
+  return { sprite: s, u, id: null };
+}
+
 /** The accessory scene for id, parented to the kart's head_attach at identity (ART.md "Attachment binding"). */
 function attachAccessory(art, model, id) {
   const g = id && art && art.model ? art.model(id) : null, at = model.getObjectByName('head_attach');
@@ -78,12 +95,13 @@ function faceScreen(art, model, fg) {
   let screen;
   if (atlas) {
     const cell = uniform(new Vector2(0, 0)), m = new MeshBasicNodeMaterial();
-    m.colorNode = texture(atlas, uv().mul(0.25).add(cell)).rgb;
+    m.colorNode = texture(atlas, uv().mul(0.25).add(cell)).rgb.mul(FACE_LOOK.gain);
     screen = { material: m, set(id) { const c = faceCell(id); cell.value.set(c.col * 0.25, c.row * 0.25); }, dispose() { m.dispose(); } };
   } else {
     const fc = createFaceCanvas(document, { bg: LOOK.faceColour, fg });
     const t = new CanvasTexture(fc.canvas); t.colorSpace = SRGBColorSpace; t.flipY = false;
     const m = new MeshBasicNodeMaterial({ map: t });
+    m.color.setScalar(FACE_LOOK.gain);   // brighter than paper white: the face glows into the bloom
     screen = { material: m, set(id, blink, time) { if (fc.set(id, blink, time)) t.needsUpdate = true; }, dispose() { t.dispose(); m.dispose(); } };
   }
   screen.set('neutral', false, 0);
@@ -111,6 +129,11 @@ function poseHead(h, o) {
 /** greyGeo: the greybox kart geometry for when the art set is missing. */
 export function buildKarts(art, count, greyGeo) {
   const R = rivalNumbers(LOOK), RR = reactNumbers(LOOK), list = [];
+  // one head mark atlas for every kart (none without a document, e.g. under node)
+  let markTex = null;
+  if (typeof document !== 'undefined') {
+    markTex = new CanvasTexture(createMarkAtlas(document)); markTex.colorSpace = SRGBColorSpace;
+  }
   for (let i = 0; i < count; i++) {
     const look = rivalLook(i, KART_TABLE, LOOK);
     const root = new Group(), body = new Group();
@@ -131,9 +154,11 @@ export function buildKarts(art, count, greyGeo) {
       if (b) bones[n] = { b, rest: b.quaternion.clone() };
     }
     body.add(model); root.add(body); root.visible = false;
+    const mark = markTex ? markSprite(markTex) : null;
+    if (mark) root.add(mark.sprite);
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      tag: null, tagName: '', pose: createPose(), react: createReact(i), pend: [], mem: {}, ghost: 0,
+      tag: null, tagName: '', pose: createPose(), react: createReact(i), pend: [], mem: {}, ghost: 0, mark,
     });
   }
 
@@ -224,6 +249,21 @@ export function buildKarts(art, count, greyGeo) {
       k.tag.visible = a > 0.01;
       k.tag.material.opacity = a;
     }
+    if (k.mark) showMark(k, o, near, gentle);
+  }
+
+  /** The head mark: pops in (scale from popIn to 1 with markK), bobs, the swirl turns; above the name tag when one shows. */
+  function showMark(k, o, near, gentle) {
+    const mk = k.mark, M = MARK_LOOK, c = near && o.mark && o.markK > 0.01 ? markCell(o.mark) : null;
+    mk.sprite.visible = !!c;
+    if (!c) return;
+    if (mk.id !== o.mark) { mk.id = o.mark; mk.u.cell.value.set(c.col, c.row); }
+    const t = k.react.t, slow = gentle ? 0.5 : 1, kk = o.markK;
+    const side = M.sided.includes(o.mark) ? M.sideM : 0, up = M.upM + (k.tag && k.tag.visible ? LOOK.tagSizeM[1] + 0.2 : 0);
+    mk.sprite.position.set(side, up + o.lift + Math.sin(t * 6.283 * M.bobHz * slow) * M.bobM * slow, 0);
+    mk.sprite.scale.setScalar(M.sizeM * (M.popIn + (1 - M.popIn) * kk));
+    mk.u.k.value = kk;
+    mk.u.rot.value = o.mark === 'swirl' ? -t * M.spinRadps * slow : Math.sin(t * 6.283 * M.wobbleHz * slow) * M.wobbleRad * slow;
   }
 
   function hide(k) { k.root.visible = false; k.pend.length = 0; }
@@ -236,8 +276,10 @@ export function buildKarts(art, count, greyGeo) {
       if (k.tag) { k.tag.material.map.dispose(); k.tag.material.dispose(); }
       for (const m of k.mats) m.dispose();
       if (k.face) k.face.dispose();
+      if (k.mark) k.mark.sprite.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
     }
+    if (markTex) markTex.dispose();
   }
   return { list, pose, hide, attach, resetReactions, dispose };
 }

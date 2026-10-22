@@ -40,7 +40,7 @@ export const ITEM_LOOK = {
   // the Melt trap prefers the wave 2 melt-spiral mask; the puddle keeps this share of alpha between its arms
   meltMask: 'fx-melt-spiral', meltFloor: 0.55,
   // pops: a ring that opens and a spray of motes
-  popRingM: [0.4, 2.4], popMotes: 12, popSpeedMps: 3.2, popGravityMps2: 3,
+  popRingM: [0.6, 3.6], popMotes: 22, popMoteSizeM: 0.24, popSpeedMps: 4.8, popGravityMps2: 3,
   // melt puddle (trap): the spiral mask, wobbling and dripping
   meltPuddleMul: 1.25, meltArms: 7, meltDripAmp: 0.32, meltWobble: 0.12, meltTurnRadps: 0.35, meltHz: 0.45,
   meltDark: '#3a0c46', meltPink: '#ff7cc8', meltBands: [0.3, 0.7], meltGloss: '#ffe6f6', meltLiftM: 0.04,
@@ -55,21 +55,23 @@ export const ITEM_LOOK = {
   // low on the far side; the living icon breathes (scale share, Hz; Gentle keeps a third)
   shineDriftRad: 0.5, shineHz: 0.11, causticGain: 0.55, causticSharp: 10, breathAmp: 0.05, breathHz: 0.35,
   // throws: a sparkling ribbon of motes along the last trailPts positions (one every trailStepM)
-  trailPts: 14, trailStepM: 0.45, trailSizeM: 0.16, trailAlpha: 0.85, trailTwinkleHz: 0.9,
+  trailPts: 14, trailStepM: 0.45, trailSizeM: 0.26, trailAlpha: 0.85, trailTwinkleHz: 0.9,
   // lobs: a dotted arc (a dot every lobDotStepM) and a soft shadow plus a pulsing ring at the target
-  lobDots: 18, lobDotStepM: 1.6, lobDotSizeM: 0.2, lobShadowR: [0.9, 2.2], lobShadowAlpha: 0.5, markColour: '#ff8fd0',
+  lobDots: 18, lobDotStepM: 1.6, lobDotSizeM: 0.3, lobShadowR: [0.9, 2.2], lobShadowAlpha: 0.5, markColour: '#ff8fd0',
   markPulseHz: 1.2, markRingM: 2.4, markAlpha: 0.55,
   // traps: a slow pulse (scale share, Hz) and a warning ring that wakes from warnM[0] to full at warnM[1]
   trapPulse: 0.07, trapPulseHz: 0.8, trapWarnM: [18, 5], trapWarnRingM: 2.2, trapWarnAlpha: 0.6, trapWarnColour: '#ffb3d9',
   // impacts (an effect lands, a shield soaks it): a shockwave ring on the road and a soft glow that never
   // spans more than impactGlowFrac of the view's height; the glow asks photosafe and skips when refused
-  impactRingM: [0.6, 6.5], impactRingS: 0.55, impactRingAlpha: 0.75, impactGlowM: 1.6, impactGlowFrac: 0.18, impactGlowAlpha: 0.55,
+  impactRingM: [0.8, 11], impactRingS: 0.6, impactRingAlpha: 0.95, impactGlowM: 1.6, impactGlowFrac: 0.18, impactGlowAlpha: 0.55,
   // only an impact this near and on screen asks photosafe for its glow (the shared budget is the player's)
   impactAskM: 60,
   impactGlowS: 0.32,
   // item boxes: a glint sweeps the card every glintEveryS; taken, it bursts into confetti cards
-  glintEveryS: 2.4, glintS: 0.45, glintSizeM: 0.55, confetti: { high: 16, mid: 12, phone: 7 }, confettiSizeM: 0.22,
-  confettiSpeedMps: [3, 6.5], confettiGravityMps2: 7, confettiS: 1.1, confettiColours: ['#ff8fd0', '#ffffff', '#ffd36b', '#bff4ff', '#e6d6ff'],
+  glintEveryS: 2.4, glintS: 0.45, glintSizeM: 0.9, confetti: { high: 36, mid: 26, phone: 16 }, confettiSizeM: 0.48,
+  confettiSpeedMps: [4.5, 10], confettiGravityMps2: 7, confettiS: 1.5,
+  // polish 3: the spectrum, pink and violet still leading
+  confettiColours: ['#ff4fb0', '#ffffff', '#ffd23a', '#22e6ff', '#9b4dff', '#a8ff2e', '#ff2bd6', '#ff8c1a'],
 };
 
 /** The HUD item slot (render/items/slotfx.js): motes orbit the held bubble, a roll shuffles cards. */

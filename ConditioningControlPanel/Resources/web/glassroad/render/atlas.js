@@ -181,3 +181,116 @@ export function maskLook(S = SCREEN_LOOK) {
 
 /** A fade edge x (0..1) jittered by blue noise j (-0.5..0.5): untouched at 0 and 1, so clear stays clear. */
 export const ditherEdge = (x, j, amp) => Math.min(1, Math.max(0, x + j * amp * x * (1 - x) * 4));
+
+// ---- polish 3 "spectacle" (JUICE lane): every feedback effect reads at 1440p at full speed ----
+
+/**
+ * The juice numbers of polish 3: multipliers over the LOOK / FXART numbers and the new bursts, rings and
+ * marks. LOOK.juice (render/look.js, integrator) overrides any of them. Gentle keeps gentleMul of every
+ * growth (a 2.6x spark is 1.8x under Gentle) and gentleCount of every burst count.
+ */
+export const JUICE_LOOK = Object.freeze({
+  gentleMul: 0.5, gentleCount: 0.6, midMul: 0.75, phoneMul: 0.5,
+  // drift sparks: bigger, faster, longer; a tier-up bursts in the new tier colour with a halo ring
+  sparkSizeMul: 2.6, sparkRateMul: 1.3, sparkSpeedMul: 1.35, sparkLifeMul: 1.5,
+  tierBurst: Object.freeze([16, 26, 40]), tierBurstSpeedMps: 7, tierRingM: Object.freeze([2.4, 3.2, 4.2]), tierRingS: 0.4,
+  // boost: a big flame of soft tongues and glitter, and a burst with a ring when it starts
+  flameSizeMul: 2.6, flameRateMul: 1.6, flameLifeMul: 1.3, flameSpeedMul: 1.3, flameSparkSizeMul: 2.2, flameInherit: 0.85,
+  flameAccents: Object.freeze(['#ff8c1a', '#ffd23a', '#ff3355', '#ff2bd6', '#22e6ff']),
+  boostBurst: 36, boostBurstSpeedMps: 9, boostBurstSizeM: 0.5, boostRingM: 4.6, boostRingS: 0.42,
+  // slipstream: wisps you can see, tinted toward the cool end
+  wispSizeMul: 2.6, wispRateMul: 1.6, wispLifeMul: 1.5, wispColours: Object.freeze(['#e8f6ff', '#9fe9ff', '#22e6ff', '#7f9cff']),
+  // bursts at a world point, per family: count, size, speed and life multipliers; spectrum = add the spectrum hues
+  burst: Object.freeze({
+    bump: Object.freeze({ count: 1.3, size: 2, speed: 1.5, life: 1.3, spectrum: true }),
+    pop: Object.freeze({ count: 1.6, size: 2.2, speed: 1.4, life: 1.3, spectrum: true }),
+    box: Object.freeze({ count: 2, size: 2.4, speed: 1.5, life: 1.3, spectrum: true }),
+  }),
+  bumpRingM: 4.4, bumpRingS: 0.38, bumpCoreM: 0.7, bumpCoreS: 0.16, bumpStars: 6,
+  hitCountMul: 1.8, hitSizeMul: 2.2, hitSpeedMul: 1.4, hitRingM: 5, hitRingS: 0.45,
+  // landing: more, bigger dust and a coloured halo; ground rings bigger, brighter, a cooler echo ring
+  dustCountMul: 1.5, dustSizeMul: 2.2, dustSpeedMul: 1.6, dustSpectrum: 0.35, landRingM: Object.freeze([2.6, 3.6, 5]),
+  ringPool: 16, ringSizeMul: 2, ringGainMul: 2, ringGainMax: 1, ringEcho: 0.6, ringEchoLifeMul: 1.5,
+  trailWidthMul: 2, trailAlphaMul: 1.3,
+  // speed lines: more, longer, wider soft streaks, spectrum tinted, stronger with speed and boost
+  lineCountMul: 1.4, lineLenMul: 1.7, lineWidthM: 0.1, lineAlpha: 0.6, lineRadiusM: Object.freeze([4.5, 12]), lineFromPct: 0.62,
+  lineTint: 0.75, lineBoostGain: 0.5, lineBoostLen: 0.6, lineBoostWidth: 0.35, lineGentle: 0.5,
+  // ambient motes: a share wears the spectrum (the hue drifts slowly), a little bigger and brighter
+  moteSpectrum: 0.45, moteSizeMul: 1.5, moteAlphaMul: 1.35, moteHueHz: 0.02,
+});
+
+/** The juice numbers with LOOK.juice over them. */
+export const juiceLook = (L = LOOK) => (L && L.juice ? { ...JUICE_LOOK, ...L.juice } : JUICE_LOOK);
+
+/** Fallback spectrum (pink, magenta and violet weighted double: about 40 percent of picks). */
+export const JUICE_HUES = Object.freeze(['#ff4fb0', '#ff2bd6', '#9b4dff', '#22e6ff', '#ff4fb0', '#a8ff2e', '#ff2bd6', '#ffd23a',
+  '#3d7bff', '#9b4dff', '#ff8c1a', '#14f0c0', '#ff3355']);
+
+const hex2 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+function hslHex(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + hex2(r + m) + hex2(g + m) + hex2(b + m);
+}
+
+/** One spectrum entry as '#rrggbb': a hex string, [r, g, b] (0..1 or 0..255), a hue (0..1 or degrees), or { hex | h }. */
+export function toHex(v) {
+  if (typeof v === 'string') return /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : null;
+  if (typeof v === 'number' && Number.isFinite(v)) return hslHex((((v <= 1 ? v * 360 : v) % 360) + 360) % 360, 0.92, 0.58);
+  if (Array.isArray(v) && v.length >= 3 && v.every(Number.isFinite)) {
+    const k = Math.max(v[0], v[1], v[2]) > 1 ? 1 / 255 : 1;
+    return '#' + hex2(v[0] * k) + hex2(v[1] * k) + hex2(v[2] * k);
+  }
+  if (v && typeof v === 'object') return toHex(v.hex ?? v.h ?? null);
+  return null;
+}
+
+/** Flatten a spectrum module's SPECTRUM (sections of hue sets, any nesting) into hex strings; [] when unreadable. */
+export function spectrumHexes(spec) {
+  const out = [], seen = new Set();
+  const walk = (v, depth) => {
+    if (depth > 4 || v == null) return;
+    const h = toHex(v);
+    if (h) { if (!seen.has(h)) { seen.add(h); out.push(h); } return; }
+    if (Array.isArray(v)) for (const x of v) walk(x, depth + 1);
+    else if (typeof v === 'object') for (const x of Object.values(v)) walk(x, depth + 1);
+  };
+  try { walk(spec, 0); } catch (e) { return []; }
+  return out;
+}
+
+// render/spectrum.js is the one colour system (integrator, polish 3); JUICE_HUES stays the fallback for a short list
+import * as SPEC from './spectrum.js';
+const SPEC_HEXES = SPEC && SPEC.SPECTRUM ? spectrumHexes(SPEC.SPECTRUM) : [];
+/** The juice spectrum: render/spectrum.js colours when readable (at least 6), else JUICE_HUES. */
+export const juiceHues = () => (SPEC_HEXES.length >= 6 ? SPEC_HEXES : JUICE_HUES);
+
+/** The hue angle (degrees) of a '#rrggbb'. */
+export function hueOf(hex) {
+  const n = parseInt(String(hex).slice(1), 16) || 0, r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+  if (!d) return 0;
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+/** k colours spread round the wheel: the list sorted by hue, then every (n / k)th. */
+export function spreadHues(hues, k = 6) {
+  const s = [...new Set(hues)].sort((a, b) => hueOf(a) - hueOf(b));
+  return Array.from({ length: k }, (_, i) => s[Math.floor(i * s.length / k) % s.length]);
+}
+
+/** Count, size, speed and life multipliers (and the spectrum flag) of a burst's family; 1s when it has none. */
+export function burstBoost(opts, L = LOOK, J = juiceLook(L)) {
+  // an explicit family (item hits, head sprays) only grows when it has its own row: hits grow by hit*Mul
+  const c = opts && opts.colours, named = opts && (opts.boost || opts.family);
+  const fam = named ? named : c && L ? (c === L.bumpColours ? 'bump' : c === L.popColours ? 'pop' : c === L.boxColours ? 'box' : null) : null;
+  const b = fam && J.burst ? J.burst[fam] : null;
+  return { family: b ? fam : null, count: b ? b.count : 1, size: b ? b.size : 1, speed: b ? b.speed : 1, life: b ? b.life : 1, spectrum: !!(b && b.spectrum) };
+}
+
+/** A growth multiplier under Gentle: keeps J.gentleMul of the growth past 1 (never shrinks below 1). */
+export const gentleGrow = (mul, gentle, J = JUICE_LOOK) => (gentle && mul > 1 ? 1 + (mul - 1) * J.gentleMul : mul);
+
+/** The count share of a quality tier: high 1, mid midMul, phone phoneMul. */
+export const tierShare = (name, J = JUICE_LOOK) => (name === 'phone' ? J.phoneMul : name === 'mid' ? J.midMul : 1);

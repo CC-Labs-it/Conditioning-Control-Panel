@@ -183,25 +183,33 @@ export function rivalLook(i, table, L) {
 // spring, tilts away from hits, a dizzy beat, per-effect moods, place faces, idle breath, finish cheer.
 // Edges come from state (observeKart) and from a few bus events (reactionsFor); stepReact writes r.out.
 
-/** Reaction numbers; LOOK.react (render/look.js, integrator) overrides any of them. */
+/**
+ * Reaction numbers; LOOK.react (render/look.js, integrator) overrides any of them.
+ * Polish 3 "spectacle": about twice the squash, stretch, tilt, head knock and twist so they read at speed;
+ * a hard bump spins the saucer a full turn; bigger head sprays; a head mark over EMI (headMark below).
+ */
 export const REACT_DEFAULTS = {
   gentleShake: 0.5,                                      // Gentle halves every shake-like motion
-  hopSquash: 0.1, hopSquashS: 0.07, hopStretch: 0.13, hopStretchS: 0.3,
-  hopTwistRad: 0.45, hopTwistS: 0.42, trickAirS: 0.55, trickSpinS: 0.75,
-  landSqPerMps: 0.016, landSqMax: 0.24, landSqHz: 3, landSqZeta: 0.3,
-  headHz: 3.2, headZeta: 0.3, headBobPerMps: 0.012, headDvMaxMps: 12, headBobMaxM: 0.1, headMaxRad: 0.5,
-  turnHeadLean: 0.45, driftCounterLean: 1.5, boostLeanRad: 0.07, boostHeadBackRad: 0.16,
-  bumpMinMps: 1, bumpTiltPerMps: 0.05, bumpTiltMaxRad: 0.34, tiltHz: 2.4, tiltZeta: 0.26, bumpHeadKnock: 1.4,
-  wallMinMps: 3, sweatMps: 3.5, sweatCount: 4, dizzyMps: 6, dizzyS: 1.5, dizzyHz: 1.2, dizzyRad: 0.18, starCount: 8,
-  spiralSpinRadps: 2.4, spiralHeadRad: 0.12, freezeStiff: 0.12, meltDroopRad: 0.32, meltSq: 0.08, meltBobM: -0.06,
-  wiggleRad: 0.16, wiggleHz: 5, wiggleS: 1,
-  overtakeHopM: 0.14, overtakeHopS: 0.34, cheerHopM: 0.16, cheerHz: 1.7, armsCheerRad: 1.1, sulkHeadRad: 0.3,
-  breathHz: 0.32, breathSq: 0.02, breathBobM: 0.012, idleBelowPct: 0.03,
-  glanceEveryS: [2.2, 4.6], glanceS: 1, glanceYawRad: 0.38, glancePitchRad: 0.16,
+  gentleSquash: 0.5,                                     // and the squash and stretch; spins run twice as long
+  hopSquash: 0.2, hopSquashS: 0.08, hopStretch: 0.26, hopStretchS: 0.32,
+  hopTwistRad: 0.75, hopTwistS: 0.42, trickAirS: 0.55, trickSpinS: 0.75,
+  landSqPerMps: 0.034, landSqMax: 0.42, landSqHz: 3, landSqZeta: 0.3,
+  headHz: 3.2, headZeta: 0.3, headBobPerMps: 0.02, headDvMaxMps: 12, headBobMaxM: 0.16, headMaxRad: 0.8,
+  turnHeadLean: 0.55, driftCounterLean: 1.6, boostLeanRad: 0.12, boostHeadBackRad: 0.24,
+  bumpMinMps: 1, bumpTiltPerMps: 0.1, bumpTiltMaxRad: 0.62, tiltHz: 2.4, tiltZeta: 0.26, bumpHeadKnock: 2.4,
+  bumpSpinMps: 7.5, bumpSpinS: 0.6,
+  wallMinMps: 3, sweatMps: 3.5, sweatCount: 8, dizzyMps: 6, dizzyS: 1.8, dizzyHz: 1.2, dizzyRad: 0.32, starCount: 10,
+  spiralSpinRadps: 3, spiralHeadRad: 0.2, freezeStiff: 0.12, meltDroopRad: 0.42, meltSq: 0.14, meltBobM: -0.1,
+  wiggleRad: 0.28, wiggleHz: 5, wiggleS: 1,
+  overtakeHopM: 0.3, overtakeHopS: 0.38, cheerHopM: 0.28, cheerHz: 1.7, armsCheerRad: 1.2, sulkHeadRad: 0.4,
+  breathHz: 0.32, breathSq: 0.025, breathBobM: 0.016, idleBelowPct: 0.03,
+  glanceEveryS: [2.2, 4.6], glanceS: 1, glanceYawRad: 0.45, glancePitchRad: 0.2,
   faceHoldS: 1.3, faceShortS: 0.6, faceMinS: 0.22, blinkEveryS: [2.4, 5.2], blinkS: 0.11,
   // sprays over EMI's head (render/particles.js burst): dizzy stars, sweat drops
-  sprayUpM: 1.35, starColours: ['#ffe27a', '#fff4fa', '#ffbf2e'], starSpeedMps: 1.8, starSizeM: 0.17,
-  sweatColours: ['#bfefff', '#8fd8ff'], sweatSpeedMps: 1.5, sweatSizeM: 0.09,
+  sprayUpM: 1.5, starColours: ['#ffe27a', '#fff4fa', '#ffbf2e', '#22e6ff', '#ff4fb0'], starSpeedMps: 2.6, starSizeM: 0.34,
+  sweatColours: ['#bfefff', '#8fd8ff', '#ffffff'], sweatSpeedMps: 2.2, sweatSizeM: 0.26,
+  // head marks (render/faces.js MARK_IDS): event marks hold markS, mood marks hold while the mood does
+  markS: 0.9, markInTcS: 0.05, markOutTcS: 0.09,
 };
 
 export const reactNumbers = (L) => ({ ...REACT_DEFAULTS, ...((L && L.react) || {}) });
@@ -218,8 +226,9 @@ export function createReact(i = 0) {
     dizT: -1, wigT: -1, liftT: -1, liftM: 0, liftS: 1, glT: -1, glYaw: 0, glUp: 0, glAt: 1.5 + i * 0.7,
     effect: null, finish: 0, melt: 0, stiffK: 0, boostLean: 0, idleT: 0, armsK: 0,
     timed: 'neutral', timedUntil: 0, shown: 'neutral', shownT: -1, blinkNext: 1 + i * 0.37,
-    sprays: [],
-    out: { sq: 0, yaw: 0, roll: 0, pitch: 0, lift: 0, hRoll: 0, hPitch: 0, hYaw: 0, hBob: 0, stiff: 1, arms: 0, armsK: 0, face: 'neutral', blink: false },
+    sprays: [], mark: null, markUntil: 0, markShown: null, markK: 0,
+    out: { sq: 0, yaw: 0, roll: 0, pitch: 0, lift: 0, hRoll: 0, hPitch: 0, hYaw: 0, hBob: 0, stiff: 1, arms: 0, armsK: 0, face: 'neutral', blink: false,
+      mark: null, markK: 0 },
   };
 }
 
@@ -296,6 +305,10 @@ export function observeKart(r, st, fxv) {
 }
 
 const timed = (r, id, holdS) => { r.timed = id; r.timedUntil = r.t + holdS; };
+/** An event head mark (render/faces.js MARK_IDS) for holdS. */
+const marked = (r, id, holdS) => { r.mark = id; r.markUntil = r.t + holdS; };
+/** A full saucer turn (a hop twist slot), its direction alternating; Gentle runs it twice as long. */
+const spinOut = (r, s, g) => { r.twT = 0; r.twS = s / g; r.twFull = true; r.twRad = TAU * (r.twSign = -r.twSign); };
 const knock = (r, roll, pitch, R, g) => {
   r.tr.v += roll * g * TAU * R.tiltHz; r.tp.v += pitch * g * TAU * R.tiltHz;
   r.hr.v -= roll * g * R.bumpHeadKnock * TAU * R.headHz; r.hp.v -= pitch * g * R.bumpHeadKnock * TAU * R.headHz;
@@ -312,10 +325,15 @@ const REACT = {
     if (dv < R.bumpMinMps) return;
     const t = tiltAway(a.lx || 0, a.lz || 0, dv, R);
     knock(r, t.roll, t.pitch, R, g);
-    if (dv >= R.dizzyMps) { r.dizT = 0; r.sprays.push(['stars', R.starCount]); }
-    else { timed(r, 'x-eyes', R.faceShortS); if (dv >= R.sweatMps) r.sprays.push(['sweat', R.sweatCount]); }
+    if (dv >= R.dizzyMps) { r.dizT = 0; r.sprays.push(['stars', R.starCount]); marked(r, 'swirl', R.dizzyS); }
+    else { timed(r, 'x-eyes', R.faceShortS); marked(r, 'sweat', R.markS); if (dv >= R.sweatMps) r.sprays.push(['sweat', R.sweatCount]); }
+    if (dv >= R.bumpSpinMps) spinOut(r, R.bumpSpinS, g);
   },
-  wall(r, a, R, g) { if ((a.dv || 0) >= R.wallMinMps) REACT.bump(r, { dv: a.dv, lx: a.side || 1, lz: 0 }, R, g); },
+  wall(r, a, R, g) {
+    if ((a.dv || 0) < R.wallMinMps) return;
+    REACT.bump(r, { dv: a.dv, lx: a.side || 1, lz: 0 }, R, g);
+    if (r.dizT < 0) marked(r, 'anger', R.markS);
+  },
   effect(r, a, R, g) {
     r.effect = a.kind || null;
     if (!a.kind) return;
@@ -327,13 +345,13 @@ const REACT = {
   shield(r, a, R) { if (a.kind === 'golden') { r.wigT = 0; timed(r, 'heart', R.faceHoldS); } else timed(r, 'grin', R.faceShortS); },
   saved(r, a, R) { if (a.verdict !== 'mercy') timed(r, a.verdict === 'decoy' ? 'wink' : 'smug', R.faceHoldS); },
   boost(r, a, R) {
-    if (a.kind >= BOOST.DRIFT1 && a.kind <= BOOST.DRIFT3) timed(r, 'sparkle', R.faceShortS + 0.25 * a.kind);
+    if (a.kind >= BOOST.DRIFT1 && a.kind <= BOOST.DRIFT3) { timed(r, 'sparkle', R.faceShortS + 0.25 * a.kind); if (a.kind === BOOST.DRIFT3) marked(r, 'spark', R.markS); }
     else timed(r, a.kind === BOOST.LAUNCH ? 'cheer' : 'grin', a.kind === BOOST.LAUNCH ? R.faceHoldS : R.faceShortS);
   },
-  overtake(r, a, R) { timed(r, 'smug', R.faceHoldS); r.liftT = 0; r.liftM = R.overtakeHopM; r.liftS = R.overtakeHopS; },
-  overtaken(r, a, R) { timed(r, 'sad', R.faceHoldS); },
+  overtake(r, a, R) { timed(r, 'smug', R.faceHoldS); r.liftT = 0; r.liftM = R.overtakeHopM; r.liftS = R.overtakeHopS; marked(r, 'spark', R.markS); },
+  overtaken(r, a, R) { timed(r, 'sad', R.faceHoldS); marked(r, 'sweat', R.markS); },
   // a countdown opens a new race: last race's cheer or sulk, daze and hops never carry over
-  countdown(r, a, R) { r.finish = 0; r.dizT = -1; r.wigT = -1; r.liftT = -1; r.glT = 0; r.glYaw = 0; r.glUp = 1; timed(r, a.n === 1 ? 'determined' : 'neutral', R.glanceS); },
+  countdown(r, a, R) { r.finish = 0; r.dizT = -1; r.mark = null; r.wigT = -1; r.liftT = -1; r.glT = 0; r.glYaw = 0; r.glUp = 1; timed(r, a.n === 1 ? 'determined' : 'neutral', R.glanceS); },
   go(r, a, R) { timed(r, 'grin', R.faceHoldS); r.glT = -1; },
   finish(r, a) {
     if (!a.place || !a.count) return;
@@ -361,6 +379,25 @@ export function moodFace(r, st) {
   if (st[S.driftDir]) return ['drift-focus', false];
   if (st[S.airborne] > 0.5 && st[S.airTime] > 0.4) return ['grin', false];
   return ['neutral', false];
+}
+
+const MOOD_MARK = { dizzy: 'swirl', sleepy: 'zz', frozen: 'ice', heart: 'heart' };
+
+/** The head mark wanted now: an event mark while it holds, else the shown face's (dizzy swirl, sleepy zz, frozen ice, heart); null for none. */
+export function headMark(r, face) {
+  if (r.mark && r.t < r.markUntil) return r.mark;
+  return MOOD_MARK[face] || null;
+}
+
+/** Ease the shown mark in and out (r.markShown, r.markK 0..1): a new mark waits until the old one has gone out. */
+export function stepMark(r, want, dt, R) {
+  if (want === r.markShown) r.markK += (1 - r.markK) * (1 - Math.exp(-dt / R.markInTcS));
+  else {
+    r.markK -= r.markK * (1 - Math.exp(-dt / R.markOutTcS));
+    if (r.markK < 0.05) { r.markShown = want; r.markK = 0; }
+  }
+  if (!r.markShown) r.markK = 0;
+  return r.markK;
 }
 
 /** The face shown now: strong mood, else a timed face, else the mood; any change holds faceMinS. */
@@ -443,7 +480,7 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0 } = {}) {
   if (r.effect === 'spiral') circ = Math.max(circ, R.spiralHeadRad);
   if (circ) { const ph = TAU * R.dizzyHz * r.t; hRoll += circ * g * Math.sin(ph); hPitch += circ * g * 0.6 * Math.cos(ph); }
   const stiff = 1 - r.stiffK * (1 - R.freezeStiff), m = R.headMaxRad;
-  o.sq = sq; o.yaw = yaw; o.roll = roll; o.pitch = pitch; o.lift = lift; o.stiff = stiff;
+  o.sq = sq * (gentle ? R.gentleSquash : 1); o.yaw = yaw; o.roll = roll; o.pitch = pitch; o.lift = lift; o.stiff = stiff;
   o.hRoll = clamp(hRoll * stiff, -m, m); o.hPitch = clamp(hPitch * stiff, -m, m); o.hYaw = clamp(hYaw, -m, m); o.hBob = hBob * stiff;
   // arms: up and waving for a cheer or a golden wiggle, down for a sulk or a melt; armsK blends over the pose
   const armsTo = r.finish > 0 || r.wigT >= 0 ? R.armsCheerRad * (0.8 + 0.2 * Math.sin(TAU * R.cheerHz * r.t)) : 0;
@@ -451,5 +488,7 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0 } = {}) {
   r.armsK = ease(r.armsK, own ? 1 : 0, 0.15);
   o.arms = armsTo; o.armsK = r.armsK;
   o.face = pickFace(r, st, R); o.blink = blinkNow(r, R);
+  stepMark(r, headMark(r, o.face), dt, R);
+  o.mark = r.markShown; o.markK = r.markK;
   return o;
 }

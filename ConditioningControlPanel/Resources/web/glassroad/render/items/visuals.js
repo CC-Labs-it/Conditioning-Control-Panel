@@ -377,7 +377,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
       const c = TINTS[kind] || TINTS.box, n = Math.round(L.popMotes * tierOf(Q.name).motes / top.motes);
       for (let i = 0; i < n; i++) {
         popMote(i, n, pop.t || 0, OFF, x * 0.37 + z);
-        motes.push(x + OFF[0], y + OFF[1], z + OFF[2], L.moteSizeM * 1.4, c[0], c[1], c[2], 1 - q);
+        motes.push(x + OFF[0], y + OFF[1], z + OFF[2], L.popMoteSizeM ?? L.moteSizeM * 1.4, c[0], c[1], c[2], 1 - q);
       }
       // an impact: a shockwave ring runs out over the road and a soft glow swells and goes, never more
       // than impactGlowFrac of the view tall; the glow asks photosafe once, only when near and on screen

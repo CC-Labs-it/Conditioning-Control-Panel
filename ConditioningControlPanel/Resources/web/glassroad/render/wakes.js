@@ -6,6 +6,8 @@
  * shares one geometry: one draw call. Points are laid every trailStepM; Q.trailPoints per kart.
  * Rings: a small pool of flat glow rings that grow and fade (landings, pickup pops); with the wave 2
  * particle atlas each is a flat card drawing its soft ring cell, else a RingGeometry glow.
+ * Polish 3 (atlas.js JUICE_LOOK): ribbons twice as wide and brighter; rings twice as big and bright, each
+ * in a spectrum colour, with a slower echo ring inside (a bigger pool). Gentle keeps half the growth.
  */
 import { Mesh, BufferGeometry, BufferAttribute, DynamicDrawUsage, MeshBasicNodeMaterial, AdditiveBlending, DoubleSide,
   RingGeometry, PlaneGeometry, Color, Vector3, Quaternion } from 'three/webgpu';
@@ -16,19 +18,20 @@ import { Q } from './quality.js';
 import { createGlowMaterial } from './materials/glow.js';
 import { currentArt } from './art.js';
 import { atlasOf, atlasCoverage } from './particles.js';
-import { FXART_LOOK, cellIndex } from './atlas.js';
+import { FXART_LOOK, cellIndex, juiceLook, juiceHues, gentleGrow } from './atlas.js';
 
-/** A flat ring card: the atlas ring cell, its ring at radius 1 of the mesh scale. */
+/** A flat ring card: the atlas ring cell, its ring at radius 1 of the mesh scale; u.col tints it. */
 function atlasRing(at, hex, A) {
-  const half = 1 / A.ringCellR, c = new Color(hex), u = { opacity: uniform(0) };
+  const half = 1 / A.ringCellR, c = new Color(hex), u = { opacity: uniform(0), col: uniform(c) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
-  m.colorNode = vec3(c.r, c.g, c.b).mul(u.opacity);
+  m.colorNode = vec3(u.col).mul(u.opacity);
   m.opacityNode = atlasCoverage(at, float(cellIndex('ring', at.cells)));
   return { geometry: new PlaneGeometry(half * 2, half * 2).rotateX(-Math.PI / 2), material: m, uniforms: u };
 }
 
 export function createWakes(feel, count = 8, art = currentArt()) {
-  const at = atlasOf(art), A = LOOK.fxArt || FXART_LOOK;
+  const at = atlasOf(art), A = LOOK.fxArt || FXART_LOOK, J = juiceLook(LOOK), HUES = juiceHues();
+  let hue = 0;
   const N = Q.trailPoints, V = count * N * 2;
   const pos = new BufferAttribute(new Float32Array(V * 3), 3).setUsage(DynamicDrawUsage);
   const col = new BufferAttribute(new Float32Array(V * 4), 4).setUsage(DynamicDrawUsage);
@@ -77,10 +80,11 @@ export function createWakes(feel, count = 8, art = currentArt()) {
   }
 
   function write(k) {
-    const t = trails[k], P = pos.array, C = col.array, W = LOOK.trailWidthM / 2;
+    const t = trails[k], P = pos.array, C = col.array, W = LOOK.trailWidthM * gentleGrow(J.trailWidthMul, gentleNow(), J) / 2;
+    const A0 = Math.min(1, LOOK.trailAlpha * J.trailAlphaMul);
     for (let i = 0; i < N; i++) {
       const j = Math.min(i, Math.max(t.n - 1, 0)) * 6, age = t.n > 1 ? 1 - Math.min(i, t.n - 1) / (t.n - 1) : 1;
-      const w = W * (1 - 0.7 * age), a = t.n > 1 && i < t.n ? t.a * LOOK.trailAlpha * (1 - age) ** 1.5 : 0;
+      const w = W * (1 - 0.7 * age), a = t.n > 1 && i < t.n ? t.a * A0 * (1 - age) ** 1.5 : 0;
       for (let s = 0; s < 2; s++) {
         const v = (k * N + i) * 2 + s, sg = s ? 1 : -1;
         P[v * 3] = t.pts[j] + t.pts[j + 3] * w * sg; P[v * 3 + 1] = t.pts[j + 1] + t.pts[j + 4] * w * sg; P[v * 3 + 2] = t.pts[j + 2] + t.pts[j + 5] * w * sg;
@@ -91,20 +95,30 @@ export function createWakes(feel, count = 8, art = currentArt()) {
 
   // ground rings
   const rings = [], rq = new Quaternion();
-  for (let i = 0; i < LOOK.ringPool; i++) {
+  for (let i = 0; i < Math.max(LOOK.ringPool, J.ringPool); i++) {
     const mat = at ? atlasRing(at, LOOK.ringColour, A) : createGlowMaterial(LOOK.ringColour);
     const r = new Mesh(at ? mat.geometry : new RingGeometry(1 - LOOK.ringWidth, 1, 48).rotateX(-Math.PI / 2), mat.material);
     r.visible = false; r.renderOrder = 1;
     rings.push({ mesh: r, u: mat.uniforms, t: 0, life: 1, size: 1, gain: 1, rise: 8 });
   }
   let ringHead = 0;
-  /** A ring at world p, lying in the plane of quaternion q (the kart's), growing to sizeM. */
-  function ring(p, q, sizeM, { lifeS = LOOK.ringLifeS, gain = LOOK.ringGain, gentle = false } = {}) {
+  function gentleNow() { return !!(feel && feel.get && feel.get('gentle.on')); }
+  function one(p, q, sizeM, lifeS, gain, gentle, hex) {
     const r = rings[ringHead]; ringHead = (ringHead + 1) % rings.length;
     r.mesh.position.set(p[0], p[1] + 0.04, p[2]);
     if (q) r.mesh.quaternion.copy(q); else r.mesh.quaternion.copy(rq.identity());
+    if (r.u.col && hex) r.u.col.value.set(hex);
     // Gentle: twice as long, half as bright, and the IN takes a third of the life (about 300 ms)
     r.t = 0; r.life = lifeS * (gentle ? 2 : 1); r.size = sizeM; r.gain = gain * (gentle ? 0.5 : 1); r.rise = gentle ? 3 : 8; r.mesh.visible = true;
+  }
+  /**
+   * A ring at world p, lying in the plane of quaternion q (the kart's), growing to sizeM (x ringSizeMul),
+   * in a spectrum colour (or opts.colour), with a slower echo ring inside it.
+   */
+  function ring(p, q, sizeM, { lifeS = LOOK.ringLifeS, gain = LOOK.ringGain, gentle = false, colour = null } = {}) {
+    const s = sizeM * gentleGrow(J.ringSizeMul, gentle, J), gn = Math.min(J.ringGainMax, gain * J.ringGainMul);
+    one(p, q, s, lifeS, gn, gentle, colour || '#ffffff');
+    if (J.ringEcho > 0) one(p, q, s * J.ringEcho, lifeS * J.ringEchoLifeMul, gn * 0.8, gentle, HUES[(hue++) % HUES.length]);
   }
 
   function update(dt) {

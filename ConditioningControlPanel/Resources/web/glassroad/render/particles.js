@@ -12,6 +12,12 @@
  * that swell into the boost colour (a colour ramp and growth per particle) with glitter shot through;
  * slipstream adds long streaks turned along their motion; every effect hit sprays its own cells and tint.
  * Extras run at FX2_LOOK.phoneExtraMul on the phone tier; the ring buffer keeps the frame cost flat.
+ * Polish 3 "spectacle" (numbers in atlas.js JUICE_LOOK, LOOK.juice wins): every effect 2 to 4 times bigger
+ * or brighter so it reads at 1440p at full speed. Drift sparks grow and a tier-up bursts with a halo ring;
+ * a boost start bursts with a ring and the flame doubles; wisps you can see; bumps throw stars, shards, a
+ * hot core and a shockwave ring; landings, pops, boxes and item hits grow and take the spectrum
+ * (render/spectrum.js through atlas.js juiceHues). Gentle keeps half of every growth and 0.6 of the
+ * counts; mid and phone tiers scale the added counts (tierShare).
  */
 import { Sprite, SpriteNodeMaterial, AdditiveBlending, InstancedBufferAttribute, DynamicDrawUsage, Color, Vector3 } from 'three/webgpu';
 import {
@@ -25,7 +31,7 @@ import { sparkProfile } from './kartPose.js';
 import { currentArt } from './art.js';
 import {
   CELLS, GRID, ATLAS_PX, MAX_LOD, FXART_LOOK, FAMILIES, UPRIGHT, ALIGNED, cellIndex, cellInset, legacyShape, sparkFamily, pickCell,
-  familyOf, hitFamily, FX2_LOOK, hitColours,
+  familyOf, hitFamily, FX2_LOOK, hitColours, juiceLook, juiceHues, burstBoost, gentleGrow, tierShare,
 } from './atlas.js';
 
 export const SHAPE = Object.freeze({ disc: 0, sparkle: 1, petal: 2 });
@@ -74,8 +80,11 @@ export function createParticles(feel, art = currentArt()) {
   const size = new Float32Array(max0), spin = new Float32Array(max0), grav = new Float32Array(max0);
   // polish 2: a colour ramp from birth to death (flame: white core to the boost colour) and growth over life
   const ramp = new Float32Array(max0 * 3), hasRamp = new Uint8Array(max0), grow = new Float32Array(max0);
-  const B = LOOK.fx2 || FX2_LOOK;
+  const B = LOOK.fx2 || FX2_LOOK, J = juiceLook(LOOK), HUES = juiceHues();
   const extra = () => (Q.name === 'phone' ? B.phoneExtraMul : 1);
+  const gentle = () => !!(feel && feel.get('gentle.on'));
+  const big = (m) => gentleGrow(m, gentle(), J);                     // a growth, halved under Gentle
+  const more = () => tierShare(Q.name, J) * (gentle() ? J.gentleCount : 1);   // share of the added counts
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   m.positionNode = instancedDynamicBufferAttribute(aPos, 'vec3');
   m.scaleNode = instancedDynamicBufferAttribute(aSize, 'float');
@@ -95,10 +104,11 @@ export function createParticles(feel, art = currentArt()) {
   const sprite = new Sprite(m);
   sprite.count = max0; sprite.frustumCulled = false; sprite.renderOrder = 2;
 
-  let head = 0;
-  const cols = new Map(), info = new Map(), tmp = new Vector3(), dir = new Vector3();
+  let head = 0, hue = 0;
+  const cols = new Map(), info = new Map(), tmp = new Vector3(), dir = new Vector3(), carry = new Vector3();
   const cap = () => Math.min(max0, Q.particles);
   const rnd = (a, b) => a + Math.random() * (b - a);
+  const nextHue = () => HUES[(hue++) % HUES.length];
   const rgb = (hex) => { let v = cols.get(hex); if (!v) { const k = new Color(hex); v = [k.r, k.g, k.b]; cols.set(hex, v); } return v; };
   /** Per cell name: the attribute code, size share, upright. */
   const cellOf = (name) => {
@@ -125,16 +135,29 @@ export function createParticles(feel, art = currentArt()) {
     if (hex2) { const e = rgb(hex2); ramp[i * 3] = e[0] - k[0]; ramp[i * 3 + 1] = e[1] - k[1]; ramp[i * 3 + 2] = e[2] - k[2]; }
   }
   /** Kart-local emit: position through obj.matrixWorld, velocity through its rotation. */
-  function local(obj, lx, ly, lz, vx, vy, vz, hex, sz, lifeS, cell, g, sp, hex2 = null, gr = 0) {
+  /** inherit: the share of the kart velocity (carry, set per kart) it keeps, so a flame hangs off the saucer at speed. */
+  function local(obj, lx, ly, lz, vx, vy, vz, hex, sz, lifeS, cell, g, sp, hex2 = null, gr = 0, inherit = 0) {
     tmp.set(lx, ly, lz).applyMatrix4(obj.matrixWorld);
     dir.set(vx, vy, vz).applyQuaternion(obj.quaternion);
+    if (inherit) dir.addScaledVector(carry, inherit);
     emit(tmp.x, tmp.y, tmp.z, dir.x, dir.y, dir.z, hex, sz, lifeS, cell, g, sp, hex2, gr);
+  }
+
+  /**
+   * Polish 3: a shockwave halo at a world point, a camera-facing ring cell that opens to diameter dM over
+   * lifeS (born at about a fifth of it, fading as it opens). Needs the atlas (the B1 disc would read as a blob).
+   */
+  function halo(x, y, z, dM, lifeS, hex, hex2 = null) {
+    if (!at) return;
+    const r = A.ringCellR || 0.58, s = big(dM) / r / 2.2 / (cellOf('ring').size || 1);
+    emit(x, y, z, 0, 0, 0, hex, s, lifeS * (gentle() ? 2 : 1), 'ring', 0, 0, hex2, 1.8);
   }
 
   /** Drift sparks: the tier colour, a white-hot share and an accent of the next tier's colour (pink, white,
    * gold), and floating embers that outlive the streaks. */
   function sparks(obj, n, hex, sz, lifeS, spread, petal, tier) {
-    const r = LOOK.saucerR, [lo, hi] = LOOK.sparkSpeedMps, fam = sparkFamily(tier, petal);
+    const r = LOOK.saucerR, [lo0, hi0] = LOOK.sparkSpeedMps, fam = sparkFamily(tier, petal);
+    const lo = lo0 * J.sparkSpeedMul, hi = hi0 * J.sparkSpeedMul;
     const colours = feel.get('juice.sparkColours'), accent = colours[tier % colours.length] || '#ffffff', ember = B.emberShare * extra();
     for (let k = 0; k < n; k++) {
       const side = k & 1 ? 1 : -1, pick = Math.random(), c = Math.random();
@@ -150,86 +173,144 @@ export function createParticles(feel, art = currentArt()) {
     }
   }
 
+  /** Polish 3: a drift tier-up: a radial ring of sparks in the new tier colour with white and stars, and a halo. */
+  function tierUp(obj, tier, mul) {
+    const colours = feel.get('juice.sparkColours'), hex = colours[tier - 1] || '#ffffff';
+    const n = Math.round(J.tierBurst[tier - 1] * mul * more()), v = J.tierBurstSpeedMps, sz = sparkProfile(tier, LOOK).size * big(J.sparkSizeMul);
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * 6.283 + rnd(-0.2, 0.2), w = v * rnd(0.6, 1.1), star = at && k % 4 === 0;
+      local(obj, Math.cos(a) * LOOK.saucerR, 0.35, Math.sin(a) * LOOK.saucerR, Math.cos(a) * w, rnd(0.5, 2.5), Math.sin(a) * w,
+        k % 3 === 0 ? '#ffffff' : hex, sz * (star ? 1.4 : 1) * rnd(0.8, 1.2), feel.get('juice.sparkDieS') * J.sparkLifeMul * 1.6,
+        star ? 'star' : 'spark', 0.4, rnd(-1, 1) * LOOK.sparkSpin);
+    }
+    tmp.set(0, 0.4, 0).applyMatrix4(obj.matrixWorld);
+    halo(tmp.x, tmp.y, tmp.z, J.tierRingM[tier - 1] * Math.sqrt(mul), J.tierRingS, hex, tier === 2 ? '#bfe8ff' : '#ffffff');
+  }
+
+  /** Polish 3: a boost start: flame tongues and glitter thrown back and out, stars round the saucer, a halo. */
+  function boostBurst(obj, hex, mul) {
+    const n = Math.round(J.boostBurst * mul * more()), v = J.boostBurstSpeedMps, sz = big(J.boostBurstSizeM);
+    for (let k = 0; k < n; k++) {
+      const a = rnd(-1.1, 1.1), w = v * rnd(0.5, 1.1), glit = k % 3 === 0;
+      const acc = J.flameAccents[k % J.flameAccents.length];
+      local(obj, rnd(-0.3, 0.3), rnd(0.2, 0.5), LOOK.saucerR, Math.sin(a) * w, rnd(0.5, 3), Math.cos(a) * w,
+        glit ? '#ffffff' : B.flameCore, sz * (glit ? 0.6 : rnd(0.8, 1.3)), LOOK.exhaustLifeS * J.flameLifeMul * 1.6,
+        glit ? (at ? 'star' : 'spark') : at ? pickCell(FAMILIES.flame, Math.random()) : 'disc', glit ? 0.3 : -0.2,
+        rnd(-1, 1) * LOOK.sparkSpin, glit ? null : k & 1 ? hex : acc, glit ? 0 : B.flameGrow, J.flameInherit * 0.6);
+    }
+    tmp.set(0, 0.35, LOOK.saucerR * 0.5).applyMatrix4(obj.matrixWorld);
+    halo(tmp.x, tmp.y, tmp.z, J.boostRingM * Math.sqrt(mul), J.boostRingS, '#ffffff', hex);
+  }
+
   /**
    * Per kart and frame. mem = the kart's own carry memory ({} at first), opts.mul scales rates (rivals,
    * far karts), opts.slip = fxv.slip (0..1 wake charge). Reads drift stage and boost kind off the state,
    * so rivals get the same ladder as the player.
    */
   function kart(obj, st, mem, dt, { mul = 1, slip = 0 } = {}) {
-    const colours = feel.get('juice.sparkColours'), dieS = feel.get('juice.sparkDieS');
-    const drifting = st[S.driftDir] !== 0, stage = st[S.driftStage] | 0;
+    const colours = feel.get('juice.sparkColours'), dieS = feel.get('juice.sparkDieS') * J.sparkLifeMul;
+    const drifting = st[S.driftDir] !== 0, stage = st[S.driftStage] | 0, sizeMul = big(J.sparkSizeMul);
+    carry.set(st[S.velX], st[S.velY], st[S.velZ]);
     if (drifting && stage > 0) {
+      if (stage > (mem.stage | 0) && mem.stage !== undefined) tierUp(obj, stage, mul);
       const pr = sparkProfile(stage, LOOK, mul);
-      mem.carry = (mem.carry || 0) + pr.rate * dt;
+      mem.carry = (mem.carry || 0) + pr.rate * J.sparkRateMul * tierShare(Q.name, J) * dt;
       const n = Math.floor(mem.carry); mem.carry -= n;
-      sparks(obj, n, colours[stage - 1], pr.size, dieS, LOOK.sparkSpreadMps, pr.petal, stage);
+      sparks(obj, n, colours[stage - 1], pr.size * sizeMul, dieS, LOOK.sparkSpreadMps * J.sparkSpeedMul, pr.petal, stage);
       mem.tier = stage;
     } else mem.carry = 0;
+    mem.stage = drifting ? stage : 0;
     const bk = st[S.boostKind];
     if (!drifting && mem.tier > 0) {
       if (bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3) {
         const pr = sparkProfile(mem.tier, LOOK);
-        sparks(obj, Math.round(LOOK.burstCount * mul), colours[mem.tier - 1], pr.size * 1.2, dieS * 1.4, LOOK.burstSpreadMps, LOOK.burstPetals, mem.tier);
+        sparks(obj, Math.round(LOOK.burstCount * mul), colours[mem.tier - 1], pr.size * 1.2 * sizeMul, dieS * 1.4, LOOK.burstSpreadMps * J.sparkSpeedMul, LOOK.burstPetals, mem.tier);
       }
       mem.tier = 0;
     }
+    const hex = bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? colours[bk - 1] : bk === BOOST.LAUNCH ? LOOK.launchTrail : LOOK.exhaustColour;
+    if (bk !== BOOST.NONE && bk !== mem.bk && mem.bk !== undefined) boostBurst(obj, hex, mul);
+    mem.bk = bk;
     if (bk !== BOOST.NONE) {
       // the boost flame: soft tongues born white hot at the saucer's back, swelling into the boost colour
-      // as they stream away, with glitter sparks shot through them
-      mem.carryX = (mem.carryX || 0) + LOOK.exhaustRate * B.flameRateMul * extra() * mul * dt;
+      // (or a warm spectrum accent) as they stream away, with glitter sparks shot through them
+      mem.carryX = (mem.carryX || 0) + LOOK.exhaustRate * B.flameRateMul * J.flameRateMul * extra() * tierShare(Q.name, J) * mul * dt;
       const n = Math.floor(mem.carryX); mem.carryX -= n;
-      const hex = bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? colours[bk - 1] : bk === BOOST.LAUNCH ? LOOK.launchTrail : LOOK.exhaustColour;
+      const fs = big(J.flameSizeMul), fv = J.flameSpeedMul, fl = J.flameLifeMul;
       for (let k = 0; k < n; k++) {
         if (Math.random() < B.flameSparkShare) {
-          local(obj, rnd(-0.25, 0.25), 0.3, LOOK.saucerR, rnd(-1.2, 1.2), rnd(0, 1.2), rnd(6, 11), Math.random() < 0.5 ? '#ffffff' : hex,
-            LOOK.exhaustSizeM * rnd(0.3, 0.5), LOOK.exhaustLifeS * 1.4, at ? 'glitter' : 'spark', 0.3, rnd(-1, 1) * LOOK.sparkSpin);
+          local(obj, rnd(-0.35, 0.35), 0.3, LOOK.saucerR, rnd(-1.6, 1.6), rnd(0, 1.6), rnd(6, 11) * fv, Math.random() < 0.5 ? '#ffffff' : hex,
+            LOOK.exhaustSizeM * rnd(0.3, 0.5) * big(J.flameSparkSizeMul), LOOK.exhaustLifeS * 1.4 * fl, at ? (k % 4 ? 'glitter' : 'star') : 'spark', 0.3, rnd(-1, 1) * LOOK.sparkSpin, null, 0, J.flameInherit * 0.7);
           continue;
         }
         const cell = at ? pickCell(FAMILIES.flame, Math.random()) : 'disc';
-        local(obj, rnd(-0.15, 0.15), rnd(0.2, 0.35), LOOK.saucerR, rnd(-0.4, 0.4), rnd(0.2, 0.7), rnd(4, 8), B.flameCore,
-          LOOK.exhaustSizeM * rnd(0.5, 0.8), LOOK.exhaustLifeS * B.flameLifeMul, cell, -0.2, rnd(-1, 1), k & 1 ? hex : LOOK.exhaustColour, B.flameGrow);
+        // a white-hot third, the rest born in the boost colour; all run out into a warm spectrum accent
+        const acc = J.flameAccents[(mem.flameK = ((mem.flameK | 0) + 1) % J.flameAccents.length)];
+        const start = k % 3 === 0 ? B.flameCore : hex, end = k % 3 === 0 ? hex : acc;
+        local(obj, rnd(-0.4, 0.4), rnd(0.2, 0.5), LOOK.saucerR, rnd(-1.4, 1.4), rnd(0.2, 1.2), rnd(4, 8) * fv, start,
+          LOOK.exhaustSizeM * rnd(0.5, 0.8) * fs, LOOK.exhaustLifeS * B.flameLifeMul * fl, cell, -0.2, rnd(-1, 1), end, B.flameGrow, J.flameInherit);
       }
     } else mem.carryX = 0;
     if (slip > 0.05) {
-      // slipstream: soft wisps and long thin streaks pour past the kart from the front
-      mem.carryW = (mem.carryW || 0) + LOOK.wispRate * slip * mul * dt;
+      // slipstream: soft wisps and long thin streaks pour past the kart from the front, cool tinted
+      mem.carryW = (mem.carryW || 0) + LOOK.wispRate * J.wispRateMul * tierShare(Q.name, J) * slip * mul * dt;
       const n = Math.floor(mem.carryW); mem.carryW -= n;
+      const ws = big(J.wispSizeMul), wl = J.wispLifeMul;
       for (let k = 0; k < n; k++) {
-        const side = k & 1 ? 1 : -1, streak = at && Math.random() < B.wispStreakShare;
-        local(obj, side * rnd(0.5, 1.3), rnd(0.2, 1.1), -rnd(0.4, 1.6), side * rnd(0, 0.6), rnd(-0.2, 0.3), LOOK.wispSpeedMps * rnd(0.8, 1.3) * (streak ? 1.3 : 1),
-          LOOK.wispColour, LOOK.wispSizeM * rnd(0.6, 1.2) * (streak ? B.wispStreakSizeMul : 1), LOOK.wispLifeS * (streak ? 1.3 : 1),
-          streak ? 'spark' : at ? pickCell(FAMILIES.wisp, Math.random()) : 'disc', 0, at && !streak ? rnd(-1, 1) : 0, streak ? '#bfe8ff' : null, streak ? 0 : 0.6);
+        const side = k & 1 ? 1 : -1, streak = at && Math.random() < B.wispStreakShare, wc = J.wispColours[(Math.random() * J.wispColours.length) | 0];
+        local(obj, side * rnd(0.5, 1.6), rnd(0.2, 1.4), -rnd(0.4, 1.8), side * rnd(0, 0.6), rnd(-0.2, 0.3), LOOK.wispSpeedMps * rnd(0.8, 1.3) * (streak ? 1.3 : 1),
+          streak ? '#ffffff' : wc, LOOK.wispSizeM * ws * rnd(0.6, 1.2) * (streak ? B.wispStreakSizeMul : 1), LOOK.wispLifeS * wl * (streak ? 1.3 : 1),
+          streak ? 'spark' : at ? pickCell(FAMILIES.wisp, Math.random()) : 'disc', 0, at && !streak ? rnd(-1, 1) : 0, streak ? wc : null, streak ? 0 : 0.6);
       }
     } else mem.carryW = 0;
   }
 
-  /** Landing dust: a flat ring of landing rings and soft discs around the saucer, tier 1..3. */
+  /** Landing dust: a flat ring of landing rings and soft discs around the saucer, tier 1..3, some in the spectrum, and a halo. */
   function dust(obj, tier) {
-    const n = Math.round(LOOK.dustCount * tier / 3);
+    const n = Math.round(LOOK.dustCount * J.dustCountMul * more() * tier / 3), v = LOOK.dustSpeedMps * J.dustSpeedMul, ds = big(J.dustSizeMul);
     for (let k = 0; k < n; k++) {
-      const a = (k / n) * Math.PI * 2, v = LOOK.dustSpeedMps;
+      const a = (k / n) * Math.PI * 2;
       const cell = at ? pickCell(FAMILIES.dust, Math.random()) : k % 3 ? 'disc' : 'petal';
-      local(obj, Math.cos(a) * LOOK.saucerR, 0.02, Math.sin(a) * LOOK.saucerR, Math.cos(a) * v, rnd(0.2, 1), Math.sin(a) * v,
-        LOOK.dustColour, LOOK.dustSizeM * rnd(0.45, 0.8), LOOK.dustLifeS, cell, 0.3, 0);
+      const hex = Math.random() < J.dustSpectrum ? nextHue() : LOOK.dustColour;
+      local(obj, Math.cos(a) * LOOK.saucerR, 0.02, Math.sin(a) * LOOK.saucerR, Math.cos(a) * v * rnd(0.7, 1.1), rnd(0.3, 1.6), Math.sin(a) * v * rnd(0.7, 1.1),
+        hex, LOOK.dustSizeM * ds * rnd(0.45, 0.8), LOOK.dustLifeS * 1.2, cell, 0.3, 0);
     }
+    tmp.set(0, 0.3, 0).applyMatrix4(obj.matrixWorld);
+    halo(tmp.x, tmp.y, tmp.z, J.landRingM[Math.min(Math.max(tier, 1), 3) - 1], 0.45, '#ffffff', nextHue());
   }
 
   /**
    * A burst at a world point p ([x, y, z]): n sprites, radial, colours cycled. With the atlas the cells
    * come from opts.family (render/atlas.js FAMILIES), else from the LOOK colour list it was given
    * (bump, pop, box); without it the petal and sparkle shares pick the B1 shapes.
+   * Polish 3: bump, pop and box bursts grow by their JUICE_LOOK.burst row and take the spectrum; a bump
+   * adds a hot white core, stars and a shockwave halo.
    */
   function burst(p, n, opts) {
     if (!p) return;
     const { colours, speed = 4, sizeM = 0.14, lifeS = 0.5, petal = 0, sparkle = 0.5, up = 1, g = 0.6 } = opts;
-    const fam = at ? FAMILIES[familyOf(opts, LOOK)] : null;
-    for (let k = 0; k < n; k++) {
-      const a = Math.random() * 6.283, e = rnd(-0.3, 1), v = speed * rnd(0.5, 1), pick = Math.random();
+    const bb = burstBoost(opts, LOOK, J), fam = at ? FAMILIES[familyOf(opts, LOOK)] : null;
+    const cnt = Math.round(n * (bb.family ? 1 + (bb.count - 1) * tierShare(Q.name, J) : 1));
+    const sz = sizeM * big(bb.size), sp = speed * bb.speed, lf = lifeS * bb.life;
+    for (let k = 0; k < cnt; k++) {
+      const a = Math.random() * 6.283, e = rnd(-0.3, 1), v = sp * rnd(0.5, 1), pick = Math.random();
       const cell = fam ? pickCell(fam, pick) : pick < petal ? 'petal' : pick < petal + sparkle ? 'spark' : 'disc';
       const gg = cell === 'petal' ? 0.2 : cell === 'drip' ? 1.6 : g;
+      // spectrum share: half of a bump (its white shards would wash out), a third of pops and boxes
+      const hex = bb.spectrum && (bb.family === 'bump' ? k & 1 : k % 3 === 2) ? nextHue() : colours[k % colours.length];
       emit(p[0], p[1] + 0.3, p[2], Math.cos(a) * v * Math.cos(e), (Math.sin(e) * v + up) * 0.8, Math.sin(a) * v * Math.cos(e),
-        colours[k % colours.length], sizeM * rnd(0.6, 1.3), lifeS * rnd(0.7, 1.2), cell, gg, rnd(-1, 1) * LOOK.sparkSpin);
+        hex, sz * rnd(0.6, 1.3), lf * rnd(0.7, 1.2), cell, gg, rnd(-1, 1) * LOOK.sparkSpin);
     }
+    if (bb.family === 'bump') {
+      const y = p[1] + 0.5;
+      emit(p[0], y, p[2], 0, 0.6, 0, '#ffffff', big(J.bumpCoreM), J.bumpCoreS, at ? 'glint' : 'spark', 0, 0, '#ffd23a');
+      const ns = Math.max(1, Math.round(J.bumpStars * Math.min(1, n / 20) * (gentle() ? J.gentleCount : 1)));
+      for (let k = 0; k < ns; k++) {
+        const a = (k / ns) * 6.283, v = sp * 0.8;
+        emit(p[0], y, p[2], Math.cos(a) * v, rnd(1.5, 3.5), Math.sin(a) * v, k & 1 ? '#ffd23a' : nextHue(), sz * 1.5, lf * 1.3, at ? 'star' : 'spark', 0.5, rnd(-1, 1) * LOOK.sparkSpin);
+      }
+      halo(p[0], y, p[2], J.bumpRingM * Math.min(1, 0.5 + n / 40), J.bumpRingS, '#ffffff', nextHue());
+    } else if (bb.family === 'box' || bb.family === 'pop') halo(p[0], p[1] + 0.5, p[2], J.bumpRingM * 0.7, J.bumpRingS, '#ffffff', nextHue());
   }
 
   /**
@@ -243,8 +324,10 @@ export function createParticles(feel, art = currentArt()) {
     const colours = family === 'freeze' ? A.frostColours : family === 'golden' ? A.goldColours : family === 'melt' ? A.meltColours
       : hitColours(family) || LOOK.popColours;
     const melt = family === 'melt', soft = family === 'pink' || family === 'spiral' || family === 'brainDrain' || family === 'blackout';
-    burst(p, Math.round(A.hitCount * few), { family, colours, speed: A.hitSpeedMps * (melt ? 0.6 : soft ? 0.8 : 1), sizeM: A.hitSizeM * (soft ? 1.2 : 1),
+    const cnt = A.hitCount * (1 + (J.hitCountMul - 1) * tierShare(Q.name, J));
+    burst(p, Math.round(cnt * few), { family, colours, speed: A.hitSpeedMps * J.hitSpeedMul * (melt ? 0.6 : soft ? 0.8 : 1), sizeM: A.hitSizeM * big(J.hitSizeMul) * (soft ? 1.2 : 1),
       lifeS: melt || soft ? 0.8 : 0.6, sparkle: 0.7, up: melt ? 2 : 1, g: melt ? 1.6 : soft ? 0.15 : 0.4 });
+    halo(p[0], p[1] + 0.6, p[2], J.hitRingM, J.hitRingS, colours[0], colours[1] || '#ffffff');
     return true;
   }
 
@@ -271,5 +354,5 @@ export function createParticles(feel, art = currentArt()) {
     aPos.needsUpdate = true; aCol.needsUpdate = true; aSize.needsUpdate = true; aRot.needsUpdate = true;
     if (at) aVel.needsUpdate = true;
   }
-  return { object: sprite, atlas: !!at, kart, dust, burst, hit, update, dispose() { m.dispose(); } };
+  return { object: sprite, atlas: !!at, kart, dust, burst, hit, halo, update, dispose() { m.dispose(); } };
 }
