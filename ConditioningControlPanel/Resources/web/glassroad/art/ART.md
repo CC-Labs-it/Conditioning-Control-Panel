@@ -739,3 +739,34 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 3: EMI motion
+
+Replaces models/emi-teacup-kart.glb with ten named 30 fps clips. Geometry, the 13-joint skin, blank emi_screen UV 0..1, head_attach, tint attributes and both embedded UASTC textures are unchanged. The original compressed geometry and texture bytes remain identical.
+
+| Clip | Seconds | Playback |
+|---|---:|---|
+| `idle_bob` | 2.40 | loop |
+| `lean_left` | 0.50 | hold |
+| `lean_right` | 0.50 | hold |
+| `hop_squash` | 0.90 | one-shot |
+| `landing_squash` | 0.60 | one-shot |
+| `hit_wobble` | 1.00 | one-shot |
+| `spin_out` | 1.20 | one-shot |
+| `wave` | 1.50 | one-shot |
+| `cheer` | 1.60 | loop |
+| `sulk` | 1.20 | hold |
+
+Use normal animation blending. Loop idle_bob and cheer. Play other clips once; clamp the final pose for lean_left, lean_right and sulk, then crossfade back when the state ends. Left and right follow the kart's local X axis. Scale and rotation channels target existing bones, so attach accessories under head_attach as before.
+
+The clips move the visible kart within its host root. Keep race movement and collision on the host root; spin_out is a visual full turn and hop_squash adds 0.18 m of local lift. Avoid adding the same visual lift or spin a second time. Motion-off can leave the bind pose or a stationary chosen pose. No texture, light or screen animation is included.
+
+Keep the skinned mesh and skeleton under the common scene root when moving or cloning a kart. The inherited non-root skin warning is unchanged; moving only the skinned mesh is unsupported. Existing shader tint instructions and the OPAQUE base-color alpha detail exclusion still apply.
+
+The asset remains 4,722 triangles, two draws and 2,796,200 bytes of conservative RGBA8 texture residency including all mips (699,104 bytes with 16-byte blocks). Motion adds zero texture memory and 28,696 GLB bytes. Packed file size is 118,432 bytes.
+
+boundRadiusM is now 1.468 m to include the motion envelope; restBoundRadiusM remains 1.274 m. CPU evaluation covered every authored 30 fps keyframe, with maximum radius 1.465219 m and no ground penetration beyond floating-point noise. Fresh import retained all ten actions and 13 joints.
+
+Review evidence covers 45 critical poses from two cameras and the full 30 fps sequence, with an unchanged bow attached for the attachment check. The bow is evidence only and remains its separate Wave 2 asset. Khronos validation reports zero errors; the decoded model retains the existing non-root skin warning.
+
+Assumptions: lean and sulk hold their last pose; cheer loops; the wave uses EMI's right arm. Clip durations and restrained amplitudes are art defaults for engine blending.

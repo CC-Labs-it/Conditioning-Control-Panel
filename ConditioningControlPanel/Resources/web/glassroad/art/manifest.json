@@ -345,7 +345,7 @@
     "kind": "kart",
     "tris": 4722,
     "texBytes": 2796200,
-    "boundRadiusM": 1.274,
+    "boundRadiusM": 1.468,
     "materialSlots": [
       "kart_surface",
       "emi_screen"
@@ -367,7 +367,62 @@
     },
     "tintDetailChannel": "baseColorTexture.a",
     "tintAlphaMode": "OPAQUE",
-    "attachPoint": "head_attach"
+    "attachPoint": "head_attach",
+    "restBoundRadiusM": 1.274,
+    "animationFps": 30,
+    "animationBlendMode": "normal",
+    "animations": [
+      {
+        "name": "idle_bob",
+        "durationSec": 2.4,
+        "playback": "loop"
+      },
+      {
+        "name": "lean_left",
+        "durationSec": 0.5,
+        "playback": "hold"
+      },
+      {
+        "name": "lean_right",
+        "durationSec": 0.5,
+        "playback": "hold"
+      },
+      {
+        "name": "hop_squash",
+        "durationSec": 0.9,
+        "playback": "one-shot"
+      },
+      {
+        "name": "landing_squash",
+        "durationSec": 0.6,
+        "playback": "one-shot"
+      },
+      {
+        "name": "hit_wobble",
+        "durationSec": 1,
+        "playback": "one-shot"
+      },
+      {
+        "name": "spin_out",
+        "durationSec": 1.2,
+        "playback": "one-shot"
+      },
+      {
+        "name": "wave",
+        "durationSec": 1.5,
+        "playback": "one-shot"
+      },
+      {
+        "name": "cheer",
+        "durationSec": 1.6,
+        "playback": "loop"
+      },
+      {
+        "name": "sulk",
+        "durationSec": 1.2,
+        "playback": "hold"
+      }
+    ]
   },
   {
     "id": "bubble",
