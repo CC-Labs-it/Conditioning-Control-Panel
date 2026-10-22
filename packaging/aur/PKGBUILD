@@ -7,7 +7,7 @@ pkgver=7.1.5
 pkgrel=1
 pkgdesc="A visual conditioning application with gamification features"
 arch=('x86_64')
-url="https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF"
+url="https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 license=('MIT')
 # Web views (GTK3 WebKit; gst-plugins-good's autoaudiosink, without which a page's first sound aborts the web process),
 # LibVLC audio/video, libsecret tokens, X11/XInput2 overlays + panic key, parec mic (libpulse), ICU for .NET globalization.

@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal static class AppUpdater
     {
         // WPF UpdateService.cs:151-152.
-        internal const string GitHubApi = "https://api.github.com/repos/CodeBambi/Conditioning-Control-Panel---CSharp-WPF";
+        internal const string GitHubApi = "https://api.github.com/repos/CC-Labs-it/Conditioning-Control-Panel";
 
         /// <summary>Test transport; null = the default one.</summary>
         internal static HttpMessageHandler? Handler;
