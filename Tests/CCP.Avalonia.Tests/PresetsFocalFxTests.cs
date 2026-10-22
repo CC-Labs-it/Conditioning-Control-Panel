@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -132,6 +133,62 @@ public sealed class PresetsFocalFxTests
             view.RefreshQuestUI(); Settle(); Assert.Equal(track.Bounds.Width, fill.Width, 3);
         }
         finally { host?.Close(); Settle(); AvApp.Quests = oldQuests; settings.MotionLevel = old; quests.Dispose(); Directory.Delete(dir, true); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ArrivalSyncsDraftsAndRecentOrderBeforeTheStagger() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup(); var settings = CoreSettings.Current;
+        var old = (settings.MotionLevel, settings.PerformanceMode, settings.SessionRackSort, settings.SessionRackSourceFilter);
+        var root = Directory.CreateTempSubdirectory("ccp-presets-sync-").FullName;
+        var custom = Path.Combine(root, "custom"); var builtIn = Path.Combine(root, "built-in");
+        Directory.CreateDirectory(custom); Directory.CreateDirectory(builtIn);
+        Window? host = null;
+        try
+        {
+            (settings.MotionLevel, settings.PerformanceMode, settings.SessionRackSort, settings.SessionRackSourceFilter) =
+                (MotionLevel.Full, false, "recent", "all");
+            var files = new SessionFileService(custom, builtIn);
+            string Write(string id, int minutesAgo)
+            {
+                var path = Path.Combine(custom, id + ".session.json");
+                files.ExportSession(new SessionDefinition { Id = id, Name = id, DurationMinutes = 10, IsAvailable = true }, path);
+                File.SetLastWriteTime(path, DateTime.Now.AddMinutes(-minutesAgo));
+                return path;
+            }
+            var a = Write("sync_a", 30); Write("sync_b", 20);
+            var manager = new SessionManager(files); manager.LoadAllSessions();
+            var added = 0; manager.SessionAdded += _ => added++;
+            var view = new PresetsTabView(); view.UseSessionManager(manager);
+            host = new Window { Width = 1200, Height = 900, Content = view }; host.Show(); host.Activate(); Settle();
+            var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
+            string[] Ids() => rack.Children.OfType<Border>().Select(b => ((Session)b.Tag!).Id).Where(id => id.StartsWith("sync_")).ToArray();
+            Assert.Equal(new[] { "sync_b", "sync_a" }, Ids());
+
+            // Editing re-dates a file without adding one: the arrival repaint re-sorts "Recent".
+            view.IsVisible = false; Settle();
+            File.SetLastWriteTime(a, DateTime.Now.AddMinutes(-5));
+            view.IsVisible = true; Settle();
+            Assert.Equal(new[] { "sync_a", "sync_b" }, Ids());
+
+            // A draft written behind the manager's back joins on arrival, before the stagger runs.
+            view.IsVisible = false; Settle();
+            Write("sync_c", 1);
+            view.IsVisible = true; Settle();
+            Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
+            Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
+            Assert.Equal(0, added);
+            Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
+            Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
+                chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
+        }
+        finally
+        {
+            host?.Close(); Settle();
+            (settings.MotionLevel, settings.PerformanceMode, settings.SessionRackSort, settings.SessionRackSourceFilter) = old;
+            Directory.Delete(root, true);
+        }
         return Task.CompletedTask;
     });
 
