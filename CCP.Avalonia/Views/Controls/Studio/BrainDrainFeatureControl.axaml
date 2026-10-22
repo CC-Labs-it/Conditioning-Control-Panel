@@ -11,8 +11,7 @@
                                             an AvaloniaResource in this head yet and x:Name on a
                                             brush is AVLN2000. The Studio wash stands in on both
                                             plates, exactly as the SpiralFeatureControl port does.
-       feat:AdaptiveSideArt.CollapseBelow -> dropped (WPF-head attached
-                                            behaviour; it follows the services to Core)
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%" (Avalonia points are absolute
                                             unless given as %)
@@ -20,7 +19,7 @@
 
      Root MUST stay a Panel (StackPanel): the WPF session-lock banner is inserted at index 0 of
      the hosting content, and into a Grid it would overlap the settings instead of stacking. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -68,7 +67,7 @@
 
         <!-- The settings column is capped (3*, MaxWidth 780) so a slider stops being a ~1200px
              runway in the wide Studio detail pane; the width that buys back becomes the art card. -->
-        <Grid>
+        <Grid sideart:AdaptiveSideArt.CollapseBelow="700">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" MaxWidth="780"/>
                 <ColumnDefinition Width="2*"/>

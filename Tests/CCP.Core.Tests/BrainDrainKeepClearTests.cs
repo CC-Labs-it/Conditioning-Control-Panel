@@ -4,10 +4,10 @@ using ConditioningControlPanel.Services;
 using Xunit;
 using E = ConditioningControlPanel.Services.BrainDrainKeepClear.BandEntry;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
-/// "Keep pictures clear": the blur window has to sit under the lowest topmost window CCP owns,
+/// WPF Services/Notifications/BrainDrainKeepClear (now in Core). "Keep pictures clear": the blur window has to sit under the lowest topmost window CCP owns,
 /// so flashes, videos, lock cards, subliminals and bubbles stay sharp above it.
 /// </summary>
 public class BrainDrainKeepClearTests
