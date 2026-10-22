@@ -71,9 +71,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CanResize = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
             SizeToContent = SizeToContent.WidthAndHeight;
-            // Never 0x0 while the pill is collapsed (no picks yet): a zero-size window stalls the compositor
-            // for every window (headless: other windows stop hit-testing) and is invalid on X11.
-            MinWidth = 1; MinHeight = 1;
 
             _row = new StackPanel { Orientation = Orientation.Horizontal };
             _pill = new Border
@@ -90,7 +87,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
             };
-            Content = _pill;
+            // A 1x1 floor: with the pill collapsed (no picks yet) a SizeToContent window would be 0x0, and the
+            // render loop throws on it ("Size should be >= (1,1)"), which stops every other window's frames.
+            Content = new Panel { Children = { new Border { Width = 1, Height = 1 }, _pill } };
 
             // WPF ToolTip chrome (:241-247): non-layered card, pink hairline.
             Styles.Add(new Style(x => x.OfType<ToolTip>())
