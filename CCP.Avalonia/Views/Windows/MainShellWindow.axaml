@@ -662,9 +662,12 @@
                      switcher. Phase 1 moved navigation into the rail, so the header is now
                      just identity (elastic) + the right-hand chrome cluster (Auto). -->
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+                <!-- WPF MainWindow.xaml:843: the Sparkle wallet, natively 29 x 138, left of the identity. -->
+                <cmp:SparkleWallet x:Name="HeaderSparkleWallet" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
 
                 <!-- Title + Player Title + App Name + Version -->
                 <!-- #860: a Grid, not a StackPanel, so this cluster can give width back.
@@ -677,7 +680,7 @@
                      own row) can claim the leftover width between the version text and the
                      right-hand chrome. Nothing spreads: columns 0-4 are still Auto/capped, and
                      the banner is the only thing that grows. -->
-                <Grid Grid.Column="0" VerticalAlignment="Center">
+                <Grid Grid.Column="1" VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*" MaxWidth="200"/>
@@ -1024,7 +1027,7 @@
                      button, Help, and the profile bubble (avatar + hover account menu).
                      Bug Report lives in the title bar (BtnTitleBarBugReport) - the copy that
                      used to sit here was a duplicate and was removed for the bubble. -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- THE PREMIUM SPARK (WPF MainWindow.xaml:1237, polish 12): 54 x 42 card held to the
                          34 px row by -4 px margins. Controls/PremiumSpark.cs, MainShellWindow.PremiumSpark.cs. -->
                     <fx:PremiumSpark x:Name="HeaderPremiumSpark" Margin="0,-4,12,-4" VerticalAlignment="Center"/>
@@ -1185,8 +1188,8 @@
                             </ControlTheme>
                         </ComboBox.ItemContainerTheme>
                     </ComboBox>
-                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_5_is_out}"
-                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_5_stay_tuned}"
+                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_14_is_out}"
+                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_14_bring_a_friend}"
                             FontSize="11" FontWeight="Bold" Cursor="Hand">
                         <Button.Theme>
                             <ControlTheme TargetType="Button">
@@ -1205,11 +1208,30 @@
                                                                  Content="{TemplateBinding Content}"
                                                                  ContentTemplate="{TemplateBinding ContentTemplate}"/>
                                             </Border>
-                                            <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver, Tag) dropped. Avalonia writes these as
-                                                 Style selectors outside the template (":pointerover /template/ Border#x"); the
-                                                 rest state renders correctly and only the hover/press/tag skins are lost. -->
                                         </ControlTemplate>
                                 </Setter>
+                                <!-- WPF MainWindow.xaml:1353-1373 template triggers, in WPF's order (Tag wins over hover).
+                                     FontSize/FontWeight stay local on the button as in WPF (local beats template triggers). -->
+                                <Style Selector="^:pointerover /template/ Border#border">
+                                    <Setter Property="Background" Value="#2D2D50"/>
+                                    <Setter Property="BorderBrush" Value="#5D5D80"/>
+                                </Style>
+                                <Style Selector="^[Tag=UpdateAvailable]">
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Style>
+                                <Style Selector="^[Tag=UpdateAvailable] /template/ Border#border">
+                                    <Setter Property="Background" Value="{DynamicResource DarkPinkBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </Style>
+                                <Style Selector="^[Tag=UrgentUpdate]">
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Style>
+                                <Style Selector="^[Tag=UrgentUpdate] /template/ Border#border">
+                                    <Setter Property="Background" Value="#DC143C"/>
+                                    <Setter Property="BorderBrush" Value="#FF4444"/>
+                                    <Setter Property="BorderThickness" Value="3"/>
+                                </Style>
                             </ControlTheme>
                         </Button.Theme>
                     </Button>

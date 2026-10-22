@@ -133,12 +133,18 @@ namespace ConditioningControlPanel
             }
 
             // Check unified display name first, then fall back to provider-specific
-            var displayName = App.Settings?.Current?.UserDisplayName
-                           ?? App.Patreon?.DisplayName
-                           ?? App.Discord?.DisplayName;
+            var displayName = Services.NeedsDisplayNameRule.FirstName(
+                App.Settings?.Current?.UserDisplayName,
+                App.Patreon?.DisplayName,
+                App.Discord?.DisplayName);
             if (!string.IsNullOrEmpty(displayName))
             {
                 TxtBannerSecondary.Text = Loc.GetF("label_welcome_back_0", displayName);
+            }
+            else if (!string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId) || App.IsLoggedIn)
+            {
+                // Signed in with no name yet: never the signed-out "log in with Patreon" pitch.
+                TxtBannerSecondary.Text = Loc.Get("banner_signed_in_no_name");
             }
             else
             {

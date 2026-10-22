@@ -294,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true, Mute = true };
             _sink = new VlcFrameSink(_player, () => _media, bmp => images.ForEach(i => i.Source = bmp), () => images.ForEach(i => i.InvalidateVisual()));
             _media = new Media(vlc, path, FromType.FromPath);
-            _media.AddOption(":no-audio");
+            _media.AddOption(LibVlcSilence.NoAudioOption);
             _media.AddOption(":input-repeat=65535");   // WPF MediaEnded -> Position 0 -> Play
             _player.Play(_media);
         }
@@ -322,7 +322,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, screens.Count, primary))
+            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, screens.Count, primary))
             {
                 var w = new OverlayWindow();
                 w.PlaceOn(screens[i]);
