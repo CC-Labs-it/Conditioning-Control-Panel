@@ -977,18 +977,30 @@
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False">
-                                <Run Text="{loc:Str label_banner_web_xp}"/>
-                                <Run Text=" "/>
-                                <!-- WPF Hyperlink + RequestNavigate (MainWindow.xaml:1842) -> an inline
-                                     SafeHyperlinkButton (ExternalOpener); Click retires the beat. -->
+                                <!-- WPF Hyperlink + RequestNavigate (MainWindow.xaml:1174) -> an inline
+                                     SafeHyperlinkButton (ExternalOpener); Click retires the beat.
+                                     WPF's CharacterEllipsis trims the whole line, Hyperlink included,
+                                     so a narrow header shows "see it on the we…". Avalonia never trims
+                                     an InlineUIContainer: it drops it whole, or (stale size) lets it
+                                     overrun. So lead + link sit in one embedded DockPanel, measured
+                                     at the line width: the lead keeps its width and the link takes
+                                     what is left and ellipsizes, as WPF does. -->
                                 <InlineUIContainer BaselineAlignment="Center">
-                                    <fx:SafeHyperlinkButton x:Name="BannerWebLink" Padding="0" Margin="0" BorderThickness="0"
-                                                            NavigateUri="https://app.cclabs.app"
-                                                            Click="BannerWebLink_Click">
-                                        <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="12"
-                                                   FontStyle="Italic" Foreground="{DynamicResource PinkBrush}"
-                                                   TextDecorations="Underline"/>
-                                    </fx:SafeHyperlinkButton>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left" FontSize="12" FontStyle="Italic"
+                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
+                                            <Run Text="{loc:Str label_banner_web_xp}"/>
+                                            <Run Text=" "/>
+                                        </TextBlock>
+                                        <fx:SafeHyperlinkButton x:Name="BannerWebLink" Padding="0" Margin="0" BorderThickness="0"
+                                                                HorizontalAlignment="Left"
+                                                                NavigateUri="https://app.cclabs.app"
+                                                                Click="BannerWebLink_Click">
+                                            <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="12"
+                                                       FontStyle="Italic" Foreground="{DynamicResource PinkBrush}"
+                                                       TextDecorations="Underline" TextTrimming="CharacterEllipsis"/>
+                                        </fx:SafeHyperlinkButton>
+                                    </DockPanel>
                                 </InlineUIContainer>
                             </TextBlock>
                             <!-- Chrome FX (PR-1): one-shot sheen pass over the banner when the
