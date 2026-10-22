@@ -366,7 +366,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// "live". Null on a headless render and before the shell builds one, which every caller
         /// treats as "there is nothing to refresh".
         /// </summary>
-        public static AvatarTubeWindow? Live =>
+        public static AvatarTubeWindow? Live => TestLive ??
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)
                 ?.Windows.OfType<AvatarTubeWindow>().FirstOrDefault();
 
@@ -1345,9 +1345,24 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        /// <summary>The user's avatar mute. WPF mirrors this setting into a field the quick menu
-        /// flips; reading the setting itself is the same answer with nothing to keep in sync.</summary>
-        public bool IsMuted => CoreSettings.Current.AvatarMuted;
+        /// <summary>The user's avatar mute: the setting, unless <see cref="SetMuteAvatar"/> holds a
+        /// transient override (the quiz windows mute her while they are open).</summary>
+        public bool IsMuted => _muteOverride ?? CoreSettings.Current.AvatarMuted;
+
+        private bool? _muteOverride;
+
+        /// <summary>Test seam: headless tests run without a desktop lifetime (and cannot set one
+        /// after setup), so <see cref="Live"/> answers this tube when a test sets it.</summary>
+        internal static AvatarTubeWindow? TestLive;
+
+        /// <summary>WPF AvatarTubeWindow.ChatInput.cs:1533 SetMuteAvatar: in-memory only, never
+        /// persisted - WPF sets its _isMuted field and does not write AvatarMuted. Setting it back
+        /// to the stored value drops the override.</summary>
+        public void SetMuteAvatar(bool isMuted)
+        {
+            _muteOverride = isMuted == CoreSettings.Current.AvatarMuted ? null : isMuted;
+            UpdateQuickMenuState();
+        }
 
         /// <summary>
         /// Auto-hide, at the user's Bubble Duration (1-10s). A long line gets an ESL-friendly
