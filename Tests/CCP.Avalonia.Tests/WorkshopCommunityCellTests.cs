@@ -77,14 +77,57 @@ public sealed class WorkshopCommunityCellTests
         return Task.CompletedTask;
     });
     // Completion signal (P08/P73): the dialog's own Opened event, bounded by time, never a poll.
-    private static async Task<MessageDialog> Dialog(Window owner)
+    private static Task<MessageDialog> Dialog(Window owner) => Opened<MessageDialog>(owner);
+    private static async Task<T> Opened<T>(Window owner) where T : Window
     {
-        var opened = new TaskCompletionSource<MessageDialog>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var sub = Window.WindowOpenedEvent.AddClassHandler<MessageDialog>((d, _) => { if (d.Owner == owner) opened.TrySetResult(d); });
+        var opened = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<T>((d, _) => { if (d.Owner == owner) opened.TrySetResult(d); });
         Dispatcher.UIThread.RunJobs();
-        if (owner.OwnedWindows.OfType<MessageDialog>().FirstOrDefault() is { } open) return open;
+        if (owner.OwnedWindows.OfType<T>().FirstOrDefault() is { } open) return open;
         return await opened.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
+
+    [Fact]
+    public Task ActivatingAnExplicitPromptAsksForConsentAndCancelLeavesItInactive() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        s.InstalledCommunityPromptIds.Clear(); s.ActiveCommunityPromptId = null;
+        s.SlutModeEnabled = true; s.CompanionPrompt.ExplicitContentAcknowledged = false;
+        var id = "consent-" + Guid.NewGuid().ToString("N");
+        var file = Path.Combine(CorePaths.UserData, "community-prompts", id + ".json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, JsonConvert.SerializeObject(new CommunityPrompt
+        { Id = id, Name = "Spicy persona", Author = "Test", PromptSettings = new() { SlutModePersonality = "fixture explicit variant" } }));
+        s.InstalledCommunityPromptIds.Add(id);
+        var cell = new WorkshopCommunityCell(); var owner = new Window { Width = 440, Height = 350, Content = cell };
+        Button Activate() => cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ActivatePrompt");
+        try
+        {
+            owner.Show(); Dispatcher.UIThread.RunJobs();
+            // WPF MainWindow.Patreon.cs ActivatePrompt: the explicit-content gate runs before the prompt is applied.
+            Activate().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var gate = await Opened<ExplicitContentAcknowledgementDialog>(owner);
+            gate.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Null(s.ActiveCommunityPromptId);
+            Assert.False(s.CompanionPrompt.ExplicitContentAcknowledged);
+            Activate().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            gate = await Opened<ExplicitContentAcknowledgementDialog>(owner);
+            gate.FindControl<CheckBox>("ChkAgeConfirm")!.IsChecked = true;
+            gate.FindControl<Button>("BtnAccept")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            // Accept applies it. (The acknowledgement stamp does not survive: ActivatePrompt replaces
+            // CompanionPrompt with the prompt's own settings, exactly as WPF does.)
+            Assert.Equal(id, s.ActiveCommunityPromptId);
+        }
+        finally
+        {
+            foreach (var w in owner.OwnedWindows.ToList()) w.Close();
+            owner.Close(); s.InstalledCommunityPromptIds.Remove(id); s.ActiveCommunityPromptId = null;
+            s.SlutModeEnabled = false; s.CompanionPrompt.ExplicitContentAcknowledged = false; File.Delete(file);
+        }
+    });
 
     [Fact]
     public Task ImportAndExportButtonsUsePickerPathsAndRefreshReturnsFromOfflineCache() => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -205,6 +248,17 @@ public sealed class WorkshopCommunityCellTests
             cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ActivatePrompt").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(active, z4.ActivePersonalityLine);
+            // WPF UpdateCommunityPromptsUI after a Z4 deactivate (MainWindow.Patreon.cs:2249) and on every tab show
+            // (MainWindow.CompanionTab.cs:147): the row's Activate button follows the setting, not the attach.
+            bool CanActivate() => cell.GetLogicalDescendants().OfType<Button>().Any(b => b.Name == "ActivatePrompt");
+            Assert.False(CanActivate());
+            z4.ResetPersonalityCommand.Execute(null); Dispatcher.UIThread.RunJobs();
+            Assert.Null(s.ActiveCommunityPromptId);
+            Assert.True(CanActivate());
+            cell.Service.ActivatePrompt(id);
+            shell.ShowTab("settings"); Dispatcher.UIThread.RunJobs();
+            shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
+            Assert.False(CanActivate());
             cell.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "RemovePrompt").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.NotEqual(active, z4.ActivePersonalityLine);
         }
