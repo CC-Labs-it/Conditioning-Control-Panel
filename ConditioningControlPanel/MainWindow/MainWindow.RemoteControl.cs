@@ -1443,11 +1443,32 @@ namespace ConditioningControlPanel
         /// game window, the Deeper player, a Takeover web video and a running leash task all stayed
         /// up, and the engine kept running. The controller's trigger_panic is a different path
         /// (RemoteControlService.StopAllRemoteEffects). No pause mark here (PanicAftermathTests).
+        ///
+        /// <para>Hard rule 6 (owner, 2026-10-22): it reaches exactly as far as the panic key
+        /// (VoicePanicReach). Under Lockdown or with panic switched off it does nothing, except the
+        /// leash part while leashed, as the key does. True = the whole panic ran (the recogniser
+        /// speaks its "everything's off" line only then).</para>
         /// </summary>
-        internal void TriggerPanicFromRemote()
+        internal bool TriggerPanicFromRemote()
         {
             try
             {
+                var reach = Services.Safety.VoicePanicReach.Decide(
+                    lockdownActive: App.Lockdown?.IsActive == true,
+                    panicKeyEnabled: App.Settings?.Current?.PanicKeyEnabled == true,
+                    leashed: Controls.Leash.LeashSurfaces.IsLeashed);
+                if (reach == Services.Safety.VoicePanicReach.Reach.LeashOnly)
+                {
+                    App.Logger?.Information("[Panic] Voice panic while the panic key cannot run: leash safety only");
+                    try { LeashOnPanicPress(panicRuns: false); } catch (Exception ex) { Diag.Swallowed(ex); }
+                    return false;
+                }
+                if (reach == Services.Safety.VoicePanicReach.Reach.Refused)
+                {
+                    App.Logger?.Information("[Panic] Voice panic refused: the panic key cannot run (Lockdown or panic off)");
+                    return false;
+                }
+
                 // EMI Desk (MOMENTS 4.B): the second panic entry point. Nothing else hooks it - the
                 // bark's Panic trigger is raised from the key path only - so without this a voice
                 // panic would leave her chatting.
@@ -1460,9 +1481,8 @@ namespace ConditioningControlPanel
 
                 App.Logger?.Information("[Panic] Voice panic: stopping every surface");
 
-                // The panic key's preamble: the welcome show, Circe's tab safety hold, a leash task.
+                // The rest of the panic key's preamble: the welcome show, a leash task.
                 try { Services.FirstShow.FirstShowService.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
-                try { App.Chaster?.NoteSafetyExit(); } catch (Exception ex) { Diag.Swallowed(ex); }
                 try { LeashOnPanicPress(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
                 // Track panic press for Relapse achievement
@@ -1487,17 +1507,11 @@ namespace ConditioningControlPanel
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
 
-                // The engine stops, and the scheduler must not start it again: what STOP does. Only
-                // where the panic key could stop it (hard rule 6): never under Lockdown or with the
-                // panic switched off, where the key stops nothing (VoicePanicReach).
-                if (Services.Safety.VoicePanicReach.StopsEngine(
-                        lockdownActive: App.Lockdown?.IsActive == true,
-                        panicKeyEnabled: App.Settings?.Current?.PanicKeyEnabled == true))
-                {
-                    if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
-                        _manuallyStoppedDuringSchedule = true;
-                    if (_isRunning) StopEngine();
-                }
+                // The engine stops, and the scheduler must not start it again: what STOP does. The
+                // reach check at the top already left Lockdown and panic-off out (hard rule 6).
+                if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
+                    _manuallyStoppedDuringSchedule = true;
+                if (_isRunning) StopEngine();
 
                 Show();
                 WindowState = WindowState.Normal;
@@ -1506,10 +1520,12 @@ namespace ConditioningControlPanel
                 Topmost = false;
                 App.Overlay?.NotifyTopWindowClosed();
                 ShowAvatarTube();
+                return true;
             }
             catch (Exception ex)
             {
                 App.Logger?.Error(ex, "[Panic] Voice panic failed");
+                return true;
             }
         }
 
