@@ -739,3 +739,43 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 4 trails
+
+Five original static scalar fields: sparkle ribbon, dotted arc, boost streak,
+slipstream wisp and faint drift scorch. No colour or animation is baked.
+Sample .r as linear data. The host supplies tint, opacity, placement, lifetime
+and Gentle Visuals. Scorch is deliberately low-amplitude.
+
+Desktop IDs are plain; matching phone IDs end in -phone and declare tier phone.
+Desktop files are 512 x 128, phone files 256 x 64. Load only the selected tier.
+Conservative RGBA8 residency including mips: desktop 1.667 MiB, phone 0.417 MiB.
+No triangle allocation. ETC1S KTX2 files pass strict validation.
+
+Repeat U along the trail, clamp V across it. U edge samples match in the sources;
+codec edge deltas are recorded in private checks and inspected in packed output.
+The side borders are black so opacity or emission falls away before the mesh edge.
+Use the same ribbon coordinate mapping for both tiers.
+
+All artwork is deterministic, original mathematical fields and glint motifs.
+No downloaded imagery, external fonts in runtime or third-party assets.
+Sources, exact packing commands, decoded contacts and checks stay private.
+
+### Tier residency and running budget
+
+Load only the selected texture tier: plain IDs on desktop, matching -phone IDs on phone.
+The tiers share GLBs, SVGs and per-vertex sidecars. Only the active sky palette nebula
+is resident on either tier; release the previous palette layer before loading another.
+
+| Tier | This family MiB | W4 cumulative MiB | Running persistent MiB | With one menu backdrop MiB |
+|---|---:|---:|---:|---:|
+| desktop | 1.666698 | 65.666683 | 175.000000 | 184.000000 |
+| phone | 0.416698 | 4.416683 | 113.750000 | 121.660156 |
+
+Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
+Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
+These are conservative decoded RGBA8 allocations including supplied mip chains, not
+compressed download sizes. The one-at-a-time Wave 3 backdrops add 9 MiB on desktop
+and 7.910156 MiB on phone. SVGs have zero baked texture allocation. Per-vertex
+sidecars are separate attribute bytes, never counted as texture memory.
+The combined phone persistent addition stays below 14 MiB; the phone ceiling is 128 MiB.
