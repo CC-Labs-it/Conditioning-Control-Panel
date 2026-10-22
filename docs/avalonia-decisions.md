@@ -1200,3 +1200,20 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-22: cloud settings backup: absolute paths stay on this machine (avalonia-port/cloud-settings-backup)
+- Question: Backup now / Restore from cloud on Linux share the account's single backup slot with Windows; absolute
+  paths in it mean nothing on the other OS. Design asked of oracle-deep (Q1, ~/ccp-port/briefs/oracle-cloud-backup-contract-d.md).
+- Option A (chosen, oracle-deep): a Core list of absolute-path fields (`CloudSettingsBackup.AbsolutePathFields`:
+  CustomAssetsPath, StartupVideoPath, SpiralPath, MindWipeAudioPath, WallpaperOriginalPath, WallpaperSourceFolder,
+  BlinkTrainerFolders, DeeperRecentFiles, DeeperLastDirectory) is stripped on upload, and every restore copies this
+  machine's values back. The restore rule is the guard that matters: frozen WPF keeps uploading Windows paths.
+  The asset lists (DisabledAssetPaths, ActiveAssetPaths, AssetPresets) stay in the backup: they are relative.
+- Option B (rejected): a path translation table; drive letters and home folders cannot be mapped reliably.
+- Option C (rejected): per-OS sections; WPF restores the whole blob and the server keeps one opaque slot.
+- Shape: Core `CloudSettingsBackup` carries WPF's ExcludedBackupProperties / IsExcludedFromBackup / PreserveLocalOnlyFields
+  copied unchanged plus the manual-restore keep list; `SettingsBackupBudget` moved to Core as is. WPF is not rewired (P118).
+  Same endpoints, bodies and X-Auth-Token as WPF; 409 goes to the contract D seam when seeded, else a failure.
+- Not in this lane (wire-views-settings-account-b-next): GDPR export, 401 token recovery, automatic backup, startup
+  restore prompt. The server contract is still pending owner confirmation (2026-10-09 entry).
+- Tests: `Tests/CCP.Core.Tests/CloudSettingsBackupTests.cs`, `AccountSettingsSectionTests.CloudRestoreAsksFirstAndKeepsThisMachinesPaths`.

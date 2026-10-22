@@ -57,6 +57,9 @@ public sealed class AccountSettingsSectionTests
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
+            // No test reaches the real server for the backup status line.
+            var oldBackup = AccountSettingsSection.NewBackup;
+            AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup("{\"backup\":null}"));
             MainShellWindow? shell = null;
             try
             {
@@ -75,6 +78,7 @@ public sealed class AccountSettingsSectionTests
                 CoreSecrets.RetrieveProvider = oldGet;
                 CoreSecrets.StoreProvider = oldSet;
                 CoreSettings.ServiceProvider = oldSettings;
+                AccountSettingsSection.NewBackup = oldBackup;
                 // P02: providers that read the process settings again, not this test's thrown-away ones.
                 AccountSeed.Seed(p => new ProviderSubscription(p));
                 CoreAccount.IsLoggedInProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = CoreAccount.IsWhitelistedProvider = null;
@@ -87,6 +91,79 @@ public sealed class AccountSettingsSectionTests
                 if (settingsBefore != null) File.WriteAllBytes(settingsPath, settingsBefore); else File.Delete(settingsPath);
             }
         });
+
+    private sealed class CannedBackup(string body) : HttpMessageHandler
+    {
+        public readonly List<string> Paths = new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        {
+            lock (Paths) Paths.Add(r.RequestUri!.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
+    }
+
+    private static string Packed(AppSettings settings)
+    {
+        using var output = new MemoryStream();
+        using (var gz = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            gz.Write(System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(settings)));
+        return Convert.ToBase64String(output.ToArray());
+    }
+
+    /// <summary>Settings > Account > Restore from cloud: asked first (No sends nothing), then the backup replaces the
+    /// settings with this machine's absolute paths and level kept, and the Backup now button uploads.</summary>
+    [Fact]
+    public Task CloudRestoreAsksFirstAndKeepsThisMachinesPaths() => RunAsync(async (shell, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        s.SpiralPath = "/home/me/spiral.gif";
+        s.FlashEnabled = true;
+        s.PlayerLevel = 5;
+        var windows = new AppSettings { SpiralPath = @"C:\spiral.gif", FlashEnabled = false, PlayerLevel = 99 };
+        var server = new CannedBackup(new Newtonsoft.Json.Linq.JObject
+        {
+            ["backup"] = new Newtonsoft.Json.Linq.JObject { ["settings_data"] = Packed(windows), ["app_version"] = "6.11.0" },
+        }.ToString());
+        var oldBackup = AccountSettingsSection.NewBackup;
+        var oldTell = AccountSettingsSection.Tell;
+        var oldConfirm = AccountSettingsSection.Confirm;
+        var dialogs = new List<string>();
+        var answer = false;
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
+        AccountSettingsSection.Tell = (_, title, _) => { dialogs.Add(title); return Task.CompletedTask; };
+        AccountSettingsSection.Confirm = (_, title, _) => { dialogs.Add(title); return Task.FromResult(answer); };
+        try
+        {
+            section.Refresh();
+            Assert.True(Shown(section, "CloudSettingsBackupSection"));
+
+            await section.RestoreAsync();
+            Assert.Equal(new[] { Loc.Get("title_restore_settings_from_cloud") }, dialogs);
+            Assert.Same(s, CoreSettings.Current);   // No: nothing swapped
+
+            answer = true;
+            await section.RestoreAsync();
+            var now = CoreSettings.Current;
+            Assert.NotSame(s, now);
+            Assert.Equal("/home/me/spiral.gif", now.SpiralPath);
+            Assert.Equal(5, now.PlayerLevel);
+            Assert.False(now.FlashEnabled);
+            Assert.Equal("u-test", now.UnifiedId);
+            Assert.Contains(Loc.Get("title_settings_restored"), dialogs);
+            Assert.True(section.FindControl<Button>("BtnRestoreSettings")!.IsEnabled);
+
+            await section.BackupNowAsync();
+            lock (server.Paths) Assert.Contains("/v2/user/backup-settings", server.Paths);
+            Assert.Contains(Loc.Get("title_backup_complete"), dialogs);
+        }
+        finally
+        {
+            AccountSettingsSection.NewBackup = oldBackup;
+            AccountSettingsSection.Tell = oldTell;
+            AccountSettingsSection.Confirm = oldConfirm;
+        }
+    });
 
     private static FontManagerOptions HeadlessFonts()
     {
