@@ -240,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia
                 .UsePlatformDetect()      // Win32 on Windows, X11 on Linux (12.1.2 has no Wayland backend)
                 .WithInterFont()
                 .With(Platform.AppFonts.Options())   // never-empty default, Fredoka, emoji fallback
+                .ConfigureFonts(Platform.AppFonts.Register)
                 .LogToTrace()
                 // Home keeps ~85 MB of tile pictures on the GPU; Avalonia's default 28 MB Skia cache
                 // re-uploaded them every frame (Platform/RenderBudget.cs has the trace numbers).

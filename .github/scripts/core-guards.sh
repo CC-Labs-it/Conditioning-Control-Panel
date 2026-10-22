@@ -54,8 +54,13 @@ trap 'rm -rf "$WORK"' EXIT
 # CCP.Core/Models/Quest.cs:336 - QuestDefinition.PackResources. Persisted data, not a load:
 # quest_definitions_cache.json stores ImagePath in pack:// form (quests-core), and Core never
 # resolves it. Goes when the cache format stops carrying head URIs.
+# CCP.Core/Services/Awareness/AwarenessAngleCards.cs:247-248 - the embedded fail-closed angle deck.
+# Its <EmbeddedResource> moved into CCP.Core.csproj with the class (awareness-core-a), so the read
+# resolves; Tests/CCP.Core.Tests/AwarenessAngleCardTests.TheEmbeddedDeckIsPresentAndRich fails without it.
 cat > "$WORK/baseline.txt" <<'EOF'
 CCP.Core/Models/Quest.cs:336
+CCP.Core/Services/Awareness/AwarenessAngleCards.cs:247
+CCP.Core/Services/Awareness/AwarenessAngleCards.cs:248
 EOF
 : > "$WORK/seen.txt"
 

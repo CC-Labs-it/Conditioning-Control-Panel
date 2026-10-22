@@ -1,7 +1,7 @@
 // PORTED (slice 1) from WPF LauncherWindow.xaml.cs/.Tiles.cs and LauncherHost.cs; rules are Core's
 // LauncherCards/LauncherRules; slice 2 adds the boot surface and the second-instance handoff (WPF App.xaml.cs
 // RouteBootSurface/RouteSurfaceHandoff, LauncherHost.OnBareRelaunch). Slice 3 adds the account chip, mod pill and panel-card status/stats (WPF LauncherWindow.xaml.cs:220-606).
-// Slice 5 (FX) lives in LauncherWindow.Fx.cs. ponytail: no game host exists on this head yet (slice 4 found none); game tiles land with their hosts.
+// Slice 5 (FX) lives in LauncherWindow.Fx.cs. Game tiles open Views/Games/GameWindow (Breakout demo so far); the other games land with their frames.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,13 +33,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Graded Intake (WPF IntakePassService.CanStartIntake); locked still opens the tab's gate.
                 ["intake"] = (() => !(CoreEntitlement.HasLab || CoreEntitlement.IsIntakePassAvailable),
                               panel => panel.ShowTab("gradedintake")),
+                // WPF BreakoutHostService.LaunchDemo: free, no account; Play opens it via LaunchGameWindow.
+                ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
+                // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
+                [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
+                // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
+                ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
             };
+
+        /// <summary>WPF LauncherEntry.IsRevealed: a race without a track is WPF's mystery card pointing at the
+        /// Back Room counter. Neither exists on this head, so the unrevealed tile is left out.</summary>
+        private static bool Revealed(string id) =>
+            !string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) || Services.Race.RacingAccess.CanLaunch;
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>
         internal static bool CanStartGame(string id) => Destinations.ContainsKey(id);
 
-        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id));
+        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id) && Revealed(c.Id));
 
         private static LauncherWindow? _window;
 
@@ -79,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildTiles();
             HookVeil();
             HookFx();
+            HookLinks();
             PaintSoundButton();
         }
 
@@ -234,7 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var panel = Panel;
             var outcome = LauncherRules.Close(MainShellWindow.LockdownActive,
-                CoreEngine.IsRunning || CoreSession.IsSessionRunning,
+                CoreEngine.IsRunning || CoreSession.IsSessionRunning || Games.GameWindow.IsAnyOpen(),
                 panel is { IsVisible: true }, panel != null);
             switch (outcome)
             {
@@ -472,10 +484,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void Play(LauncherCard card)
         {
             if (!Destinations.TryGetValue(card.Id, out var dest)) return;
+            bool game = Games.GameWindow.Games.ContainsKey(card.Id);
             bool needsAccount = card.RequiresAccount && !CoreAccount.IsLoggedIn;
-            // Every destination here is a panel tab: a locked one still opens it (its own gate paints
-            // the refusal), as WPF's does. A pending leash punishment sends the tile to the gate on the
-            // panel first (WPF LauncherHost.cs:360-366).
+            // A panel tab that is locked still opens (its own gate paints the refusal), as WPF's does; a
+            // game's gate runs in GameWindow.Launch. A pending leash punishment sends the tile to the gate
+            // on the panel first (WPF LauncherHost.cs:360-366).
             bool locked = Locked(dest);
             FxPlayBeat(card.Id, needsAccount || locked);
             var step = LauncherRules.Game(needsAccount, locked, MainShellWindow.LeashBlocksGames);
@@ -490,7 +503,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 OpenPanel(p => p.PresentLeashGateFromLauncher());
                 return;
             }
+            if (game) { LaunchGameWindow(card.Id); return; }
             OpenPanel(dest.Open);
+        }
+
+        /// <summary>WPF LauncherHost.LaunchGame (:335): the game opens, then the launcher hides behind it;
+        /// the return poll brings the launcher back when the game closes and the panel is not up. A gate
+        /// that refused leaves the launcher where it is.</summary>
+        private void LaunchGameWindow(string id)
+        {
+            var game = Games.GameWindow.Launch(id);
+            if (game == null) return;
+            AfterExitBeat(() =>
+            {
+                if (!game.IsVisible) return;
+                Hide();
+                game.Activate();
+            });
+            game.Closed += (_, _) =>
+            {
+                if (Panel is { IsVisible: true }) return;
+                try { Show(); Activate(); }
+                catch (Exception ex) { Log.Debug(ex, "[Launcher] return after {Id} failed", id); }
+            };
         }
 
         private static bool Locked((Func<bool> Locked, Action<MainShellWindow> Open) dest)
@@ -615,6 +650,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 new SolidColorBrush(Color.FromRgb(0x2A, 0x1C, 0x08)), 10));
             if (card.IsNew) plate.Children.Add(Pill("exclusives_badge_new", null, Res("AccentGradientBrush"), Brushes.White,
                 needsAccount || locked ? 40 : 10));
+            plate.Children.Add(ShortcutButton(tile, card.Id));
             body.Children.Add(plate);
 
             // --- title, blurb, play: fixed heights so every title sits on the same line ---

@@ -43,17 +43,10 @@ namespace ConditioningControlPanel.Services.JustDrop
     /// </summary>
     internal static class JustDropHostService
     {
-        /// <summary>The dashboard app. Bare cclabs.app is the marketing site and serves none of this.</summary>
-        public const string SiteHost = "app.cclabs.app";
-
-        private const string SiteOrigin = "https://" + SiteHost;
-
-        /// <summary>The shop: browse, order, wallet.</summary>
-        private const string ShopPath = "/dashboard/express";
-
-        /// <summary>The bare player. No sidebar, no header, nothing but the session - and no wallet
-        /// and no payout, which is why replaying from the shelf is free by construction.</summary>
-        private const string PlayerPath = "/express/play";
+        // Site, paths and the handoff url are Core's (JustDropHandoff), shared with the Avalonia head.
+        public const string SiteHost = JustDropHandoff.SiteHost;
+        private const string SiteOrigin = JustDropHandoff.SiteOrigin;
+        private const string ShopPath = JustDropHandoff.ShopPath;
 
         private static ChaosWebViewHost? _host;
         private static bool _disposing;
@@ -97,7 +90,7 @@ namespace ConditioningControlPanel.Services.JustDrop
                 App.Logger?.Warning("JustDropHost: replay asked for with no order code");
                 return;
             }
-            Launch($"{PlayerPath}?order={Uri.EscapeDataString(orderCode.Trim())}",
+            Launch(JustDropHandoff.ReplayPath(orderCode),
                    fullscreen: true, duckMain: true);
         }
 
@@ -163,18 +156,8 @@ namespace ConditioningControlPanel.Services.JustDrop
         /// asks who is calling exactly as it should - a signed-out user has nothing to hand over,
         /// and pretending otherwise would just be a broken redirect.
         /// </summary>
-        private static string BuildStartUrl(string nextPath)
-        {
-            var unifiedId = SafeUnifiedId();
-            if (string.IsNullOrEmpty(unifiedId) || string.IsNullOrEmpty(SafeAuthToken()))
-            {
-                App.Logger?.Information("JustDropHost: no account state; opening signed-out");
-                return SiteOrigin + nextPath;
-            }
-            return $"{SiteOrigin}/api/auth/desktop-session" +
-                   $"?unified_id={Uri.EscapeDataString(unifiedId)}" +
-                   $"&next={Uri.EscapeDataString(nextPath)}";
-        }
+        private static string BuildStartUrl(string nextPath) =>
+            JustDropHandoff.BuildStartUrl(nextPath, SafeUnifiedId(), SafeAuthToken());
 
         /// <summary>
         /// Put the CCP token on the sign-in request, and on nothing else. The filter is scoped to
@@ -187,18 +170,34 @@ namespace ConditioningControlPanel.Services.JustDrop
             if (string.IsNullOrEmpty(token)) return;
 
             core.AddWebResourceRequestedFilter(
-                SiteOrigin + "/api/auth/desktop-session*",
+                SiteOrigin + JustDropHandoff.HandoffPath + "*",
                 CoreWebView2WebResourceContext.Document);
 
             core.WebResourceRequested += (_, e) =>
             {
-                try { e.Request.Headers.SetHeader("X-CCP-Auth-Token", token); }
+                // The event fires for EVERY filter on this core (the Scrolller gate adds its own),
+                // so check the path here too or the token would ride along to other hosts.
+                if (!IsDesktopSessionRequest(e.Request.Uri)) return;
+                try { e.Request.Headers.SetHeader(JustDropHandoff.AuthHeaderName, token); }
                 catch (Exception ex)
                 {
                     // Never log the token itself - only that stamping it failed.
                     App.Logger?.Warning("JustDropHost: could not attach the auth header: {E}", ex.Message);
                 }
             };
+        }
+
+        /// <summary>The sign-in request and nothing else, judged on the PARSED url (scheme, host,
+        /// port, no user info, exact path; the query may vary), never a raw string prefix.</summary>
+        internal static bool IsDesktopSessionRequest(string? requestUri)
+        {
+            if (!Uri.TryCreate(requestUri, UriKind.Absolute, out var u)) return false;
+            if (!Uri.TryCreate(SiteOrigin, UriKind.Absolute, out var site)) return false;
+            return string.Equals(u.Scheme, site.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(u.Host, site.Host, StringComparison.OrdinalIgnoreCase)
+                && u.Port == site.Port
+                && u.UserInfo.Length == 0
+                && string.Equals(u.AbsolutePath.TrimEnd('/'), "/api/auth/desktop-session", StringComparison.Ordinal);
         }
 
         /// <summary>The ccp-server token the site's bridge endpoint validates. Empty when signed
