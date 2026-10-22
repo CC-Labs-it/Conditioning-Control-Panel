@@ -9,8 +9,8 @@
 // LockdownImageGlow are reached as LockdownImageBorder's own BorderBrush and Effect. A XAML attribute
 // brush is immutable, so the start swaps in a mutable SolidColorBrush and the stop puts the original back.
 //
-// NOTHING CALLS THE PULSE YET. On WPF it is started from the tab transition
-// (MainWindow.TabNavigation.cs:677); on this head that funnel is SwitchTabFx in MainShellWindow.AmbientFx.cs.
+// ShowTab stops it on every navigation and its "lockdown" case starts it, as WPF does
+// (MainWindow.TabNavigation.cs:306/677; MainShellWindow.TabNavigation.cs).
 //
 // Dropped, with the reason:
 //   StartSeasonTitleShimmer / StopSeasonTitleShimmer (WPF :35-83)

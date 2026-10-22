@@ -6,9 +6,15 @@
 // is real too, and runs inside ShowTab (MainShellWindow.AmbientFx.cs).
 //
 // What is NOT, on purpose, each named so it is not lost silently:
-//   - The transition choreography (AnimateTabIn, the Stop*Shimmer/Pulse/Motion calls).
-//   - Per-tab side effects on the way in (RefreshPresetsList, StopPolling on leaving Available Subjects,
-//     UpdatePatreonUI, RefreshIntakePassTile, RefreshDashboardRail - its favorites half is restored). Those reach App.* or a service.
+//   - The transition choreography is REAL in part (AnimateTabIn's crossfade, the first-visit door
+//     pulse: MainShellWindow.TabTransitions.cs); the slide, stagger and outgoing fade are not - see that file.
+//     Of WPF's Stop* calls, StopLockdownPulse runs here; the season shimmer, skill-tree air and
+//     vault motion park themselves with their tab's IsVisible (QuestsTabView.Fx, AmbientFxCanvas, BeatLoop).
+//   - UpdatePatreonUI on bambitakeover/studio/haptics/ramp: its tab half is RefreshEntitlementVeils,
+//     which OnTabShown runs on every navigation; the account half lives in AccountSettingsSection.
+//   - Per-tab side effects on the way in (StopPolling on leaving Available Subjects,
+//     RefreshIntakePassTile, RefreshDashboardRail - its favorites half is restored). Those reach App.* or a service.
+//     (WPF BtnPresets_Click's RefreshPresetsList is dead in WPF: no XAML names the handler.)
 //     The FIVE that do not are restored in OnTabShown below:
 //       * StudioTab.OnTabShown() for "studio" and StudioTab.FocusRackEntry("haptics") for the
 //         haptics alias - ported view state on StudioTabView. Without the second, ShowTab("haptics")
@@ -167,11 +173,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Window launchers have already returned. Real tabs keep their legacy bark aliases.
             CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
 
+            // WPF :306: the Lockdown plate's breath stops on every navigation; its case restarts it.
+            StopLockdownPulse();
+
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
+            // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
+            AnimateTabIn(this.FindControl<Control>(target));
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;
@@ -229,7 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "companionai":
                         Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(Named<Tabs.CompanionTabView>("CompanionTab")?.Room);
                         break;
-                    case "lockdown": MaybeShowFeatureIntro("lockdown"); break;
+                    case "lockdown": StartLockdownPulse(); MaybeShowFeatureIntro("lockdown"); break; // WPF :677
                     case "blinktrainer":
                         // WPF refreshes on every ShowTab. Coming from another tab the view's own
                         // IsVisible hook already did; only a re-visit of the visible page needs it.
@@ -278,11 +289,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     // WPF MainWindow.TabNavigation.cs:324-337: spend the tab's seen-flag on any
                     // route in, then the one-time explainer on top of the tab just shown.
-                    // ponytail: no rail pulse to stop on this head (StopProgramsTabPulse).
                     case "programs":
                         if (!CoreSettings.Current.HasSeenProgramsTab)
                         {
                             CoreSettings.Current.HasSeenProgramsTab = true;
+                            StopNavDoorHeaderPulse("programs"); // WPF :453 StopProgramsTabPulse
                             CoreSettings.Save();
                         }
                         ProgramsIntroPopup.ShowIfFirstTime(this);

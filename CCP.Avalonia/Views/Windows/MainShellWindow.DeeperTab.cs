@@ -72,8 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>
         /// The rail's Deeper entry. Navigates, then retires the "you have not opened this yet"
-        /// pulse flag exactly where WPF does - on the first open, not on install - so the rail
-        /// stops nagging even though the pulse animation itself is not on this head.
+        /// pulse flag and stops the Play row's pulse exactly where WPF does - on the first open,
+        /// not on install (MainShellWindow.TabTransitions.cs).
         /// </summary>
         private void BtnDeeper_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!s.HasSeenDeeperTab)
             {
                 s.HasSeenDeeperTab = true;
+                StopNavDoorHeaderPulse("deeper"); // WPF DeeperTab.cs:45 StopDeeperTabPulse
                 CoreSettings.Save();
             }
 
