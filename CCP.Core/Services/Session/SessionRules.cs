@@ -5,9 +5,9 @@ using Serilog;
 
 namespace ConditioningControlPanel.Services
 {
-    // Pure pieces of the WPF SessionEngine (ConditioningControlPanel/Services/Session/SessionEngine.cs),
-    // ported rather than moved: the engine is pinned to the head by MainWindow/DispatcherTimer/App.*,
-    // and WPF is frozen, so this duplication is deliberate (docs/avalonia-decisions.md).
+    // Pure pieces of the WPF SessionEngine (ConditioningControlPanel/Services/Session/SessionEngine.cs).
+    // The engine stays on the WPF head (MainWindow/DispatcherTimer/App.*); these rules are the one
+    // copy both heads run - SessionEngine calls them (session-core-a).
 
     /// <summary>SessionEngine.ElapsedTime (SessionEngine.cs:103-127), minus the running/paused guards
     /// the runner owns.</summary>
@@ -81,10 +81,14 @@ namespace ConditioningControlPanel.Services
 
         public bool IsPending(string name) => _pending.Exists(p => p.Name == name);
 
+        /// <summary>The features still waiting, in queue order (one per deferral; WPF read the list itself).</summary>
+        public IEnumerable<string> PendingNames => _pending.ConvertAll(p => p.Name);
+
         public void Clear() => _pending.Clear();
 
-        /// <summary>Starts every entry whose minute has arrived. Reverse order, as WPF: firing removes in place.</summary>
-        public void FireDue(double elapsedMinutes)
+        /// <summary>Starts every entry whose minute has arrived. Reverse order, as WPF: firing removes in place.
+        /// <paramref name="started"/> runs after each successful start (WPF's EMI "sessionFeatureArrived").</summary>
+        public void FireDue(double elapsedMinutes, Action<string, int>? started = null)
         {
             for (int i = _pending.Count - 1; i >= 0; i--)
             {
@@ -96,6 +100,7 @@ namespace ConditioningControlPanel.Services
                     pending.Start();
                     Log.Information("Session: {Feature} started at {Minutes:F1} minutes (target was {Target})",
                         pending.Name, elapsedMinutes, pending.StartMinute);
+                    started?.Invoke(pending.Name, pending.StartMinute);
                 }
                 catch (Exception ex)
                 {

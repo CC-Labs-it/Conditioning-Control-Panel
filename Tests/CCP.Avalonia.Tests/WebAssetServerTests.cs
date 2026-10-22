@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -22,6 +23,44 @@ public class WebAssetServerTests
 
     static HttpClient Client(bool cookies = true) =>
         new(new HttpClientHandler { UseCookies = cookies, CookieContainer = new CookieContainer() });
+
+    /// <summary>The For You feed seeks a clip window inside each video (fyp/surfaces.js): a media element asks for a
+    /// byte range and must get only that slice (206), never the whole file.</summary>
+    [Fact]
+    public async Task ServesOneByteRange_AsWebView2DoesForSeekingMedia()
+    {
+        using var s = Make().server;
+        using var http = Client();
+        async Task<HttpResponseMessage> Get(string? range, string method = "GET")
+        {
+            var req = new HttpRequestMessage(new HttpMethod(method), s.Url("game/index.html"));
+            if (range != null) req.Headers.TryAddWithoutValidation("Range", range);
+            return await http.SendAsync(req);
+        }
+        var mid = await Get("bytes=3-6");                  // "<p>hi</p>" -> "hi</"
+        Assert.Equal(HttpStatusCode.PartialContent, mid.StatusCode);
+        Assert.Equal("hi</", await mid.Content.ReadAsStringAsync());
+        Assert.Equal("bytes 3-6/9", mid.Content.Headers.ContentRange!.ToString());
+        Assert.Equal("p>", await (await Get("bytes=-2")).Content.ReadAsStringAsync());
+        Assert.Equal("</p>", await (await Get("bytes=5-")).Content.ReadAsStringAsync());
+        var past = await Get("bytes=50-");
+        Assert.Equal(HttpStatusCode.RequestedRangeNotSatisfiable, past.StatusCode);
+        Assert.Equal("bytes */9", past.Content.Headers.GetValues("Content-Range").Single());
+        Assert.Equal(HttpStatusCode.RequestedRangeNotSatisfiable, (await Get("bytes=-0")).StatusCode);   // RFC 7233 2.1
+        // A backward range and a multi-range request are ignored: the whole file, 200.
+        foreach (var ignored in new[] { "bytes=6-3", "bytes=0-1,3-4" })
+        {
+            var r = await Get(ignored);
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            Assert.Equal("<p>hi</p>", await r.Content.ReadAsStringAsync());
+        }
+        var head = await Get("bytes=3-6", "HEAD");
+        Assert.Equal(HttpStatusCode.PartialContent, head.StatusCode);
+        Assert.Equal(4, head.Content.Headers.ContentLength);
+        var whole = await Get(null);
+        Assert.Equal(HttpStatusCode.OK, whole.StatusCode);
+        Assert.Equal("bytes", Assert.Single(whole.Headers.AcceptRanges));
+    }
 
     [Fact]
     public async Task ServesWithToken_AndCookieCarriesLaterLoads()

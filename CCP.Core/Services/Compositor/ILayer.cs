@@ -3,7 +3,7 @@ using SkiaSharp;
 namespace ConditioningControlPanel.Services.Compositor;
 
 /// <summary>
-/// A z-ordered visual layer rendered by the head's compositor engine (WPF <c>CompositorEngine</c>) into the shared
+/// A z-ordered visual layer rendered by the WPF head's <c>CompositorEngine</c> into the shared
 /// per-monitor overlay host, replacing a dedicated per-effect window.
 /// Contract mirrors the Avalonia port's ILayer/IAvaloniaLayer seam (same member names and
 /// semantics) so layer implementations stay portable between the two heads.
@@ -21,6 +21,20 @@ public interface IWpfLayer
     /// runs the render tick based on this; an inactive layer costs nothing.
     /// </summary>
     bool IsActive { get; }
+
+    /// <summary>
+    /// True while the engine must still draw this layer. Same as <see cref="IsActive"/> except
+    /// while gentle visuals fade a hidden layer away: services already see it as gone, the
+    /// engine keeps drawing it until its <see cref="VisibilityAlpha"/> reaches 0.
+    /// </summary>
+    bool IsRendering => IsActive;
+
+    /// <summary>Gentle visuals fade, 0..1, applied over the whole layer. Always 1 when off.</summary>
+    double VisibilityAlpha => 1.0;
+
+    /// <summary>Advance the gentle visuals fade one tick. True when the alpha moved (repaint).
+    /// Called by the engine every tick, before it reads <see cref="IsRendering"/>.</summary>
+    bool AdvanceVisibility(TimeSpan delta) => false;
 
     /// <summary>
     /// True routes this layer to the capture-EXCLUDED surface (WDA_EXCLUDEFROMCAPTURE), used by

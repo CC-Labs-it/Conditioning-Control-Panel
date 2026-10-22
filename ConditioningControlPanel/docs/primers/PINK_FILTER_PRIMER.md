@@ -66,7 +66,7 @@ Compositor != null`, `App.xaml.cs:307`). Every show method (`StartPinkFilter` `:
 | Type | `Compositor.PinkTintLayer` on the shared Skia host | one `Border` in a `WS_EX_LAYERED` topmost `Window` **per screen** (`_pinkFilterWindows`) |
 | Created | lazily via `GetPinkLayer()` (`:118`, registers with `App.Compositor`) | `CreatePinkFilterForScreen` (`:1004`) per `App.GetAllScreensCached()` (or primary only) |
 | Draws | `canvas.DrawRect` with `SKColor(r,g,b, opacity*255)` (`PinkTintLayer.cs:48`) | `SolidColorBrush(Color.FromArgb(opacity*255, r,g,b))` on a `Border` |
-| Multi-monitor | one host per screen; `ShouldRenderOnScreen => App.ShouldRenderTargetOnScreen(...)` (`PinkTintLayer.cs:24`, honors `DualMonitorEnabled`) | one window per screen; `DualMonitorEnabled ? all : primary` |
+| Multi-monitor | one host per screen; `ShouldRenderOnScreen => ShouldRenderTargetOnScreen(PinkFilterTargetMonitor, ...)` (`CCP.Core/Services/Compositor/PinkTintLayer.cs:26`; the head seeds `BaseLayer.ScreenTargetGate` with `App.ShouldRenderTargetOnScreen`) | one window per screen; `DualMonitorEnabled ? all : primary` |
 | Repaint | **dirty-gated** — only repaints when color/opacity changes (#550) | live — mutating `brush.Color` re-renders |
 | Click-through | host is click-through | `WS_EX_TOOLWINDOW\|NOACTIVATE\|TRANSPARENT\|LAYERED` (`:1049`) |
 | Positioning | host owns it | `SetWindowPos` in **physical px** on `SourceInitialized` (`PositionWindowOnScreen`) — bypasses WPF DPI virtualization on mixed-DPI (#457); `HookBoundsRestore` re-pins on move |
