@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text;
@@ -17,21 +19,30 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal sealed class SingleInstance : IDisposable
     {
         public const string MutexName = "ConditioningControlPanel_SingleInstance_Mutex";
-        const int ShowAckTimeoutMs = 10000;                          // WPF App.xaml.cs:68
+        internal static int ShowAckTimeoutMs = 10000;                // WPF App.xaml.cs:68; tests shorten it
+        /// <summary>WPF KillStaleInstances (App.xaml.cs:4058); tests swap it so nothing real is killed.</summary>
+        internal static Func<int> KillStale = KillStaleInstances;
         static readonly TimeSpan LegacyTakeoverWait = TimeSpan.FromSeconds(8);   // WPF App.xaml.cs:1862
         static readonly TimeSpan StaleTakeoverWait = TimeSpan.FromSeconds(3);    // WPF App.xaml.cs:1914
 
         readonly Mutex _mutex;
         readonly bool _owned;
         readonly CancellationTokenSource _cts = new();
+        volatile bool _startupPhase = true;
 
         SingleInstance(Mutex mutex, bool owned, string pipe, Func<string?, Task> show)
         {
             _mutex = mutex;
             _owned = owned;
             // Only the mutex owner answers; an unowned run (wedged primary) would fight it for the pipe.
-            if (owned) _ = Task.Run(() => ListenAsync(pipe, show, _cts.Token));
+            if (owned) _ = Task.Run(() => ListenAsync(pipe, show, () => _startupPhase, _cts.Token));
         }
+
+        /// <summary>WPF App.xaml.cs:3976-3978: called on the first dispatcher pump. Until then the listener acks
+        /// before the show runs (WPF 2133-2142), so a relaunch during a slow cold start does not kill a healthy
+        /// primary whose UI thread is not pumping yet; afterwards the ack waits for the show, so a wedged
+        /// dispatcher reads as wedged again.</summary>
+        public void EndStartupPhase() => _startupPhase = false;
 
         /// <summary>A sandboxed profile (CCP_USERDATA_DIR) is a different instance, so kc and tests never
         /// wake or block the user's real app. A shipped build never sets it and holds WPF's exact name.</summary>
@@ -51,13 +62,90 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 bool? acked = RequestShow(pipe, payload);
                 if (acked == true) { mutex.Dispose(); return null; }
                 // No listener: a primary still exiting mid-update (#466) - wait for it, else exit (WPF 1861-1870).
-                // Listener but no ack: wedged primary. ponytail: WPF also kills it (KillStaleInstances);
-                // here this launch runs without the mutex after the short wait, as WPF does when the kill fails.
+                // Listener but no ack: wedged primary. Kill it and take over (WPF 2104); the kill fails closed,
+                // so when it ends nothing this launch still runs without the mutex after the short wait (WPF 2097-2101).
+                if (acked == false)
+                {
+                    int killed = 0;
+                    try { killed = KillStale(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[LIFECYCLE] Takeover failed"); }
+                    Serilog.Log.Warning("[LIFECYCLE] Recovered from a stale instance that did not acknowledge the show request; killed {Killed}", killed);
+                }
                 try { owned = mutex.WaitOne(acked == null ? LegacyTakeoverWait : StaleTakeoverWait); }
                 catch (AbandonedMutexException) { owned = true; }
                 if (!owned && acked == null) { mutex.Dispose(); return null; }
             }
             return new SingleInstance(mutex, owned, pipe, show);
+        }
+
+        static StringComparison PathCmp => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        /// <summary>Only the app's own executable may kill: under `dotnet x.dll` or a testhost the same path is
+        /// shared by unrelated processes (other apps, parallel test shards), so the takeover aborts.</summary>
+        internal static bool IsAppExecutable(string? selfPath)
+        {
+            if (string.IsNullOrWhiteSpace(selfPath)) return false;
+            var name = Path.GetFileName(selfPath.Trim());   // not GetFileNameWithoutExtension: "CCP.Avalonia" -> "CCP"
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+            return string.Equals(name, typeof(SingleInstance).Assembly.GetName().Name, PathCmp);
+        }
+
+        /// <summary>WPF's fail-closed match (App.xaml.cs:4041-4057): kill only a process whose image path is
+        /// readable AND equals ours; an unreadable path is never a target.</summary>
+        internal static bool IsSameBuild(string? selfPath, string? otherPath) =>
+            Normalize(selfPath) is { } s && Normalize(otherPath) is { } o && string.Equals(s, o, PathCmp);
+
+        static string? Normalize(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            try { return Path.GetFullPath(path.Trim()); } catch { return path.Trim(); }
+        }
+
+        // Linux answers from the kernel (/proc/<pid>/exe), like WPF's QueryFullProcessImageName; MainModule second.
+        static string? ImagePath(Process proc)
+        {
+            try { if (OperatingSystem.IsLinux() && new FileInfo($"/proc/{proc.Id}/exe").LinkTarget is { } t) return t; }
+            catch (Exception) { }
+            try { return proc.MainModule?.FileName; } catch { return null; }
+        }
+
+        /// <summary>WPF App.xaml.cs:4058-4113: terminate every OTHER process running our exact executable;
+        /// returns how many were actually terminated. Each verdict is logged.</summary>
+        static int KillStaleInstances()
+        {
+            int killed = 0;
+            try
+            {
+                string? self = Normalize(Environment.ProcessPath);
+                if (!IsAppExecutable(self))
+                {
+                    Serilog.Log.Warning("[LIFECYCLE] Takeover aborted: we run {Self}, not the app executable, so no other process can be confirmed to be this build", self);
+                    return 0;
+                }
+                using var me = Process.GetCurrentProcess();
+                foreach (var proc in Process.GetProcessesByName(me.ProcessName))
+                {
+                    int id = -1;
+                    try
+                    {
+                        id = proc.Id;
+                        if (id == Environment.ProcessId) continue;
+                        var other = ImagePath(proc);
+                        if (!IsSameBuild(self, other))
+                        {
+                            Serilog.Log.Warning("[LIFECYCLE] Takeover skipped pid {Pid}: it runs {Other}, we run {Self}", id, other ?? "(unreadable)", self);
+                            continue;
+                        }
+                        proc.Kill();
+                        proc.WaitForExit(5000);
+                        killed++;
+                        Serilog.Log.Warning("[LIFECYCLE] Takeover killed pid {Pid} ({Path}) after it failed to acknowledge the show request", id, other);
+                    }
+                    catch (Exception ex) { Serilog.Log.Warning("[LIFECYCLE] Takeover could not act on pid {Pid}: {Error}", id, ex.Message); }
+                    finally { proc.Dispose(); }
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Warning("[LIFECYCLE] Takeover could not enumerate processes: {Error}", ex.Message); }
+            return killed;
         }
 
         /// <summary>true = acked, false = connected but no ack in time, null = nobody listening.</summary>
@@ -82,7 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show request failed"); return null; }
         }
 
-        static async Task ListenAsync(string pipe, Func<string?, Task> show, CancellationToken ct)
+        static async Task ListenAsync(string pipe, Func<string?, Task> show, Func<bool> startupPhase, CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
             {
@@ -96,6 +184,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     var body = new byte[len[0]];
                     await s.ReadExactlyAsync(body, ct);
                     string? payload = body.Length == 0 ? null : Encoding.UTF8.GetString(body);
+                    if (startupPhase())
+                    {
+                        // Starting, not wedged: ack now and let the show run when the dispatcher pumps.
+                        await s.WriteAsync(new byte[] { 1 }, ct);
+                        await s.FlushAsync(ct);
+                        _ = Task.Run(() => show(payload)).ContinueWith(
+                            t => Serilog.Log.Warning(t.Exception, "Single-instance show failed"),
+                            TaskContinuationOptions.OnlyOnFaulted);
+                        continue;
+                    }
                     // Ack even when showing fails: WPF acks after the attempt (App.xaml.cs:1985), and a
                     // missing ack reads as "wedged" to the second launch.
                     try { await show(payload); } catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show failed"); }
