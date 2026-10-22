@@ -2397,3 +2397,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/panic-key-sweep: +185
 - Panic key matched by Key value (alias-aware, Enter/Return) on MandatoryVideoOverlay, BubbleCount game/result, FirstShowStage via one helper `Platform/HotkeyNames`.
 - Panic bound to Enter now beats the focused control; headless tests fail-proven.
+
+## avalonia-port/chaos-fx-window: +498
+- Chaos FX window (vignette, edge glow, heat tint) ported with Core envelope maths; heat tint wired into ChaosRunHost; run-end close tested (fail-proven).
+- Row chaos-fx-window: missing -> stub (no user path to StartRun yet).
