@@ -39,6 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal Func<Window?, string, string, Task<bool>> AskStreakFix = (owner, title, message) =>
             owner == null ? Task.FromResult(false) : Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: "Yes", cancelText: "No");
 
+        /// <summary>Test seam: the calendar's "today" (the 1st of a month has no missed day).</summary>
+        internal Func<DateTime> Today = () => DateTime.Today;
+
         internal bool IsStreakFixMode => _isStreakFixMode;
         internal IReadOnlyList<Control> StreakFixRings => _fixRings;
 
@@ -109,13 +112,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var ring in _fixRings) ring.Opacity = opacity;
         }
 
-        private void ShowFixStatus(string text, IBrush? colour = null)
+        private void ShowFixStatus(string text, IBrush? colour = null, IconKind? kind = null)
         {
             _fixStatusTimer?.Dispose();
             _fixStatusTimer = null;
+            TxtFixStreakStatus.Kind = kind;
             TxtFixStreakStatus.Text = text;
             if (colour != null) TxtFixStreakStatus.SetValue(TextElement.ForegroundProperty, colour);
             TxtFixStreakStatus.IsVisible = true;
+        }
+
+        /// <summary>A loc line with a leading icon: the IconLabel splits it, so the emoji draws as a Fluent glyph.</summary>
+        private void ShowFixStatusKey(string key, IBrush colour, params object[] args)
+        {
+            ShowFixStatus("", colour);
+            TxtFixStreakStatus.Text = null;
+            TxtFixStreakStatus.Args = args.Length > 0 ? args : null;
+            TxtFixStreakStatus.Key = key;
         }
 
         /// <summary>Back to the accent colour the XAML gives the line.</summary>
@@ -127,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_isStreakFixMode) { ExitStreakFixMode(); return; }
             var s = CoreSettings.Current;
             if (s.StreakFixCharges < 1) { ShowFixStatus(Loc.Get("label_no_streak_fixes_left")); return; }
-            if (!StreakFix.HasMissedDays(App.Quests?.Progress, DateTime.Today))
+            if (!StreakFix.HasMissedDays(App.Quests?.Progress, Today()))
             {
                 ShowFixStatus(Loc.Get("label_no_broken_streak_you_re_doing_great_sweetie"));
                 return;
@@ -165,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 if (string.IsNullOrEmpty(s.UnifiedId))
                 {
-                    ShowFixStatus(Loc.Get("label_oopsie_insurance_requires_a_cloud_account_ple"), FixRed);
+                    ShowFixStatusKey("label_oopsie_insurance_requires_a_cloud_account_ple", FixRed);
                     return;
                 }
 
@@ -173,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var (success, error, credits) = await SpendStreakFix(fixDate);
                 if (!success)
                 {
-                    ShowFixStatus($"❌ {error ?? Loc.Get("label_streak_fix_failed")}", FixRed);
+                    ShowFixStatus(error ?? Loc.Get("label_streak_fix_failed"), FixRed, IconKind.DismissCircle);
                     return;
                 }
 
@@ -186,7 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (stillFixing)
                 {
                     _isStreakFixMode = false;
-                    ShowFixStatus(Loc.GetF("label_streak_fixed_success", fixDate.ToString("MMMM d")), FixGreen);
+                    ShowFixStatusKey("label_streak_fixed_success", FixGreen, fixDate.ToString("MMMM d"));
                 }
                 RefreshQuestUI();   // the stats tile and the button caption, not just the calendar
                 if (!stillFixing) return;

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Skia;
@@ -48,7 +49,8 @@ public sealed class QuestsStreakFixTests
                     .SetupWithoutStarting();
             LocalizationManager.Instance.SetLanguage("en");
 
-            var today = DateTime.Today;
+            // A fixed mid-month "today", so the run does not depend on the calendar (the 1st has no missed day).
+            var today = new DateTime(2026, 3, 15);
             s.UnifiedId = null;
             s.StreakFixCharges = 2;
             s.StreakShieldUsedDates?.Clear();
@@ -60,7 +62,7 @@ public sealed class QuestsStreakFixTests
             var defs = new QuestDefinitionService(Path.Combine(dir, "defs"));
             AvApp.QuestDefinitions = defs;
 
-            var tab = new QuestsTabView();
+            var tab = new QuestsTabView { Today = () => new DateTime(2026, 3, 1) };
             host = new Window { Width = 1200, Height = 900, Content = tab };
             host.Show();
             Dispatcher.UIThread.RunJobs();
@@ -83,13 +85,12 @@ public sealed class QuestsStreakFixTests
 
             s.UnifiedId = "u_k2";
             tab.RefreshQuestUI();
-            if (today.Day == 1)
-            {
-                // The first of the month has no missed day to fix.
-                Assert.False(button.IsEnabled);
-                Assert.Equal(Loc.Get("tooltip_no_missed_days_your_streak_is_perfect"), ToolTip.GetTip(button));
-                return;
-            }
+            // The first of the month has no missed day to fix.
+            Assert.False(button.IsEnabled);
+            Assert.Equal(Loc.Get("tooltip_no_missed_days_your_streak_is_perfect"), ToolTip.GetTip(button));
+
+            tab.Today = () => today;
+            tab.RefreshQuestUI();
             Assert.True(button.IsEnabled);
             Assert.Equal(Loc.GetF("tooltip_use_streak_fix", 2), ToolTip.GetTip(button));
 
@@ -103,7 +104,9 @@ public sealed class QuestsStreakFixTests
             Assert.True(status.IsVisible);
             // The rings pulse 1.0 -> 0.3 over 600 ms (clamped), on the tab's ambient beat.
             tab.StepFixPulse(0.6);
-            Assert.InRange(tab.StreakFixRings[0].Opacity, 0.0, 1.0);
+            Assert.Equal(0.3, tab.StreakFixRings[0].Opacity, 3);
+            tab.StepFixPulse(1.2);
+            Assert.Equal(1.0, tab.StreakFixRings[0].Opacity, 3);
 
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
@@ -115,11 +118,20 @@ public sealed class QuestsStreakFixTests
             var spent = new List<DateTime>();
             bool answer = false;
             (bool, string?, int?) reply = (false, "Server says no", null);
-            tab.AskStreakFix = (_, _, _) => Task.FromResult(answer);
             tab.SpendStreakFix = day => { spent.Add(day); return Task.FromResult(reply); };
             var missed = today.AddDays(-1);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await tab.FixDayAsync(missed);
+            Dispatcher.UIThread.RunJobs();
+            // The user's way in: a left press on the ring over the missed day (its PointerPressed).
+            var asked = new List<string>();
+            tab.AskStreakFix = (_, _, message) => { asked.Add(message); return Task.FromResult(answer); };
+            var ring = Assert.Single(tab.StreakFixRings, r => (DateTime)r.Tag! == missed);
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            host.MouseDown(ring.TranslatePoint(new Point(ring.Bounds.Width / 2, ring.Bounds.Height / 2), host)!.Value, MouseButton.Left);
+            host.MouseUp(ring.TranslatePoint(new Point(ring.Bounds.Width / 2, ring.Bounds.Height / 2), host)!.Value, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { Loc.GetF("label_fix_day_confirm_body", missed.ToString("MMMM d"), 2) }, asked);
             Assert.Empty(spent);
             Assert.Equal(2, s.StreakFixCharges);
 
