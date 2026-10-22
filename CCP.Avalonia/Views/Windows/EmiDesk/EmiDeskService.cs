@@ -157,6 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 if (_window != null) return _window;
                 var win = new EmiDeskWindow();
+                if (Clock != TimeProvider.System) win.FxClock = Clock;
                 win.Closed += (_, _) =>
                 {
                     if (!ReferenceEquals(_window, win)) return;

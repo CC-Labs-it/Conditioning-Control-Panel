@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
@@ -11,7 +12,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 internal sealed partial class EmiDeskService
 {
     private readonly EmiNudgeMachine _nudges = new();
-    private DispatcherTimer? _pinNudgeTimer;
+    private ITimer? _pinNudgeTimer;
+    private int _pinNudgeGen;
+    /// <summary>Clock for the 900 ms pin-nudge delay and, when not the system clock, the desk's summon
+    /// FX steps; tests step it instead of sleeping (P08).</summary>
+    internal TimeProvider Clock { get; set; } = TimeProvider.System;
     internal EmiLineEngine LineEngine { get; set; } = EmiLineEngine.Instance;
     public event EventHandler<EmiMoment>? MomentFired;
 
@@ -52,14 +57,15 @@ internal sealed partial class EmiDeskService
         EmiState.NoteRingOpen();
         var track = _nudges.OnRingOpened(new RingNudgeWorld(this));
         if (track == null) return;
-        _pinNudgeTimer?.Stop();
-        _pinNudgeTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(900) };
-        _pinNudgeTimer.Tick += (_, _) =>
+        _pinNudgeTimer?.Dispose();
+        int gen = ++_pinNudgeGen;
+        _pinNudgeTimer = Clock.CreateTimer(_ => Dispatcher.UIThread.Post(() =>
         {
-            _pinNudgeTimer?.Stop();
+            if (gen != _pinNudgeGen) return; // cancelled or superseded after the tick was queued
+            _pinNudgeTimer?.Dispose();
+            _pinNudgeTimer = null;
             SpeakPinNudge(track);
-        };
-        _pinNudgeTimer.Start();
+        }, DispatcherPriority.Background), null, TimeSpan.FromMilliseconds(900), Timeout.InfiniteTimeSpan);
     }
 
     private void SpeakPinNudge(string track)
@@ -82,7 +88,8 @@ internal sealed partial class EmiDeskService
 
     private void StopRingNudges()
     {
-        _pinNudgeTimer?.Stop();
+        _pinNudgeGen++;
+        _pinNudgeTimer?.Dispose();
         _pinNudgeTimer = null;
         _nudges.NoteDismiss();
     }

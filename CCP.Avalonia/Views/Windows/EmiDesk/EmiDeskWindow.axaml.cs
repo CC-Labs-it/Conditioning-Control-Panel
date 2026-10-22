@@ -2506,11 +2506,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <c>Application.Current.Dispatcher.HasShutdownStarted</c>, and <c>_closingForGood</c> is
         /// this head's twin of it - ShutDown and the Closed handler both set it.
         /// </summary>
+        /// <summary>Test seam (P08): when set, <see cref="After"/> waits on this clock instead of a DispatcherTimer.</summary>
+        internal TimeProvider? FxClock { get; set; }
+
         private void After(int ms, Action act)
         {
             try
             {
-                DispatcherTimer.RunOnce(() =>
+                void Step()
                 {
                     try
                     {
@@ -2521,7 +2524,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     {
                         Log.Debug(ex, "[EmiDesk] deferred FX step failed");
                     }
-                }, TimeSpan.FromMilliseconds(Math.Max(1, ms)), DispatcherPriority.Background);
+                }
+                var due = TimeSpan.FromMilliseconds(Math.Max(1, ms));
+                if (FxClock is { } clock)
+                    clock.CreateTimer(_ => Dispatcher.UIThread.Post(Step, DispatcherPriority.Background), null, due, System.Threading.Timeout.InfiniteTimeSpan);
+                else
+                    DispatcherTimer.RunOnce(Step, due, DispatcherPriority.Background);
             }
             catch (Exception ex)
             {

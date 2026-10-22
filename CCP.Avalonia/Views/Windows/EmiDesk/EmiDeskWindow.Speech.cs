@@ -67,6 +67,17 @@ public partial class EmiDeskWindow
         _speechTimer.Start();
     }
 
+    /// <summary>Test seam (P08): run the next say-frame now instead of waiting on its timer.</summary>
+    internal void StepSpeech() { if (_speechIndex < _speechFrames.Count) AdvanceSpeech(null, EventArgs.Empty); }
+
+    /// <summary>The hold's end: back to rest and the idle beats. Test seam (P08) when called directly.</summary>
+    internal void EndHold()
+    {
+        if (_holdTimer == null) return;
+        _holdTimer.Stop(); _holdTimer = null;
+        DrawFace(RestFace); RestartIdleBeats();
+    }
+
     private void CancelSpeech()
     {
         _speechTimer?.Stop();
@@ -88,7 +99,7 @@ public partial class EmiDeskWindow
             DrawFace(string.IsNullOrEmpty(line.Face) ? "-_-" : line.Face);
             engine.Ack(line.Id, spoke: false);
             _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(line.HoldMs > 0 ? line.HoldMs : 1400) };
-            _holdTimer.Tick += (_, _) => { _holdTimer?.Stop(); _holdTimer = null; DrawFace(RestFace); RestartIdleBeats(); };
+            _holdTimer.Tick += (_, _) => EndHold();
             _holdTimer.Start();
             return false;
         }
