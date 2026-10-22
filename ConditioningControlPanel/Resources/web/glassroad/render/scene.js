@@ -8,6 +8,10 @@
  * sprite particles for every kart plus world bursts from bus events (bumps, pickup pops, item boxes,
  * landings), boost ribbons and ground rings (render/wakes.js), ambient motes (render/motes.js), the
  * road sheen and the SCREENFX lane's item visuals (render/items/visuals.js).
+ * Polish 3: the full-spectrum palette is driven by the player's speed (pal.drive), the Loom spiral gates
+ * (render/spirals3d.js, tracks/<id>.spirals.json) and the media slots with their placeholders
+ * (render/media.js, tracks/<id>.media.json). Each is optional: a module or layout that fails to load
+ * leaves the race running without it.
  */
 import {
   Scene, Group, Mesh, InstancedMesh, Object3D, BufferGeometry, BufferAttribute, Float32BufferAttribute, Color, Vector2,
@@ -40,6 +44,12 @@ import { racerLabels } from '../hud/format.js';
 const FWD = new Vector3();
 // the SCREENFX lane's item visuals; missing or broken, the race runs without them
 const itemsMod = await import('./items/visuals.js').catch((e) => { console.warn('[glassroad/world] no item visuals: ' + (e && e.message)); return null; });
+// polish 3 layers, loaded the same way: missing or broken, the race runs without them
+const spiralsMod = await import('./spirals3d.js').catch((e) => { console.warn('[glassroad/world] no spiral gates: ' + (e && e.message)); return null; });
+const mediaMod = await import('./media.js').catch((e) => { console.warn('[glassroad/world] no media slots: ' + (e && e.message)); return null; });
+// Threshold is the only track: its gate layout loads with the module so buildWorld stays synchronous
+const SPIRAL_LAYOUTS = new Map();
+if (spiralsMod && globalThis.location) SPIRAL_LAYOUTS.set('threshold', await spiralsMod.fetchSpiralLayout('threshold'));
 
 /** Track MeshData -> Mesh, or null when the data is empty. */
 export function meshFrom(d, material) {
@@ -102,7 +112,7 @@ function props(track) {
  * Polish 2 opts: renderer (createRenderer's wrapper: the shadow map and its tier hook), shadowsOn (the
  * Shadows option), photosafe (fx/photosafe.js, the impact glows ask it). Returns { ..., shadows, colossi }.
  */
-export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null } = {}) {
+export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id) } = {}) {
   const scene = new Scene();
   const pal = createPalette();
   const owned = [], offs = [];
@@ -153,7 +163,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   ringMesh.position.y = 0.03; kart.add(ringMesh);
   const tendril = createGlowMaterial(LOOK.tendrilColour);
   const tendrilMesh = add(new Mesh(new CylinderGeometry(0.15, 0.6, 1, 12, 1, true).translate(0, 0.5, 0), tendril.material));
-  const particles = createParticles(feel), lines = createSpeedLines(), wakes = createWakes(feel, count), motes = createMotes(pal, seed);
+  const particles = createParticles(feel, art), lines = createSpeedLines(feel), wakes = createWakes(feel, count), motes = createMotes(pal, seed);
   add(particles.object); add(lines.object); add(motes.object);
   for (const o of wakes.objects) add(o);
   // reactions (REACT lane): bumps, walls, the countdown glance, finishes and the head sprays
@@ -167,6 +177,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     } catch (e) { console.warn('[glassroad/world] shadows failed: ' + (e && e.message)); }
     if (shadows && renderer.onTier) offs.push(renderer.onTier(() => shadows.retier()));
   }
+  // polish 3: the Loom spiral gates across the road and the media slots (placeholders only)
+  let spirals = null, media = null;
+  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: spiralLayout, photosafe, feel }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
+  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
+  const kartPos = [];
   let itemVis = null;
   try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
 
@@ -240,6 +255,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     lastT = view.timeS;
     const gentle = !!feel.get('gentle.on');
     const scroll = gentle ? feel.get('gentle.scrollMul') : 1, contrast = gentle ? feel.get('gentle.contrastMul') : 1;
+    // the road and rail patterns stream toward the player at a speed from the kart (spectrum.js flowMps)
+    pal.drive({ speedMps: Math.max(0, k[S.speedPct] || 0) * feel.get('speed.topMps'), gentle });
 
     // karts: pose every racer, hide the unused slots; distance to the player picks rival LOD and tags
     const topMps = feel.get('speed.topMps');
@@ -307,6 +324,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     rails.uniforms.flow.value = road.uniforms.phase.value;
     if (shadows && view.camera) { view.camera.layers.enable(CATCH_LAYER); view.camera.getWorldDirection(FWD); shadows.update(view.camera.position, FWD); }
 
+    if (view.camera) {
+      kartPos.length = 0;
+      for (const o of kartObjs) if (o.visible) kartPos.push(o.position);
+      if (spirals) spirals.update(dt, { camera: view.camera, karts: kartPos, player: 0, gentle });
+      if (media) media.update(dt, { camera: view.camera, gentle, scrollMul: scroll, contrastMul: contrast });
+    }
     particles.update(dt);
     wakes.update(dt);
     lines.update(dt, k, fx, kart);
@@ -320,7 +343,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (itemVis) itemVis.dispose();
     if (shadows) shadows.dispose();
     if (colossi && colossi.dispose) colossi.dispose();
+    if (spirals) spirals.dispose();
+    if (media) media.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, resetReactions: karts.resetReactions };
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, resetReactions: karts.resetReactions };
 }

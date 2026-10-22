@@ -52,7 +52,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   const dyn = createDynRes();
   const tierFns = new Set();
   let post = null, postKey = null, last = 0, gated = false;
-  const meter = { n: 0, t: 0, fps: 0, el: null }, LF = String.fromCharCode(10);
+  const meter = { n: 0, t: 0, fps: 0, el: null, art: '' }, LF = String.fromCharCode(10);
 
   const scale = () => opts.renderScale === 'auto' ? dyn.scale : opts.renderScale;
   function resize() {
@@ -88,7 +88,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     if (on && !meter.el) {
       const el = meter.el = doc.createElement('div');
       el.className = 'gr-fps'; el.setAttribute('aria-hidden', 'true');
-      el.style.cssText = 'position:fixed;left:8px;top:8px;z-index:5;pointer-events:none;font:600 11px/1.2 ui-monospace,Consolas,monospace;' +
+      // under the minimap (top right), clear of the lap and time block in the top left
+      el.style.cssText = 'position:fixed;right:8px;top:150px;z-index:5;pointer-events:none;text-align:right;font:600 11px/1.2 ui-monospace,Consolas,monospace;' +
         'color:#fff8ef;background:rgba(8,7,14,0.45);padding:2px 6px;border-radius:4px;letter-spacing:0.04em;white-space:pre';
       doc.body.appendChild(el);
     } else if (!on && meter.el) { meter.el.remove(); meter.el = null; }
@@ -98,7 +99,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     if (!meter.t) meter.t = now;
     if (now - meter.t < 500) return;
     meter.fps = Math.round(meter.n * 1000 / (now - meter.t)); meter.n = 0; meter.t = now;
-    if (meter.el) { const s = scale(); meter.el.textContent = meter.fps + ' fps' + (s < 1 ? '  ' + Math.round(s * 100) + '%' : '') + LF + backend + (gpu ? ', ' + gpu : ''); }
+    if (meter.el) { const s = scale(); meter.el.textContent = meter.fps + ' fps' + (s < 1 ? '  ' + Math.round(s * 100) + '%' : '') + LF + backend + (gpu ? ', ' + gpu : '') + (meter.art ? LF + meter.art : ''); }
   }
   readout(opts.showFps);
 
@@ -120,6 +121,12 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       if (opts.renderScale !== was.renderScale) { dyn.reset(1); resize(); }
       if (opts.quality !== was.quality) setQuality();
       if (opts.showFps !== was.showFps) readout(opts.showFps);
+    },
+    /** The art status for the fps readout: art.js loadArt's result, or null when the race runs without art. */
+    setArt(art) {
+      if (!art) { meter.art = 'art off'; return; }
+      const failed = art.failed || [];
+      meter.art = 'art ' + (art.loaded ?? 0) + '/' + (art.wanted ?? 0) + (failed.length ? ', ' + failed.length + ' failed: ' + failed[0] : '');
     },
     /** Call first thing in every requestAnimationFrame: false = skip this one (the frame cap). */
     frameDue(now) { gated = true; return gate.due(now); },
@@ -151,7 +158,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     stats() {
       const r = three.info.render;
       return { backend, tier: Q.name, drawCalls: r.drawCalls, triangles: r.triangles, perFrame: true,
-        renderScale: Math.round(scale() * 100) / 100, renderFps: meter.fps, displayMs: Math.round(gate.displayMs * 100) / 100, gpu };
+        renderScale: Math.round(scale() * 100) / 100, renderFps: meter.fps, displayMs: Math.round(gate.displayMs * 100) / 100, gpu, art: meter.art };
     },
     dispose() { if (ro) ro.disconnect(); if (post) post.dispose(); readout(false); three.dispose(); },
   };

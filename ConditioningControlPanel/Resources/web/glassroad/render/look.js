@@ -1,6 +1,10 @@
 /* render/look.js - the render look table. Feel numbers (what the player tunes) live in feel.json;
  * these are the art numbers of the greybox look, in one place so no module hard-codes them.
  * Colours are CSS hex. Section `palette` and `sky` ids in track JSON key into PALETTES and SKIES.
+ * Polish 3 lanes keep their own tables, each overridable from here by an optional key: LOOK.juice
+ * (render/atlas.js JUICE_LOOK), LOOK.camKick (render/cameraMath.js), LOOK.world (render/colossiMath.js
+ * WORLD_DEFAULTS: scatter per tier, haze, colossi), LOOK.media (render/mediaMath.js tiers and frames). The
+ * colour system is render/spectrum.js (SPECTRUM_LOOK); the spiral gates read render/spiralMath.js SPIRAL_LOOK.
  */
 
 /** Three colours per palette: [band A, band B, band C]. The sky reads the same three. */

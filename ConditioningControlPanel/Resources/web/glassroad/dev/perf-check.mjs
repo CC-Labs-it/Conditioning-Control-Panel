@@ -114,7 +114,7 @@ function topSelf(p) {
 async function run(backend, httpPort) {
   const dbg = await freePort();
   const profile = mkdtempSync(join(tmpdir(), 'glassroad-perf-'));
-  const browser = spawn(BROWSER, ['--headless=new', '--remote-debugging-port=' + dbg, '--user-data-dir=' + profile,
+  const browser = spawn(BROWSER, ['--headless=new', '--mute-audio', '--remote-debugging-port=' + dbg, '--user-data-dir=' + profile,
     '--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--disable-gpu-vsync', '--disable-frame-rate-limit',
     '--window-size=' + W + ',' + H, '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required',
     'about:blank'], { stdio: 'ignore' });

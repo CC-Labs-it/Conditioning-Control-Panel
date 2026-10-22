@@ -66,7 +66,7 @@ async function cdp(wsUrl) {
 async function run(backend, httpPort) {
   const dbg = await freePort();
   const profile = mkdtempSync(join(tmpdir(), 'glassroad-edge-'));
-  const browser = spawn(BROWSER, ['--headless=new', '--remote-debugging-port=' + dbg, '--user-data-dir=' + profile,
+  const browser = spawn(BROWSER, ['--headless=new', '--mute-audio', '--remote-debugging-port=' + dbg, '--user-data-dir=' + profile,
     '--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--window-size=1280,720', '--no-first-run',
     '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore' });
   const report = { backend, pid: browser.pid, errors: [], warnings: [], samples: [], shots: [] };

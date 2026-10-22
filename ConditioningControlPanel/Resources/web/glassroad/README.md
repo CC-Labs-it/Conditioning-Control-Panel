@@ -33,6 +33,7 @@ stick down + X drops, Start; the d-pad, A and B work the cards). Touch: tap the 
 | `&botFall=1` | with `bot=1`: the player steers off the first open corner once, to show a drop and the rescue |
 | `?seed=N` | seeds the item rolls and the bots (default: random, shown as `__glassroad.seed`) |
 | `?touch=1` / `?touch=0` | force the touch layer on or off |
+| `?art=0` / `?shadows=0` / `?spirals=0` | dev: race the greybox, drop the shadow map, or drop the spiral gates |
 
 Escape only pauses. Losing focus pauses too (not under `?bot=1`).
 
@@ -44,6 +45,10 @@ node dev/boot-check.mjs               # headless Edge over CDP, both backends: m
 node dev/boot-check.mjs --finish      # all 3 laps to the results card (about 3 min per backend)
 node dev/boot-check.mjs --fall        # plus &botFall=1 and a rescue shot
 node dev/boot-check.mjs --cards       # no bot: menu, Enter on Race, Escape pauses, Enter resumes
+node dev/shots.mjs                    # look tour: start grid, boost, bump, then a fixed camera on each road section,
+                                      # spiral gate, billboard, the sky halo, the tunnel, colossi and props
+node dev/shots.mjs --tier --quality phone   # start grid and mid-race on one tier
+node dev/perf-check.mjs --size 2560x1440    # frame cost, uncapped, both backends
 ```
 
 `boot-check.mjs` writes screenshots to `C:/wt-glassroad-run/shots/b1/` (`--out <dir>` to change), prints a
@@ -53,7 +58,18 @@ error. It starts its own server and browser and kills only those, by PID. Other 
 
 `window.__glassroad` holds a read-only status (phase: boot, menu, countdown, racing, finished, results or
 paused; fps, backend, tier, drawCalls, triangles, lap, place, item, effects seen, result, seed, drops,
-rescues, event counts) for the check and the console.
+rescues, event counts, art: loaded / wanted and the first failed ids) for the check and the console. With
+`?bot=1`, `__glassroad.peek = { s, backM, upM, latM, aheadM, liftM }` holds the camera at a spot on the lap
+(`null` hands it back). The Show fps option also prints the art status (`art 43/43`, or how many failed
+and the first failed id), so a machine that cannot load the art says so on screen.
+
+## The Loom beside this tree
+
+The spiral gates (`render/spirals3d.js`) and the media placeholders (`render/mediaPlaceholders.js`) import the
+Loom from `../arcademy/engine/loom/` (owner law: every spiral comes from the Loom, never forked). The app serves
+`Resources/web` whole, and `dev/serve.mjs` mounts `/arcademy/` beside this tree for the same reason. A phone
+pack or any copy of glassroad must ship `arcademy/engine/loom/` beside it; without it the gates draw from their
+stored params and the media placeholders use the Loom fallback frame.
 
 ## Map
 

@@ -6,6 +6,9 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
+// the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
+// here; only that tree is mounted beside this one
+const ARCADEMY = resolve(ROOT, '..', 'arcademy');
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -19,8 +22,9 @@ const server = createServer(async (req, res) => {
   try {
     let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (path.endsWith('/')) path += 'index.html';
-    const file = normalize(join(ROOT, path));
-    if (file !== ROOT && !file.startsWith(ROOT + sep)) { res.writeHead(403, head); res.end('forbidden'); return; }
+    const base = path.startsWith('/arcademy/') ? ARCADEMY : ROOT;
+    const file = normalize(join(base, base === ARCADEMY ? path.slice('/arcademy'.length) : path));
+    if (file !== base && !file.startsWith(base + sep)) { res.writeHead(403, head); res.end('forbidden'); return; }
     const st = await stat(file);
     if (!st.isFile()) throw new Error('not a file');
     const body = await readFile(file);

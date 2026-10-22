@@ -35,7 +35,8 @@ let current = null;
  * loadArt read it when their caller passes no art. */
 export const currentArt = () => current;
 
-/** Load the art set. Resolves { tex(id), model(id), row(id), failed[] } and never rejects. */
+/** Load the art set. Resolves { tex(id), model(id), row(id), failed[], loaded, wanted } and never rejects.
+ * wanted counts the ids asked for minus LATER ids not shipped yet; loaded counts what arrived. */
 export async function loadArt(renderer, { want = WANT } = {}) {
   const rows = new Map(), tex = new Map(), models = new Map(), failed = [];
   let manifest = [];
@@ -70,7 +71,10 @@ export async function loadArt(renderer, { want = WANT } = {}) {
     }
   }));
   ktx2.dispose();
+  const wanted = want.filter((id) => rows.has(id) || !LATER.has(id)).length;
   return current = {
+    loaded: tex.size + models.size,
+    wanted,
     tex: (id) => tex.get(id) || null,
     model: (id) => models.get(id) || null,
     row: (id) => rows.get(id) || null,

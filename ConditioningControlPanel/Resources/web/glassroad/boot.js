@@ -7,6 +7,8 @@
  * ?seed=N (item rolls and the bots), ?bot=1 (the AI drives the player too, for smoke tests and attract
  * mode: the menu starts the race on its own after a short look, and results go round again),
  * &botFall=1 (the player steers off the first open corner once, to show a rescue).
+ * Dev (?bot=1 only): window.__glassroad.peek = { s, backM, upM, latM, aheadM, liftM } holds the camera at a
+ * fixed spot on the track for screenshots (dev/shots.mjs); null hands it back to the chase rig.
  * Escape only pauses; nothing here ever leaves.
  */
 import { createBridge } from './host/bridge.js';
@@ -101,6 +103,21 @@ function boxAhead(st, boxes) {
   return best < 0 ? -1 : Math.round(best * 10) / 10;
 }
 
+/** Dev peek camera: eye backM behind s, upM over the road, latM to the right, looking aheadM down the road. */
+const peekF = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] }, peekG = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
+function peekCamera(camera, track, pk, aspect) {
+  const L = track.lengthM, s = (((+pk.s || 0) % L) + L) % L;
+  const back = pk.backM ?? 12, up = pk.upM ?? 3, lat = pk.latM ?? 0, ahead = pk.aheadM ?? 40, lift = pk.liftM ?? 2;
+  track.frameAt(s - back, peekF); track.frameAt(s + ahead - back, peekG);
+  const f = peekF, g = peekG;
+  camera.position.set(f.p[0] + f.n[0] * up + f.b[0] * lat, f.p[1] + f.n[1] * up + f.b[1] * lat, f.p[2] + f.n[2] * up + f.b[2] * lat);
+  camera.up.set(f.n[0], f.n[1], f.n[2]);
+  camera.lookAt(g.p[0] + g.n[0] * lift + g.b[0] * (pk.lookLatM ?? 0), g.p[1] + g.n[1] * lift + g.b[1] * (pk.lookLatM ?? 0), g.p[2] + g.n[2] * lift + g.b[2] * (pk.lookLatM ?? 0));
+  if (pk.fov && camera.fov !== pk.fov) { camera.fov = pk.fov; camera.updateProjectionMatrix(); }
+  camera.aspect = aspect; camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+}
+
 /** The closed centreline as x, z pairs for the minimap. */
 function centreline(track, stepM = 4) {
   const n = Math.max(8, Math.floor(track.lengthM / stepM)), xz = new Float32Array(n * 2);
@@ -147,17 +164,28 @@ async function boot() {
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
   const art = qs.get('art') === '0' ? null : await loadArt(renderer);
   if (art && art.failed.length) debug.artFailed = art.failed;
+  debug.art = art ? { loaded: art.loaded, wanted: art.wanted, failed: art.failed.slice(0, 4) } : null;
+  renderer.setArt(art);   // the fps readout shows art loaded / wanted and the first failed id
   const seed = +qs.get('seed') || ((Math.random() * 2147483646) | 0) + 1;
   debug.seed = seed;
   // ?shadows=0 (dev) drops the shadow map whatever the option says; the map is always set up otherwise
   // and the Shadows option turns it on or off in applyOptions
-  const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0' });
-  const cam = createChaseCamera(feel);
+  const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0',
+    spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
+  const cam = createChaseCamera(feel, { bus });   // the kick layer hears the player's bumps and wall hits
   debug.backend = renderer.backend;
   debug.gpu = renderer.gpu;
   // the HUD item slot's orbit and roll shuffle (FXPOLISH lane)
   const slotFx = createSlotFx(hud.item, hud.item && hud.item.querySelector('img'), { feel, phone: renderer.tier === 'phone' });
   // the arches that lean over the road, for the boot check's colossus shot
+  // polish 3 layers for the shot harness: gate and media slot positions along the lap
+  debug.gates = world.spirals ? world.spirals.gates.map((g) => ({ id: g.id, s: Math.round(g.s) })) : [];
+  debug.mediaSlots = world.media ? world.media.slots.length : 0;
+  debug.lengthM = track.lengthM;
+  // dev (?bot=1): the shot harness pokes at the world; not enumerable, so the status JSON stays small
+  if (BOT) Object.defineProperty(debug, 'world', { value: world, enumerable: false });
+  debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
+  debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
 
   const clock = createClock({ hz: feel.get('clock.hz'), maxSubsteps: feel.get('clock.maxSubsteps'), bpm: feel.get('clock.bpm') });
@@ -352,6 +380,7 @@ async function boot() {
     racers.interpolate(alpha);                                    // 6. camera
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
+    if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
@@ -378,6 +407,7 @@ async function boot() {
     debug.phase = paused ? 'paused' : state === 'race' ? race.phase : state;
     debug.lap = pst[S.lap]; debug.s = pst[S.s]; debug.timeS = race.timeS; debug.speedPct = pst[S.speedPct];
     debug.place = place; debug.item = it.id;
+    debug.boost = pst[S.boostKind] || 0;
     debug.air = pst[S.airborne] > 0.5 && pst[S.respawnPhase] === RESPAWN.NONE;
     debug.archAheadM = -1;
     for (const x of arches) {
