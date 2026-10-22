@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Services
         private TimeSpan _lastElapsed;
         private TimeSpan _pausedElapsed;
         private readonly Random _random = new();
+        internal readonly SessionClockRules.StepFailures StepFailures = new();
 
         public SessionLogService SessionLog { get; }
         public Session? CurrentSession { get; private set; }
@@ -62,6 +63,7 @@ namespace ConditioningControlPanel.Services
         {
             SessionLog = sessionLog;
             CoreSession.IsSessionRunningProvider = () => IsRunning && CurrentSession != null;
+            CoreSession.StopSessionFromRemote = () => Stop();
         }
 
         /// <summary>SessionEngine.RemainingTime.</summary>
@@ -90,6 +92,7 @@ namespace ConditioningControlPanel.Services
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
+            StepFailures.Clear();
             PinkOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
@@ -203,6 +206,7 @@ namespace ConditioningControlPanel.Services
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
+            Step("pause:progress", () => Ticked?.Invoke());
         }
 
         /// <summary>SessionEngine.ResumeSession (SessionEngine.cs:554): restart only what has reached its
@@ -221,6 +225,42 @@ namespace ConditioningControlPanel.Services
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
             Log.Information("Session resumed");
+            Step("resume:progress", () => Ticked?.Invoke());
+        }
+
+        /// <summary>A user START has restarted the plain engine; restore the session's delayed starts.</summary>
+        public void ReassertScheduleAfterEngineStart()
+        {
+            if (!IsRunning || IsPaused || CurrentSession is not { } session) return;
+            foreach (var name in _deferred.PendingNames)
+            {
+                Action? stop = name switch
+                {
+                    "flash" => CoreFlash.Stop,
+                    "subliminal" => CoreSubliminal.Stop,
+                    "bouncing text" => CoreBouncingText.Stop,
+                    "lock cards" => LockCardScheduler.Instance.Stop,
+                    _ => null,
+                };
+                if (stop != null) Step("resume:hold-" + name, stop);
+            }
+            if (session.Settings.LockCardEnabled && !_deferred.IsPending("lock cards"))
+                Step("resume:lock-cards", () =>
+                {
+                    LockCardScheduler.Instance.Stop();
+                    LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
+                });
+            // ponytail: the session's own Mind Wipe is not ported; keep the global one off.
+            Step("resume:mind-wipe-stop", CoreMindWipe.Stop);
+        }
+
+        private void Step(string name, Action action) =>
+            SessionClockRules.RunStep(action, ex => ReportStepFailure(name, ex));
+
+        private void ReportStepFailure(string name, Exception error)
+        {
+            // ponytail: this head uses its daily Serilog file; crash.log mirroring is a follow-up.
+            if (StepFailures.Note(name)) Log.Error(error, "Session step failed: {Step}", name);
         }
 
         private void StartAt(string name, int minute, Action start, Action stop)
@@ -240,23 +280,29 @@ namespace ConditioningControlPanel.Services
             var minutes = elapsed.TotalMinutes;
             if (minutes >= session.DurationMinutes) { Stop(true, elapsed); return; }
 
-            var phase = SessionTimeline.PhaseIndexAt(session.Phases, minutes);
-            if (phase != CurrentPhaseIndex)
+            Step("tick:phase", () =>
             {
-                CurrentPhaseIndex = phase;
-                Log.Information("Phase changed: {Phase}", session.Phases[phase].Name);
-            }
-            UpdateRamps(session, minutes);
-            _deferred.FireDue(minutes);
+                var phase = SessionTimeline.PhaseIndexAt(session.Phases, minutes);
+                if (phase != CurrentPhaseIndex)
+                {
+                    CurrentPhaseIndex = phase;
+                    Log.Information("Phase changed: {Phase}", session.Phases[phase].Name);
+                }
+            });
+            Step("tick:ramp", () => UpdateRamps(session, minutes));
+            Step("tick:delayed-features", () => _deferred.FireDue(minutes));
 
             // Pink delayed start at its randomised minute (SessionEngine.cs:849); the head shows it.
-            var s = CoreSettings.Current;
-            if (session.Settings.PinkFilterEnabled && !s.PinkFilterEnabled && minutes >= PinkStartMinute)
+            Step("tick:pink", () =>
             {
-                s.PinkFilterEnabled = true;
-                Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
-            }
-            Ticked?.Invoke();
+                var s = CoreSettings.Current;
+                if (session.Settings.PinkFilterEnabled && !s.PinkFilterEnabled && minutes >= PinkStartMinute)
+                {
+                    s.PinkFilterEnabled = true;
+                    Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
+                }
+            });
+            Step("tick:progress", () => Ticked?.Invoke());
         }
 
         /// <summary>SessionEngine.UpdateRampingValues (SessionEngine.cs:699), flash trio + pink.</summary>
@@ -293,22 +339,22 @@ namespace ConditioningControlPanel.Services
             var session = CurrentSession;
             if (!IsRunning || session == null) return;
             IsRunning = IsPaused = false;
-            _custody?.Release();
+            Step("stop:release-pools", () => _custody?.Release());
             _stopwatch.Stop();
-            _timer?.Dispose();
+            Step("stop:timer", () => _timer?.Dispose());
             _timer = null;
             _deferred.Clear();
-            CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:372
+            Step("stop:pop-quiz", () => CoreEngine.PopQuiz?.Stop());   // SessionEngine.cs:372
 
             var s = CoreSettings.Current;
-            s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore
+            Step("stop:flash-ramp", s.ClearSessionFlashRamp);   // ahead of the restore
             PinkOpacity = null;
-            _snapshot?.RestoreTo(s);
+            Step("stop:restore-settings", () => _snapshot?.RestoreTo(s));
             _snapshot = null;
-            _custody?.Restore(s);
+            Step("stop:restore-pools", () => _custody?.Restore(s));
             _custody = null;
-            CoreEngine.Stop();   // MainWindow.Presets.cs:1951
-            CoreSettings.Save();   // WPF leaves the restore to the next save; persist it now
+            Step("stop:engine", CoreEngine.Stop);   // MainWindow.Presets.cs:1951
+            Step("stop:save", () => CoreSettings.Save());   // persist the restored settings
 
             // XP actually banked: 0 while no head has a progression service (decision log).
             int xp = 0;
@@ -317,7 +363,7 @@ namespace ConditioningControlPanel.Services
                 var award = SessionXp.Compute(session.BonusXP, PauseCount, s.PlayerLevel, elapsed);
                 // Banked = what the ledger actually gained (a head's gate may refuse it, e.g. signed out).
                 var before = ProfileAdopt.TotalXp(s);
-                CoreProgression.AddXP(award, "Session");
+                Step("stop:xp", () => CoreProgression.AddXP(award, "Session"));
                 xp = (int)Math.Round(ProfileAdopt.TotalXp(s) - before);
                 Log.Information("Session completed: {Name}, XP: {XP} (banked {Banked}, paused {PauseCount}x, penalty: -{Penalty})",
                     session.Name, award, xp, PauseCount, XPPenalty);
@@ -329,7 +375,8 @@ namespace ConditioningControlPanel.Services
             CurrentSession = null;
             // WPF SessionEngine.SessionStopped + SessionCompleted, as one call (ProgramEngineBridge).
             try { Stopped?.Invoke(session, completed); }
-            catch (Exception ex) { Log.Warning(ex, "SessionRunner.Stopped handler failed"); }
+            catch (Exception ex) { ReportStepFailure("stop:stopped", ex); }
+            if (StepFailures.Any) Log.Warning("Session guarded-step failures: {Failures}", StepFailures.Summary());
         }
     }
 }

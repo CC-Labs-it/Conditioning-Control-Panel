@@ -28,9 +28,7 @@ public sealed class SessionRunWireTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
 
             var shell = new MainShellWindow();
             shell.Show();
@@ -55,16 +53,35 @@ public sealed class SessionRunWireTests
                 Assert.True(runner.IsRunning && runner.IsPaused);
                 Assert.Equal(1, runner.PauseCount);
                 Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
+                Assert.Contains("[" + Loc.Get("label_paused") + "]", shell.Named<TextBlock>("TxtStartLabel")!.Text!);
+                Assert.Contains("[" + Loc.Get("label_paused") + "]", Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text!);
                 Assert.True(shell.IsSessionFeatureLockActive);
                 var pause = shell.Named<Button>("BtnPauseSession")!;
                 Assert.True(pause.IsVisible);
                 Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.Get("tooltip_resume_session"), ToolTip.GetTip(pause));
 
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                using (var frame = shell.CaptureRenderedFrame())
+                {
+                    Assert.NotNull(frame);
+                    frame.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-sync7-session-safety-paused.png"));
+                }
+
                 pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));   // Resume
                 Assert.False(runner.IsPaused);
+                Assert.True(CoreEngine.IsRunning);
                 Assert.Equal("\u23F8", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", 1), ToolTip.GetTip(pause));
+
+                MainShellWindow.StopEverything();
+                var count = CoreSettings.Current.TotalSessions;
+                shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(CoreEngine.IsRunning && runner.IsRunning && !runner.IsPaused);
+                Assert.Equal(count, CoreSettings.Current.TotalSessions);
+                Assert.DoesNotContain("[" + Loc.Get("label_paused") + "]", shell.Named<TextBlock>("TxtStartLabel")!.Text!);
 
                 runner.Stop(completed: false);   // the stop-session confirm's OK
                 Assert.False(runner.IsRunning || CoreEngine.IsRunning || pause.IsVisible);
@@ -91,6 +108,7 @@ public sealed class SessionRunWireTests
                 runner.Stop();
                 CoreEngine.StoppedHook = null;
                 CoreSession.IsSessionRunningProvider = null;
+                CoreSession.StopSessionFromRemote = null;
                 AvApp.Sessions = null;
                 CoreEngine.Stop();
                 shell.Close();

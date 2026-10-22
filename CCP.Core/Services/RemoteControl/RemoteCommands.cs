@@ -108,13 +108,28 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops; strict off, panic
         /// key on. Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
-        public static void StopEffects(bool force)
+        public static void StopEffects(bool force) =>
+            StopEffects(force ? Remote.RemoteEndCause.Panic : Remote.RemoteEndCause.SessionEnded);
+
+        public static void StopEffects(Remote.RemoteEndCause cause)
         {
+            var force = cause == Remote.RemoteEndCause.Panic;
+            // Session verbs are unavailable on this head: every running engine is locally started.
+            if (Remote.RemoteEndRule.LeavesLocalRun(cause,
+                    CoreEngine.IsRunning, sessionRemoteStarted: false))
+            {
+                RemoteHaptics.Stop();
+                return;
+            }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();
-            if (force) CoreEngine.Stop();
+            if (force)
+            {
+                CoreSession.StopSessionFromRemote?.Invoke();
+                CoreEngine.Stop();
+            }
             else
             {
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();

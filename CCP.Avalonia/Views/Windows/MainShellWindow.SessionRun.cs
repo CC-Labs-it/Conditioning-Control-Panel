@@ -107,6 +107,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (runner.IsPaused)
             {
+                if (SessionClockRules.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected))
+                {
+                    StartEngineFromUser();
+                    return;
+                }
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;
@@ -126,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
+            OnSessionTick();
         }
 
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
@@ -147,11 +153,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshSessionFeatureLock(force: false);
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
-            if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
+            SetPauseButton(runner.IsPaused);   // WPF OnSessionStarted
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;
+            var pauseMark = SessionClockRules.PauseMark(runner.IsPaused, Loc.Get("label_paused"));
             Named<Tabs.PresetsTabView>("PresetsTab")?.SetSessionButtonLabel(SessionClockLabel.StopButton(
-                remaining, showCountdown, Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2")));
+                remaining, showCountdown, Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2"), pauseMark));
 
             var mName = session.GetModeAwareName();
             var nameMax = showCountdown ? 14 : 22;
@@ -161,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = "⏹";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty, new Binding
             {
-                Source = SessionClockLabel.StartButton(name, remaining, showCountdown, "", Loc.Get("label_0_1_2_3"))
+                Source = SessionClockLabel.StartButton(name, remaining, showCountdown, pauseMark, Loc.Get("label_0_1_2_3"))
             });
         }
 

@@ -7,6 +7,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -43,6 +44,7 @@ public sealed class SessionRunnerTests : IDisposable
         _runner.Stop();
         CoreEngine.Stop();
         CoreSession.IsSessionRunningProvider = null;
+        CoreSession.StopSessionFromRemote = null;
         CoreSession.NoteUserPhrasePoolEdit = null;
         CoreSession.ReapplyPhrasePoolOverrides = null;
         CoreSession.UserPhrasePoolsWhileOverriding = null;
@@ -371,6 +373,137 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(10, _runner.PinkOpacity!.Value, 2);
         _runner.Tick(TimeSpan.FromMinutes((at + 10) / 2));   // halfway through the tint's own window
         Assert.Equal(25, _runner.PinkOpacity!.Value, 2);
+    }
+
+    [Fact]
+    public void ThrowingProgress_DoesNotEscapeTick_AndNextTickStillRuns()
+    {
+        _runner.Start(OneMinute());
+        var ticks = 0;
+        _runner.Ticked += () => { ticks++; throw new InvalidOperationException("progress"); };
+        Assert.Null(Record.Exception(() => _runner.Tick(TimeSpan.FromSeconds(20))));
+        Assert.Null(Record.Exception(() => _runner.Tick(TimeSpan.FromSeconds(21))));
+        Assert.Equal(2, ticks);
+        _runner.Stop();
+        Assert.False(_runner.IsRunning);
+    }
+
+    [Fact]
+    public void ThrowingSettingsRestore_DoesNotSkipPoolsLogOrStopped()
+    {
+        _runner.Start(OneMinute());
+        var stopped = false;
+        _runner.Stopped += (_, _) => stopped = true;
+        System.ComponentModel.PropertyChangedEventHandler fault = (_, e) =>
+        {
+            if (e.PropertyName == "FlashEnabled") throw new InvalidOperationException("restore");
+        };
+        CoreSettings.Current.PropertyChanged += fault;
+        try
+        {
+            Assert.Null(Record.Exception(() => _runner.Stop()));
+            Assert.True(stopped);
+            Assert.NotNull(_ready);
+            Assert.Null(_runner.CurrentSession);
+            Assert.Equal(1, _runner.StepFailures.Count("stop:restore-settings"));
+            Assert.Null(CoreSession.UserPhrasePoolsWhileOverriding!());
+        }
+        finally { CoreSettings.Current.PropertyChanged -= fault; }
+    }
+
+    [Fact]
+    public void UserRestart_ReassertsDeferredFeatures_WithoutCountingANewRun()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 2;
+        session.Settings.LockCardStartMinute = 1;
+        session.Settings.SubliminalStartMinute = 1;
+        _runner.Start(session);
+        _runner.Pause();
+        CoreEngine.Stop();
+        var count = CoreSettings.Current.TotalSessions;
+        CoreEngine.Start(resumingSession: true);
+        _runner.Resume();
+        _runner.ReassertScheduleAfterEngineStart();
+        Assert.Equal(count, CoreSettings.Current.TotalSessions);
+        Assert.False(CoreSubliminal.IsRunning || LockCardScheduler.Instance.IsRunning);
+        _runner.Tick(TimeSpan.FromMinutes(1));
+        Assert.True(CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning);
+        Assert.Equal(1, LockCardScheduler.Instance.LastWindowMinutes);
+    }
+
+    private sealed class SessionLogSink : Serilog.Core.ILogEventSink
+    {
+        public readonly System.Collections.Generic.List<Serilog.Events.LogEvent> Events = new();
+        public void Emit(Serilog.Events.LogEvent logEvent) => Events.Add(logEvent);
+    }
+
+    [Fact]
+    public void ProgressFailures_AreCountedPerStep_AndClearedForTheNextSession()
+    {
+        var previous = Serilog.Log.Logger;
+        var sink = new SessionLogSink();
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        Serilog.Log.Logger = logger;
+        Action fault = () => throw new InvalidOperationException("progress");
+        try
+        {
+            _runner.Start(OneMinute());
+            _runner.Ticked += fault;
+            _runner.Tick(TimeSpan.FromSeconds(20));
+            _runner.Tick(TimeSpan.FromSeconds(21));
+            Assert.Equal(2, _runner.StepFailures.Count("tick:progress"));
+            Assert.Equal("tick:progress x2", _runner.StepFailures.Summary());
+            var first = Assert.Single(sink.Events.Where(e => e.MessageTemplate.Text == "Session step failed: {Step}"));
+            Assert.IsType<InvalidOperationException>(first.Exception);
+            _runner.Stop();
+            Assert.Single(sink.Events.Where(e => e.MessageTemplate.Text == "Session guarded-step failures: {Failures}"));
+            _runner.Start(OneMinute());
+            Assert.False(_runner.StepFailures.Any);
+            _runner.Tick(TimeSpan.FromSeconds(20));
+            Assert.Equal(2, sink.Events.Count(e => e.MessageTemplate.Text == "Session step failed: {Step}"));
+        }
+        finally
+        {
+            _runner.Ticked -= fault;
+            _runner.Stop();
+            Serilog.Log.Logger = previous;
+        }
+    }
+
+    [Fact]
+    public void ThrowingPhase_DoesNotSkipTheClockOrDeferredStarts()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 2;
+        session.Settings.LockCardStartMinute = 1;
+        _runner.Start(session);
+        var ticks = 0;
+        _runner.Ticked += () => ticks++;
+        // A malformed phase from imported content throws during the phase lookup.
+        session.Phases.Add(null!);
+        try
+        {
+            Assert.Null(Record.Exception(() => _runner.Tick(TimeSpan.FromSeconds(60))));
+            Assert.Equal(1, ticks);
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.Equal(1, _runner.StepFailures.Count("tick:phase"));
+        }
+        finally { session.Phases.RemoveAt(session.Phases.Count - 1); }
+    }
+
+    [Fact]
+    public void ControllerPanic_EndsTheActualSession_AndRetiresItsDeferredStarts()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 2;
+        session.Settings.LockCardStartMinute = 1;
+        _runner.Start(session);
+        Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+        Assert.False(_runner.IsRunning || CoreEngine.IsRunning);
+        Assert.Null(_runner.CurrentSession);
+        _runner.Tick(TimeSpan.FromMinutes(1));
+        Assert.False(LockCardScheduler.Instance.IsRunning);
     }
 
     private static string Fixture([CallerFilePath] string here = "") =>

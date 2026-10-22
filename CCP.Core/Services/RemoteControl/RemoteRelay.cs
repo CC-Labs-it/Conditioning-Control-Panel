@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using ConditioningControlPanel.Services.Remote;
 
 namespace ConditioningControlPanel.Services
 {
@@ -47,7 +48,7 @@ namespace ConditioningControlPanel.Services
         private readonly string? _baseUrl;
         private readonly Func<string?> _token, _unifiedId;
         private readonly Func<string, JObject?, string?> _execute;
-        private readonly Action<bool> _stopEffects;
+        private readonly Action<RemoteEndCause> _stopEffects;
         private CancellationTokenSource? _loop;
         private int _pollBusy, _consecutiveFailures;
         private DateTime? _idleSince;
@@ -88,9 +89,11 @@ namespace ConditioningControlPanel.Services
         /// <param name="execute">Runs one command on the UI thread; returns a refusal reason or null.</param>
         /// <param name="stopEffects">WPF StopAllRemoteEffects(force) / StopRemoteTriggeredEffects.</param>
         public RemoteRelay(Func<string?> token, Func<string?> unifiedId, string appVersion,
-            Func<string, JObject?, string?> execute, Action<bool> stopEffects, HttpMessageHandler? handler = null)
+            Func<string, JObject?, string?> execute, Action<bool> stopEffects, HttpMessageHandler? handler = null,
+            Action<RemoteEndCause>? stopEffectsByCause = null)
         {
-            (_token, _unifiedId, _execute, _stopEffects) = (token, unifiedId, execute, stopEffects);
+            (_token, _unifiedId, _execute) = (token, unifiedId, execute);
+            _stopEffects = stopEffectsByCause ?? (cause => stopEffects(cause == RemoteEndCause.Panic));
             _baseUrl = handler != null ? RealBaseUrl : ResolveBaseUrl(
                 Environment.GetEnvironmentVariable("CCP_REMOTE_BASE_URL"),
                 !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
@@ -168,7 +171,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsActive) return;
             var uid = _unifiedId();
-            Cleanup();
+            Cleanup(RemoteEndCause.LeashCut);
             Log.Information("[RemoteControl] Session ended locally (leash cut)");
             if (string.IsNullOrEmpty(uid)) return;
             _ = Task.Run(async () =>
@@ -179,16 +182,16 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF CleanupSession: everything the controller started stops; the subject's own run stays.</summary>
-        private void Cleanup()
+        private void Cleanup(RemoteEndCause cause = RemoteEndCause.SessionEnded)
         {
             if (!IsActive) return;
             _loop?.Cancel();
             _loop = null;
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
-            (_remoteSetStrictLock, _pollBackedOff, _lastControllerCommand) = (false, false, DateTime.MinValue);
+            (_pollBackedOff, _lastControllerCommand) = (false, DateTime.MinValue);
             // StopAsync and the poll loop land here off the UI thread, and the stops close windows: run
             // them on the UI like ControllerLeft, posted if a stalled UI cancels the Invoke.
-            void StopEffects() { try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); } }
+            void StopEffects() { try { ReleaseSafetyState(); _stopEffects(cause); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); } }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));
             if (!done) CoreDispatch.Post(StopEffects);
             if (ControllerConnected) { ControllerConnected = false; ControllerConnectedChanged?.Invoke(this, EventArgs.Empty); }
@@ -302,6 +305,13 @@ namespace ConditioningControlPanel.Services
         private void ReleaseOnLeave()
         {
             RemoteCommands.RemoteHaptics.Stop();
+            ReleaseSafetyState();
+            if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
+                try { _stopEffects(RemoteEndCause.SessionEnded); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+        }
+
+        private void ReleaseSafetyState()
+        {
             var s = CoreSettings.Current;
             var changed = false;
             if (_remoteSetStrictLock) { _remoteSetStrictLock = false; if (s.StrictLockEnabled) { s.StrictLockEnabled = false; changed = true; } }
@@ -312,8 +322,6 @@ namespace ConditioningControlPanel.Services
                 try { LockdownService.PanicKeyUiSync?.Invoke(); } catch { }
                 Log.Information("[RemoteControl] Controller left: panic key back on, controller's strict lock released");
             }
-            if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
-                try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
         }
 
         private int _leaveGeneration;

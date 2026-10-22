@@ -225,6 +225,85 @@ public sealed class RemoteRelayTests
         finally { (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemoteEnd_LeavesTheLocalEngineFeaturesAndOwnStrictLockAlone(bool stopOnDisconnect)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.StopEffectsOnRemoteDisconnect);
+        try
+        {
+            s.FlashEnabled = true;
+            s.StopEffectsOnRemoteDisconnect = stopOnDisconnect;
+            CoreEngine.Start();
+            s.StrictLockEnabled = true; // locally set, never owned by the controller
+            s.PanicKeyEnabled = false;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
+                RemoteCommands.StopEffects, f, stopEffectsByCause: RemoteCommands.StopEffects) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true}");
+            await r.PollOnceAsync();
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
+            Assert.True(CoreEngine.IsRunning && CoreFlash.IsRunning);
+            await r.StopAsync();
+            Assert.True(CoreEngine.IsRunning && CoreFlash.IsRunning);
+            Assert.True(s.StrictLockEnabled && s.PanicKeyEnabled && s.FlashEnabled);
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning || s.StrictLockEnabled);
+        }
+        finally { CoreEngine.Stop(); (s.StrictLockEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
+    }
+
+    [Fact]
+    public async Task RemoteEnd_ReleasesOnlyTheControllersStrictLock_WhileTheLocalRunContinues()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled);
+        try
+        {
+            s.StrictLockEnabled = false;
+            CoreEngine.Start();
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
+                RemoteCommands.StopEffects, f, stopEffectsByCause: RemoteCommands.StopEffects) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"enable_strict_lock\"}]}");
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+            await r.StopAsync();
+            Assert.True(CoreEngine.IsRunning);
+            Assert.False(s.StrictLockEnabled);
+        }
+        finally { CoreEngine.Stop(); (s.StrictLockEnabled, s.PanicKeyEnabled) = saved; }
+    }
+
+    [Fact]
+    public async Task Relay_PreservesLeashCutAndNormalEndAsDistinctCauses()
+    {
+        var causes = new List<ConditioningControlPanel.Services.Remote.RemoteEndCause>();
+        var f = new FakeRelay();
+        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var answer = f.Answer;
+        f.Answer = path =>
+        {
+            if (path == "/v2/remote/stop") sent.TrySetResult();
+            return answer(path);
+        };
+        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
+            _ => throw new InvalidOperationException("legacy callback should not run"), f,
+            stopEffectsByCause: causes.Add) { AutoPoll = false };
+        await r.StartAsync("full");
+        r.EndSessionNow();
+        Assert.Equal(ConditioningControlPanel.Services.Remote.RemoteEndCause.LeashCut, Assert.Single(causes));
+        await sent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await r.StartAsync("full");
+        await r.StopAsync();
+        Assert.Equal(ConditioningControlPanel.Services.Remote.RemoteEndCause.SessionEnded, causes[1]);
+    }
+
     // main 7b22ece8c (ccp-bugs #1065): no toy -> refused, never a silent "ok".
     [Fact]
     public void Trigger_haptic_with_no_toy_is_refused()

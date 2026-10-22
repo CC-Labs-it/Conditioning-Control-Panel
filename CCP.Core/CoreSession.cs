@@ -38,6 +38,10 @@ namespace ConditioningControlPanel
             get { try { return IsSessionRunningProvider?.Invoke() ?? false; } catch { return false; } }
         }
 
+        /// <summary>The real session runner teardown for an explicit controller panic; normal remote
+        /// end never asks it to stop the subject's session.</summary>
+        public static volatile Action? StopSessionFromRemote;
+
         // The running session's hold on the phrase pools, for the mod service's per-mod backup
         // (#906). WPF reads each through SessionEngine.Active, so "no active session" is folded
         // into every delegate: unseeded, or seeded with no session running, answers no-op /
