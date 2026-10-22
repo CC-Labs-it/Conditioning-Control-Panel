@@ -2499,3 +2499,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-wave-timer: +418
 - Pocket Watch wave countdown overlay ported (Core readout rules shared with WPF), hooked to ChaosRunHost ticks; panic/run end close it; it refuses to show without click-through or transparency.
 - Row chaos-wave-timer missing -> stub; live steps queued in live-queue/overlays.md.
+
+## avalonia-port/game-dtrh-host-b: +774
+- DtRH online half moved to Core `DtrhRemoteMedia` (online media copied locally, manifest re-posted as copies land, loops lane, 30 min loops-dry back-off); WPF now calls it; WebAssetServer serves only `.temp/ccp_temp_remote_*` copies.
+- DtRH manifest uses root-relative asset urls so hostMedia.js counts the library as local (it never did on Avalonia); delta rows 16/22/24 -> ported-here.

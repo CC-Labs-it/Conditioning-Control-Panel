@@ -696,6 +696,65 @@ public sealed class GameWindowTests
         });
     }
 
+    /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
+    /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in
+    /// <c>&lt;assets&gt;/.temp</c> re-post the manifest with them as asset urls; a closed window stops listening.</summary>
+    [Fact]
+    public void Dtrh_OnlineCopiesLand_TheManifestIsRepostedWithThemAsAssetUrls() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.MediaSource, s.RemoteMediaConsented, s.RemoteMediaRatio, DtrhRemoteMedia.Fetch, GameWindow.DtrhCopier);
+        var cachePath = Path.Combine(CorePaths.UserData, "dtrh_remote_media.json");
+        try
+        {
+            File.Delete(cachePath);
+            DtrhRemoteMedia.ResetForTests();
+            (s.MediaSource, s.RemoteMediaConsented, s.RemoteMediaRatio) = ("mixed", true, 40);
+            DtrhRemoteMedia.Fetch = (kind, _) => Task.FromResult((kind != DtrhRemoteMedia.Kind.Stills ? new List<global::ConditioningControlPanel.Services.Fyp.FypAssetManifest.Entry>()
+                : new() { new() { Id = "scrolller/Sub/7", Url = "https://cdn/7.webp", Type = "image", Origin = "online" } }, (string?)null));
+            GameWindow.DtrhCopier = new((url, _) =>
+            {
+                var dir = Directory.CreateDirectory(Path.Combine(CorePaths.EffectiveAssets, ".temp")).FullName;
+                var path = Path.Combine(dir, DtrhRemoteMedia.CopyPrefix + "7.webp");
+                File.WriteAllBytes(path, new byte[] { 1 });
+                return Task.FromResult<string?>(path);
+            }, _ => { });
+
+            var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var first = sent.Single(o => (string?)o["type"] == "manifest");
+            Assert.Equal("/ccp.assets/images/pic.png", (string?)first["images"]!.Single()["url"]);   // cold cache: one launch behind
+            Assert.Equal(1, DtrhRemoteMedia.CopiesReadyListeners);
+
+            // Loops come back dry, so stills are fetched next (the 30 min back-off), copied and re-posted.
+            DtrhRemoteMedia.RefillTask.Wait(TimeSpan.FromSeconds(10));
+            sent.Clear();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            DtrhRemoteMedia.RefillTask.Wait(TimeSpan.FromSeconds(10));
+            DtrhRemoteMedia.CopyTask.Wait(TimeSpan.FromSeconds(10));
+            sent.Clear();
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!sent.Any(o => (string?)o["type"] == "manifest") && DateTime.UtcNow < deadline) Dispatcher.UIThread.RunJobs();
+            var again = sent.Single(o => (string?)o["type"] == "manifest");
+            var images = again["images"]!.Select(e => ((string?)e["name"], (string?)e["url"])).ToList();
+            Assert.Contains(("pic.png", "/ccp.assets/images/pic.png"), images);                       // mixed: the library stays
+            Assert.Contains(("online40:Sub-7.webp", "/ccp.assets/.temp/ccp_temp_remote_7.webp"), images);
+
+            w.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, DtrhRemoteMedia.CopiesReadyListeners);
+        }
+        finally
+        {
+            (s.MediaSource, s.RemoteMediaConsented, s.RemoteMediaRatio, DtrhRemoteMedia.Fetch, GameWindow.DtrhCopier) = old;
+            DtrhRemoteMedia.ResetForTests();
+            File.Delete(cachePath);
+            File.Delete(Path.Combine(CorePaths.EffectiveAssets, ".temp", DtrhRemoteMedia.CopyPrefix + "7.webp"));
+        }
+    });
+
     /// <summary>WPF MainWindow.xaml.cs:1505 TryRacePauseOnEscape (DtRH since 2026-10-12): with Escape as the panic
     /// key and the game in front, the first press is the game's pause (kept-escape to the page, the game stays
     /// open, nothing exits); a second press inside 2 s is a full panic that closes it (PanicSurfaces "games").</summary>

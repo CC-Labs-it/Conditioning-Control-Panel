@@ -8,17 +8,16 @@ Web pages: every file the range added or changed under `ConditioningControlPanel
 No new non-text asset types (no audio/images), so `CCP.Avalonia.csproj` links need no change.
 
 Status legend: **ported-by-merge** = web-only change now served from `Assets/web/dtrh`;
-**ported-here** = landed in lane `avalonia-port/dtrh-feel-port` or `avalonia-port/game-dtrh-host`; **needs-port** = open, with reason;
+**ported-here** = landed in lane `avalonia-port/dtrh-feel-port`, `avalonia-port/game-dtrh-host` or `avalonia-port/game-dtrh-host-b`; **needs-port** = open, with reason;
 **n/a** = nothing to port, with reason.
 
 Lane **game-dtrh-host** (slice A, parity row `game-dtrh`) registered `dtrh/index.html` on
 `CCP.Avalonia/Views/Games/GameWindow.cs` (`GameWindow.Dtrh.cs`): init with `motionLevel`, the local manifest, the run
 lifecycle, Escape as the game's pause (`MainShellWindow.PanicKey.cs` -> `PanicPolicy.GameClaimsEscapeAsPause` /
-`KeptEscapeGoesTo` -> kept-escape) and panic closing it (PanicSurfaces "games"). The remaining host rows need the
-`DtrhAssetManifest` remote half (online media copies, loops lane, loops-dry back-off), which lands with lane
-**game-dtrh-host-b**.
+`KeptEscapeGoesTo` -> kept-escape) and panic closing it (PanicSurfaces "games"). Lane **game-dtrh-host-b** moved the
+`DtrhAssetManifest` remote half (online media copies, loops lane, loops-dry back-off) to Core `DtrhRemoteMedia`.
 
-Counts: 22 ported-by-merge, 2 ported-here, 3 needs-port, 0 n/a (total 27). A row whose host part is open counts as needs-port.
+Counts: 22 ported-by-merge, 5 ported-here, 0 needs-port, 0 n/a (total 27). A row whose host part is open counts as needs-port.
 
 | # | sha | subject | WPF files outside web/dtrh | Avalonia/Core counterpart | status |
 |---|---|---|---|---|---|
@@ -37,15 +36,15 @@ Counts: 22 ported-by-merge, 2 ported-here, 3 needs-port, 0 n/a (total 27). A row
 | 13 | `820811b9d` | fix(dtrh): feel wave 2 review - a click is not a hold, one figure per streak pop, the melt does not end a hold | none | `Assets/web/dtrh` | ported-by-merge |
 | 14 | `ce65441e6` | fix(dtrh): Escape only pauses the game, it never closes the window | `MainWindow/MainWindow.xaml.cs` (dtrhInFront joins GameClaimsEscapeAsPause, KeptEscapePage.Dtrh -> PostKeptEscape), `Services/Chaos/DtrhHostService.cs` (IsInFront, IsReady, PostKeptEscape), `Services/Safety/PanicPolicy.cs` | `CCP.Core/Services/Safety/PanicPolicy.cs` (KeptEscapePage.Dtrh + dtrh args, merged); page side (`engine/scene.js`, `exit.js`) in `Assets/web/dtrh` | ported-by-merge (Core rule + page) / ported-here (panel routing `MainShellWindow.PanicKey.cs` TryGamePauseOnEscape + `GameWindow.Dtrh.cs` PostKeptEscape, lane game-dtrh-host, test `GameWindowTests.Dtrh_EscapePauses_ASecondEscapeInsideTwoSecondsClosesIt`) |
 | 15 | `02e141d0d` | fix(dtrh): emotes no longer fly to the counter (owner call); gold still flies | none | `Assets/web/dtrh` | ported-by-merge |
-| 16 | `724ac82bc` | fix(dtrh): online media gets a copy on this machine so the tube can draw it | `Services/Chaos/DtrhAssetManifest.cs` (local copies of the remote pool, ccp.assets urls, re-post manifest, library steps aside at 8 copies), `Services/Chaos/DtrhHostService.cs` | none yet (`GameMediaManifest.cs` mirrors only the local library walk for the Back Room deal; online/mixed sources are not on this head) | needs-port (host exists since game-dtrh-host, local manifest only; the online pool copies + re-post land with lane game-dtrh-host-b) |
+| 16 | `724ac82bc` | fix(dtrh): online media gets a copy on this machine so the tube can draw it | `Services/Chaos/DtrhAssetManifest.cs` (local copies of the remote pool, ccp.assets urls, re-post manifest, library steps aside at 8 copies), `Services/Chaos/DtrhHostService.cs` | `CCP.Core/Services/Chaos/DtrhRemoteMedia.cs` (the remote half moved to Core, WPF `DtrhAssetManifest` now calls it with `RemoteMediaCache` as the copier); Avalonia copier writes `<assets>/.temp/ccp_temp_remote_*`, `WebAssetServer` serves exactly those, `GameWindow.Dtrh.cs` re-posts the manifest on `CopiesReady` with root-relative asset urls; tests `DtrhRemoteMediaTests`, `GameWindowTests.Dtrh_OnlineCopiesLand_TheManifestIsRepostedWithThemAsAssetUrls` | ported-here (lane game-dtrh-host-b) |
 | 17 | `c59173385` | feat(dtrh): the bubbles' own pictures move | none | `Assets/web/dtrh` | ported-by-merge |
 | 18 | `7860abdb2` | feat(dtrh): thread layers on the tube | none | `Assets/web/dtrh` | ported-by-merge |
 | 19 | `e69254f33` | feat(dtrh): the Loom weaves the Descent's spirals | none | `Assets/web/dtrh` (Loom store already Core `DtrhLoomStore`) | ported-by-merge |
 | 20 | `c591701b0` | feat(dtrh): pictures first in the tube, clips sparse later | none | `Assets/web/dtrh` | ported-by-merge |
 | 21 | `c648d30b8` | feat(dtrh): the dock toys wake on their own | none | `Assets/web/dtrh` | ported-by-merge |
-| 22 | `d86c3586a` | feat(dtrh): online gifs move, flash cards leave in style | `Services/Chaos/DtrhAssetManifest.cs` (loops lane: `RemoteEntry.IsLoop`, `loop:` name prefix, copy order loops > stills > clips) | none yet; page `hostMedia.js` in `Assets/web/dtrh` | needs-port (host manifest loops lane: lands with lane game-dtrh-host-b) |
+| 22 | `d86c3586a` | feat(dtrh): online gifs move, flash cards leave in style | `Services/Chaos/DtrhAssetManifest.cs` (loops lane: `RemoteEntry.IsLoop`, `loop:` name prefix, copy order loops > stills > clips) | `Core DtrhRemoteMedia` (`RemoteEntry.IsLoop`, `EntryName` `loop:` marker, `CopyOrder` loops > stills > clips, `PickRefill`); page `hostMedia.js` in `Assets/web/dtrh` | ported-here (lane game-dtrh-host-b) |
 | 23 | `4f4195f05` | fix(dtrh): flashes pick a moving picture whenever there is one; pause is a real pause in the app | none (page only: `engine/scene.js`, `engine/spawner.js`) | `Assets/web/dtrh` | ported-by-merge |
-| 24 | `f96e84ed4` | fix(dtrh): review of the play-session work - panic still closes the game, leaks and a flicker closed | `MainWindow/MainWindow.xaml.cs` (unclaimed panic Escape closes the DTRH window: `DtrhHostService.CloseActive()`), `Services/Chaos/DtrhAssetManifest.cs` (loops-dry back-off 30 min) | page fixes in `Assets/web/dtrh`; panic close = PanicSurfaces "games" once a DTRH GameWindow exists | ported-by-merge (page leaks/flicker) / ported-here (panic close: PanicSurfaces "games" closes the DTRH GameWindow, lane game-dtrh-host) / needs-port (loops-dry back-off: lands with lane game-dtrh-host-b) |
+| 24 | `f96e84ed4` | fix(dtrh): review of the play-session work - panic still closes the game, leaks and a flicker closed | `MainWindow/MainWindow.xaml.cs` (unclaimed panic Escape closes the DTRH window: `DtrhHostService.CloseActive()`), `Services/Chaos/DtrhAssetManifest.cs` (loops-dry back-off 30 min) | page fixes in `Assets/web/dtrh`; panic close = PanicSurfaces "games" once a DTRH GameWindow exists | ported-by-merge (page leaks/flicker) / ported-here (panic close: PanicSurfaces "games" closes the DTRH GameWindow, lane game-dtrh-host) / ported-here (loops-dry back-off: Core `DtrhRemoteMedia.PickRefill`/`MarkLoopsDry` 30 min, lane game-dtrh-host-b) |
 | 25 | `d3bf87937` | feat(dtrh): no still pictures where a moving one can be had; flash bubble loses its dark core; quieter defaults | none | `Assets/web/dtrh` | ported-by-merge |
 | 26 | `7db2f6c12` | feat(dtrh): chrome drops more often; material bubbles wear a ring of drifting motes | none | `Assets/web/dtrh` | ported-by-merge |
 | 27 | `46e9e908d` | feat(dtrh): the fall gathers pace, junction tubes rush, toy wakes are seen, the guide's voice obeys its level | none | `Assets/web/dtrh` | ported-by-merge |
