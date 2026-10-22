@@ -342,15 +342,20 @@ namespace ConditioningControlPanel.Services
 
                 // If this was the active preset, switch to the context default: neutral when
                 // unmodded, the stock themed default under a themed mod.
-                if (CoreSettings.Service?.Current?.ActivePersonalityPresetId == presetId)
+                var wasActive = CoreSettings.Service?.Current?.ActivePersonalityPresetId == presetId;
+                if (wasActive)
                 {
                     CoreSettings.Service!.Current.ActivePersonalityPresetId = IsNeutralContext()
                         ? PersonalityPresets.NeutralDefaultId
                         : PersonalityPresets.BambiSpriteId;
+                    // A different voice from here on, as a pick: fence the deleted one's replies off the wire.
+                    CoreSettings.Service!.Current.PersonaVoiceFenceUtc = DateTime.UtcNow;
                 }
 
                 CoreSettings.Service?.Save();
                 Log.Information("PersonalityService: Deleted user preset: {Name}", preset.Name);
+                // The studio's Delete is the first caller (#1481): chips and pickers re-read on this.
+                if (wasActive) PersonalityChanged?.Invoke(this, GetActivePreset());
                 return true;
             }
 
