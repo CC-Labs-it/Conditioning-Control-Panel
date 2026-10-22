@@ -5,9 +5,9 @@
 //
 // sync6-nav-rail-c added the edge spur, the art tint (navtint), the label glow, the 160 ms halo
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
-// ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
-// rail shadow (PaintDepthRail) - lane
-// wire-shell-nav-rail-b; the possession reroute seam (WPF PossessionReroute, written only by
+// wire-shell-nav-rail-b added the coin depth (BuildNavCoin, press travel + spring, tilt, specular)
+// and the rail shadow (PaintDepthRail), in MainShellWindow.NavCoin.cs.
+// ponytail: not yet here (lane wire-shell-nav-rail-b-next): the possession reroute seam (WPF PossessionReroute, written only by
 // Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
@@ -43,7 +43,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             internal Border? Tile, Ring, Shade, Art, Tint, Badge, Spur;
             internal TextBlock? Label, BadgeText;
             internal Color Hue;
-            internal bool Active, Painted;
+            internal bool Active, Painted, Hovered, Pressed;
+            /// <summary>The coin's own parts (WPF polish wave 10/11), built once by BuildNavCoin.</summary>
+            internal NavCoinParts? Coin;
+            /// <summary>The row's content Grid: the one element that travels and leans.</summary>
+            internal Panel? Face;
+            internal readonly TranslateTransform Lift = new();
+            internal readonly RotateTransform Tilt = new();
         }
 
         // WPF NavRailRules: row tint 0x33, tile tint 0x40, ring idle/hover/active alpha, lit halo.
@@ -91,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 NavBadges.Changed += OnNavBadgeChanged;
                 Closed += (_, _) => NavBadges.Changed -= OnNavBadgeChanged;
                 foreach (var row in _navSectionRows) PaintNavBadge(row, NavBadges.Get(row.Section));
+                if (Named<Rectangle>("NavRailShadow") is { } railShadow) railShadow.Width = DepthLaw.RailShadowPx;   // WPF :126
                 // WPF :118 + MainWindow.xaml.cs:3653: the active mod's medallions, again on a mod switch.
                 ApplyDoorArt();
                 ApplyModToNavRailLabels();
@@ -117,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (nav/door_*.png) are the mod compatibility surface. A null resolve leaves the authored
         /// Source alone. Social's XAML placeholder (the Lobby picture under a shade) gives way to the
         /// shipped or modded nav/door_social.png, and the shade goes with it. ponytail: WPF's
-        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are lane wire-shell-nav-rail-b.</summary>
+        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are lane wire-shell-nav-rail-b-next.</summary>
         internal void ApplyDoorArt()
         {
             try
@@ -170,7 +177,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                 }
                 row.Shade = Named<Border>("Shade" + name);
-                if (btn.Content is Panel face) AddNavRowParts(row, face);
+                if (btn.Content is Panel face)
+                {
+                    AddNavRowParts(row, face);
+                    if (row.Tile != null)
+                    {
+                        // WPF :188: the coin around the tile; the face travels (Lift) and leans (Tilt).
+                        row.Face = face;
+                        row.Coin = BuildNavCoin(face, row.Tile, row.Tint, row.Ring, row.Art, row.Hue);
+                        face.RenderTransformOrigin = new RelativePoint(0.5, 0.4, RelativeUnit.Relative);
+                        face.RenderTransform = new TransformGroup { Children = { row.Tilt, row.Lift } };
+                    }
+                }
                 if (row.Glow != null)
                     row.Glow.Fill = new RadialGradientBrush
                     {
@@ -185,8 +203,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         Color = AmbientFxCanvas.Env.GlowColor, BlurRadius = 6, OffsetX = 0, OffsetY = 0, Opacity = 0.45,
                     };
                 var captured = row;
-                btn.PointerEntered += (_, _) => { PaintNavRing(captured, hover: true); NudgeNavIcon(captured, true); };
-                btn.PointerExited += (_, _) => { PaintNavRing(captured, hover: false); NudgeNavIcon(captured, false); };
+                HookNavPress(captured);
+                btn.PointerEntered += (_, _) =>
+                {
+                    captured.Hovered = true;
+                    PaintNavRing(captured, hover: true);
+                    NudgeNavIcon(captured, true);
+                    PaintNavCoin(captured);
+                };
+                btn.PointerExited += (_, _) =>
+                {
+                    captured.Hovered = false;
+                    captured.Pressed = false;
+                    PaintNavRing(captured, hover: false);
+                    NudgeNavIcon(captured, false);
+                    SettleNavTilt(captured);
+                    PaintNavCoin(captured);
+                };
+                btn.PointerMoved += (_, e) => TiltNavCoin(captured, e);
                 ToolTip.AddToolTipOpeningHandler(btn, (_, _) => ToolTip.SetTip(btn, BuildNavRowToolTip(captured)));
                 PaintNavRowActive(row);
                 _navSectionRows.Add(row);
@@ -279,6 +313,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 row.Tint.Background = new SolidColorBrush(WithAlpha(row.Hue, row.Active ? NavArtTintActiveAlpha : (byte)0));
             PaintNavSpur(row);
             PaintNavRing(row, hover: row.Button.IsPointerOver);
+            // WPF :669: the lit coin sits down in its socket; a press in flight wins.
+            if (row.Active) SettleNavTilt(row);
+            PaintNavCoin(row);
         }
 
         /// <summary>The opacity fade the halo and spur share, or none at Motion Off.</summary>
