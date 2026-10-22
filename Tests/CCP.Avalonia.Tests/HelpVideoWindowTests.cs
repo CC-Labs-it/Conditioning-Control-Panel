@@ -114,7 +114,9 @@ public sealed class HelpVideoWindowTests
                 var content = new HelpContent { SectionId = "HelpClipTest", Title = "Clip", ClipFile = "help-test-clip.mp4", WhatItDoes = "blurb" };
                 Assert.False(HelpLoopRegistry.Has(content.SectionId));
                 // WPF starts the clip on Loaded: a window that is never shown never starts a player.
-                Assert.Null(new HelpVideoWindow(content).Player);
+                var unshown = new HelpVideoWindow(content);
+                Assert.Null(unshown.Player);
+                unshown.Close();
                 HelpVideoWindow.Show(content, null);
                 var win = Current()!;
                 try
