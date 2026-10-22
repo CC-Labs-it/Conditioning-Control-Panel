@@ -739,3 +739,51 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 4 sky depth
+
+Three original nebula layers sit between the existing galaxy and star layers.
+They are soft static equirectangular colour and straight-alpha fields, with
+billowing density, translucent dust and broad veils. No star sprites, motion,
+flashes or spiral animation are baked. The existing galaxy is not replaced.
+
+Desktop nebulae are 2048 x 1024; phone variants are 1024 x 512 and use -phone
+IDs with tier phone. All are sRGB UASTC KTX2 with mips. Decode sRGB before
+compositing. Repeat U and clamp V. Source longitudes match and poles are constant.
+The host owns sky layer scale, relative rotation, opacity and Gentle Visuals.
+
+Only ONE active palette nebula is resident on ANY tier. Desktop active allocation
+is 10.667 MiB RGBA8 including mips; phone active allocation is 2.667 MiB.
+All three palette files are supplied, but do not preload all three.
+On a palette change, release the old nebula before loading the new one, or use
+a temporary crossfade budget explicitly accounted by the host.
+
+shooting-star is a grayscale ETC1S streak, desktop 256 x 64 and phone 128 x 32.
+Sample .r, clamp both axes, orient its bright head toward the direction of travel.
+Its opacity, lifetime and movement come from the engine. It adds 0.083 MiB on
+desktop and 0.021 MiB on phone. No model triangles.
+
+UASTC avoids visible colour banding in translucent nebula gradients. Every KTX2
+passes strict validation, is decoded, and is reviewed alone and over the existing
+galaxy. Private checks record seams, poles, error and exact file hashes.
+Artwork is original deterministic spherical density fields using project palettes.
+No third-party imagery or runtime text. Sources, masters and contacts stay private.
+
+### Tier residency and running budget
+
+Load only the selected texture tier: plain IDs on desktop, matching -phone IDs on phone.
+The tiers share GLBs, SVGs and per-vertex sidecars. Only the active sky palette nebula
+is resident on either tier; release the previous palette layer before loading another.
+
+| Tier | This family MiB | W4 cumulative MiB | Running persistent MiB | With one menu backdrop MiB |
+|---|---:|---:|---:|---:|
+| desktop | 10.750008 | 87.083347 | 196.416664 | 205.416664 |
+| phone | 2.687508 | 9.770847 | 119.104164 | 127.014320 |
+
+Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
+Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
+These are conservative decoded RGBA8 allocations including supplied mip chains, not
+compressed download sizes. The one-at-a-time Wave 3 backdrops add 9 MiB on desktop
+and 7.910156 MiB on phone. SVGs have zero baked texture allocation. Per-vertex
+sidecars are separate attribute bytes, never counted as texture memory.
+The combined phone persistent addition stays below 14 MiB; the phone ceiling is 128 MiB.
