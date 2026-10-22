@@ -109,7 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var path = new[]
                 {
                     Path.Combine(root, "Resources", "sounds", "lvup.mp3"),
-                    Path.Combine(root, "Resources", "sounds", "lvlup.mp3"),
+                    Path.Combine(root, "Resources", "lvlup.mp3"),
                     Path.Combine(root, "assets", "sounds", "lvlup.mp3"),
                 }.FirstOrDefault(File.Exists);
                 if (path == null) return;

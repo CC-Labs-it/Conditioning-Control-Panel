@@ -60,6 +60,27 @@ public sealed class CompanionShellEventsTests
     });
 
     [Fact]
+    public void DrainFlashesTheHeroCardXpBar() => WithShell((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        s.CompanionPerk = CompanionBonusType.XPDrain;
+        s.PlayerXP = 23;
+        s.ActiveCompanionProgress.CurrentXP = 11;
+        var overlay = shell.GetLogicalDescendants().OfType<CompanionHeroCard>().Single()
+            .FindControl<Border>("PrgCompanion0FlashOverlay")!;
+        Assert.Equal(0, overlay.Opacity);
+        CompanionCore.DrainTick(DateTime.UtcNow);
+        double peak = 0;
+        for (int i = 0; i < 30; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            peak = Math.Max(peak, overlay.Opacity);
+        }
+        Assert.True(peak > 0, "the drain never flashed the hero card's XP bar");
+    });
+
+    [Fact]
     public void RoomMuteRefreshesTubeMenuAndKeepsTheBubble() => WithShell((shell, hero) =>
     {
         var tube = shell.Tube!;
