@@ -13,11 +13,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// OnOverlayClosed tear down the same way.
     ///
     /// <para>ponytail: three things are NOT here, so nothing user-facing starts a run yet (the
-    /// hub's FALL IN stays a logged no-op): the bubble field (SpawnTick, pops, score), the boon
+    /// hub's FALL IN stays a logged no-op): the bubble field (SpawnTick, pops, score - its rules
+    /// are in Core now: ChaosBubbleVariants picks the spec, ChaosFieldMath the cadence and pop
+    /// points, EffectPayload.Firer is the unseeded payload hook; still missing is a chaos bubble
+    /// on BubbleOverlay with fuses, defuse and detonation, and this head's payload firer), the boon
     /// draft on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts
     /// off), and the payout (AddXP, AwardRunRewards, RevealService.Sync, the rank card) - the
     /// recap shows the computed XP and never saves. A bubble-less run that banked rewards would
-    /// diverge from WPF.</para>
+    /// diverge from WPF. The FX window's Pulse/FreezeBurst/edge-hold callers (pops, detonations,
+    /// the freeze power-up) come with the bubble field; only the heat tint is driven from here.</para>
     ///
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
     /// it directly. It does nothing while the overlay is hidden (P01).</para>
@@ -29,12 +33,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosOverlayWindow? _overlay;
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer;
+        private static ChaosFxWindow? _fx;
+        private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused;
 
         internal static ChaosRunState? State => _state;
         internal static ChaosOverlayWindow? Overlay => _overlay;
         internal static ChaosHudWindow? Hud => _hud;
         internal static ChaosBoonBarOverlay? BoonBar => _boonBar;
+        internal static ChaosFxWindow? Fx => _fx;
         internal static bool IsActive => _active;
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
@@ -48,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state = new ChaosRunState(cfg);
                 _active = true;
+                _lastHeatTint = -1;
                 _hud = new ChaosHudWindow(_state);
                 _hud.Show();
                 _overlay = ChaosOverlayWindow.ForRun();
@@ -80,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
             _state.StartShields = _state.Shields;
             _spawning = true;
+            _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
             _runTimer.Tick += (_, _) => Tick();
             _runTimer.Start();
@@ -91,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null || _manualPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
+            UpdateHeatTint();
             var end = ChaosRunEngine.CheckEnd(_state, elapsed);
             if (end == ChaosRunEngine.EndCheck.RunOver) { EndRun(); return; }
             if (end == ChaosRunEngine.EndCheck.Relapse) _state.PushEvent("☠ relapse. one more loop — everything drips double");
@@ -102,6 +112,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.WaveIndex = newWave;
                 _state.ActIndex = ChaosRunEngine.ActFor(newWave);
             }
+        }
+
+        /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
+        /// re-issued only when the quantized level moves. Honours the colour-flashes toggle.</summary>
+        private static void UpdateHeatTint()
+        {
+            if (_state?.Config?.ColorFlashesEnabled != true || _fx == null) return;
+            if (ChaosFxEnvelope.HeatTintLevel(_state.Heat, _lastHeatTint) is not { } q) return;
+            _lastHeatTint = q;
+            var (r, g, b) = ChaosFxEnvelope.HeatTintColor;
+            if (q <= 0) _fx.EndHeatTint();
+            else _fx.SetHeatTint(global::Avalonia.Media.Color.FromRgb(r, g, b), q * ChaosFxEnvelope.HEAT_TINT_MAX_OPACITY);
+        }
+
+        private static void CloseFx()
+        {
+            try { _fx?.Close(); } catch (Exception ex) { Log.Debug("Chaos FX close: {E}", ex.Message); }
+            _fx = null;
         }
 
         /// <summary>WPF ToggleManualPause (:257), the clock half: paused holds the clock.</summary>
@@ -122,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
-            if (!_active && _hud == null && _overlay == null) return;
+            if (!_active && _hud == null && _overlay == null && _fx == null) return;
             _spawning = false;
             _runTimer?.Stop();
             if (_overlay != null)
@@ -132,6 +160,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 try { _overlay.Close(); } catch (Exception ex) { Log.Debug("Chaos overlay close: {E}", ex.Message); }
             }
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
+            ChaosGifCascadeOverlay.CloseActive();   // WPF ForceShutdown :3176
+            CloseBoonBar();   // WPF ForceShutdown :3181
+            CloseFx();   // WPF ForceShutdown :3189
             CleanupAfterRun();
         }
 
@@ -141,6 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null) return;
             _spawning = false;
             _runTimer?.Stop();
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF EndRun :3241
 
             double durMin = Math.Max(1, _state.RunDurationSec) / 60.0;
             double capBase = 250.0 * durMin * _state.Config.DifficultyMult;
@@ -151,8 +183,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
+            ChaosGifCascadeOverlay.CloseActive();   // WPF EndRun :3229
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
             CloseBoonBar();   // WPF EndRun :3235
+            CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
             Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
                 baseXp, skillMult, finalXp);
@@ -181,8 +215,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
             CloseBoonBar();
+            CloseFx();   // WPF CleanupAfterRun :3338 (also covers an overlay closed mid-run)
             _runTimer = null;
             _hud = null;
             _overlay = null;

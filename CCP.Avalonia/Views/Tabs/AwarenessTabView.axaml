@@ -27,8 +27,7 @@
        x:FieldModifier="internal"     ->  dropped; no host re-publishes these fields on this head,
                                           and the x:Names are kept so the wiring is a one-line change.
        feat:SessionLock.Owned         ->  sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
-       feat:AdaptiveSideArt.CollapseBelow -> dropped; the attached behaviour lives in the WPF head. The 3*/2* split with
-                                          MaxWidth="780" is kept verbatim.
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        hover:HoverPop.IsEnabled       ->  unchanged (Controls/HoverPop.cs)
        pack:// BitmapImage AwarenessArt -> dropped, and with it the ElementName ImageBrush bindings
                                           that fed the hero strip and the side plate. This head
@@ -36,7 +35,7 @@
                                           geometry, mask and scrim and draw the hue wash instead.
                                           ImgAwarenessFeature survives as the same zero-size carrier
                                           so the per-mod art swap is one avares:// line later. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
@@ -158,9 +157,9 @@
                      The settings column is capped (3*, MaxWidth 780) so a cooldown slider stops
                      being a ~1200px runway, and the width that buys back becomes one big art
                      card instead of dead margin. On WPF, feat:AdaptiveSideArt collapses the art
-                     column below 1000px so the settings retake the full width; that attached
-                     behaviour is not ported and the column split is unchanged. -->
-                <Grid Grid.Row="1">
+                     column below 1000px so the settings retake the full width; same here
+                     (Helpers/AdaptiveSideArt.cs). -->
+                <Grid sideart:AdaptiveSideArt.CollapseBelow="1000" Grid.Row="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" MaxWidth="780"/>
                         <ColumnDefinition Width="2*"/>
