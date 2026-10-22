@@ -483,6 +483,15 @@ namespace ConditioningControlPanel.Services
             SubliminalWhisper.FindLinkedAudio(text, SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath),
                 _audioPath, App.Mods?.ActiveModId, ListAudioFiles);
 
+        /// <summary>True when the phrase has a recorded clip on the active mod: the same lookup the
+        /// player runs before it speaks, so the editors can mark the lines that will stay silent.</summary>
+        public bool HasRecordedVoice(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            try { return FindLinkedAudio(text) != null; }
+            catch { return false; }
+        }
+
         private string[]? ListAudioFiles(string directory, bool isModCache)
         {
             if (!Directory.Exists(directory)) return null;
@@ -591,9 +600,6 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>The app's own card envelope: 50 ms each side of the hold.</summary>
-        private const int DefaultFadeMs = 50;
-
         private void ShowSubliminalVisuals(string text, int? opacity = null, int? overrideDurationMs = null, int? oneShotGen = null,
             int? fadeInMs = null, int? fadeOutMs = null)
         {
@@ -603,7 +609,11 @@ namespace ConditioningControlPanel.Services
 
             // Guard against delayed callbacks firing after Stop() — prevents orphaned windows
             // Allow one-shot from remote control even when service not running
-            if (!_isRunning && !_oneShotActive) return;
+            // A show that carries a dispatch generation IS a point-fired one and is admitted on
+            // that alone (ccp-bugs #1421). The latch is one bool for every pending show: with a toy
+            // connected each show waits out the haptic head start, so the first to arrive cleared
+            // the latch and every other one fired inside that wait was dropped here.
+            if (!OneShotGate.AdmitsShow(_isRunning, _oneShotActive, oneShotGen)) return;
             _oneShotActive = false;
 
             // Remember whose card is on screen, so a later StopOneShotSubliminals can tell a
@@ -614,19 +624,20 @@ namespace ConditioningControlPanel.Services
             _subliminalCount++;
             SubliminalDisplayed?.Invoke(this, EventArgs.Empty);
 
-            // Duration in frames * ~16.6ms per frame, minimum 100ms.
-            // Caller may override (Deeper engine passes the timeline segment width).
-            var durationMs = overrideDurationMs.HasValue
-                ? Math.Max(100, overrideDurationMs.Value)
-                : Math.Max(100, App.Settings.Current.SubliminalDuration * 17);
-            var targetOpacity = (opacity ?? App.Settings.Current.SubliminalOpacity) / 100.0;
-            int fadeIn = Math.Max(1, fadeInMs ?? DefaultFadeMs), fadeOut = Math.Max(1, fadeOutMs ?? DefaultFadeMs);
+            // Hold, alpha and fades are Core's (SubliminalCard), shared with the Avalonia overlay.
+            var durationMs = SubliminalCard.HoldMs(App.Settings.Current.SubliminalDuration, overrideDurationMs);
+            var targetOpacity = SubliminalCard.Alpha(opacity ?? App.Settings.Current.SubliminalOpacity);
+            int fadeIn = SubliminalCard.FadeMs(fadeInMs), fadeOut = SubliminalCard.FadeMs(fadeOutMs);
+            // Gentle visuals: the card fades in and out over the gentle fade (hold time unchanged).
+            var gentle = Safety.GentleVisuals.On;
+            if (gentle) { fadeIn = Safety.GentleVisuals.FadeMs(fadeIn); fadeOut = Safety.GentleVisuals.FadeMs(fadeOut); }
 
             // Colors from settings
             var bgColor = ParseColor(App.Settings.Current.SubBackgroundColor, Colors.Black);
             var textColor = ParseColor(App.Settings.Current.SubTextColor, Color.FromRgb(255, 0, 255)); // Magenta
             var borderColor = ParseColor(App.Settings.Current.SubBorderColor, Colors.White);
-            var bgTransparent = App.Settings.Current.SubBackgroundTransparent;
+            // Gentle visuals: no full-screen card behind the words.
+            var bgTransparent = App.Settings.Current.SubBackgroundTransparent || gentle;
 
             // Get all monitors and reuse (or lazily create) the keep-alive window per screen
             var screens = App.GetGlobalScreens();
@@ -636,7 +647,12 @@ namespace ConditioningControlPanel.Services
             // rendering both collapse into the layer - bgTransparent handles the difference).
             // Focus-steal can't come from a NOACTIVATE host, so it stays on the classic windows;
             // a layer failure falls through to the legacy paths so a flash is never lost.
-            if (UseCompositor && !stealsFocus &&
+            //
+            // Not over a video (ccp-bugs #1422): the host is pinned directly below the video
+            // window, so a card on it was unreadable for the whole clip. Over a video the card
+            // uses the per-screen window, slotted just above the clip (SubliminalOverVideo).
+            var videoWindows = LiveVideoWindows();
+            if (SubliminalOverVideo.UsesCompositorCard(UseCompositor, stealsFocus, videoWindows.Count > 0) &&
                 ShowCompositorSubliminal(screens, text, bgColor, textColor, borderColor,
                     bgTransparent, targetOpacity, durationMs, fadeIn, fadeOut))
             {
@@ -664,7 +680,7 @@ namespace ConditioningControlPanel.Services
                 BuildSubliminalContent(win, text, bgColor, textColor, borderColor, bgTransparent);
                 if (!win.IsVisible) win.Show();   // stays shown (transparent) between flashes; only
                                                   // hidden by Stop(), so this re-shows after a stop
-                ApplyWindowStyles(win, screen.Bounds, stealsFocus);
+                ApplyWindowStyles(win, screen.Bounds, stealsFocus, videoWindows);
                 if (stealsFocus) win.Activate();
                 PositionSubliminalText(win);
                 AnimateSubliminal(win, targetOpacity, durationMs, fadeIn, fadeOut);
@@ -704,7 +720,7 @@ namespace ConditioningControlPanel.Services
 
                 if (_layer == null)
                 {
-                    _layer = new Compositor.SubliminalLayer(App.Compositor!);
+                    _layer = new Compositor.SubliminalLayer(App.Compositor!.Wake);
                     App.Compositor!.RegisterLayer(_layer);
                 }
                 _layer.Flash(placements, text,
@@ -766,15 +782,10 @@ namespace ConditioningControlPanel.Services
                 // Same outlined-text construction as BuildSubliminalContent, but positioned now:
                 // the card's size is known up front, no ActualWidth round-trip needed.
                 var textCanvas = new Canvas { IsHitTestVisible = false };
-                var fontSize = 120;
-                var offsets = new (double x, double y)[]
-                {
-                    (-3, -3), (3, -3), (-3, 3), (3, 3),
-                    (0, -4), (0, 4), (-4, 0), (4, 0)
-                };
+                var fontSize = SubliminalCard.FontDip;
                 var centerX = dipW / 2.0;
                 var centerY = dipH / 2.0;
-                foreach (var (ox, oy) in offsets)
+                foreach (var (ox, oy) in SubliminalCard.OutlineOffsets)
                 {
                     var borderText = CreateTextBlock(text, fontSize, borderColor);
                     borderText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -989,17 +1000,10 @@ namespace ConditioningControlPanel.Services
                 VerticalAlignment = System.Windows.VerticalAlignment.Stretch
             };
 
-            var fontSize = 120;
-
-            // Border/outline offsets
-            var offsets = new (double x, double y)[]
-            {
-                (-3, -3), (3, -3), (-3, 3), (3, 3),
-                (0, -4), (0, 4), (-4, 0), (4, 0)
-            };
+            var fontSize = SubliminalCard.FontDip;
 
             // Draw border text (positioned by PositionSubliminalText once sizes are known)
-            foreach (var (ox, oy) in offsets)
+            foreach (var (ox, oy) in SubliminalCard.OutlineOffsets)
             {
                 var borderText = CreateTextBlock(text, fontSize, borderColor);
                 borderText.Tag = (ox, oy, true); // Store offset and isBorder flag
@@ -1020,7 +1024,8 @@ namespace ConditioningControlPanel.Services
         /// the live hwnd. Runs per show: StealsFocus can change between shows, and bounds
         /// can change with display layout.
         /// </summary>
-        private void ApplyWindowStyles(Window win, System.Drawing.Rectangle targetBounds, bool stealsFocus)
+        private void ApplyWindowStyles(Window win, System.Drawing.Rectangle targetBounds, bool stealsFocus,
+            IReadOnlyList<(IntPtr Hwnd, IntPtr Monitor)>? videoWindows = null)
         {
             try
             {
@@ -1037,9 +1042,20 @@ namespace ConditioningControlPanel.Services
 
                 // Position window using SetWindowPos with SWP_NOACTIVATE for robust no-focus behavior
                 // Use physical pixel coordinates to bypass WPF DPI virtualization
-                SetWindowPos(hwnd, HWND_TOPMOST,
+                // Over a video the card goes directly ABOVE the clip, never to the top of the
+                // band: a lock card, the Lockdown veil or a panic surface above the video stays
+                // above the words too (ccp-bugs #1422).
+                var slot = videoWindows is { Count: > 0 }
+                    ? SubliminalOverVideo.ResolveSlot(ReadTopmostBand(), videoWindows, hwnd,
+                        MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+                    : new SubliminalOverVideo.Slot(SubliminalOverVideo.SlotKind.TopOfBand, IntPtr.Zero);
+                uint flags = SWP_NOACTIVATE | SWP_SHOWWINDOW;
+                IntPtr insertAfter = HWND_TOPMOST;
+                if (slot.Kind == SubliminalOverVideo.SlotKind.Keep) flags |= SWP_NOZORDER;
+                else if (slot.Kind == SubliminalOverVideo.SlotKind.Below) insertAfter = slot.InsertAfter;
+                SetWindowPos(hwnd, insertAfter,
                     targetBounds.X, targetBounds.Y, targetBounds.Width, targetBounds.Height,
-                    SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                    flags);
 
                 // Subliminal cards are intentionally LEFT in screen capture so they show up in the
                 // user's screen recordings. The awareness OCR no longer relies on capture exclusion
@@ -1172,6 +1188,10 @@ namespace ConditioningControlPanel.Services
             try
             {
                 if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() != true) return handles;
+                // Over a video the card's slot is "directly above the clip", set on every show
+                // (ccp-bugs #1422). The reconciler only knows "top of the band", which on a forced
+                // tick would lift the words over a lock card: it gets no handle to lift.
+                if (LiveVideoWindows().Count > 0) return handles;
                 foreach (var win in _screenWindows.Values)
                 {
                     if (win == null || !win.IsVisible || win.Opacity <= 0.01) continue;
@@ -1181,6 +1201,42 @@ namespace ConditioningControlPanel.Services
             }
             catch { /* a diagnostic/reconciler accessor must never throw */ }
             return handles;
+        }
+
+        /// <summary>
+        /// Every live mandatory-video window with the monitor it covers; empty when no video is
+        /// playing. The same set OverlayService.ReassertZOrder pins the compositor host under.
+        /// Never throws.
+        /// </summary>
+        private static List<(IntPtr Hwnd, IntPtr Monitor)> LiveVideoWindows()
+        {
+            var list = new List<(IntPtr, IntPtr)>();
+            try
+            {
+                var video = App.Video;
+                if (video?.IsPlaying != true) return list;
+                foreach (var h in video.GetVideoWindowHandles())
+                {
+                    if (h == IntPtr.Zero || !IsWindow(h)) continue;
+                    list.Add((h, MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST)));
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        /// <summary>The topmost band, front window first. It ends at the first window that is not
+        /// topmost; capped so an odd window list can never stall the UI thread.</summary>
+        private static List<IntPtr> ReadTopmostBand()
+        {
+            var band = new List<IntPtr>(64);
+            int steps = 0;
+            for (IntPtr h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero && steps++ < 1024; h = GetWindow(h, GW_HWNDNEXT))
+            {
+                if ((GetWindowLong(h, GWL_EXSTYLE) & WS_EX_TOPMOST) == 0) break;
+                band.Add(h);
+            }
+            return band;
         }
 
         /// <summary>Center the border/main text blocks for the current content + window size.</summary>
@@ -1280,7 +1336,7 @@ namespace ConditioningControlPanel.Services
             };
         }
 
-        private void AnimateSubliminal(Window win, double targetOpacity, int holdMs, int fadeInMs = DefaultFadeMs, int fadeOutMs = DefaultFadeMs)
+        private void AnimateSubliminal(Window win, double targetOpacity, int holdMs, int fadeInMs = SubliminalCard.DefaultFadeMs, int fadeOutMs = SubliminalCard.DefaultFadeMs)
         {
             var fadeInDuration = TimeSpan.FromMilliseconds(fadeInMs);
             var holdDuration = TimeSpan.FromMilliseconds(holdMs);
@@ -1379,6 +1435,23 @@ namespace ConditioningControlPanel.Services
         private const uint SWP_NOACTIVATE = 0x0010;
         private const uint SWP_SHOWWINDOW = 0x0040;
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private const int WS_EX_TOPMOST = 0x00000008;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint GW_HWNDNEXT = 2;
+        private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetTopWindow(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool IsWindow(IntPtr hWnd);
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern int GetWindowLong(IntPtr hwnd, int index);

@@ -88,4 +88,15 @@ public class ChasterHooksTests
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization"))) dir = dir.Parent;
         return dir?.FullName ?? throw new DirectoryNotFoundException("repo root");
     }
+
+    [Theory]
+    [InlineData("melt", "melt")]
+    [InlineData("emi3", CircesTab.JackpotEventId)]
+    [InlineData("gif3same", null)]
+    [InlineData("none", null)]
+    [InlineData(null, null)]
+    public void Only_the_melt_line_and_the_jackpot_line_touch_the_tab(string? line, string? row)
+    {
+        Assert.Equal(row, ChasterHooks.SlotLineRow(line));
+    }
 }

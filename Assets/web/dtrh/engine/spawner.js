@@ -22,6 +22,7 @@
 
 import * as THREE from 'three';
 import { videoAllowed, newCardMix, noteCard } from './cardMix.js';
+import { createStageGate } from './videoStage.js';
 import { Q } from '../shared/quality.js';
 import { isMuted } from '../shared/audioMute.js';
 import { getLevel } from './audioLevels.js';
@@ -464,7 +465,8 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   let liveVeils = 0;
   let paused = false;         // ESC pause (scene stops calling update too)
   let spotlight = null;       // the promoted video card, if any
-  let grabbed = null;         // an image/gif card the player is holding in front of the POV
+  const stage = createStageGate(); // closed between descents: no clip may hold the stage (#1470)
+  let grabbed = null;        // an image/gif card the player is holding in front of the POV
   let nextSpotlightOkAt = 60; // camera depth before the next feature may start
   let autoSpotlightOk = true; // Wave 2: the game turns approach-promotion off mid-run
   let pickupTimeScale = 1;    // Wave 2: pickups follow the game's freeze/slow-mo clock
@@ -1726,13 +1728,15 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   // url = null draws a random user video from the media pool. Async: resolves
   // true once the stage is taken, false if there was nothing to show.
   async function forceSpotlight(url, secs, release) {
-    if (spotlight) return false;
+    const ticket = stage.ticket();
+    if (spotlight || !stage.mayOpen(ticket)) return false;
     if (!url) {
       const entry = media.drawKind('video');
       if (!entry) return false;
       const acq = await entry.acquire();
       if (!acq) return false;
-      if (spotlight) { if (acq.release) acq.release(); return false; }
+      // the run may have stood down while the clip decrypted: a closed stage refuses it
+      if (spotlight || !stage.mayOpen(ticket)) { if (acq.release) acq.release(); return false; }
       url = acq.url; release = acq.release;
     }
     const rec = buildVideoCard(camDepthNow + 12, url, { withAudio: true, release });
@@ -2024,7 +2028,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
       // never-loaded video used to freeze the WHOLE conveyor: an invisible
       // stage whose clipLeft never counts down (it only ticks while playing)
       // suppresses every card spawn until the run ends.
-      if (rec.spotlightable && autoSpotlightOk && !paused && rec.group.visible && !spotlight && camDepth >= rec.depth - 16 && camDepth >= nextSpotlightOkAt) {
+      if (rec.spotlightable && autoSpotlightOk && !paused && !stage.isClosed() && rec.group.visible && !spotlight && camDepth >= rec.depth - 16 && camDepth >= nextSpotlightOkAt) {
         promoteSpotlight(rec, camera);
         continue;
       }
@@ -2189,6 +2193,13 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
     }
   }
 
+  // Between descents the stage is closed (ccp-bugs #1470). Parking alone froze a clip on
+  // stage in front of the camera, because its countdown only ticks while the conveyor runs.
+  // A zero countdown takes the usual fade-out path, which runs paused or not.
+  function setStageClosed(on) {
+    if (stage.setClosed(on, !!spotlight)) spotlight.clipLeft = 0;
+  }
+
   // ESC pause: park every live video; the scene stops calling update() too.
   function setPaused(v) {
     paused = !!v;
@@ -2224,7 +2235,7 @@ export function createSpawner({ scene, layout, media, renderer, camera, onCardAp
   });
 
   return {
-    update, reset, dispose, setPaused, warm,
+    update, reset, dispose, setPaused, setStageClosed, warm,
     grabAtPointer, releaseGrab, probeGrab, grabExternalCard,
     setGrabHooks, setMirror, meltAll,
     // The Surfacing: 0..1 global card slump (see update); 0 stands them back up.

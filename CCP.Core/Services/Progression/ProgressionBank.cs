@@ -10,7 +10,7 @@ namespace ConditioningControlPanel
     /// level loop with <c>HighestLevelEver</c>.
     /// ponytail: of the skill multiplier only Pink Rush's 3x is applied (sparkle boosts, streak power, night
     /// shift, early bird and event boost are not, so owners are under-awarded, which errs safe), no skill
-    /// points or companion XP - each lands with its ported feature. Level achievements listen to <see cref="LevelUp"/>; quests listen to <see cref="Awarded"/>
+    /// points - they land with their ported feature. Companion XP: CompanionCore.AddCompanionXP. Level achievements listen to <see cref="LevelUp"/>; quests listen to <see cref="Awarded"/>
     /// (the Avalonia head feeds it to QuestService.TrackXPEarned, as WPF AddXP:120 does).
     /// </summary>
     public static class ProgressionBank
@@ -43,6 +43,8 @@ namespace ConditioningControlPanel
             var adjusted = amount * Models.PinkRushRules.XpFactor(s) * Services.Descent.DescentCycleXp.XpBonusFor(s);
             s.PlayerXP += adjusted;
             Log.Information("XP awarded: +{Amount} from {Source} (now {Now})", adjusted, source, s.PlayerXP);
+            // WPF AddXP:117: the active companion gets the BASE amount, after the gates, before the level loop.
+            Services.Companion.CompanionCore.AddCompanionXP(amount, source);
             var epoch = ProfileAdopt.Epoch(s);
             var levels = new System.Collections.Generic.List<int>();
             for (var need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch); s.PlayerXP >= need; need = XpCurve.GetXPForLevel(s.PlayerLevel, epoch))

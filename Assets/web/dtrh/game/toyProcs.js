@@ -72,6 +72,36 @@ export function rollProc(toy, rnd = Math.random) {
   return false;
 }
 
+/**
+ * Grabbing a toy you already hold (owner, 2026-10-13): it goes one level deeper for this
+ * fall, up to the top of its own ladder, and wakes rested either way. `toy` carries
+ * { level, power, maxed, cooldownLeft } and is updated here; returns true when it deepened.
+ */
+export function regrab(toy, levelValues) {
+  const top = (levelValues && levelValues.length) || 1;
+  const deeper = (toy.level | 0) < top;
+  if (deeper) {
+    toy.level = (toy.level | 0) + 1;
+    toy.power = levelValues[toy.level - 1];
+    toy.maxed = toy.level >= top;
+  }
+  toy.cooldownLeft = 0;
+  return deeper;
+}
+
+/** Can a held toy still go deeper (so a second card of it is worth offering)? */
+export function canDeepen(toy, levelValues) {
+  return !!toy && (toy.level | 0) < ((levelValues && levelValues.length) || 1);
+}
+
+// Overload (duo): the E-Stim arcs this many times as often, never past OVERLOAD_CAP.
+export const OVERLOAD_CAP = 0.6;
+/** The share of clicked pops that arc, for an E-Stim at `level` (maxed or not) and a duo multiplier. */
+export function estimChance(level, maxed, mult = 1) {
+  const base = maxed ? 0.30 : [0.10, 0.15, 0.20][Math.min(Math.max(1, level | 0), 3) - 1];
+  return Math.min(OVERLOAD_CAP, base * Math.max(1, mult));
+}
+
 /** Seconds a toy sleeps after a wake. */
 export function restFor(id) { const p = TOY_PROCS[id]; return p ? p.rest : 0; }
 

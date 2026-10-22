@@ -52,12 +52,13 @@ import { getVoice, setVoiceDefault, onVoice, getLevel } from '../engine/audioLev
 import { createChaosField } from './chaosField.js';
 import { createFieldFx } from './fieldFx.js';
 import { createPayloadFx } from './payloadFx.js';
-import { listensFor, rollProc, restFor } from './toyProcs.js';
+import { listensFor, rollProc, restFor, regrab, canDeepen, estimChance } from './toyProcs.js';
 import { setLifePaused } from './bubbleLife.js';
 import { setLoomBook } from '../engine/loomSpirals.js';
 import { createLoomBook } from '../race/loomBook.js';
 import { createLoomSpiralFx } from '../race/loomSpiralFx.js';
 import { motionOff } from '../shared/motion.js';
+import { sourceCredit } from '../shared/sourceCredit.js';
 import { createScreenShake } from './screenShake.js';
 import { createChaosHud } from './chaosHud.js';
 import { createOverlays } from './overlays.js';
@@ -1141,7 +1142,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     if (!estimArced && src === 'pointer') {
       const est = toys.find((t) => t.id === 'e_stim');
       if (est) {
-        const chance = est.maxed ? 0.30 : [0.10, 0.15, 0.20][Math.min(est.level, 3) - 1] || 0.10;
+        const chance = estimChance(est.level, est.maxed, st.estimChargeMult);   // Overload doubles it
         if (Math.random() < chance) {
           field.dischargeAt(x, y, { maxTargets: 3, reach: 600, chain: est.maxed });
           est.wokeAt = performance.now();   // the dock tile swells for it too
@@ -3207,17 +3208,15 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   function addConsumable(id, level) {
     const def = boonDefById(id);
     if (!def || !def.levelValues || !def.levelValues.length) return;
-    // Recharge path: already holding this active -> top its charges back up instead
-    // of docking a duplicate. When the dock is full, the drop picker offers a recharge
-    // of a partly-spent held toy (see canOfferPowerup) rather than a toy with no slot.
+    // Re-grab: already holding this toy -> it goes one level deeper for this fall instead
+    // of docking a duplicate (toyProcs.js regrab), and wakes rested. When the dock is full
+    // the drop picker offers a held toy that can still deepen (see canOfferPowerup).
     const held = toys.find((t) => t.id === id);
     if (held) {
-      held.chargesLeft = held.chargesMax;
-      held.cooldownLeft = 0;
-      if (held.pickRef) held.pickRef.spent = false;   // un-grey the ribbon tile if it had drained
+      const deeper = regrab(held, def.levelValues);
       hudUi.setPicks(st.runPicks);
       hudUi.updateToys(toys, toyStatus());
-      return true;   // signals a recharge (vs a fresh dock) to the grab toast
+      return deeper ? 'deeper' : 'rested';   // tells the grab toast which it was
     }
     if (dockUsed() >= st.consumableSlots) return;   // dock full (canOfferPowerup should have vetoed; crafted toys don't count)
     const lvl = Math.max(1, level | 0);
@@ -3276,15 +3275,15 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
 
     const acquire = () => {
       if (state !== 'running') return;   // card dismissed after the run ended: skip the apply/anim
-      let recharged = false;
+      let regrabbed = '';
       if (kind === 'consumable') {
-        recharged = addConsumable(id, level) === true;
+        regrabbed = addConsumable(id, level) || '';
         try { hudUi.flyArtToSlot(id, screenPos, 'consumable'); } catch (e) { /* ignore */ }
       } else {
         applyGrabbedPassive(id);
         try { hudUi.flyArtToSlot(id, screenPos, 'relic'); } catch (e) { /* ignore */ }
       }
-      hudUi.toast('◈ ' + def.name + (recharged ? ' recharged' : ''));
+      hudUi.toast('◈ ' + def.name + (regrabbed === 'deeper' ? ' goes deeper' : regrabbed === 'rested' ? ' is rested' : ''));
     };
 
     if (first) {
@@ -4067,6 +4066,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   function endRun(ranFullCourse) {
     if (state !== 'running') return;
     setState('recap');
+    try { sourceCredit.clear(); } catch (e) { /* ignore */ }   // the run's Scrolller cards leave with it; anything re-shown touches it back
     setRegionCycle(false); setBiomeCycle(false);   // The Bottomless Fall: disarm cycling so the next (normal) run clamps to Court
     // Surfaced: hush the drift whisper + calm the tube for the recap/hub idle.
     try { ctx.setRunActive && ctx.setRunActive(false); } catch (e) { /* ignore */ }
@@ -4608,17 +4608,18 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     getMeta() { return hostState ? hostState.meta : null; },
     /** Veto an offer: only while running, and passives/new toys never re-offer this
      *  run. A consumable with a free dock slot is offered fresh; once the dock is full
-     *  we instead offer a RECHARGE of a partly-spent held active (grabbing it refills
-     *  that toy - see addConsumable) rather than a toy there's no room for. Passives
+     *  we instead offer a held toy that can still go DEEPER (grabbing it adds a level
+     *  for this fall - see addConsumable) rather than a toy there's no room for. Passives
      *  always fit - they pin to the relic strip. */
     canOfferPowerup(id, kind) {
       if (state !== 'running' || !st) return false;
       const held = st.runEquipment.has(id);
       if (kind === 'consumable') {
         if (!held) return dockUsed() < st.consumableSlots;   // fresh toy needs an open pocket (crafted toys don't count)
-        if (dockUsed() < st.consumableSlots) return false;   // room to spare: prefer new toys, not a refill
-        const t = toys.find((x) => x.id === id);              // pockets full: offer a recharge...
-        return !!t && t.chargesLeft < t.chargesMax;           // ...only if this one has a spent charge
+        if (dockUsed() < st.consumableSlots) return false;   // room to spare: prefer new toys
+        const t = toys.find((x) => x.id === id);              // pockets full: offer one that can deepen
+        const d = boonDefById(id);
+        return canDeepen(t, d && d.levelValues);
       }
       if (held) return false;   // passives never re-offer
       return true;
@@ -4658,7 +4659,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       if (m.rankUp && RANK[m.rankUp] != null) {
         bridge.send({ type: 'meta-command', op: 'set-num', key: 'lastRankSeen', value: RANK[m.rankUp] });
       }
-      overlays?.showPayout(m);
+      // THE PLAN ROW (brief C10): the payout card may close with a Daily Gift line; the init payload's
+      // C1 `plans` (when the host sent one) is the only source of a price.
+      overlays?.showPayout(m, { plans: (m && m.plans) || (hostState && hostState.plans) || null });
     },
 
     isRunning: () => state === 'running',
