@@ -12,16 +12,24 @@ public static class IntakeSubliminals
     /// <summary>WPF's forty-phrase media sample; raw text is retained for the in-page effect layer.</summary>
     public static string[]? Sample(IDictionary<string, bool>? pool)
     {
-        var active = pool?.Where(kvp => kvp.Value).Select(kvp => kvp.Key)
-            .Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
-        if (active == null || active.Count == 0) return null;
-        var rng = new Random();
-        for (int i = active.Count - 1; i > 0; i--)
+        try
         {
-            int j = rng.Next(i + 1);
-            (active[i], active[j]) = (active[j], active[i]);
+            var active = pool?.Where(kvp => kvp.Value).Select(kvp => kvp.Key)
+                .Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+            if (active == null || active.Count == 0) return null;
+            var rng = new Random();
+            for (int i = active.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (active[i], active[j]) = (active[j], active[i]);
+            }
+            return active.Take(40).ToArray();
         }
-        return active.Take(40).ToArray();
+        catch (Exception ex)
+        {
+            Log.Debug("IntakeSubliminals.Sample: {E}", ex.Message);
+            return null;
+        }
     }
 
     // Audio inlined into the init config: only enabled phrases, and only when a matching clip
@@ -94,6 +102,8 @@ public static class IntakeSubliminals
     private static string? ResolveSubliminalAudioFile(string text, string? modDir, string? defaultDir)
     {
         var clean = text.Trim();
+        // Stricter than WPF (which had no guard): a phrase holding a path separator or NUL never
+        // becomes a file name, so a phrase cannot reach a clip outside the two audio folders.
         if (clean.Contains('/') || clean.Contains('\\') || clean.Contains('\0')) return null;
         var variants = new[]
         {
