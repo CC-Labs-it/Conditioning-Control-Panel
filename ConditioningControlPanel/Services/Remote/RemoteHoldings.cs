@@ -88,6 +88,11 @@ namespace ConditioningControlPanel.Services.Remote
             return new StrictHandBack(live, recorded);
         }
 
+        /// <summary>The remote end puts the panic key back on, except while a running Lockdown holds it
+        /// off: Lockdown's own end restores it (owner, 2026-10-22).</summary>
+        public static bool TurnsPanicBackOn(bool panicOn, bool remoteDisabledPanic, bool lockdownActive, bool lockdownDisabledPanic)
+            => (!panicOn || remoteDisabledPanic) && !(lockdownActive && lockdownDisabledPanic);
+
         /// <summary>A remote disable_strict_lock never turns off a strict lock a running Lockdown forced.</summary>
         public static bool RefusesStrictOff(bool lockdownActive, bool lockdownForcedStrict)
             => lockdownActive && lockdownForcedStrict;

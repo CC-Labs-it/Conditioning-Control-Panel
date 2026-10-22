@@ -94,6 +94,34 @@ public class RemoteHoldingsTests
     public void A_strict_write_under_lockdown_replaces_lockdowns_record(bool current, bool active, bool recorded, int before)
         => Assert.Equal(before, RemoteHoldings.StrictBefore(current, active, recorded));
 
+    // panic on now, remote disabled it, lockdown active, lockdown switched panic off -> turn it back on
+    [Theory]
+    [InlineData(false, false, false, false, true)]   // no Lockdown: panic always comes back
+    [InlineData(false, true, false, false, true)]
+    [InlineData(false, false, true, false, true)]    // a Lockdown that left panic alone: comes back
+    [InlineData(false, false, true, true, false)]    // a Lockdown holding panic off keeps it off
+    [InlineData(false, true, true, true, false)]
+    [InlineData(true, false, true, true, false)]
+    [InlineData(true, false, false, false, false)]   // already on: nothing to do
+    public void Panic_comes_back_on_except_while_a_lockdown_holds_it_off(bool on, bool remoteOff, bool active, bool ldOff, bool turnsOn)
+        => Assert.Equal(turnsOn, RemoteHoldings.TurnsPanicBackOn(on, remoteOff, active, ldOff));
+
+    [Fact]
+    public void Every_end_path_asks_the_panic_rule_through_the_one_release()
+    {
+        var src = Source("RemoteControlService.cs");
+        var release = Body(src, "private void ReleaseRemoteSafetyState()");
+        int ask = release.IndexOf("RemoteHoldings.TurnsPanicBackOn(", StringComparison.Ordinal);
+        Assert.True(ask > 0 && ask < release.IndexOf("s.PanicKeyEnabled = true", StringComparison.Ordinal));
+        Assert.Contains("App.Lockdown?.DisabledPanicKey == true", release);
+        foreach (var sig in new[] { "private void StopAllRemoteEffects(RemoteEndCause cause)", "private void StopRemoteTriggeredEffects()",
+                     "private void ReleaseRemoteHoldings()" })
+            Assert.DoesNotContain("PanicKeyEnabled = true", CodeOnly(Body(src, sig)));
+        Assert.Contains("ReleaseRemoteSafetyState();", Body(Source("Remote/RemoteControlService.V2.cs"), "public void ReleaseHoldingsForExit()"));
+        var ld = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Haptics", "LockdownService.cs"));
+        Assert.Contains("DisabledPanicKey = settings.LockdownDisablePanicKey;", Body(ld, "public void Activate(TimeSpan duration)"));
+    }
+
     [Fact]
     public void A_crash_mid_session_heals_at_the_next_launch_and_the_file_goes()
     {

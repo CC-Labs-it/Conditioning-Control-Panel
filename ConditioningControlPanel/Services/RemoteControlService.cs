@@ -1093,11 +1093,14 @@ namespace ConditioningControlPanel.Services
             var s = App.Settings?.Current;
             if (s == null) return;
             bool changed = HandBackStrictLock();
-            if (!s.PanicKeyEnabled || _remoteDisabledPanic)
+            // A running Lockdown that switched the panic key off keeps it off; its own end puts it
+            // back (owner, 2026-10-22). Outside one, panic always comes back on.
+            if (RemoteHoldings.TurnsPanicBackOn(s.PanicKeyEnabled, _remoteDisabledPanic,
+                    App.Lockdown?.IsActive == true, App.Lockdown?.DisabledPanicKey == true))
             {
-                _remoteDisabledPanic = false;
                 if (!s.PanicKeyEnabled) { s.PanicKeyEnabled = true; changed = true; }
             }
+            _remoteDisabledPanic = false;
             if (!changed) return;
             App.Settings!.Save();
             SyncPanicKeyUi();
