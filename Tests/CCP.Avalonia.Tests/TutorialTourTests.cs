@@ -62,7 +62,7 @@ public sealed class TutorialTourTests : IDisposable
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -175,14 +175,13 @@ public sealed class TutorialTourTests : IDisposable
         Assert.False(CoreTutorial.IsActive);
     }
 
-    // ---- the shell (adapted: this head's overlay is still its own window; the in-window stage,
-    // the ? panel's StartGuide and TextMatches arrive with TutorialOverlay.Live.cs, a follow-up) ----
+    // ---- the shell: live coach marks sit inside the host window ----
 
     private static TutorialOverlay? ShellOverlay() =>
         (TutorialOverlay?)typeof(TutorialHead).GetField("_shellOverlay",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
 
-    private static T Named<T>(Window w, string name) where T : Control =>
+    private static T Named<T>(Control w, string name) where T : Control =>
         w.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [Fact]
@@ -218,25 +217,27 @@ public sealed class TutorialTourTests : IDisposable
             Assert.Equal(0, CoreTutorial.CurrentStepIndex);
             var overlay = ShellOverlay();
             Assert.NotNull(overlay);
-            Assert.True(overlay!.IsVisible);
-            var title = Named<TextBlock>(overlay, "TxtTitle");
+            Assert.False(overlay!.IsVisible);
+            Assert.True(overlay.IsOnStage);
+            Assert.Same(shell, overlay.StageWindow);
+            var title = Named<TextBlock>(overlay.StageRoot!, "TxtTitle");
             Assert.Equal(CoreTutorial.CurrentStep!.Title, title.Text);
 
             // The step's Icon string is data: a Fluent IconGlyph is drawn, never the emoji text.
             var icon = CoreTutorial.CurrentStep!.Icon;
             Assert.False(string.IsNullOrEmpty(icon));
-            var glyph = Named<IconGlyph>(overlay, "TxtIcon");
+            var glyph = Named<IconGlyph>(overlay.StageRoot!, "TxtIcon");
             Assert.Null(glyph.Emoji);
             Assert.False(glyph.IsFallback);
             Assert.Equal(TutorialOverlay.IconFor(icon).Kind, glyph.Kind);
-            Assert.DoesNotContain(overlay.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == icon);
+            Assert.DoesNotContain(overlay.StageRoot!.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == icon);
 
             // Step: Next walks, Previous walks back.
-            Named<Button>(overlay, "BtnNext").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Named<Button>(overlay.StageRoot!, "BtnNext").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, CoreTutorial.CurrentStepIndex);
             Assert.Equal(CoreTutorial.CurrentStep!.Title, title.Text);
-            Named<Button>(overlay, "BtnPrevious").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Named<Button>(overlay.StageRoot!, "BtnPrevious").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, CoreTutorial.CurrentStepIndex);
 
@@ -252,6 +253,7 @@ public sealed class TutorialTourTests : IDisposable
             Assert.False(CoreTutorial.IsActive);
             Assert.Null(ShellOverlay());
             Assert.False(overlay.IsVisible);
+            Assert.False(overlay.IsOnStage);
             Assert.False(TutorialHead.Service.HasCompleted(TutorialType.GettingStarted));
 
             // Close: a fresh tour starts after that, and Escape on the card abandons it too.
@@ -260,7 +262,7 @@ public sealed class TutorialTourTests : IDisposable
             var second = ShellOverlay();
             Assert.NotNull(second);
             Assert.NotSame(overlay, second);
-            second!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            shell.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Dispatcher.UIThread.RunJobs();
             Assert.False(CoreTutorial.IsActive);
             Assert.Null(ShellOverlay());

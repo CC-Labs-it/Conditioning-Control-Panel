@@ -13,6 +13,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Tours;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Localization;
 using Xunit;
@@ -53,6 +54,9 @@ public sealed class NewEnhancementSourceTests
         {
             dialog.Close();
             shell.Close();
+            TutorialHead.ResetForTests();
+            Dispatcher.UIThread.RunJobs();
+            CoreTutorialEvents.PendingPart2Tutorial = null;
             CoreModsHooks.KnownVideoLinksProvider = old;
             CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial = seen;
         }
@@ -102,6 +106,90 @@ public sealed class NewEnhancementSourceTests
             if (dialog.IsVisible) dialog.Close();
             CoreSettings.Current.DeeperLastDirectory = old;
             Directory.Delete(root, true);
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF NewEnhancementDialog.xaml.cs:128-150 + :194-203: HT walkthrough puts Part 1 on the dialog,
+    // a valid Create arms Part 2 for the editor and the Create click ends Part 1.
+    [Fact]
+    public Task HypnoTubeWalkthroughRunsPartOneOnTheDialogAndCreateHandsOffPartTwo() => WithTours(dialog =>
+    {
+        dialog.FindControl<Button>("BtnTryHypnoTubeTutorial")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(CoreTutorial.IsActive);
+        Assert.Equal("iht_create", CoreTutorial.CurrentStep!.Id);
+        var overlay = Assert.IsType<global::ConditioningControlPanel.Avalonia.Views.Windows.TutorialOverlay>(dialog.ActiveTutorialOverlay);
+        Assert.True(overlay.IsOnStage);
+        Assert.Same(dialog, overlay.StageWindow);
+        Assert.Null(CoreTutorialEvents.PendingPart2Tutorial);   // armed only by Create
+
+        dialog.FindControl<Button>("BtnCreate")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("DeeperEditorInteractiveHTPart2", CoreTutorialEvents.PendingPart2Tutorial);
+        Assert.False(CoreTutorial.IsActive);
+        Assert.False(overlay.IsOnStage);
+    });
+
+    // WPF :117-123 + :33-44 + :184-190: the audio walkthrough picks Audio and spotlights Browse; an
+    // empty Create arms nothing, and Cancel takes the card down and ends the tour.
+    [Fact]
+    public Task LocalAudioWalkthroughCancelEndsPartOneWithoutHandingOff() => WithTours(dialog =>
+    {
+        dialog.FindControl<Button>("BtnLocalAudioTutorial")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(dialog.FindControl<RadioButton>("RbAudio")!.IsChecked);
+        Assert.Equal("iaud_browse", CoreTutorial.CurrentStep!.Id);
+        var overlay = dialog.ActiveTutorialOverlay!;
+        Assert.True(overlay.IsOnStage);
+
+        dialog.FindControl<Button>("BtnCreate")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(dialog.FindControl<TextBlock>("TxtError")!.IsVisible);
+        Assert.Null(CoreTutorialEvents.PendingPart2Tutorial);
+
+        dialog.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(dialog.IsVisible);
+        Assert.False(overlay.IsOnStage);
+        Assert.False(CoreTutorial.IsActive);
+        Assert.Null(CoreTutorialEvents.PendingPart2Tutorial);
+    });
+
+    private sealed class NoCompletions : TutorialService.ITourCompletionStore
+    {
+        public bool Has(string name) => false;
+        public void Latch(string name) { }
+    }
+
+    private static Task WithTours(Action<NewEnhancementDialog> check) => Run(() =>
+    {
+        var oldStore = TutorialService.CompletionStore;
+        var oldShell = TutorialHeadHooks.ShellProvider;
+        var oldPending = CoreTutorialEvents.PendingPart2Tutorial;
+        var oldSource = CoreModsHooks.KnownVideoLinksProvider;
+        var seen = CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial;
+        TutorialService.CompletionStore = new NoCompletions();
+        TutorialHeadHooks.ShellProvider = () => null;
+        TutorialHead.Seed();
+        TutorialHead.ResetForTests();
+        CoreTutorialEvents.PendingPart2Tutorial = null;
+        CoreModsHooks.KnownVideoLinksProvider = null;
+        var dialog = new NewEnhancementDialog();
+        dialog.Show();
+        Dispatcher.UIThread.RunJobs();
+        try { check(dialog); }
+        finally
+        {
+            dialog.ActiveTutorialOverlay?.Close();
+            if (dialog.IsVisible) dialog.Close();
+            TutorialHead.ResetForTests();
+            Dispatcher.UIThread.RunJobs();
+            TutorialService.CompletionStore = oldStore;
+            TutorialHeadHooks.ShellProvider = oldShell;
+            CoreTutorialEvents.PendingPart2Tutorial = oldPending;
+            CoreModsHooks.KnownVideoLinksProvider = oldSource;
+            CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial = seen;
         }
         return Task.CompletedTask;
     });
