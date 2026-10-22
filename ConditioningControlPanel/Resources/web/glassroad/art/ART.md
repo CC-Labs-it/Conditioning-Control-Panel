@@ -739,3 +739,116 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 4 materials and immutable model shading
+
+Eight original tiling detail maps ship at desktop 512 and phone 256. Use one tier at a time.
+Normals are linear UASTC RGB XYZ, OpenGL +Y. Scalars are linear ETC1S and read R only.
+Repeat both axes. All mips are supplied; do not interpret any detail texture as sRGB.
+Both variants share the same fields. Plain IDs use `tier: desktop`; suffixed IDs use `tier: phone`.
+Host shaders choose palette, intensity, glass treatment and motion. No animation, words or media are baked.
+
+| Texture ID suffix after `detail-` | Meaning | Suggested tile size m |
+|---|---|---|
+| porcelain-roughness | Absolute subtle glaze roughness | 0.35 x 0.35 |
+| porcelain-crazing-normal | Fine ceramic crazing, suggested normal strength 0.2 | 0.35 x 0.35 |
+| gold-wear | White means more wear; mix into roughness | 0.22 x 0.22 |
+| road-ripple-normal | Fine glass ripples, suggested normal strength 0.25 | 4 x 4 |
+| road-sparkle-mask | Sparse static sparkle coverage; host controls tint and behavior | 3 x 3 |
+| road-edge-frost | Frost coverage; multiply by host edge falloff | 1.5 x 1.5 |
+| rail-normal | Cast glass waviness, suggested normal strength 0.2 | 0.5 x 2 |
+| rail-thickness | Relative glass thickness, not metres | 0.5 x 2 |
+
+Every desktop map: 1,398,100 texBytes. Every phone map: 349,524 texBytes.
+Desktop total: 11,184,800 bytes (10.667 MiB). Phone total: 2,796,192 bytes (2.667 MiB).
+These are conservative RGBA8 residency including all mips. `texBytesBlock16` is the smaller block-format bound.
+Review images are excluded from texture residency. Do not load desktop and phone variants together.
+
+### Vertex sidecar contract
+
+Every approved GLB stays byte-for-byte unchanged. This family ships no GLBs.
+Each `models/<model-id>.vtx.bin` contains exactly two interleaved unsigned bytes per decoded vertex:
+AO first, curvature second. No header, padding, index stream, UVs or material changes.
+AO 255 means unoccluded and 0 means fully occluded. Curvature 128 is neutral, lower is concave, higher is convex.
+From the normalized attribute value, signed curvature is `clamp((value * 255 - 128) / 127, -1, 1)`.
+Each manifest row contains the exact compressed source file SHA256, mesh/primitive indices, vertex counts and byte offsets.
+
+Loader sequence:
+1. Read the complete source GLB and require its SHA256 to equal `sourceSha256`.
+2. Decode its original primitives. Match `meshIndex` and `primitiveIndex`, not object name or traversal order.
+3. Require every decoded POSITION accessor count to match the listed `vertexCount`.
+4. Read each primitive's `byteLength` bytes at `byteOffset`, retaining its decoded accessor vertex order.
+5. Add a separate normalized two-component Uint8 attribute. Preserve existing attributes, indices and materials.
+6. If the source hash, primitive mapping, counts or sidecar byte length disagree, skip the sidecar entirely.
+
+The source order was read through glTF-Transform with MeshoptDecoder; it is not Blender's imported vertex order.
+Do not weld, optimize, decimate, reorder or merge primitives between decoding and attribute attachment.
+Each sidecar is independently tied to its existing LOD. No separate phone sidecar is needed.
+`perVertexBytes` and `vertexBytes` both record file bytes; `gpuAttributeBytes` records logical GPU attribute bytes.
+They are separate accounting fields for the same data, not values to add together. All sidecar `texBytes` and added `tris` are zero.
+
+| Source model | Decoded vertices | Sidecar / GPU attribute bytes |
+|---|---:|---:|
+| chess-bishop-lod0 | 4653 | 9306 |
+| chess-bishop-lod1 | 1545 | 3090 |
+| chess-king-lod0 | 3020 | 6040 |
+| chess-king-lod1 | 782 | 1564 |
+| chess-knight-lod0 | 2903 | 5806 |
+| chess-knight-lod1 | 728 | 1456 |
+| chess-pawn-lod0 | 2546 | 5092 |
+| chess-pawn-lod1 | 747 | 1494 |
+| chess-queen-lod0 | 2971 | 5942 |
+| chess-queen-lod1 | 759 | 1518 |
+| chess-rook-lod0 | 3085 | 6170 |
+| chess-rook-lod1 | 799 | 1598 |
+| pocket-watch | 752 | 1504 |
+| slot-cabinet-lod0 | 4369 | 8738 |
+| slot-cabinet-lod1 | 1542 | 3084 |
+| spiral-disc | 376 | 752 |
+
+Sidecar total: 63,154 file bytes, 63,154 logical GPU attribute bytes, zero texture bytes.
+
+AO uses 64 cosine hemisphere rays, a 9.5%-of-bounds-diagonal reach and distance falloff.
+Curvature uses a signed local graph measure with mild smoothing. Coincident positions are grouped only for calculation.
+The approved vertices, topology, normals, UVs, colours and material assignments are never rewritten.
+Review shading uses AO strength 0.5 and curvature strength 0.1; host integration controls final strength.
+
+### Density and UV audit
+
+All six chess LOD pairs, the pocket watch and four cards have no UV0.
+The cabinet repeats UV islands and contains degenerate UV triangles; a unique atlas cannot be baked without changing it.
+The disc faces overlap intentionally and its rim has degenerate UVs. No UV atlases were generated.
+The four cards are excluded: broad faces have boundary-only triangulation, unsuitable for clean interior vertex shading.
+The watch enamel, disc shader faces, and screen/credit/emi_screen primitives remain AO255 and curvature128.
+Their broad or dynamic surfaces stay neutral while the surrounding model receives the sidecar.
+
+### Validation and evidence
+
+All 16 KTX2 variants pass glTF BasisU validation, with full mip chains and correct linear interpretation.
+All source-image tile boundaries are exactly equal. Lossy scalar block encoding introduces small localized edge differences.
+Decoded normals preserve RGB XYZ; worst normal error is 2.01 degrees and mean error is at most 0.045 degrees.
+Fresh glTF-Transform reads independently verify all 16 source hashes, primitive mappings, vertex counts and contiguous byte ranges.
+Private paired renders reproject the sidecars onto the exact decoded positions, normals and colours without remeshing.
+All 32 front/three-quarter pairs show changed pixels, while all 16 source hashes remain unchanged.
+Material fixture previews use actual KTX2 decoded level 0. Thickness is previewed as roughness variation only.
+Contact sheets cover both chess LODs, the other props, all desktop/phone materials and 2x2 tiling.
+Native review fixtures, PNG masters, extraction/bake scripts and validation evidence remain private.
+
+### Tier residency and running budget
+
+Load only the selected texture tier: plain IDs on desktop, matching -phone IDs on phone.
+The tiers share GLBs, SVGs and per-vertex sidecars. Only the active sky palette nebula
+is resident on either tier; release the previous palette layer before loading another.
+
+| Tier | This family MiB | W4 cumulative MiB | Running persistent MiB | With one menu backdrop MiB |
+|---|---:|---:|---:|---:|
+| desktop | 10.666656 | 76.333340 | 185.666656 | 194.666656 |
+| phone | 2.666656 | 7.083340 | 116.416656 | 124.326813 |
+
+Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
+Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
+These are conservative decoded RGBA8 allocations including supplied mip chains, not
+compressed download sizes. The one-at-a-time Wave 3 backdrops add 9 MiB on desktop
+and 7.910156 MiB on phone. SVGs have zero baked texture allocation. Per-vertex
+sidecars are separate attribute bytes, never counted as texture memory.
+The combined phone persistent addition stays below 14 MiB; the phone ceiling is 128 MiB.
