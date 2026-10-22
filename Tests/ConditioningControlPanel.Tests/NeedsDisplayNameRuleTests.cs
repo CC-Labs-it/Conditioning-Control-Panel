@@ -21,7 +21,7 @@ public class NeedsDisplayNameRuleTests
     [InlineData(true, "Pixie", null, false)]
     [InlineData(true, "Pixie", false, false)]
     [InlineData(true, "Pixie", true, true)]    // the server's flag wins over a stale local name
-    [InlineData(true, null, false, true)]      // an empty name is asked even when the flag says no
+    [InlineData(true, null, false, false)]     // the server says no: a blanked patron name is not asked again
     [InlineData(false, null, null, false)]     // anonymous: never
     [InlineData(false, "", true, false)]
     public void Asks_only_a_signed_in_account_with_no_name(bool signedIn, string? name, bool? flag, bool expected)
