@@ -180,7 +180,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             bool prompt = popped || offline || BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             BrowserLoadingText.IsVisible = prompt;
             BrowserLoadingText.Bind(TextBlock.TextProperty, LocBinding(offline
-                ? "label_browser_disabled_in_offline_mode" : popped
+                ? "label_browser_disabled_in_offline_mode" : Shell?.IsBrowserFullscreenEmbedded == true
+                ? "label_browser_in_fullscreen" : popped   // WPF MainWindow.Browser.cs:2907
                 ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
             // The placeholder belongs to the card; the popped-out host stays visible in its window.
             BrowserWebHost.IsVisible = popped || !prompt;
@@ -196,7 +197,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void SyncBrowserPopout()
         {
-            bool popped = Shell?.IsBrowserPoppedOut == true;
+            // WPF leaves the button as Pop Out while the card's own fullscreen window is up (only the click focuses it).
+            bool popped = Shell?.IsBrowserPoppedOut == true && !Shell!.IsBrowserFullscreenEmbedded;
             if (BtnPopOutBrowser.Content is TextBlock label)
                 label.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(
                     popped ? "btn_focus" : "btn_pop_out").ProvideValue(null!));

@@ -105,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.StopDesktopOverlays(final: false);
             PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
             LockCardWindow.ForceCloseAll();
+            ExitBrowserFullscreenForTeardown();   // WPF StartStop.cs:529 (#952)
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).

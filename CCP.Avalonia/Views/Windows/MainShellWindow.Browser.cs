@@ -1,8 +1,9 @@
 // Home browser navigation and profile entry points, adapted from WPF MainWindow.Browser.cs.
 // Site controls, live navigation/catalogue lookup and document mute already exist on this head.
 // BrowserPopout.cs adds the WPF pop-out/focus/return path using NativeWebView's reparenting scope.
-// ponytail: autoplay at DOM parse, native fullscreen/media signals and audio-sync remain
-// wire-shell-browser-b. Do not substitute NavigationCompleted for avatar video autoplay:
+// BrowserFullscreen.cs carries page fullscreen, its escapes and the session-teardown exit.
+// ponytail: autoplay at DOM parse, media signals and audio-sync remain
+// wire-shell-browser-b-next. Do not substitute NavigationCompleted for avatar video autoplay:
 // WPF ArmVideoAutoPlay uses DOMContentLoaded first (main daf734417); playlists use completion.
 
 using System;
@@ -86,6 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 status.Foreground = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(0, 230, 118));
             }
             TriggerCatalogueLookupForNavigation(url.AbsoluteUri);   // escaped, like CoreWebView2.Source
+            // WPF injects this once per document at creation (BrowserService.cs:259); no such seam here.
+            _ = BrowserView?.InvokeScriptAsync(BrowserFullscreenScript);
         }
 
         /// <summary>Back to the selected site's homepage. Shared by the reload button and the
@@ -116,8 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
-        /// <param name="autoPlayFullscreen">Takeover remains deferred to wire-shell-browser-b: document-parse
-        /// and native fullscreen hooks are not yet wired. The normal navigation still runs.</param>
+        /// <param name="autoPlayFullscreen">Takeover remains deferred to wire-shell-browser-b-next: no caller on this
+        /// head passes it and there is no document-parse hook. The normal navigation still runs.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
@@ -135,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (hypno != null) hypno.IsChecked = lower.Contains("hypnotube.com");
 
             if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen is pending wire-shell-browser-b - takeover skipped: {Url}", url);
+                Log.Warning("Auto-play/fullscreen is pending wire-shell-browser-b-next - takeover skipped: {Url}", url);
 
             return NavigateBrowser(url);
         }

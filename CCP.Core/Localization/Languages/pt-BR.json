@@ -2244,6 +2244,7 @@
   "label_0_6": "#{0}",
   "label_0_achievements_unlocked": "{0} conquistas desbloqueadas",
   "label_browser_popped_out_nclick_to_focus_window": "🌐 Navegador destacado\nClique ⧉ para focar na janela",
+  "label_browser_in_fullscreen": "Navegador em tela cheia",
   "btn_focus": "◱ Focar",
   "tooltip_browser_is_popped_out_click_to_focus": "O navegador está destacado - clique para focar",
   "msg_you_are_in_lockdown_mode_nyou_cannot_stop_dur": "Lockdown em andamento.\nVocê não pode parar até o cronômetro acabar.",

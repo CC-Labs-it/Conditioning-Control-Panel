@@ -2244,6 +2244,7 @@
   "label_0_6": "#{0}",
   "label_0_achievements_unlocked": "{0}개 업적 잠금 해제됨",
   "label_browser_popped_out_nclick_to_focus_window": "🌐 브라우저가 팝아웃됨\n⧉를 클릭하면 창에 포커스해요",
+  "label_browser_in_fullscreen": "브라우저 전체 화면",
   "btn_focus": "◱ 포커스",
   "tooltip_browser_is_popped_out_click_to_focus": "브라우저가 팝아웃됨 - 클릭하면 포커스해요",
   "msg_you_are_in_lockdown_mode_nyou_cannot_stop_dur": "락다운이 실행 중입니다.\n타이머가 끝날 때까지 멈출 수 없습니다.",

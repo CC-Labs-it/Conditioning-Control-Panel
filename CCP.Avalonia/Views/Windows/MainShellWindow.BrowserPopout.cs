@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 popout.Content = host;
                 popout.Closing += (_, _) =>
                 {
+                    // Closed while fullscreen in place: nothing is left to restore (not reset on WPF).
+                    if (_isBrowserFullscreen) { _isBrowserFullscreen = false; DisarmFullscreenEscapes(); }
                     using var returning = host.BeginReparenting();
                     popout.Content = null;
                     if (!container.Children.Contains(host)) container.Children.Add(host);

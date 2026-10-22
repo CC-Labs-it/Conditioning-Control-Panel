@@ -3369,6 +3369,7 @@
   "label_0_6": "#{0}",
   "label_0_achievements_unlocked": "{0} obiettivi sbloccati",
   "label_browser_popped_out_nclick_to_focus_window": "🌐 Browser staccato\nClicca ⧉ per portare la finestra in primo piano",
+  "label_browser_in_fullscreen": "Browser a schermo intero",
   "btn_focus": "◱ Primo piano",
   "tooltip_browser_is_popped_out_click_to_focus": "Il browser è staccato - clicca per portarlo in primo piano",
   "msg_you_are_in_lockdown_mode_nyou_cannot_stop_dur": "Il Lockdown è in corso.\nNon puoi fermarti finché il timer non scade.",

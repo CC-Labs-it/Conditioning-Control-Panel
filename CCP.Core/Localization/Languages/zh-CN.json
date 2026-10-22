@@ -2975,6 +2975,7 @@
   "label_0_6": "#{0}",
   "label_0_achievements_unlocked": "{0} 个成就已解锁",
   "label_browser_popped_out_nclick_to_focus_window": "🌐 浏览器已弹出\n点击 ⧉ 聚焦窗口",
+  "label_browser_in_fullscreen": "浏览器全屏中",
   "btn_focus": "◱ 聚焦",
   "tooltip_browser_is_popped_out_click_to_focus": "浏览器已弹出 - 点击聚焦",
   "msg_you_are_in_lockdown_mode_nyou_cannot_stop_dur": "封锁进行中。\n计时结束前无法停止。",
