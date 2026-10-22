@@ -111,7 +111,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _shards.Children.Add(new Border
                 {
                     Name = "FlashShard",
-                    Background = _glow.BoxShadow.Count == 0 ? Brushes.Black : Brushes.Transparent,
                     Child = new Image { Source = source, Stretch = Stretch.Fill },
                     Clip = new RectangleGeometry(cut),
                     RenderTransformOrigin = new RelativePoint(cut.Center, RelativeUnit.Absolute),

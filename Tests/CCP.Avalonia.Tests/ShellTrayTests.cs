@@ -63,7 +63,7 @@ public sealed class ShellTrayTests
                 Assert.False(CoreEngine.IsRunning);
                 Assert.False(CoreFlash.IsRunning);
                 Assert.False(CoreSubliminal.IsRunning);
-                Assert.True(FlashOverlay.Generation > generation);   // engine stop and the "flash" panic surface may each cancel
+                Assert.Equal(generation + 2, FlashOverlay.Generation);   // engine stop and the "flash" panic surface each cancel once
                 Assert.True(CoreSettings.Current.FlashEnabled && CoreSettings.Current.SubliminalEnabled && CoreSettings.Current.BouncingTextEnabled);
                 Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
                 Assert.True(shell.IsVisible);
