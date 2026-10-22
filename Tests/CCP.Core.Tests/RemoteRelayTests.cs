@@ -225,6 +225,29 @@ public sealed class RemoteRelayTests
         finally { (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
     }
 
+    // WPF RemoteControlService.cs:1572: a start_session {strict_lock:true} is the controller's strict lock too.
+    [Fact]
+    public async Task Controller_leave_releases_the_strict_lock_a_remote_session_start_switched_on()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect);
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = (false, true, false);
+            RemoteCommands.SessionVerb = (_, _) => null;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"start_session\",\"params\":{\"strict_lock\":true}}]}");
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
+            Assert.False(s.StrictLockEnabled);
+        }
+        finally { RemoteCommands.SessionVerb = null; (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
+    }
+
     // main 7b22ece8c (ccp-bugs #1065): no toy -> refused, never a silent "ok".
     [Fact]
     public void Trigger_haptic_with_no_toy_is_refused()

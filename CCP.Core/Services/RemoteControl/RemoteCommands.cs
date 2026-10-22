@@ -8,8 +8,8 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: pink filter, spiral, opacity, HypnoTube, autonomy, mind wipe, Melt (start/stop_brain_drain),
-    /// wallpaper and the session verbs have no Core entry point yet; they refuse until their services move.
+    /// ponytail: pink filter, spiral, opacity, HypnoTube, autonomy, Melt (start/stop_brain_drain) and
+    /// wallpaper have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
     {
@@ -55,6 +55,54 @@ namespace ConditioningControlPanel.Services
             try { RemoteHaptics.Stop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] remote haptic stop failed"); }
         }
 
+        /// <summary>The head's half of the session verbs (WPF MainWindow.Start/Pause/Resume/StopSessionFromRemote):
+        /// runs on the UI thread, returns a refusal or null. Unset = the verbs refuse "not on this build".</summary>
+        public static volatile Func<string, Models.Session?, string?>? SessionVerb;
+
+        /// <summary>WPF FindSessionByIdCallback: an available built-in or custom session by id, else null.</summary>
+        public static volatile Func<string, Models.Session?>? FindSession;
+
+        /// <summary>WPF RemoteControlService start_session fallback: a 30-minute session that keeps the
+        /// subject's own effect settings, so what runs keeps running.</summary>
+        internal static Models.Session GenericSession(Models.AppSettings cur) => new()
+        {
+            Id = "remote_session",
+            Name = "Remote Session",
+            Icon = "\U0001F3AE",
+            DurationMinutes = 30,
+            Difficulty = Models.SessionDifficulty.Medium,
+            BonusXP = 200,
+            Settings = new Models.SessionSettings
+            {
+                FlashEnabled = cur.FlashEnabled,
+                FlashPerHour = cur.FlashFrequency,
+                FlashOpacity = cur.FlashOpacity,
+                FlashImages = cur.SimultaneousImages,
+                FlashClickable = cur.FlashClickable,
+                FlashAudioEnabled = cur.FlashAudioEnabled,
+                SubliminalEnabled = cur.SubliminalEnabled,
+                SubliminalPerMin = cur.SubliminalFrequency,
+                SubliminalOpacity = cur.SubliminalOpacity,
+                SubliminalFrames = cur.SubliminalDuration,
+                MandatoryVideosEnabled = cur.MandatoryVideosEnabled,
+                BubblesEnabled = cur.BubblesEnabled,
+            }
+        };
+
+        /// <summary>WPF PanicAftermath.PanicPause: the pause a LOCAL panic left (session, run, pause number).</summary>
+        private static (object Session, int Run, int Pauses)? _panicPause;
+
+        /// <summary>WPF NoteLocalPanicPause: every local panic stop calls it after pausing the session; a remote
+        /// panic never does (the controller may resume its own panic, owner 2026-10-19).</summary>
+        public static void NoteLocalPanicPause(SessionRunner? r) =>
+            _panicPause = r is { IsRunning: true, IsPaused: true, CurrentSession: { } cs } ? (cs, r.Run, r.PauseCount) : null;
+
+        /// <summary>WPF LocalPanicHoldsSession: the same run of the same session still sits in the very pause a
+        /// local panic left, so a remote resume_session or start_session must not undo it.</summary>
+        public static bool LocalPanicHoldsSession(SessionRunner? r) =>
+            _panicPause is { } m && r is { IsRunning: true, IsPaused: true, CurrentSession: { } cs }
+            && ReferenceEquals(m.Session, cs) && m.Run == r.Run && m.Pauses == r.PauseCount;
+
         public static string? Execute(string action, JObject? p)
         {
             var s = CoreSettings.Current;
@@ -83,6 +131,23 @@ namespace ConditioningControlPanel.Services
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
                 case "stop_video": CoreEngine.Video?.Stop(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
+                case "trigger_mind_wipe": if (CoreMindWipe.ClipCount > 0) CoreMindWipe.TriggerOnce(); return null;
+                case "start_mind_wipe": CoreMindWipe.Start(s.MindWipeFrequency, s.MindWipeVolume / 100.0); return null;
+                case "stop_mind_wipe": CoreMindWipe.Stop(); return null;
+                case "start_session":
+                    if (SessionVerb is not { } start) return NotOnThisBuild;
+                    var sessionId = p?["session_id"]?.ToString();
+                    var session = (string.IsNullOrEmpty(sessionId) ? null : FindSession?.Invoke(sessionId)) ?? GenericSession(s);
+                    if (start(action, session) is { } refused) return refused;
+                    // WPF: the strict_lock flag goes on after the start, unless the account is leashed (StripStrict).
+                    var asks = Leash.LeashRemoteRule.AsksStrictLock(p);
+                    if (asks && Leash.LeashRemoteRule.Screen(action, asks, Leash.LeashGuard.Check()) != Leash.LeashRemoteVerdict.StripStrict)
+                    { s.StrictLockEnabled = true; CoreSettings.Save(); }
+                    return null;
+                case "pause_session":
+                case "resume_session":
+                case "stop_session":
+                    return SessionVerb is { } verb ? verb(action, null) : NotOnThisBuild;
                 case "start_lock_card": s.LockCardEnabled = true; LockCardScheduler.Instance.Start(); return null;
                 case "stop_lock_card": LockCardScheduler.Instance.Stop(); return null;
                 case "trigger_haptic":
@@ -120,6 +185,7 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
+            CoreMindWipe.Stop();   // WPF StopAllRemoteEffects / StopRemoteEffects: App.MindWipe?.Stop() on both paths
             // As WPF, Lockdown or not: this only reduces restraint, and LockdownService.Deactivate restores
             // the pre-lockdown values when the timer ends.
             var s = CoreSettings.Current;

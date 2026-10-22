@@ -336,7 +336,7 @@ namespace ConditioningControlPanel.Services
                     {
                         var refusal = _execute(action, parameters);
                         // Set here, in the dispatched call, so even a late-landing switch-on is the controller's.
-                        if (refusal == null && action == "enable_strict_lock" && !strictBefore) _remoteSetStrictLock = true;
+                        if (refusal == null && (action is "enable_strict_lock" or "start_session") && !strictBefore && CoreSettings.Current.StrictLockEnabled) _remoteSetStrictLock = true;
                         return refusal;
                     }
                     catch (Exception ex) { Log.Error(ex, "[RemoteControl] Error executing command: {Action}", action); return "error"; }

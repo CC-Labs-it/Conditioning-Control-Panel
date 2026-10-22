@@ -3,9 +3,9 @@
 // QR, status, command log and the emote picker. This partial is the SHELL half: the full-window
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
-// button lock while a controller drives.
-// ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
-// RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
+// button lock while a controller drives, and the session verbs (StartSessionFromRemote & co, :1287-1420).
+// ponytail: still missing here - IsSessionRemoteStarted (the controller-owned run mark; no teardown reads it
+// on this head yet), the directory opt-in chain, tray minimise/restore
 // for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and the browser
 // blindfold (no embedded browser under the overlay on this head).
 
@@ -17,7 +17,9 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 
@@ -51,8 +53,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.ControllerIdleChanged += idle;
             r.SessionEnded += ended;
             r.CommandReceived += command;
+            Func<string, Session?, string?> sessionVerb = RemoteSessionVerb;
+            RemoteCommands.SessionVerb = sessionVerb;
+            RemoteCommands.FindSession = FindRemoteSession;
             Closed += (_, _) =>
             {
+                if (RemoteCommands.SessionVerb == sessionVerb) (RemoteCommands.SessionVerb, RemoteCommands.FindSession) = (null, null);
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
@@ -64,6 +70,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 o.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(300) } };
             if (Named<Border>("RemoteCommandNotification") is { } n)
                 n.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(250) } };
+        }
+
+        /// <summary>WPF FindSessionByIdCallback (:1029): an available built-in or custom session by id.</summary>
+        private Session? FindRemoteSession(string id) => Named<PresetsTabView>("PresetsTab")?.FindSession(id)
+            ?? Session.GetAllSessions().FirstOrDefault(s => s.Id == id && s.IsAvailable);
+
+        /// <summary>WPF MainWindow.StartSessionFromRemote / PauseSessionFromRemote / ResumeSessionFromRemote /
+        /// StopSessionFromRemote (:1287-1420) and the start_session panic refusal (RemoteControlService.cs:1517).
+        /// UI thread; returns the refusal the controller sees, or null.</summary>
+        internal string? RemoteSessionVerb(string action, Session? session)
+        {
+            if (App.Sessions is not { } runner) return RemoteCommands.NotOnThisBuild;
+            switch (action)
+            {
+                case "start_session":
+                    if (RemoteCommands.LocalPanicHoldsSession(runner)) return "panic";
+                    if (session == null) return "no session";
+                    if (runner.IsRunning) runner.Stop(completed: false);   // WPF: StopSession(completed: false) first
+                    StartSession(session);
+                    return null;
+                case "pause_session":
+                    if (!runner.IsRunning || runner.IsPaused) return null;
+                    runner.Pause();
+                    PinkFilterOverlay.Refresh(this);
+                    SpiralOverlay.Refresh(this);
+                    SetPauseButton(true);
+                    return null;
+                case "resume_session":
+                    // A session a local panic paused stays paused: say so, not a silent ok (PanicAftermath).
+                    if (RemoteCommands.LocalPanicHoldsSession(runner)) return "panic";
+                    if (!runner.IsRunning || !runner.IsPaused) return null;
+                    StartEffect(() =>   // effects come back, so the portal panic bind comes first (BtnPauseSession_Click)
+                    {
+                        if (App.Sessions is not { IsPaused: true } r) return;
+                        r.Resume();
+                        PinkFilterOverlay.Refresh(this);
+                        SpiralOverlay.Refresh(this);
+                        SetPauseButton(false);
+                        OnSessionTick();
+                    });
+                    return null;
+                case "stop_session":   // WPF StopEngineAndSession("RemoteControl")
+                    if (runner.IsRunning) runner.Stop();
+                    if (CoreEngine.IsRunning) StopEngine();
+                    return null;
+                default: return RemoteCommands.NotOnThisBuild;
+            }
         }
 
         /// <summary>WPF OnRemoteControllerChanged (:784).</summary>

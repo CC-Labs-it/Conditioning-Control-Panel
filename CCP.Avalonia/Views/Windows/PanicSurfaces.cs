@@ -62,7 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // programs 3a (P06, docs/avalonia-decisions.md): today's program session ENDS, not pauses, so
             // a panic never leaves a program run holding the screen; foreign sessions stay paused below.
             new("program-session", sh => { if (sh != null) sh.EndProgramSessionQuietly("panic"); else App.Programs?.StopProgramSessionIfRunning("panic"); }),
-            new("engine", _ => MainShellWindow.StopEngine()),
+            // WPF NoteLocalPanicPause: a remote resume_session/start_session cannot undo this pause.
+            new("engine", _ => { MainShellWindow.StopEngine(); RemoteCommands.NoteLocalPanicPause(App.Sessions); }),
             new("pink-rush", _ => PinkRushHost.Stop()),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
             // WPF :1967 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel.
             new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll()),

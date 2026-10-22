@@ -41,6 +41,8 @@ namespace ConditioningControlPanel.Services
         public int CurrentPhaseIndex { get; private set; }
         public bool IsPaused { get; private set; }
         public int PauseCount { get; private set; }
+        /// <summary>Counts starts (WPF MainWindow._sessionRun): session objects are reused, so a pause mark names the run too.</summary>
+        public int Run { get; private set; }
         public int XPPenalty => PauseCount * SessionXp.PausePenalty;
 
         /// <summary>SessionEngine._randomizedPinkStartMinute: the preset's start ±3 min (RandomizeStartTimes).</summary>
@@ -90,6 +92,7 @@ namespace ConditioningControlPanel.Services
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
+            Run++;
             PinkOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);

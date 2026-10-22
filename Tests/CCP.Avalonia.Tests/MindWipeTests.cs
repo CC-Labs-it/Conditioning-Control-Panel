@@ -164,4 +164,24 @@ public sealed class MindWipeTests
         Assert.True(voices.All(v => v.Disposed));
         Assert.False(player.IsLooping);
     });
+
+    // WPF App.WireMemorySignalSources: MindWipeTriggered (a played clip, not the loop) is the "mindwipe" favourite;
+    // the controller's trigger_mind_wipe plays one through the same player.
+    [Fact]
+    public void A_played_clip_counts_as_the_mind_wipe_favourite_and_the_remote_trigger_plays_one() => Run((player, voices, clock) =>
+    {
+        var used = new List<string>();
+        Action<string> note = used.Add;
+        global::ConditioningControlPanel.Avalonia.App.FeatureUsed += note;
+        try
+        {
+            player.StartLoop(0.5);
+            Assert.Empty(used);
+            player.StopLoop();
+            Assert.Null(ConditioningControlPanel.Services.RemoteCommands.Execute("trigger_mind_wipe", null));
+            Assert.Equal(2, voices.Count);
+            Assert.Equal(new[] { ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe }, used);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.FeatureUsed -= note; }
+    });
 }

@@ -242,7 +242,8 @@ namespace ConditioningControlPanel.Avalonia
         /// WPF App.xaml.cs SignalMirrorFactory + WireMemorySignalSources: the brain's memory profile gets
         /// level, streak, sessions, archetype (CoreSettings), level-ups, favourite features and per-mod
         /// chat turns and mantra reps (WPF's DeferredSourcesHook; App.Mantra exists from the start here).
-        /// ponytail: no brain drain / mind wipe on this head, so those two favourites never count.
+        /// Mind wipe counts from MindWipePlayer.PlayOnce (WPF MindWipeTriggered).
+        /// ponytail: no brain drain on this head, so that favourite never counts.
         /// </summary>
         internal static void SeedMemorySignals()
         {
