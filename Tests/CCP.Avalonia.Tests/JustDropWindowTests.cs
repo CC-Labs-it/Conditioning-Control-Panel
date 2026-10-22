@@ -19,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.JustDrop;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -244,6 +245,65 @@ public sealed class JustDropWindowTests
         tab.PaintTakeaway(Array.Empty<JustDropOrdersService.Order>());
         Assert.False(shelf.IsVisible);
         Assert.True(tab.FindControl<TextBlock>("TxtTakeawayEmpty")!.IsVisible);
+    });
+
+    /// <summary>WPF EscapeBridgeScript route: a focused native page reports Esc through the carrier, and the host
+    /// leaves fullscreen (only then) without forwarding the envelope to Core.</summary>
+    [Fact]
+    public void EscFromTheFocusedPageLeavesHostFullscreen() => Run(shell =>
+    {
+        Assert.Contains("addEventListener('keydown'", GameWindow.JustDropEscapeBridge);
+        Assert.Contains("type:'ccp-host-escape'", GameWindow.JustDropEscapeBridge);
+        Assert.Contains("},true);", GameWindow.JustDropEscapeBridge);   // capture phase, as WPF
+        Assert.DoesNotContain("preventDefault", GameWindow.JustDropEscapeBridge);
+        var window = GameWindow.LaunchJustDropReplay("JD-ESC", shell)!;
+        window.Web.OnNavigationCompleted(new Uri("https://app.cclabs.app/express/play?order=JD-ESC"));
+        Assert.Equal(WindowState.FullScreen, window.WindowState);
+        window.Web.OnWebMessage("{\"type\":\"ccp-host-escape\"}");
+        Assert.Equal(WindowState.Normal, window.WindowState);
+        Assert.False(window.Topmost);
+        window.Web.OnWebMessage("{\"type\":\"ccp-host-escape\"}");   // windowed: Esc is the page's business
+        Assert.Equal(WindowState.Normal, window.WindowState);
+        Assert.True(window.IsVisible);
+    });
+
+    /// <summary>WPF PreparePresetCardFx on the shelf: receipts and the shop chip lift 1.02 on hover (Motion Off snaps,
+    /// otherwise a 150 ms tween); and a language switch redraws the receipts' code-set strings.</summary>
+    [Fact]
+    public void ShelfChipsLiftOnHover_AndRepaintOnLanguageChange() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("presets");
+        var tab = shell.FindControl<PresetsTabView>("PresetsTab")!;
+        tab.PaintTakeaway(new[] { new JustDropOrdersService.Order { Code = "JD-LIFT" } });
+        var shelf = tab.FindControl<StackPanel>("TakeawayShelf")!;
+        void Hover(Control c, bool on) => c.RaiseEvent(new PointerEventArgs(on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent, c,
+            new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), shell, default, 0, PointerPointProperties.None, KeyModifiers.None));
+        foreach (var chip in new[] { (Border)shelf.Children[0], (Border)shelf.Children[1] })   // receipt, shop
+        {
+            var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(chip.RenderTransform);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            Hover(chip, true);
+            Assert.Equal(PresetsTabView.TakeawayLiftScale, scale.ScaleX);
+            Assert.Null(scale.Transitions);
+            Hover(chip, false);
+            Assert.Equal(1, scale.ScaleY);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            Hover(chip, true);
+            Assert.NotNull(scale.Transitions);
+            Assert.Equal(PresetsTabView.TakeawayLiftScale, scale.GetBaseValue(global::Avalonia.Media.ScaleTransform.ScaleYProperty).GetValueOrDefault());
+        }
+
+        var count = tab.FindControl<TextBlock>("TxtTakeawayCount")!;
+        Assert.Equal("1 kept", count.Text);
+        try
+        {
+            ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("1 gespeichert", count.Text);
+            Assert.Equal("Diesen Drop erneut abspielen", ToolTip.GetTip(shelf.Children[0]));
+        }
+        finally { ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("en"); }
     });
 
     [Fact]

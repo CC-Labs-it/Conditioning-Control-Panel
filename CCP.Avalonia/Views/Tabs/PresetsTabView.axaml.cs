@@ -117,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 if (VisualRoot is null) return;
                 RefreshLocalizedDetails();
+                RepaintTakeawayForLanguage();
             });
 
         private void RefreshLocalizedDetails()
