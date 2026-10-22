@@ -60,7 +60,7 @@ Why: this is a multi-person codebase now, and a 2k-line PR cannot be reviewed.
 |------|------|
 | `../Version.props` | `<Version>` tag (shared by WPF, Avalonia and Core) |
 | `Services/Update/UpdateService.cs:~23` | `AppVersion` constant |
-| `Services/Update/UpdateService.cs:~29` | `CurrentPatchNotes` |
+| `../CCP.Core/ReleaseNotes.cs:~6` | `ReleaseNotes.Current` (patch notes; `UpdateService.CurrentPatchNotes` aliases it) |
 | `../installer.iss:16` | `MyAppVersion` |
 | `../build-installer.bat:10` | `VERSION` |
 | `MainWindow/MainWindow.xaml:~1985` | `BtnUpdateAvailable` Content + ToolTip loc keys |
