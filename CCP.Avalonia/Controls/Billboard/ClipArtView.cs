@@ -4,6 +4,7 @@
 
 using System;
 using System.IO;
+using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -54,6 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 
         internal Image Poster => _poster;
 
+        /// <summary>The decoder is running right now (test seam).</summary>
+        internal bool Decoding => _player?.IsPlaying == true;
+
         public void Run()
         {
             if (_released || _failed || _art == null) return;
@@ -75,6 +79,14 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             _running = false;
             try { if (_player?.IsPlaying == true) _player.SetPause(true); }
             catch (Exception ex) { Fail(ex.Message); }
+        }
+
+        /// <summary>Off the visual tree the clip holds, whoever took it off: nothing decodes unseen.
+        /// WPF's MediaElement (UnloadedBehavior Manual) kept running; the next Run resumes it.</summary>
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            Hold();
+            base.OnDetachedFromVisualTree(e);
         }
 
         public void Release()
@@ -101,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true, Mute = true };
             _sink = new VlcFrameSink(_player, () => _media, OnFirstBitmap, () => _video?.InvalidateVisual());
             _media = new Media(vlc, _art!.VideoPath, FromType.FromPath);
-            _media.AddOption(":no-audio");
+            _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
             _media.AddOption(":input-repeat=65535");   // WPF MediaEnded -> Position 0 -> Play
             _player.EncounteredError += (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Fail("decoder error"));
             return true;

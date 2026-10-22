@@ -14,6 +14,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaster;
+using ConditioningControlPanel.Services.Friends;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
@@ -440,7 +441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             finally { RefreshChaster(); }
         }
 
-        // ---- friends presence (WPF FriendsPresenceSetting.Read/Write) ----
+        // ---- friends presence (Core FriendsPresenceSetting.Read/Write, shared with WPF) ----
 
         private bool _refreshingPresence;
 
@@ -449,12 +450,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             _refreshingPresence = true;
             try
             {
-                var svc = FriendsHead.Service;
-                bool shared;
-                // WPF FriendsPresenceSetting.Read: a throwing service falls back to the saved setting.
-                try { shared = svc != null ? svc.PresenceShared : CoreSettings.Current.FriendsPresenceShared; }
-                catch { shared = CoreSettings.Current.FriendsPresenceShared; }
-                Find<CheckBox>("ChkFriendsPresence").IsChecked = shared;
+                Find<CheckBox>("ChkFriendsPresence").IsChecked = FriendsPresenceSetting.Read(
+                    FriendsHead.Service, () => CoreSettings.Current.FriendsPresenceShared);
             }
             finally { _refreshingPresence = false; }
         }
@@ -462,16 +459,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private void ChkFriendsPresence_Changed(object? sender, RoutedEventArgs e)
         {
             if (_refreshingPresence) return;
-            var on = Find<CheckBox>("ChkFriendsPresence").IsChecked == true;
-            var done = false;
-            try { if (FriendsHead.Service is { } svc) { svc.PresenceShared = on; done = true; } }
-            catch (Exception ex) { Log.Debug("[Friends] presence write failed: {E}", ex.Message); }
-            if (!done)
-            {
-                CoreSettings.Current.FriendsPresenceShared = on;
-                CoreSettings.Save();
-            }
-            PresenceAsk.MarkAsked();
+            FriendsPresenceSetting.Write(
+                Find<CheckBox>("ChkFriendsPresence").IsChecked == true,
+                FriendsHead.Service,
+                on => { CoreSettings.Current.FriendsPresenceShared = on; CoreSettings.Save(); },
+                PresenceAsk.MarkAsked);
         }
 
         // ponytail: cloud settings backup - ProfileSyncService.BackupSettingsAsync /
