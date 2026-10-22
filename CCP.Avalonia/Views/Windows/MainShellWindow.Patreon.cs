@@ -316,9 +316,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _preMuteMasterVolume;
 
         /// <summary>WPF MainWindow.Patreon.cs:2136 ApplyVoiceMute (the "mute"/"unmute" voice commands): master
-        /// to 0 (remembered), whispers and her voice off; unmute restores the remembered level or 70. The
-        /// settings page, whispers box and tube menu repaint from settings, so WPF's manual syncs fold into
-        /// one live-volume push. ponytail: WPF also cuts her clip in flight (StopVoiceLineAudio); the tube
+        /// to 0 (remembered), whispers and her voice off; unmute restores the remembered level or 70. WPF's
+        /// manual slider sync (Patreon.cs:2161-2166) is the binder's Changed event, raised in PushMasterVolume,
+        /// which repaints every attached master slider (Settings · Audio, dashboard audio card). ponytail: WPF also cuts her clip in flight (StopVoiceLineAudio); the tube
         /// has no stop for a playing one-shot, so that clip finishes.</summary>
         internal void ApplyVoiceMute(bool muted)
         {
@@ -346,7 +346,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PushMasterVolume();
         }
 
-        // The same live push the Settings page's master slider runs (AudioSettingsBinder), then save.
+        // The same live push the Settings page's master slider runs (AudioSettingsBinder), a repaint of
+        // every attached audio surface (the binder only repaints on Changed), then save.
         private static void PushMasterVolume()
         {
             try
@@ -355,6 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "master volume push failed"); }
+            Controls.AppSettings.AudioSettingsBinder.RaiseChanged();
             CoreSettings.Save();
         }
     }

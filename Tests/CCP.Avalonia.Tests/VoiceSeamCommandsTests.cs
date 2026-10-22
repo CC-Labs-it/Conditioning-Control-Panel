@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -32,16 +33,25 @@ public sealed class VoiceSeamCommandsTests
     {
         var s = CoreSettings.Current;
         var saved = (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted);
+        var savedEnum = AudioSettingsBinder.Enumerate;
+        AudioSettingsBinder.Enumerate = () => System.Array.Empty<ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.OutputDevice>();
+        var host = new global::Avalonia.Controls.Window { Content = new AudioSettingsSection() };
         try
         {
             (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = (50, true, false);
+            host.Show();   // Settings "Audio" attached: its master slider must follow the voice (WPF Patreon.cs:2161)
+            Dispatcher.UIThread.RunJobs();
+            var slider = ((AudioSettingsSection)host.Content!).SliderMaster;
+            Assert.Equal(50, slider.Value);
             Say(shell, "louder");
             Assert.Equal(65, s.MasterVolume);
+            Assert.Equal(65, slider.Value);
             Say(shell, "quieter");
             Assert.Equal(50, s.MasterVolume);
 
             Say(shell, "mute");
             Assert.Equal((0, false, true), (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted));
+            Assert.Equal(0, slider.Value);
             Say(shell, "unmute");   // the remembered level comes back
             Assert.Equal((50, true, false), (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted));
 
@@ -49,7 +59,12 @@ public sealed class VoiceSeamCommandsTests
             Say(shell, "louder");   // clamped at 100
             Assert.Equal(100, s.MasterVolume);
         }
-        finally { (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = saved; }
+        finally
+        {
+            host.Close();
+            AudioSettingsBinder.Enumerate = savedEnum;
+            (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = saved;
+        }
     });
 
     [Fact]
