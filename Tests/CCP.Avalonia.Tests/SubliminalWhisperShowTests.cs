@@ -70,6 +70,32 @@ public sealed class SubliminalWhisperShowTests
         Assert.Empty(run.Timers);
     });
 
+    /// <summary>WPF TriggerBambiFreeze(deferReset: true) + TriggerDeferredBambiReset: before a video the
+    /// Reset is held (no 4-8 s timer) and follows 1-2 s after the video ends, once.</summary>
+    [Fact]
+    public void Video_freeze_holds_its_reset_until_the_video_ends() => With(audible: true, roll: 0.5, run =>
+    {
+        var (fp, rp) = (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider);
+        (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) =
+            (SubliminalWhisperShow.FreezeBeforeVideo, SubliminalWhisperShow.DeferredReset);   // as App.axaml.cs seeds them
+        try
+        {
+            CoreSubliminal.TriggerDeferredBambiFreeze();
+            Fire(run, 500);
+            Fire(run, 50); Fire(run, 250);
+            Assert.Equal("card Freeze", run.Log[^1]);
+            Assert.Empty(run.Timers);                                           // no 4-8 s Reset: the video holds it
+            CoreSubliminal.TriggerDeferredBambiReset();                         // the video ended
+            var reset = Assert.Single(run.Timers);
+            Assert.InRange(reset.Ms, 1000, 1999);
+            CoreSubliminal.TriggerDeferredBambiReset();                         // a second end owes nothing
+            Assert.Single(run.Timers);
+            Fire(run, reset.Ms);
+            Assert.Equal("play reset.mp3 whisper", run.Log[^1]);
+        }
+        finally { (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) = (fp, rp); }
+    });
+
     [Fact]
     public void Ambient_phrase_whispers_for_20_xp_else_card_for_10()
     {
