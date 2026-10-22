@@ -11,6 +11,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Logging;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
 using SkiaSharp;
@@ -219,7 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 CornerGifPlanner.CountEarlierSlotsInCorner(CoreSettings.Current.CornerGifOverlays, index, setting.Position));
             if (place is not { } p)
             {
-                Log.Warning("CornerGif: unreadable or degenerate GIF {W}x{H} ({Path}) for slot {Index} - skipping overlay", srcW, srcH, path, index);
+                Log.Warning("CornerGif: unreadable or degenerate GIF {W}x{H} ({Where}) for slot {Index} - skipping overlay", srcW, srcH, UrlLog.Where(path), index);
                 return;
             }
             var bounds = new PixelRect(screen.Bounds.X + (int)Math.Round(p.Left * scale), screen.Bounds.Y + (int)Math.Round(p.Top * scale),
@@ -235,7 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, Math.Max(bounds.Width, bounds.Height)));
             if (Seq.GetValueOrDefault(index) != seq || frames.Count == 0)
             {
-                if (frames.Count == 0) Log.Warning("CornerGif: no frames decoded from {Path}", path);
+                if (frames.Count == 0) Log.Warning("CornerGif: no frames decoded from {Where}", UrlLog.Where(path));
                 foreach (var f in frames) f.Dispose();
                 if (Seq.GetValueOrDefault(index) == seq) { Decoding.Remove(index); SyncSentinel(); }
                 return;
@@ -271,7 +272,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 shown.Timer.Start();
             }
             SyncSentinel();
-            Log.Information("CornerGif: overlay {Index} shown ({Path}, {W}x{H}px, {Opacity:P0})", index, path, bounds.Width, bounds.Height, opacity);
+            Log.Information("CornerGif: overlay {Index} shown ({Where}, {W}x{H}px, {Opacity:P0})", index, UrlLog.Where(path), bounds.Width, bounds.Height, opacity);
         }
 
         /// <summary>One animation frame. Allocation-free.</summary>

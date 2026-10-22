@@ -119,14 +119,8 @@ namespace ConditioningControlPanel.Services
             return width > 0 && height > 0;
         }
 
-        /// <summary>What a log line may say about a source: its host, or for a file only that it is
-        /// one and its extension. Never the path or the url (a remote item's id is content).</summary>
-        internal static string LogWhere(Uri? uri)
-        {
-            if (uri == null) return Logging.UrlLog.Empty;
-            try { return uri.IsAbsoluteUri && uri.IsFile ? "file " + Path.GetExtension(uri.LocalPath) : Logging.UrlLog.Host(uri); }
-            catch { return Logging.UrlLog.Invalid; }
-        }
+        /// <summary>What a log line may say about a source (the rule lives in Core, shared with the Avalonia head).</summary>
+        internal static string LogWhere(Uri? uri) => Logging.UrlLog.Where(uri);
 
         /// <summary>Opens a corner-GIF source, handling pack:// resources and plain files alike.</summary>
         internal static Stream? OpenSource(Uri uri)

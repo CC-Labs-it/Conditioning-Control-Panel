@@ -63,5 +63,23 @@ namespace ConditioningControlPanel.Services.Logging
                 return Invalid;
             }
         }
+
+        /// <summary>What a log line may say about a media source (main f07e12edd, WPF CornerGifMedia.LogWhere):
+        /// its host, or for a file only that it is one and its extension. Never the path or the url
+        /// (a remote item's id is content).</summary>
+        public static string Where(Uri? uri)
+        {
+            if (uri == null) return Empty;
+            try { return uri.IsAbsoluteUri && uri.IsFile ? "file " + System.IO.Path.GetExtension(uri.LocalPath) : Host(uri); }
+            catch { return Invalid; }
+        }
+
+        /// <summary><see cref="Where(Uri?)"/> for a path or url string (an absolute file path is a file).</summary>
+        public static string Where(string? source)
+        {
+            if (string.IsNullOrWhiteSpace(source)) return Empty;
+            try { return Uri.TryCreate(source.Trim(), UriKind.Absolute, out var uri) ? Where(uri) : Invalid; }
+            catch { return Invalid; }
+        }
     }
 }

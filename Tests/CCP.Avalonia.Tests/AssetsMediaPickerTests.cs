@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -168,5 +169,24 @@ public sealed class AssetsMediaPickerTests
         Assert.True(error.IsVisible);
         Assert.Equal(RemoteSubAddMessages.Describe(RemoteSubAddOutcome.NotCarried, "nosuchsub", AppSettings.RemoteSubLibraryCap), error.Text);
         Assert.True(view.FindControl<ScrollViewer>("RemoteFineTuneScroll")!.IsVisible);
+    }));
+
+    /// <summary>Main f07e12edd (licence 3.4): the Fine-tune fold says online media is kept for a day on
+    /// this computer, never uploaded (WPF AssetsTabView.xaml TxtOnlineCacheDay), with the real string.</summary>
+    [Fact]
+    public Task FineTuneFoldSaysOnlineMediaIsKeptForADay() => AvaloniaTestDispatcher.RunAsync(() => WithView((view, s) =>
+    {
+        s.MediaSource = "online";
+        view.RefreshRemoteMediaPicker();
+        view.FindControl<Button>("BtnRemoteFineTune")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        TopLevel.GetTopLevel(view)!.UpdateLayout();
+        var fold = view.FindControl<ScrollViewer>("RemoteFineTuneScroll")!;
+        var line = view.FindControl<TextBlock>("TxtOnlineCacheDay")!;
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("online_cache_day_line"), line.Text);
+        Assert.Contains("never uploaded", line.Text);   // the English string, not a raw key
+        Assert.True(line.IsEffectivelyVisible);
+        Assert.True(line.Bounds.Height > 0);
+        Assert.Same(fold, line.GetVisualAncestors().OfType<ScrollViewer>().First());
+        return Task.CompletedTask;
     }));
 }
