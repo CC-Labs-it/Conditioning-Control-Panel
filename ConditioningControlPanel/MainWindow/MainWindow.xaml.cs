@@ -1546,6 +1546,19 @@ namespace ConditioningControlPanel
                 bool goonInFront = Services.GoonGame.GoonHostService.IsInFront;
                 bool roomInFront = Services.BackRoom.BackRoomHostService.IsRoomInFront;
                 bool intakeInFront = Services.Quiz.IntakeHostService.IsInFront;
+                bool raceReady = Services.Chaos.CaucusHostService.IsReady;
+                bool boardReady = Services.PieceByPiece.PieceByPieceHostService.IsReady;
+                bool breakoutReady = Services.BackRoom.BackRoomHostService.IsBreakoutReady;
+                bool dtrhReady = Services.Chaos.DtrhHostService.IsReady;
+                bool arcademyReady = Services.Arcademy.ArcademyHostService.IsReady;
+                bool goonReady = Services.GoonGame.GoonHostService.IsReady;
+                bool roomReady = Services.BackRoom.BackRoomHostService.IsRoomReady;
+                bool intakeReady = Services.Quiz.IntakeHostService.IsReady;
+                // Only a game that is up can pause: a booting page that kept the press did nothing.
+                bool frontGameReady = Services.Safety.PanicPolicy.KeptEscapeGoesTo(true,
+                    raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
+                    dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
+                    roomInFront, roomReady, intakeInFront, intakeReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
                     gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
@@ -1553,7 +1566,9 @@ namespace ConditioningControlPanel
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
-                    nowUtc: now);
+                    nowUtc: now,
+                    frontGameReady: frontGameReady,
+                    fromPanicKey: !_panicFromStopButton);
                 if (!claim) { _lastRaceEscapeClaimUtc = null; return false; }
                 _lastRaceEscapeClaimUtc = now;
                 var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
@@ -1565,14 +1580,9 @@ namespace ConditioningControlPanel
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
                 // when the real key reached it as well (host-escape.js).
                 switch (Services.Safety.PanicPolicy.KeptEscapeGoesTo(claim,
-                            raceInFront, raceReady: Services.Chaos.CaucusHostService.IsReady,
-                            boardInFront, boardReady: Services.PieceByPiece.PieceByPieceHostService.IsReady,
-                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady,
-                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady,
-                            arcademyInFront, arcademyReady: Services.Arcademy.ArcademyHostService.IsReady,
-                            goonInFront, goonReady: Services.GoonGame.GoonHostService.IsReady,
-                            roomInFront, roomReady: Services.BackRoom.BackRoomHostService.IsRoomReady,
-                            intakeInFront, intakeReady: Services.Quiz.IntakeHostService.IsReady))
+                            raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
+                            dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
+                            roomInFront, roomReady, intakeInFront, intakeReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
@@ -1599,6 +1609,21 @@ namespace ConditioningControlPanel
                 App.Logger?.Warning("PANIC: race pause probe failed: {Error}", ex.Message);
                 return false;
             }
+        }
+
+        /// <summary>True while a Stop or Panic BUTTON runs the panic path (<see cref="HandlePanicFromStopButton"/>).</summary>
+        private bool _panicFromStopButton;
+
+        /// <summary>
+        /// A Stop / Panic button (the Remote HUD, the leash gate) runs exactly the panic press, except
+        /// that it is never a game's Escape pause: a click is not an Escape (bug hunt 2026-10-22). The
+        /// Remote HUD never takes focus, so the game under it stayed in front and its Stop paused it.
+        /// </summary>
+        private void HandlePanicFromStopButton()
+        {
+            _panicFromStopButton = true;
+            try { HandlePanicKeyPress(); }
+            finally { _panicFromStopButton = false; }
         }
 
         private void HandlePanicKeyPress()
@@ -1647,7 +1672,8 @@ namespace ConditioningControlPanel
             // short grace window, so the press is claimed exactly once whichever of the two
             // deliveries (WPF KeyDown vs the hook's queued handler) lands first - and it is only
             // ASKED when no lock card is open, because asking closes the palette as a side effect.
-            bool paletteClaimed = !lockCardOpen
+            // A Stop / Panic BUTTON is never an Escape: it never closes the palette instead of stopping.
+            bool paletteClaimed = !lockCardOpen && !_panicFromStopButton
                 && string.Equals(App.Settings?.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)
                 && SettingsPaletteWindow.TryConsumeEscape();
 
