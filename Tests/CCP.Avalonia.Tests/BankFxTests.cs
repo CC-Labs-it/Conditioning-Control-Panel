@@ -42,13 +42,16 @@ public sealed class BankFxTests
         Assert.StartsWith("15 / ", shell.FindControl<TextBlock>("TxtXP")!.Text);
     });
 
-    [Fact]
-    public void FractionalAwardsUseWpfsRoundedReadout() => WithShell((shell, s) =>
+    [Theory]
+    [InlineData(MotionLevel.Full, "11 / ")] // WPF odometer formats {0:F0} (rounds)
+    [InlineData(MotionLevel.Off, "10 / ")]  // WPF snap path writes (int)xp (ChromeFx.cs:693)
+    public void FractionalAwardsMatchWpfsReadout(MotionLevel motion, string expected) => WithShell((shell, s) =>
     {
-        s.MotionLevel = MotionLevel.Off;
+        s.MotionLevel = motion;
         ProgressionBank.Add(0.8, "Mantra");
         Dispatcher.UIThread.RunJobs();
-        Assert.StartsWith("11 / ", shell.FindControl<TextBlock>("TxtXP")!.Text);
+        shell.SettleXpOdometerForTests();
+        Assert.StartsWith(expected, shell.FindControl<TextBlock>("TxtXP")!.Text);
     });
 
     [Fact]

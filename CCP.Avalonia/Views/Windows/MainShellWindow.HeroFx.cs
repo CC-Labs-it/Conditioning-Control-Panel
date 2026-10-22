@@ -44,7 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             InitializeBankFx();
             Action<ProgressionBank.XpAward> awarded = award => Dispatcher.UIThread.Post(() => OnBankAward(award));
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { StopBankForPanic(); FlashLevelUp(); UpdateLevelDisplay(); });
+            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { AbortBankFlight(writeTruth: false); FlashLevelUp(); UpdateLevelDisplay(); });
             ProgressionBank.XPAwarded += awarded;
             ProgressionBank.LevelUp += levelUp;
             Closed += (_, _) => { ProgressionBank.XPAwarded -= awarded; ProgressionBank.LevelUp -= levelUp; ShutdownBankFx(); _xpOdometer?.Stop(); };
@@ -119,7 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!AmbientFxCanvas.Env.AllowTransitions || !IsVisible || seconds <= 0
                 || Math.Abs(xp - from) < 0.5)
             {
-                txt.Text = $"{xp:F0} / {(int)needed} XP";
+                // WPF ChromeFx.cs:693 truncates on the snap path; only the odometer rounds (F0).
+                txt.Text = _xpOdometerTarget = $"{(int)xp} / {(int)needed} XP";
                 return;
             }
             string tail = " / " + ((int)needed) + " XP";
