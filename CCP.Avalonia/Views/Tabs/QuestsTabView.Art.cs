@@ -78,11 +78,12 @@ public partial class QuestsTabView
     {
         if (_questSettings == null) return;
         _questArtCache.Clear();
-        RefreshQuestUI();
+        // WPF repaints on a mod switch only while the tab is on screen; showing it repaints anyway.
+        if (IsVisible) RefreshQuestUI();
     });
 
     private void OnQuestDefinitionsChanged() => Dispatcher.UIThread.Post(() =>
     {
-        if (_questDefinitions != null) RefreshQuestUI();
+        if (_questDefinitions != null && IsVisible) RefreshQuestUI();
     });
 }
