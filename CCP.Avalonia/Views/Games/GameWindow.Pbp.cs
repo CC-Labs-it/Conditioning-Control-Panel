@@ -147,7 +147,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>()));
+                var frame = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>());
+                frame["spectateMatchId"] = _featuredSpectate;
+                _featuredSpectate = null;
+                Post(frame);
             }
             if (!_pbpIdentityPosted)
             {
@@ -155,6 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                     CoreSettings.Current.UserDisplayName, CoreReleaseContent.AppVersion));
             }
+            SendFeaturedSpectate();
         }
 
         /// <summary>The CCP auth token, NOT the Patreon bearer; empty with no cloud session (WPF SafeAuthToken :632).</summary>
@@ -204,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Post(PbpHostRules.NetResult(call.Id, 0, call.Refusal));
                 return;
             }
-            var token = PbpAuthToken();
+            var token = PbpWatchRules.IsPublicWatchPath(call.Method, call.Path) ? "" : PbpAuthToken();
             var baseUrl = PbpServerBase();
             var http = PbpHttpClient();
             PbpPending = Task.Run(async () =>

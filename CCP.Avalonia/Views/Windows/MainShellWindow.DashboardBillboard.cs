@@ -2,7 +2,7 @@
 // on Home). This file only hosts the deck: it makes the deck and the card host once, keeps the snoozes
 // in AppSettings and runs a card's button. The rules are Core DashboardBillboard/BillboardDeck, the
 // drawing is Controls/Billboard/BillboardCardHost. Providers so far: the house cards and the Prime
-// tips, Core's Waiting/Resume/Event adapters over this head's services, and the premium showcase.
+// tips, Core's Waiting/Resume/Event adapters over this head's services, the premium showcase and featured chess.
 // ponytail: Live waits on a Lobby service (none on this head); the Board card waits on BoardTileView
 // and the marquee hand-off (neither on this head), so it offers no card here.
 
@@ -16,6 +16,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Billboard;
 using ConditioningControlPanel.Services.Billboard.Providers;
 using ConditioningControlPanel.Services.Billboard.Showcase;
+using ConditioningControlPanel.Services.PieceByPiece;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -37,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             host.IsVisible = show;
             if (show) EnsureBillboard();
             _billboardHost?.RefreshMotion();
+            SyncFeaturedPoll();
         }
 
         /// <summary>WPF EnsureBillboard: the deck over the saved snoozes, the host in its slot, the
@@ -65,7 +67,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             slot.Children.Clear();
             slot.Children.Add(cardHost);
             _billboardHost = cardHost;
+            if (Dash is { } dash) dash.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) SyncFeaturedPoll(); };
+            Opened += (_, _) => SyncFeaturedPoll();
+            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) SyncFeaturedPoll(); };
             cardHost.Begin();
+            SyncFeaturedPoll();
         }
 
         private IBillboardProvider[] _billboardProviders = Array.Empty<IBillboardProvider>();
@@ -74,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the long-lived services (P41/P68) and its art frees its player.</summary>
         private void ReleaseBillboard(object? sender, EventArgs e)
         {
+            Platform.PbpFeaturedFeed.SetActive(false);
             foreach (var p in _billboardProviders) (p as BillboardProviderBase)?.Detach();
             _billboardHost?.ReleaseArt();
         }
@@ -100,11 +107,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _ = ShowcaseArt.Value;
             var providers = new IBillboardProvider[]
             {
-                new HouseProvider(), MakeShowcase(), new WaitingProvider(head), new ResumeProvider(head), new EventProvider(head), new TipCardsProvider(),
+                new HouseProvider(), MakeShowcase(), new Platform.FeaturedProvider(id => Shell()?.WatchFeatured(id)), new WaitingProvider(head), new ResumeProvider(head), new EventProvider(head), new TipCardsProvider(),
             };
             foreach (var p in providers)
                 p.Changed += (_, _) => Dispatcher.UIThread.Post(() => Shell()?._billboardHost?.MarkDirty());
             return providers;
+        }
+
+        private void SyncFeaturedPoll() => Platform.PbpFeaturedFeed.SetActive(
+            PbpFeaturedPoll.ShouldRun(_billboardHost?.IsEffectivelyVisible == true && IsVisible, WindowState == WindowState.Minimized));
+
+        internal void WatchFeatured(string matchId)
+        {
+            if (!PbpWatchRules.IsMatchId(matchId)) return;
+            // Chess is free; the Lobby's Watch gate requires a cloud identity.
+            if (Platform.FriendsHead.Identity() == null) { _ = OpenUnifiedLoginDialog(); return; }
+            Games.GameWindow.HostSpectate(matchId);
         }
 
         /// <summary>WPF ShowcaseArtRegistration.Register, once per process.</summary>
