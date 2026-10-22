@@ -50,14 +50,15 @@ export const LOOK = {
   artRingAheadM: [12, 22, 32], artRingScale: 1, artRingRiseS: 0.12, artRingOpenS: 0.35, artRingHideS: 1.2,
   artRingTurnRadps: 0.8, artGentleFace: 0.5, artFinishFace: 0.3, artFinishClearM: 1.5,
   artLight: { sky: '#ffe3f1', ground: '#2a1640', hemi: 1.6, sun: 1.4 },
-  artScatter: 44, artScatterSideM: [3, 26], artScatterUpM: [-10, 14], artScatterMarginM: 2, artScatterAirM: 9,
+  // owner 2026-10-22: props read as landmarks, not confetti (about 3x the first pass)
+  artScatter: 90, artScatterSideM: [6, 50], artScatterUpM: [-30, 40], artScatterMarginM: 4, artScatterAirM: 10,
   artScatterKinds: [
-    { id: 'card-drop', w: 3, scale: [2.5, 5], spin: 0.5 }, { id: 'card-lens', w: 3, scale: [2.5, 5], spin: 0.5 },
-    { id: 'card-orbit', w: 3, scale: [2.5, 5], spin: 0.5 }, { id: 'card-petal', w: 3, scale: [2.5, 5], spin: 0.5 },
-    { id: 'pocket-watch', w: 3, scale: [2, 4], spin: 0.4 }, { id: 'bubble', w: 4, scale: [1.5, 4], spin: 0.2 },
-    { id: 'spiral-disc', w: 2, scale: [2, 5], spin: 0.6 }, { id: 'slot-cabinet-lod1', w: 1.5, scale: [1.5, 2.5], spin: 0.15 },
-    { id: 'chess-king-lod1', w: 1, scale: [2, 4], spin: 0.25 }, { id: 'chess-queen-lod1', w: 1, scale: [2, 4], spin: 0.25 },
-    { id: 'chess-rook-lod1', w: 1, scale: [2, 4], spin: 0.25 }, { id: 'chess-bishop-lod1', w: 1, scale: [2, 4], spin: 0.25 },
-    { id: 'chess-knight-lod1', w: 1, scale: [2, 4], spin: 0.25 }, { id: 'chess-pawn-lod1', w: 1.5, scale: [2, 4], spin: 0.25 },
+    { id: 'card-drop', w: 3, scale: [8, 16], spin: 0.35 }, { id: 'card-lens', w: 3, scale: [8, 16], spin: 0.35 },
+    { id: 'card-orbit', w: 3, scale: [8, 16], spin: 0.35 }, { id: 'card-petal', w: 3, scale: [8, 16], spin: 0.35 },
+    { id: 'pocket-watch', w: 3, scale: [6, 12], spin: 0.3 }, { id: 'bubble', w: 4, scale: [4, 10], spin: 0.15 },
+    { id: 'spiral-disc', w: 2, scale: [6, 14], spin: 0.45 }, { id: 'slot-cabinet-lod0', w: 1.5, scale: [4, 7], spin: 0.1 },
+    { id: 'chess-king-lod0', w: 1, scale: [6, 12], spin: 0.18 }, { id: 'chess-queen-lod0', w: 1, scale: [6, 12], spin: 0.18 },
+    { id: 'chess-rook-lod0', w: 1, scale: [6, 12], spin: 0.18 }, { id: 'chess-bishop-lod0', w: 1, scale: [6, 12], spin: 0.18 },
+    { id: 'chess-knight-lod0', w: 1, scale: [6, 12], spin: 0.18 }, { id: 'chess-pawn-lod0', w: 1.5, scale: [6, 12], spin: 0.18 },
   ],
 };

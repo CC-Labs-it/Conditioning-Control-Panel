@@ -19,6 +19,7 @@ import {
 import { uniform, uv, vec2, texture, cos, sin, float } from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { LOOK } from './look.js';
+import { Q } from './quality.js';
 
 const M4 = new Matrix4(), V = new Vector3(), SC = new Vector3(), ZB = new Vector3();
 
@@ -145,8 +146,9 @@ export function buildScatter(art, track, seed) {
   const pick = () => { let x = rnd(0, total); for (const k of kinds) { if ((x -= k.w) <= 0) return k; } return kinds[0]; };
 
   const placed = [], L = track.lengthM;
-  const tries = LOOK.artScatter * 8;
-  for (let i = 0; i < tries && placed.length < LOOK.artScatter; i++) {
+  // the tier picked at boot sets the count (a later governor step leaves the layout alone)
+  const want = Math.round(LOOK.artScatter * (Q.scatter ?? 1)), tries = want * 8;
+  for (let i = 0; i < tries && placed.length < want; i++) {
     const k = pick(), scale = rnd(k.scale[0], k.scale[1]), R = art.row(k.id).boundRadiusM * scale;
     const f = track.frameAt(rnd(0, L)), side = rnd(0, 1) < 0.5 ? -1 : 1;
     const off = f.w / 2 + R + rnd(LOOK.artScatterSideM[0], LOOK.artScatterSideM[1]), up = rnd(LOOK.artScatterUpM[0], LOOK.artScatterUpM[1]);

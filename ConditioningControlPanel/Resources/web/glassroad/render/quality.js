@@ -7,9 +7,9 @@
 
 /** Per tier: DPR cap, bloom on and its resolution scale, particle budget, speed line count. */
 export const TIERS = Object.freeze({
-  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160 }),
-  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100 }),
-  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 500, speedLines: 60 }),
+  high: Object.freeze({ name: 'high', dprMax: 2, antialias: true, bloom: true, bloomScale: 0.5, particles: 4000, speedLines: 160, scatter: 1 }),
+  mid: Object.freeze({ name: 'mid', dprMax: 1.5, antialias: true, bloom: true, bloomScale: 0.25, particles: 1500, speedLines: 100, scatter: 0.7 }),
+  phone: Object.freeze({ name: 'phone', dprMax: 1.25, antialias: false, bloom: true, bloomScale: 0.25, particles: 500, speedLines: 60, scatter: 0.45 }),
 });
 /** Lowest first; the governor moves one step along this list. */
 export const ORDER = Object.freeze(['phone', 'mid', 'high']);

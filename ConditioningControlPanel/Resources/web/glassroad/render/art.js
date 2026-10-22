@@ -17,8 +17,8 @@ export const WANT = [
   'road-bands-mask', 'road-glass-roughness', 'rail-glow-mask', 'boost-chevron-mask',
   'sky-dawn-galaxy', 'sky-deep-galaxy', 'sky-afterglow-galaxy', 'sky-dawn-stars', 'sky-deep-stars', 'sky-afterglow-stars',
   'sky-spiral-open-mask', 'emi-teacup-kart', 'countdown-ring', 'finish-portal-lod0',
-  'bubble', 'card-drop', 'card-lens', 'card-orbit', 'card-petal', 'pocket-watch', 'spiral-disc', 'slot-cabinet-lod1',
-  'chess-bishop-lod1', 'chess-king-lod1', 'chess-knight-lod1', 'chess-pawn-lod1', 'chess-queen-lod1', 'chess-rook-lod1',
+  'bubble', 'card-drop', 'card-lens', 'card-orbit', 'card-petal', 'pocket-watch', 'spiral-disc', 'slot-cabinet-lod0',
+  'chess-bishop-lod0', 'chess-king-lod0', 'chess-knight-lod0', 'chess-pawn-lod0', 'chess-queen-lod0', 'chess-rook-lod0',
 ];
 
 /** Load the art set. Resolves { tex(id), model(id), row(id), failed[] } and never rejects. */
