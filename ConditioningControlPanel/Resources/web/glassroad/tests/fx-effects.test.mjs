@@ -126,3 +126,22 @@ test('real photosafe: a burst of hits never reaches the screen faster than the b
   fx.update(0.25);
   assert.ok(fx.screen.k <= 0.25 / feel.get('items.photosafeInS') + 1e-6);
 });
+
+test('p4: remain runs 1 to 0 over the hold; the hue tint rises, holds and goes, halved under Gentle and on a refusal', () => {
+  const t = setup();
+  t.hit('spiral', 2);
+  assert.equal(t.s.remain, 1);
+  t.run(1);
+  assert.ok(Math.abs(t.s.remain - 0.5) < 0.02, 'half way ' + t.s.remain);
+  t.run(1.05);
+  assert.equal(t.s.remain, 0);
+  const h = setup(); h.hit('pink', 2); h.run(0.2);
+  const peak = h.s.hit.k;
+  assert.ok(peak > 0.3 && h.s.hit.kind === 'pink', 'tint ' + peak);
+  h.run(1.5); assert.equal(h.s.hit.k, 0);
+  const g = setup({ gentleOn: true }); g.hit('pink', 2); g.run(0.5);
+  assert.ok(g.s.hit.k <= peak * 0.55 + 1e-9, 'gentle ' + g.s.hit.k);
+  const r = setup({ grant: false }); r.hit('pink', 2); r.run(0.5);
+  assert.ok(r.s.hit.k <= peak * 0.55 + 1e-9, 'refused ' + r.s.hit.k);
+  assert.deepEqual(t.asked.length, 1, 'the tint spends no photosafe budget of its own');
+});

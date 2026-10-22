@@ -5,15 +5,27 @@
  * is a new registry key. An envelope rises to a peak (IN, Gentle rise floor), holds while
  * held or for holdS, then eases back to rest over outS (OUT, Gentle fade length). Pausing
  * freezes every envelope. update() also advances the photosafe window.
+ * Polish 4: ITEM_CUES (below) is this lane's own small registry, run beside FX_CUES: an item hit on the
+ * player kicks the camera in toward the kart (channel 'kick', added to camPush; Gentle removes it).
  */
 import { clamp, smoothstep } from '../core/math.js';
 import { S } from '../sim/state.js';
 import { createShake } from './shake.js';
 import { FX_CUES } from './cues.js';
+import { HIT_LOOK } from '../render/items/look.js';
 
 const CHANNELS = ['bloom', 'band', 'push', 'fov', 'lines', 'bandSpeed', 'burst', 'squash', 'stretch',
   'dust', 'edge', 'duck', 'tendril', 'rescue', 'white', 'flash', 'orbit', 'rumble', 'thud', 'pad',
-  'wake'];   // B1: slipstream charge (speed lines at LOOK-free half strength)
+  'wake',    // B1: slipstream charge (speed lines at LOOK-free half strength)
+  'kick'];   // polish 4: the camera kick of an item hit on the player
+
+/** Item cues beside the FX_CUES registry (render/items/look.js HIT_LOOK numbers). */
+export const ITEM_CUES = {
+  'item-hit'(fx, { victim = -1, verdict }) {
+    if (victim !== 0 || verdict !== 'hit') return;
+    fx.fire('kick', fx.gentle.kick(HIT_LOOK.kickPushM), HIT_LOOK.kickInS, 0, HIT_LOOK.kickOutS);
+  },
+};
 
 export function restState() {
   return {
@@ -90,7 +102,7 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     paletteS: 1,
   };
 
-  const offs = Object.entries(FX_CUES).map(([name, react]) => bus.on(name, (p) => react(fx, p || {})));
+  const offs = [...Object.entries(FX_CUES), ...Object.entries(ITEM_CUES)].map(([name, react]) => bus.on(name, (p) => react(fx, p || {})));
 
   function update(dt, kart) {
     if (fx.paused || !(dt > 0)) return;
@@ -98,7 +110,7 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     for (const n of CHANNELS) stepEnv(ch[n], dt);
     state.bloomBoost = clamp(ch.bloom.v, 0, 1);
     state.bandBright = clamp(ch.band.v, 0, 1);
-    state.camPush = ch.push.v;
+    state.camPush = ch.push.v + ch.kick.v;
     state.fovKick = ch.fov.v;
     state.bandSpeedMul = 1 + ch.bandSpeed.v;
     state.sparkBurst = ch.burst.v;

@@ -16,6 +16,7 @@ import {
 } from 'three/tsl';
 import { ITEM_LOOK as L } from './look.js';
 import { ATLAS_GRID } from './living.js';
+import { lensDepth, lensScale, lensAlpha } from '../lens.js';
 
 const col3 = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
 
@@ -128,9 +129,11 @@ export function cardEdge(hex) {
 export function moteCloud(cap) {
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   const c = cloud(cap, m, 'col'), { pos, size, v } = c.nodes;
-  m.positionNode = pos; m.scaleNode = size;
+  // the lens rule (render/lens.js): near the camera a mote, glow or trail halo is capped and fades
+  const d = lensDepth(pos);
+  m.positionNode = pos; m.scaleNode = lensScale(size, d);
   m.colorNode = v.rgb;
-  m.opacityNode = v.a.mul(smoothstep(0.1, 0.5, uv().sub(0.5).length()).oneMinus());
+  m.opacityNode = v.a.mul(smoothstep(0.1, 0.5, uv().sub(0.5).length()).oneMinus()).mul(lensAlpha(d));
   return { ...c, dispose: () => m.dispose() };
 }
 

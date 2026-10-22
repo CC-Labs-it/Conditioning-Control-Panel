@@ -16,12 +16,18 @@
  * Polish 3: the screen face draws larger and brighter (faces.js FACE_LOOK, gain feeds the bloom) and a head
  * mark (faces.js MARK_IDS: dizzy swirl, sweat drop, zz, ice, heart, spark, anger) pops over EMI's head on
  * a sprite (one shared atlas canvas), eased in and out by the reaction layer's markK.
+ * Polish 4, items as events: an item hit spins, stomps or flips the kart (kartPose.js itemHit), bursts in the
+ * kind's colour, sets stars orbiting EMI's head for the stun and glows the rim in the kind's hue (hue drifts,
+ * lightness held; Gentle holds it still and halves it). A throw winds up and lunges. Self items (Surge, Glass,
+ * Echo, Golden) wrap the kart in an aura (fresnel shell with climbing bands, additive) plus rising motes.
  */
 import {
   Group, Mesh, Sprite, SpriteNodeMaterial, MeshBasicNodeMaterial, CanvasTexture, SRGBColorSpace, Quaternion, Vector2, Vector3,
-  Euler, Color,
+  Euler, Color, SphereGeometry, AdditiveBlending,
 } from 'three/webgpu';
-import { texture, uv, uniform, vec2 } from 'three/tsl';
+import {
+  texture, uv, uniform, vec2, float, pow, abs, sin, atan, smoothstep, min, normalView, positionViewDirection, positionLocal,
+} from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { LOOK } from './look.js';
@@ -30,12 +36,41 @@ import { buildKart } from './dressing.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
   createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor,
+  hitRimRgb, stunStar, kindHex,
 } from './kartPose.js';
+import { HIT_LOOK, AURA_LOOK, ITEM_TIERS } from './items/look.js';
 import { createFaceCanvas, faceCell, FACE_LOOK, MARK_LOOK, markCell, createMarkAtlas } from './faces.js';
 
 const QX = new Quaternion(), QH = new Quaternion(), QI = new Quaternion(), EU = new Euler(), V = new Vector3(), AX = new Vector3();
 const UPY = new Vector3(0, 1, 0), FZ = new Vector3(0, 0, 1), RX = new Vector3(1, 0, 0), GC = new Color();
-const BUS_EVENTS = ['bump', 'wall', 'countdown', 'go', 'finish', 'item-hit', 'race-result', 'racer-event'];
+const BUS_EVENTS = ['bump', 'wall', 'countdown', 'go', 'finish', 'item-hit', 'item-fire', 'race-result', 'racer-event'];
+const RIM = [0, 0, 0], STAR = [0, 0, 0, 0];
+
+/** The stun ring: n sprites on the mark atlas's spark cell sharing one material (k fades it, rot turns them). */
+function starRing(tex, n, cell) {
+  const u = { k: uniform(0), rot: uniform(0) };
+  const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
+  const c = texture(tex, vec2(uv().x.add(cell.col).div(4), float(1 - cell.row).add(uv().y).div(2)));
+  m.colorNode = c.rgb; m.opacityNode = c.a.mul(u.k); m.rotationNode = u.rot;
+  const sprites = [];
+  for (let j = 0; j < n; j++) { const s = new Sprite(m); s.renderOrder = 5; s.visible = false; s.frustumCulled = false; sprites.push(s); }
+  return { sprites, u, material: m };
+}
+
+/** A self item aura: a fresnel shell with bands climbing round it, additive; k fades it, t runs the bands. */
+function auraMesh(geo) {
+  const A = AURA_LOOK, u = { colour: uniform(new Color(1, 1, 1)), k: uniform(0), t: uniform(0) };
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
+  const fres = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), A.fresPow);
+  const p = positionLocal;
+  const band = sin(p.y.mul(A.bands * Math.PI).sub(u.t.mul(A.bandClimbHz * 2 * Math.PI)).add(atan(p.x, p.z).mul(A.bandTwist))).mul(0.5).add(0.5).pow(3);
+  const ends = smoothstep(-1, -0.55, p.y).mul(smoothstep(1, 0.5, p.y));
+  m.colorNode = u.colour.mul(fres.mul(0.8).add(band.mul(0.55)));
+  m.opacityNode = min(fres.add(band.mul(0.6)), 1).mul(ends).mul(u.k);
+  const mesh = new Mesh(geo, m);
+  mesh.scale.set(A.size[0], A.size[1], A.size[2]); mesh.position.y = A.upM; mesh.renderOrder = 2; mesh.visible = false;
+  return { mesh, u, material: m, emitAcc: 0 };
+}
 
 /** art/palettes.json `karts` (seven colourways); null keeps the LOOK.kartTints fallback. */
 const KART_TABLE = await fetch(new URL('../art/palettes.json', import.meta.url))
@@ -129,6 +164,7 @@ function poseHead(h, o) {
 /** greyGeo: the greybox kart geometry for when the art set is missing. */
 export function buildKarts(art, count, greyGeo) {
   const R = rivalNumbers(LOOK), RR = reactNumbers(LOOK), list = [];
+  const auraGeo = new SphereGeometry(1, 32, 20);
   // one head mark atlas for every kart (none without a document, e.g. under node)
   let markTex = null;
   if (typeof document !== 'undefined') {
@@ -139,11 +175,12 @@ export function buildKarts(art, count, greyGeo) {
     const root = new Group(), body = new Group();
     const art3d = buildKart(art);
     const model = art3d || new Mesh(greyGeo, createKartMaterial(look ? look.cup : [1, 1, 1]).material);
-    const mats = [];
+    const mats = [], rims = [];
     model.traverse((o) => {
       if (!o.isMesh || !o.material || o.material.name !== 'kart_surface') return;
-      o.material = createKartSurface(o.material, look, R).material;
-      mats.push(o.material);
+      const surf = createKartSurface(o.material, look, R);
+      o.material = surf.material;
+      mats.push(o.material); rims.push(surf.uniforms.rim);
     });
     const accessory = art3d && look ? attachAccessory(art, model, look.accessory) : null;
     const face = art3d ? faceScreen(art, model, look ? look.hex : LOOK.emiColour) : null;
@@ -156,9 +193,14 @@ export function buildKarts(art, count, greyGeo) {
     body.add(model); root.add(body); root.visible = false;
     const mark = markTex ? markSprite(markTex) : null;
     if (mark) root.add(mark.sprite);
+    const stars = markTex ? starRing(markTex, RR.stunStars, markCell('spark')) : null;
+    if (stars) for (const sp of stars.sprites) root.add(sp);
+    const aura = auraMesh(auraGeo);
+    root.add(aura.mesh);
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
       tag: null, tagName: '', pose: createPose(), react: createReact(i), pend: [], mem: {}, ghost: 0, mark,
+      rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura,
     });
   }
 
@@ -172,6 +214,8 @@ export function buildKarts(art, count, greyGeo) {
   function attach({ bus = null, particles: pt = null } = {}) {
     if (pt) particles = pt;
     if (bus) for (const name of BUS_EVENTS) offs.push(bus.on(name, (p) => { for (const [i, kind, a] of reactionsFor(name, p)) queue(i, kind, a); }));
+    // dev (?bot=1 only): the bus on the page so screenshot scripts can play an item hit or a fire
+    if (bus && globalThis.location && /[?&]bot=1(?:&|$)/.test(globalThis.location.search)) globalThis.__glassroadBus = bus;
   }
 
   function setName(k, name) {
@@ -195,10 +239,20 @@ export function buildKarts(art, count, greyGeo) {
     }
   }
 
-  function spray(k, kind, n, gentle) {
+  function spray(k, kind, n, gentle, item) {
+    const few = gentle ? 0.6 : 1;
+    if (kind === 'impact') {
+      // the item lands: a wide burst in the kind's colour with a few pale sparkles, never a white core (the
+      // player's own is half as many and smaller: it bursts right under the camera)
+      const c = V.set(0, 0.7, 0).applyQuaternion(k.root.quaternion).add(k.root.position), H = HIT_LOOK, hex = kindHex(item), me = k.i === 0;
+      particles.burst([c.x, c.y, c.z], Math.max(1, Math.round(n * few * (me ? H.burstPlayerMul : 1))), { colours: [hex, hex, '#fff4fa'],
+        speed: H.burstSpeedMps * (gentle ? 0.7 : 1), sizeM: H.burstSizeM * (me ? H.burstPlayerMul : 1), lifeS: H.burstLifeS, sparkle: 0.6, petal: 0.2, up: H.burstUp, g: 0.4 });
+      return;
+    }
     const up = V.set(0, RR.sprayUpM, 0).applyQuaternion(k.root.quaternion).add(k.root.position), p = [up.x, up.y, up.z];
-    const few = gentle ? 0.6 : 1, stars = kind === 'stars';
-    particles.burst(p, Math.max(1, Math.round(n * few)), stars
+    const stars = kind === 'stars', me = k.i === 0;
+    // the player's own head sprays burst right under the camera: half as many (render/lensMath.js)
+    particles.burst(p, Math.max(1, Math.round(n * few * (me ? 0.5 : 1))), stars
       ? { family: 'golden', colours: RR.starColours, speed: RR.starSpeedMps, sizeM: RR.starSizeM, lifeS: 0.9, sparkle: 1, up: 1.2, g: 0.15 }
       : { family: 'melt', colours: RR.sweatColours, speed: RR.sweatSpeedMps, sizeM: RR.sweatSizeM, lifeS: 0.55, sparkle: 0, up: 1.8, g: 1.2 });
   }
@@ -216,7 +270,7 @@ export function buildKarts(art, count, greyGeo) {
     for (const [kind, a] of observeKart(r, st, fxv)) reactTo(r, kind, a, RR, gentle);
     for (const [kind, a] of k.pend) { prep(k, kind, a, fxv); reactTo(r, kind, a, RR, gentle); }
     k.pend.length = 0;
-    const o = stepReact(r, st, dt, RR, { gentle, lean: p.lean });
+    const o = stepReact(r, st, dt, RR, { gentle, lean: p.lean, fxv });
     body.position.set(0, o.lift, 0);
     body.quaternion.setFromAxisAngle(UPY, p.yawAdd + o.yaw)
       .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff + o.roll)).multiply(QX.setFromAxisAngle(RX, p.pitch + o.pitch));
@@ -231,7 +285,7 @@ export function buildKarts(art, count, greyGeo) {
       if (k.face) k.face.set(o.face, o.blink, r.t);
     }
     if (r.sprays.length) {
-      if (particles && near) for (const [kind, n] of r.sprays) spray(k, kind, n, gentle);
+      if (particles && near) for (const [kind, n, item] of r.sprays) spray(k, kind, n, gentle, item);
       r.sprays.length = 0;
     }
     // ghost: a steady pale wash (no flicker), eased in and out
@@ -250,6 +304,54 @@ export function buildKarts(art, count, greyGeo) {
       k.tag.material.opacity = a;
     }
     if (k.mark) showMark(k, o, near, gentle);
+    showHit(k, o, near, gentle);
+    showAura(k, o, near, gentle, dt);
+  }
+
+  /** The stun stars orbit EMI's head; the rim glows the kind's hue (lightness held) while stunned. */
+  function showHit(k, o, near, gentle) {
+    const t = k.react.t;
+    if (k.stars) {
+      const on = near && o.stunK > 0.01;
+      for (let j = 0; j < k.stars.sprites.length; j++) {
+        const sp = k.stars.sprites[j];
+        sp.visible = on;
+        if (!on) continue;
+        stunStar(j, k.stars.sprites.length, t, o.stunK, gentle, RR, STAR);
+        sp.position.set(STAR[0], STAR[1] + o.lift, STAR[2]);
+        sp.scale.setScalar(STAR[3]);
+      }
+      if (on) { k.stars.u.k.value = o.stunK; k.stars.u.rot.value = -t * 2.5 * (gentle ? 0.5 : 1); }
+    }
+    if (!k.rims.length) return;
+    if (o.rimK > 0) {
+      hitRimRgb(o.hitKind, t, gentle, o.rimK, k.rimBase, RR, RIM);
+      for (const u of k.rims) u.value.set(RIM[0], RIM[1], RIM[2]);
+      k.rimSet = true;
+    } else if (k.rimSet) {
+      for (const u of k.rims) u.value.set(k.rimBase[0], k.rimBase[1], k.rimBase[2]);
+      k.rimSet = false;
+    }
+  }
+
+  /** A self item's aura: the shell fades with auraK; motes rise off it (fewer on lower tiers and under Gentle). */
+  function showAura(k, o, near, gentle, dt) {
+    const a = k.aura, A = AURA_LOOK, on = !!o.aura && o.auraK > 0.01;
+    a.mesh.visible = on;
+    if (!on) { a.emitAcc = 0; return; }
+    const slow = gentle ? A.gentle : 1;
+    a.u.colour.value.set(A.colours[o.aura] || '#ffffff');
+    a.u.k.value = o.auraK * (k.i === 0 ? A.playerAlpha : A.alpha) * slow;
+    a.u.t.value = k.react.t * slow;
+    if (!particles || !near) return;
+    const tier = ITEM_TIERS[Q.name] || ITEM_TIERS.high, share = tier.motes / ITEM_TIERS.high.motes;
+    a.emitAcc += dt * A.motesPerS * share * slow * o.auraK * (k.i === 0 ? 0.5 : 1);   // the player's own: half, under the camera
+    const n = Math.floor(a.emitAcc);
+    if (n < 1) return;
+    a.emitAcc -= n;
+    const c = V.set(0, A.upM * 0.6, 0).applyQuaternion(k.root.quaternion).add(k.root.position);
+    particles.burst([c.x, c.y, c.z], n, { colours: [A.colours[o.aura] || '#ffffff', '#ffffff'], speed: A.moteSpeedMps * 0.6, sizeM: A.moteSizeM,
+      lifeS: A.moteLifeS, sparkle: 0.7, up: A.moteSpeedMps, g: -0.4 });
   }
 
   /** The head mark: pops in (scale from popIn to 1 with markK), bobs, the swirl turns; above the name tag when one shows. */
@@ -277,9 +379,12 @@ export function buildKarts(art, count, greyGeo) {
       for (const m of k.mats) m.dispose();
       if (k.face) k.face.dispose();
       if (k.mark) k.mark.sprite.material.dispose();
+      if (k.stars) k.stars.material.dispose();
+      k.aura.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
     }
     if (markTex) markTex.dispose();
+    auraGeo.dispose();
   }
   return { list, pose, hide, attach, resetReactions, dispose };
 }

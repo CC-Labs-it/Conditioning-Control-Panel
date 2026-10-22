@@ -156,3 +156,22 @@ test('Gentle applies the 300 ms rise floor to every IN', () => {
   run(0.2);
   assert.equal(fx.state.edgeGlow, 1);
 });
+
+test('p4: an item hit on the player kicks the camera in and eases back; a bot hit or Gentle does not', async () => {
+  const { createFeel } = await import('../core/feel.js');
+  const mk = (on) => {
+    const feel = createFeel(feelJson), bus = createBus(), g = createGentle(feel, { search: '' });
+    if (on) g.set({ on: true });
+    const fx = createFx(bus, feel, { gentle: g, photosafe: createPhotosafe(feel) }), kart = createState();
+    return { bus, fx, run: (s) => { for (let t = 0; t < s; t += 1 / 60) fx.update(1 / 60, kart); } };
+  };
+  const a = mk(false);
+  a.bus.emit('item-hit', { victim: 2, by: 0, kind: 'flash', verdict: 'hit' }); a.run(0.1);
+  assert.equal(a.fx.state.camPush, 0);
+  a.bus.emit('item-hit', { victim: 0, by: 2, kind: 'flash', verdict: 'hit' }); a.run(0.08);
+  assert.ok(a.fx.state.camPush > 0.3, 'kick ' + a.fx.state.camPush);
+  a.run(1); assert.equal(a.fx.state.camPush, 0);
+  const b = mk(true);
+  b.bus.emit('item-hit', { victim: 0, by: 2, kind: 'flash', verdict: 'hit' }); b.run(0.1);
+  assert.equal(b.fx.state.camPush, 0);
+});

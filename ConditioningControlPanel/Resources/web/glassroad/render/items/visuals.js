@@ -13,6 +13,10 @@
  * warning ring as a kart nears; impacts ring out over the road with a soft glow capped to a share of the
  * view (asks opts.photosafe once, skipped when refused or not wired); box cards glint now and then and
  * burst into tumbling confetti cards when taken. The player's held bubble stays in the HUD (slotfx.js).
+ * Polish 4, items as events: a throw leaves charged (the bubble pops big and settles, a glow swells and a ring
+ * opens where it left) and drags a longer, haloed ribbon you can follow; an impact (hit, trap, glass, golden,
+ * decoy) throws a wider ring, twice the motes, a second shockwave, confetti in the kind's colour and a fountain
+ * of glitter. The self item auras are on the karts (render/karts.js).
  */
 import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion, Box3, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -22,7 +26,7 @@ import { Q } from '../quality.js';
 import { ITEM_LOOK as L, ITEM_TIERS, MOTE_TINT } from './look.js';
 import {
   tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, cardEdgeGlow, shellFit, nearCapR, impactSeen,
-  breathe, trailPush, trailLook, trapWarn, lobMark, impactPhase, confettiAt, boxGlint,
+  breathe, trailPush, trailLook, trapWarn, lobMark, impactPhase, confettiAt, boxGlint, launchPop, launchFlare, impactFountain,
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
 import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
@@ -60,7 +64,7 @@ function lay(obj, p, n, spin = 0, lift = 0) {
   obj.quaternion.setFromUnitVectors(UP, N).multiply(QS.setFromAxisAngle(UP, spin));
 }
 
-const IMPACTS = new Set(['hit', 'glass', 'golden', 'decoy']);
+const IMPACTS = new Set(['hit', 'trap', 'glass', 'golden', 'decoy']);
 const hexRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
 const MOTE_HEX = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k, '#' + s.split(',').map((x) => Number(x).toString(16).padStart(2, '0')).join('')]));
 let frame = 0;
@@ -71,9 +75,10 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
   const root = new Group(); root.name = 'item-visuals'; scene.add(root);
   const icons = createLivingIcons({ px: start.iconPx, fps: start.iconFps });
   // motes: bubble rings, pop sprays, throw ribbons, lob dots, box glints and impact glows share one draw
-  const bubbles = bubbleCloud(top.bubbles + 24, icons.texture), motes = moteCloud(top.bubbles * top.motes + 24 * L.popMotes + 8 * (L.trailPts + L.lobDots) + 24);
+  const bubbles = bubbleCloud(top.bubbles + 24, icons.texture);
+  const motes = moteCloud(top.bubbles * top.motes + 24 * Math.ceil(L.popMotes * L.impactMotesMul) + 8 * (2 * L.trailPts + L.lobDots + 1) + 12 * L.fountain.high + 24);
   root.add(bubbles.sprite, motes.sprite);
-  const confetti = confettiCloud(L.confetti.high * 6);
+  const confetti = confettiCloud(L.confetti.high * 6 + L.hitConfetti.high * 4);
   root.add(confetti.mesh);
   const CONF = L.confettiColours.map(hexRgb);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
@@ -143,7 +148,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
     lay(e.mesh, p, n, 0, lift); e.mesh.scale.setScalar(rM);
     e.u.colour.value.set(hex); e.u.opacity.value = a; e.mesh.visible = true;
   }
-  const trails = new Map(), seen = new Set(), glows = new Map();
+  const trails = new Map(), seen = new Set(), glows = new Map(), launches = new Map();
   const trailOf = (id, n) => { let h = trails.get(id); if (!h) trails.set(id, h = { pts: new Float32Array(n * 3), n: 0 }); return h; };
   const confT = [];
   const kartModel = art && art.model ? art.model('emi-teacup-kart') : null;
@@ -280,9 +285,19 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
     seen.clear();
     const lobS = feel.get('items.lobFlightS') || 1.6;
     for (const pr of view.projectiles || []) {
-      const x = comp(pr.p, 0), y = comp(pr.p, 1), z = comp(pr.p, 2), lob = pr.mode === 'lob', id = pr.id | 0;
-      bubble3d(x, y, z, pr.kind, lob ? L.lobR : L.throwR, 1, id * 3);
+      const x = comp(pr.p, 0), y = comp(pr.p, 1), z = comp(pr.p, 2), lob = pr.mode === 'lob', id = pr.id | 0, age = pr.t || 0;
+      bubble3d(x, y, z, pr.kind, (lob ? L.lobR : L.throwR) * launchPop(age, soft), 1, id * 3);
       seen.add(id);
+      // where it left: a glow swells and goes (capped like an impact glow), a ring opens on the road
+      let ln = launches.get(id);
+      if (!ln) launches.set(id, ln = { x, y, z });
+      const fl = launchFlare(age, soft), lc = TINTS[pr.kind] || TINTS.box;
+      if (fl.glowA > 0.003) {
+        const p = cam && cam.position, d = p ? Math.hypot(ln.x - p.x, ln.y - p.y, ln.z - p.z) : 99;
+        const r = nearCapR(fl.glowR, d, cam ? cam.fov : 0, L.impactGlowFrac);
+        motes.push(ln.x, ln.y + r * 0.3, ln.z, r * 2, lc[0] * 0.5 + 0.5, lc[1] * 0.5 + 0.5, lc[2] * 0.5 + 0.5, fl.glowA);
+      }
+      if (fl.ringA > 0.004) { OFF[0] = ln.x; OFF[1] = ln.y - (feel.get('items.throwHeightM') || 1); OFF[2] = ln.z; mark(OFF, null, fl.ring, MOTE_HEX[pr.kind] || L.markColour, fl.ringA, 0.08); }
       const n = lob ? L.lobDots : L.trailPts, h = trailOf(id, n), c = TINTS[pr.kind] || TINTS.box;
       trailPush(h, x, y, z, n, lob ? L.lobDotStepM : L.trailStepM);
       const shown = Math.max(2, Math.round(h.n * (lob ? 1 : moteK)));
@@ -292,6 +307,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
         else {
           motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], L.trailSizeM * tl.size, c[0], c[1], c[2], L.trailAlpha * tl.alpha);
           if (i & 1) motes.push(h.pts[j], h.pts[j + 1] + 0.05, h.pts[j + 2], L.trailSizeM * 0.45 * tl.size, 1, 1, 1, L.trailAlpha * tl.alpha);
+          else motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], L.trailSizeM * L.trailHaloMul * tl.size, c[0], c[1], c[2], L.trailHaloAlpha * tl.alpha);
         }
       }
       const tk = lob ? karts[pr.target] : null;
@@ -303,6 +319,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
       }
     }
     for (const id of trails.keys()) if (!seen.has(id)) trails.delete(id);
+    for (const id of launches.keys()) if (!seen.has(id)) launches.delete(id);
 
     // traps: Melt is a puddle; any other kind sits on the road as a low bubble that pulses; either wakes
     // a warning ring as a kart comes near
@@ -372,9 +389,10 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
       const q = popPhase(pop.t || 0, showS);
       if (q >= 1) continue;
       const x = comp(pop.p, 0), y = comp(pop.p, 1) + 0.6, z = comp(pop.p, 2);
-      const [r0, r1] = L.popRingM, kind = pop.at === 'golden' ? 'golden' : pop.at === 'glass' ? 'glass' : pop.kind;
+      const big = IMPACTS.has(pop.at);
+      const [r0, r1] = big ? L.impactPopRingM : L.popRingM, kind = pop.at === 'golden' ? 'golden' : pop.at === 'glass' ? 'glass' : pop.kind;
       bubble(x, y, z, kind, r0 + (r1 - r0) * Math.sqrt(q), (1 - q) * (pop.at === 'decoy' ? 0.5 : 1), pop.at === 'golden' ? MODE.goldShell : MODE.shell, 0, 0);
-      const c = TINTS[kind] || TINTS.box, n = Math.round(L.popMotes * tierOf(Q.name).motes / top.motes);
+      const c = TINTS[kind] || TINTS.box, n = Math.round(L.popMotes * (big ? L.impactMotesMul : 1) * tierOf(Q.name).motes / top.motes);
       for (let i = 0; i < n; i++) {
         popMote(i, n, pop.t || 0, OFF, x * 0.37 + z);
         motes.push(x + OFF[0], y + OFF[1], z + OFF[2], L.popMoteSizeM ?? L.moteSizeM * 1.4, c[0], c[1], c[2], 1 - q);
@@ -382,7 +400,18 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
       // an impact: a shockwave ring runs out over the road and a soft glow swells and goes, never more
       // than impactGlowFrac of the view tall; the glow asks photosafe once, only when near and on screen
       // (unseen ones never spend the player's budget), and stays dark when refused
-      if (!IMPACTS.has(pop.at)) continue;
+      if (!big) continue;
+      // confetti in the kind's colour (and white) and a fountain of glitter, both fading out with the pop
+      const seed = Math.round(x * 3.1 + z * 1.7), fade = 1 - q * q, tq = Q.name;
+      const nc = L.hitConfetti[tq] || L.hitConfetti.high, nf = Math.round((L.fountain[tq] || L.fountain.high) * (soft ? 0.6 : 1));
+      for (let k = 0; k < nc; k++) {
+        const cf = confettiAt(k, (pop.t || 0) * 1.4, OFF, seed), white = k % 3 === 2;
+        confetti.push(x + OFF[0], y + OFF[1], z + OFF[2], cf.rx, cf.ry, L.confettiSizeM * 0.8, white ? 1 : c[0], white ? 1 : c[1], white ? 1 : c[2], cf.alpha * fade);
+      }
+      for (let k = 0; k < nf; k++) {
+        const fa = impactFountain(k, nf, pop.t || 0, OFF, seed);
+        if (fa > 0.01) motes.push(x + OFF[0], y + OFF[1], z + OFF[2], L.fountainSizeM * (k & 1 ? 0.6 : 1), k & 1 ? 1 : c[0], k & 1 ? 1 : c[1], k & 1 ? 1 : c[2], fa * fade);
+      }
       const key = kind + pop.at + Math.round(x * 2) + ',' + Math.round(z * 2);
       let g = glows.get(key);
       if (!g) glows.set(key, g = { ok: false, asked: false, f: 0 });
@@ -395,6 +424,9 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
       }
       const ip = impactPhase(pop.t || 0, { glow: g.ok, gentle: soft });
       mark(pop.p, null, ip.ring, MOTE_HEX[kind] || L.markColour, ip.ringA, 0.08);
+      // a second shockwave a beat later, narrower, in white
+      const ip2 = impactPhase((pop.t || 0) - L.impactRing2S, { glow: false, gentle: soft });
+      if ((pop.t || 0) > L.impactRing2S) mark(pop.p, null, ip2.ring * L.impactRing2Mul, '#ffffff', ip2.ringA * 0.8, 0.09);
       if (ip.glowA > 0.003) {
         const p = cam && cam.position, d = p ? Math.hypot(x - p.x, y - p.y, z - p.z) : 99;
         const r = nearCapR(L.impactGlowM, d, cam ? cam.fov : 0, L.impactGlowFrac);

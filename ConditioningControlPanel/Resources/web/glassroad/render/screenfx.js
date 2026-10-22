@@ -20,15 +20,22 @@
  * with facets glinting on the front; Shatter cracks into cells that grow out from the middle, then the
  * pieces slide apart and home again; Blackout's iris wears a soft rim; Pink washes in from the edges round
  * a heart; Brain Drain's grey creeps inward. Gentle halves every amount, so fronts stop halfway.
+ * Polish 4, bolder and clear about when it ends: a frame meter (a band round the whole view edge in the
+ * effect's colour, draining clockwise from the top as the effect runs out) and a badge low in the middle (the
+ * effect's icon in a disc, its ring draining the same way), both over the never-blind floor. The hit itself
+ * tints the view toward the kind's colour for a beat (fx/effects.js screen.hit): the hue moves, the
+ * luminance of every pixel stays, strongest at the edges.
  */
-import { TextureLoader, SRGBColorSpace, Color, NearestFilter } from 'three/webgpu';
+import { TextureLoader, SRGBColorSpace, Color, NearestFilter, CanvasTexture, Vector2 } from 'three/webgpu';
 import {
   Fn, If, uniform, screenUV, vec2, vec3, float, texture, mix, smoothstep, sin, cos, atan, log, length, abs, max, min,
-  luminance, mx_noise_float, mx_worley_noise_float, clamp, normalize, screenCoordinate, floor, fract, dot, sqrt, sign, select,
+  luminance, mx_noise_float, mx_worley_noise_float, clamp, normalize, screenCoordinate, floor, fract, dot, sqrt, sign, select, step,
 } from 'three/tsl';
 import { currentArt } from './art.js';
 import { SCREEN_LOOK as L } from './items/look.js';
-import { screenAmounts, irisRadius, flashRect, shatterTilt, frostThreshold, shatterPhase, spiralOpen, pinkHeart } from './items/fxmath.js';
+import { screenAmounts, irisRadius, flashRect, shatterTilt, frostThreshold, shatterPhase, spiralOpen, pinkHeart, meterLook, SCREEN_KINDS } from './items/fxmath.js';
+import { HIT_LOOK } from './items/look.js';
+import { ITEMS } from '../sim/itemTable.js';
 import { maskLook } from './atlas.js';
 
 const rgb = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
@@ -42,6 +49,21 @@ function heartSd(p) {
 }
 const ICON = new URL('../art/fx/spiral.png', import.meta.url).href;
 
+/** The badge atlas: a 4 x 2 canvas of BADGE_PX cells, each screen kind's icon drawn in as it loads. */
+const BADGE_PX = 128;
+function badgeAtlas() {
+  const cv = document.createElement('canvas');
+  cv.width = BADGE_PX * 4; cv.height = BADGE_PX * 2;
+  const g = cv.getContext('2d'), t = new CanvasTexture(cv);
+  t.colorSpace = SRGBColorSpace;
+  SCREEN_KINDS.forEach((kind, i) => {
+    const img = new Image();
+    img.onload = () => { g.drawImage(img, (i % 4) * BADGE_PX, ((i / 4) | 0) * BADGE_PX, BADGE_PX, BADGE_PX); t.needsUpdate = true; };
+    img.src = new URL('../' + ITEMS[kind].icon, import.meta.url).href;
+  });
+  return t;
+}
+
 export function createScreenFx(three, art = currentArt()) {
   const tex = (id) => (art && art.tex ? art.tex(id) : null);
   const frostT = tex('fx-frost-edge'), flowT = tex('fx-melt-flow'), crackT = tex('fx-crack'), irisT = tex('fx-iris'), noiseT = tex('fx-noise');
@@ -49,12 +71,16 @@ export function createScreenFx(three, art = currentArt()) {
   const X = maskLook();
   const icon = new TextureLoader().load(ICON);
   icon.colorSpace = SRGBColorSpace;
+  // the badge's icons: the eight screen kinds' art drawn into one 4 x 2 canvas atlas (row 0 on top) as each loads
+  const badgeTex = badgeAtlas();
   const u = {
     any: uniform(0), blurOn: uniform(0), t: uniform(0), runT: uniform(0), aspect: uniform(16 / 9), blurMul: uniform(1),
     flash: uniform(0), spiral: uniform(0), drain: uniform(0), freeze: uniform(0), black: uniform(0), pink: uniform(0),
     melt: uniform(0), shatter: uniform(0), dimOnly: uniform(0), tilt: uniform(0), iris: uniform(L.irisFrom),
     rx: uniform(0.5), ry: uniform(0.5), rw: uniform(0.2), rh: uniform(0.2),
     frostThr: uniform(1), crack: uniform(0), slide: uniform(0), spiralR: uniform(0), heartR: uniform(L.pinkHeartR[0]),
+    meterK: uniform(0), remain: uniform(0), meterRgb: uniform(new Color(1, 1, 1)), badgeS: uniform(1),
+    hitK: uniform(0), hitRgb: uniform(new Color(1, 1, 1)), badgeCell: uniform(new Vector2(0, 0)),
   };
   const amt = {};
   let clock = 0;
@@ -202,21 +228,59 @@ export function createScreenFx(three, art = currentArt()) {
         col.assign(mix(col, col.mul(L.keepImage), shut));
         // a soft rim of light rides the closing iris edge
         col.addAssign(rgb(L.irisRimColour).mul(open.mul(open.oneMinus()).mul(4).pow(L.irisRimPow).mul(u.black).mul(L.irisRimAlpha)));
+        // the hit: the view's hue swings toward the kind's colour, each pixel keeping its own luminance
+        If(u.hitK.greaterThan(0.001), () => {
+          const tl = luminance(col), hl = max(luminance(u.hitRgb), 0.05);
+          const hued = min(u.hitRgb.mul(tl.div(hl)), vec3(1.2));
+          const tw = smoothstep(HIT_LOOK.tintEdge[0], HIT_LOOK.tintEdge[1], rad).mul(1 - HIT_LOOK.tintCentre).add(HIT_LOOK.tintCentre);
+          col.assign(mix(col, hued, u.hitK.mul(tw)));
+        });
         // never blind: the highlights (rails, racing line) come through sharp, read where Melt and
         // Shatter moved the view so even Melt has no still centre
         const clear = sceneTex.sample(suv).rgb;
         const bright = clear.mul(smoothstep(L.keepBright[0], L.keepBright[1], luminance(clear)).mul(L.keepBrightGain));
         if (jit) col.addAssign(jit.mul(X.ditherOut));
         out.assign(max(col, bright));
+        If(u.meterK.greaterThan(0.001), () => {
+          const K = u.meterK;
+          // the frame meter: lit clockwise from the top centre up to remain over a dark track, so it reads on any sky
+          const ex = min(uv0.x, uv0.x.oneMinus()).mul(asp), ey = min(uv0.y, uv0.y.oneMinus()), de = min(ex, ey);
+          const p = fract(atan(c.x, c.y.negate()).div(2 * Math.PI).add(1));
+          const lit = smoothstep(u.remain.add(0.004), u.remain.sub(0.004), p).mul(step(0.0005, u.remain));
+          out.assign(mix(out, out.mul(L.meterShade), smoothstep(L.meterW * 1.9, L.meterW * 1.3, de).mul(K)));
+          const band = smoothstep(L.meterW, L.meterW * 0.6, de);
+          out.assign(mix(out, mix(rgb(L.meterTrack), u.meterRgb, lit), band.mul(K).mul(L.meterAlpha)));
+          out.addAssign(u.meterRgb.mul(smoothstep(L.meterGlowW, L.meterW * 1.9, de).mul(lit).mul(K).mul(L.meterGlow)));
+          // the badge: the icon in a disc, a ring round it draining the same way, a dark outline under both
+          const bc = uv0.sub(vec2(...L.badgeAt)).mul(toH), br = length(bc), R = u.badgeS.mul(L.badgeR), RW = R.add(L.badgeRingW);
+          out.assign(mix(out, out.mul(L.meterShade), smoothstep(RW.add(0.007), RW.add(0.004), br).mul(K)));
+          const disc = smoothstep(R, R.sub(0.003), br);
+          const ring = smoothstep(R.sub(0.001), R.add(0.002), br).mul(smoothstep(RW.add(0.002), RW, br));
+          const pb = fract(atan(bc.x, bc.y.negate()).div(2 * Math.PI).add(1));
+          const rl = smoothstep(u.remain.add(0.006), u.remain.sub(0.006), pb).mul(step(0.0005, u.remain));
+          // screen y runs down and the canvas texture is flipped, so the icon's v counts up from its cell's bottom
+          const lu = clamp(bc.div(R.mul(1.8)).add(0.5), 0.004, 0.996);
+          const bi = texture(badgeTex, vec2(lu.x.add(u.badgeCell.x).div(4), u.badgeCell.y.oneMinus().add(lu.y.oneMinus()).div(2)));
+          out.assign(mix(out, mix(rgb(L.badgePaper), bi.rgb, bi.a), disc.mul(K).mul(L.badgeAlpha)));
+          out.assign(mix(out, mix(rgb(L.meterTrack), u.meterRgb, rl), ring.mul(K).mul(L.badgeAlpha)));
+        });
       });
       return out;
     })();
   }
 
   function update(screen, dt, aspect) {
-    const a = screenAmounts(screen, amt);
-    u.any.value = a.any ? 1 : 0;
-    if (!a.any) { clock = 0; return; }
+    const a = screenAmounts(screen, amt), m = meterLook(screen);
+    u.hitK.value = m.hitK; u.meterK.value = m.meterK; u.remain.value = m.remain; u.badgeS.value = m.badgeS;
+    if (m.hitK > 0) u.hitRgb.value.set(m.hitHex);
+    if (m.meterK > 0) {
+      u.meterRgb.value.set(m.meterHex);
+      const ci = Math.max(0, SCREEN_KINDS.indexOf(screen.kind));
+      u.badgeCell.value.set(ci % 4, (ci / 4) | 0);
+    }
+    const any = a.any || m.hitK > 0 || m.meterK > 0;
+    u.any.value = any ? 1 : 0;
+    if (!any) { clock = 0; return; }
     clock += (dt || 0) * a.timeMul;
     u.t.value = clock;
     u.runT.value = (screen.t || 0) * a.timeMul;
@@ -240,5 +304,5 @@ export function createScreenFx(three, art = currentArt()) {
     u.rx.value = r.cx; u.ry.value = r.cy + L.flashPop * 0.8 * (1 - Math.min(1, a.flash)); u.rw.value = r.hw * pop; u.rh.value = r.hh * pop;
   }
 
-  return { node, update, dispose() { icon.dispose(); } };
+  return { node, update, dispose() { icon.dispose(); badgeTex.dispose(); } };
 }

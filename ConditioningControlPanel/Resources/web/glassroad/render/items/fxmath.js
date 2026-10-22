@@ -298,3 +298,50 @@ export function slotOrbit(i, n, t, gentle = false) {
   const s = Math.sin(a), [s0, s1] = L.orbitSizePx, wob = 1 + 0.06 * Math.sin(t * 0.9 + i * 1.3);
   return { x: Math.cos(a) * L.orbitR * wob, y: s * L.orbitR * L.orbitTilt, size: s0 + (s1 - s0) * (0.5 + 0.5 * s), alpha: L.orbitAlpha * (0.45 + 0.55 * (0.5 + 0.5 * s)), front: s > 0 };
 }
+
+// ---- polish 4: items as events -----------------------------------------------------------------
+const METER = { hitK: 0, hitHex: '#ffffff', meterK: 0, meterHex: '#ffffff', remain: 0, badgeS: 1 };
+
+/**
+ * ScreenState -> the countdown meter, badge and hit tint (one shared object, rewritten each call): meterK
+ * fades with the effect (Gentle a touch softer), remain 1..0 over the hold, badgeS pops past 1 as it lands
+ * (no pop under Gentle); hitK is the hue tint fx/effects.js already shaped (Gentle halved there).
+ */
+export function meterLook(screen) {
+  const o = METER, L = SCREEN_LOOK;
+  o.hitK = 0; o.meterK = 0; o.remain = 0; o.badgeS = 1;
+  if (!screen) return o;
+  const gentle = !!(screen.params && screen.params.gentle), h = screen.hit;
+  if (h && h.k > 0.001) { o.hitK = clamp01(h.k); o.hitHex = L.meterColours[h.kind] || '#ffffff'; }
+  if (screen.kind && screen.kind !== 'none' && screen.durS > 0) {
+    o.meterK = clamp01(screen.k) * (gentle ? L.meterGentle : 1);
+    o.meterHex = L.meterColours[screen.kind] || '#ffffff';
+    o.remain = clamp01(Number.isFinite(screen.remain) ? screen.remain : 1 - (screen.t || 0) / screen.durS);
+    const q = clamp01((screen.t || 0) / L.badgePopS);
+    o.badgeS = (0.6 + 0.4 * clamp01(screen.k)) * (1 + (gentle ? 0 : L.badgePop * Math.sin(Math.PI * q)));
+  }
+  return o;
+}
+
+/** A thrown bubble at age t: it leaves big and charged and settles to its size by launchS (Gentle: half the pop). */
+export function launchPop(t, gentle = false) {
+  const L = ITEM_LOOK, q = clamp01(t / L.launchS);
+  return 1 + L.launchPop * (gentle ? 0.5 : 1) * (1 - q) * (1 - q);
+}
+
+/** The launch flare at age t: a glow that swells and goes, a ring that opens on the road; alpha 0 once over. */
+export function launchFlare(t, gentle = false) {
+  const L = ITEM_LOOK, life = L.launchS * (gentle ? 2 : 1), q = clamp01(t / life), [r0, r1] = L.launchRingM;
+  const rise = gentle ? 0.3 : 0.04, k = gentle ? 0.5 : 1, up = Math.min(1, t / rise);
+  return { glowR: L.launchGlowM * (0.5 + 0.5 * q), glowA: q >= 1 ? 0 : L.launchGlowAlpha * k * up * (1 - q) ** 2,
+    ring: r0 + (r1 - r0) * (1 - (1 - q) ** 2), ringA: q >= 1 ? 0 : L.markAlpha * k * up * (1 - q) };
+}
+
+/** Impact fountain spark k of n at age t: writes [dx, dy, dz] (m, y up) into out; returns its alpha (glitter rising and spreading). */
+export function impactFountain(k, n, t, out, seed = 0) {
+  const L = ITEM_LOOK, [v0, v1] = L.fountainSpeedMps, a = k * 2.399963 + seed, v = v0 + (v1 - v0) * rnd(k * 1.7 + seed);
+  const spread = 0.35 + (1 - Math.exp(-t * 2.2)) * (1.2 + 1.6 * rnd(k * 5.3 + seed));
+  out[0] = Math.cos(a) * spread; out[2] = Math.sin(a) * spread;
+  out[1] = v * t - 0.5 * L.fountainGravityMps2 * t * t;
+  return clamp01(1 - t / L.fountainS) * (out[1] > -0.2 ? 1 : 0);
+}

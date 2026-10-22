@@ -55,7 +55,7 @@ export const ITEM_LOOK = {
   // low on the far side; the living icon breathes (scale share, Hz; Gentle keeps a third)
   shineDriftRad: 0.5, shineHz: 0.11, causticGain: 0.55, causticSharp: 10, breathAmp: 0.05, breathHz: 0.35,
   // throws: a sparkling ribbon of motes along the last trailPts positions (one every trailStepM)
-  trailPts: 14, trailStepM: 0.45, trailSizeM: 0.26, trailAlpha: 0.85, trailTwinkleHz: 0.9,
+  trailPts: 22, trailStepM: 0.45, trailSizeM: 0.36, trailAlpha: 0.9, trailTwinkleHz: 0.9,
   // lobs: a dotted arc (a dot every lobDotStepM) and a soft shadow plus a pulsing ring at the target
   lobDots: 18, lobDotStepM: 1.6, lobDotSizeM: 0.3, lobShadowR: [0.9, 2.2], lobShadowAlpha: 0.5, markColour: '#ff8fd0',
   markPulseHz: 1.2, markRingM: 2.4, markAlpha: 0.55,
@@ -72,6 +72,43 @@ export const ITEM_LOOK = {
   confettiSpeedMps: [4.5, 10], confettiGravityMps2: 7, confettiS: 1.5,
   // polish 3: the spectrum, pink and violet still leading
   confettiColours: ['#ff4fb0', '#ffffff', '#ffd23a', '#22e6ff', '#9b4dff', '#a8ff2e', '#ff2bd6', '#ff8c1a'],
+  // ---- polish 4: items as events ----
+  // a throw leaves charged: the bubble starts launchPop bigger and settles by launchS, a glow swells and a ring
+  // opens on the road where it left (the glow capped to impactGlowFrac of the view like an impact)
+  launchS: 0.4, launchPop: 0.7, launchGlowM: 2.4, launchGlowAlpha: 0.45, launchRingM: [0.6, 5],
+  // the trail you can follow: a soft halo under every other ribbon point
+  trailHaloMul: 2.8, trailHaloAlpha: 0.22,
+  // impacts: a wider pop ring, more motes, a second shockwave a beat later, confetti in the kind's colour and
+  // a fountain of glitter (counts per tier)
+  impactPopRingM: [1, 6.5], impactMotesMul: 1.8, impactRing2S: 0.12, impactRing2Mul: 0.6,
+  hitConfetti: { high: 24, mid: 16, phone: 10 }, fountain: { high: 18, mid: 12, phone: 8 },
+  fountainSpeedMps: [3.5, 7.5], fountainGravityMps2: 6, fountainS: 0.9, fountainSizeM: 0.32,
+};
+
+/**
+ * Polish 4, items as events. HIT_LOOK: what a hit does to the kart and, for the player, the camera and screen
+ * (fx/reactions.js kick, fx/effects.js tint, render/karts.js rim, burst and stun stars). The tint keeps the
+ * picture's luminance and only moves its hue, strongest at the edges; Gentle halves it.
+ */
+export const HIT_LOOK = {
+  kickPushM: 0.6, kickInS: 0.06, kickOutS: 0.5,
+  tintInS: 0.12, tintHoldS: 0.12, tintOutS: 0.7, tintAmt: 0.6, tintGentle: 0.5, tintRefusedMul: 0.5, tintRefusedInS: 0.3,
+  tintEdge: [0.12, 0.75], tintCentre: 0.25,
+  // the kart's rim in the kind's hue while stunned; the hue drifts round (lightness held), Gentle holds it still
+  rimLight: 0.62, rimSat: 1,
+  // the impact burst: a wide ring of the kind's colour plus white sparkles
+  burstSpeedMps: 7.5, burstSizeM: 0.42, burstLifeS: 0.75, burstUp: 1.4, burstPlayerMul: 0.35,
+};
+
+/** Self items wrap the kart in an aura while they run (render/karts.js): colour, how strong, how the bands climb. */
+export const AURA_LOOK = {
+  colours: { surge: '#ffb43a', glass: '#9fe4ff', echo: '#b49cff', golden: '#ffd66e' },
+  // a coloured shell you see the kart through: peak alpha on rivals, and on the player's own (right under the
+  // camera, so it must never push the middle of the view to white) playerAlpha with a softer rim
+  size: [1.55, 1.3, 1.9], upM: 0.75, alpha: 0.55, playerAlpha: 0.3, fresPow: 1.6, bands: 3, bandClimbHz: 0.9, bandTwist: 2,
+  gentle: 0.5, ringM: 2.1, ringAlpha: 0.6,
+  // motes rising off the aura, per second (high tier; mid and phone scale by the tier's mote share)
+  motesPerS: 22, moteSpeedMps: 1.8, moteSizeM: 0.22, moteLifeS: 0.8,
 };
 
 /** The HUD item slot (render/items/slotfx.js): motes orbit the held bubble, a roll shuffles cards. */
@@ -93,33 +130,44 @@ export const SCREEN_LOOK = {
   spiralArms: 5, spiralTwist: 6, spiralTurnRadps: 1.6, spiralAlpha: 0.42, spiralR: [0.12, 0.62],
   spiralColour: '#ff8fd0', spiralDim: 0.55,
   // Brain Drain: edges blur and grey, centre sharp
-  drainEdge: [0.22, 0.8], drainGrey: 0.9, drainBlur: 1,
+  drainEdge: [0.2, 0.75], drainGrey: 1, drainBlur: 1,
   // Freeze: frost from the edges in
-  frostEdge: [0.55, 1.05], frostNoise: 7, frostColour: '#dff4ff', frostAlpha: 0.65, frostBlur: 0.35, frostVeins: 0.16,
+  frostEdge: [0.55, 1.05], frostNoise: 7, frostColour: '#dff4ff', frostAlpha: 0.8, frostBlur: 0.35, frostVeins: 0.16,
   // Blackout: an iris closes to a circle
-  irisFrom: 1.3, irisTo: 0.3, irisSoft: 0.08, irisAt: [0.5, 0.56],
+  irisFrom: 1.3, irisTo: 0.26, irisSoft: 0.08, irisAt: [0.5, 0.56],
   // Pink: a wash with the contrast down
-  pinkTint: [1.0, 0.62, 0.85], pinkContrast: 0.5, pinkLift: 0.12,
+  pinkTint: [1.0, 0.58, 0.84], pinkContrast: 0.6, pinkLift: 0.12,
   // Melt: the whole view runs down like wet paint
-  meltRunUv: 0.06, meltDripUv: 0.1, meltStreak: 2.5, meltWobbleUv: 0.012, meltCols: 9, meltHz: 0.6, meltBlur: 0.75, meltSat: 1.15,
+  meltRunUv: 0.08, meltDripUv: 0.12, meltStreak: 2.8, meltWobbleUv: 0.016, meltCols: 9, meltHz: 0.6, meltBlur: 0.75, meltSat: 1.15,
   // Shatter: a soft radial smear and a brief tilt
-  shatterSmear: 0.06, shatterTiltRad: 0.07, shatterTiltHz: 1.4, shatterTaps: 6,
+  shatterSmear: 0.08, shatterTiltRad: 0.07, shatterTiltHz: 1.4, shatterTaps: 6,
   // ---- polish 2: each effect has a readable IN and OUT ----
   // Melt: colour channels run apart down the view; drips fall from the top (columns, view heights per s, length)
-  meltChromaUv: 0.012, meltDripCols: 26, meltDripSpeed: 0.55, meltDripLen: 0.4, meltDripGloss: 0.22, meltDripTint: '#ff7cc8',
+  meltChromaUv: 0.016, meltDripCols: 26, meltDripSpeed: 0.55, meltDripLen: 0.4, meltDripGloss: 0.22, meltDripTint: '#ff7cc8',
   // Spiral: a full-view spiral of two bands that opens from the centre with the amount and twirls the view a little
-  spiralBands: ['#ff8fd0', '#7ce8e0'], spiralFullAlpha: 0.38, spiralOpenR: 1.25, spiralTwirlRad: 0.3, spiralHole: 0.05, spiralEdge: 0.1,
+  spiralBands: ['#ff8fd0', '#7ce8e0'], spiralFullAlpha: 0.5, spiralOpenR: 1.25, spiralTwirlRad: 0.4, spiralHole: 0.05, spiralEdge: 0.1,
   // Freeze: a frost front crystallises in from the edges (frontAt = where it stops at full), crystal glints on the front
-  frostFrontAt: 0.42, frostFrontSoft: 0.09, frostCells: 22, frostGlint: 0.35,
+  frostFrontAt: 0.34, frostFrontSoft: 0.09, frostCells: 22, frostGlint: 0.45,
   // Shatter: cracks grow out from the middle (crackS), then the shards slide apart (slideUv) and settle on the OUT;
   // shards are cells in log-polar space (spokes round the middle, rings per e-fold of radius); seam and the gap it
   // opens as the shards part in view heights
-  shatterSpokes: 9, shatterRings: 1.7, shatterCrackS: 0.28, shatterSlideS: 0.35, shatterSlideUv: 0.03, shatterCrackW: 0.004,
+  shatterSpokes: 9, shatterRings: 1.7, shatterCrackS: 0.28, shatterSlideS: 0.35, shatterSlideUv: 0.04, shatterCrackW: 0.004,
   shatterGapW: 0.006, shatterCrackDark: 0.45,
   // Blackout: a soft rim on the closing iris
-  irisRimPow: 6, irisRimColour: '#ff8fd0', irisRimAlpha: 0.22,
+  irisRimPow: 6, irisRimColour: '#ff8fd0', irisRimAlpha: 0.35,
   // Pink: the wash closes in from the edges round a heart (heart size at no amount, at full)
-  pinkHeartR: [1.6, 0.55], pinkHeartSoft: 0.22, pinkEdgeTint: '#ff5cbf', pinkEdgeAlpha: 0.4, pinkRimW: 0.05, pinkRimAlpha: 0.3,
+  pinkHeartR: [1.6, 0.55], pinkHeartSoft: 0.22, pinkEdgeTint: '#ff5cbf', pinkEdgeAlpha: 0.5, pinkRimW: 0.05, pinkRimAlpha: 0.45,
   // Brain Drain: the grey edge creeps inward by this much of the view as the amount rises
-  drainCreep: 0.35,
+  drainCreep: 0.45,
+  // ---- polish 4: bolder, and clear about when it ends ----
+  // the frame meter: a band round the whole view edge in the effect's colour that drains clockwise from the top
+  // as the effect runs out (width in view heights); the badge: the effect's icon in a disc low in the middle,
+  // with a ring that drains the same way (centre in uv, radius in view heights)
+  meterW: 0.014, meterGlowW: 0.06, meterAlpha: 0.95, meterGlow: 0.3, meterShade: 0.3, meterTrack: '#2a1238',
+  badgeAt: [0.5, 0.915], badgeR: 0.05, badgeRingW: 0.013, badgePaper: '#2a1238', badgeAlpha: 0.95, badgePop: 0.35, badgePopS: 0.45,
+  meterGentle: 0.8,
+  meterColours: {
+    flash: '#ff4fb0', spiral: '#22e6ff', brainDrain: '#5dff7a', freeze: '#6fd2ff', blackout: '#9b6bff', pink: '#ff3fae',
+    melt: '#ff6ad0', shatter: '#ffb02e',
+  },
 };

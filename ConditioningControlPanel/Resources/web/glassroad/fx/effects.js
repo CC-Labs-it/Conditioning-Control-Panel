@@ -7,8 +7,12 @@
  * items.effectOutS. Every start asks photosafe; a refusal lands it softer (IN = items.photosafeInS).
  * Gentle belongs to the player: Flash becomes a corner card, Spiral a soft dim, blur halved, no flicker.
  * Mercy is not decided here (sim/items.js); this module plays what it is told. Three-free.
+ * Polish 4: screen.remain (1 at the start, 0 when the hold ends) drives the countdown meter, and screen.hit is
+ * a short hue tint at the moment of the hit (render/screenfx.js keeps the picture's luminance, so it is no
+ * brightness step; it rides the start's photosafe answer: refused, it lands at half and slower; Gentle halves it).
  */
 import { ITEMS } from '../sim/itemTable.js';
+import { HIT_LOOK as H } from '../render/items/look.js';
 
 const SCREEN_KINDS = new Set(['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter']);
 const FLASHY = new Set(['flash', 'blackout']);
@@ -22,6 +26,7 @@ export function createEffects(bus, feel, { gentle, photosafe } = {}) {
   const screen = {
     kind: 'none', t: 0, durS: 0, k: 0, strength: 0, prevKind: 'none', prevK: 0,
     params: { gentle: false, corner: false, dimOnly: false, blurMul: 1, flicker: false, cover: 0, scale: 0, seed: 0, by: -1 },
+    remain: 0, hit: { kind: 'none', k: 0, t: -1, amt: 0, inS: 0, holdS: 0, outS: 0 },
   };
   let inS = 0, outS = 0, prevFrom = 0, prevT = 0, prevS = 0, paused = false, seed = 0;
 
@@ -48,9 +53,13 @@ export function createEffects(bus, feel, { gentle, photosafe } = {}) {
     inS = rise(g('effectInS'));
     const granted = photosafe ? photosafe.request(FLASHY.has(kind) ? 'flash' : 'palette') : true;
     if (!granted) inS = Math.max(inS, g('photosafeInS'));
+    const h = screen.hit;
+    h.kind = kind; h.t = 0;
+    h.amt = H.tintAmt * (gOn() ? H.tintGentle : 1) * (granted ? 1 : H.tintRefusedMul);
+    h.inS = rise(granted ? H.tintInS : Math.max(H.tintInS, H.tintRefusedInS)); h.holdS = H.tintHoldS; h.outS = fade(H.tintOutS);
     prevS = inS;
     outS = fade(g('effectOutS'));
-    screen.kind = kind; screen.t = 0; screen.durS = Math.max(0, durationS || 0); screen.k = 0;
+    screen.kind = kind; screen.t = 0; screen.durS = Math.max(0, durationS || 0); screen.k = 0; screen.remain = screen.durS > 0 ? 1 : 0;
     screen.params.seed = ++seed; screen.params.by = by == null ? -1 : by;
     applyParams();
     bus.emit('effect-start', { kind, durationS: screen.durS, by: screen.params.by });
@@ -62,8 +71,19 @@ export function createEffects(bus, feel, { gentle, photosafe } = {}) {
     return Math.min(up, down);
   }
 
+  function stepHit(dt) {
+    const h = screen.hit;
+    if (h.t < 0) return;
+    h.t += dt;
+    const up = h.inS > 0 ? Math.min(1, h.t / h.inS) : 1, d = h.t - h.inS - h.holdS;
+    const down = d <= 0 ? 1 : h.outS > 0 ? Math.max(0, 1 - d / h.outS) : 0;
+    h.k = h.amt * Math.min(up * up * (3 - 2 * up), down * down * (3 - 2 * down));
+    if (d >= h.outS) { h.t = -1; h.k = 0; h.kind = 'none'; }
+  }
+
   function update(dt) {
     if (paused || !(dt > 0)) return;
+    stepHit(dt);
     if (screen.prevKind !== 'none') {
       prevT += dt;
       screen.prevK = prevS > 0 ? Math.max(0, prevFrom * (1 - prevT / prevS)) : 0;
@@ -71,9 +91,10 @@ export function createEffects(bus, feel, { gentle, photosafe } = {}) {
     }
     if (screen.kind === 'none') return;
     screen.t += dt;
+    screen.remain = screen.durS > 0 ? Math.max(0, 1 - screen.t / screen.durS) : 0;
     if (screen.t >= screen.durS + outS && screen.t >= inS) {
       const kind = screen.kind;
-      screen.kind = 'none'; screen.k = 0; screen.t = 0; screen.durS = 0;
+      screen.kind = 'none'; screen.k = 0; screen.t = 0; screen.durS = 0; screen.remain = 0;
       applyParams();
       bus.emit('effect-end', { kind, replaced: false });
       return;
@@ -83,7 +104,8 @@ export function createEffects(bus, feel, { gentle, photosafe } = {}) {
   }
 
   function reset() {
-    screen.kind = 'none'; screen.t = 0; screen.durS = 0; screen.k = 0; screen.prevKind = 'none'; screen.prevK = 0;
+    screen.kind = 'none'; screen.t = 0; screen.durS = 0; screen.k = 0; screen.prevKind = 'none'; screen.prevK = 0; screen.remain = 0;
+    Object.assign(screen.hit, { kind: 'none', k: 0, t: -1, amt: 0 });
     inS = outS = prevFrom = prevT = prevS = 0; paused = false;
     applyParams();
   }

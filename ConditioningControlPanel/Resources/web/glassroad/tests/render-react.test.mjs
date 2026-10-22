@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createState, S, BOOST, RESPAWN } from '../sim/state.js';
 import {
   REACT_DEFAULTS as R, reactNumbers, createReact, springStep, hopSquashAt, landSquash, twistAt, tiltAway, reactionsFor,
-  observeKart, reactTo, stepReact, pickFace, blinkNow, moodFace,
+  observeKart, reactTo, stepReact, pickFace, blinkNow, moodFace, hitMotion, fireMotion, auraWanted,
 } from '../render/kartPose.js';
 import { FACE_IDS, faceCell, drawFace } from '../render/faces.js';
 
@@ -48,7 +48,9 @@ test('react: bus events pick their karts; state-borne events are not doubled', (
   assert.deepEqual(reactionsFor('racer-event', { racer: 3, name: 'land', p: { tier: 2 } }), []);
   assert.deepEqual(reactionsFor('land', { tier: 3 }), []);
   assert.deepEqual(reactionsFor('countdown', { n: 2 }), [[-1, 'countdown', { n: 2 }]]);
-  assert.deepEqual(reactionsFor('item-hit', { victim: 1, verdict: 'hit', kind: 'freeze' }), []);
+  assert.deepEqual(reactionsFor('item-hit', { victim: 1, verdict: 'hit', kind: 'freeze', durationS: 2 }), [[1, 'itemHit', { kind: 'freeze', durationS: 2 }]]);
+  assert.deepEqual(reactionsFor('item-hit', { victim: 1 }), []);
+  assert.deepEqual(reactionsFor('item-fire', { racer: 4, id: 'spiral', mode: 'throw' }), [[4, 'fire', { id: 'spiral', mode: 'throw' }]]);
   assert.deepEqual(reactionsFor('item-hit', { victim: 1, verdict: 'glass' }), [[1, 'saved', { verdict: 'glass' }]]);
   const rr = reactionsFor('race-result', { rows: [{ i: 0, place: 2 }, { i: 4, place: 1 }] });
   assert.deepEqual(rr[1], [4, 'finish', { place: 1, count: 2 }]);
@@ -253,4 +255,55 @@ test('faces: the 16 ids match the atlas contract, cells run in order, every face
     if (id === 'blank') assert.equal(marks, 0); else assert.ok(marks >= 3, id + ' draws eyes and a mouth');
   }
   assert.equal(drawFace(g, 'nope'), 'neutral');
+});
+
+test('react p4: an item hit spins whole turns with a hop, squashes, shocks then dazes, stars and rim for the stun', () => {
+  const st = moving(), r = createReact(2);
+  reactTo(r, 'itemHit', { kind: 'spiral', durationS: 2 }, R);
+  assert.ok(r.sq.x >= R.hitSquash - 1e-9, 'squash on impact');
+  assert.deepEqual(r.sprays.map((x) => x[0]), ['impact', 'stars']);
+  let maxLift = 0, maxYaw = 0, faces = new Set();
+  for (let t = 0; t < 2.6; t += DT) { const o = stepReact(r, st, DT, R); maxLift = Math.max(maxLift, o.lift); maxYaw = Math.max(maxYaw, Math.abs(o.yaw)); faces.add(o.face); if (t > 0.3 && t < 1.9) assert.ok(o.stunK > 0.5 && o.rimK > 0.5, 'stun and rim hold at ' + t.toFixed(2)); }
+  assert.ok(maxLift > R.hitHopM * 0.8, 'hops ' + maxLift);
+  assert.ok(maxYaw > 2 * Math.PI * 1.8, 'spiral spins two turns');
+  assert.ok(faces.has('x-eyes') && faces.has('dizzy'), [...faces].join());
+  for (let t = 0; t < 1.5; t += DT) stepReact(r, st, DT, R);
+  assert.equal(r.out.stunK, 0); assert.equal(r.out.rimK, 0); assert.equal(Math.abs(r.out.yaw) < 1e-6, true, 'ends on a whole turn, no snap');
+});
+
+test('react p4: shatter flips a barrel roll on a high hop; Gentle turns it into a slower plain turn at half the hop', () => {
+  const f = hitMotion(0.5, 0, 1, true, R.hitFlipHopM);
+  assert.ok(Math.abs(f.roll - Math.PI) < 1e-9 && f.lift > R.hitFlipHopM * 0.9);
+  assert.deepEqual(hitMotion(1, 2, 1, true, 1), { yaw: 0, roll: 0, lift: 0 });
+  const st = moving(), n = createReact(1), g = createReact(1);
+  reactTo(n, 'itemHit', { kind: 'shatter', durationS: 1 }, R); reactTo(g, 'itemHit', { kind: 'shatter', durationS: 1 }, R, true);
+  assert.equal(n.hitFlip, true); assert.equal(g.hitFlip, false);
+  assert.ok(Math.abs(g.hitS - n.hitS / R.gentleShake * R.hitSpinS / R.hitFlipS) < 1e-9 && g.hitHopM < n.hitHopM / 2);
+  let roll = 0;
+  for (let t = 0; t < 2; t += DT) roll = Math.max(roll, Math.abs(stepReact(g, st, DT, R, { gentle: true }).roll));
+  assert.ok(roll < 1, 'never upside down under Gentle');
+  const s = createReact(3); reactTo(s, 'itemHit', { kind: 'blackout', durationS: 3 }, R);
+  assert.ok(s.sq.x >= R.hitStompSquash - 1e-9, 'blackout presses the kart flat');
+});
+
+test('react p4: a throw winds up then lunges with arms up; a Surge wakes an aura until its boost ends; shields and echo wear theirs', () => {
+  const w = fireMotion(R.fireWindS, R), l = fireMotion(R.fireWindS + R.fireLungeS / 2, R);
+  assert.ok(w.sq > 0 && w.pitch > 0, 'wind-up squashes and leans back');
+  assert.ok(l.sq < 0 && l.pitch < 0 && l.arms > 0.5, 'lunge stretches forward, arms up');
+  assert.deepEqual(fireMotion(R.fireWindS + R.fireLungeS + 0.01, R), { sq: 0, pitch: 0, arms: 0 });
+  const st = moving(), r = createReact(0);
+  reactTo(r, 'fire', { id: 'spiral', mode: 'throw' }, R);
+  let arms = 0;
+  for (let t = 0; t < 0.4; t += DT) { const o = stepReact(r, st, DT, R); arms = Math.max(arms, o.arms * o.armsK); }
+  assert.ok(arms > 0.3, 'arms ' + arms);
+  reactTo(r, 'fire', { id: 'surge', mode: 'self' }, R);
+  st[S.boostKind] = BOOST.PAD;
+  for (let t = 0; t < 1; t += DT) stepReact(r, st, DT, R, { fxv: {} });
+  assert.equal(r.out.aura, 'surge'); assert.ok(r.out.auraK > 0.9);
+  st[S.boostKind] = BOOST.NONE;
+  for (let t = 0; t < 1.5; t += DT) stepReact(r, st, DT, R, { fxv: {} });
+  assert.equal(r.out.auraK, 0);
+  assert.equal(auraWanted(createReact(1), st, { shield: 'golden', echo: 0 }, R), 'golden');
+  assert.equal(auraWanted(createReact(1), st, { shield: null, echo: 2 }, R), 'echo');
+  assert.equal(auraWanted(createReact(1), st, null, R), null);
 });

@@ -9,6 +9,7 @@
  */
 import { S, BOOST, RESPAWN } from '../sim/state.js';
 import { clamp, smoothstep } from '../core/math.js';
+import { MOTE_TINT, HIT_LOOK } from './items/look.js';
 
 export function createPose() {
   return { roll: 0, lean: 0, pitch: 0, yawAdd: 0, sq: 0, sqPeak: 0, sqT: -1, wobT: -1, wobAmp: 0, wobHz: 0, ant: 0, arms: 0 };
@@ -210,6 +211,19 @@ export const REACT_DEFAULTS = {
   sweatColours: ['#bfefff', '#8fd8ff', '#ffffff'], sweatSpeedMps: 2.2, sweatSizeM: 0.26,
   // head marks (render/faces.js MARK_IDS): event marks hold markS, mood marks hold while the mood does
   markS: 0.9, markInTcS: 0.05, markOutTcS: 0.09,
+  // polish 4, item hits read at a glance: per kind a style (spin = whole turns with a hop, stomp = pressed
+  // flat from above then a turn, flip = a barrel roll on a high hop), a squash on impact, a shocked face then
+  // dizzy for the stun (clamped), stars orbiting the head, the rim glowing the kind's hue, an impact burst
+  hitStyle: { flash: 'spin', spiral: 'spin', brainDrain: 'spin', freeze: 'spin', pink: 'spin', melt: 'spin', blackout: 'stomp', shatter: 'flip' },
+  hitTurns: { flash: 1, spiral: 2, brainDrain: 1, freeze: 1, pink: 1, melt: 2, blackout: 1, shatter: 0 },
+  hitSpinS: 0.9, hitHopM: 0.8, hitHopS: 0.5, hitFlipHopM: 1.6, hitFlipS: 0.8, hitSquash: 0.42, hitStompSquash: 0.62,
+  hitKnock: 0.35, stunMinS: 1.2, stunMaxS: 3.2, stunInTcS: 0.08, stunOutTcS: 0.25,
+  stunStars: 5, stunOrbitM: 0.78, stunOrbitHz: 0.8, stunUpM: 1.55, stunStarM: 0.42, stunTiltRad: 0.35,
+  rimInTcS: 0.06, rimHoldS: 0.5, rimOutTcS: 0.35, rimGain: 3.2, rimHueHz: 0.45, impactCount: 34,
+  // throwing: a wind-up (lean back, squash) then the lunge as it leaves (stretch forward, arms up)
+  fireWindS: 0.1, fireLungeS: 0.28, fireSquash: 0.22, fireStretch: 0.28, fireLeanRad: 0.3, fireArmsRad: 1.1,
+  // self items wrap the kart in an aura while they run (render/items/look.js AURA_LOOK has the look)
+  auraInTcS: 0.12, auraOutTcS: 0.3, surgeMinS: 0.3,
 };
 
 export const reactNumbers = (L) => ({ ...REACT_DEFAULTS, ...((L && L.react) || {}) });
@@ -227,8 +241,10 @@ export function createReact(i = 0) {
     effect: null, finish: 0, melt: 0, stiffK: 0, boostLean: 0, idleT: 0, armsK: 0,
     timed: 'neutral', timedUntil: 0, shown: 'neutral', shownT: -1, blinkNext: 1 + i * 0.37,
     sprays: [], mark: null, markUntil: 0, markShown: null, markK: 0,
+    hitT: -1, hitS: 1, hitKind: null, hitStyle: 'spin', hitTurns: 0, hitHopM: 0, hitFlip: false, shockUntil: 0, stunUntil: 0, stunK: 0,
+    rimUntil: -1, rimK: 0, fireT: -1, surgeAt: -1, auraKind: null, auraShown: null, auraK: 0,
     out: { sq: 0, yaw: 0, roll: 0, pitch: 0, lift: 0, hRoll: 0, hPitch: 0, hYaw: 0, hBob: 0, stiff: 1, arms: 0, armsK: 0, face: 'neutral', blink: false,
-      mark: null, markK: 0 },
+      mark: null, markK: 0, stunK: 0, rimK: 0, hitKind: null, aura: null, auraK: 0 },
   };
 }
 
@@ -272,7 +288,9 @@ const BUS = {
   countdown: (p) => [[-1, 'countdown', { n: p.n || 0 }]],
   go: () => [[-1, 'go', {}]],
   finish: (p, i = 0) => [[i, 'finish', {}]],
-  'item-hit': (p) => (p.verdict && p.verdict !== 'hit' ? [[p.victim, 'saved', { verdict: p.verdict }]] : []),
+  'item-hit': (p) => (p.verdict && p.verdict !== 'hit' ? [[p.victim, 'saved', { verdict: p.verdict }]]
+    : p.verdict === 'hit' ? [[p.victim, 'itemHit', { kind: p.kind || null, durationS: p.durationS || 0 }]] : []),
+  'item-fire': (p) => [[p.racer, 'fire', { id: p.id || null, mode: p.mode || null }]],
   'race-result': (p) => (p.rows || []).map((row) => [row.i, 'finish', { place: row.place, count: p.rows.length }]),
 };
 const FROM_BOTS = new Set(['wall', 'finish']);
@@ -344,6 +362,35 @@ const REACT = {
   },
   shield(r, a, R) { if (a.kind === 'golden') { r.wigT = 0; timed(r, 'heart', R.faceHoldS); } else timed(r, 'grin', R.faceShortS); },
   saved(r, a, R) { if (a.verdict !== 'mercy') timed(r, a.verdict === 'decoy' ? 'wink' : 'smug', R.faceHoldS); },
+  // an item lands: the style's motion, a squash, shock then dizzy for the stun, the rim in the kind's hue, a burst
+  itemHit(r, a, R, g) {
+    const kind = a.kind || 'flash', style = R.hitStyle[kind] || 'spin';
+    r.hitKind = kind; r.hitT = 0;
+    // Gentle: half the hop, twice as long, and a flip becomes a plain turn (never upside down)
+    r.hitFlip = style === 'flip' && g === 1;
+    r.hitStyle = style;
+    r.hitTurns = R.hitTurns[kind] ?? 1;   // Shatter's own turns come from the sim (fxv.spinRad)
+    r.hitS = (r.hitFlip ? R.hitFlipS : R.hitSpinS) / g;
+    r.hitHopM = (r.hitFlip ? R.hitFlipHopM : style === 'stomp' ? R.hitHopM * 0.5 : R.hitHopM) * g;
+    r.twSign = -r.twSign;
+    r.sq.x = Math.max(r.sq.x, style === 'stomp' ? R.hitStompSquash : R.hitSquash); r.sq.v = 0;
+    knock(r, R.hitKnock * r.twSign, -R.hitKnock * 0.6, R, g);
+    r.shockUntil = r.t + R.faceShortS;
+    r.stunUntil = r.t + clamp(a.durationS || 0, R.stunMinS, R.stunMaxS);
+    r.rimUntil = r.t + R.rimHoldS;
+    r.dizT = -1; r.mark = null;
+    r.sprays.push(['impact', R.impactCount, kind], ['stars', R.starCount >> 1]);
+  },
+  // throwing: a wind-up then the lunge; a self item shows its face, a Surge wakes its aura
+  fire(r, a, R) {
+    if (a.mode === 'self') {
+      if (SELF_FACE[a.id]) timed(r, SELF_FACE[a.id], R.faceHoldS);
+      if (a.id === 'surge') r.surgeAt = r.t;
+      return;
+    }
+    r.fireT = 0;
+    timed(r, 'determined', R.faceShortS);
+  },
   boost(r, a, R) {
     if (a.kind >= BOOST.DRIFT1 && a.kind <= BOOST.DRIFT3) { timed(r, 'sparkle', R.faceShortS + 0.25 * a.kind); if (a.kind === BOOST.DRIFT3) marked(r, 'spark', R.markS); }
     else timed(r, a.kind === BOOST.LAUNCH ? 'cheer' : 'grin', a.kind === BOOST.LAUNCH ? R.faceHoldS : R.faceShortS);
@@ -351,7 +398,7 @@ const REACT = {
   overtake(r, a, R) { timed(r, 'smug', R.faceHoldS); r.liftT = 0; r.liftM = R.overtakeHopM; r.liftS = R.overtakeHopS; marked(r, 'spark', R.markS); },
   overtaken(r, a, R) { timed(r, 'sad', R.faceHoldS); marked(r, 'sweat', R.markS); },
   // a countdown opens a new race: last race's cheer or sulk, daze and hops never carry over
-  countdown(r, a, R) { r.finish = 0; r.dizT = -1; r.mark = null; r.wigT = -1; r.liftT = -1; r.glT = 0; r.glYaw = 0; r.glUp = 1; timed(r, a.n === 1 ? 'determined' : 'neutral', R.glanceS); },
+  countdown(r, a, R) { r.finish = 0; r.dizT = -1; r.mark = null; r.wigT = -1; r.liftT = -1; r.glT = 0; r.hitT = -1; r.stunUntil = 0; r.shockUntil = 0; r.fireT = -1; r.surgeAt = -1; r.glYaw = 0; r.glUp = 1; timed(r, a.n === 1 ? 'determined' : 'neutral', R.glanceS); },
   go(r, a, R) { timed(r, 'grin', R.faceHoldS); r.glT = -1; },
   finish(r, a) {
     if (!a.place || !a.count) return;
@@ -372,8 +419,9 @@ const NO_BLINK = new Set(['dizzy', 'sleepy', 'frozen', 'heart', 'x-eyes', 'blank
 
 /** The mood face from state: [id, strong]. A strong mood beats any timed face. */
 export function moodFace(r, st) {
+  if (r.t < r.shockUntil) return ['x-eyes', true];
   if (r.effect && STRONG[r.effect]) return [STRONG[r.effect], true];
-  if (r.dizT >= 0) return ['dizzy', true];
+  if (r.dizT >= 0 || r.t < r.stunUntil) return ['dizzy', true];
   if (r.finish) return [r.finish > 0 ? 'cheer' : 'sad', true];
   if (r.effect && WEAK[r.effect]) return [WEAK[r.effect], false];
   if (st[S.driftDir]) return ['drift-focus', false];
@@ -419,7 +467,61 @@ export function blinkNow(r, R) {
  * hRoll, hPitch, hYaw, hBob for EMI; stiff 0..1 scales the lean; arms + armsK blend over the pose arms;
  * face + blink). lean = the pose's lean (EMI counter-leans it in a drift).
  */
-export function stepReact(r, st, dt, R, { gentle = false, lean = 0 } = {}) {
+/** An item hit's body motion at u 0..1 of its run: yaw (whole turns), roll (the flip), lift (the hop). */
+export function hitMotion(u, turns, sign, flip, hopM) {
+  if (u < 0 || u >= 1) return { yaw: 0, roll: 0, lift: 0 };
+  const out = 1 - (1 - u) ** 3, io = u * u * (3 - 2 * u), hop = Math.min(1, u / (flip ? 1 : 0.6));
+  return { yaw: turns * TAU * sign * out, roll: flip ? TAU * sign * io : 0, lift: hop < 1 ? 4 * hopM * hop * (1 - hop) : 0 };
+}
+
+/** The throw's wind-up and lunge t s after a fire: squash share (+ squash, - stretch), pitch (+ back), arms 0..1. */
+export function fireMotion(t, R) {
+  if (t < 0) return { sq: 0, pitch: 0, arms: 0 };
+  if (t < R.fireWindS) { const u = t / R.fireWindS; return { sq: R.fireSquash * Math.sin(Math.PI * u / 2), pitch: R.fireLeanRad * Math.sin(Math.PI * u / 2), arms: u }; }
+  const u = (t - R.fireWindS) / R.fireLungeS;
+  if (u >= 1) return { sq: 0, pitch: 0, arms: 0 };
+  const back = Math.cos(Math.PI * u / 2);
+  return { sq: R.fireSquash * back * (1 - u) - R.fireStretch * Math.sin(Math.PI * u), pitch: R.fireLeanRad * (back - 1.6 * Math.sin(Math.PI * u)) * (1 - u * 0.5), arms: 1 - u * u };
+}
+
+/** An item kind's colour as '#rrggbb' (render/items/look.js MOTE_TINT; the box pink for an unknown kind). */
+export function kindHex(kind) {
+  const s = MOTE_TINT[kind] || MOTE_TINT.box;
+  return '#' + s.split(',').map((x) => Number(x).toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * The rim while stunned, linear rgb into out: the kind's hue at a held lightness, drifting round the wheel
+ * (hue only, never a brightness pulse; Gentle holds the hue still and halves it), mixed over the kart's own rim by k.
+ */
+export function hitRimRgb(kind, t, gentle, k, base, R, out) {
+  const [h] = toHsl(hexRgb(kindHex(kind))), m = clamp(k, 0, 1) * (gentle ? 0.5 : 1);
+  const c = fromHsl([(h + (gentle ? 0 : 360 * R.rimHueHz * t)) % 360, HIT_LOOK.rimSat, HIT_LOOK.rimLight]);
+  for (let i = 0; i < 3; i++) out[i] = (base ? base[i] : 0) * (1 - m) + srgbToLinear(c[i]) * R.rimGain * m;
+  return out;
+}
+
+/** Stun star j of n over EMI's head at time t: out = [x, y, z, size] in kart metres (a tilted ring, nearer stars a touch bigger). */
+export function stunStar(j, n, t, k, gentle, R, out) {
+  const a = TAU * (j / n + R.stunOrbitHz * t * (gentle ? 0.5 : 1)), s = Math.sin(a), r = R.stunOrbitM * (0.7 + 0.3 * clamp(k, 0, 1));
+  out[0] = Math.cos(a) * r; out[2] = s * r;
+  out[1] = R.stunUpM + Math.cos(a) * r * Math.sin(R.stunTiltRad) + 0.05 * Math.sin(3 * a);
+  out[3] = R.stunStarM * (0.4 + 0.6 * clamp(k, 0, 1)) * (0.85 + 0.15 * s);
+  return out;
+}
+
+/** The self item aura wanted now: a shield (glass, golden), Echo copies, or a Surge while its boost runs; null for none. */
+export function auraWanted(r, st, fxv, R) {
+  if (fxv && fxv.shield) return fxv.shield;
+  if (fxv && fxv.echo > 0) return 'echo';
+  if (r.surgeAt >= 0) {
+    if (r.t - r.surgeAt < R.surgeMinS || st[S.boostKind] !== BOOST.NONE) return 'surge';
+    r.surgeAt = -1;
+  }
+  return null;
+}
+
+export function stepReact(r, st, dt, R, { gentle = false, lean = 0, fxv = null } = {}) {
   const o = r.out, g = gentle ? R.gentleShake : 1, ease = (v, to, tc) => v + (to - v) * (1 - Math.exp(-dt / tc));
   r.t += dt;
   const air = st[S.airborne] > 0.5 && !inRescue(st), drifting = !!st[S.driftDir], boosting = st[S.boostKind] !== BOOST.NONE;
@@ -432,6 +534,9 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0 } = {}) {
   r.idleT = idle ? r.idleT + dt : 0;
   const bk = Math.min(1, r.idleT), breath = Math.sin(TAU * R.breathHz * r.t + r.i) * bk;
   sq += r.melt * R.meltSq + breath * R.breathSq;
+  // a throw: wind-up squash, then the lunge stretch
+  let fm = null;
+  if (r.fireT >= 0) { r.fireT += dt; fm = fireMotion(r.fireT, R); if (r.fireT > R.fireWindS + R.fireLungeS) r.fireT = -1; sq += fm.sq; }
   // yaw: hop twist, a full saucer turn on long air, the Spiral's slow spin (it finishes the turn it is on)
   if (air && !r.trick && st[S.airTime] > R.trickAirS) { r.trick = true; r.twT = 0; r.twS = R.trickSpinS; r.twFull = true; r.twRad = TAU * r.twSign; }
   let yaw = 0;
@@ -442,6 +547,9 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0 } = {}) {
     if (r.effect !== 'spiral' && Math.floor(r.spYaw / TAU) > Math.floor(before / TAU)) r.spYaw = 0;
   }
   yaw += r.spYaw;
+  // an item hit: whole turns easing out, a flip, a hop (the run ends on a whole turn, so nothing snaps)
+  let hm = null;
+  if (r.hitT >= 0) { r.hitT += dt; hm = hitMotion(r.hitT / r.hitS, r.hitTurns, r.twSign, r.hitFlip, r.hitHopM); yaw += hm.yaw; if (r.hitT >= r.hitS) r.hitT = -1; }
   // body tilt: the hit springs, the golden wiggle, a lean back on a boost; lift: overtake hop, cheer bounce
   let roll = springStep(r.tr, 0, dt, R.tiltHz, R.tiltZeta), pitch = springStep(r.tp, 0, dt, R.tiltHz, R.tiltZeta);
   if (r.wigT >= 0) {
@@ -454,6 +562,8 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0 } = {}) {
   let lift = 0;
   if (r.liftT >= 0) { r.liftT += dt; const u = r.liftT / r.liftS; if (u >= 1) r.liftT = -1; else lift += 4 * r.liftM * u * (1 - u); }
   if (r.finish > 0) lift += R.cheerHopM * Math.abs(Math.sin(Math.PI * R.cheerHz * r.t));
+  if (hm) { roll += hm.roll; lift += hm.lift; }
+  if (fm) pitch += fm.pitch * g;
   // EMI's head: springs toward targets, pushed by vertical speed changes (lags on a hop, bobs on a landing)
   const vy = st[S.velY];
   if (r.vyPrev !== null && dt > 0 && !inRescue(st)) r.hb.v -= clamp(vy - r.vyPrev, -R.headDvMaxMps, R.headDvMaxMps) * R.headBobPerMps * TAU * R.headHz;
@@ -484,11 +594,21 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0 } = {}) {
   o.hRoll = clamp(hRoll * stiff, -m, m); o.hPitch = clamp(hPitch * stiff, -m, m); o.hYaw = clamp(hYaw, -m, m); o.hBob = hBob * stiff;
   // arms: up and waving for a cheer or a golden wiggle, down for a sulk or a melt; armsK blends over the pose
   const armsTo = r.finish > 0 || r.wigT >= 0 ? R.armsCheerRad * (0.8 + 0.2 * Math.sin(TAU * R.cheerHz * r.t)) : 0;
-  const own = r.finish !== 0 || r.wigT >= 0 || r.melt > 0.5;
+  const own = r.finish !== 0 || r.wigT >= 0 || r.melt > 0.5 || (fm && fm.arms > 0.05);
   r.armsK = ease(r.armsK, own ? 1 : 0, 0.15);
-  o.arms = armsTo; o.armsK = r.armsK;
+  o.arms = fm && fm.arms > 0.05 ? R.fireArmsRad * fm.arms : armsTo; o.armsK = r.armsK;
   o.face = pickFace(r, st, R); o.blink = blinkNow(r, R);
   stepMark(r, headMark(r, o.face), dt, R);
   o.mark = r.markShown; o.markK = r.markK;
+  // the stun (orbiting stars), the rim's hue glow and the self item aura, each eased in and out
+  const stunned = r.t < r.stunUntil;
+  r.stunK = ease(r.stunK, stunned ? 1 : 0, stunned ? R.stunInTcS : R.stunOutTcS);
+  const rimOn = r.t < Math.max(r.rimUntil, r.stunUntil);
+  r.rimK = ease(r.rimK, rimOn ? 1 : 0, rimOn ? R.rimInTcS : R.rimOutTcS);
+  const aw = auraWanted(r, st, fxv, R);
+  if (aw === r.auraShown) r.auraK = ease(r.auraK, aw ? 1 : 0, R.auraInTcS);
+  else { r.auraK = ease(r.auraK, 0, R.auraOutTcS); if (r.auraK < 0.03) { r.auraShown = aw; r.auraK = 0; } }
+  o.stunK = r.stunK < 0.005 ? 0 : r.stunK; o.rimK = r.rimK < 0.005 ? 0 : r.rimK; o.hitKind = r.hitKind;
+  o.aura = r.auraShown; o.auraK = r.auraShown ? r.auraK : 0;
   return o;
 }

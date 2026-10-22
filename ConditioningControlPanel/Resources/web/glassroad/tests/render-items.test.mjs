@@ -91,3 +91,30 @@ test('near cap: a bubble near the camera spans at most nearMaxFrac of the view h
   assert.equal(nearCapR(0.6, 3, undefined), 0.6);       // no camera fov: unchanged
   assert.equal(L.playerHeldInWorld, false);              // the HUD slot shows the player's own
 });
+
+import { meterLook, launchPop, launchFlare, impactFountain } from '../render/items/fxmath.js';
+import { SCREEN_LOOK as SL, HIT_LOOK, AURA_LOOK } from '../render/items/look.js';
+
+test('items p4: the meter drains with remain, fades with k, pops the badge in (not under Gentle); the tint passes through', () => {
+  assert.equal(meterLook(null).meterK, 0);
+  const scr = (o) => ({ kind: 'spiral', t: 0.2, durS: 3, k: 1, remain: 0.9, params: { gentle: false }, hit: { kind: 'spiral', k: 0.4 }, ...o });
+  const m = meterLook(scr());
+  assert.equal(m.meterK, 1); assert.equal(m.remain, 0.9); assert.equal(m.hitK, 0.4);
+  assert.equal(m.meterHex, SL.meterColours.spiral); assert.ok(m.badgeS > 1, 'pops');
+  assert.equal(meterLook(scr({ params: { gentle: true } })).meterK, SL.meterGentle);
+  assert.equal(meterLook(scr({ t: 5, params: { gentle: true } })).badgeS, 1);
+  assert.equal(meterLook(scr({ kind: 'none' })).meterK, 0);
+  for (const k of ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter']) assert.ok(/^#[0-9a-f]{6}$/.test(SL.meterColours[k]), k);
+});
+
+test('items p4: a throw leaves big and settles, its flare and every impact fountain end; Gentle halves the pop', () => {
+  assert.ok(launchPop(0) > 1.5 && launchPop(L.launchS) === 1);
+  assert.ok(launchPop(0, true) - 1 < (launchPop(0) - 1) * 0.51);
+  assert.ok(launchFlare(0.05).glowA > 0 && launchFlare(L.launchS + 0.01).glowA === 0 && launchFlare(L.launchS * 2 + 0.01, true).ringA === 0);
+  assert.ok(launchFlare(0.05, true).glowA < launchFlare(0.05).glowA, 'Gentle: softer and a slower rise');
+  const o = [0, 0, 0];
+  assert.ok(impactFountain(1, 10, 0.2, o) > 0 && o[1] > 0);
+  assert.equal(impactFountain(1, 10, L.fountainS + 0.01, o), 0);
+  assert.ok(L.hitConfetti.phone <= L.hitConfetti.high / 2 + 2 && L.fountain.phone <= L.fountain.high / 2 + 2);
+  assert.ok(HIT_LOOK.tintGentle <= 0.5 && AURA_LOOK.gentle <= 0.5);
+});
