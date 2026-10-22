@@ -29,6 +29,15 @@ public sealed class ShellInitializerScanTests
         Assert.Empty(uncalled);
     }
 
+    /// <summary>P04: the quick-recal tests call StartQuickRecalHotkey directly, so only this scan notices the desktop
+    /// startup dropping its wire (WPF arms Ctrl+Alt+G once the shell is up, MainWindow.xaml.cs:1279).</summary>
+    [Fact]
+    public void DesktopStartupArmsTheQuickRecalHotkeyWhenTheShellOpens()
+    {
+        var app = Code(File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "App.axaml.cs")));
+        Assert.Matches(@"\bshell\.Opened\s*\+=\s*\(\s*_\s*,\s*_\s*\)\s*=>\s*shell\.StartQuickRecalHotkey\(\s*\)", app);
+    }
+
     /// <summary>A method definition whatever it returns (void, Task, Task&lt;T&gt;, bool), async or not.</summary>
     private static string Definition(string name) => $@"\b(?:void|bool|Task(?:<[^>()]+>)?)\s+{name}\s*\(";
 
