@@ -412,6 +412,8 @@ public sealed class TakeoverTests
             Dispatcher.UIThread.RunJobs();
             Assert.NotEqual("preset zero", text.Text);
             tube.StopThinkingAnimation();
+            tube.EndSpeechBubble();   // the thinking bubble's line ends; its 2 s gap runs at once here
+            tube.SpeechDelayScheduler = (_, fire) => { fire(); return () => { }; };
 
             tube.Giggle("preset one");
             Dispatcher.UIThread.RunJobs();

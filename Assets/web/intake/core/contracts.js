@@ -360,6 +360,7 @@ export const MECHANICS = Object.freeze(Object.values(Mechanic));
  * @property {number}   latencyMs    ms from beat shown to committed
  * @property {string}   mechanic     Mechanic.* (echo of the beat's mechanic)
  * @property {boolean}  timedOut     true if the timeout auto-submitted
+ * @property {boolean=} melted       true when the card melted away (core/melt.js): scores nothing
  * @property {boolean=} steered      true if a steer materially assisted/redirected the commit
  * @property {number=}  pickHeat     0..1 normalized heat of the CHOSEN option — lets reward.js's
  *                                    SpicierPick pay more for the hotter pick. Optional: reward.js
@@ -370,8 +371,12 @@ export const MECHANICS = Object.freeze(Object.values(Mechanic));
  */
 
 /** Build a well-formed AnswerEvent (render helper). */
-export function makeAnswerEvent({ chosenIndex, value, latencyMs = 0, mechanic, timedOut = false, steered = false, pickHeat }) {
+export function makeAnswerEvent({ chosenIndex, value, latencyMs = 0, mechanic, timedOut = false, steered = false, pickHeat, melted = false }) {
   const ev = { latencyMs: Math.max(0, latencyMs | 0), mechanic, timedOut: !!timedOut, steered: !!steered };
+  // CARD MELT (core/melt.js): the card melted away under a stray click. Not an
+  // answer and not a timeout; the engine scores nothing for it. Additive: the
+  // key is only present on a melt.
+  if (melted) { ev.melted = true; ev.timedOut = false; ev.steered = false; return ev; }
   if (typeof chosenIndex === 'number') ev.chosenIndex = chosenIndex;
   if (value !== undefined) ev.value = value;
   if (typeof pickHeat === 'number') ev.pickHeat = clamp01(pickHeat);

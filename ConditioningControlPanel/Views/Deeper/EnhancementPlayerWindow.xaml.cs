@@ -1490,6 +1490,7 @@ namespace ConditioningControlPanel.Views.Deeper
                 .ConfigureAwait(true);
             await VideoBrowser.EnsureCoreWebView2Async(env).ConfigureAwait(true);
             if (VideoBrowser.CoreWebView2 == null) return false;
+            global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(VideoBrowser.CoreWebView2);
 
             // Settings hardening — JS stays on (BrowserVideoTimeSource needs it
             // to drive the <video> element) but every other surface is off.

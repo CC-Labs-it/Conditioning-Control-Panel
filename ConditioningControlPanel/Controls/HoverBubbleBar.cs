@@ -32,7 +32,9 @@ namespace ConditioningControlPanel.Controls
     /// Nav polish wave 5 (owner, 2026-10-06: the account strip and the bubble row become ONE
     /// line): the bar dresses any <see cref="ButtonBase"/> that carries a Glyph, so a CheckBox
     /// (the Rich Presence switch) is a bubble too and lights up while checked; a child with no
-    /// Glyph (the Discord pill, a divider) is left exactly as written. <see cref="FillProperty"/>
+    /// Glyph (a divider) is left exactly as written; <see cref="IconProperty"/> swaps the glyph
+    /// for a vector mark (the Discord button, 2026-10-20: the pill shrank to a round logo
+    /// bubble, its old label slides out on hover). <see cref="FillProperty"/>
     /// gives a bubble a solid rest fill (Logout stays pink: the dangerous one at a glance).
     /// On that line the label FLOATS: the plate grows to the left under a negative margin of the
     /// same width, so the button's layout stays 34 px, nothing beside it moves (the name used
@@ -62,6 +64,19 @@ namespace ConditioningControlPanel.Controls
         public static string GetLabelKeys(DependencyObject o) => (string)o.GetValue(LabelKeysProperty);
         public static void SetLabelKeys(DependencyObject o, string v) => o.SetValue(LabelKeysProperty, v);
 
+        /// <summary>A vector mark drawn instead of the glyph (a brand logo no font carries). A child
+        /// with an Icon is dressed like one with a Glyph.</summary>
+        public static readonly DependencyProperty IconProperty = DependencyProperty.RegisterAttached(
+            "Icon", typeof(Geometry), typeof(HoverBubbleBar), new PropertyMetadata(null));
+        public static Geometry? GetIcon(DependencyObject o) => (Geometry?)o.GetValue(IconProperty);
+        public static void SetIcon(DependencyObject o, Geometry? v) => o.SetValue(IconProperty, v);
+
+        /// <summary>Glyph or Icon: the bar dresses this child as a bubble.</summary>
+        public static bool IsBubble(DependencyObject o) => !string.IsNullOrEmpty(GetGlyph(o)) || GetIcon(o) != null;
+
+        /// <summary>Height of an Icon mark inside the bubble (the glyph's 15 px font, optically).</summary>
+        public const double IconSize = 15;
+
         /// <summary>A solid rest fill (alpha 0 = the glass plate). Hover lightens it a little.</summary>
         public static readonly DependencyProperty FillProperty = DependencyProperty.RegisterAttached(
             "Fill", typeof(Color), typeof(HoverBubbleBar), new PropertyMetadata(Colors.Transparent));
@@ -73,7 +88,7 @@ namespace ConditioningControlPanel.Controls
             public Border Plate = null!;
             public Border LabelHost = null!;
             public TextBlock Label = null!;
-            public TextBlock Glyph = null!;
+            public FrameworkElement Glyph = null!;
             public ScaleTransform Scale = null!;
             public Color RestColor;
             public Color HoverColor;
@@ -96,13 +111,13 @@ namespace ConditioningControlPanel.Controls
             Unloaded += (_, _) => StopPulse();
         }
 
-        /// <summary>The bubbles in XAML order (left to right): every child with a Glyph.</summary>
+        /// <summary>The bubbles in XAML order (left to right): every child with a Glyph or an Icon.</summary>
         public IReadOnlyList<ButtonBase> Bubbles => _order;
 
         protected override void OnInitialized(EventArgs e)
         {
             base.OnInitialized(e);
-            foreach (var b in Children.OfType<ButtonBase>().Where(b => !string.IsNullOrEmpty(GetGlyph(b))).ToList())
+            foreach (var b in Children.OfType<ButtonBase>().Where(IsBubble).ToList())
                 Dress(b);
         }
 
@@ -145,16 +160,34 @@ namespace ConditioningControlPanel.Controls
             }
 
             var labelHost = new Border { Width = 0, ClipToBounds = true, Child = label, VerticalAlignment = VerticalAlignment.Stretch };
-            var glyph = new TextBlock
-            {
-                Text = GetGlyph(b),
-                FontFamily = new FontFamily(GlyphFont),
-                FontSize = 15,
-                Foreground = Brushes.White,
-                Width = BubbleSize - 3,
-                TextAlignment = TextAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+            var icon = GetIcon(b);
+            FrameworkElement glyph = icon != null
+                ? new Border
+                {
+                    // Same 31 px slot as a glyph so the plate stays round; the mark sits centred.
+                    Width = BubbleSize - 3,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new System.Windows.Shapes.Path
+                    {
+                        Data = icon,
+                        Fill = Brushes.White,
+                        Stretch = Stretch.Uniform,
+                        Height = IconSize,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        SnapsToDevicePixels = true,
+                    },
+                }
+                : new TextBlock
+                {
+                    Text = GetGlyph(b),
+                    FontFamily = new FontFamily(GlyphFont),
+                    FontSize = 15,
+                    Foreground = Brushes.White,
+                    Width = BubbleSize - 3,
+                    TextAlignment = TextAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
             var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { labelHost, glyph } };
             var scale = new ScaleTransform(1, 1);
             var plate = new Border

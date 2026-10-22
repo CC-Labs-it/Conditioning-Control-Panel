@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
 
-            var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
             var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
 
@@ -143,17 +143,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <c>App.ResolveScreens</c> (ConditioningControlPanel/App.ScreenResolver.cs). The sentinel
         /// numbers are PERSISTED, so this has to agree with the WPF head exactly:
         /// <see cref="MonitorTarget.All"/> is every monitor, <see cref="MonitorTarget.FollowGlobal"/>
-        /// is every monitor when <c>DualMonitorEnabled</c> and the primary otherwise, and 0..N is
-        /// that one index. An index that no longer exists (unplugged monitor) falls back to the
-        /// FollowGlobal behaviour WITHOUT rewriting the setting, so the target survives a reconnect.
+        /// follows the global "Show content on" pick (<c>GlobalTargetMonitor</c>, WPF ResolveFollowGlobal,
+        /// App.ScreenResolver.cs:93-123), and 0..N is that one index. An index that no longer exists
+        /// (unplugged monitor) falls back WITHOUT rewriting the setting, so the target survives a
+        /// reconnect: an effect's own pick to FollowGlobal, the global pick to the primary.
         /// </summary>
-        internal static int[] ResolveScreenIndices(int target, bool dualMonitorEnabled, int screenCount, int primaryIndex)
+        internal static int[] ResolveScreenIndices(int target, int globalTarget, bool dualMonitorEnabled, int screenCount, int primaryIndex)
         {
             if (screenCount <= 0) return Array.Empty<int>();
             if (primaryIndex < 0 || primaryIndex >= screenCount) primaryIndex = 0;
 
             if (target == MonitorTarget.All) return Enumerable.Range(0, screenCount).ToArray();
             if (target >= 0 && target < screenCount) return new[] { target };
+            if (globalTarget == MonitorTarget.All) return Enumerable.Range(0, screenCount).ToArray();
+            if (globalTarget >= 0) return new[] { globalTarget < screenCount ? globalTarget : primaryIndex };
             return dualMonitorEnabled ? Enumerable.Range(0, screenCount).ToArray() : new[] { primaryIndex };
         }
 
