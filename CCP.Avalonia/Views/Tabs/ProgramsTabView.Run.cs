@@ -92,8 +92,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!IsVisible && VisualRoot is not null)
             {
-                // WPF remembers a background completion even though the hidden tree is not rebuilt.
-                // Otherwise showing the tab would replay the banner's wave and event burst.
+                // Deliberate deviation: WPF returns early here (MainWindow.ProgramsTab.cs:469) and
+                // replays the banner wave and burst when the tab is shown (:1672). We record the
+                // completion now, following WPF's stated contract (:972-975): "remembered even when hidden".
                 var hiddenEnrollment = AvApp.Programs?.ActiveEnrollment;
                 ResetRunPopsIfRunChanged(hiddenEnrollment);
                 if (hiddenEnrollment != null)

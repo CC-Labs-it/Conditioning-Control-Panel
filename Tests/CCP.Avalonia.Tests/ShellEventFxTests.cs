@@ -124,7 +124,7 @@ public sealed class ShellEventFxTests
     private static void WithShell(Action<MainShellWindow, AchievementEngine, QuestService> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            AppBuilder.Configure<AvApp>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var dir = Directory.CreateTempSubdirectory("ccp-shell-event-fx-").FullName;
         var (oldSettings, oldAchievements, oldQuests) = (CoreSettings.ServiceProvider, AvApp.Achievements, AvApp.Quests);
