@@ -2495,3 +2495,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-unlock-card: +588
 - Unlock-card rules moved to Core (WPF delegates); hub purchases show WPF's queued top-center unlock card on Avalonia.
 - Interactive mid-run overlay + lesson pause deferred to chaos-unlock-card-b (row stays stub).
+
+## avalonia-port/chaos-wave-timer: +418
+- Pocket Watch wave countdown overlay ported (Core readout rules shared with WPF), hooked to ChaosRunHost ticks; panic/run end close it; it refuses to show without click-through or transparency.
+- Row chaos-wave-timer missing -> stub; live steps queued in live-queue/overlays.md.
