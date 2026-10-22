@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CmbMercyAfter.SelectionChanged += CmbMercyAfter_Changed;
             SliderPerHour.ValueChanged += SliderPerHour_Changed;
             ChkStrict.IsCheckedChanged += ChkStrict_Changed;
+            CmbAppearance.SelectionChanged += CmbAppearance_Changed;
             // WPF Lab.cs:640-647 / 726-732: greyed while a Lockdown forces Strict Lock, given back on exit.
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
@@ -148,6 +149,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtTargetSize.Text = s.AttentionSize.ToString();
                 ChkVideoGazeClick.IsChecked = s.VideoGazeClickEnabled;
                 PopulateMonitors();
+                // Full screen first (the default). Rebuilt on every load so the names follow the language.
+                CmbAppearance.Items.Clear();
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_fullscreen"), Tag = false });
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
+                CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
+                TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
                 ChkMercy.IsChecked = s.MercySystemEnabled;
                 CmbMercyAfter.IsVisible = s.MercySystemEnabled;
                 foreach (var obj in CmbMercyAfter.Items)
@@ -182,12 +189,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||
                 e.PropertyName == nameof(AppSettings.MercyAfterFails))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);
             }
+        }
+
+        /// <summary>WPF CmbAppearance_Changed: read at the next video's start; a video already playing stays as it is.</summary>
+        private void CmbAppearance_Changed(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbAppearance.SelectedItem is not ComboBoxItem { Tag: bool floating }) return;
+            var s = CoreSettings.Current;
+            if (s.MandatoryVideoFloating == floating) return;
+            s.MandatoryVideoFloating = floating;
+            CoreSettings.Save();
         }
 
         // -- Display monitor picker (ccp-bugs #1154; WPF VideoFeatureControl.xaml.cs, Pink filter recipe) --

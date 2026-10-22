@@ -101,6 +101,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal IReadOnlyList<Window> Messages => _messages;
         internal VlcFrameSink? Sink => _sink;
         internal int LiveTargets => _targets.Count;
+        /// <summary>This clip arms the attention checks (never on a floating window).</summary>
+        internal bool AttentionArmed => _attention;
         /// <summary>Milliseconds from Show to the first frame on screen; -1 until then.</summary>
         internal long FirstFrameMs { get; private set; } = -1;
         /// <summary>Total ms spent downscaling blur fills, and how many (CCP perf check).</summary>
@@ -126,7 +128,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var s = CoreSettings.Current;
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-            foreach (var screen in Targets(host, s.FillAllMonitorsWithVideo)) _surfaces.Add(Build(screen, strict));
+            // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
+            Floating = Floats(strict);
+            var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
+            if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
+            foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
 
             var vlc = LibVlcAudio.Shared;
             if (vlc == null)
@@ -139,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // bouncing text, and arm the attention checks.
             if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
-            _attention = s.AttentionChecksEnabled;
+            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
 
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
             _player.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
@@ -208,6 +214,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
         }
 
+        /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
+        internal bool Floating { get; private set; }
+
+        /// <summary>WPF DecidePresentation: floating is for an ordinary video only - never a strict one,
+        /// a Lockdown or a Chaos run (DtRH is n/a on this head).</summary>
+        internal static bool Floats(bool strict) => ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ShouldFloat(
+            CoreSettings.Current.MandatoryVideoFloating, strict,
+            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+
         /// <summary>WPF VideoService.UpdateMasterVolume / UpdateVideoVolume: a playing clip follows
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
@@ -256,7 +271,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Background = Brushes.Black,
                 Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace } },
             };
-            Place(w, screen);
+            var floating = Floating;
+            if (floating)
+            {
+                // WPF: a floating window never takes focus from what is under it (panic and Esc reach
+                // it through the global hooks), and it moves with the mouse.
+                // ponytail: WPF's first-cut drag; the frame's fling and bounce (row 18) replace it.
+                w.ShowActivated = false;
+                PlaceFloating(w, screen, _random);
+                w.PointerPressed += (_, e) => { if (e.GetCurrentPoint(w).Properties.IsLeftButtonPressed) w.BeginMoveDrag(e); };
+            }
+            else Place(w, screen);
             void OnKey(KeyEventArgs e)
             {
                 var s = CoreSettings.Current;
@@ -289,8 +314,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
             w.Show();
-            w.WindowState = WindowState.FullScreen;
-            w.Activate();
+            if (!floating)
+            {
+                w.WindowState = WindowState.FullScreen;
+                w.Activate();
+            }
             return new Surface(w, fill, scrim, video, layer, grace, countdown);
         }
 
@@ -465,6 +493,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Position = screen.Bounds.Position;
             w.Width = screen.Bounds.Width / screen.Scaling;
             w.Height = screen.Bounds.Height / screen.Scaling;
+        }
+
+        /// <summary>WPF FloatRectOn: MandatoryVideoFloatingSizePercent of the work area's width, 16:9, at a
+        /// random spot wholly on it (Core FloatingRect, in the area's DIPs). No screen known (headless):
+        /// the window's primary screen.</summary>
+        internal static void PlaceFloating(Window w, global::Avalonia.Platform.Screen? screen, Random random)
+        {
+            screen ??= w.Screens.Primary ?? w.Screens.All.FirstOrDefault();
+            if (screen == null) return;
+            var area = screen.WorkingArea;
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            var (x, y, width, height) = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FloatingRect(
+                (int)(area.Width / scale), (int)(area.Height / scale), random, CoreSettings.Current.MandatoryVideoFloatingSizePercent);
+            w.WindowStartupLocation = WindowStartupLocation.Manual;
+            w.Position = new PixelPoint(area.X + (int)Math.Round(x * scale), area.Y + (int)Math.Round(y * scale));
+            w.Width = width;
+            w.Height = height;
         }
 
         internal const int FillWidth = 64;
