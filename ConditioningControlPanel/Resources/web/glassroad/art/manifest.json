@@ -1722,5 +1722,6 @@
       109,
       61
     ]
-  }
+  },
+  {"id":"emi-faces","file":"textures/emi-faces.ktx2","kind":"texture","tris":0,"texBytes":5592404,"boundRadiusM":0,"materialSlots":["emi_screen"],"palette":"all","width":1024,"height":1024,"encoding":"UASTC","colorSpace":"srgb","mipLevels":11,"cells":{"neutral":[0,0],"happy":[1,0],"grin":[2,0],"wink":[3,0],"determined":[0,1],"drift-focus":[1,1],"dizzy":[2,1],"sleepy":[3,1],"frozen":[0,2],"heart-eyes":[1,2],"x-eyes":[2,2],"smug":[3,2],"sad":[0,3],"sparkle":[1,3],"cheer":[2,3],"blank":[3,3]},"cellGrid":[4,4],"cellSizePx":256,"cellOrigin":"top-left","cellUvInsetPx":1,"maxSafeLod":2,"wrap":["clamp","clamp"]}
 ]
