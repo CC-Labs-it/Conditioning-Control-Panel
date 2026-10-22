@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Commands
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     if (_data.On)
-                        App.BouncingText?.Start(true, _data.Words);
+                        App.BouncingText?.Start(true, AiCommandAdmission.BounceWords(_data.Words));
                     else
                         App.BouncingText?.Stop();
                 });
