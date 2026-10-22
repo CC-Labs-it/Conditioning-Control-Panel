@@ -159,6 +159,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool HasEngine => _web is not null;
 
+        /// <summary>Preserves the native page through a move between visual parents. Avalonia 12.1
+        /// delays teardown and reparents the existing adapter when this scope ends after layout.</summary>
+        internal IDisposable? BeginReparenting() => _web?.BeginReparenting();
+
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
         /// The stand-in for <c>CoreWebView2.ExecuteScriptAsync</c>.

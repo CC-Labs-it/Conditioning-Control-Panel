@@ -2244,6 +2244,7 @@
   "label_0_6": "#{0}",
   "label_0_achievements_unlocked": "{0} succès débloqués",
   "label_browser_popped_out_nclick_to_focus_window": "🌐 Navigateur détaché\nClique ⧉ pour mettre au premier plan",
+  "label_browser_in_fullscreen": "Navigateur en plein écran",
   "btn_focus": "◱ Focus",
   "tooltip_browser_is_popped_out_click_to_focus": "Le navigateur est détaché - clique pour mettre au premier plan",
   "msg_you_are_in_lockdown_mode_nyou_cannot_stop_dur": "Le Lockdown est en cours.\nVous ne pouvez pas arrêter avant la fin du minuteur.",

@@ -1,57 +1,10 @@
-// PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.Browser.cs (3,084 lines).
-//
-// LIVE here (the Profile entry BtnDiscordTab_Click left with the rail entries, cd426fe36):
-//   * the site navigation, the offline gate and the profile-viewer clear. Restored in full and
-//     each is complete, but NOTHING CALLS THEM YET - see "Callers still missing" below.
-//
-// WHY NAVIGATION IS PORTABLE AT ALL. The blanket "this whole file is WebView2" header that used
-// to sit here was wrong. SettingsTabView.axaml already carries <controls:WebHost x:Name=
-// "BrowserWebHost"/>, which wraps Avalonia's NativeWebView and draws a legible fallback panel
-// naming the page where no engine is installed. Setting its Source IS the navigation, and its
-// NavigationCompleted carries the live URL (OnBrowserNavigationCompleted). What WebHost does NOT
-// expose is a document-script channel, a mute or a fullscreen signal - and
-// every member that needed one of those is still a note, not a half-port.
-//
-// TWO DELIBERATE DEVIATIONS, both because WebHost is narrower than CoreWebView2:
-//   1. autoPlayFullscreen is ACCEPTED AND IGNORED by NavigateToUrlInBrowser, and logged. The WPF
-//      path injects JS from a NavigationCompleted hook; returning false for that flag alone would
-//      break the plain-navigation half of the same call for every caller.
-//   2. (Resolved) the offline-block toast now shows through App.Notifications, as WPF
-//      NotifyBrowserBlockedOffline does (MainWindow.Browser.cs:489-494).
-//
-// THE MUTE PAIR is ported onto the card itself (Views/Tabs/SettingsTabView.BrowserCard.cs) over the WebHost
-// script channel (Views/Controls/WebHostMedia.cs), re-applied after each navigation. There is still no ENGINE
-// mute: a player inside a cross-origin iframe is out of reach.
-//
-// CALLERS STILL MISSING, each one line in a file this layer does not own:
-//   * (Resolved) SettingsTabView forwards RbBambiCloud / RbHypnoTube / BtnReloadBrowser and the
-//     WebHost's NavigationCompleted to this partial.
-//   * CCP.Avalonia/Views/Tabs/DiscordTabView.axaml.cs:BtnClearProfile_Click now forwards
-//     (`Host?.BtnClearProfile_Click`), which wires
-//     ClearProfileViewer -> SetProfileViewingSelf. NavigateToUrlInBrowser stays public for
-//     AvatarTubeWindow's speech-bubble links and the remote controller, neither on this head.
-// STILL BLOCKED, grouped by what is actually missing (60 members):
-//   * WebView2 itself (36): the init/teardown chain (InitializeBrowserAsync, InitAndNavigateAsync,
-//     TearDownBrowserForReinit, NavigateWhenBrowserReadyAsync, BrowserLoadingText_Click,
-//     OpenUrlExternallyAfterBrowserFailure, _browserInitializing, _browserCorePending); the
-//     script channel (AutoPlayAndFullscreenVideoAsync,
-//     AutoPlayBambiCloudPlaylistAsync, EndWebVideoTakeover, OnBrowserWebMessageReceived,
-//     HandleBrowserMediaMessage, the four HandleAudioSync* members, HookHapticAudioSyncRearm,
-//     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the pop-out and
-//     fullscreen rig (BtnPopOutBrowser_Click, FocusBrowserSurface's pop-out half,
-//     HandleBrowserFullscreenChanged, Arm/DisarmFullscreenEscapes, Enter/ExitBrowserFullscreen,
-//     ExitBrowserFullscreenForTeardown, the four _browserFs* fields); the remote video pair
-//     (PlayHypnotubeFromRemote, StopBrowserVideoFromRemote, _remoteBrowserVideoActive); the
-//     refused mute pair above.
-//   * the Trainer Card read (search, own card, lookup, badges, achievements, FormatNumber) is
-//     PORTED onto CCP.Avalonia/Views/Tabs/DiscordTabView.axaml.cs, text rules in Core
-//     TrainerCardText. Still missing: BtnDiscordTabLogin_Click, UpdateDiscordTabUI,
-//     ResolveProfilePictureUnavailable, LoadPatreonBadgeImage, ProfileDiscordHandle_Click,
-//     BtnProfileDiscord_Click (art). Change name / delete profile are ported below.
-//   * CoreMods (1): SyncSiteRadiosToActiveMod needs ShowBambiCloudOption() and
-//     GetDefaultBrowserUrl(); CCP.Core/CoreMods.cs carries neither yet. Its IsBrowserShowingKnownSite
-//     helper is NOT restored either: WebHost.CurrentUrl now answers it, but its only caller is
-//     SyncSiteRadiosToActiveMod, so write it with that caller.
+// Home browser navigation and profile entry points, adapted from WPF MainWindow.Browser.cs.
+// Site controls, live navigation/catalogue lookup and document mute already exist on this head.
+// BrowserPopout.cs adds the WPF pop-out/focus/return path using NativeWebView's reparenting scope.
+// BrowserFullscreen.cs carries page fullscreen, its escapes and the session-teardown exit.
+// ponytail: autoplay at DOM parse, media signals and audio-sync remain
+// wire-shell-browser-b-next. Do not substitute NavigationCompleted for avatar video autoplay:
+// WPF ArmVideoAutoPlay uses DOMContentLoaded first (main daf734417); playlists use completion.
 
 using System;
 using Avalonia.Controls;
@@ -121,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF's <c>_browser.NavigationCompleted</c> handler (MainWindow.Browser.cs:132-160),
-        /// minus the audio-sync injection (no document script channel on WebHost). Forwarded by
+        /// minus audio-sync injection (the haptic bridge is still deferred). Forwarded by
         /// SettingsTabView from its WebHost with the LIVE url, so a link clicked inside the page
         /// is looked up too, not just the URL we asked for.</summary>
         internal void OnBrowserNavigationCompleted(Uri url)
@@ -134,6 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 status.Foreground = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(0, 230, 118));
             }
             TriggerCatalogueLookupForNavigation(url.AbsoluteUri);   // escaped, like CoreWebView2.Source
+            // WPF injects this once per document at creation (BrowserService.cs:259); no such seam here.
+            _ = BrowserView?.InvokeScriptAsync(BrowserFullscreenScript);
         }
 
         /// <summary>Back to the selected site's homepage. Shared by the reload button and the
@@ -164,19 +119,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
-        /// <param name="autoPlayFullscreen">ACCEPTED AND IGNORED - see deviation 2 in the header.
-        /// WebHost has no script channel, so the video takeover cannot be requested. The plain
-        /// navigation still happens, which is what every caller needs first.</param>
+        /// <param name="autoPlayFullscreen">Takeover remains deferred to wire-shell-browser-b-next: no caller on this
+        /// head passes it and there is no document-parse hook. The normal navigation still runs.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
             if (BrowserBlockedOffline(userInitiated)) return false;
 
-            // WPF's FocusBrowserSurface, minus the pop-out branch: there is no browser pop-out
-            // window on this head, so the embedded surface is always the one to bring forward.
-            ShowTab("settings");
-            RevealDashboardBrowser("focus-surface");   // WPF Browser.cs:349
-            Activate();
+            FocusBrowserSurface();
 
             // Move the radios to match the URL, deselecting both for an external link so that
             // clicking either one afterwards navigates back to it. Safe to write: the handlers
@@ -188,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (hypno != null) hypno.IsChecked = lower.Contains("hypnotube.com");
 
             if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
+                Log.Warning("Auto-play/fullscreen is pending wire-shell-browser-b-next - takeover skipped: {Url}", url);
 
             return NavigateBrowser(url);
         }

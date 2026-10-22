@@ -2244,6 +2244,7 @@
   "label_0_6": "#{0}",
   "label_0_achievements_unlocked": "{0} достижений открыто",
   "label_browser_popped_out_nclick_to_focus_window": "🌐 Браузер открыт отдельно\nНажми ⧉ для фокуса окна",
+  "label_browser_in_fullscreen": "Браузер в полноэкранном режиме",
   "btn_focus": "◱ Фокус",
   "tooltip_browser_is_popped_out_click_to_focus": "Браузер открыт отдельно: нажми для фокуса",
   "msg_you_are_in_lockdown_mode_nyou_cannot_stop_dur": "Локдаун идёт.\nОстановить нельзя, пока не истечёт таймер.",

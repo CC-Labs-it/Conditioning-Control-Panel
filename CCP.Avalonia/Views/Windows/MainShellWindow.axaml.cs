@@ -131,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeHelpButtons(); // MainShellWindow.HelpButtons.cs (WPF MainWindow.Presets.cs:35 SetupHelpButtons)
             InitializeDashboardFx(); // MainShellWindow.DashboardFx.cs (WPF MainWindow ctor -> InitializeDashboardFx)
             InitDashboardBrowserFold(); // MainShellWindow.DashboardFold.cs (WPF MainWindow.xaml.cs:3505)
+            InitializeBrowserSurfaceLifecycle(); // BrowserPopout.cs: close and unload on shell teardown
             InitializeRememberButton(); // MainShellWindow.Remember.cs (WPF MainWindow.xaml.cs:3508)
             InitializeMicActivePill(); // MainShellWindow.SheListening.cs (WPF MainWindow.xaml.cs:3594 WireMicActivePill)
             InitializeStatPills(); // MainShellWindow.UiUpdates.cs (WPF MainWindow.xaml.cs:3726 StartStatPillUpdateTimer)
