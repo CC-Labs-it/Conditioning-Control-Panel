@@ -20,6 +20,39 @@ namespace CCP.Avalonia.Tests;
 public sealed class AwarenessLedgerPrivacyTests
 {
     [Fact]
+    public void Picker_candidates_fold_in_the_ledgers_switches_and_known_apps()
+    {
+        // WPF AwarenessAppCandidates.Gather: the ledger, not just the window in front, fills the picker.
+        var dir = Directory.CreateTempSubdirectory("ccp-awareness-candidates-").FullName;
+        var now = DateTime.Today.AddHours(12);
+        var old = AwarenessLive.Ledger;
+        using var ledger = new ActivityLedger(Path.Combine(dir, "awareness_ledger.json"), () => now, () => 30);
+        try
+        {
+            ledger.Start();
+            ledger.NoteFocus("first-app", "test", ActivityCategory.Unknown, now.AddMinutes(-5));
+            ledger.NoteFocus("second-app", "test", ActivityCategory.Unknown, now.AddMinutes(-3));
+            ledger.NoteFocus("listed-app", "test", ActivityCategory.Unknown, now.AddMinutes(-1));
+            Assert.Contains(ledger.RecentTransitions, t => t.AppId == "first-app");
+            var known = ledger.KnownAppIds.ToList();
+            Assert.True(known.IndexOf("second-app") < known.IndexOf("first-app"));   // counters alone would offer second-app first
+            AwarenessLive.Ledger = ledger;
+
+            var picked = AwarenessPrivacyViewModel.Candidates(new[] { "LISTED-APP" });
+
+            Assert.Equal(new[] { "first-app", "second-app" }, picked);   // switches in ring order first, de-duplicated, listed skipped
+            AwarenessLive.Ledger = null;
+            Assert.Empty(AwarenessPrivacyViewModel.Candidates(Array.Empty<string>()));
+        }
+        finally
+        {
+            AwarenessLive.Ledger = old;
+            ledger.Dispose();
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Retained_apps_are_shown_forgotten_pruned_and_wiped_through_the_card()
     {
         var dir = Directory.CreateTempSubdirectory("ccp-awareness-privacy-").FullName;

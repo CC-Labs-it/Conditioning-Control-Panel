@@ -338,13 +338,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Log.Information("Awareness: page titles hidden again for every app");
         }
 
-        private static IReadOnlyList<string> Candidates(IEnumerable<string> listed)
+        internal const int MaxCandidates = 40;   // WPF AwarenessAppCandidates.MaxCandidates
+
+        /// <summary>
+        /// Port of WPF <c>AwarenessAppCandidates.Gather</c>: the window in front, this session's app
+        /// switches, then the persisted per-app counters (the only source on a cold launch), sanitised,
+        /// de-duplicated, already-listed entries skipped, capped at 40. WPF's fourth source, the
+        /// keyword-trigger ring, has no engine on this head yet.
+        /// </summary>
+        internal static IReadOnlyList<string> Candidates(IEnumerable<string> listed)
         {
-            // WPF AwarenessAppCandidates.Gather source 1 (the window in front); the ledger and trigger
-            // ring sources do not exist on this head.
-            var current = AwarenessText.SanitizeRuleEntry(AvApp.WindowAwareness.CurrentServiceName);
-            return current == null || listed.Contains(current, StringComparer.OrdinalIgnoreCase)
-                ? Array.Empty<string>() : new[] { current };
+            var ordered = new List<string>();
+            TryAdd(ordered, () => new[] { AvApp.WindowAwareness.CurrentServiceName ?? string.Empty });
+            TryAdd(ordered, () => AwarenessLive.Ledger?.RecentTransitions.Select(t => t.AppId) ?? Enumerable.Empty<string>());
+            TryAdd(ordered, () => AwarenessLive.Ledger?.KnownAppIds ?? Enumerable.Empty<string>());
+
+            var skip = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in listed)
+                if (AwarenessText.SanitizeRuleEntry(entry) is { } clean) skip.Add(clean);
+
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var raw in ordered)
+            {
+                if (result.Count >= MaxCandidates) break;
+                if (AwarenessText.SanitizeRuleEntry(raw) is not { } clean) continue;
+                if (skip.Contains(clean) || !seen.Add(clean)) continue;
+                result.Add(clean);
+            }
+            return result;
+        }
+
+        // Each source on its own: a missing ledger must not cost the picker the window in front.
+        private static void TryAdd(List<string> into, Func<IEnumerable<string>> source)
+        {
+            try
+            {
+                foreach (var entry in source())
+                    if (!string.IsNullOrWhiteSpace(entry)) into.Add(entry);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Awareness candidates: a source was unavailable ({E})", ex.Message);
+            }
         }
 
         private async Task<List<string>?> PickAsync(AwarenessListKind kind, IReadOnlyList<string> listed)
