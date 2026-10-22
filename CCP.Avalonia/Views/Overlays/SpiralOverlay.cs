@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static string? _sourcePath;
         private static string? _configuredPath;
         private static bool? _randomizeAtStart;
+        private static bool _repicked;
 
         /// <summary>Pick once per run; repainting opacity/monitors never resamples the pool.
         /// Explicit file changes take effect live. Randomize changes take effect next start.</summary>
@@ -92,7 +93,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
                 return;
             }
-            if (_frames.Count == 0) { CloseWindows(); return; }   // undecodable: logged once by the decode
+            if (_frames.Count == 0)   // undecodable: logged once by the decode
+            {
+                // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
+                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
+                CloseWindows();
+                return;
+            }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -160,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
+            _repicked = false;
             CloseWindows();
         }
 

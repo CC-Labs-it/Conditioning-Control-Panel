@@ -76,6 +76,57 @@ public sealed class SpiralRandomizeTests
     }
 
     [Fact]
+    public async Task An_undecodable_random_pick_is_repicked_instead_of_leaving_the_run_blank()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-spiral-randomize-");
+        var good = Path.Combine(dir.FullName, "good.gif");
+        var broken = Path.Combine(dir.FullName, "broken.gif");
+        File.WriteAllBytes(good, Convert.FromBase64String("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"));
+        File.WriteAllText(broken, "not a gif");
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var s = CoreSettings.Current;
+                var saved = (s.SpiralPath, s.SpiralRandomize, s.SpiralEnabled);
+                var provider = CoreSession.IsEngineRunningProvider;
+                var host = new Window();
+                host.Show();
+                try
+                {
+                    while (SpiralOverlay.Decoding is { IsCompleted: false } pending) await pending;
+                    SpiralOverlay.SkipPlatformChecksForTests = true;
+                    CoreSession.IsEngineRunningProvider = () => true;
+                    (s.SpiralPath, s.SpiralRandomize, s.SpiralEnabled) = (good, true, true);
+                    // The pool avoids the previous pick, so once good has shown every later run picks the broken file first.
+                    for (var run = 0; run < 4; run++)
+                    {
+                        SpiralOverlay.CloseAll();
+                        SpiralOverlay.Refresh(host);
+                        while (SpiralOverlay.Decoding is { IsCompleted: false } pending) await pending;
+                        Assert.True(SpiralOverlay.IsShowing, $"run {run} left the spiral blank");
+                        Assert.Equal(good, SpiralOverlay.SourcePath());
+                    }
+                }
+                finally
+                {
+                    SpiralOverlay.CloseAll();
+                    SpiralOverlay.SkipPlatformChecksForTests = false;
+                    CoreSession.IsEngineRunningProvider = provider;
+                    (s.SpiralPath, s.SpiralRandomize, s.SpiralEnabled) = saved;
+                    host.Close();
+                }
+            });
+        }
+        finally { dir.Delete(true); }
+    }
+
+    [Fact]
     public async Task Randomize_picks_once_per_run_and_the_next_run_avoids_the_previous_image()
     {
         var dir = Directory.CreateTempSubdirectory("ccp-spiral-randomize-");
