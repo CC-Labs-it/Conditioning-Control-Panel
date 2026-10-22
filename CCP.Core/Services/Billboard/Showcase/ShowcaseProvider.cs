@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services.Billboard.Showcase
     public sealed class ShowcaseProvider : IBillboardProvider
     {
         public const string ManifestUrl =
-            "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/download/showcase-clips/showcase.json";
+            "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/download/showcase-clips/showcase.json";
 
         /// <summary>How long a fetched manifest stands before the next look.</summary>
         public static readonly TimeSpan ManifestFreshFor = TimeSpan.FromHours(6);
