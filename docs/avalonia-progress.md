@@ -2503,3 +2503,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/game-dtrh-host-b: +774
 - DtRH online half moved to Core `DtrhRemoteMedia` (online media copied locally, manifest re-posted as copies land, loops lane, 30 min loops-dry back-off); WPF now calls it; WebAssetServer serves only `.temp/ccp_temp_remote_*` copies.
 - DtRH manifest uses root-relative asset urls so hostMedia.js counts the library as local (it never did on Avalonia); delta rows 16/22/24 -> ported-here.
+
+## avalonia-port/friends-landing: +389
+- FriendsLanding on Avalonia: the poke-received word plus Emi line, sent beat, and Tell over the game/panel/launcher, routed by the Core router; LandingRules.SentWord/PokeThrowsWord (fail-proven).
+- feat-friends-landing -> wired; knock/inbox/flavour folded to win-knock-card, toasts to feat-friends-open-tables.

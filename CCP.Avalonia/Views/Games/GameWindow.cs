@@ -239,6 +239,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 
+        /// <summary>The open game window that is the active window, if any (friends landing anchor).</summary>
+        internal static GameWindow? ActiveOpen() { lock (Open) return Open.FirstOrDefault(w => w.IsActive); }
+
         internal static GameWindow? OpenForTests(string id) => OpenWindowsForTests().FirstOrDefault(w => w.Spec.Id == id);
 
         internal static void CloseAllForPanic()
