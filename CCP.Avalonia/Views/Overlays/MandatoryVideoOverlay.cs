@@ -786,8 +786,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             if (owner == null) return;
-            _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler));
+            _ = ShowNoVideosAsync(owner, Scheduler);
         });
+
+        /// <summary>WPF VideoService.cs:2486-2495: the guidance box, then - AFTER it closes, and only when
+        /// the length filter did not cause the empty library - the remote-media offer.</summary>
+        internal static async System.Threading.Tasks.Task ShowNoVideosAsync(Window owner, MandatoryVideoScheduler s)
+        {
+            try
+            {
+                var filterEmptied = NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration);
+                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(s));
+                if (!filterEmptied) RemoteMediaOffer.Offer("videos", owner);
+            }
+            catch (Exception ex) { Log.Debug("VideoService: no-videos dialog failed: {Error}", ex.Message); }
+        }
 
         /// <summary>WPF TriggerVideo's guidance text: #1352 names the length filter when it emptied a
         /// library that has files, else the add-files hint.</summary>
