@@ -12,7 +12,7 @@
 import {
   Scene, Group, Mesh, InstancedMesh, Object3D, BufferGeometry, BufferAttribute, Float32BufferAttribute, Color, Vector2,
   SphereGeometry, LatheGeometry, TorusGeometry, CylinderGeometry, RingGeometry, IcosahedronGeometry,
-  HemisphereLight, DirectionalLight,
+  HemisphereLight, DirectionalLight, Vector3,
 } from 'three/webgpu';
 import { S } from '../sim/state.js';
 import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.js';
@@ -24,6 +24,9 @@ import { createRailMaterial } from './materials/rails.js';
 import { createPadMaterial } from './materials/pads.js';
 import { createSkyMaterial, SKY_PALETTES } from './materials/sky.js';
 import { buildCountdown, buildFinish, buildScatter } from './dressing.js';
+import { buildColossi } from './colossi.js';
+import { buildShadows, CATCH_LAYER } from './shadows.js';
+import { sampleTrack } from './colossiMath.js';
 import { createPropMaterial } from './materials/kart.js';
 import { createGlowMaterial } from './materials/glow.js';
 import { createParticles } from './particles.js';
@@ -31,9 +34,10 @@ import { createSpeedLines } from './speedlines.js';
 import { buildKarts } from './karts.js';
 import { createWakes } from './wakes.js';
 import { createMotes } from './motes.js';
-import { kickSquash, kickWobble, moteDensity, bumpCount } from './kartPose.js';
+import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
 import { racerLabels } from '../hud/format.js';
 
+const FWD = new Vector3();
 // the SCREENFX lane's item visuals; missing or broken, the race runs without them
 const itemsMod = await import('./items/visuals.js').catch((e) => { console.warn('[glassroad/world] no item visuals: ' + (e && e.message)); return null; });
 
@@ -94,30 +98,41 @@ function props(track) {
   return im;
 }
 
-export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8 } = {}) {
+/**
+ * Polish 2 opts: renderer (createRenderer's wrapper: the shadow map and its tier hook), shadowsOn (the
+ * Shadows option), photosafe (fx/photosafe.js, the impact glows ask it). Returns { ..., shadows, colossi }.
+ */
+export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null } = {}) {
   const scene = new Scene();
   const pal = createPalette();
   const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
 
+  let sun = null;
   if (art) {
     // the glTF props and kart are lit (standard / physical materials); everything else is unlit
     const L = LOOK.artLight;
     scene.add(new HemisphereLight(L.sky, L.ground, L.hemi));
-    const sun = new DirectionalLight(L.sky, L.sun);
+    sun = new DirectionalLight(L.sky, L.sun);
     sun.position.set(LOOK.lightDir[0], LOOK.lightDir[1], LOOK.lightDir[2]);
     scene.add(sun);
   }
   const sky = createSkyMaterial(pal, art);
   const skyMesh = add(new Mesh(new SphereGeometry(LOOK.skyRadiusM, 48, 32), sky.material));
   skyMesh.renderOrder = -1; skyMesh.frustumCulled = false;
-  const road = createRoadMaterial(pal, art);
-  add(meshFrom(track.meshes.road, road.material));
-  add(meshFrom(track.meshes.rails, createRailMaterial(pal, art).material));
+  const road = createRoadMaterial(pal, art, track);
+  const roadMesh = add(meshFrom(track.meshes.road, road.material));
+  const rails = createRailMaterial(pal, art);
+  add(meshFrom(track.meshes.rails, rails.material));
   const pad = createPadMaterial(LOOK.padColour, art && art.tex('boost-chevron-mask')), lip = createPadMaterial(LOOK.lipColour);
-  add(meshFrom(track.meshes.pads, pad.material));
+  const padMesh = add(meshFrom(track.meshes.pads, pad.material));
   add(meshFrom(track.meshes.jumps, lip.material));
-  const scatter = buildScatter(art, track, seed);
+  // the hero colossi lean over the road; the scatter keeps clear of them (WORLD lane)
+  const samples = sampleTrack(track, 4);
+  let colossi = null;
+  try { colossi = art ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
+  if (colossi) add(colossi.object);
+  const scatter = buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
   add(scatter ? scatter.object : props(track));
   const countdown = buildCountdown(art, track, pal), finish = buildFinish(art, track, pal);
   if (countdown) {
@@ -141,8 +156,19 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const particles = createParticles(feel), lines = createSpeedLines(), wakes = createWakes(feel, count), motes = createMotes(pal, seed);
   add(particles.object); add(lines.object); add(motes.object);
   for (const o of wakes.objects) add(o);
+  // reactions (REACT lane): bumps, walls, the countdown glance, finishes and the head sprays
+  karts.attach({ bus, particles });
+  // the lamp's soft shadows: colossi, karts and props onto the road and pads; blobs on the phone tier
+  let shadows = null;
+  if (renderer) {
+    try {
+      shadows = buildShadows(renderer, scene, sun, Q, { enabled: shadowsOn, track, samples, receivers: [roadMesh, padMesh].filter(Boolean),
+        casters: colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
+    } catch (e) { console.warn('[glassroad/world] shadows failed: ' + (e && e.message)); }
+    if (shadows && renderer.onTier) offs.push(renderer.onTier(() => shadows.retier()));
+  }
   let itemVis = null;
-  try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
+  try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
   const pending = [];
@@ -158,13 +184,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const posOf = (i) => { const o = kartObjs[i]; return o ? [o.position.x, o.position.y, o.position.z] : null; };
   function juice(e, gentle) {
     const [kind, i, a, p, b] = e, k = karts.list[i], obj = kartObjs[i], few = gentle ? 0.6 : 1;
-    const sq = feel.get('air.squash');
+    // squash and stretch on hops and landings belong to the reaction layer (karts.js stepReact)
     if (kind === 'land' && a >= 1 && k && obj.visible) {
       particles.dust(obj, a);
       wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[Math.min(a, 3) - 1], { gentle });
-      if (i > 0) kickSquash(k.pose, sq[Math.min(a, 3) - 1]);
-    } else if (kind === 'hop' && k && i > 0) kickSquash(k.pose, sq[0]);
-    else if (kind === 'bump') particles.burst(p || posOf(i), Math.round(bumpCount(a, LOOK) * few), { colours: LOOK.bumpColours, speed: LOOK.bumpSpeedMps, sparkle: 0.7 });
+    } else if (kind === 'bump') particles.burst(p || posOf(i), Math.round(bumpCount(a, LOOK) * few), { colours: LOOK.bumpColours, speed: LOOK.bumpSpeedMps, sparkle: 0.7 });
     else if (kind === 'pop') {
       particles.burst(p || posOf(i), Math.round(LOOK.popCount * few), { colours: LOOK.popColours, speed: LOOK.popSpeedMps, sizeM: LOOK.popSizeM, petal: 0.3, sparkle: 0.3, g: 0.15 });
       if (obj && obj.visible) wakes.ring(p || posOf(i), obj.quaternion, LOOK.ringMaxM[0], { gentle, gain: LOOK.ringGain * 0.6 });
@@ -279,6 +303,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (countdown) countdown.update(dt, turn, gentle);
     if (finish) finish.update(dt, turn * 0.5, gentle);
     if (scatter) scatter.update(dt, scroll);
+    if (colossi) colossi.update(dt, scroll);
+    rails.uniforms.flow.value = road.uniforms.phase.value;
+    if (shadows && view.camera) { view.camera.layers.enable(CATCH_LAYER); view.camera.getWorldDirection(FWD); shadows.update(view.camera.position, FWD); }
 
     particles.update(dt);
     wakes.update(dt);
@@ -291,7 +318,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     for (const o of owned) o.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
     particles.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); karts.dispose();
     if (itemVis) itemVis.dispose();
+    if (shadows) shadows.dispose();
+    if (colossi && colossi.dispose) colossi.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose };
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, resetReactions: karts.resetReactions };
 }

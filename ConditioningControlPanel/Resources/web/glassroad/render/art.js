@@ -24,7 +24,11 @@ export const WANT = [
   // wave 2 models (MODELS lane: item box card, effect-bubble shell, Melt puddle, finish LOD, rival accessories)
   'finish-portal-lod1', 'item-card', 'effect-bubble', 'fx-melt-spiral',
   'head-bow', 'head-cat-ears', 'head-halo', 'head-spiral-crown',
+  // polish 2: Astra's wave 3 face atlas for emi_screen (render/faces.js draws the same 16 ids until it lands)
+  'emi-faces',
 ];
+/** Wanted before they ship: missing from the manifest is quiet (not in failed); a broken file still counts. */
+const LATER = new Set(['emi-faces']);
 
 let current = null;
 /** The last art set loadArt resolved (null before, or with ?art=0): modules built after boot's
@@ -47,7 +51,7 @@ export async function loadArt(renderer, { want = WANT } = {}) {
 
   await Promise.all(want.map(async (id) => {
     const r = rows.get(id);
-    if (!r) { failed.push(id); return; }
+    if (!r) { if (!LATER.has(id)) failed.push(id); return; }
     const url = new URL(r.file, BASE).href;
     try {
       if (r.kind === 'texture') {

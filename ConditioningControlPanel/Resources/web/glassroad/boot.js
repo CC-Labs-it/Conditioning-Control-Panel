@@ -38,6 +38,7 @@ import { createEffects } from './fx/effects.js';
 import { createAudio } from './audio/bus.js';
 import { createHud } from './hud/hud.js';
 import { openFeelSheet } from './hud/feelSheet.js';
+import { createSlotFx } from './render/items/slotfx.js';
 
 const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
@@ -141,15 +142,23 @@ async function boot() {
   hud.setHostGentle(hostGentle);
   hud.setCard('start', { title: trackName });
 
-  const renderer = await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer });
+  // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
+  const renderer = await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options });
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
   const art = qs.get('art') === '0' ? null : await loadArt(renderer);
   if (art && art.failed.length) debug.artFailed = art.failed;
   const seed = +qs.get('seed') || ((Math.random() * 2147483646) | 0) + 1;
   debug.seed = seed;
-  const world = buildWorld(track, feel, { art, bus, seed, count: COUNT });
+  // ?shadows=0 (dev) drops the shadow map whatever the option says; the map is always set up otherwise
+  // and the Shadows option turns it on or off in applyOptions
+  const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0' });
   const cam = createChaseCamera(feel);
   debug.backend = renderer.backend;
+  debug.gpu = renderer.gpu;
+  // the HUD item slot's orbit and roll shuffle (FXPOLISH lane)
+  const slotFx = createSlotFx(hud.item, hud.item && hud.item.querySelector('img'), { feel, phone: renderer.tier === 'phone' });
+  // the arches that lean over the road, for the boot check's colossus shot
+  const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
 
   const clock = createClock({ hz: feel.get('clock.hz'), maxSubsteps: feel.get('clock.maxSubsteps'), bpm: feel.get('clock.bpm') });
   const race = createRace(track, feel, queue);
@@ -178,18 +187,22 @@ async function boot() {
   let tapItem = false;                            // touch: a tap on the HUD item slot
   hud.on('item', () => { tapItem = true; });
   const tapSource = { poll(into) { into.item = tapItem; tapItem = false; }, dispose() {} };
-  const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true });
+  const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, feel });
   const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createEdgeLatch('item');
 
   let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
 
-  // ---- options: Gentle preview (never below the host's switch), steering assist, volumes ----
+  // ---- options: Gentle preview (never below the host's switch), steering assist and sensitivity,
+  //      volumes, and the display set (frame cap, render scale, quality, fps readout, shadows) ----
   let opts = hud.options;
   function applyOptions(o) {
     opts = o;
     gentle.set({ on: hostGentle || !!o.gentlePreview });
     racers.setAssist(!!o.assist);
     audio.setVolumes({ master: o.volMaster, music: o.volMusic, sfx: o.volSfx });
+    if (Number.isFinite(o.steerSens)) feel.set('steer.userMul', o.steerSens);   // FEEL.md: grip yaw, player only
+    renderer.setOptions(o);
+    if (world.shadows) world.shadows.setEnabled(qs.get('shadows') !== '0' && o.shadows !== false);
   }
   applyOptions(opts);
   hud.on('option', ({ options }) => applyOptions(options || hud.options));
@@ -197,6 +210,7 @@ async function boot() {
   function resetAll() {
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     effects.reset(); ai.reset(); fx.reset();
+    if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
     const sec = P.st[S.sectionIdx];
     audio.reset(sec);                         // held tones never carry into a new run
@@ -246,6 +260,9 @@ async function boot() {
   // the menu's Back link: the host decides (it may close the game); unhosted it does nothing
   hud.on('back', ({ from } = {}) => { if (from === 'menu') bridge.send({ type: 'menu-back' }); });
 
+  // dev status for the boot check's reaction and item shots (times are performance.now())
+  bus.on('bump', ({ a, b, dv = 0 }) => { if (a === 0 || b === 0) { debug.bumpMeAt = performance.now(); debug.bumpDv = Math.round(dv * 10) / 10; } });
+  bus.on('item-fire', ({ racer, id, mode }) => { if (mode === 'throw' || mode === 'lob') { debug.fireAt = performance.now(); debug.fire = { racer, id, mode }; } });
   bus.on('lap', () => { debug.laps++; });
   bus.on('drop', () => { debug.drops++; });
   bus.on('rescue-release', () => { debug.rescues++; });
@@ -285,7 +302,8 @@ async function boot() {
   let fpsN = 0, fpsT = performance.now(), telT = 0;
   function frame(now) {
     requestAnimationFrame(frame);
-    const { steps, alpha, frameDt } = clock.frame(now);
+    if (!renderer.frameDue(now)) return;                          // the Frame cap option skips this one
+    const { steps, alpha, frameDt, renderTime } = clock.frame(now);
     const a = actions.sample();                                   // 1. input
     const nav = gamepad.takeNav();
     const card = hud.card;
@@ -335,7 +353,9 @@ async function boot() {
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
     const iv = items.view();
-    world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: clock.simTime, beat: clock.beat,
+    // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
+    // display that is not 60 Hz
+    world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
       sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera });
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: paused ? 0 : frameDt });   // 7. render
@@ -347,6 +367,7 @@ async function boot() {
     hud.update({ lap: pst[S.lap], laps, timeS: race.timeS, speedPct: pst[S.speedPct], countdown: null,
       sectionIdx: pst[S.sectionIdx], paused, place, count: COUNT, item: holding ? hudItem : null,
       map: mapXz, finished: P.finished, bestLapS: P.bestLapS });
+    slotFx.update(paused ? 0 : frameDt, holding && !P.finished ? hudItem : null, !!feel.get('gentle.on'));
 
     if (state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell
       finishAt = 0;
@@ -357,10 +378,19 @@ async function boot() {
     debug.phase = paused ? 'paused' : state === 'race' ? race.phase : state;
     debug.lap = pst[S.lap]; debug.s = pst[S.s]; debug.timeS = race.timeS; debug.speedPct = pst[S.speedPct];
     debug.place = place; debug.item = it.id;
+    debug.air = pst[S.airborne] > 0.5 && pst[S.respawnPhase] === RESPAWN.NONE;
+    debug.archAheadM = -1;
+    for (const x of arches) {
+      let d = x.s - pst[S.s];
+      if (d < 0) d += track.lengthM;
+      if (debug.archAheadM < 0 || d < debug.archAheadM) { debug.archAheadM = Math.round(d); debug.arch = x.id; }
+    }
     fpsN++;
     if (now - fpsT >= 1000) {
       debug.fps = Math.round(fpsN * 1000 / (now - fpsT)); fpsN = 0; fpsT = now;
       Object.assign(debug, renderer.stats());
+      debug.sfx = audio.sfx;
+      debug.shadowMode = world.shadows ? world.shadows.mode : 'none';
       if (bridge.hosted && now - telT >= 5000) { telT = now; bridge.telemetry({ fps: debug.fps, ...renderer.stats() }); }
     }
   }

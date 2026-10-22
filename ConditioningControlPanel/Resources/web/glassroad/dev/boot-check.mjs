@@ -102,7 +102,7 @@ async function run(backend, httpPort) {
     const query = CARDS ? '/?x=1' : '/?bot=1' + (FALL ? '&botFall=1' : '');
     await c.send('Page.navigate', { url: 'http://127.0.0.1:' + httpPort + query + flag + FLAGS }, sid);
     const state = async () => {
-      const r = await c.send('Runtime.evaluate', { expression: 'JSON.stringify(window.__glassroad || null)', returnByValue: true }, sid);
+      const r = await c.send('Runtime.evaluate', { expression: 'JSON.stringify(window.__glassroad ? { ...window.__glassroad, now: performance.now() } : null)', returnByValue: true }, sid);
       return JSON.parse(r.result.value || 'null');
     };
     const shot = async (name) => {
@@ -125,6 +125,9 @@ async function run(backend, httpPort) {
     const click = (act) => c.send('Runtime.evaluate', { expression: "(document.querySelector('#card [data-act=" + act + "]') || {}).click && document.querySelector('#card [data-act=" + act + "]').click(), true", returnByValue: true }, sid);
     if (CARDS) {   // no bot: menu card, Enter on the Race door, Escape pauses, Enter resumes
       if (await until(['menu'], 30000)) { await sleep(600); await shot('card-menu'); }
+      // polish 2: the options card (frame cap, render scale, quality, fps, steering, shadows), then back
+      await click('options'); await sleep(700); await shot('card-options');
+      await click('back'); await sleep(400);
       await key('Enter', 'Enter', 13);
       if (await until(['countdown', 'racing'], 5000)) await sleep(2500);
       await key('Escape', 'Escape', 27);
@@ -139,6 +142,10 @@ async function run(backend, httpPort) {
     const t0 = Date.now();
     let st = null, startShot = false, packShot = false, midShot = false, fxShot = false, dropAt = 0, dropShot = false, resultsAt = 0, lastSample = 0;
     let goShot = false, boxShot = false, heldAt = 0, heldShot = false;
+    // polish 2: a colossus arch ahead with its shadow, a kart mid-hop, a bump reaction, a thrown item's
+    // trail, and up to two different screen effects
+    let archShot = false, hopShot = false, bumpShot = false, trailShot = false;
+    const fxShots = new Set();
     while (Date.now() - t0 < SECONDS * 1000) {
       await sleep(200);
       st = await state();
@@ -153,7 +160,11 @@ async function run(backend, httpPort) {
       if (!heldShot && heldAt && Date.now() - heldAt > 1500) { heldShot = true; await shot('held-bubble'); }
       if (!packShot && st.phase === 'racing' && st.timeS > 5) { packShot = true; await shot('mid-race-pack'); }
       if (!midShot && st.phase === 'racing' && st.timeS > 40) { midShot = true; await shot('mid-race'); }
-      if (!fxShot && st.effectNow) { fxShot = true; await sleep(350); await shot('effect-' + st.effectNow); }
+      if (st.effectNow && fxShots.size < 2 && !fxShots.has(st.effectNow)) { fxShots.add(st.effectNow); fxShot = true; await sleep(350); await shot('effect-' + st.effectNow); }
+      if (!archShot && st.phase === 'racing' && st.timeS > 2 && st.archAheadM > 25 && st.archAheadM < 60) { archShot = true; report.arch = { id: st.arch, aheadM: st.archAheadM }; await shot('colossus'); }
+      if (!hopShot && st.phase === 'racing' && st.timeS > 3 && st.air) { hopShot = true; await shot('hop'); }
+      if (!bumpShot && st.phase === 'racing' && st.bumpMeAt && st.now - st.bumpMeAt < 300) { bumpShot = true; report.bumpDv = st.bumpDv; await sleep(120); await shot('bump'); }
+      if (!trailShot && st.phase === 'racing' && st.fireAt && st.now - st.fireAt < 350 && (st.fire.racer === 0 || st.timeS > 60)) { trailShot = true; report.fire = st.fire; await sleep(250); await shot('item-trail'); }
       if (FALL && !dropAt && st.drops > 0) dropAt = Date.now();
       if (dropAt && !dropShot && Date.now() - dropAt > 700) { dropShot = true; await shot('rescue'); }
       if (st.fps && Date.now() - lastSample >= 5000) {
@@ -162,13 +173,13 @@ async function run(backend, httpPort) {
       }
       if (FINISH && st.phase === 'results' && !resultsAt) resultsAt = Date.now();
       if (resultsAt && Date.now() - resultsAt > 1200) { await shot('results'); break; }
-      if (!FINISH && midShot && (!FALL || (dropShot && st.rescues > 0))) break;
+      if (!FINISH && midShot && fxShots.size >= 2 && (!FALL || (dropShot && st.rescues > 0))) break;
     }
     if (st) await shot('end');
     const ev = (st && st.events) || {}, pick = (re) => Object.fromEntries(Object.entries(ev).filter(([k]) => re.test(k)));
     report.final = st && { phase: st.phase, backend: st.backend, tier: st.tier, fps: st.fps, drawCalls: st.drawCalls,
       triangles: st.triangles, lap: st.lap, place: st.place, s: Math.round(st.s), drops: st.drops, rescues: st.rescues, laps: st.laps,
-      result: st.result, effectsSeen: st.effects, items: pick(/^(item-|bubble-pop)/), screen: pick(/^effect-/),
+      result: st.result, effectsSeen: st.effects, gpu: st.gpu, shadowMode: st.shadowMode, sfx: st.sfx, renderScale: st.renderScale, items: pick(/^(item-|bubble-pop)/), screen: pick(/^effect-/),
       race: pick(/^(bump|slipstream|overtake|place-change|race-|racer-event)/), seed: st.seed };
     try { await c.send('Browser.close'); } catch (e) { /* closing */ }
   } catch (e) {
