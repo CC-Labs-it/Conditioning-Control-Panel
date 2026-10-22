@@ -77,8 +77,7 @@ public class LockdownService : IDisposable
         get
         {
             if (!_isActive || _duration <= TimeSpan.Zero) return 0;
-            var f = (DateTime.Now - _activatedAt).TotalSeconds / _duration.TotalSeconds;
-            return f < 0 ? 0 : f > 1 ? 1 : f;
+            return LockdownExitRule.ElapsedFraction(_activatedAt, _duration, DateTime.UtcNow);
         }
     }
 
@@ -127,9 +126,8 @@ public class LockdownService : IDisposable
         get
         {
             if (!_isActive) return TimeSpan.Zero;
-            var elapsed = DateTime.Now - _activatedAt;
-            var remaining = _duration - elapsed;
-            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+            // UTC, never local time: a local clock jumps an hour at the daylight-saving change.
+            return LockdownExitRule.Remaining(_activatedAt, _duration, DateTime.UtcNow);
         }
     }
 
@@ -160,7 +158,7 @@ public class LockdownService : IDisposable
         SyncPanicKeyUi();
 
         _duration = duration;
-        _activatedAt = DateTime.Now;
+        _activatedAt = DateTime.UtcNow;
         _startedAt = _activatedAt;
         _isActive = true;
         _escapeRepeats.Clear();
@@ -211,7 +209,7 @@ public class LockdownService : IDisposable
         // From _startedAt, NOT _activatedAt: RestartTimer rebases _activatedAt, so measuring from
         // it would report only the time since the last sendback and no amount of sitting through
         // Emergency Exit restarts could ever earn the long-lockdown achievement.
-        LastActiveDuration = DateTime.Now - _startedAt;
+        LastActiveDuration = DateTime.UtcNow - _startedAt;
         _isActive = false;
 
         App.Logger?.Information("Lockdown deactivated after {Minutes:F1} minutes", LastActiveDuration.TotalMinutes);
@@ -244,9 +242,21 @@ public class LockdownService : IDisposable
         {
             if (!File.Exists(RecoveryFilePath)) return;
 
-            var json = File.ReadAllText(RecoveryFilePath);
-            var state = JsonConvert.DeserializeObject<RecoveryState>(json);
-            if (state != null && App.Settings?.Current != null)
+            RecoveryState? state;
+            try { state = JsonConvert.DeserializeObject<RecoveryState>(File.ReadAllText(RecoveryFilePath)); }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning("Lockdown recovery file unreadable: {Error}", ex.Message);
+                state = null;
+            }
+            // An empty or broken file (a kill mid-write) still means a lockdown was interrupted, and
+            // the settings on disk may carry its panic-off. Fail open rather than leave them stuck.
+            if (state == null)
+            {
+                var (strict, panic) = LockdownExitRule.UnreadableRecovery;
+                state = new RecoveryState { StrictLockEnabled = strict, PanicKeyEnabled = panic };
+            }
+            if (App.Settings?.Current != null)
             {
                 App.Settings.Current.StrictLockEnabled = state.StrictLockEnabled;
                 App.Settings.Current.PanicKeyEnabled = state.PanicKeyEnabled;
@@ -291,7 +301,11 @@ public class LockdownService : IDisposable
                 StrictLockEnabled = strictLock,
                 PanicKeyEnabled = panicKey
             });
-            File.WriteAllText(RecoveryFilePath, json);
+            // Temp file + move: a kill between File.WriteAllText's truncate and its write left an
+            // EMPTY recovery file, which the next launch could not read.
+            var tmp = RecoveryFilePath + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, RecoveryFilePath, overwrite: true);
         }
         catch (Exception ex)
         {
@@ -325,7 +339,7 @@ public class LockdownService : IDisposable
     public void RestartTimer(string reason)
     {
         if (!_isActive) return;
-        _activatedAt = DateTime.Now;
+        _activatedAt = DateTime.UtcNow;
         RestartCount++;
         App.Logger?.Information("Lockdown timer restarted to {Minutes} minutes (reason {Reason}, restart #{Count})",
             _duration.TotalMinutes, reason, RestartCount);
@@ -348,7 +362,7 @@ public class LockdownService : IDisposable
     {
         if (!_isActive) return false;
 
-        if (string.Equals(phrase?.Trim(), "let me out", StringComparison.OrdinalIgnoreCase))
+        if (LockdownExitRule.PhraseMatches(phrase))
         {
             App.Logger?.Information("Lockdown deactivated via secret exit phrase");
             Deactivate();
