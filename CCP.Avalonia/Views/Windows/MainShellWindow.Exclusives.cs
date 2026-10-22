@@ -70,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshExclusivesTab()
         {
             Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.RefreshVault();
+            AppSettingsPage?.SectionAccount.PlansView.RefreshVault();   // WPF repaints every built view, the Plans copy too
             RefreshInvites();
         }
 

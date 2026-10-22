@@ -100,7 +100,7 @@
             <fx:AmbientFxCanvas x:Name="ExclusivesAmbientFx"/>
 
             <!-- 2 + 3. Content -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="26,20,26,22">
 
@@ -126,8 +126,8 @@
                                            Margin="0,0,18,0"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                                <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
-                                <TextBlock Text="{loc:Str premium_page_sub}"
+                                <TextBlock x:Name="TxtVaultTitle" Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
+                                <TextBlock x:Name="TxtVaultSub" Text="{loc:Str premium_page_sub}"
                                            FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
                                            Margin="0,1,0,0" MaxWidth="620" HorizontalAlignment="Left"
                                            TextTrimming="CharacterEllipsis"/>
@@ -160,6 +160,13 @@
                             </Border>
                         </Grid>
                     </Border>
+
+                    <!-- Account & Plans only (PlansMode): the way to the full Premium page. -->
+                    <Button x:Name="BtnSeePremium" Theme="{StaticResource SecondaryButton}"
+                            HorizontalAlignment="Left" Margin="0,-8,0,18"
+                            Padding="18,7" IsVisible="False" Click="SeePremium_Click">
+                        <TextBlock Text="{loc:Str plans_see_premium}"/>
+                    </Button>
 
                     <!-- Spotlight: the newest exclusive, hero-sized -->
                     <Border x:Name="SpotlightCard"

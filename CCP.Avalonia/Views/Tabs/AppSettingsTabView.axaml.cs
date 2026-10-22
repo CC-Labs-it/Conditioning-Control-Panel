@@ -186,6 +186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             finally { _syncingPills = false; }
             if (key == _raisedKey) return; // the spy calls this every scroll step (P07)
             _raisedKey = key;
+            // WPF CheckPill :184-195: the Account & Plans vault motion follows the lit pill, parked elsewhere.
+            SectionAccount.PlansView.PlansActive = key == "account";
             SectionChecked?.Invoke();
         }
 
