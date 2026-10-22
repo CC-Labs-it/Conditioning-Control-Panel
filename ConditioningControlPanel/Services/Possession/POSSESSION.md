@@ -361,7 +361,8 @@ effect. Deliberately NOT gated on `LockdownPhotosafe` - photosafe is a visual ac
 service subscribes to the director only while a lockdown runs; the setting is re-read at PLAY time so
 flipping it mid-lockdown takes effect at once.
 
-**C2 it remembers** - `Services/Possession/PossessionRemember.cs` +
+**C2 it remembers** - `CCP.Core/Services/Possession/PossessionRemember.cs` (rules: arm, spend-once flag,
+window-ready clock, escape counter) + `Services/Possession/PossessionWpfHead.cs` InstallRemember (WPF: timer, door, line) +
 `AppSettings.LockdownPossessionRememberPending` (bool, default false). Set when a lockdown ends and the
 intensity WAS Full Doki (read at deactivate time, not next launch). About 20 s after the main window is
 up on the next launch, the Lockdown door takes one ember charge (its own `EmberAttribution` over
