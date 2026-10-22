@@ -125,7 +125,12 @@ internal static class AccountSeed
     /// <param name="v2">Tests only.</param>
     internal static async Task<bool> LoadProfileAsync(V2AuthService? v2 = null)
     {
-        try { return await LoadProfileCoreAsync(v2 ?? NewV2()); }
+        try
+        {
+            if (!await LoadProfileCoreAsync(v2 ?? NewV2())) return false;
+            ProfileLoaded?.Invoke();
+            return true;
+        }
         catch (Exception ex)
         {
             // Fire-and-forget from the login dialog and inside an async void Post at startup: never throw.
@@ -136,6 +141,9 @@ internal static class AccountSeed
 
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
     internal static SyncPush? Sync;
+
+    /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
+    internal static event Action? ProfileLoaded;
 
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();

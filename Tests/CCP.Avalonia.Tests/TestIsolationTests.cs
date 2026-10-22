@@ -77,4 +77,54 @@ public class TestIsolationTests
         Assert.False(File.Exists(stray));
         Assert.False(leaked.HasPendingSave);
     }
+
+    /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
+    /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification
+    /// dialog in JumpRightInTests, flake-stackcapture). Restore must wait for that write.</summary>
+    [Fact]
+    public void ASaveAlreadyWritingWhenTheTestEndsLandsBeforeTheFilesGoBack()
+    {
+        var settingsFile = Path.Combine(TestUserDataProfile.Root, "settings.json");
+        var before = File.Exists(settingsFile) ? File.ReadAllText(settingsFile) : null;
+        var snapshot = ProcessStateSnapshot.Take();
+        var service = new ConditioningControlPanel.Services.SettingsService();
+        service.Current.Welcomed = true;
+        var flags = System.Reflection.BindingFlags.NonPublic;
+        var writeLock = typeof(ConditioningControlPanel.Services.SettingsService)
+            .GetField("_saveLock", flags | System.Reflection.BindingFlags.Instance)!.GetValue(service)!;
+        var inFlight = typeof(ConditioningControlPanel.Services.SettingsService)
+            .GetField("_debouncedSavesInFlight", flags | System.Reflection.BindingFlags.Static)!;
+        System.Threading.Tasks.Task? restore = null;
+        var held = new System.Threading.ManualResetEventSlim();
+        var release = new System.Threading.ManualResetEventSlim();
+        var holder = new System.Threading.Thread(() =>
+        {
+            lock (writeLock) { held.Set(); release.Wait(); }
+        }) { IsBackground = true };
+        holder.Start();
+        held.Wait();
+        try
+        {
+            service.Save();
+            // The debounce fired and is blocked inside its write: a signal, not a guess.
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while ((int)inFlight.GetValue(null)! == 0)
+            {
+                Assert.True(deadline.Elapsed < System.TimeSpan.FromSeconds(10), "the debounce never fired");
+                System.Threading.Thread.Yield();
+            }
+            restore = System.Threading.Tasks.Task.Run(snapshot.Restore);
+            // Without the wait Restore is done well inside this; with it, it is still waiting (5 s bound).
+            restore.Wait(System.TimeSpan.FromMilliseconds(500));
+        }
+        finally { release.Set(); }
+        restore!.Wait();
+        var drained = System.Diagnostics.Stopwatch.StartNew();   // the write is over before the files are judged
+        while ((int)inFlight.GetValue(null)! != 0)
+        {
+            Assert.True(drained.Elapsed < System.TimeSpan.FromSeconds(10), "the write never finished");
+            System.Threading.Thread.Yield();
+        }
+        Assert.Equal(before, File.Exists(settingsFile) ? File.ReadAllText(settingsFile) : null);
+    }
 }
