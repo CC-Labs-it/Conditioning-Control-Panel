@@ -143,4 +143,25 @@ public sealed class CompanionRoomPreviewTests
         finally { window.Close(); }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task LiveZonesWithoutMocksAreInertInThePreview() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var window = Create();
+        try
+        {
+            var room = window.RoomView.GetLogicalDescendants().ToList();
+            // Hero mute, provider, awareness and presets write real settings; no mocks seat them yet.
+            Assert.False(room.OfType<CompanionHeroCard>().Single().IsEnabled);
+            Assert.False(room.OfType<MakeHerYoursView>().Single().IsEnabled);
+            Assert.False(room.OfType<AwarenessPrivacyView>().Single().IsEnabled);
+            Assert.False(room.OfType<EngineRoomDrawer>().Single().IsEnabled);
+            Assert.False(room.OfType<AiPermissionsGrid>().Single().IsEnabled);
+            Assert.False(room.OfType<WorkshopAccordion>().Single().IsEnabled);
+            Assert.True(room.OfType<ChatThresholdView>().Single().IsEnabled);
+            Assert.True(room.OfType<MemoryDiaryView>().Single().IsEnabled);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
 }

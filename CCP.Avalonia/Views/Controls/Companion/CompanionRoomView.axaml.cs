@@ -62,6 +62,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             MemoryZone.ViewModel = memory; // DataContextChanged -> ForgetConfirm.Bind disarms the two-step
             ChatZone.ScrollThreadToEnd();
             ChatZone.PlayDormantShimmer();
+            // ponytail: these zones have no preview mocks here yet and write real settings (hero mute,
+            // provider, awareness, presets), so the debug harness shows them inert instead.
+            foreach (var live in new Control[] { HeroZone, PersonalityZone, AwarenessZone, EngineZone, PermissionsZone, WorkshopZone })
+                live.IsEnabled = false;
         }
 
         // =====================================================================================
