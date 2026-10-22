@@ -28,6 +28,8 @@ public sealed class CompanionRoomThinkingTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.MotionLevel = MotionLevel.Off; // the hero's ambient clock is irrelevant here
+        var time = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         var room = new CompanionRoomView();
         var parent = new Border { Child = room };
         var win = new Window { Content = parent, Width = 1240, Height = 900 };
@@ -54,8 +56,9 @@ public sealed class CompanionRoomThinkingTests
             // A real window frame paints the dots (not only the explicit seam below).
             var dot1 = chat.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Dot1")!;
             dot1.Opacity = 1;
-            for (int i = 0; i < 4 && dot1.Opacity == 1; i++)
+            for (int i = 0; i < 10 && dot1.Opacity == 1; i++)
             {
+                time.Advance(TimeSpan.FromMilliseconds(100));
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
             }
@@ -64,6 +67,13 @@ public sealed class CompanionRoomThinkingTests
             Assert.Equal(1, chat.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Dot1")!.Opacity, 8);
             Assert.Equal(.75, chat.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Dot2")!.Opacity, 8);
             Assert.Equal(.5, chat.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("Dot3")!.Opacity, 8);
+            // A minimised window parks the beat (BeatLoop; WPF renders nothing minimised) and a restore wakes it.
+            win.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(baseline, frames.SubscriberCount);
+            win.WindowState = WindowState.Normal;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(baseline + 1, frames.SubscriberCount);
             parent.IsVisible = false;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(baseline, frames.SubscriberCount);
@@ -90,6 +100,7 @@ public sealed class CompanionRoomThinkingTests
         finally
         {
             win.Close();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = TimeProvider.System;
             CoreSettings.ServiceProvider = oldSettings;
         }
     });

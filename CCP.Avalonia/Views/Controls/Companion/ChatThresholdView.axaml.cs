@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Diagnostics;
 using ConditioningControlPanel.Motion;
-using ConditioningControlPanel.Avalonia.Controls.Fx;
+using ConditioningControlPanel.Avalonia.Helpers;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
@@ -47,8 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private bool _shimmerPlayed;
         private ChatThresholdViewModel? _vm;
         private ChatThresholdViewModel? _observed;
-        private FrameClock? _thinkingClock;
-        private readonly Stopwatch _thinkingElapsed = new();
+        private BeatLoop? _thinking;
 
         public ChatThresholdView()
         {
@@ -110,34 +108,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>WPF SyncThinking: re-read on every room show; hidden ancestors park the clock.</summary>
         public void SyncThinking()
         {
-            if (IsLoaded && IsEffectivelyVisible && ViewModel?.IsThinking == true) StartThinking();
+            if (IsLoaded && IsEffectivelyVisible && ViewModel?.IsThinking == true)
+            {
+                StartThinking();
+                ScrollThreadToEnd(); // WPF SyncThinking(true)
+            }
             else StopThinking();
         }
 
         public void StartThinking()
         {
-            if (!IsLoaded || !IsEffectivelyVisible || _thinkingClock?.IsEnabled == true) return;
-            if (_thinkingClock == null)
-            {
-                _thinkingClock = new FrameClock(this);
-                _thinkingClock.Tick += (_, _) => PaintThinking(_thinkingElapsed.Elapsed.TotalMilliseconds);
-            }
-            _thinkingElapsed.Restart();
-            _thinkingClock.Start();
-            PaintThinking(0);
+            if (!IsLoaded || !IsEffectivelyVisible || _thinking?.IsRunning == true) return;
+            // The shared 30 fps beat: parks itself while hidden or minimised, test-clocked (BeatLoop.Time).
+            _thinking ??= new BeatLoop(this, seconds => PaintThinking(seconds * 1000));
+            _thinking.Start();
         }
 
         public void StopThinking()
         {
-            _thinkingClock?.Stop();
-            _thinkingElapsed.Stop();
+            _thinking?.Stop();
             Dot1.Opacity = Dot2.Opacity = Dot3.Opacity = 1;
         }
 
-        /// <summary>One shared-clock frame, stepped explicitly by headless tests.</summary>
+        /// <summary>One beat, stepped explicitly by headless tests.</summary>
         internal void PaintThinking(double milliseconds)
         {
-            if (_thinkingClock?.IsEnabled != true) return;
+            if (_thinking?.IsRunning != true) return;
             Dot1.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 0);
             Dot2.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 1);
             Dot3.Opacity = CompanionThinkingPulse.Opacity(milliseconds, 2);
