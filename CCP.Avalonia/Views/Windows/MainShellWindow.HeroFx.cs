@@ -26,6 +26,7 @@ using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -90,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private double _lastXpShown = double.NaN;
         private int _lastXpLevelShown = -1;
-        private DispatcherTimer? _xpOdometer;
+        private FrameClock? _xpOdometer;   // on the window's shared frame beat (AmbientBeatLoopsTests)
 
 
         internal void SettleXpOdometerForTests()
@@ -124,8 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             string tail = " / " + ((int)needed) + " XP";
             txt.Text = from.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
             var started = System.Diagnostics.Stopwatch.GetTimestamp();
-            DispatcherTimer? timer = null;
-            timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) =>
+            var timer = new FrameClock(txt) { Interval = TimeSpan.FromMilliseconds(16) };
+            timer.Tick += (_, _) =>
             {
                 try
                 {
@@ -135,9 +136,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (p < 1) return;
                 }
                 catch (Exception ex) { Log.Debug("XP odometer: {E}", ex.Message); }
-                timer!.Stop();
+                timer.Stop();
                 if (ReferenceEquals(_xpOdometer, timer)) _xpOdometer = null;
-            });
+            };
             _xpOdometer = timer;
             timer.Start();
         }

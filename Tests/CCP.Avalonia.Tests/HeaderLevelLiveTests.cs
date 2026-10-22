@@ -61,9 +61,12 @@ public sealed class HeaderLevelLiveTests
             Assert.Equal($"5 / {(int)Need(11)} XP", Text("TxtXP"));
             Assert.Equal($"{Loc.Get("label_level")} 11", Text("ProfileMenuLevel"));   // the bubble rail agrees
 
-            s.MotionLevel = MotionLevel.Full;          // the fill tweens instead of snapping
-            ProgressionBank.Add(1, "Quest");
+            // The fill tweens instead of snapping. Weather (Mantra) is not banked, so it is not held;
+            // under Full motion the readout counts up (WPF odometer), so settle it before reading.
+            s.MotionLevel = MotionLevel.Full;
+            ProgressionBank.Add(1, "Mantra");
             Dispatcher.UIThread.RunJobs();
+            shell.SettleXpOdometerForTests();
             Assert.Equal($"6 / {(int)Need(11)} XP", Text("TxtXP"));
             Assert.NotNull(bar.Transitions);
         }

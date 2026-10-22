@@ -383,7 +383,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var scale = _bankPopTransform;
                 _bankPop?.Finish();
                 double total = BankPopOutMs + BankPopSpringMs;
-                _bankPop = FxTrack.Play(total, ms => scale.ScaleX = scale.ScaleY = FxTrack.Keys(ms,
+                _bankPop = FxTrack.Play(txt, total, ms => scale.ScaleX = scale.ScaleY = FxTrack.Keys(ms,
                         (0, 1, null), (BankPopOutMs, BankPopScale, FxTrack.QuadOut), (total, 1, u => FxTrack.BackOut(u, BankPopSpringAmplitude))),
                     () => scale.ScaleX = scale.ScaleY = 1);
             }
