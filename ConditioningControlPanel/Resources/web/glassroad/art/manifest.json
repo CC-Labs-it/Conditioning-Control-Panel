@@ -163,7 +163,7 @@
     "texBytes": 11184812,
     "boundRadiusM": 0,
     "materialSlots": [
-      "sky-dawn-galaxy"
+      "sky_dawn_galaxy"
     ],
     "palette": "dawn",
     "width": 2048,
@@ -209,7 +209,7 @@
     "texBytes": 11184812,
     "boundRadiusM": 0,
     "materialSlots": [
-      "sky-deep-galaxy"
+      "sky_deep_galaxy"
     ],
     "palette": "deep",
     "width": 2048,
@@ -255,7 +255,7 @@
     "texBytes": 11184812,
     "boundRadiusM": 0,
     "materialSlots": [
-      "sky-afterglow-galaxy"
+      "sky_afterglow_galaxy"
     ],
     "palette": "afterglow",
     "width": 2048,
@@ -792,42 +792,50 @@
     "id": "finish-portal-lod0",
     "file": "models/finish-portal-lod0.glb",
     "kind": "prop",
-    "tris": 2876,
-    "texBytes": 0,
-    "boundRadiusM": 10.923,
-    "materialSlots": [
-      "portal_trim",
-      "portal_glass",
-      "spiral_mask"
-    ],
     "palette": "all",
-    "draws": 3,
+    "lod": 0,
+    "tris": 4695,
+    "degenerateTriangles": 0,
+    "boundRadiusM": 12.852,
     "sizeM": [
-      16.21235,
-      10.92004,
-      0.71991
+      17.24,
+      12.85,
+      1.02
     ],
-    "lod": 0
+    "materialSlots": [
+      "portal_glass",
+      "portal_trim",
+      "spiral_mask",
+      "finish_membrane"
+    ],
+    "texBytes": 0,
+    "draws": 4,
+    "clearanceWidthM": 14.4,
+    "compression": "meshopt-lossless"
   },
   {
     "id": "finish-portal-lod1",
     "file": "models/finish-portal-lod1.glb",
     "kind": "prop",
-    "tris": 780,
-    "texBytes": 0,
-    "boundRadiusM": 10.86,
-    "materialSlots": [
-      "portal_trim",
-      "portal_glass",
-      "spiral_mask"
-    ],
     "palette": "all",
-    "draws": 3,
+    "lod": 1,
+    "tris": 1207,
+    "degenerateTriangles": 0,
+    "boundRadiusM": 12.838,
     "sizeM": [
-      16.18966,
-      10.83006,
-      0.71991
+      17.18,
+      12.835,
+      1
     ],
-    "lod": 1
+    "materialSlots": [
+      "portal_glass",
+      "portal_trim",
+      "spiral_mask",
+      "finish_membrane"
+    ],
+    "texBytes": 0,
+    "draws": 4,
+    "clearanceWidthM": 14.4,
+    "compression": "meshopt-lossless"
   }
 ]
