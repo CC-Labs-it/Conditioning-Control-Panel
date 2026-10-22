@@ -111,9 +111,15 @@ public sealed class NavSearchTests
     {
         SettingsPaletteWindow.Toggle(shell);
         OpenPalette();
+        // Arm the Esc grace window as if an earlier Escape had closed the palette. A future
+        // timestamp keeps it armed however slow the run is. Panic must close through
+        // CloseIfOpen and leave that grace alone; TryConsumeEscape would clear it.
+        var grace = typeof(SettingsPaletteWindow).GetField("_escapeClosedAtUtc", BindingFlags.NonPublic | BindingFlags.Static)!;
+        grace.SetValue(null, DateTime.UtcNow.AddMinutes(1));
         PanicSurfaces.StopAll("palette test", shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(SettingsPaletteWindow.IsOpen);
+        Assert.True(SettingsPaletteWindow.TryConsumeEscape());
         Assert.False(SettingsPaletteWindow.TryConsumeEscape());
     });
 
