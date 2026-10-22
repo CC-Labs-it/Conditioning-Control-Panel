@@ -330,8 +330,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _btnClose.Click += (_, _) => CloseBook();
             this.FindControl<Button>("BtnFirstShow")!.Click += (_, _) =>
             {
+                var owner = _owner;
                 CloseBook();
-                FirstShowService.Open(TutorialHeadHooks.Shell);
+                // Native Wayland refuses the show after the book is gone: put the book back.
+                if (!FirstShowService.Open(TutorialHeadHooks.Shell)) owner?.OpenBook();
             };
             this.FindControl<Button>("BtnCompleteGuide")!.Click += (_, _) => OpenManual();
             _btnPrev.Click += (_, _) => Step(-1);

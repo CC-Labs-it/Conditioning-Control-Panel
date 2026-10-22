@@ -213,6 +213,14 @@ public sealed class EmiBookNavigationTests : IDisposable
             Assert.False(FirstShowService.IsActive);
             Assert.False(stage.IsVisible);
             Assert.False(EmiDeskService.Instance.Window!.PresentationActive);
+
+            // Refused show (native Wayland; headless cannot click-through): the book comes back.
+            FirstShowService.RequireClickThrough = true;
+            desk.OpenBook();
+            Click(desk.Book!, "BtnFirstShow");
+            Assert.False(FirstShowService.IsActive);
+            Assert.NotNull(desk.Book);
+            Assert.True(desk.Book!.IsVisible);
         }
         finally
         {
