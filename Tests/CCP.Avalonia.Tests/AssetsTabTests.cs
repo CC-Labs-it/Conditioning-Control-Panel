@@ -117,6 +117,54 @@ public sealed class AssetsTabTests
     });
 
     [Fact]
+    public Task PackFilesSortByNameVideoFolderCheckFeedsThePoolAndDeactivateHidesThePack() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var guid = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(assets, ".packs", guid);
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        File.WriteAllBytes(Path.Combine(dir, "content", "video.enc"), PackEncryptionService.Encrypt(new byte[16]));
+        var manifest = new InstalledPackManifest
+        {
+            PackId = "library-pack", PackGuid = guid, PackName = "Library pack",
+            Files = new List<PackFileEntry>   // manifest order is NOT name order
+            {
+                new() { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" },
+                new() { OriginalName = "u.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" }
+            }
+        };
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        var store = new ContentPackStore(() => assets, () => s, () => { });
+        ContentPackStore.Current = store;
+        try
+        {
+            tab.OnTabShown();
+            var pack = Assert.Single(tab.AssetTree.Single(n => n.IsPackFolder).Children);
+            pack.IsExpanded = true;
+            var videos = Assert.Single(pack.Children);
+            Assert.Equal(ContentPackStore.VideoType, videos.PackFileType);
+            tab.AssetTreeView.SelectedItem = videos;
+            await tab.ThumbnailLoads;
+            // WPF MainWindow.Assets.cs:724 sorts pack files by OriginalName, not manifest order.
+            Assert.Equal(new[] { "u.mp4", "v.mp4" }, tab.CurrentFolderFiles.Select(f => f.Name));
+            Assert.Equal(2, store.GetAllActivePackVideos().Count);
+            // A real Space on the videos folder's checkbox empties the encrypted video pool.
+            var cb = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<CheckBox>()
+                .FirstOrDefault(c => c.DataContext == videos));
+            PressSpace(shell, cb);
+            Assert.Empty(store.GetAllActivePackVideos());
+            Assert.Contains("pack:library-pack/v.mp4", s.DisabledAssetPaths);
+            // Deactivating hides the pack from the Library but keeps it installed (WPF BuildPackTree reads active ids only).
+            store.DeactivatePack("library-pack");
+            tab.RefreshAssetTree();
+            Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);
+            Assert.True(store.IsPackInstalled("library-pack"));
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
+    [Fact]
     public Task DoorBuildsTreeAndSpaceOnAFolderCheckboxDisablesItsFiles() => Run(async (shell, tab, s) =>
     {
         var images = tab.AssetTree.Single(n => n.Name == "images");
