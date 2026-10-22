@@ -9,12 +9,12 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
-using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using CCP.Tests.Shared;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -315,7 +315,7 @@ public sealed class ModChoiceTests
     {
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);   // never the real profile
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            AppBuilder.Configure<AvApp>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var zip = BuildZip();
