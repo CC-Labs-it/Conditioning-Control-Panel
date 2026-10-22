@@ -513,12 +513,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopForPanic()
         {
             _open?.StopDrone();
-            _open?._completionCloseTimer?.Stop();
             App.Mantra.Dispose();
         }
 
         // Settings can change on a remote/preset thread; player changes belong on the UI thread.
         private void OnMasterVolumeChanged(int _) => Dispatcher.UIThread.Post(ApplyDroneVolume);
+
+        internal DispatcherTimer? CompletionCloseTimer => _completionCloseTimer;   // test seam
 
         private static MantraWindow? _open;   // the opener refuses a second window, so one is enough
 

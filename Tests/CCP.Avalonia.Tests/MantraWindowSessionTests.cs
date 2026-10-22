@@ -88,7 +88,7 @@ public sealed class MantraWindowSessionTests
             // Deliver Escape before pumping the completion timer: a loaded runner can spend
             // over five seconds rendering the preceding typing/ramp checks.
             Assert.True(win.IsVisible);
-            win.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            win.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
             Dispatcher.UIThread.RunJobs();
             Assert.True(drone.Disposed);
             Assert.False(AvApp.Mantra.IsActive);
@@ -363,11 +363,11 @@ public sealed class MantraWindowSessionTests
             Dispatcher.UIThread.RunJobs();
             typeof(MantraWindow).GetMethod("OnSessionComplete", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
                 .Invoke(win, new object[] { 1, 1 });
+            var timer = win.CompletionCloseTimer!;
+            Assert.True(timer.IsEnabled);
             win.Close();
             AvApp.Mantra.StartSession(3);
-            Thread.Sleep(5100); // let the closed window's five-second completion deadline pass
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(AvApp.Mantra.IsActive, "the previous window's timer ended the next session");
+            Assert.False(timer.IsEnabled, "the closed window's completion timer would end the next session");
         }
         finally
         {
