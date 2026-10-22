@@ -107,7 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             // Normal, never Loaded — DispatcherPriority.Loaded is starved in this app.
             Dispatcher.UIThread.Post(() =>
             {
-                SyncCursorBlink();
+                if (IsEffectivelyVisible) SyncCursorBlink();   // a collapsed room's card must not tick
                 if (!_introPlayed) { _introPlayed = true; PlayIntro(); }
             }, DispatcherPriority.Normal);
         }

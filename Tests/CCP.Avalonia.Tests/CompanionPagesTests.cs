@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -106,6 +107,13 @@ public sealed class CompanionPagesTests
             Assert.True(personality.IsVisualAncestorOf(presets));
             Assert.True(personality.IsVisualAncestorOf(workshop.Parts.Community));
             Capture(w, "personality");
+
+            // The Advanced row's door (WPF BtnOpenPromptEditor) opens the full prompt editor.
+            personality.FindControl<Button>("BtnOpenPromptEditor")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var editor = Assert.Single(w.OwnedWindows.OfType<CompanionPromptEditorDialog>());
+            editor.Close();
+            Dispatcher.UIThread.RunJobs();
 
             // Adopted, not borrowed: the zones stay on their pages when the user goes back to chat.
             w.ShowTab("companion");
