@@ -2355,3 +2355,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/video-core-b: +334
 - Cloud session unit (video-core-b); reviewed and gated locally.
+
+## avalonia-port/emidesk-core-c: +47
+- Cloud session unit (emidesk-core-c); reviewed and gated locally.
