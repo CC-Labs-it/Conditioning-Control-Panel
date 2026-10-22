@@ -80,4 +80,87 @@ public sealed class SpiralRoomShellTests
         }
         return Task.CompletedTask;
     });
+
+    /// <summary>FIRST LIGHT through the shell's door (WPF MainWindow.BeginSpiralFirstLight -> SpiralTabView.BeginFirstLight): the reveal owns the room,
+    /// holds at the hand-off fade with no block, hands back to the waiting room at the 12 s timeout,
+    /// and leaving the tab mid-reveal ends it.</summary>
+    [Fact]
+    public Task FirstLightHoldsForTheBlockThenTimesOutToTheWaitingRoom() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        var (oldAt, oldDone, oldMotion) = (s.DescentCeremonyAtUtc, s.DescentMigrationCompleted, s.MotionLevel);
+        s.DescentCeremonyAtUtc = null;
+        s.DescentMigrationCompleted = false;
+        s.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+        var time = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
+        var oldFuse = global::ConditioningControlPanel.Avalonia.App.DescentCountdown;
+        global::ConditioningControlPanel.Avalonia.App.DescentCountdown = null;   // fuse dark: the room is the waiting room
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<SpiralTabView>("SpiralTab")!;
+            var fog = tab.FindControl<Grid>("FogHost")!;
+            var waiting = tab.FindControl<Border>("WaitingPanel")!;
+            var help = tab.FindControl<Button>("BtnSpiralHelp")!;
+
+            shell.BeginSpiralFirstLight();   // RunFirstLightReveal's landing (no desktop lifetime headless)
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.IsVisible);
+            Assert.True(fog.IsVisible);
+            Assert.False(waiting.IsVisible);
+            Assert.False(tab.FindControl<StackPanel>("FogCopy")!.IsVisible);
+            Assert.False(help.IsVisible);
+            var visual = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SpiralFirstLightVisual>(Assert.Single(fog.Children));
+            Assert.Equal(0, visual.ElapsedSeconds);
+
+            var holdAt = SpiralFirstLightTimeline.HandoffStartSeconds(false);
+            for (var t = 0.5; t <= 11.5; t += 0.5)
+            {
+                time.Advance(TimeSpan.FromSeconds(0.5));
+                global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Equal(Math.Min(t, holdAt), visual.ElapsedSeconds, 3);   // the reveal runs, then holds
+            }
+            Assert.True(fog.IsVisible);
+            Assert.False(waiting.IsVisible);
+
+            time.Advance(TimeSpan.FromSeconds(0.5));   // 12 s: no block came
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.False(fog.IsVisible);
+            Assert.True(waiting.IsVisible);
+            Assert.True(help.IsVisible);
+            Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+
+            // Leaving the tab mid-reveal ends it; coming back is the ordinary room.
+            shell.BeginSpiralFirstLight();
+            Assert.True(fog.IsVisible);
+            Assert.Contains(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+            shell.ShowTab("appsettings");
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+            shell.ShowTab(SpiralRoom.TabKey);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(fog.IsVisible);
+            Assert.True(waiting.IsVisible);
+        }
+        finally
+        {
+            shell.Close();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = TimeProvider.System;
+            global::ConditioningControlPanel.Avalonia.App.DescentCountdown = oldFuse;
+            (s.DescentCeremonyAtUtc, s.DescentMigrationCompleted, s.MotionLevel) = (oldAt, oldDone, oldMotion);
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
 }

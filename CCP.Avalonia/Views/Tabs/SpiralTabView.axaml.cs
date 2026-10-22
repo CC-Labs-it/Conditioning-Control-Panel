@@ -42,8 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///     <c>App.DescentMigration</c> (the withhold) and <c>App.Descent</c> (the block) are WPF-head
     ///     services, so <see cref="Refresh"/> passes false for both and Spiral is unreachable — see the
     ///     placeholder there.</item>
-    ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
-    ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
+    ///   <item>The first-light reveal plays (<see cref="BeginFirstLight"/>), but with no block
+    ///     service it always holds at the bloom until the twelve-second timeout hands back.</item>
     ///   <item><c>SpiralEmbedView</c> (WebView2, Windows-only) becomes
     ///     <see cref="WebHost"/>, whose <c>Navigated</c>/<c>Failed</c>/<c>Ready</c>/<c>PostState</c>
     ///     have no twin yet — see <see cref="EnsureEmbed"/>.</item>
@@ -144,6 +144,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private const double SplashFadeSeconds = 0.4;
 
+        /// <summary>WPF SpiralTabView.xaml.cs:57: how long the first light waits for a descent block
+        /// before giving up and handing the room back quietly.</summary>
+        private static readonly TimeSpan FirstLightBlockTimeout = TimeSpan.FromSeconds(12);
+
         // ============================== motion ==============================
 
         /// <summary>
@@ -202,6 +206,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private WebHost? _embed;
 
         private SpiralRoomState _state = SpiralRoomState.Waiting;
+
+        // ---- first light (WPF SpiralTabView.xaml.cs:188-192) ----
+        private bool _firstLight;
+        private bool _firstLightReduced;
+        private double _firstLightElapsed;
+        private bool _awaitingFirstBlock;
+        private double _revealLastAt;
+        private BeatLoop? _revealFrames;
 
         /// <summary>The fuse subscriptions are held only while the tab is on screen (P01).</summary>
         private DescentCountdownService? _wiredFuse;
@@ -312,13 +324,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!IsVisible) return;
             Refresh();
-            if (_state == SpiralRoomState.Fog) FlarePhaseChange();
+            if (_state == SpiralRoomState.Fog && !_firstLight) FlarePhaseChange();
         }
 
         /// <summary>WPF OnFuseTick: the hero digits, once a second, only in the fog.</summary>
         private void OnFuseTick(object? sender, TimeSpan remaining)
         {
-            if (!IsVisible || _state != SpiralRoomState.Fog) return;
+            if (!IsVisible || _state != SpiralRoomState.Fog || _firstLight) return;
             ApplyReadout(DescentFuseCopy.TMinus(remaining), hero: true);
         }
 
@@ -326,6 +338,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Suspend()
         {
             Unwire();
+            StopReveal();
+            _firstLight = false;
             StopFogFrames();
             ApplyHelpChip(false);
             StopFogFx();
@@ -343,6 +357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         private void Refresh()
         {
+            if (_firstLight) return;  // the reveal owns the surface until it hands back
             if (!IsVisible) return;   // a hidden tab paints nothing and holds no subscriptions
             Wire();
             try
@@ -374,7 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // asked to make sense of, and to neither of the two that are a ceremony: the fog says
             // nothing is clickable and means it, and the reveal is a one-shot the user should not be
             // able to interrupt with a help card.
-            ApplyHelpChip(state != SpiralRoomState.Fog);
+            ApplyHelpChip(state != SpiralRoomState.Fog && !_firstLight);
 
             switch (state)
             {
@@ -467,33 +482,132 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// user's own ceremony commits (owner ruling 2026-08-16). Called by
         /// <c>DescentShowDirector</c> after it has brought the window forward and navigated here.
         ///
-        /// <para>ponytail: the drawing control is ported, but the ceremony director and descent
-        /// block service are absent. Without their wait/timeout/cancellation there is no handoff. It fails SOFT the way every
-        /// other first-light failure does in the original (a thrown frame, a withdrawn block, a
-        /// twelve-second timeout): hand the room straight back to the ordinary selection rather
-        /// than hold a black rectangle for three and a half seconds. Nothing is lost — the withhold
-        /// is already open by the time this is called, so every ordinary door into the spiral
-        /// works.</para>
+        /// <para>Port of WPF SpiralTabView.xaml.cs:758-858. It does not gate on the block: the intro
+        /// plays over the wait, holds at the bloom until the block lands, and hands back to the
+        /// ordinary selection on completion, on the twelve-second timeout, on a thrown frame or on
+        /// leaving the tab (Suspend).</para>
+        ///
+        /// <para>ponytail: DescentService (the block and its BlockChanged) is WPF-head only, so on
+        /// this head the block is never in hand: the reveal always holds at the bloom and the
+        /// timeout hands back. The timeout is measured on the reveal's own BeatLoop clock, so a
+        /// minimised window (parked loop) fires it on restore rather than on the dot.</para>
         /// </summary>
         internal void BeginFirstLight()
         {
-            Log.Information("[Spiral] first light: no block handoff on this head - handing the room back quietly.");
+            try
+            {
+                if (_firstLight) return;
+
+                // AIRSPACE: whatever was on screen, the browser cannot be under a reveal - and
+                // neither can the splash, the embers, the waiting panel or the "?".
+                TeardownEmbed();
+                _embedHost.IsVisible = false;
+                _waitingPanel.IsVisible = false;
+                _fogCopy.IsVisible = false;
+                ApplyHelpChip(false);
+                HideSplash(fade: false);
+                StopFogFx();
+                StopWaitingAmbience();
+                StopFogFrames();
+
+                var visual = EnsureVisual();
+                _fogHost.IsVisible = true;
+
+                // Reduced motion is the WHOLE-reveal decision, taken once.
+                _firstLightReduced = CoreSettings.Current.MotionLevel != MotionLevel.Full;
+                visual.Begin(_firstLightReduced);
+
+                _firstLight = true;
+                _firstLightElapsed = 0;
+                _revealLastAt = 0;
+                _awaitingFirstBlock = true;   // no DescentService.Current on this head
+
+                StopReveal();
+                _revealFrames = new BeatLoop(visual, RevealFrame);
+                _revealFrames.Start();
+
+                Log.Information("[Spiral] first light opened in the room ({Motion}, block {State}).",
+                    _firstLightReduced ? "reduced motion" : "full motion",
+                    _awaitingFirstBlock ? "still in flight" : "already in hand");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("[Spiral] first light could not start: {E}", ex.Message);
+                FinishFirstLight();
+            }
+        }
+
+        /// <summary>WPF PaintFrame's first-light half plus OnBlockWaitElapsed: the intro runs freely
+        /// up to the hand-off fade, which waits for the block; the deadline ends the wait.</summary>
+        private void RevealFrame(double now)
+        {
+            if (!_firstLight || _visual == null) return;
+            try
+            {
+                var dt = Math.Max(0, now - _revealLastAt);
+                _revealLastAt = now;
+
+                if (_awaitingFirstBlock && now >= FirstLightBlockTimeout.TotalSeconds)
+                {
+                    Log.Information("[Spiral] first light: no descent block within {Seconds}s - handing the room back quietly.",
+                        (int)FirstLightBlockTimeout.TotalSeconds);
+                    FinishFirstLight();
+                    return;
+                }
+
+                // THE HOLD at the hand-off fade. Clamped rather than WPF's "stop adding once past":
+                // WPF steps every 20 ms, but a parked loop (minimised) resumes with one large dt
+                // that would otherwise jump straight through the fade.
+                var holdAt = SpiralFirstLightTimeline.HandoffStartSeconds(_firstLightReduced);
+                _firstLightElapsed += dt;
+                if (_awaitingFirstBlock) _firstLightElapsed = Math.Min(_firstLightElapsed, holdAt);
+
+                _visual.SetFrame(_firstLightElapsed, now);
+
+                if (SpiralFirstLightTimeline.IsComplete(_firstLightElapsed, _firstLightReduced))
+                    FinishFirstLight();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("[Spiral] frame failed: {E}", ex.Message);
+                FinishFirstLight();
+            }
+        }
+
+        /// <summary>WPF FinishFirstLight: hand the room back to the ordinary selection. Idempotent.</summary>
+        private void FinishFirstLight()
+        {
+            StopReveal();
+            _awaitingFirstBlock = false;
+            if (!_firstLight) return;
+            _firstLight = false;
+            _visual?.Begin(false);   // back to the fog era's posture for any later fog
             Refresh();
+        }
+
+        private void StopReveal()
+        {
+            _revealFrames?.Stop();
+            _revealFrames = null;
+        }
+
+        private SpiralFirstLightVisual EnsureVisual()
+        {
+            if (_visual != null) return _visual;
+            var accent = Color.FromRgb(0xFF, 0x69, 0xB4);
+            if (this.TryFindResource("PinkColor", out var c) && c is Color color) accent = color;
+            else if (this.TryFindResource("PinkBrush", out var b) && b is ISolidColorBrush brush) accent = brush.Color;
+            _visual = new SpiralFirstLightVisual(accent);
+            _fogHost.Children.Add(_visual);
+            return _visual;
         }
 
         // The fog holds the Core reveal timeline before the first stroke, even under reduced
         // motion: snapping to a finished figure here would reveal a spiral still withheld by the fuse.
         private void StartFogFrames()
         {
-            if (_visual == null)
-            {
-                var accent = Color.FromRgb(0xFF, 0x69, 0xB4);
-                if (this.TryFindResource("PinkColor", out var c) && c is Color color) accent = color;
-                else if (this.TryFindResource("PinkBrush", out var b) && b is ISolidColorBrush brush) accent = brush.Color;
-                _visual = new SpiralFirstLightVisual(accent);
-                _fogHost.Children.Add(_visual);
-            }
-            _visual.Begin(false);
+            EnsureVisual();
+            _visual!.Begin(false);
             if (!AllowAmbientLoops)
             {
                 StopFogFrames();
