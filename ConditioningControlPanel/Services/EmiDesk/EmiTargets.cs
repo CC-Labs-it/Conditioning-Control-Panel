@@ -130,7 +130,8 @@ public static class EmiTargets
     // have to score too. Rather than scatter NoteOpen through the UI, the two chokepoints every
     // one of those paths already funnels through call in here.
     //
-    // The maps are deliberately partial. A tab with no card in the catalogue scores nothing
+    // The tab and rack maps live in Core (EmiDoors.TargetForTab / TargetForRack) so the Avalonia
+    // head scores the same doors. They are deliberately partial. A tab with no card in the catalogue scores nothing
     // (Home, Quests, Achievements, the Studio itself), and three keys are missing on purpose:
     // "fyp" and "justdrop" never reach the bottom of ShowTab (they are intercepted into their
     // own launchers, which count there), while "gradedintake" is the quiz LANDING page whose
