@@ -152,11 +152,6 @@ wire-shell-ui-updates
 wire-dialogs-welcome-back-sheet
 wire-feat-feature-card
 wire-ctrl-friends-rail-chip
-sync7-scrolller-a
-sync7-scrolller-b
-sync7-scrolller-d
-sync7-mandatory-video-a
-sync7-mandatory-video-c
 sync7-engine-fixes-a
 sync7-engine-fixes-b
 sync7-engine-fixes-c
@@ -169,9 +164,6 @@ sync7-companion-b
 sync7-session-safety-a
 sync7-shell-ui-a
 sync7-shell-ui-b
-sync7-leash-a
-sync7-leash-b
-sync7-gentle-visuals-a
 sync7-friends-link
 sync7-chaster-billboard
 sync7-pbp-host-a
