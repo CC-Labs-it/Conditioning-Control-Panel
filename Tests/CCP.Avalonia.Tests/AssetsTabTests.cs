@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ScrolllerCreditLine = ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -228,6 +229,30 @@ public sealed class AssetsTabTests
         Assert.Contains("images/sub/c.png", s.DisabledAssetPaths);
         Assert.DoesNotContain("images/a.png", s.DisabledAssetPaths);
         await tab.ThumbnailLoads;
+    });
+
+    /// <summary>WPF AssetsTabView.xaml:454-461 + ScrolllerCredit.OpenHome: the online source's credit line links
+    /// scrolller.com, and the link is refused under Strict Lock.</summary>
+    [Fact]
+    public Task ScrolllerCreditLineLinksScrolllerOutsideEveryLock() => Run((shell, tab, s) =>
+    {
+        var line = tab.FindControl<ScrolllerCreditLine>("TxtScrolllerCredit")!;
+        Assert.Equal("Media from Scrolller", ((TextBlock)line.Link.Content!).Text);
+        Assert.Contains(Loc.Get("label_online_media_credit"), line.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text));
+        var opened = new List<string>();
+        var old = ScrolllerCreditLine.Opener;
+        ScrolllerCreditLine.Opener = url => { opened.Add(url); return true; };
+        try
+        {
+            s.StrictLockEnabled = true;
+            line.Link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Empty(opened);                                  // a browser over Strict Lock is a way out
+            s.StrictLockEnabled = false;
+            line.Link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { "https://scrolller.com" }, opened);
+        }
+        finally { ScrolllerCreditLine.Opener = old; s.StrictLockEnabled = false; }
+        return Task.CompletedTask;
     });
 
     // ---- harness ----------------------------------------------------------------------

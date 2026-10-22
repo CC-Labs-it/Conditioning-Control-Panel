@@ -78,8 +78,11 @@ public sealed class FirstShowStageTests
         Assert.Equal(Loc.Get("first_show_warning") + S.PanicLabel(CoreSettings.Current.PanicKey) + " " + Loc.Get("first_show_panicHint"), stage.SpeechText);
         stage.ChoiceButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // "ready"
         Assert.True(stage.Playing);
+        Assert.Equal(!bundled, stage.Credit.Shown);   // WPF FirstShowDesktopWindow :236: "via Scrolller" only on fetched pictures
         t += S.FlashAt + .01; stage.Frame();
         Assert.True(played.Count(p => p == "chip_pop.mp3") >= 2, string.Join(",", played));   // the beat's cue + a picture flash
+        t += S.Length; stage.Frame();
+        Assert.False(stage.Credit.Shown);   // WPF :264: the mark goes when the show ends
     });
 
     [Fact]

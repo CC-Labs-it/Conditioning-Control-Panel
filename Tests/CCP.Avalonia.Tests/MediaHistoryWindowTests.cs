@@ -112,4 +112,51 @@ public sealed class MediaHistoryWindowTests
         }
         return Task.CompletedTask;
     });
+
+    /// <summary>WPF MediaHistoryWindow.xaml.cs:35/192/394: "via Scrolller" sits on the preview of a Scrolller
+    /// row, never on a local or other online row, and goes when nothing is selected.</summary>
+    [Fact]
+    public Task Scrolller_rows_carry_the_via_Scrolller_mark() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-mhw-").FullName;
+        var history = new MediaHistoryService(Path.Combine(dir, "media_history.json"));
+        var before = App.MediaHistory;
+        MediaHistoryWindow? w = null;
+        try
+        {
+            App.MediaHistory = history;
+            history.RecordImages(new[] { Path.Combine(dir, "local.png") });
+            history.RecordImages(new[] { "https://cdn.example.com/x.jpg" });
+            history.RecordImages(new[] { "https://images.scrolller.com/abc.jpg" });
+            w = new MediaHistoryWindow();
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var list = w.FindControl<ListBox>("MediaList")!;
+            Assert.Same(w.FindControl<Image>("PreviewImage")!.Parent, w.Credit.Parent);   // on the preview, as WPF
+
+            list.SelectedIndex = 0;                                          // the Scrolller picture (newest)
+            Assert.True(w.Credit.Shown);
+            list.SelectedIndex = 1;                                          // another site
+            Assert.False(w.Credit.Shown);
+            list.SelectedIndex = 0;
+            list.SelectedIndex = 2;                                          // a local file
+            Assert.False(w.Credit.Shown);
+            list.SelectedIndex = 0;
+            list.SelectedItem = null;
+            Assert.False(w.Credit.Shown);
+        }
+        finally
+        {
+            w?.Close();
+            App.MediaHistory = before;
+            history.Dispose();
+            Dispatcher.UIThread.RunJobs();
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
 }
