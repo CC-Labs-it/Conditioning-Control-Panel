@@ -39,7 +39,8 @@ export function screenAmounts(screen, out = {}) {
   const bm = p.blurMul > 0 ? p.blurMul : 1;
   out.blurMul = gentle && g > 0 ? bm / g : bm;
   out.cover = p.cover > 0 ? p.cover : 0.4;
-  out.cornerScale = p.scale > 0 ? p.scale : st < 1 ? st : 0.35;
+  // Gentle Flash: fx/effects.js sends params.scale (items.gentleFlashScale, a LINEAR scale of the card)
+  out.cornerScale = p.scale > 0 ? p.scale : st < 1 ? st : SCREEN_LOOK.flashCornerScale;
   out.seed = Number.isFinite(p.seed) ? p.seed : 0;
   out.timeMul = gentle ? SCREEN_LOOK.gentleTimeMul : 1;
   return out;
@@ -53,7 +54,7 @@ export const irisRadius = (a) => SCREEN_LOOK.irisFrom + (SCREEN_LOOK.irisTo - SC
  * picture, nudged by the seed; corner mode = scaled down and parked at flashCornerAt.
  * @returns {{ cx: number, cy: number, hw: number, hh: number }}
  */
-export function flashRect(cover, aspect, { corner = false, scale = 0.35, seed = 0 } = {}) {
+export function flashRect(cover, aspect, { corner = false, scale = SCREEN_LOOK.flashCornerScale, seed = 0 } = {}) {
   const a = aspect > 0 ? aspect : 16 / 9;
   let h = Math.sqrt(Math.max(0, cover) * 0.75 * a), w = (h * 4) / 3 / a;
   const fit = Math.min(1, 0.9 / w, 0.9 / h);
@@ -112,6 +113,39 @@ export function meltEdge(a, t, { arms = ITEM_LOOK.meltArms, amp = ITEM_LOOK.melt
   const w = Math.sin(a * 3 + t * hz * 2.1) * 0.5 + Math.sin(a * 5 - t * hz * 1.3) * 0.5;
   const arm = Math.max(0, Math.sin(a * arms + t * hz)) ** 3 * (0.6 + 0.4 * Math.sin(t * hz * 0.7 + a * 2));
   return 1 + w * wobble * 0.5 + arm * amp;
+}
+
+/**
+ * The item card's edge glow at time t (wave 2 item-card, item_edge): a slow breath round cardEdgeGlow,
+ * never faster than cardEdgeHz; Gentle holds it steady at cardEdgeGentle of the glow (no breath).
+ */
+export function cardEdgeGlow(t, gentle) {
+  const L = ITEM_LOOK;
+  if (gentle) return L.cardEdgeGlow * L.cardEdgeGentle;
+  return L.cardEdgeGlow * (1 + L.cardEdgeBreath * Math.sin(2 * Math.PI * L.cardEdgeHz * t));
+}
+
+/**
+ * How the effect-bubble GLB maps onto a bubble of radius R (manifest row, ART.md "item card and effect
+ * bubble"): the shell's centre height above its base, its radius, and the icon carrier's share of the
+ * shell diameter (the living icon sprite is drawn at 2R x carrier). Falls back to the art assumptions.
+ */
+export function shellFit(row) {
+  const size = row && row.sizeM ? row.sizeM[0] : 1.1;
+  const radius = size / 2, centreY = row && row.billboardCentreM ? row.billboardCentreM[1] : radius;
+  const carrier = row && row.billboardSizeM ? row.billboardSizeM[0] / size : 0.7 / 1.1;
+  return { radius, centreY, carrier };
+}
+
+/**
+ * The largest radius (m) that keeps a bubble at distance d under frac of the view's height: a sphere of
+ * radius R spans 2 asin(R / d), and that angle fills tan(half) / tan(vFov / 2) of the frame.
+ * Returns R unchanged without a distance or a field of view.
+ */
+export function nearCapR(R, d, vFovDeg, frac = ITEM_LOOK.nearMaxFrac) {
+  if (!(d > 0) || !(vFovDeg > 0) || !(frac > 0)) return R;
+  const half = Math.atan(frac * Math.tan((vFovDeg * Math.PI) / 360));
+  return Math.min(R, d * Math.sin(half));
 }
 
 /**

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tierOf, comp, moteAt, popPhase, popMote, rollIconAt, meltEdge, createPool } from '../render/items/fxmath.js';
+import { tierOf, comp, moteAt, popPhase, popMote, rollIconAt, meltEdge, createPool, nearCapR } from '../render/items/fxmath.js';
 import { ITEM_TIERS, ITEM_LOOK as L, MOTE_TINT } from '../render/items/look.js';
 import { ITEM_IDS } from '../sim/itemTable.js';
 
@@ -76,4 +76,18 @@ test('items: the pool keeps its cap, reuses objects and hides what a frame did n
   pool.end();
   assert.deepEqual([...hidden].sort(), [1, 2]);
   assert.ok(b && c && pool.size === 3);
+});
+
+test('near cap: a bubble near the camera spans at most nearMaxFrac of the view height', () => {
+  const fov = 60, t = Math.tan((fov * Math.PI) / 360);
+  for (const d of [0.5, 2, 3.2, 6]) {
+    const R = nearCapR(5, d, fov);
+    const share = Math.tan(Math.asin(Math.min(1, R / d))) / t;
+    assert.ok(share <= L.nearMaxFrac + 1e-9, `d ${d}: ${share}`);
+  }
+  assert.ok(L.nearMaxFrac > 0 && L.nearMaxFrac <= 0.08);
+  assert.equal(nearCapR(0.6, 200, fov), 0.6);           // far bubbles keep their size
+  assert.equal(nearCapR(0.6, 0, fov), 0.6);             // no distance: unchanged
+  assert.equal(nearCapR(0.6, 3, undefined), 0.6);       // no camera fov: unchanged
+  assert.equal(L.playerHeldInWorld, false);              // the HUD slot shows the player's own
 });

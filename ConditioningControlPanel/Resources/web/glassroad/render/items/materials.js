@@ -3,14 +3,16 @@
  * glass shell: iridescent rim, a highlight, optional gold tint or shell-only for shields and pops).
  * moteCloud: the drifting motes, additive. meltPuddle: the Melt trap, the spiral mask on the road
  * with a wobbling, dripping edge. ghost: Echo copies. ring: the Pink wave.
+ * Wave 2: shellCloud is the effect-bubble GLB shell instanced (one draw) round a bare icon sprite
+ * (bubbleCloud mode 4); cardEdge is the item card's glowing item_edge.
  */
 import {
   Sprite, SpriteNodeMaterial, MeshBasicNodeMaterial, InstancedBufferAttribute, DynamicDrawUsage, AdditiveBlending,
-  DoubleSide, Color,
+  DoubleSide, Color, InstancedMesh, Matrix4, Quaternion, Vector3,
 } from 'three/webgpu';
 import {
   instancedDynamicBufferAttribute, uniform, uv, vec2, vec3, float, texture, mix, smoothstep, sin, cos, atan, log, length,
-  max, pow, floor, mod, normalize, cameraPosition, normalView, positionViewDirection, abs, step,
+  max, pow, floor, mod, normalize, cameraPosition, normalView, positionViewDirection, abs, step, dot,
 } from 'three/tsl';
 import { ITEM_LOOK as L } from './look.js';
 import { ATLAS_GRID } from './living.js';
@@ -42,14 +44,15 @@ function cloud(cap, material, vec4Name) {
   };
 }
 
-/** info = (cell or -1, alpha, mode 0 icon / 1 gold icon / 2 shell / 3 gold shell, seed). */
+/** info = (cell or -1, alpha, mode 0 icon / 1 gold icon / 2 shell / 3 gold shell / 4 bare icon in a GLB shell, seed). */
 export function bubbleCloud(cap, atlas) {
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
   const c = cloud(cap, m, 'info'), { pos, size, v } = c.nodes, u = { time: uniform(0) };
   // pulled toward the camera by its radius so the front of the glass sits in front of what it holds
   m.positionNode = pos.add(normalize(cameraPosition.sub(pos)).mul(size.mul(0.5)));
   m.scaleNode = size;
-  const g = ATLAS_GRID, cell = v.x, mode = v.z, shell = step(1.5, mode), gold = mod(mode, 2);
+  const g = ATLAS_GRID, cell = v.x, mode = v.z, bare = step(3.5, mode), dressed = bare.oneMinus();
+  const shell = step(1.5, mode).mul(dressed), gold = mod(mode, 2).mul(dressed);
   const p = uv(), d = length(p.sub(0.5)).mul(2);
   const auv = vec2(p.x.add(mod(cell, g)), p.y.add(float(g - 1).sub(floor(cell.div(g))))).div(g);
   const icon = texture(atlas, auv);
@@ -63,8 +66,52 @@ export function bubbleCloud(cap, atlas) {
   const body = smoothstep(0.98, 1.0, dn).oneMinus().mul(L.shellAlpha).mul(shell);
   const glass = tint.mul(rim.mul(L.shellRim)).add(spec);
   m.colorNode = mix(glass.add(tint.mul(body)), icon.rgb, iconA);
-  m.opacityNode = max(iconA, max(rim.mul(0.85), max(spec.mul(0.7), body))).mul(v.y);
+  // a bare icon draws only the icon: the GLB shell around it is the glass
+  m.opacityNode = max(iconA, max(rim.mul(0.85), max(spec.mul(0.7), body)).mul(dressed)).mul(v.y);
   return { ...c, uniforms: u, dispose: () => m.dispose() };
+}
+
+/**
+ * The effect-bubble GLB shell (effect_shell), instanced: one draw for every 3D bubble. geometry is the
+ * shell centred on its middle at radius 1 (visuals.js builds it with shellFit). push(x, y, z, R, alpha,
+ * seed). A Fresnel glass in place of the GLB clearcoat / iridescence: a clear centre, an iridescent rim
+ * drifting slowly with time and seed, one highlight. Back faces culled, drawn after the icons inside.
+ */
+export function shellCloud(geometry, cap) {
+  const aInfo = new InstancedBufferAttribute(new Float32Array(cap * 2), 2).setUsage(DynamicDrawUsage);
+  const info = instancedDynamicBufferAttribute(aInfo, 'vec2'), u = { time: uniform(0) };
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+  const fres = pow(float(1).sub(abs(dot(normalView, positionViewDirection))), L.shellGlassPow);
+  const hue = cos(vec3(0, 2.1, 4.2).add(fres.mul(4)).add(u.time.mul(0.6)).add(info.y)).mul(0.5).add(0.5);
+  const tint = mix(hue, vec3(1, 1, 1), L.shellWhite);
+  const spec = pow(max(dot(normalView, normalize(vec3(-0.45, 0.55, 0.7))), 0), 48).mul(L.shellGlassSpec);
+  m.colorNode = tint.mul(fres.mul(L.shellGlassRim)).add(spec);
+  m.opacityNode = max(fres.mul(0.85), max(spec, float(L.shellGlassBody))).mul(info.x);
+  const mesh = new InstancedMesh(geometry, m, cap);
+  mesh.count = 0; mesh.frustumCulled = false; mesh.renderOrder = 4;
+  const M = new Matrix4(), P = new Vector3(), Qi = new Quaternion(), Sc = new Vector3();
+  let n = 0;
+  return {
+    mesh, uniforms: u, cap,
+    get n() { return n; },
+    begin() { n = 0; },
+    push(x, y, z, R, alpha, seed) {
+      if (n >= cap) return false;
+      mesh.setMatrixAt(n, M.compose(P.set(x, y, z), Qi, Sc.setScalar(R)));
+      aInfo.array[n * 2] = alpha; aInfo.array[n * 2 + 1] = seed; n++;
+      return true;
+    },
+    end() { mesh.count = n; mesh.visible = n > 0; mesh.instanceMatrix.needsUpdate = true; aInfo.needsUpdate = true; },
+    dispose() { m.dispose(); geometry.dispose(); },
+  };
+}
+
+/** The item card's item_edge: an unlit glow whose strength the caller sets each frame (fxmath.cardEdgeGlow). */
+export function cardEdge(hex) {
+  const u = { glow: uniform(1) };
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = col3(hex).mul(u.glow);
+  return { material: m, uniforms: u };
 }
 
 /** col = (r, g, b, alpha) 0..1 per mote; additive soft dots. */
@@ -77,8 +124,11 @@ export function moteCloud(cap) {
   return { ...c, dispose: () => m.dispose() };
 }
 
-/** The Melt trap puddle on a 2 x 2 plane (local xy, lay it on the road). mask = sky-spiral-open-mask or null. */
-export function meltPuddle(mask) {
+/**
+ * The Melt trap puddle on a 2 x 2 plane (local xy, lay it on the road). melt = the wave 2 fx-melt-spiral
+ * mask (broad warped arms with drips; preferred), mask = sky-spiral-open-mask; either may be null.
+ */
+export function meltPuddle(mask, melt = null) {
   const u = { time: uniform(0), alpha: uniform(1), seed: uniform(0) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const lp = uv().mul(2).sub(1), span = 1 + L.meltWobble * 0.5 + L.meltDripAmp;
@@ -90,12 +140,15 @@ export function meltPuddle(mask) {
   const inside = smoothstep(edge.sub(0.07), edge, r).oneMinus();
   const turn = u.time.mul(L.meltTurnRadps).add(sin(r.mul(6).sub(u.time.mul(1.2))).mul(0.25));
   const q = lp.mul(0.5).div(edge), qr = vec2(q.x.mul(cos(turn)).sub(q.y.mul(sin(turn))), q.x.mul(sin(turn)).add(q.y.mul(cos(turn)))).add(0.5);
-  const spiral0 = mask ? texture(mask, qr).r : sin(a.mul(5).add(log(r.add(0.02)).mul(6)).sub(u.time)).mul(0.5).add(0.5);
+  const tex = melt || mask;
+  const spiral0 = tex ? texture(tex, qr).r : sin(a.mul(5).add(log(r.add(0.02)).mul(6)).sub(u.time)).mul(0.5).add(0.5);
   const spiral = smoothstep(L.meltBands[0], L.meltBands[1], spiral0);
   const gloss = smoothstep(edge.sub(0.3), edge.sub(0.08), r).mul(inside).mul(0.45)
     .add(smoothstep(0, 0.25, length(lp.sub(vec2(sin(u.time.mul(0.4)).mul(0.3), 0.25)))).oneMinus().mul(0.35));
   m.colorNode = mix(col3(L.meltDark), col3(L.meltPink), spiral).add(col3(L.meltGloss).mul(gloss));
-  m.opacityNode = inside.mul(u.alpha).mul(0.92);
+  // the melt mask is strength: its arms and drips read solid, the gaps between keep meltFloor
+  const body = melt ? spiral0.mul(1 - L.meltFloor).add(L.meltFloor) : float(1);
+  m.opacityNode = inside.mul(body).mul(u.alpha).mul(0.92);
   return { material: m, uniforms: u };
 }
 

@@ -20,8 +20,10 @@ export const MOTE_TINT = {
 export const ITEM_LOOK = {
   // bubbles (world metres)
   bubbleR: 0.55, heldR: 0.42, heldUpM: 2.1, heldBobM: 0.12, heldBobHz: 0.6,
-  // the player's own rides low in the cup's back right, under the chase camera's sightline (the HUD slot shows it too)
-  playerHeldScale: 0.7, playerHeldAt: [0.8, 1.05, 0.35],
+  // the player's own rides low in the cup's back right; hidden in the world while the HUD slot shows it
+  playerHeldScale: 0.7, playerHeldAt: [0.8, 1.05, 0.35], playerHeldInWorld: false,
+  // a bubble near the camera shrinks so it spans at most this share of the view's height (shields exempt)
+  nearMaxFrac: 0.08,
   throwR: 0.6, lobR: 0.9, trapR: 0.5, trapHoverM: 0.45, trapUnarmedAlpha: 0.45, pickupR: 0.7, pickupHoverM: 1.3,
   shellRim: 0.9, shellAlpha: 0.12, shellWhite: 0.55, iconFill: 0.727, shellFill: 0.96, // the art/fx bubble spans 186 of 256 px
   rollSwapS: 0.14, rollSwapGentleS: 0.3,
@@ -30,6 +32,13 @@ export const ITEM_LOOK = {
   // item boxes: a spinning card that turns into a bubble when driven through
   boxSizeM: 1.6, boxHoverM: 1.25, boxBobM: 0.15, boxBobHz: 0.5, boxSpinRadps: 1.4, boxTurnS: 0.35,
   boxCards: ['card-drop', 'card-lens', 'card-orbit', 'card-petal'], boxColour: '#ffd1ec', echoColour: '#cdc3f0',
+  // wave 2: the item-card GLB (preferred over boxCards) with a slowly breathing edge, height in metres
+  boxCard: 'item-card', boxCardM: 1.45, cardEdgeColour: '#ff7cc8', cardEdgeGlow: 1.6, cardEdgeBreath: 0.3,
+  cardEdgeHz: 0.4, cardEdgeGentle: 0.6,
+  // wave 2: held, thrown, trap and box-turn bubbles wear the effect-bubble GLB shell (instanced, one draw)
+  shellModel: 'effect-bubble', shellGlassPow: 2.4, shellGlassRim: 1.0, shellGlassBody: 0.06, shellGlassSpec: 0.9,
+  // the Melt trap prefers the wave 2 melt-spiral mask; the puddle keeps this share of alpha between its arms
+  meltMask: 'fx-melt-spiral', meltFloor: 0.55,
   // pops: a ring that opens and a spray of motes
   popRingM: [0.4, 2.4], popMotes: 12, popSpeedMps: 3.2, popGravityMps2: 3,
   // melt puddle (trap): the spiral mask, wobbling and dripping
@@ -51,6 +60,7 @@ export const SCREEN_LOOK = {
   // Flash: a rounded card, the B1 stand-in picture is the spiral icon on paper
   flashAlpha: 0.9, flashRound: 0.06, flashPaper: '#fff3fa', flashInk: '#ff4fa3', flashOffset: [0.06, -0.04],
   flashPop: 0.08, flashCornerAt: [0.16, 0.5], flashShadow: 0.25,
+  flashCornerScale: 0.35,  // only when fx sends no params.scale (Gentle sends items.gentleFlashScale)
   // Spiral: turning arms over the middle
   spiralArms: 5, spiralTwist: 6, spiralTurnRadps: 1.6, spiralAlpha: 0.42, spiralR: [0.12, 0.62],
   spiralColour: '#ff8fd0', spiralDim: 0.55,

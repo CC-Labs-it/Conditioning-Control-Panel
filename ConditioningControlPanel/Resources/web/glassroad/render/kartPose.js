@@ -96,3 +96,84 @@ export function moteDensity(deepW, L, gentle) {
 export function bumpCount(dv, L) {
   return Math.round(L.bumpSparks[0] + (L.bumpSparks[1] - L.bumpSparks[0]) * clamp(dv / 8, 0, 1));
 }
+
+// ---- rivals (wave 2 art): colourways from art/palettes.json `karts`, pushed apart, one accessory each ----
+
+/** Rival look numbers; LOOK.rival (render/look.js, integrator) overrides any of them. */
+export const RIVAL_DEFAULTS = {
+  // ART.md "Tint binding": the porcelain the base atlas was painted with, linear
+  porcelainRef: [0.95597335, 0.83076988, 0.8796224],
+  cupSatMul: 1.8, cupSatMin: 0.5, cupLight: [0.5, 0.72],
+  saucerSatMul: 1.5, saucerSatMin: 0.35, saucerLight: [0.55, 0.8],
+  // a near-grey colourway (pearl) stays pale instead of turning into a weak pink
+  paleBelow: 0.3, paleSatMul: 0.6, paleLight: 0.86,
+  rimGain: 0.85, rimPow: 2.2,
+  rimHex: { petal: '#ff5fae', mint: '#3fe8c4', honey: '#ffbf2e', periwinkle: '#7f86ff', apricot: '#ff7d45', tide: '#3fb4ff', pearl: '#f4ecff' },
+  accessories: ['head-bow', 'head-cat-ears', 'head-halo', 'head-spiral-crown'],
+};
+
+export const rivalNumbers = (L) => ({ ...RIVAL_DEFAULTS, ...((L && L.rival) || {}) });
+
+/** '#rrggbb' -> sRGB 0..1. */
+export function hexRgb(hex) {
+  const n = parseInt(String(hex).replace('#', ''), 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => c / 255);
+}
+
+export const srgbToLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+
+function toHsl([r, g, b]) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [((h * 60) + 360) % 360, s, l];
+}
+
+function fromHsl([h, s, l]) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r + m, g + m, b + m];
+}
+
+/** Push an sRGB colour apart for speed: more saturation inside a lightness band; a near-grey one stays pale. */
+export function pushColour(rgb, satMul, satMin, [lo, hi], R = RIVAL_DEFAULTS) {
+  const [h, s, l] = toHsl(rgb);
+  if (s < R.paleBelow) return fromHsl([h, s * R.paleSatMul, Math.max(l, R.paleLight)]);
+  return fromHsl([h, clamp(Math.max(satMin, s * satMul), 0, 1), clamp(l, lo, hi)]);
+}
+
+/** The accessory id for racer i (null for the player): the colourway's own, else spread over the four. */
+export function accessoryFor(i, table, L) {
+  if (i <= 0) return null;
+  const R = rivalNumbers(L), list = table ? Object.values(table) : [];
+  const e = list.length ? list[(i - 1) % list.length] : null;
+  return (e && e.accessory) || R.accessories[(i - 1) % R.accessories.length];
+}
+
+/**
+ * Racer i's look (null for the player, who keeps EMI's colours). table = palettes.json `karts` (or null:
+ * then LOOK.kartTints). Returns sRGB cup / saucer / rim, the linear multipliers the kart shader applies
+ * (tintLinear / porcelainRef, ART.md), the name and the accessory id.
+ */
+export function rivalLook(i, table, L) {
+  if (i <= 0) return null;
+  const R = rivalNumbers(L), list = table ? Object.entries(table) : [];
+  let name, cupHex, saucerHex, accessory;
+  if (list.length) {
+    const [n, e] = list[(i - 1) % list.length];
+    name = n; cupHex = e.cup; saucerHex = e.saucer || e.cup; accessory = e.accessory;
+  } else {
+    const t = (L && L.kartTints) || ['#ffffff'];
+    name = 'tint' + i; cupHex = saucerHex = t[i % t.length];
+  }
+  const cup = pushColour(hexRgb(cupHex), R.cupSatMul, R.cupSatMin, R.cupLight, R);
+  const saucer = pushColour(hexRgb(saucerHex), R.saucerSatMul, R.saucerSatMin, R.saucerLight, R);
+  const rim = R.rimHex[name] ? hexRgb(R.rimHex[name]) : pushColour(cup, 2, 0.8, [0.55, 0.65], R);
+  const mul = (c) => c.map((v, k) => srgbToLinear(v) / R.porcelainRef[k]);
+  return {
+    name, cup, saucer, rim, cupMul: mul(cup), saucerMul: mul(saucer), rimLin: rim.map(srgbToLinear),
+    accessory: accessory || accessoryFor(i, null, L),
+    hex: '#' + rim.map((v) => Math.round(clamp(v, 0, 1) * 255).toString(16).padStart(2, '0')).join(''),
+  };
+}

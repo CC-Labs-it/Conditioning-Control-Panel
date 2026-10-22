@@ -5,6 +5,9 @@
  * that shrink into a bubble when driven through; the Melt trap is a wobbling spiral puddle; the
  * Pink wave a ring; Echo three rim-lit copies. Pools and per-tier caps from render/items/look.js.
  * Gentle: half speed, no Echo flicker. Reads ItemsView only; ages (t) are seconds since spawn.
+ * Wave 2 art (each optional, the look above is the fallback): boxes are the item-card GLB with a slowly
+ * breathing edge; held, thrown, trap and box-turn bubbles are the effect-bubble GLB shell (instanced)
+ * round the living icon; the Melt puddle samples fx-melt-spiral.
  */
 import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion, Box3, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -12,14 +15,28 @@ import { S } from '../../sim/state.js';
 import { ITEM_IDS } from '../../sim/itemTable.js';
 import { Q } from '../quality.js';
 import { ITEM_LOOK as L, ITEM_TIERS, MOTE_TINT } from './look.js';
-import { tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool } from './fxmath.js';
+import { tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, cardEdgeGlow, shellFit, nearCapR } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
-import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow } from './materials.js';
+import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge } from './materials.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
 const OFF = [0, 0, 0];
 const TINTS = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k, s.split(',').map((x) => Number(x) / 255)]));
-const MODE = { icon: 0, goldIcon: 1, shell: 2, goldShell: 3 };
+const MODE = { icon: 0, goldIcon: 1, shell: 2, goldShell: 3, bare: 4 };
+
+/** The effect_shell geometry from the effect-bubble GLB, centred on its middle at radius 1; null without it. */
+function shellGeometry(model, fit) {
+  if (!model) return null;
+  let geo = null;
+  model.scene.updateMatrixWorld(true);
+  model.scene.traverse((o) => {
+    if (geo || !o.isMesh || !o.material || o.material.name !== 'effect_shell') return;
+    geo = o.geometry.clone().applyMatrix4(o.matrixWorld);
+  });
+  if (!geo) return null;
+  const k = 1 / (fit.radius || 0.55);
+  return geo.translate(0, -fit.centreY, 0).scale(k, k, k);
+}
 
 /** N = the road normal n (up when missing). */
 function normal(n) {
@@ -42,15 +59,29 @@ export function createItemVisuals(scene, art, feel) {
   const bubbles = bubbleCloud(top.bubbles + 24, icons.texture), motes = moteCloud(top.bubbles * top.motes + 24 * L.popMotes);
   root.add(bubbles.sprite, motes.sprite);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
+  const meltTex = art && art.tex ? art.tex(L.meltMask) : null;
   const gentle = () => !!feel.get('gentle.on');
   let timeS = 0;
+
+  // ---- wave 2: the effect-bubble shell (instanced) and the item card's glowing edge ----
+  const fit = shellFit(art && art.row ? art.row(L.shellModel) : null);
+  const shellGeo = shellGeometry(art && art.model ? art.model(L.shellModel) : null, fit);
+  const shells = shellGeo ? shellCloud(shellGeo, top.bubbles) : null;
+  if (shells) root.add(shells.mesh);
+  const cardModel = art && art.model ? art.model(L.boxCard) : null;
+  const edge = cardModel ? cardEdge(L.cardEdgeColour) : null;
 
   // ---- boxes: one card per track box, built on first sight ----
   const boxes = [], prevAlive = [], turnT = [];
   function buildBox(i) {
     const id = L.boxCards[i % L.boxCards.length], g = art && art.model ? art.model(id) : null;
     const o = new Group();
-    if (g) {
+    if (cardModel) {
+      // item-card: base-centred, 1.2 m tall; scaled to boxCardM, its edge swapped for the shared glow
+      const card = cloneSkinned(cardModel.scene), h = new Box3().setFromObject(card).getSize(W).y || 1.2;
+      card.traverse((m) => { if (m.isMesh && m.material && m.material.name === 'item_edge') m.material = edge.material; });
+      card.scale.setScalar(L.boxCardM / h); o.add(card);
+    } else if (g) {
       const card = cloneSkinned(g.scene), r = new Box3().setFromObject(card).getBoundingSphere({ radius: 1, center: V }).radius || 1;
       card.scale.setScalar(L.boxSizeM / 2 / r); o.add(card);
     } else {
@@ -67,7 +98,7 @@ export function createItemVisuals(scene, art, feel) {
   // ---- pooled meshes: melt puddles, pink waves, echo copies ----
   const plane = new PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
   const puddles = createPool(top.puddles, () => {
-    const pm = meltPuddle(mask), mesh = new Mesh(plane, pm.material);
+    const pm = meltPuddle(mask, meltTex), mesh = new Mesh(plane, pm.material);
     mesh.frustumCulled = false; mesh.renderOrder = 1; root.add(mesh);
     return { mesh, u: pm.uniforms };
   }, (e) => { e.mesh.visible = false; });
@@ -96,9 +127,17 @@ export function createItemVisuals(scene, art, feel) {
       motes.push(x + OFF[0], y + OFF[1], z + OFF[2], m.size, c[0], c[1], c[2], m.alpha * alpha);
     }
   }
-  let drawn = 0;
-  function bubble(x, y, z, id, R, alpha = 1, mode = MODE.icon, seed = 0, moteN = -1) {
-    if (drawn >= tierOf(Q.name).bubbles) return;
+  let drawn = 0, cam = null;
+  /** R shrunk so a bubble at (x, y, z) stays under nearMaxFrac of the view's height (no camera: unchanged). */
+  function capR(x, y, z, R) {
+    if (!cam || !cam.position) return R;
+    const p = cam.position;
+    return nearCapR(R, Math.hypot(x - p.x, y - p.y, z - p.z), cam.fov, L.nearMaxFrac);
+  }
+  /** free: skip the near cap (shields wrap a kart and must stay round it). */
+  function bubble(x, y, z, id, R, alpha = 1, mode = MODE.icon, seed = 0, moteN = -1, free = false) {
+    if (!free) R = capR(x, y, z, R);
+    if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     const cell = mode >= MODE.shell ? -1 : cellOf(id);
     if (cell >= 0) icons.use(id);
     if (!bubbles.push(x, y, z, (R * 2) / (mode >= MODE.shell ? L.shellFill : L.iconFill), cell, alpha, mode, seed)) return;
@@ -106,17 +145,33 @@ export function createItemVisuals(scene, art, feel) {
     const n = moteN >= 0 ? moteN : tierOf(Q.name).motes;
     if (n > 0) addMotes(x, y, z, R, id, n, seed, alpha);
   }
+  /** A 3D effect bubble (held, thrown, trap, box turn): the GLB shell round a bare living icon; the sprite bubble without it. */
+  function bubble3d(x, y, z, id, R, alpha = 1, seed = 0, moteN = -1) {
+    if (!shells) { bubble(x, y, z, id, R, alpha, MODE.icon, seed, moteN); return; }
+    R = capR(x, y, z, R);
+    if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
+    if (!shells.push(x, y, z, R, alpha, seed)) return;
+    icons.use(id);
+    bubbles.push(x, y, z, 2 * R * fit.carrier, cellOf(id), alpha, MODE.bare, seed);
+    drawn++;
+    const n = moteN >= 0 ? moteN : tierOf(Q.name).motes;
+    if (n > 0) addMotes(x, y, z, R, id, n, seed, alpha);
+  }
   const kartPos = (k) => V.set(k.st[S.posX], k.st[S.posY], k.st[S.posZ]);
   const kartQuat = (k) => QT.set(k.st[S.quatX], k.st[S.quatY], k.st[S.quatZ], k.st[S.quatW]);
 
-  function update(view, dt, karts = []) {
+  function update(view, dt, karts = [], camera = null) {
     dt = Math.max(0, Math.min(dt || 0, 0.1));
+    cam = camera;
     const soft = gentle(), rate = soft ? 0.5 : 1;
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
+    if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
+    if (edge) edge.uniforms.glow.value = cardEdgeGlow(timeS, soft);
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); drawn = 0;
-    if (!view) { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); return; }
+    if (!view) { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); if (shells) shells.end(); return; }
     const showS = feel.get('items.popShowS') || 0.6;
+    const mid = cardModel ? L.boxCardM / 2 : 0;   // the bubble rises out of the card's middle
 
     // boxes: spinning cards; driven through, the card spins away and a bubble rises out of it
     (view.boxes || []).forEach((b, i) => {
@@ -131,7 +186,8 @@ export function createItemVisuals(scene, art, feel) {
         const q = Math.min(1, turnT[i] / L.boxTurnS), rise = Math.max(0, turnT[i] - L.boxTurnS) / showS;
         o.visible = q < 1; o.scale.setScalar(1 - q);
         o.quaternion.multiply(QS.setFromAxisAngle(UP, q * q * 9));
-        bubble(o.position.x + N.x * rise, o.position.y + N.y * rise, o.position.z + N.z * rise, 'box', L.bubbleR * Math.min(1, q * 1.4), 1 - rise, MODE.icon, i);
+        const up = rise + mid * (1 - q);
+        bubble3d(o.position.x + N.x * up, o.position.y + N.y * up, o.position.z + N.z * up, 'box', L.bubbleR * Math.min(1, q * 1.4), 1 - rise, i);
       } else {
         turnT[i] = undefined;
         o.visible = !!b.alive; o.scale.setScalar(Math.max(0.01, b.k === undefined ? 1 : b.k));
@@ -151,15 +207,16 @@ export function createItemVisuals(scene, art, feel) {
       const k = karts[h.racer];
       if (!k) continue;
       const me = h.racer === 0, [sx, sy, sz] = me ? L.playerHeldAt : [0, L.heldUpM, 0];
+      if (me && !L.playerHeldInWorld) continue;   // the HUD item slot shows the player's own
       const bob = Math.sin(timeS * L.heldBobHz * 6.283 + h.racer) * L.heldBobM * (me ? 0.5 : 1);
       kartPos(k); W.set(sx, sy + bob, sz).applyQuaternion(kartQuat(k)).add(V);
       const id = h.rolling ? rollIconAt(h.rollT, ITEM_IDS, soft ? L.rollSwapGentleS : L.rollSwapS) : h.id;
-      bubble(W.x, W.y, W.z, id || 'box', L.heldR * (me ? L.playerHeldScale : 1), 1, MODE.icon, h.racer * 7, me ? 4 : -1);
+      bubble3d(W.x, W.y, W.z, id || 'box', L.heldR * (me ? L.playerHeldScale : 1), 1, h.racer * 7, me ? 4 : -1);
     }
 
     // throws and lobs: the sim's p already carries the arc
     for (const pr of view.projectiles || []) {
-      bubble(comp(pr.p, 0), comp(pr.p, 1), comp(pr.p, 2), pr.kind, pr.mode === 'lob' ? L.lobR : L.throwR, 1, MODE.icon, (pr.id | 0) * 3);
+      bubble3d(comp(pr.p, 0), comp(pr.p, 1), comp(pr.p, 2), pr.kind, pr.mode === 'lob' ? L.lobR : L.throwR, 1, (pr.id | 0) * 3);
     }
 
     // traps: Melt is a puddle; any other kind sits on the road as a low bubble
@@ -175,7 +232,7 @@ export function createItemVisuals(scene, art, feel) {
       }
       normal(tr.n);
       const lift = L.trapHoverM + Math.sin(timeS * 1.2 + (tr.id | 0)) * 0.08;
-      bubble(comp(tr.p, 0) + N.x * lift, comp(tr.p, 1) + N.y * lift, comp(tr.p, 2) + N.z * lift, tr.kind, L.trapR, alpha, MODE.icon, (tr.id | 0) * 5);
+      bubble3d(comp(tr.p, 0) + N.x * lift, comp(tr.p, 1) + N.y * lift, comp(tr.p, 2) + N.z * lift, tr.kind, L.trapR, alpha, (tr.id | 0) * 5);
     }
 
     // Pink wave: a ring opening along the road
@@ -196,7 +253,7 @@ export function createItemVisuals(scene, art, feel) {
       const cx = V.x + W.x * L.shieldUpM, cy = V.y + W.y * L.shieldUpM, cz = V.z + W.z * L.shieldUpM;
       const fade = Math.min(1, (sh.k === undefined ? 1 : sh.k) * 4);
       if (sh.kind === 'glass' || sh.kind === 'golden') {
-        bubble(cx, cy, cz, sh.kind, L.shieldR, fade, sh.kind === 'golden' ? MODE.goldShell : MODE.shell, sh.racer, 0);
+        bubble(cx, cy, cz, sh.kind, L.shieldR, fade, sh.kind === 'golden' ? MODE.goldShell : MODE.shell, sh.racer, 0, true);
         if (sh.kind === 'golden') addMotes(cx, cy, cz, L.shieldR * 0.8, 'golden', Math.round(L.goldMotes * tierOf(Q.name).motes / top.motes), sh.racer * 11, fade);
         continue;
       }
@@ -230,6 +287,7 @@ export function createItemVisuals(scene, art, feel) {
 
     icons.tick(dt, timeS, soft);
     bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end();
+    if (shells) shells.end();
   }
 
   return {
@@ -237,6 +295,8 @@ export function createItemVisuals(scene, art, feel) {
     dispose() {
       scene.remove(root);
       icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose();
+      if (shells) shells.dispose();
+      if (edge) edge.material.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());
       copies.each((e) => { e.obj.traverse((m) => { if (m.isMesh && m.material) m.material.dispose(); }); });
       for (const m of spare) m.dispose();
