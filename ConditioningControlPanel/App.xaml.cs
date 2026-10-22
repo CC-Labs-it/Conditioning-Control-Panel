@@ -251,6 +251,8 @@ namespace ConditioningControlPanel
         static App()
         {
             CorePaths.EffectiveAssetsProvider = () => EffectiveAssetsPath;
+            // Chaos bubble payloads are Core data; what firing one does is this head's.
+            Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
@@ -2729,7 +2731,7 @@ namespace ConditioningControlPanel
             V2Purchase = new Services.Prizes.V2PurchaseService(
                 new Services.BackRoom.BackRoomApi(null, Services.BackRoom.BackRoomApi.AppIdentity, adoptSp: null),
                 () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId,
-                Services.Prizes.V2PurchaseRule.OwnsPrize,
+                id => Services.Prizes.V2PurchaseRule.OwnsPrize(id, Services.Prizes.PrizeGrants.IsGranted),
                 () => Settings?.Current?.SkillPoints ?? 0,
                 // The account is captured when the reply lands and checked AGAIN inside the
                 // marshalled write, the `canAdopt` shape BackRoomBridge.AdoptSp uses: the write
