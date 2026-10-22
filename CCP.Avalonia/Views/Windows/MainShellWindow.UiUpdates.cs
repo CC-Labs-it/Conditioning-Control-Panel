@@ -96,10 +96,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The last leaderboard page the pills read (WPF App.Leaderboard OnlineUsers/YourRank/
         /// YourTotal/Entries, LeaderboardService.cs:106-108). LeaderboardTabView calls it when a page lands
         /// and repaints its host, as WPF's post-refresh UpdateStatPills does (MainWindow.xaml.cs:3721).</summary>
-        internal static void NoteLeaderboardPage(int onlineUsers, int? yourRank, int? yourTotal, int entries)
-            => (_lbOnline, _lbPercentile, _lbEntries) = (onlineUsers,
-                LeaderboardClient.PlayerPercentile(yourRank, yourTotal, Array.Empty<LeaderboardEntryData>(), 0, null, null, null), entries);
-
         internal static void NoteLeaderboardPage<T>(LeaderboardPage<T> page) where T : LeaderboardEntryData
         {
             _lbOnline = page.OnlineUsers;
@@ -123,17 +119,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _statPillsClosed;
 
+        /// <summary>The signed-in startup fetch started on Opened; tests await it and zero the delay.</summary>
+        internal Task StartupPillFetch { get; private set; } = Task.CompletedTask;
+        internal static TimeSpan StartupPillFetchDelay = TimeSpan.FromMilliseconds(500);
+
+        private async Task StartupPillFetchAsync()
+        {
+            if (!CoreAccount.IsLoggedIn || CoreSettings.Current.OfflineMode) return;
+            await Task.Delay(StartupPillFetchDelay);
+            if (!_statPillsClosed) await RefreshStatPillLeaderboardAsync();
+        }
+
         /// <summary>WPF StartStatPillUpdateTimer (MainWindow.xaml.cs:3726): paint now, then every 30 s.</summary>
         private void InitializeStatPills()
         {
             UpdateStatPills();
             // WPF MainWindow.xaml.cs:3716: signed-in startup fetch, after the window has loaded.
-            Opened += async (_, _) =>
-            {
-                if (!CoreAccount.IsLoggedIn || CoreSettings.Current.OfflineMode) return;
-                await Task.Delay(500);
-                if (!_statPillsClosed) await RefreshStatPillLeaderboardAsync();
-            };
+            Opened += (_, _) => StartupPillFetch = StartupPillFetchAsync();
             _statPillTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(30) };
             _statPillTimer.Tick += (_, _) => UpdateStatPills();
             _statPillTimer.Start();

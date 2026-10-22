@@ -23,9 +23,11 @@ public sealed partial class AccountSeedTests
         var oldOffline = s.OfflineMode;
         var oldSkills = s.UnlockedSkills.ToList();
         var wire = new BoardWire();
+        var oldDelay = MainShellWindow.StartupPillFetchDelay;
         try
         {
             LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
+            MainShellWindow.StartupPillFetchDelay = TimeSpan.Zero;
             CoreAccount.IsLoggedInProvider = () => true;
             s.OfflineMode = false;
             s.UnlockedSkills.AddRange(new[] { "hive_mind", "popular_girl" });
@@ -33,15 +35,15 @@ public sealed partial class AccountSeedTests
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                        .UseSkia().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions
+                        .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions
                             { UseHeadlessDrawing = false }).SetupWithoutStarting();
                 global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
                 var shell = new MainShellWindow();
                 try
                 {
                     shell.Show();
-                    await Task.Delay(700);
+                    await shell.StartupPillFetch;
                     Assert.Single(wire.Seen);
                     Assert.Contains("season=all-time", wire.Seen[0]);
                     Assert.Equal("2", shell.Named<TextBlock>("TxtPillOnlineUsers")!.Text);
@@ -72,7 +74,8 @@ public sealed partial class AccountSeedTests
         {
             LeaderboardTabView.NewClient = oldClient; s.OfflineMode = oldOffline;
             s.UnlockedSkills.Clear(); s.UnlockedSkills.AddRange(oldSkills);
-            MainShellWindow.NoteLeaderboardPage(0, null, null, 0);
+            MainShellWindow.StartupPillFetchDelay = oldDelay;
+            MainShellWindow.NoteLeaderboardPage(new LeaderboardPage<LeaderboardEntryData>());
         }
     }
 }

@@ -20,8 +20,8 @@ public sealed class UiUpdatesTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
-                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions
+            AppBuilder.Configure<AvApp>().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                        .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions
                 { UseHeadlessDrawing = false }).SetupWithoutStarting();
         global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
         LocalizationManager.Instance.SetLanguage("en");
