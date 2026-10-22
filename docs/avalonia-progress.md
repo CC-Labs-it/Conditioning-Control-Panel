@@ -2507,3 +2507,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/friends-landing: +389
 - FriendsLanding on Avalonia: the poke-received word plus Emi line, sent beat, and Tell over the game/panel/launcher, routed by the Core router; LandingRules.SentWord/PokeThrowsWord (fail-proven).
 - feat-friends-landing -> wired; knock/inbox/flavour folded to win-knock-card, toasts to feat-friends-open-tables.
+
+## avalonia-port/chaos-payout-fallin: +215
+- The Chaos hub's FALL IN starts a real run. Its end banks the WPF payout: XP, Sparks, reveals, the rank card and the loop-tip gold. The maths is in Core `ChaosPayout`, which WPF also uses. Panic pays nothing.
+- Fail-proven: `ChaosPayoutTests` (Core) and the headless test that clicks FALL IN, steps ticks to the end and checks the payout. Live panic steps are queued in live-queue/safety.md. The hub has no startup opener yet (its only opener is the recap), so no user path reaches FALL IN.
