@@ -40,6 +40,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
             ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
+            [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
+            // WPF JustDropHostService: the live shop at app.cclabs.app, not a page off disk (GameWindow.JustDrop.cs).
+            [JustDropId] = new(JustDropId, "jd_door_title", "", JustDropDoorOpen),
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
             // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
@@ -99,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal void Load(WebAssetServer server)
         {
+            if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
             Web.Navigate(PageUrl);
@@ -120,6 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == FypId && HandleFyp(o)) return;
+            if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
             if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
             switch ((string?)o["type"])
@@ -219,15 +226,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var json = JsonConvert.SerializeObject(message);
             Posted?.Invoke(json);
             if (_closing) return;
-            var script = "(function(m){try{if(typeof window.__ccpRnPush==='function'){window.__ccpRnPush(JSON.stringify(m));return;}"
-                + "var w=window.chrome&&window.chrome.webview;if(w&&w.dispatchEvent){w.dispatchEvent(new MessageEvent('message',{data:m}));}}catch(e){}})("
-                + json + ");";
-            _ = Web.InvokeScriptAsync(script);
+            _ = Web.PostJsonAsync(json);
         }
 
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
 
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
+
+        internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
+
+        internal static GameWindow? OpenForTests(string id) => OpenWindowsForTests().FirstOrDefault(w => w.Spec.Id == id);
 
         internal static void CloseAllForPanic()
         {

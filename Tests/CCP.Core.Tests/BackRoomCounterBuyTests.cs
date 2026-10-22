@@ -103,13 +103,13 @@ public sealed class BackRoomCounterBuyTests
     [Fact]
     public async Task Head_hooks_receive_prizes_and_every_reply_when_the_caller_names_none()
     {
-        var (apply, reply) = (BackRoomApi.DefaultApplyPrizes, BackRoomApi.OnReply);
+        var (apply, reply) = (BackRoomApi.DefaultApplyPrizes, BackRoomApi.MergedReply);
         try
         {
             var applied = new List<(string, long)>();
             var replies = new List<int>();
             BackRoomApi.DefaultApplyPrizes = (a, rev, _) => applied.Add((a, rev));
-            BackRoomApi.OnReply = (code, _) => { replies.Add(code); return false; };
+            BackRoomApi.MergedReply = (code, _) => { replies.Add(code); return false; };
             var h = new Fake();
             h.Reply(Bought);
             var res = await new BackRoomApi(new HttpClient(h), () => ("u-1", "t-1"), null, baseUrl: "http://127.0.0.1:9")
@@ -118,6 +118,6 @@ public sealed class BackRoomCounterBuyTests
             Assert.Equal(new[] { ("u-1", 7L) }, applied);
             Assert.Equal(new[] { 200 }, replies);
         }
-        finally { (BackRoomApi.DefaultApplyPrizes, BackRoomApi.OnReply) = (apply, reply); }
+        finally { (BackRoomApi.DefaultApplyPrizes, BackRoomApi.MergedReply) = (apply, reply); }
     }
 }

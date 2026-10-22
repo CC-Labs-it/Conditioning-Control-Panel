@@ -95,6 +95,14 @@ public sealed class BackRoomApi : IBackRoomRelay
             ["breakout"] = Array.Empty<(string Method, string Path)>(),
         };
 
+    /// <summary>Contract D: the head's merged-account check, handed (status, body) of every reply
+    /// (WPF: <c>MergedAccountRecovery.TryHandle</c>). Null = no recovery on this head.</summary>
+    public static Func<int, string, bool>? MergedReply;
+
+    /// <summary>Where a counter reply's prizes go when the constructor is given none
+    /// (WPF: <c>App.Ownership.ApplySnapshot</c>). Null = dropped.</summary>
+    public static Action<string, long, string[]>? DefaultApplyPrizes;
+
     private static readonly HttpClient SharedHttp = new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
 
     private readonly HttpClient _http;
@@ -106,7 +114,7 @@ public sealed class BackRoomApi : IBackRoomRelay
     /// <param name="identity">Null result = no account (or offline): every request refuses <c>offline</c>.</param>
     /// <param name="adoptSp">Receives settlement balances; decoration state and layout replies are excluded.</param>
     /// <param name="applyPrizes">Receives (account sent for, revision, grants) from a counter reply.
-    /// Null = <see cref="DefaultApplyPrizes"/> (the WPF head seeds <c>App.Ownership.ApplySnapshot</c>).</param>
+    /// Null = <see cref="DefaultApplyPrizes"/>.</param>
     /// <param name="baseUrl">Null = <see cref="BaseUrl"/>. The Avalonia head passes its sandbox-checked proxy.</param>
     public BackRoomApi(HttpClient? http, Func<(string UnifiedId, string Token)?> identity, Action<int>? adoptSp,
         Action<string, long, string[]>? applyPrizes = null, string? baseUrl = null)
@@ -119,14 +127,6 @@ public sealed class BackRoomApi : IBackRoomRelay
     }
 
     private readonly string _baseUrl;
-
-    /// <summary>Head hook: where a counter reply's prizes block goes when the caller names none.
-    /// WPF seeds <c>App.Ownership.ApplySnapshot</c> at startup.</summary>
-    public static Action<string, long, string[]>? DefaultApplyPrizes;
-
-    /// <summary>Head hook: Contract D, handed every status + body (WPF seeds
-    /// <c>MergedAccountRecovery.TryHandle</c>, which is head-only).</summary>
-    public static Func<int, string, bool>? OnReply;
 
     /// <summary>The account's token door off AppSettings, or null when there is none to use.</summary>
     public static (string UnifiedId, string Token)? AppIdentity()
@@ -174,7 +174,7 @@ public sealed class BackRoomApi : IBackRoomRelay
                 using var res = await _http.SendAsync(req, budget.Token).ConfigureAwait(false);
                 var text = await res.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
                 if (_identity()?.UnifiedId != id.Value.UnifiedId) return BackRoomStationResult.Refuse("closed");
-                OnReply?.Invoke((int)res.StatusCode, text);   // contract D
+                MergedReply?.Invoke((int)res.StatusCode, text);   // contract D
                 return Read(station, op, id.Value.UnifiedId, (int)res.StatusCode, res.IsSuccessStatusCode, text);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)

@@ -311,6 +311,8 @@ namespace ConditioningControlPanel
             // Race rules live in Core; the prize store and the NAudio decoder stay here.
             Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
             Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
+            // The compositor layers moved to Core; their per-monitor fill gate resolves screens here.
+            Services.Compositor.BaseLayer.ScreenTargetGate = ShouldRenderTargetOnScreen;
             // The mod service's side effects on a switch, and what it asks the head.
             CoreModsHooks.ModSwitched = newCompanionName => Brain?.OnModSwitched(newCompanionName);
             CoreModsHooks.ReloadBarkRules = () => Bark?.ReloadRules();
@@ -347,6 +349,11 @@ namespace ConditioningControlPanel
             CoreBark.AllLinesProvider = () =>
                 (System.Collections.Generic.IReadOnlyList<Services.Bark.BarkLineInfo>?)Bark?.GetAllBarkLines()
                 ?? System.Array.Empty<Services.Bark.BarkLineInfo>();
+            // EMI's names and bark mirror live in Core; what only the desk can see crosses here.
+            // Lazy like the bark seam: EmiDesk and Video are built in OnStartup.
+            Services.EmiDesk.EmiNames.TargetLabelProbe = id => Services.EmiDesk.EmiTargets.Find(id)?.Label;
+            Services.EmiDesk.EmiBarkBridge.DeskFire = () => EmiDesk is { } desk ? desk.Fire : null;
+            Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = () => Video?.LastVideoTitle ?? Video?.LastVideoPath;
             // The downloadable packs: the pack service seeds what the mod service reads.
             CoreReleaseContent.StampProvider = ReleaseContentService.GetStampFor;
             CoreReleaseContent.PackInfoProvider = id => ReleaseContent?.GetPackInfo(id);
@@ -369,11 +376,15 @@ namespace ConditioningControlPanel
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
+            Services.MergedAccountRecoveryHead.Seed();
+            Services.Arcademy.ArcademySyncService.MergedRecovery = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
             Services.ProviderSubscription.PrizesSink = Services.ProfileSyncService.ApplyValidatePrizes;
             // BugReportService stays head-side in this layer, but its report assembly is portable.
             // The diagnostic writer/heartbeat remains WPF; only its bounded tail crosses the seam.
             BugReportService.DiagnosticTailProvider = VideoDiag.Tail;
+            // VideoSurfaceHealth moved to Core; its per-surface line still lands in video-diag.log.
+            VideoSurfaceHealth.DiagSink = VideoDiag.Log;
             // The freeze-report trio main added: the ring dump, the newest dump on disk and this
             // session's log file. All three sinks are WPF-bound, so the head hands them over.
             BugReportService.FlightRecorderDump = reason => Services.Logging.FlightRecorderSink.DumpIfActive(reason);
@@ -385,7 +396,10 @@ namespace ConditioningControlPanel
             CoreAudio.DuckProvider = strength => Audio?.Duck(strength);
             CoreAudio.UnduckProvider = generation => Audio?.Unduck(generation);
             CoreAudio.DuckGenerationProvider = () => Audio?.DuckGeneration ?? 0;
+            CoreAudio.IsOutputSuppressedProvider = () => Audio == null || Audio.IsOutputSuppressed;
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
+            // The board's picture rules moved to Core; the PNG codec stays WPF imaging.
+            Services.Billboard.Board.BoardPng.Install();
             // Mind wipe's playing half. The schedule (tick interval, per-tick probability, the
             // session escalation and the clip folders) is MindWipeSchedule in Core; what cannot
             // cross is NAudio's crossfading loop, so the card asks for it through this seam. Lazy
@@ -450,6 +464,10 @@ namespace ConditioningControlPanel
             Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
             Services.Invites.InviteApi.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
+            Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
+            Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
             CoreProgram.ActivePackVideoCountProvider = () => ContentPacks?.GetAllActivePackVideos().Count ?? 0;
             CoreProgram.RoadmapProvider = () => Roadmap;
@@ -890,29 +908,8 @@ namespace ConditioningControlPanel
 
         #endregion
 
-        /// <summary>
-        /// Returns a temp directory for media files (decrypted packs, video downloads, etc.)
-        /// located inside the effective assets path so it lives on the same drive as assets.
-        /// Falls back to system temp if the assets path isn't available yet.
-        /// </summary>
-        public static string GetMediaTempPath()
-        {
-            try
-            {
-                var assetsPath = EffectiveAssetsPath;
-                if (!string.IsNullOrEmpty(assetsPath))
-                {
-                    var tempDir = Path.Combine(assetsPath, ".temp");
-                    Directory.CreateDirectory(tempDir);
-                    return tempDir;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger?.Debug("GetMediaTempPath: Could not use assets temp dir, falling back to system temp: {Error}", ex.Message);
-            }
-            return Path.GetTempPath();
-        }
+        /// <summary>Media temp directory (assets/.temp, else system temp); the rule lives in <see cref="CorePaths.MediaTemp"/>.</summary>
+        public static string GetMediaTempPath() => CorePaths.MediaTemp();
 
         /// <summary>
         /// Cleans up stale temp files from previous sessions (crash recovery).
@@ -1233,6 +1230,23 @@ namespace ConditioningControlPanel
         public static Services.Deeper.EnhancementLibrary EnhancementLibrary { get; private set; } = null!;
         public static Services.Deeper.EnhancementAudioPlayer DeeperPlayer { get; private set; } = null!;
         public static Services.Deeper.EnhancementHostService DeeperHost { get; private set; } = null!;
+        /// <summary>The audio player with a playlist. Null until startup builds it; every call site is null-conditional.</summary>
+        public static Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; private set; }
+
+        /// <summary>
+        /// Stops the audio player with a playlist, from any thread (panic, the panic watchdog,
+        /// exit). The playlist itself stays; nothing here writes a setting.
+        /// </summary>
+        public static void StopAudioPlaylist()
+        {
+            try
+            {
+                var playlist = AudioPlaylist;
+                if (playlist is Services.AudioPlayer.AudioPlaylistService service) service.StopEmergency();
+                else if (playlist != null) Helpers.DispatcherHelper.RunOnUI(playlist.Stop);
+            }
+            catch (Exception ex) { Logger?.Debug("StopAudioPlaylist error: {Error}", ex.Message); }
+        }
         public static Services.Deeper.EnhancementFetcher DeeperFetcher { get; private set; } = null!;
         public static Services.Deeper.BrowserAutoDiscovery DeeperBrowserDiscovery { get; private set; } = null!;
         // Bridge that ties dashboard browser navigation to the local enhancement
@@ -1750,6 +1764,15 @@ namespace ConditioningControlPanel
         /// </summary>
         public static void KillAllAudio()
         {
+            // The audio player first and on its own: the pass below is one try/catch, and the
+            // player's own files are the loudest thing a panic can leave running.
+            StopAudioPlaylist();
+            // A Goon toy cue is a sound-alike: a panic or stop-all never leaves it running (ccp-bugs #1429).
+            try { Services.GoonGame.GoonToyDirector.Stop(); } catch { }
+            // The one-shot clip (the companion's Audio effect, a Deeper play-audio action). Only a
+            // session pause stopped it before, so a panic with the engine off let it play out.
+            try { Audio?.StopSound(); } catch { }
+
             try
             {
                 // Stop subliminal whispers
@@ -2481,6 +2504,17 @@ namespace ConditioningControlPanel
             CleanupStaleTempFiles();
             Services.Fyp.Online.RemoteMediaCache.CleanupStaleTempFiles();
 
+            // The Scrolller licence switch: read now (off the UI thread) and every 30 min. No
+            // answer = the shipped behaviour, so this never holds startup.
+            Services.Fyp.Online.ScrolllerPolicyService.Start();
+            // Locked screen or display off = nobody watching: no fresh Scrolller fetch (never on minimise).
+            Services.Fyp.Online.ScrolllerAwayWatcher.Start();
+            // The Scrolller device cache loads its books in the background: no UI-thread folder scan.
+            _ = Services.Fyp.Online.ScrolllerDiskCache.WarmAsync();
+            // Licence: no Scrolller copy outlives a day from its download. Sweeps once the load is
+            // done, then hourly.
+            Services.Fyp.Online.ScrolllerDiskCache.StartSweeper();
+
             // Initialize localization (must be after settings, before UI)
             LocalizationManager.Instance.Initialize(Settings?.Current?.Language ?? "en");
 
@@ -2682,9 +2716,6 @@ namespace ConditioningControlPanel
             // CCP_PRIZE_GRANTS desk-test override. The static PrizeGrants facade the effect lanes call forwards here.
             Ownership = new Services.Prizes.OwnershipService();
             Services.Prizes.PrizeGrants.Attach(Ownership);
-            // BackRoomApi moved to Core; these were its App.Ownership default and its Contract D call.
-            Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
-            Services.BackRoom.BackRoomApi.OnReply = Services.MergedAccountRecovery.TryHandle;
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
             // screen. The relay is the room's own, so a reply applies its prizes block.
@@ -2820,6 +2851,10 @@ namespace ConditioningControlPanel
             };
             Services.Companion.Brain.CompanionBrain.ClearLegacyLocalHistoryHook = () => (Ai as AiServiceStrategy)?.ClearLocalHistory();
             Services.Companion.Brain.CompanionBrain.MemoryRecalled = LocalAiService.SignalPersistentMemoryRecalled;
+            // The Back Room page's end-card funnel message (Core BackRoomBridge) counts and opens checkouts here.
+            Services.BackRoom.BackRoomBridge.FunnelMessage = (m, mayOpen) => Services.Funnel.FunnelPageMessage.Handle(m, mayOpen);
+            Services.Companion.Brain.CompanionBrain.IdleLineVoiced = trigger =>
+                Services.Companion.CompanionIdleVoice.ShouldVoiceNow(Services.Companion.CompanionIdleVoice.IsUnprompted(trigger));
             Services.Companion.Brain.CompanionBrain.ActivitiesProvider = Services.Companion.CompanionActivities.Current;
             Services.Companion.ConversationDelivery.AskCardsShown = _ => true;   // ChatInput.cs OfferForRequest
             SeedAskSeams();
@@ -2992,7 +3027,7 @@ namespace ConditioningControlPanel
             {
                 _friendsService = Services.Friends.FriendsServiceApp.CreateForApp();
                 Friends = _friendsService;
-                try { FriendsFeed = Services.Friends.FriendsFeed.CreateForApp(_friendsService); } catch (Exception exFeed) { Logger?.Debug("Friends feed failed to start: {E}", exFeed.Message); }
+                try { FriendsFeed = Services.Friends.FriendsFeed.CreateForApp(_friendsService, () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId); } catch (Exception exFeed) { Logger?.Debug("Friends feed failed to start: {E}", exFeed.Message); }
                 ProfileSync.ProfileLoaded += (_, _) => _friendsService?.Kick();
                 _friendsService.Start(new Services.Friends.FriendsServiceApp.Timer());
             }
@@ -3132,6 +3167,8 @@ namespace ConditioningControlPanel
 
             // Initialize Discord Rich Presence (only if Discord is linked — prevents
             // accidental exposure for users who chose anonymous invite-code accounts)
+            // The service lives in Core; its 15 s refresh ticks hop back to this UI thread (was a DispatcherTimer).
+            DiscordRichPresenceService.PostToUi = a => Dispatcher.BeginInvoke(a);
             DiscordRpc = new DiscordRichPresenceService();
             if (Settings.Current.DiscordRichPresenceEnabled && Settings.Current.HasLinkedDiscord)
             {
@@ -3267,6 +3304,12 @@ namespace ConditioningControlPanel
             // first Play / first Bind.
             DeeperPlayer = new Services.Deeper.EnhancementAudioPlayer();
             DeeperHost = new Services.Deeper.EnhancementHostService();
+            Services.Deeper.PlaylistEnhancementBridge.Install(); // waits for AudioPlaylist; a Deeper enhancement rides the playlist track
+
+            // The audio player with a playlist: its own player instance, list and level from
+            // the settings. Cheap like the two above; nothing opens until the first Play.
+            try { AudioPlaylist = new Services.AudioPlayer.AudioPlaylistService(); }
+            catch (Exception ex) { Logger?.Warning(ex, "Audio playlist player failed to start"); }
 
             // Phase 9: HT description auto-discovery. Fetcher caches in-memory
             // per session; browser discovery wires onto the WebView2 once
@@ -3289,13 +3332,14 @@ namespace ConditioningControlPanel
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
             // and LockdownPossessionEnabled is on, so constructing it here costs nothing.
-            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll());
+            Possession = new Services.Possession.PossessionDirector(Lockdown, Services.Possession.Effects.PossessionEffectCatalog.CreateAll(),
+                Services.Possession.PossessionWpfHead.CreateDirectorHead());
             Possession.Warden = new Services.Possession.Warden();
             // Companion wave (POSSESSION.md): the ember tick / dip cues, and the one remembered charge a
             // Full Doki lockdown leaves for the next launch. Both only subscribe; neither costs anything
             // until a lockdown runs (or, for the charge, until the flag from the last one is spent).
-            Services.Possession.PossessionAudio.Install();
-            Services.Possession.PossessionRemember.Install();
+            Services.Possession.PossessionAudio.Install(Lockdown, Possession);
+            Services.Possession.PossessionWpfHead.InstallRemember();
             // The Dose: a lockdown refuses to run empty (engine off -> started; nothing on -> the warden
             // picks). Recovery first, so a killed lockdown's conscripted toggles go back off before the
             // engine can ever read them.
@@ -3647,14 +3691,18 @@ namespace ConditioningControlPanel
             // bypassing the Lab UI and the ChaosWebGameEnabled flag — but NOT the tier gate, which
             // it now answers to like the Lab card does. `--dtrh-m2test` additionally runs the M2
             // bridge exercise against a CLONED meta state (real save untouched) and stays
-            // unrestricted: it is the capture rig's entry point.
+            // unrestricted: it is the capture rig's entry point, so it exists in DEBUG builds only
+            // (in a shipped build it was a tier-free door into DtRH; Release ignores it).
             //
             // Entitlement is read from the cached state loaded in PatreonService's constructor —
             // online validation may still be in flight this early, so an unvalidated launch fails
             // closed. Denials only log: a dialog here would fire before the user has done anything.
+#if DEBUG
             if (e.Args.Contains("--dtrh-m2test"))
                 Services.Chaos.DtrhHostService.Launch(testMode: true);
-            else if (e.Args.Contains("--dtrh"))
+            else
+#endif
+            if (e.Args.Contains("--dtrh"))
             {
                 var dtrhGate = Services.TierGate.RequiresLab("Down the Rabbit Hole", "dtrh");
                 if (dtrhGate.Allowed) Services.Chaos.DtrhHostService.Launch();
@@ -4194,6 +4242,11 @@ namespace ConditioningControlPanel
             // If this achievement gates a wardrobe item, announce that too - a beat later, so it
             // reads as a consequence of the achievement popup rather than a second competing toast.
             ShowWardrobeRewardToasts(achievement);
+
+            // Never on the toast itself: a free account gets one quiet Inbox row about the patron
+            // gallery, at most once a day (MainWindow.Inbox.cs, proposal 7).
+            try { MainWindowRef?.PostPatronGalleryRow(achievement); }
+            catch (Exception ex) { Logger?.Debug("Patron gallery row skipped: {Error}", ex.Message); }
 
             // Play achievement sound
             PlayAchievementSound();
@@ -5562,7 +5615,7 @@ namespace ConditioningControlPanel
                             {
                                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                                 {
-                                    FileName = "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest",
+                                    FileName = "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest",
                                     UseShellExecute = true
                                 });
                             }
@@ -5609,7 +5662,7 @@ namespace ConditioningControlPanel
                         {
                             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                             {
-                                FileName = "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest",
+                                FileName = "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest",
                                 UseShellExecute = true
                             });
                         }
@@ -5741,7 +5794,7 @@ namespace ConditioningControlPanel
         /// signature in full, then one "suppressed" line, then nothing. The Serilog line is capped
         /// the same way — the storm floods app-.log too.</para>
         /// </summary>
-        private static void LogCrashDetails(string source, Exception? ex)
+        internal static void LogCrashDetails(string source, Exception? ex)
         {
             if (ex == null) return;
 
@@ -6150,6 +6203,11 @@ Application State:
             // and never gets one - she does not get a goodbye speech while the app is going away.
             try { EmiDesk?.Fire("appClosing", null); } catch (Exception ex) { Diag.Swallowed(ex); }
 
+            // Scrolller daily share: the ledger and the device cache index have debounced writes.
+            try { Services.Fyp.Online.ScrolllerAwayWatcher.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Services.Fyp.Online.ScrolllerAllowance.Flush(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Services.Fyp.Online.ScrolllerDiskCache.Flush(); } catch (Exception ex) { Diag.Swallowed(ex); }
+
             try { SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // A clean shutdown — even mid-run — is NOT a crash. Clear both dirty-shutdown
@@ -6339,6 +6397,7 @@ Application State:
             DeeperBrowserDiscovery?.Dispose();
             DeeperHost?.Dispose();
             DeeperPlayer?.Dispose();
+            try { (AudioPlaylist as IDisposable)?.Dispose(); } catch (Exception ex) { Logger?.Debug("AudioPlaylist dispose error: {Error}", ex.Message); }
             DeeperFetcher?.Dispose();
             EnhancementLibrary?.Dispose();
 
