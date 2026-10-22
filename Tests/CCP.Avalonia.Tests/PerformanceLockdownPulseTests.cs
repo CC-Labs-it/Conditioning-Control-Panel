@@ -78,6 +78,8 @@ public sealed class PerformanceLockdownPulseTests
                 Assert.True(shell.LockdownPulsing);
                 shell.Close();
                 Assert.False(shell.LockdownPulsing);
+                // BeatLoop already stops itself on close; the Closed handler is what restores the resting glow.
+                Assert.Equal(14, glow.BoxShadow[0].Blur);
             }
             finally
             {
