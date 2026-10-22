@@ -2518,3 +2518,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/brain-drain-keep-clear: +150
 - Keep-pictures-clear rule moved to Core (tests now run on Linux); the Avalonia Brain Drain card has the option row, saved to the same setting and repainted on Reset/cloud restore.
 - No blur overlay on this head yet, so the setting has no effect there; ledger row is stub.
+
+## avalonia-port/chaos-skia-fx: +723
+- chaos-skia-fx: Avalonia click-through sparkle/bloom overlay. The WPF `ChaosFxLayer` sim and painter moved to Core and is shared by both heads. The frame loop runs only while effects are live; refused without a compositor; panic closes it (`PanicSurfaces` `chaos-skia-fx`, ChaosRunHost).
+- Row stays stub until FALL IN or the bubble field emits effects. Tests are fail-proven (15 deliberate breaks, each caught). rgate GATE-OK, Windows included.

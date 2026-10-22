@@ -296,6 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
+            ChaosSkiaFxOverlay.CloseActive();   // WPF ChaosModeService.ForceShutdown; before the idle return
             if (!_active && _hud == null && _overlay == null && _fx == null) return;
             _spawning = false;
             _runTimer?.Stop();
@@ -368,6 +369,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
             ChaosEStimOverlay.CloseActive();   // WPF EndRun :3238
+            ChaosSkiaFxOverlay.CloseActive();   // WPF EndRun
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned, rankUp);
             Log.Information("Chaos run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks",
@@ -407,6 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosVibeTrailOverlay.CloseActive();   // WPF ForceShutdown :3184 / CleanupAfterRun :3324
             ChaosEStimOverlay.CloseActive();   // WPF ForceShutdown :3185 / :3325
             Overlays.ChaosFieldFxOverlay.CloseActive();   // WPF ChaosModeService.cs:3186/3239/3326
+            ChaosSkiaFxOverlay.CloseActive();   // WPF CleanupAfterRun
             CloseFx();   // WPF CleanupAfterRun :3338 (also covers an overlay closed mid-run)
             _runTimer = null;
             _hud = null;
