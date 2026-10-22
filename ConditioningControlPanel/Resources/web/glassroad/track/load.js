@@ -1,0 +1,73 @@
+/* track/load.js - Track JSON v1 -> Track (CONTRACT.md section 5). No three.js.
+ * Degrees in the JSON (node roll) become radians here; everything derived (spline, frames, lengthM,
+ * driveline, checklines, meshes) is built at load, the meshes and driveline on first access.
+ */
+import { validate as validateJson } from './schema.js';
+import { DEG, qfromBasis, wrap } from '../core/math.js';
+import { createSpline, createScalar } from './spline.js';
+import { buildRefNormals, frameAtSegU, makeFrame } from './frames.js';
+import { createQuery } from './query.js';
+import { buildDriveline, buildChecklines } from './driveline.js';
+import { buildMeshes } from './mesh.js';
+
+/** @returns {object} Track; throws an Error listing the schema errors */
+export function loadTrack(json, { validate = true } = {}) {
+  if (validate) {
+    const r = validateJson(json);
+    if (!r.ok) throw new Error('track invalid: ' + r.errors.join('; '));
+  }
+  if (json.loop !== true) throw new Error('track invalid: only closed loops are supported');
+  const nodes = json.nodes.map((n) => ({ p: n.p.slice(), roll: n.roll * DEG, w: n.w, flags: n.flags.slice(), speed: n.speed, surface: n.surface }));
+  const N = nodes.length;
+  const sp = createSpline(nodes.map((n) => n.p), nodes.map((n) => n.flags.includes('jump')));
+  const refN = buildRefNormals(sp);
+  const rollAt = createScalar(nodes.map((n) => n.roll));
+  const widthAt = createScalar(nodes.map((n) => n.w));
+  const { nodeS, lengthM } = sp;
+  const isGap = (i) => sp.gap[((i % N) + N) % N];
+
+  const frameAt = (s, out = makeFrame()) => {
+    const sw = wrap(s, lengthM), seg = sp.segAt(sw);
+    return frameAtSegU(sp, refN, rollAt, widthAt, nodes, seg, sp.uFromS(seg, sw), out);
+  };
+
+  const sections = json.sections.map((s) => ({ id: s.id, act: s.act, palette: s.palette, sky: s.sky, bandSpeed: s.bandSpeed, from: s.from, to: s.to, fromS: nodeS[s.from], toS: nodeS[s.to] }));
+  const sectionAt = (s) => {
+    const sw = wrap(s, lengthM);
+    for (let i = sections.length - 1; i > 0; i--) if (sw >= sections[i].fromS) return i;
+    return 0;
+  };
+
+  const boosts = json.boosts.map((b) => ({ node: b.node, x: b.x, w: b.w, len: b.len, s: nodeS[b.node] }));
+  const jumps = json.jumps.map((j) => {
+    let land = j.node + 1;
+    while (isGap(land) && land < j.node + N) land++;
+    return { node: j.node, airLen: j.airLen, height: j.height, s: nodeS[j.node], landS: nodeS[land % N] };
+  });
+  const lm = json.limits;
+
+  const grid = json.spawn.grid, spawnNode = json.spawn.node;
+  const spawnPose = (slot = 0) => {
+    const g = grid[((slot % grid.length) + grid.length) % grid.length];
+    const f = frameAt(nodeS[spawnNode] + g[1]);
+    const p = [f.p[0] + f.b[0] * g[0], f.p[1] + f.b[1] * g[0], f.p[2] + f.b[2] * g[0]];
+    const q = qfromBasis([0, 0, 0, 1], f.b, f.n, [-f.t[0], -f.t[1], -f.t[2]]);
+    return { p, q, seg: f.seg, s: wrap(nodeS[spawnNode] + g[1], lengthM), lateral: g[0] };
+  };
+
+  const track = {
+    id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
+    sections, sectionAt, boosts, jumps,
+    limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
+    spawnPose,
+    nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
+    frameAt,
+    query: createQuery(sp, refN, rollAt, widthAt, nodes),
+    checklines: null,
+  };
+  track.checklines = buildChecklines(track, json.checkpoints);
+  let dl = null, meshes = null;
+  Object.defineProperty(track, 'driveline', { enumerable: true, get: () => (dl ||= buildDriveline(track, sp)) });
+  Object.defineProperty(track, 'meshes', { enumerable: true, get: () => (meshes ||= buildMeshes(track, track.driveline)) });
+  return track;
+}
