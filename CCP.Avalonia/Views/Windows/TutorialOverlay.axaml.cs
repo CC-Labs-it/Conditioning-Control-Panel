@@ -9,7 +9,6 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
-using ConditioningControlPanel.Avalonia.Platform;
 
 // The step model now comes from the tutorial seam. Aliased to the names the WPF original uses so
 // this file still reads against ConditioningControlPanel/Windows/TutorialOverlay.xaml.cs line for
@@ -25,55 +24,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// around the control the current step is about, plus the card that carries the step's icon,
     /// title, description and its Skip / Skip step / Previous / Next row.
     ///
-    /// PORTED from ConditioningControlPanel/Windows/TutorialOverlay.xaml.cs. Everything that only
-    /// touches the view is real here — the spotlight geometry, the glow ring, the panel placer
-    /// with its clamp-and-flip, the settle timer, the visual-tree element lookup. What is stubbed,
-    /// and why:
-    ///
-    /// <list type="bullet">
-    ///   <item><b>Live against the tutorial seam.</b> The card, the counter, the Next/Finish label,
-    ///     Previous, Skip and the follow-up buttons all read <c>CoreTutorial</c>, and the two
-    ///     verbs plus Escape call into it. On a head that seeds the seam (the WPF one does, from
-    ///     <c>App.SeedTutorialSeam</c>) the overlay walks a real tour; unseeded — which is this
-    ///     head today, because TutorialService and its step lists are still in the WPF head — the
-    ///     seam answers "no tour" and nothing is drawn but the sample card. Use the
-    ///     <see cref="TutorialOverlay(Window)"/> constructor for the live overlay; the
-    ///     parameterless one is the render proof's.</item>
-    ///
-    ///   <item><b>The auto-advance subscriptions are still stubs</b> (OnButtonClick, OnTextEquals,
-    ///     OnSelectionEquals, OnSliderAtLeast, OnEvent), and so is the WindowLoaded:* retarget.
-    ///     Those are not seam calls: each hooks a real control in a real window and the OnEvent one
-    ///     needs <c>TutorialEventBus</c>, which stayed in the WPF head. A step whose
-    ///     <c>Advance</c> is anything but Manual therefore shows no Next button and nothing
-    ///     advances it — it is honest about waiting and wrong about what it waits for, so it stops
-    ///     the tour rather than skipping a card. <c>AllowManualSkip</c> steps still have their
-    ///     "Skip step" button, which is the WPF escape hatch for exactly this.</item>
-    ///
-    ///   <item><b><c>TutorialStep.PrepareTargetWindowAction</c> did not cross.</b> It is an
-    ///     <c>Action&lt;System.Windows.Window&gt;</c> on Windows (DeeperTutorialPrep,
-    ///     CompanionTutorialPrep, AppSettingsTutorialPrep in Services/TutorialService.cs), so it
-    ///     cannot be seam data. Without it a step pointing INSIDE a default-collapsed drawer
-    ///     resolves its element but measures 0×0, and the settle timer runs out and draws the plain
-    ///     dim — the degraded path WPF already takes when an element cannot be found, not a
-    ///     crash.</item>
-    ///
-    ///   <item><b>SetWindowRgn / CreateRectRgn / CombineRgn — the click-through hole.</b> WPF
-    ///     punched the spotlight rect out of the window's OS-level region, because a WPF layered
-    ///     window catches clicks across its whole client area whatever the pixel alpha. The X11
-    ///     shim on this head exposes <c>SetClickThrough(TopLevel, bool)</c>, which is whole-window
-    ///     only, so <see cref="ClearWindowSpotlightRegion"/> maps exactly and
-    ///     <see cref="ApplyWindowSpotlightRegion"/> does not — see its own comment. NO DllImport
-    ///     was carried across; user32/gdi32 do not exist off Windows.</item>
-    ///
-    ///   <item><b>The 300ms fade in and 200ms fade out.</b> Dropped rather than re-expressed as a
-    ///     transition: the headless render captures two dispatcher passes after Show(), which is
-    ///     inside the fade, so a faithful fade-in would have drawn a nearly blank PNG and hidden
-    ///     the very thing the render proves. The overlay simply appears.</item>
-    /// </list>
-    ///
-    /// The parameterless constructor is the render constructor (see RenderProof): it seeds one
-    /// sample step and a sample target rect so the PNG shows the dim sheet, the glow ring and a
-    /// fully populated card rather than an empty window.
+    /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
+    /// Live cards use the host overlay layer, including a real spotlight input hole. Narration,
+    /// guide navigation, keyword demo and fade timing remain in wire-win-tutorial-overlay-c. The parameterless constructor renders a
+    /// sample and never subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
     {
@@ -160,9 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// as WPF does (MainWindow.StartTutorial calls Start then constructs) — the first card is
         /// read on Loaded, and StepChanged carries every card after it.
         ///
-        /// <para>Nothing on this head calls this yet: starting a tour is
-        /// <c>MainShellWindow.StartTutorial</c>, which is a different layer's file, and there is no
-        /// step source here to start. It is the entry point that layer needs.</para>
+        /// TutorialHead starts shell tours through this constructor.
         /// </summary>
         public TutorialOverlay(Window targetWindow) : this(targetWindow, live: true)
         {
@@ -207,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 CoreTutorial.StepChanged += OnSeamStepChanged;
                 CoreTutorial.Finished += OnSeamFinished;
+                CoreTutorialEvents.Event += OnTutorialEvent;
             }
 
             Loaded += (_, _) =>
@@ -239,6 +192,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            _closed = true;
+            UnsubscribeAdvanceTrigger();
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
 
@@ -246,6 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 CoreTutorial.StepChanged -= OnSeamStepChanged;
                 CoreTutorial.Finished -= OnSeamFinished;
+                CoreTutorialEvents.Event -= OnTutorialEvent;
 
                 // The window going away while the tour is still running is exactly what WPF's
                 // OnAppExit / OnMainWindowClosed handlers cover, and they Skip() for a reason: a
@@ -257,6 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             base.OnClosed(e);
+            if (!_live) Closed?.Invoke(this, e);
         }
 
         /// <summary>A step's Icon string is data (WPF drew the emoji): mapped through IconMap to a Fluent
@@ -310,21 +267,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void UpdateStep(TutorialStep step)
         {
+            if (_closed) return;
             _step = step;
-
-            // WPF retargeted here when step.TargetWindowTypeName named a different window, and
-            // drew a clean centered "next up" card while that window was still opening.
-            // ponytail: CurrentStepIndex is NOT the blocker - CoreTutorial.CurrentStepIndex is in
-            // Core and StepCounterText below already reads it. What is missing is the STEP LIST
-            // (CoreTutorial exposes CurrentStep only, so "the next step's TargetWindowTypeName"
-            // cannot be looked ahead) and the WindowLoaded:* bus event that says the other window
-            // has opened - ConditioningControlPanel/Services/TutorialEventBus.cs, which has no Core
-            // seam to emit into. Both live with
-            // ConditioningControlPanel/Services/TutorialService.cs.
-
-            // A new card: the once-per-step advance latch reopens. WPF does this inside
-            // SubscribeAdvanceTrigger, which is the only thing UpdateStep calls after this point
-            // that is still a stub here, so the reset moves up rather than getting lost with it.
+            if (RetargetIfNeeded(step)) return;
             _advanceFiredThisStep = false;
 
             _txtStepCounter.Text = StepCounterText();
@@ -371,17 +316,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // button's Click sequence. This is what makes Escape -> Skip reachable.
             Dispatcher.UIThread.Post(() =>
             {
-                try { Focus(); } catch { /* window already closing */ }
+                try { if (!_live) Focus(); } catch { /* window already closing */ }
             }, DispatcherPriority.Background);
 
-            // ponytail: SubscribeAdvanceTrigger is head work, not a seam call — it hooks the target control
-            // for OnButtonClick (Click + PreviewMouseLeftButtonUp + the parent window's Closing),
-            // OnTextEquals (TextBox.TextChanged, with the numeric/substring match),
-            // OnSelectionEquals (Selector.SelectionChanged, by Content or Tag) and
-            // OnSliderAtLeast (advance on pointer release, not on every ValueChanged), and
-            // OnEvent came off the static TutorialEventBus, which stayed in the WPF head. Every
-            // one of them needs a real control in a real window, which is why none of it crossed
-            // with the seam. The consequence is written into the class header.
+            if (_live) SubscribeAdvanceTrigger(step);
         }
 
         /// <summary>The follow-up label comes from step data, which may contain an underscore, so
@@ -444,10 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // WPF gave the target window a chance to prepare itself here (expand the collapsed
-            // drawer that holds TargetElementName) via step.PrepareTargetWindowAction. That hook
-            // is an Action<System.Windows.Window> and did not cross with the seam - see the class
-            // header for what a step behind a collapsed drawer degrades to.
+            PrepareTarget(step);
             try { _targetWindow.UpdateLayout(); } catch { /* not laid out yet */ }
 
             var targetElement = FindElementByName(_targetWindow, step.TargetElementName);
@@ -575,8 +510,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             byte alpha = blockClicks ? DimAlpha() : (byte)0x00;
             var overlay = new Rectangle
             {
-                Width = Bounds.Width,
-                Height = Bounds.Height,
+                Width = StageW,
+                Height = StageH,
                 Fill = new SolidColorBrush(Color.FromArgb(alpha, 0x00, 0x00, 0x00)),
                 IsHitTestVisible = blockClicks,
             };
@@ -584,16 +519,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Canvas.SetTop(overlay, 0);
             _spotlightCanvas.Children.Add(overlay);
 
-            // ponytail: needs the same rect input region as the spotlight hole (see
-            // ApplyWindowSpotlightRegion). WPF got its pass-through here for free, from alpha-0
-            // pixels on a layered window; X11 does not honour pixel alpha for input, and
-            // X11Overlay.SetClickThrough is whole-window, so handing input away would take the
-            // card's Skip Tutorial / Skip step with it and strand the user with no way out — the
-            // exact failure #443 was about. So the region is cleared in BOTH branches and the
-            // pass-through dim (used while the user works an OS file dialog on top of us) is lost
-            // until X11Overlay gains that entry point. The dim still drops to alpha 0, so the card
-            // alone signals the wait state as it does on Windows.
-            ClearWindowSpotlightRegion();
+            // The stage leaves input outside its dim and card with the host.
         }
 
         private void DrawSpotlightOverlay(Rect highlightBounds, bool clickThroughHole)
@@ -606,7 +532,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 highlightBounds.Height + padding * 2
             );
 
-            var fullRect = new RectangleGeometry(new Rect(0, 0, Bounds.Width, Bounds.Height));
+            var fullRect = new RectangleGeometry(new Rect(0, 0, StageW, StageH));
             var spotlightRect = new RectangleGeometry(glowBounds) { RadiusX = 8, RadiusY = 8 };
 
             // When clickThroughHole=true the dark fill is the full rect MINUS the spotlight rect,
@@ -633,61 +559,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BorderThickness = new Thickness(2),
                 Background = Brushes.Transparent,
                 IsHitTestVisible = false,
-                Effect = new DropShadowEffect
-                {
-                    Color = Color.FromRgb(0xFF, 0x69, 0xB4),
-                    BlurRadius = 15,
-                    OffsetX = 0,
-                    OffsetY = 0,
-                    Opacity = 0.7,
-                },
+                // WPF's DropShadowEffect glowed both sides of the ring; BoxShadow is one-sided, so add an inset twin.
+                BoxShadow = new BoxShadows(new BoxShadow { Blur = 15, Color = Color.FromArgb(179, 255, 105, 180) },
+                    new[] { new BoxShadow { Blur = 15, IsInset = true, Color = Color.FromArgb(179, 255, 105, 180) } }),
             };
             Canvas.SetLeft(glowBorder, glowBounds.X);
             Canvas.SetTop(glowBorder, glowBounds.Y);
             _spotlightCanvas.Children.Add(glowBorder);
 
-            if (clickThroughHole) ApplyWindowSpotlightRegion(highlightBounds);
-            else ClearWindowSpotlightRegion();
         }
 
         /// <summary>WPF dimmed harder over MainWindow (0xA0) than over a dialog (0x70). Sample mode
         /// has no target, and the overlay's normal home is MainWindow, so it takes the same
         /// value.</summary>
         private byte DimAlpha() => _targetWindow is null or MainWindow or MainShellWindow ? (byte)0xA0 : (byte)0x70;
-
-        // ---- Window-level click-through ---------------------------------------------
-
-        /// <summary>
-        /// WPF punched the spotlight rect out of the window's OS region with
-        /// CreateRectRgn + CombineRgn(RGN_DIFF) + SetWindowRgn, because a layered WPF window
-        /// receives clicks over its whole client area whatever the pixel alpha, so the drawn hole
-        /// alone gave no click-through.
-        ///
-        /// ponytail: needs a rect-region entry point on CCP.Avalonia/Platform/X11Overlay — it
-        /// exposes only SetClickThrough(TopLevel, bool), which is the whole window or nothing, and
-        /// no view layer may edit it. XFixes CAN express this exactly (an input region of
-        /// everything-minus-the-hole; X11Overlay's own doc-comment says a non-empty region would
-        /// be strictly more capable than WS_EX_TRANSPARENT), so this is one small addition to that
-        /// class, not a lost feature. Until it lands: the spotlight hole is VISUAL ONLY — the ring
-        /// and the lit rect draw correctly, but a click inside the hole is eaten by the overlay
-        /// instead of reaching the highlighted control, which strands every auto-advance step that
-        /// waits on the user clicking through. The region is cleared here rather than left
-        /// half-applied so at least the card's own buttons keep working.
-        /// </summary>
-        private void ApplyWindowSpotlightRegion(Rect spotlightBoundsDip)
-        {
-            _ = spotlightBoundsDip;
-            ClearWindowSpotlightRegion();
-        }
-
-        /// <summary>The exact analogue of SetWindowRgn(hwnd, IntPtr.Zero, true): give the window
-        /// its whole input area back.</summary>
-        private void ClearWindowSpotlightRegion() => SetWholeWindowClickThrough(false);
-
-        /// <summary>X11Overlay handles X11 and (via Win32Overlay) Windows, and returns false everywhere
-        /// else (native Wayland, the headless render), so it is called unconditionally.</summary>
-        private void SetWholeWindowClickThrough(bool clickThrough)
-            => X11Overlay.SetClickThrough(this, clickThrough);
 
         // ---- Card placement ---------------------------------------------------------
 
@@ -708,8 +593,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var (left, top) = ComputePanelPosition(position, targetBounds, panelWidth, panelHeight, margin);
 
             // Clamp to overlay extent.
-            double clampedLeft = Math.Max(margin, Math.Min(left, Bounds.Width - panelWidth - margin));
-            double clampedTop = Math.Max(margin, Math.Min(top, Bounds.Height - panelHeight - margin));
+            double clampedLeft = Math.Max(margin, Math.Min(left, StageW - panelWidth - margin));
+            double clampedTop = Math.Max(margin, Math.Min(top, StageH - panelHeight - margin));
 
             // If clamping moved us into / over the target (small overlay or target near an edge),
             // flip to the opposite side so the card never sits on top of the spotlighted control.
@@ -718,8 +603,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var flipped = FlipPosition(position);
                 var (altLeft, altTop) = ComputePanelPosition(flipped, targetBounds, panelWidth, panelHeight, margin);
-                double altClampedLeft = Math.Max(margin, Math.Min(altLeft, Bounds.Width - panelWidth - margin));
-                double altClampedTop = Math.Max(margin, Math.Min(altTop, Bounds.Height - panelHeight - margin));
+                double altClampedLeft = Math.Max(margin, Math.Min(altLeft, StageW - panelWidth - margin));
+                double altClampedTop = Math.Max(margin, Math.Min(altTop, StageH - panelHeight - margin));
                 var altRect = new Rect(altClampedLeft, altClampedTop, panelWidth, panelHeight);
                 if (!altRect.Intersects(targetBounds))
                 {
@@ -794,8 +679,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (parent is Control fe)
             {
-                var found = fe.FindControl<Control>(name);
-                if (found != null) return found;
+                if (fe.Name == name) return fe;
+                try
+                {
+                    var found = fe.FindControl<Control>(name);
+                    if (found != null) return found;
+                }
+                catch (InvalidOperationException) { /* dynamic controls may have no name scope; walk the visual tree */ }
             }
 
             try
@@ -820,6 +710,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                if (_stage != null && element.TranslatePoint(new Point(0, 0), _stage) is { } local)
+                    return new Rect(local, element.Bounds.Size);
                 var screenTopLeft = element.PointToScreen(new Point(0, 0));
                 var overlayLocal = this.PointToClient(screenTopLeft);
                 return new Rect(overlayLocal, element.Bounds.Size);
@@ -855,9 +747,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_advanceFiredThisStep) return;
             _advanceFiredThisStep = true;
+            UnsubscribeAdvanceTrigger();
+            var step = _step;
             Dispatcher.UIThread.Post(() =>
             {
-                if (CoreTutorial.IsActive) CoreTutorial.Next();
+                if (!_closed && CoreTutorial.IsActive && ReferenceEquals(CoreTutorial.CurrentStep, step)) CoreTutorial.Next();
             });
         }
 

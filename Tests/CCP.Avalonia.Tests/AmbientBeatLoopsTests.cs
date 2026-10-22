@@ -101,7 +101,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Windows/MantraWindow.axaml", "Views/Windows/PinkRushPopup.axaml", "Views/Windows/PopQuizWindow.axaml",
         "Views/Windows/ProgramsIntroPopup.axaml", "Views/Windows/QuestCompletePopup.axaml", "Views/Windows/QuizCategoryEditorWindow.axaml",
         "Views/Windows/QuizReportWindow.axaml", "Views/Windows/QuizWindow.axaml", "Views/Windows/SettingsPaletteWindow.axaml",
-        "Views/Windows/SplashScreen.axaml", "Views/Windows/TeaseRevealPopup.axaml", "Views/Windows/TutorialOverlay.axaml",
+        "Views/Windows/SplashScreen.axaml", "Views/Windows/TeaseRevealPopup.axaml",
         "Views/Windows/WebcamCalibrationWindow.axaml", "Views/Windows/WebcamGazeTrackerWindow.axaml",
         "Views/Windows/WebcamQuickRecalWindow.axaml", "Views/Windows/WhatMovedCard.axaml",
     };
