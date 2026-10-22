@@ -105,6 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _boonBar.SetPicks(picks);
             _boonBar.Show();
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
+            // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
+            if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             _state.StartShields = _state.Shields;
             _spawning = true;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
@@ -236,7 +238,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     artKey: "relapse", subText: "one more loop");   // WPF :1083
                 _state.PushEvent("☠ relapse. one more loop — everything drips double");
             }
-            var (newWave, _) = ChaosRunEngine.WaveAt(_state, elapsed);
+            var (newWave, waveLen) = ChaosRunEngine.WaveAt(_state, elapsed);
+            // WPF :1094 Pocket Watch: the wave countdown (+ a live score line).
+            if (_state.ShowWaveTimer)
+                ChaosWaveTimerWindow.Update(newWave, _state.WaveCount, waveLen - (elapsed % waveLen), _state.Score);
             if (newWave > _state.WaveIndex)
             {
                 // WPF BeginWaveTransition with drafts off (:1449): roll straight into the next wave.
@@ -297,6 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             ChaosGifCascadeOverlay.CloseActive();   // WPF ForceShutdown :3176
+            ChaosWaveTimerWindow.CloseActive();   // WPF ForceShutdown :3181
             CloseBoonBar();   // WPF ForceShutdown :3181
             CloseFx();   // WPF ForceShutdown :3189
             CleanupAfterRun();
@@ -324,6 +330,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosGifCascadeOverlay.CloseActive();   // WPF EndRun :3229
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3230
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
+            ChaosWaveTimerWindow.CloseActive();   // WPF EndRun :3234
             CloseBoonBar();   // WPF EndRun :3235
             ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
@@ -344,6 +351,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawning = false;
             _runTimer?.Stop();
             EndField();
+            ChaosWaveTimerWindow.CloseActive();   // WPF CleanupAfterRun :3321
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             CleanupAfterRun();
         }
