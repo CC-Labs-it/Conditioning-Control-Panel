@@ -176,10 +176,10 @@ public sealed class LocalAiSetupWizardTests
     });
 
     [Fact]
-    public void NonWindowsHardwareIsUnknown()
+    public void NonWindowsReadsRamAndLeavesVramUnknown()
     {
         if (OperatingSystem.IsWindows()) return;
-        Assert.Equal(0, ConditioningControlPanel.Avalonia.Platform.LocalAiHardwareProbe.TotalRamBytes());
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.LocalAiHardwareProbe.TotalRamBytes() > LocalAiHardwareRules.Gb / 4);
         Assert.Equal(0, ConditioningControlPanel.Avalonia.Platform.LocalAiHardwareProbe.LargestVramBytes());
     }
 

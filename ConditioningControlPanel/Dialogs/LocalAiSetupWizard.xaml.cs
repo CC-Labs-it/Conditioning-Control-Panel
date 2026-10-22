@@ -62,12 +62,12 @@ namespace ConditioningControlPanel
                 var vram = LocalAiHardware.LargestVramBytes();
                 var fit = LocalAiHardware.Judge(ram, vram);
                 App.Logger?.Information("Local AI wizard: RAM {Ram} B, VRAM {Vram} B, fit {Fit}", ram, vram, fit);
-                if (fit == LocalAiHardware.Fit.Below)
+                if (fit == LocalAiHardwareRules.Fit.Below)
                 {
                     TxtPerfTitle.Text = Loc.Get("label_local_ai_perf_title_below");
                     TxtPerfTitle.Foreground = (System.Windows.Media.Brush)FindResource("PinkBrush");
                 }
-                TxtPerfFound.Text = fit == LocalAiHardware.Fit.Unknown
+                TxtPerfFound.Text = fit == LocalAiHardwareRules.Fit.Unknown
                     ? Loc.Get("label_local_ai_perf_recommended")
                     : Loc.GetF("label_local_ai_perf_found", LocalAiHardware.FormatGb(ram), LocalAiHardware.FormatGb(vram))
                       + " " + Loc.Get("label_local_ai_perf_recommended");

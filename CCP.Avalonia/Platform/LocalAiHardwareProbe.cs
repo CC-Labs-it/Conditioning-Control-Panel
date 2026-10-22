@@ -4,12 +4,17 @@ using Microsoft.Win32;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>WPF LocalAiHardware native reads; unknown off Windows, never an installation gate.</summary>
+/// <summary>WPF LocalAiHardware native reads; RAM from the runtime and VRAM unknown off Windows, never an installation gate.</summary>
 internal static class LocalAiHardwareProbe
 {
         public static long TotalRamBytes()
         {
-            if (!OperatingSystem.IsWindows()) return 0;
+            try
+            {
+                // Physical memory (or the cgroup limit) as the GC sees it, on every OS.
+                if (!OperatingSystem.IsWindows()) return Math.Max(0, GC.GetGCMemoryInfo().TotalAvailableMemoryBytes);
+            }
+            catch { return 0; }
             try
             {
                 var s = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };

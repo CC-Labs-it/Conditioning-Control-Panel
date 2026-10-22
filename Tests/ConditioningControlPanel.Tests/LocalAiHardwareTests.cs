@@ -1,6 +1,7 @@
 using ConditioningControlPanel.Services.AIService;
 using Xunit;
 using static ConditioningControlPanel.Services.AIService.LocalAiHardware;
+using Fit = ConditioningControlPanel.Services.AIService.LocalAiHardwareRules.Fit;
 
 namespace ConditioningControlPanel.Tests;
 

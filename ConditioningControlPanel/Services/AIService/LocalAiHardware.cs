@@ -16,9 +16,8 @@ namespace ConditioningControlPanel.Services.AIService
         public const long Gb = LocalAiHardwareRules.Gb;
         public const long RecommendedRamBytes = LocalAiHardwareRules.RecommendedRamBytes;
         public const long RecommendedVramBytes = LocalAiHardwareRules.RecommendedVramBytes;
-        public enum Fit { Unknown, Below, Ok }
-        public static Fit Judge(long ramBytes, long vramBytes)
-            => (Fit)LocalAiHardwareRules.Judge(ramBytes, vramBytes);
+        public static LocalAiHardwareRules.Fit Judge(long ramBytes, long vramBytes)
+            => LocalAiHardwareRules.Judge(ramBytes, vramBytes);
         public static string FormatGb(long bytes) => LocalAiHardwareRules.FormatGb(bytes);
 
         // ---- live reads ----
