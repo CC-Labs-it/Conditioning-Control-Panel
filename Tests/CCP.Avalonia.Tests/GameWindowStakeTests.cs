@@ -150,6 +150,64 @@ public sealed partial class GameWindowTests
         }
     });
 
+    private sealed class MemoryChasterTokens : ConditioningControlPanel.Services.Chaster.IChasterTokenStore
+    {
+        public ConditioningControlPanel.Services.Chaster.ChasterStoredTokens? Tokens;
+        public ConditioningControlPanel.Services.Chaster.ChasterStoredTokens? Read() => Tokens;
+        public void Write(ConditioningControlPanel.Services.Chaster.ChasterStoredTokens t) => Tokens = t;
+        public void Clear() => Tokens = null;
+    }
+
+    /// <summary>WPF StakeAppHooks.AppTimeOk with a linked Chaster: time is on offer, and a time pick switches the
+    /// pvp_loss row on before the offer is sent. Paused takes it away again.</summary>
+    [Fact]
+    public void LinkedChaster_TimeOk_TimeOfferSwitchesTheLossRowOn() => Run((_, _) =>
+    {
+        var (oldTime, oldRow, oldCreate) = (StakeBridge.TimeOkHook, StakeBridge.EnableLossRowHook, StakeSettlement.CreateShared);
+        var (oldSecret, oldChaster) = (CoreSecrets.RetrieveProvider, ChasterHead.Service);
+        var fake = new FakeStakes();
+        using var http = new HttpClient(fake);
+        var dir = Directory.CreateTempSubdirectory("stake-chaster-").FullName;
+        var tokens = new MemoryChasterTokens { Tokens = new("acc", "ref", DateTime.UtcNow.AddHours(1)) };
+        using var chaster = new ConditioningControlPanel.Services.Chaster.ChasterService(
+            new ConditioningControlPanel.Services.Chaster.ChasterClient(fake), tokens, Path.Combine(dir, "tab.json"),
+            () => ConditioningControlPanel.Services.Chaster.ChasterOptions.Off);
+        try
+        {
+            StakeHead.Seed();
+            ChasterHead.Service = chaster;
+            var s = CoreSettings.Current;
+            (s.OfflineMode, s.UnifiedId, s.ChasterTabEnabled, s.ChasterPaused) = (false, "u1", true, false);
+            s.ChasterPrices = new List<string>();
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;   // P02: never the keyring
+            Assert.True(chaster.IsLinked);
+            Assert.True(StakeHead.TimeOk());
+
+            var sent = new List<JObject>();
+            var bridge = new StakeBridge("pbp", sent.Add, new StakeApi(http, FriendsHead.Identity, "http://stakes.test"),
+                new StakeSettlement((_, sec) => sec, StakeHead.AdoptSp, StakeHead.Account),
+                () => StakeBridge.TimeOkHook(), () => StakeBridge.EnableLossRowHook());
+            Assert.True(bridge.Handle(JObject.Parse("{\"type\":\"stake-limits\"}")).Wait(TimeSpan.FromSeconds(10)));
+            Assert.True((bool)sent.Single()["time_ok"]!);
+
+            Assert.True(bridge.Handle(JObject.Parse("{\"type\":\"stake-offer\",\"match\":\"m1\",\"kind\":\"time\",\"amount\":900}"))
+                .Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { StakeRules.LossRowId }, s.ChasterPrices);   // the pick is the consent
+            var call = fake.Calls.Single(c => c.Op == "offer");
+            Assert.Equal(("time", 900), ((string?)call.Body["kind"], (int)call.Body["amount"]!));
+
+            s.ChasterPaused = true;
+            Assert.False(StakeHead.TimeOk());
+        }
+        finally
+        {
+            (StakeBridge.TimeOkHook, StakeBridge.EnableLossRowHook, StakeSettlement.CreateShared) = (oldTime, oldRow, oldCreate);
+            (CoreSecrets.RetrieveProvider, ChasterHead.Service) = (oldSecret, oldChaster);
+            Directory.Delete(dir, true);
+        }
+    });
+
     private static string StakeRoot([CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }
