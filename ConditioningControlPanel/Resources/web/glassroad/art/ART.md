@@ -382,3 +382,28 @@ effect drawn inside; `bubble.png` is the empty bubble.
 | (later: Glitch, Lock, Subliminal, Video) | gifwash.png, htlink.png, lock.png, subliminal.png, video.png | unused in B1 |
 
 17 files, 1.2 MB together. The phone tier uses them as is (256 px).
+## Wave 2: particle atlas
+
+One 1024-square UASTC atlas with a 4 x 4 grid of 256-square cells.
+The manifest cells map uses zero-based [column,row], with row zero at the top.
+Cells are disc, spark, glint, glitter, petal, heart, ring, smoke, drip, shard,
+frost, swirl, bubble, star and two empty spares. A cell has at least 20 px of empty gutter.
+
+Use the alpha channel as coverage. RGB is neutral white, including transparent pixels;
+this prevents dark filtering fringes. Storage is straight alpha: premultiply once in the
+host when using premultiplied blending. Tint, brightness, lifetime and motion belong to the engine.
+Do not use this atlas as an sRGB colour input. Clamp sampling to LOD 4 to avoid unrelated
+cells mixing in the smallest atlas mips. Apply the half-texel inset inside each cell.
+
+Source: original deterministic procedural silhouettes, no external image or font input.
+Private masters and decoded-file evidence are in glassroad-art/w2/particles.
+Contact sheets are hosted as PR attachments, never included in the installer tree.
+
+| Asset | Tris | RGBA8 residency including mips |
+|---|---:|---:|
+| particles-atlas | 0 | 5,592,404 bytes (5.333 MiB) |
+
+Running manifest total after this family: 69.333 MiB, compared with 64 MiB in Wave 1.
+This includes every palette and mip, not just the active sky. Runtime render targets and
+engine-owned effect icons need their own allowance. KTX strict validation and decoded-file
+visual inspection passed. Engine motion and device integration are Claude's lane.
