@@ -3,7 +3,7 @@
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), PvP stakes (no Core
 // StakeBridge on this head), friend / Lobby intents (.Friends.cs),
-// MergedAccountRecovery and SeasonRecapService.TrackFeature.
+// MergedAccountRecovery (head-wide gap merged-account-recovery-head).
 
 using System;
 using System.Collections.Generic;
@@ -91,6 +91,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _pbpWatch.Tick += (_, _) => CheckPbpWatch(DateTime.UtcNow);
             _pbpWatch.Start();
+            // WPF Launch :165, a fresh board only (a refocus never reaches here: one window per game).
+            try { SeasonFeatureTracking.Track(CoreSettings.Current, SeasonFeatureKeys.PieceByPiece, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: launched");
         }

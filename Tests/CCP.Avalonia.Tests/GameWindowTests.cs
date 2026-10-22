@@ -26,6 +26,9 @@ namespace CCP.Avalonia.Tests;
 /// ready with init and media-request with a deal, exit-done closes it, and the panic registry closes it.</summary>
 public sealed class GameWindowTests
 {
+    private static readonly System.Reflection.PropertyInfo DayLogProp = typeof(ConditioningControlPanel.Avalonia.App)
+        .GetProperty("FeatureDayLog", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+
     private static void Run(Action<MainShellWindow, LauncherWindow> body)
     {
         AvaloniaTestDispatcher.Run(() =>
@@ -217,6 +220,8 @@ public sealed class GameWindowTests
         var (oldAssets, oldHttp, oldBase) = (CorePaths.EffectiveAssetsProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var oldSecret = CoreSecrets.RetrieveProvider;
         var oldLoopback = Environment.GetEnvironmentVariable(FriendsHead.EnvVar);
+        var oldDayLog = DayLogProp.GetValue(null);
+        FeatureDayLogService? dayLog = null;
         var fake = new FakeHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
@@ -245,10 +250,15 @@ public sealed class GameWindowTests
             Assert.Equal(1, gates);
             Assert.False(GameWindow.IsAnyOpen());
             MainShellWindow.LeashGateDueProvider = () => false;
+            dayLog = new FeatureDayLogService(() => null, Path.Combine(lib, "feature_day_log.json"));
+            DayLogProp.SetValue(null, dayLog);
+            int Uses() => dayLog!.Log.GetOrAddDay(DateTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)).Events.GetValueOrDefault("e_pb");
 
             launcher.Play(card);
             Dispatcher.UIThread.RunJobs();
             var w = GameWindow.Launch(GameWindow.PbpId)!;            // the open board, focused
+            // WPF Launch :165 TrackFeature: a fresh board notes one e_pb day event; the refocus above notes none.
+            Assert.Equal(1, Uses());
             Assert.Contains("piecebypiece/index.html", w.PageUrl!.AbsolutePath);
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -307,6 +317,8 @@ public sealed class GameWindowTests
             (CorePaths.EffectiveAssetsProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldAssets, oldHttp, oldBase);
             CoreSecrets.RetrieveProvider = oldSecret;
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
+            DayLogProp.SetValue(null, oldDayLog);
+            dayLog?.Dispose();
             Directory.Delete(lib, true);
         }
     });

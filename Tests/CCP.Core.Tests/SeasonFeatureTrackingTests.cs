@@ -1,0 +1,50 @@
+using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using Xunit;
+
+namespace ConditioningControlPanel.Tests;
+
+/// <summary>WPF SeasonRecapService.TrackFeature (:192) and CurrentSeasonKey (:30), shared in Core for the other heads.</summary>
+public class SeasonFeatureTrackingTests
+{
+    private static readonly DateTime Now = new(2026, 7, 3, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void CurrentSeasonKey_PrefersAMonthShapedServerKey()
+    {
+        Assert.Equal("2026-06", SeasonFeatureTracking.CurrentSeasonKey("2026-06", Now));
+        Assert.Equal("2026-07", SeasonFeatureTracking.CurrentSeasonKey("season-6", Now));
+        Assert.Equal("2026-07", SeasonFeatureTracking.CurrentSeasonKey(null, Now));
+    }
+
+    [Fact]
+    public void Track_CatalogFeature_NotesTheDayLog_OpensTheBucketOnce_AndCounts()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-06" };
+        var notes = new List<string>();
+        SeasonFeatureTracking.Track(s, SeasonFeatureKeys.Flash, notes.Add, Now);
+        Assert.Equal(new[] { "e_fl" }, notes);
+        Assert.Equal("2026-06", s.SeasonStatsSeason);
+        Assert.Equal(1, s.SeasonFeatureUse[SeasonFeatureKeys.Flash]);
+
+        s.CurrentSeason = "2026-08";   // an open bucket is never re-keyed here (rollover is the recap's job)
+        SeasonFeatureTracking.Track(s, SeasonFeatureKeys.Flash, notes.Add, Now);
+        Assert.Equal("2026-06", s.SeasonStatsSeason);
+        Assert.Equal(2, s.SeasonFeatureUse[SeasonFeatureKeys.Flash]);
+    }
+
+    [Fact]
+    public void Track_PieceByPiece_NotesTheDayLogOnly_LikeWpf()
+    {
+        // Piece by Piece has a day-log event but no Catalog entry, so WPF stops after the note.
+        var s = new AppSettings();
+        var notes = new List<string>();
+        SeasonFeatureTracking.Track(s, SeasonFeatureKeys.PieceByPiece, notes.Add, Now);
+        SeasonFeatureTracking.Track(s, "not-a-feature", notes.Add, Now);
+        Assert.Equal(new[] { "e_pb" }, notes);
+        Assert.Empty(s.SeasonFeatureUse);
+        Assert.True(string.IsNullOrEmpty(s.SeasonStatsSeason));
+    }
+}
