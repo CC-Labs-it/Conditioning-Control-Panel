@@ -43,6 +43,22 @@ public sealed class TubeContentGatesTests
         return owner.OwnedWindows.OfType<T>().Single();
     }
 
+    /// <summary>The flake behind ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement: a plain [Fact] that reads a tube static
+    /// (TubeMotesTests) runs AvatarTubeWindow's type initializer on an xUnit worker. A mutable SolidColorBrush built there
+    /// belongs to that thread's dispatcher, so the next frame that paints the menu (MenuGreen on the engine item) throws
+    /// "a different thread owns it" and every later render in the testhost dies. Shared static brushes must be immutable.</summary>
+    [Fact]
+    public void TubeStaticBrushesBelongToNoThread()
+    {
+        var brushes = typeof(AvatarTubeWindow)
+            .GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+            .Where(f => typeof(global::Avalonia.Media.IBrush).IsAssignableFrom(f.FieldType))
+            .Select(f => (f.Name, Value: f.GetValue(null)))
+            .ToList();
+        Assert.Contains(brushes, b => b.Name == "MenuGreen");
+        Assert.All(brushes, b => Assert.False(b.Value is AvaloniaObject, b.Name + " is thread-affine"));
+    }
+
     [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
