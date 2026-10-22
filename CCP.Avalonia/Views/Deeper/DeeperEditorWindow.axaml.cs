@@ -84,8 +84,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         <c>VisualTreeHelper.GetDpi</c> is NOT one of these any more: TopLevel.RenderScaling
     ///         is its twin and the gaze picker uses it - see BeginGazePick in the RuleEditor
     ///         partial.</item>
-    ///   <item><b>App services.</b> App.DeeperPlayer / App.DeeperHost and the haptics bus.
-    ///         GazePickerWindow is NOT one - it is ported, beside this file, and now wired.
+    ///   <item><b>App services.</b> None left: Preview opens the shell's one player and Test
+    ///         fires through CoreHaptics. GazePickerWindow is NOT one - it is ported, beside this file, and now wired.
     ///         App.Tutorial is the CoreTutorial seam and TutorialOverlay is ported; the manual editor coachmarks are wired through
     ///         that seam - see
     ///         <see cref="StartEditorTutorial"/>. App.EnhancementLibrary is
@@ -111,9 +111,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _isDirty;
         private bool _suppressDirty;
 
-        // ponytail: the waveform peaks still need a decoder (WPF AudioWaveformCache, NAudio). Local
-        // audio PLAYBACK is real (_localAudio); remote AND local video poll the page's media element.
+        // Peaks come from Core WaveformPeaks (WPF AudioWaveformCache) through the head's LibVLC
+        // decoder; PLAYBACK is _localAudio; remote AND local video poll the page's media element.
         private double[]? _waveformPeaks;
+        /// <summary>The last waveform decode, so tests await it rather than sleep (P56).</summary>
+        internal Task WaveformLoad { get; private set; } = Task.CompletedTask;
         private IDeeperLocalAudio? _localAudio;
 
         /// <summary>Open editors (UI thread): the panic sweep and the player's one-editor-per-file
@@ -957,15 +959,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
-        /// are real through <see cref="DeeperLocalAudio"/>. ponytail: the waveform peak extractor
-        /// (AudioWaveformCache) is not; wiring peaks in later is one assignment to
-        /// <c>_waveformPeaks</c>.</summary>
+        /// are real through <see cref="DeeperLocalAudio"/>; the peaks (WPF :1197) decode beside it.</summary>
         private async Task InitializeAudioAsync(string path)
         {
             BrowserPreview.IsVisible = false;
             VideoPreview.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
             WaveformCanvas.IsVisible = true;
+            WaveformLoad = LoadWaveformAsync(path);
 
             IDeeperLocalAudio? audio = null;
             try { audio = await DeeperLocalAudio.Open(path); }
@@ -1057,6 +1058,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (!ConditioningControlPanel.Services.Deeper.UrlSafety.IsSafeLocalAbsolute(source)) return false;
             if (!IOPath.IsPathRooted(source)) return false;
             return File.Exists(source);
+        }
+
+        /// <summary>WPF DeeperEditorWindow.xaml.cs:1197: decode off the UI thread, then draw. A
+        /// failure only logs - the editor works without the picture, as in WPF.</summary>
+        private async Task LoadWaveformAsync(string path)
+        {
+            try
+            {
+                var peaks = await WaveformPeaks.LoadAsync(path);
+                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                _waveformPeaks = Array.ConvertAll(peaks, p => (double)p);
+                UpdateWaveformPath();
+            }
+            catch (Exception ex) { Log.Warning(ex, "DeeperEditor: waveform decode failed"); }
         }
 
         private void UpdateWaveformPath()
@@ -1717,7 +1732,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             return null;
         }
 
-        private void SelectHaptic(HapticTrack track, HapticEvent ev)
+        internal void SelectHaptic(HapticTrack track, HapticEvent ev)
         {
             _selectedRegion = null;
             _selectedHaptic = ev;
@@ -2335,6 +2350,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
+        private DispatcherTimer? _stripMessageTimer;
+        private bool _stripFading;
+
+        /// <summary>WPF DeeperEditorWindow.xaml.cs:4373: a transient line in the validation strip,
+        /// faded out over its last 400 ms, after which the strip shows validation again (:173).</summary>
+        private void ShowStripMessage(string text, string brushKey, int ms)
+        {
+            if (_stripMessageTimer == null)
+            {
+                _stripMessageTimer = new DispatcherTimer();
+                _stripMessageTimer.Tick += (_, _) =>
+                {
+                    if (!_stripFading)
+                    {
+                        _stripFading = true;
+                        TxtValidationSummary.Transitions = new global::Avalonia.Animation.Transitions
+                        {
+                            new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(400) }
+                        };
+                        TxtValidationSummary.Opacity = 0;
+                        _stripMessageTimer.Interval = TimeSpan.FromMilliseconds(400);
+                        return;
+                    }
+                    _stripMessageTimer.Stop();
+                    TxtValidationSummary.Transitions = null;
+                    TxtValidationSummary.Opacity = 1;
+                    RefreshValidation();
+                };
+            }
+            _stripMessageTimer.Stop();
+            _stripFading = false;
+            TxtValidationSummary.Transitions = null;
+            TxtValidationSummary.Opacity = 1;
+            TxtValidationClean.IsVisible = false;
+            TxtValidationSummary.IsVisible = true;
+            TxtValidationSummary.Text = text;
+            TxtValidationSummary.Foreground = Res(brushKey);
+            TxtValidationSummary.Cursor = null;
+            TxtValidationSummary.TextDecorations = null;
+            _stripMessageTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, ms - 400));
+            _stripMessageTimer.Start();
+        }
+
         private void TxtValidationSummary_PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
             if (e.InitialPressMouseButton != MouseButton.Left) return;
@@ -2529,6 +2587,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // UpdateTitle only writes TextBlocks and the linked-files strip, so none of
                 // Avalonia's deferred TextChanged handlers fire and the flag stays clear.
                 UpdateTitle();
+                ShowStripMessage(Loc.Get("deeper_editor_saved_inline"), "DeeperAccentBrush", 2000);
 
                 CoreTutorialEvents.LastSavedEnhancementPath = path;
                 CoreTutorialEvents.Emit("FileSaved");
@@ -3167,6 +3226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             StopBrowserPreview();
             try { _playheadTimer?.Stop(); } catch { }
             try { _validationTimer?.Stop(); } catch { }
+            try { _stripMessageTimer?.Stop(); } catch { }
             try { _htFetchCts?.Cancel(); _htFetchCts?.Dispose(); } catch { }
             _htFetchCts = null;
         }
